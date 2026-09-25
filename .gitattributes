@@ -1,0 +1,2 @@
+# LF everywhere, so golden files and level JSON are byte-identical on Windows and Linux.
+* text=auto eol=lf

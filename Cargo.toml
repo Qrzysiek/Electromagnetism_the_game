@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["crates/physics", "crates/level", "crates/generator", "crates/game", "tools/integrator_eval"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# Implicit float/int conversions and lossy casts are a common source of silent
+# precision loss in numerical code.
+cast_possible_truncation = "warn"
+cast_precision_loss = "warn"
+float_cmp = "warn"
+
+# Physics tests are slow in debug builds; optimize dependencies even in dev.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.test]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = "thin"

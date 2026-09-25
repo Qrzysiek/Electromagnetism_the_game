@@ -1,0 +1,15 @@
+[package]
+name = "physics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+
+
+[dev-dependencies]
+# Independent DOP853 implementation used as a cross-check in tests only.
+ode_solvers = "0.6.2"

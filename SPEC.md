@@ -1,0 +1,149 @@
+# Specification: Electromagnetism – the game
+
+Status: **draft v2** (revised from `SPEC_original_pl.md`). Before writing code, Claude Code presents a Stage 1 plan (repository layout, modules, order of work, tests) and waits for approval.
+
+Companion document: `PHYSICS.md` describes the physics that is implemented and how. It must be kept up to date with the code.
+
+## 1. Goal
+
+A puzzle game built on accurate classical electrodynamics. The player places fixed charges on a grid so that test particles fly from start point A into detector region B, avoiding obstacles (charges placed by the level).
+
+Priorities, in order:
+1. **Physical accuracy.** No simplifications of the equations except explicitly documented and controlled approximations. Numerical error must be small enough that it never decides victory or defeat (see §2.3).
+2. **Playability.** Puzzles are hard but solvable by a human. A solution tolerates small imprecision, and the live preview gives visible feedback as the player gets closer.
+3. **Performance.** An interactive live preview, and a generator fast enough to search many candidate levels.
+
+Audience and commercial success are not goals. Classical electrodynamics is the backbone. Quantum effects are out of scope for the foreseeable future.
+
+## 2. Physics
+
+### 2.1 Model
+- The engine is **three-dimensional from the start**. 2D mode uses the same engine (§4).
+- Field sources: charges with a finite radius. The field outside the sphere is exact Coulomb. Touching the sphere means the particle is lost. There is no artificial softening.
+- Test particles: defined per level by charge `q`, mass `m` and radius. They don't have to be elementary particles. "Scaling up the particles" (larger `q`, e.g. charged microspheres) is how the level controls how strongly particles affect each other (§2.4).
+- Equation of motion, relativistic: `dp/dt = q(E + v×B)`, `p = γmv`. The state is `(x, p)`, so `|v| < c` holds by construction.
+- Static field: exact Coulomb superposition in f64 with a fixed summation order.
+- Units: dimensionless internally, with an explicit, documented conversion to SI.
+
+### 2.2 Numerical integration
+- A high-order adaptive integrator with error control and dense output (baseline: Dormand–Prince 8(5,3), "DOP853", Hairer et al.). Boris is **not** used while the fields are purely electric, because an adaptive step destroys its structure-preserving properties. It may be reconsidered with magnetic fields.
+- Collisions with charge spheres, detector entry and leaving the map are found as **events** on the dense-output interpolant: root finding within the step, so a step can never jump over a sphere. The step size is additionally limited by the distance to the nearest surface.
+- Conserved quantities (energy `γmc² + qφ` in static fields, and angular momentum where applicable) are monitored as diagnostics. They are **never** used to correct the solution.
+
+### 2.3 Outcome verification ("no numerical luck")
+- Every outcome (hit / miss / lost) is computed at a working tolerance and re-checked at a tolerance at least 100× tighter. If the outcome differs, or the trajectory passes a boundary (sphere, detector edge) closer than the estimated error, the result is **marginal**.
+- The live preview uses a fast tolerance and is refined in the background. The UI shows when a result is verified.
+- The generator rejects levels whose reference solutions are marginal.
+- Sensitivity that is physical (chaotic, near-grazing trajectories) is not numerical error. It is handled by the robustness requirements for levels (§7).
+
+### 2.4 Interaction model ladder
+Each level declares its model. The model does not switch automatically mid-simulation. The active model is shown to the player.
+
+A single particle in the static field of fixed charges is treated **exactly**, including relativity, at any speed. Approximations enter only through the interaction between moving particles. Each model has a validity range in `v/c`. A run (level + launch speed) outside the declared model's range is rejected, never silently simulated. Example: for co-moving particles, magnetic attraction cancels part of the Coulomb repulsion, and the net force scales as `1/γ²`. Pure Coulomb waves at relativistic speed would therefore overstate space charge. Relativistic waves require at least the Darwin model, and highly relativistic ones require Liénard–Wiechert.
+1. Coulomb interaction between test particles (Stage 2).
+2. Darwin approximation: magnetic interaction to order `v²/c²` (Stage 6).
+3. Liénard–Wiechert retarded fields of point charges, with Landau–Lifshitz radiation reaction. Exact classical electrodynamics in vacuum (later).
+4. FDTD / PIC on a grid, only where materials, cavities or waveguides need it (optional, far future).
+
+### 2.5 Other
+- B is a region (detector). An electrostatic field has no stable equilibrium (Earnshaw's theorem).
+- Each level defines the particle species and the energy and direction at launch from A.
+- Game rules (not physics): leaving the map bounds, or exceeding a maximum flight time, counts as a loss.
+
+## 3. Gameplay
+
+- Charges of the player and the level are fixed and sit on grid nodes. Particle trajectories are continuous.
+- Each level has a recommended grid resolution (the one the generator used). The player may refine it by an integer factor (2×, 3×…), which keeps all old nodes. Arbitrary resolution is available in custom mode.
+- Each level limits the player's charges: count, sign, allowed magnitudes.
+- **The level is solved** when wave 1 (a single particle) reaches B.
+- **Waves** are the endurance and high-score layer: 1 particle, pause, 2, pause, 4, pause, … Later waves feel the particles' interaction more strongly (and, in the future, the response of materials). Pauses let materials relax.
+- **High score (open, candidates below; may be combined):**
+  - *Wave score:* the highest wave number that arrives completely, with no losses (collision with a charge or another particle, leaving the map, timeout). Tie-breaker: the fraction of the first failed wave that arrived.
+  - *Speed score:* the highest launch speed (or energy) for which the configuration still delivers the particle(s) to B. Launch direction, A and B stay fixed. Note: in non-relativistic electrostatics, multiplying the launch energy by `s` is equivalent to dividing all charges by `s`. The challenge therefore comes only from the limits on charge magnitude and, at high speed, from relativity, which breaks this scale invariance. Relativity then becomes part of the gameplay.
+  - *Mixed:* e.g. waves at a chosen launch speed, or a two-dimensional score (wave number × speed).
+  - To be decided after playtesting.
+- Wave particles start with a defined, small spread in position, direction and energy, as a real beam does. Identical initial conditions would be singular.
+- Fast feedback: the wave-1 trajectory recomputes live on every change. There is no start button.
+
+## 4. 2D and 3D modes
+
+- One physics core, two presentation and control layers. 2D mode is its own experience: its own look, levels, generator settings and simpler controls.
+- **Decision:** physics is always truly 3D, including in 2D mode. 2D mode is a cross-section of the 3D world. All charges lie in a plane of symmetry, and particles start in it with velocity parallel to it, so they never leave it. The field is the real 3D field (`1/r²`). "Flat" physics with a `1/r` field is excluded.
+- In 2D, field lines show direction only. Their density in the plane does not represent field strength for a 3D field, and the UI says so. Strength is shown by the potential map and the arrows.
+- 3D mode: editing by layers (the current grid slice is active, the others are semi-transparent).
+
+## 5. Controls
+
+- Mouse: place, remove and edit charges in 2D. In 3D, a layer mode with the scroll wheel changing layers.
+- Keyboard: the cursor jumps between grid nodes. Arrow keys move it within a layer, PageUp/PageDown change layer (3D only). Keys to place, remove, flip sign and change magnitude.
+- Later: group selection, copy, paste at the cursor, mirroring a group about a chosen plane, repeat counts (e.g. "paste 5 times every 2 cells"), configurable key bindings.
+
+## 6. Visualisation
+
+- Field lines start on a small sphere around each charge, with the number of lines proportional to the charge (3D). Traced on the CPU in f64 (cheap and exact enough).
+- A vector field (arrows) on a chosen slice. A potential map in 2D and equipotential surfaces in 3D, computed on the GPU in f32 (visual only, never used for gameplay).
+- Learning aids: slow motion, the force vector on the particle, a kinetic/potential energy bar during flight (relativistic kinetic energy `(γ−1)mc²`), the active physics model indicator, and the verified/marginal status of the result.
+
+## 7. Level generator
+
+1. Randomises the level's charges, A, B and launch parameters.
+2. Searches the grid for a placement of k player charges for which the particle reaches B (simulated annealing or beam search). The objective is shaped to be continuous even when a trajectory is lost: distance to B, plus a penalty for how early the particle was lost.
+3. Rejects trivial levels: without player charges the particle misses, and solutions with k−1 charges are not found in N independent searches.
+4. Requires several distinct solutions (repeated searches from different starting points), so the level can also be solved in ways the generator didn't anticipate.
+5. Robustness: moving any single charge by one cell must not always destroy the solution. The fraction of one-cell perturbations that survive is measured.
+6. Computes a difficulty measure from points 3–5. Numeric thresholds are part of the acceptance criteria.
+7. All reference solutions must be verified, not marginal (§2.3).
+8. From Stage 2: verifies the level by simulating the full wave sequence (expensive, so done precisely only for the best candidates).
+9. A native command-line tool, parallel over candidates. Saves levels as JSON: level charges, A, B, particle species, launch parameters, recommended grid, limits, reference solution, metrics, integrator tolerances and **physics engine version**.
+
+## 8. Materials (future stages, accounted for in the architecture now)
+
+- Metals: equipotential. Relaxation takes about `ε₀/σ ≈ 1e-19 s`, which is instantaneous here. They carry induced charge.
+- Dielectrics: `∇·(ε∇φ) = −ρ`. Charged by stopped particles, discharged during pauses through leakage.
+- Semiconductors: drift-diffusion (Poisson with continuity equations for electrons and holes, mobility, diffusion, recombination). The most expensive stage, possibly never.
+- Superconductors: London equations and the Meissner effect. Only meaningful once magnetic fields exist.
+- Test particles fly in vacuum or channels. Materials respond as the environment.
+- Methods: boundary element method for metals and dielectrics, and a 3D multigrid Poisson solver for semiconductors. Established native libraries (e.g. PETSc, hypre) are allowed, since the game is native.
+
+## 9. Architecture and technology
+
+- **Native desktop application.** Windows and Linux required, macOS desirable. No web version.
+- **Rust** throughout.
+- `physics` crate: pure library with no graphics dependency. It contains the field solvers, integrator, events and diagnostics. The game and the generator use the same code, so a generator solution always works in the game. Deterministic.
+- A `FieldSolver` interface separates field sources from particle motion. Implementations: Coulomb; test-only analytic fields (e.g. uniform E); later Darwin, Liénard–Wiechert, BEM, grid Poisson, FDTD.
+- Particles are stored as arrays (structure of arrays), not objects, so waves and streams scale.
+- Libraries preferred over custom code wherever a mature, tested one exists:
+  - Game and rendering: **Bevy** (pinned to one version for the whole project; built on wgpu, so Vulkan, DX12 or Metal) with **bevy_egui** for editor panels.
+  - Integrator (decided in M1, see PHYSICS.md §5.1): our own step-at-a-time port of Hairer's DOP853. The coefficients are generated from `dop853.f`, and the result is cross-checked against `ode_solvers`. No existing crate exposed the per-step interpolant without heavy dependencies.
+  - N-body (Stage 2): IAS15 (Rein & Spiegel 2015, REBOUND) and individual/block time steps are evaluated against the global-step DOP853 approach.
+  - Parallelism: `rayon`. Serialisation: `serde`/`serde_json`. Vector math: `glam` (`DVec3`) or `nalgebra`. Float comparison in tests: `approx`.
+- The live preview runs off the main thread. Rendering never waits for physics.
+
+## 10. Stages and acceptance criteria
+
+1. **Stage 1: vacuum, single particle.** 3D core (Coulomb, DOP853, events, outcome verification), 2D mode as a cross-section, editor (mouse and basic keyboard), live trajectory, field lines and potential map, generator points 1–7, saving and loading levels, `PHYSICS.md`. Criteria: all physics tests pass; the trajectory recomputes within one frame (16 ms) with 50 charges at preview tolerance; the generator produces levels meeting points 3–5 and 7.
+2. **Stage 2: waves.** Coulomb interaction between particles, particle–particle collisions, the wave sequence with pauses, score, and a generator that verifies waves.
+3. **Stage 3: full 3D mode.** Layer editing, 3D visualisation, group editing tools.
+4. **Stage 4: static metals and dielectrics.**
+5. **Stage 5: materials charged by particles, relaxation during pauses.**
+6. **Stage 6: magnetic fields, Darwin approximation, superconductors.**
+7. **Stage 7: Liénard–Wiechert with radiation reaction.** Optionally FDTD/PIC, semiconductors.
+
+## 11. Physics tests (mandatory from Stage 1)
+
+Each test compares against an analytic result, with thresholds stated in `PHYSICS.md`.
+- Energy conservation in a static field: `γmc² + qφ` relative drift below a threshold.
+- Rutherford scattering: deflection angle versus the analytic formula (non-relativistic limit), and versus the exact relativistic Coulomb scattering angle.
+- Kepler orbit around an opposite charge: period, closure of the orbit, angular momentum conservation (non-relativistic limit).
+- Relativistic Coulomb orbit: perihelion precession versus the analytic (Sommerfeld) result.
+- Hyperbolic motion in a uniform field (test field solver): analytic `x(t)`, `v(t)`.
+- Speed limit: `|v| < c` for extreme energies and fields.
+- Symmetry: a particle starting in a plane of symmetry never leaves it.
+- Event location: a particle aimed to graze a sphere at a known distance is classified correctly, just inside and just outside, down to the error tolerance.
+- Convergence: the error scales with tolerance as expected for the method's order.
+- Determinism: the same level gives bit-identical results across runs and across Windows and Linux builds.
+
+## 12. Open decisions
+
+- The physical scale of the reference world (cell size, reference particle species, typical energies). Non-relativistic electrostatics is scale-invariant, so this matters from Stage 2 (particle charge scale) and for materials.
+- The final scoring formula (wave-based, speed-based, or a mix; see §3), after playtesting. The architecture must support both: launch speed is a per-run parameter, not baked into the level.

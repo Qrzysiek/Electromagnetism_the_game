@@ -1,0 +1,11 @@
+[package]
+name = "level"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+physics = { path = "../physics" }
