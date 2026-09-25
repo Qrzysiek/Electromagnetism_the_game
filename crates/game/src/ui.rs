@@ -56,6 +56,22 @@ pub fn fmt_si(v: f64) -> String {
     format!("{text}{suffix}")
 }
 
+/// Parses a number with an optional SI-style suffix ("2M", "1.5k", "3µ" or "3u", "1e6").
+pub fn parse_si(text: &str) -> Option<f64> {
+    let t = text.trim();
+    let (num, scale) = match t.chars().last()? {
+        'G' => (&t[..t.len() - 1], 1e9),
+        'M' => (&t[..t.len() - 1], 1e6),
+        'k' => (&t[..t.len() - 1], 1e3),
+        'm' => (&t[..t.len() - 1], 1e-3),
+        'u' => (&t[..t.len() - 1], 1e-6),
+        'µ' => (&t[..t.len() - 'µ'.len_utf8()], 1e-6),
+        'n' => (&t[..t.len() - 1], 1e-9),
+        _ => (t, 1.0),
+    };
+    num.trim().parse::<f64>().ok().map(|v| v * scale)
+}
+
 fn outcome_text(o: Outcome) -> String {
     match o {
         Outcome::Arrived => "reached the detector".into(),
@@ -119,7 +135,21 @@ pub fn panel(mut contexts: EguiContexts, mut game: ResMut<Game>) -> Result {
 }
 
 fn contents(ui: &mut egui::Ui, game: &mut Game) {
-    ui.heading("Electromagnetism");
+    game.text_focus = false;
+    ui.horizontal(|ui| {
+        ui.heading("Electromagnetism");
+        ui.add_space(20.0);
+        let mut sandbox = game.sandbox.active;
+        ui.selectable_value(&mut sandbox, false, "Play");
+        ui.selectable_value(&mut sandbox, true, "Sandbox");
+        if sandbox != game.sandbox.active {
+            if sandbox {
+                crate::sandbox::enter(game);
+            } else {
+                game.sandbox.active = false;
+            }
+        }
+    });
 
     // Level selection.
     let names: Vec<String> = game.levels.iter().map(|l| l.name.clone()).collect();
@@ -143,6 +173,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         }
     });
     game.select_level(selected);
+    if game.sandbox.active {
+        ui.separator();
+        crate::sandbox::panel(ui, game);
+        ui.separator();
+    }
     let level = game.editor.level.clone();
     if !level.description.is_empty() {
         ui.label(egui::RichText::new(&level.description).italics());
@@ -354,4 +389,23 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ui.label("S flip sign, Q/E change magnitude, C clear, 1–4 grid refinement.");
         ui.label("N/P next/previous level, V potential map, F field lines, A animation.");
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn si_round_trip() {
+        for v in [2e6, 1.5e3, 1e-6, -4e6, 0.5, 12.0] {
+            let back = parse_si(&fmt_si(v)).unwrap();
+            assert!(
+                (back - v).abs() <= 1e-12 * v.abs(),
+                "{v} -> {} -> {back}",
+                fmt_si(v)
+            );
+        }
+        assert_eq!(parse_si("3u").map(f64::to_bits), Some(3e-6f64.to_bits()));
+        assert_eq!(parse_si("1e6").map(f64::to_bits), Some(1e6f64.to_bits()));
+    }
 }

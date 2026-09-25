@@ -299,8 +299,8 @@ pub fn run_observed<F: FieldSolver>(
                 let m = if event == Some(ev) {
                     // Penetration depth along the continued trajectory; followed past
                     // this step below if the minimum is not reached within it.
-                    let m = minimize_on(&g, t_a, t_b).1;
-                    pending_depth = Some((k, m, g_next[k] <= m));
+                    let (t_min, m) = minimize_on(&g, t_a, t_b);
+                    pending_depth = Some((k, m, minimum_at_end(t_min, t_a, t_b)));
                     m
                 } else if event.is_some() {
                     // Closest approach up to the event time only.
@@ -366,14 +366,21 @@ pub fn run_observed<F: FieldSolver>(
                 dense: int.dense(),
             };
             let g = |t: f64| event_value(scn, ev, view.state(t).0);
-            depth = depth.min(minimize_on(&g, t_a, int.t()).1);
-            let g_end = event_value(scn, ev, ParticleOde::<&F>::position(int.y()));
-            unfinished = g_end <= depth;
+            let (t_min, m) = minimize_on(&g, t_a, int.t());
+            depth = depth.min(m);
+            unfinished = minimum_at_end(t_min, t_a, int.t());
         }
         margin[k] = margin[k].min(depth);
     }
     traj.margins = rs.margins.then(|| collect_margins(&events, &margin));
     traj
+}
+
+/// Whether a minimum found on `[a, b]` lies at the right end, i.e. the function is still
+/// decreasing there. Decided from the location of the minimum, not by comparing values:
+/// the integrator state and the dense output at `b` differ by rounding.
+fn minimum_at_end(t_min: f64, a: f64, b: f64) -> bool {
+    t_min >= b - 1e-6 * (b - a)
 }
 
 fn collect_margins(events: &[Event], margin: &[f64]) -> Margins {

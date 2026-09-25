@@ -2,6 +2,7 @@
 
 mod editor;
 mod potential;
+mod sandbox;
 mod ui;
 mod visuals;
 mod worker;
@@ -31,6 +32,8 @@ pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
 #[derive(Resource)]
 pub struct Game {
     pub levels: Vec<Level>,
+    /// File of each level (same order as `levels`).
+    pub level_paths: Vec<PathBuf>,
     pub level_index: usize,
     pub editor: Editor,
     pub preview: Option<Preview>,
@@ -50,6 +53,9 @@ pub struct Game {
     pub playback_speed: f64,
     pub anim_time: f64,
     pub last_cursor_world: Option<Vec2>,
+    pub sandbox: sandbox::Sandbox,
+    /// Set by the UI while a text field has focus (game shortcuts are suspended).
+    pub text_focus: bool,
     /// Left edge of the side panel in physical pixels (reported by the UI).
     pub panel_left_px: Option<f32>,
 }
@@ -72,7 +78,24 @@ impl Game {
     pub fn select_level(&mut self, index: usize) {
         if index != self.level_index {
             self.load_level(index);
+            if self.sandbox.active {
+                sandbox::enter(self);
+            }
         }
+    }
+
+    /// Re-reads the level files (after saving) and selects `select` if given. The level
+    /// being edited stays loaded.
+    pub fn reload_levels(&mut self, select: Option<&std::path::Path>) {
+        let (levels, paths) = load_levels();
+        if levels.is_empty() {
+            return;
+        }
+        self.levels = levels;
+        self.level_paths = paths;
+        self.level_index = select
+            .and_then(|s| self.level_paths.iter().position(|p| p == s))
+            .unwrap_or(0);
     }
 
     /// Solved = verified arrival for the current setup.
@@ -95,7 +118,7 @@ struct PotentialQuad {
     entity: Entity,
 }
 
-fn levels_dir() -> PathBuf {
+pub fn levels_dir() -> PathBuf {
     let candidates = [
         std::env::current_dir().ok().map(|d| d.join("levels")),
         std::env::current_exe()
@@ -110,33 +133,42 @@ fn levels_dir() -> PathBuf {
         .expect("levels directory not found")
 }
 
-fn load_levels() -> Vec<Level> {
+/// Shipped levels from `levels/`, then custom ones from `levels/custom/`.
+fn load_levels() -> (Vec<Level>, Vec<PathBuf>) {
     let dir = levels_dir();
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .expect("read levels directory")
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| {
-            p.extension().is_some_and(|e| e == "json") && !p.ends_with("golden_hashes.json")
-        })
-        .collect();
-    paths.sort();
-    paths
-        .iter()
-        .filter_map(|p| {
-            let text = std::fs::read_to_string(p).ok()?;
-            match Level::from_json(&text) {
-                Ok(l) => Some(l),
-                Err(e) => {
-                    eprintln!("skipping {}: {e}", p.display());
-                    None
-                }
+    let list = |d: &std::path::Path| -> Vec<PathBuf> {
+        let mut v: Vec<PathBuf> = std::fs::read_dir(d)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| {
+                        p.extension().is_some_and(|e| e == "json")
+                            && !p.ends_with("golden_hashes.json")
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        v.sort();
+        v
+    };
+    let mut levels = Vec::new();
+    let mut paths = Vec::new();
+    for p in list(&dir).into_iter().chain(list(&dir.join("custom"))) {
+        let Ok(text) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        match Level::from_json(&text) {
+            Ok(l) => {
+                levels.push(l);
+                paths.push(p);
             }
-        })
-        .collect()
+            Err(e) => eprintln!("skipping {}: {e}", p.display()),
+        }
+    }
+    (levels, paths)
 }
 
 fn main() {
-    let levels = load_levels();
+    let (levels, level_paths) = load_levels();
     assert!(!levels.is_empty(), "no levels found");
     let editor = Editor::new(levels[0].clone());
     App::new()
@@ -154,6 +186,7 @@ fn main() {
         .init_gizmo_group::<FieldLineGizmos>()
         .insert_resource(Game {
             levels,
+            level_paths,
             level_index: 0,
             editor,
             preview: None,
@@ -170,6 +203,8 @@ fn main() {
             playback_speed: 1.0,
             anim_time: 0.0,
             last_cursor_world: None,
+            sandbox: sandbox::Sandbox::default(),
+            text_focus: false,
             panel_left_px: None,
         })
         .insert_resource(PhysicsWorker(Worker::spawn()))
@@ -245,9 +280,9 @@ fn input(
     mut game: ResMut<Game>,
 ) {
     let game = &mut *game;
-    // The panel has no text fields, so game shortcuts always apply (egui keeps keyboard
-    // focus on the last clicked button, which would otherwise block them).
-    {
+    // Game shortcuts apply unless a text field has focus. (egui's own "wants keyboard"
+    // flag is also set by a focused button, which would block shortcuts after a click.)
+    if !game.text_focus {
         let step = if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
             5
         } else {
@@ -345,11 +380,23 @@ fn input(
         game.editor.set_cursor(node);
         game.last_cursor_world = Some(world);
     }
-    if on_grid && mouse.just_pressed(MouseButton::Left) {
+    let (pressed, released, right) = (
+        mouse.just_pressed(MouseButton::Left),
+        mouse.just_released(MouseButton::Left),
+        mouse.just_pressed(MouseButton::Right),
+    );
+    if on_grid
+        && game.sandbox.active
+        && (pressed || released || right)
+        && sandbox::pointer(game, node, pressed, released, right)
+    {
+        return;
+    }
+    if on_grid && pressed {
         game.editor.set_cursor(node);
         let _ = game.editor.place();
     }
-    if on_grid && mouse.just_pressed(MouseButton::Right) {
+    if on_grid && right {
         game.editor.set_cursor(node);
         game.editor.remove();
     }
@@ -431,6 +478,7 @@ fn update_field_lines(mut game: ResMut<Game>) {
 }
 
 fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
+    sandbox::poll(&mut game);
     for r in worker.0.poll() {
         match r {
             Response::Preview(p) if p.revision == game.sent_revision => {
@@ -628,6 +676,17 @@ fn draw(
     }
     for c in &game.editor.placement {
         draw_charge(&mut gizmos, c, true);
+    }
+
+    // Detector being dragged in the sandbox.
+    if let Some(a) = game.sandbox.detector_drag {
+        let p0 = to_vec2(grid.position(a));
+        let p1 = to_vec2(grid.position(game.editor.cursor));
+        gizmos.rect_2d(
+            (p0 + p1) * 0.5,
+            (p1 - p0).abs(),
+            Color::srgba(0.3, 1.0, 0.4, 0.6),
+        );
     }
 
     // Cursor.

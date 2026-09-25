@@ -61,3 +61,54 @@ fn razor_thin_outcomes_are_marginal() {
         assert!(marginal, "δ = {delta:e}: {status:?}");
     }
 }
+
+/// Regression: a clear exit through the map edge was flagged marginal because the
+/// penetration-depth continuation sometimes stopped after one step (it compared the
+/// integrator state with the dense output at the same time, which differ by rounding).
+#[test]
+fn clear_exit_through_bounds_is_verified() {
+    use physics::dynamics::{Kinematics, Particle};
+    use physics::field::{Coulomb, FixedCharge};
+    use physics::geometry::{Aabb, Region, Sphere};
+    use physics::trajectory::Scenario;
+
+    let charge = FixedCharge {
+        position: DVec3::new(15.0, 12.0, 0.0),
+        charge: 1e6,
+        radius: 0.3,
+    };
+    let kin = Kinematics::new(1.0, 5.0);
+    let scn = Scenario {
+        field: Coulomb::new(&[charge]),
+        obstacles: vec![Sphere {
+            center: charge.position,
+            radius: charge.radius,
+        }],
+        particle: Particle {
+            charge: 1e-6,
+            mass: 1.0,
+            radius: 0.0,
+        },
+        c: 5.0,
+        x0: DVec3::new(0.0, 10.0, 0.0),
+        p0: kin.momentum_from_kinetic_energy(0.5, DVec3::X),
+        detector: Some(Region::Box(Aabb {
+            min: DVec3::new(27.0, 8.0, -1.0),
+            max: DVec3::new(30.0, 12.0, 1.0),
+        })),
+        bounds: Some(Aabb {
+            min: DVec3::splat(-1.0),
+            max: DVec3::new(31.0, 21.0, 1.0),
+        }),
+        t_max: 200.0,
+    };
+    let v = verify(&scn, Tolerances::default());
+    println!(
+        "{:?} {:?} margins {:?}",
+        v.outcome(),
+        v.status,
+        v.verified.margins
+    );
+    assert_eq!(v.outcome(), Outcome::LeftBounds);
+    assert!(v.status.is_verified(), "{:?}", v.status);
+}

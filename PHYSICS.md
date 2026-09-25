@@ -169,6 +169,7 @@ Every flight that matters is computed at two tolerances: preview (1e-10) and ver
 - **The boundary that ended the flight:** the penetration depth (negative) of the *continued* trajectory, integrated past the event as if the boundary were absent. Integration continues until the minimum is reached, or the depth exceeds `MARGIN_SAFE` (0.25 cells), or it breaks down at a point charge (depth −∞).
 - A first version used only the step containing the event. That made the depth depend on where steps happened to end, and flagged clear hits as marginal. The continued-trajectory definition is a property of the trajectory alone.
 - **Time:** for flights ending in an event, the remaining time `t_max − t_event`.
+- **Stopping the continuation:** it goes on while the minimum of the latest step lies at the step's right end, judged from *where* the minimum lies. A first version compared the event function at the step end, evaluated once from the integrator state and once from the dense output. Those differ by rounding, so the continuation sometimes stopped after one step. Clear exits through the map edge were then flagged marginal (depths −0.57 vs −0.11). Regression test: `clear_exit_through_bounds_is_verified`.
 
 **Classification.**
 - **Verified:** both runs give the same outcome, and every margin `m` below `MARGIN_SAFE` satisfies `|m| > SAFETY · |m_preview − m_verify| + FLOOR`, with `SAFETY = 10` and `FLOOR = 1e-9` cells (`FLOOR · t_max` for time).

@@ -3046,7 +3046,6 @@ dependencies = [
  "clap",
  "level",
  "physics",
- "rayon",
 ]
 
 [[package]]
@@ -3901,6 +3900,7 @@ name = "level"
 version = "0.1.0"
 dependencies = [
  "physics",
+ "rayon",
  "serde",
  "serde_json",
 ]

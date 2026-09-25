@@ -1,6 +1,6 @@
 //! Searching for player placements that solve a level (SPEC §7.2).
 
-use level::{Charge, Level, Node};
+use crate::{Charge, Level, Node};
 use physics::trajectory::{Outcome, RunSettings, run};
 use physics::verify::verify;
 use rayon::prelude::*;

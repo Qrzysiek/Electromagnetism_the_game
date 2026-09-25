@@ -60,15 +60,16 @@ impl Grid {
     }
 }
 
-/// Evenly spaced field lines in the plane z = 0 (Jobard & Lefer, "Creating evenly-spaced
-/// streamlines of arbitrary density", 1997). Lines are traced forward and backward from
-/// seed points; a line stops when it comes within `spacing / 2` of another line, so the
-/// plane is filled with roughly uniform density, also between close charges. Seeds come
-/// from near the charges, then from points offset by `spacing` perpendicular to accepted
-/// lines, then from a grid sweep that fills any region left empty.
+/// Field lines in the plane z = 0 that start and end only on charges or at the arena
+/// edge, as field lines of an electrostatic field do. Spacing is kept roughly even with
+/// a variant of Jobard & Lefer's evenly spaced streamlines (1997): candidate lines are
+/// seeded near charges, then offset by `spacing` perpendicular to accepted lines, then
+/// from a grid sweep; each candidate is traced in full both ways, and rejected if, away
+/// from the charges (where lines must converge), a noticeable part of it runs closer
+/// than `spacing / 2` to an accepted line. Between close charges this leaves few lines.
 ///
 /// In the 2D slice of a 3D field, line density does not represent field strength
-/// (SPEC §4), so uniform spacing loses no information: lines show direction.
+/// (SPEC §4): lines show direction.
 pub fn field_lines(scn: &Scenario<Coulomb>, spacing: f64) -> Vec<FieldLine> {
     if scn.obstacles.is_empty() {
         return Vec::new();
@@ -76,8 +77,8 @@ pub fn field_lines(scn: &Scenario<Coulomb>, spacing: f64) -> Vec<FieldLine> {
     let b = scn.bounds.expect("bounds");
     let d_sep = spacing.max(0.2);
     let d_test = 0.5 * d_sep;
-    // Points are registered about every d_sep/4 of arc length.
-    let store_every = 0.25 * d_sep;
+    // Near a charge lines converge; proximity there is not counted.
+    let converge_zone = 1.5 * d_sep;
     let arrow_spacing = (2.5 * d_sep).max(2.0);
 
     let field_dir = |x: DVec3, sign: f64| -> Option<DVec3> {
@@ -85,40 +86,21 @@ pub fn field_lines(scn: &Scenario<Coulomb>, spacing: f64) -> Vec<FieldLine> {
         (e.length() > 0.0 && e.is_finite()).then(|| e.normalize() * sign)
     };
     let inside_bounds = |x: DVec3| x.x > b.min.x && x.y > b.min.y && x.x < b.max.x && x.y < b.max.y;
-    let near_charge =
-        |x: DVec3, margin: f64| scn.obstacles.iter().any(|s| s.signed_distance(x) < margin);
+    let charge_distance = |x: DVec3| {
+        scn.obstacles
+            .iter()
+            .map(|s| s.signed_distance(x))
+            .fold(f64::INFINITY, f64::min)
+    };
 
-    let mut grid = Grid::new(d_sep);
-    let mut lines: Vec<FieldLine> = Vec::new();
-    let mut queue: VecDeque<DVec3> = VecDeque::new();
-
-    // Seeds just outside each charge, a few directions each.
-    for s in &scn.obstacles {
-        for i in 0..4 {
-            let a = std::f64::consts::FRAC_PI_2 * f64::from(i) + 0.3;
-            queue.push_back(s.center + DVec3::new(a.cos(), a.sin(), 0.0) * (s.radius + d_sep));
-        }
-    }
-    // Grid sweep seeds, used after the queue runs dry.
-    let mut sweep: Vec<DVec3> = Vec::new();
-    let mut y = b.min.y + 0.5 * d_sep;
-    while y < b.max.y {
-        let mut x = b.min.x + 0.5 * d_sep;
-        while x < b.max.x {
-            sweep.push(DVec3::new(x, y, 0.0));
-            x += d_sep;
-        }
-        y += d_sep;
-    }
-    let mut sweep = sweep.into_iter();
-
-    // Traces from `seed` in direction `sign` (+1 along E) until a stop condition.
-    let trace = |seed: DVec3, sign: f64, grid: &Grid, id: usize| -> Vec<DVec3> {
+    // Traces from `seed` in direction `sign` (+1 along E) until the line reaches a charge
+    // or the edge (or a point where E vanishes).
+    let trace = |seed: DVec3, sign: f64| -> Vec<DVec3> {
         let mut pts = vec![seed];
         let mut x = seed;
         let mut ds: f64 = 0.02;
         let mut length = 0.0;
-        'outer: for _ in 0..20_000 {
+        'outer: for _ in 0..50_000 {
             let Some(d0) = field_dir(x, sign) else { break };
             let xn = loop {
                 let k1 = d0;
@@ -141,53 +123,79 @@ pub fn field_lines(scn: &Scenario<Coulomb>, spacing: f64) -> Vec<FieldLine> {
                     continue;
                 }
                 if turn < 0.3 * MAX_TURN {
-                    ds = (ds * 1.5).min(store_every);
+                    ds = (ds * 1.5).min(0.25 * d_sep);
                 }
                 break xn;
             };
             length += (xn - x).length();
             x = xn;
-            if !inside_bounds(x) || near_charge(x, 0.05) || length > 1000.0 {
-                pts.push(x);
-                break;
-            }
-            if grid.near(x, d_test, Some(id)) {
-                break;
-            }
             pts.push(x);
+            if !inside_bounds(x) || charge_distance(x) < 0.0 || length > 2000.0 {
+                break;
+            }
         }
         pts
     };
 
-    loop {
-        let seed = match queue.pop_front() {
-            Some(s) => s,
-            None => match sweep.next() {
-                Some(s) => s,
-                None => break,
-            },
-        };
-        if !inside_bounds(seed) || near_charge(seed, 0.1) || grid.near(seed, d_sep, None) {
+    let mut grid = Grid::new(d_sep);
+    let mut lines: Vec<FieldLine> = Vec::new();
+    let mut queue: VecDeque<DVec3> = VecDeque::new();
+    for s in &scn.obstacles {
+        for i in 0..8 {
+            let a = std::f64::consts::FRAC_PI_4 * f64::from(i) + 0.2;
+            queue
+                .push_back(s.center + DVec3::new(a.cos(), a.sin(), 0.0) * (s.radius + 0.6 * d_sep));
+        }
+    }
+    let mut sweep: Vec<DVec3> = Vec::new();
+    let mut y = b.min.y + 0.5 * d_sep;
+    while y < b.max.y {
+        let mut x = b.min.x + 0.5 * d_sep;
+        while x < b.max.x {
+            sweep.push(DVec3::new(x, y, 0.0));
+            x += d_sep;
+        }
+        y += d_sep;
+    }
+    let mut sweep = sweep.into_iter();
+
+    while let Some(seed) = queue.pop_front().or_else(|| sweep.next()) {
+        if !inside_bounds(seed) || charge_distance(seed) < 0.0 {
             continue;
         }
-        let id = lines.len();
-        let forward = trace(seed, 1.0, &grid, id);
-        let backward = trace(seed, -1.0, &grid, id);
+        if charge_distance(seed) > converge_zone && grid.near(seed, d_sep, None) {
+            continue;
+        }
+        let forward = trace(seed, 1.0);
+        let backward = trace(seed, -1.0);
         let mut points: Vec<DVec3> = backward.into_iter().rev().collect();
         points.extend(forward.into_iter().skip(1));
-        let length: f64 = points.windows(2).map(|w| (w[1] - w[0]).length()).sum();
-        if length < 2.0 * d_sep {
+
+        // Reject lines that crowd accepted ones away from the charges.
+        let mut crowded = 0.0;
+        let mut free = 0.0;
+        for w in points.windows(2) {
+            let seg = (w[1] - w[0]).length();
+            if charge_distance(w[1]) > converge_zone {
+                if grid.near(w[1], d_test, None) {
+                    crowded += seg;
+                } else {
+                    free += seg;
+                }
+            }
+        }
+        if crowded > 0.1 * (crowded + free) || crowded > d_sep {
             continue;
         }
-        // Register points (about every d_sep/4) and queue perpendicular seeds.
+
+        let id = lines.len();
         let mut since_store = 0.0;
         let mut since_seed = 0.0;
-        grid.insert(points[0], id);
         for w in points.windows(2) {
             let seg = (w[1] - w[0]).length();
             since_store += seg;
             since_seed += seg;
-            if since_store >= store_every {
+            if since_store >= 0.25 * d_sep {
                 grid.insert(w[1], id);
                 since_store = 0.0;
             }
@@ -199,7 +207,6 @@ pub fn field_lines(scn: &Scenario<Coulomb>, spacing: f64) -> Vec<FieldLine> {
                 queue.push_back(w[1] - n * d_sep);
             }
         }
-        grid.insert(*points.last().expect("non-empty"), id);
         let arrows = arrows_along(&points, arrow_spacing, |x| field_dir(x, 1.0));
         lines.push(FieldLine { points, arrows });
     }

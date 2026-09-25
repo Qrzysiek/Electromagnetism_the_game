@@ -5,6 +5,8 @@
 //! Refining the grid by an integer factor multiplies every node and the subdivision, so
 //! all existing nodes stay exactly where they were.
 
+pub mod solve;
+
 use physics::DVec3;
 use physics::dynamics::{Kinematics, Particle};
 use physics::field::{Coulomb, FixedCharge};

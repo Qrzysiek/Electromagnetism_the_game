@@ -64,12 +64,13 @@ A single particle in the static field of fixed charges is treated **exactly**, i
   - To be decided after playtesting.
 - Wave particles start with a defined, small spread in position, direction and energy, as a real beam does. Identical initial conditions would be singular.
 - Fast feedback: the wave-1 trajectory recomputes live on every change. There is no start button.
+- **Sandbox mode** (level editor): place level charges freely; set the launch point, direction and energy, the particle, c, the detector box, the grid and the player limits. Check solvability with the solver, store a reference solution, and save levels as JSON (`levels/custom/`) alongside generated ones.
 
 ## 4. 2D and 3D modes
 
 - One physics core, two presentation and control layers. 2D mode is its own experience: its own look, levels, generator settings and simpler controls.
 - **Decision:** physics is always truly 3D, including in 2D mode. 2D mode is a cross-section of the 3D world. All charges lie in a plane of symmetry, and particles start in it with velocity parallel to it, so they never leave it. The field is the real 3D field (`1/r²`). "Flat" physics with a `1/r` field is excluded.
-- In 2D, field lines show direction only. Their density in the plane does not represent field strength for a 3D field, and the UI says so. Strength is shown by the potential map and the arrows.
+- In 2D, field lines show direction only. They are drawn evenly spaced (Jobard–Lefer style), start and end only on charges or the arena edge, and carry arrowheads along **E**. Their density in the plane does not represent field strength for a 3D field, and the UI says so. Strength is shown by the potential map and the arrows.
 - 3D mode: editing by layers (the current grid slice is active, the others are semi-transparent).
 
 ## 5. Controls
@@ -81,7 +82,7 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 ## 6. Visualisation
 
 - Field lines start on a small sphere around each charge, with the number of lines proportional to the charge (3D). Traced on the CPU in f64 (cheap and exact enough).
-- A vector field (arrows) on a chosen slice. A potential map in 2D and equipotential surfaces in 3D, computed on the GPU in f32 (visual only, never used for gameplay).
+- A vector field (arrows) on a chosen slice. A potential map in 2D (a fragment shader evaluating the potential per pixel, antialiased contours, forbidden region `q(φ − φ_A) > T₀` shaded) and equipotential surfaces in 3D, computed on the GPU in f32 (visual only, never used for gameplay).
 - Learning aids: slow motion, the force vector on the particle, a kinetic/potential energy bar during flight (relativistic kinetic energy `(γ−1)mc²`), the active physics model indicator, and the verified/marginal status of the result.
 
 ## 7. Level generator

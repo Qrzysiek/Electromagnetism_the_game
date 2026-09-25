@@ -1,11 +1,10 @@
 //! Offline level tools: solving and checking levels. (Random level generation: M5.)
 
-mod search;
-
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use level::Level;
+use level::solve as search;
 use physics::verify::verify;
 
 #[derive(Parser)]

@@ -41,7 +41,13 @@ impl Editor {
 
     /// Value of a new charge.
     pub fn selected_charge(&self) -> f64 {
-        let q = self.level.limits.magnitudes[self.magnitude_index];
+        let q = self
+            .level
+            .limits
+            .magnitudes
+            .get(self.magnitude_index)
+            .copied()
+            .unwrap_or(1.0);
         if self.positive { q } else { -q }
     }
 
@@ -193,6 +199,34 @@ impl Editor {
         ]);
         self.level = level;
         self.placement = placement;
+        self.changed();
+    }
+
+    /// The level at its own (recommended) grid.
+    pub fn base(&self) -> &Level {
+        &self.base
+    }
+
+    /// Edits the level itself (sandbox). Works on the level's own grid: the refinement is
+    /// reset to 1 first (player charges that do not fit it are removed).
+    pub fn edit_level(&mut self, f: impl FnOnce(&mut Level)) {
+        if self.refinement() != 1 {
+            self.set_refinement(1);
+            if self.refinement() != 1 {
+                self.placement.clear();
+                self.level = self.base.clone();
+            }
+        }
+        f(&mut self.base);
+        self.level = self.base.clone();
+        let m = self.level.grid.max_node();
+        self.cursor = [
+            self.cursor[0].clamp(0, m[0]),
+            self.cursor[1].clamp(0, m[1]),
+            0,
+        ];
+        let n = self.level.limits.magnitudes.len();
+        self.magnitude_index = self.magnitude_index.min(n.saturating_sub(1));
         self.changed();
     }
 
