@@ -193,6 +193,7 @@ Accuracy of the margins against the analytic gap `r_min δ`: relative error 2e-1
 | Effect | Status in Stage 1 | Control |
 |---|---|---|
 | Radiation (Larmor/Liénard) | neglected | The radiated energy `∫P dt`, with `P = (2/3) k q² γ⁶ (a² − (v × a)²/c²) / c³`, is computed as a diagnostic (`Trajectory::radiated_energy`, trapezoidal rule over accepted steps; exactly 0 for `c = ∞`). Flagging levels above a threshold is part of the generator (M5). |
+| | | **Consistency requirement (found in M4):** radiated fraction per close pass ≈ `r_cl / r`, with `r_cl = k q²/(mc²)` the particle's classical radius. The first demo levels used `q = m = 1`, `c = 1.5…5`, giving `r_cl` = 0.04–0.44 cells. Their neglected radiation was 1e-4 to 2 × T₀, so they were physically inconsistent. Fix, as in real accelerators: weakly charged particle (`q = 10⁻⁶`), strongly charged electrodes (`Q ~ 10⁶`). Trajectories depend only on `qQ/m` and `c`, so the puzzles are unchanged. Neglected radiation of the reference flights is now 1e-16 … 1.7e-11 × T₀. Test `level/tests/levels.rs` requires `< 1e-10` for every shipped level; the game flags player setups above that. |
 | Magnetic field of the moving particle acting on others | n/a (single particle) | Stage 6 (Darwin) |
 | Polarization of test particles | neglected (non-polarizable by assumption) | documented assumption |
 | Recoil of fixed charges | none (held fixed by definition) | game rule |

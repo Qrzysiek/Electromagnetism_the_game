@@ -1,0 +1,355 @@
+//! Side panel: level selection, charge palette, result and verification status, energy
+//! bars and controls.
+
+use bevy::prelude::*;
+use bevy_egui::{EguiContexts, egui};
+use physics::trajectory::Outcome;
+use physics::verify::{Boundary, Status};
+
+use crate::worker::{PathPoint, Preview};
+use crate::{Game, PANEL_WIDTH};
+
+/// Linearly interpolated path point at time `t` (for animation only).
+pub fn point_at(p: &Preview, t: f64) -> Option<PathPoint> {
+    let path = &p.path;
+    let last = *path.last()?;
+    if t >= last.t {
+        return Some(last);
+    }
+    let i = path.partition_point(|q| q.t <= t).max(1);
+    let (a, b) = (path[i - 1], path[i]);
+    let w = if b.t > a.t {
+        (t - a.t) / (b.t - a.t)
+    } else {
+        0.0
+    };
+    let lerp = |x: f64, y: f64| x + (y - x) * w;
+    Some(PathPoint {
+        t,
+        x: a.x.lerp(b.x, w),
+        p: a.p.lerp(b.p, w),
+        kinetic: lerp(a.kinetic, b.kinetic),
+        potential: lerp(a.potential, b.potential),
+        force: a.force.lerp(b.force, w),
+        speed_over_c: lerp(a.speed_over_c, b.speed_over_c),
+    })
+}
+
+/// Compact number with an SI-style suffix (2e6 → "2M", 1e-6 → "1µ").
+pub fn fmt_si(v: f64) -> String {
+    let a = v.abs();
+    let (scale, suffix) = [
+        (1e9, "G"),
+        (1e6, "M"),
+        (1e3, "k"),
+        (1.0, ""),
+        (1e-3, "m"),
+        (1e-6, "µ"),
+        (1e-9, "n"),
+    ]
+    .into_iter()
+    .find(|(s, _)| a >= *s)
+    .unwrap_or((1.0, ""));
+    let m = v / scale;
+    let text = format!("{m:.3}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    format!("{text}{suffix}")
+}
+
+fn outcome_text(o: Outcome) -> String {
+    match o {
+        Outcome::Arrived => "reached the detector".into(),
+        Outcome::Collided(_) => "hit a charge".into(),
+        Outcome::LeftBounds => "left the map".into(),
+        Outcome::Timeout => "ran out of time".into(),
+        Outcome::Failed(e) => format!("integration failed ({e})"),
+    }
+}
+
+fn boundary_text(b: Boundary) -> &'static str {
+    match b {
+        Boundary::Obstacle(_) => "a charge",
+        Boundary::Bounds => "the map edge",
+        Boundary::Detector => "the detector edge",
+        Boundary::TimeLimit => "the time limit",
+    }
+}
+
+/// A horizontal bar for an energy relative to T₀, on a scale of −2…2 T₀.
+fn energy_bar(ui: &mut egui::Ui, label: &str, value: f64, color: egui::Color32) {
+    ui.horizontal(|ui| {
+        ui.add_sized([70.0, 16.0], egui::Label::new(label));
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(170.0, 14.0), egui::Sense::hover());
+        let painter = ui.painter_at(rect);
+        painter.rect_filled(rect, 2.0, egui::Color32::from_gray(35));
+        let zero = rect.center().x;
+        #[allow(clippy::cast_possible_truncation)]
+        let x = zero + (value.clamp(-2.0, 2.0) as f32) * rect.width() / 4.0;
+        let bar = egui::Rect::from_x_y_ranges(zero.min(x)..=zero.max(x), rect.y_range());
+        painter.rect_filled(bar, 2.0, color);
+        painter.line_segment(
+            [
+                egui::pos2(zero, rect.top()),
+                egui::pos2(zero, rect.bottom()),
+            ],
+            egui::Stroke::new(1.0, egui::Color32::GRAY),
+        );
+        ui.label(format!("{value:+.3}"));
+    });
+}
+
+pub fn panel(mut contexts: EguiContexts, mut game: ResMut<Game>) -> Result {
+    let ctx = contexts.ctx_mut()?;
+    let mut root = egui::Ui::new(
+        ctx.clone(),
+        "root".into(),
+        egui::UiBuilder::new()
+            .layer_id(egui::LayerId::background())
+            .max_rect(ctx.viewport_rect()),
+    );
+    let game = &mut *game;
+    let response = egui::Panel::right("side_panel")
+        .exact_size(PANEL_WIDTH)
+        .resizable(false)
+        .show(&mut root, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| contents(ui, game));
+        });
+    game.panel_left_px = Some(response.response.rect.left() * ctx.pixels_per_point());
+    Ok(())
+}
+
+fn contents(ui: &mut egui::Ui, game: &mut Game) {
+    ui.heading("Electromagnetism");
+
+    // Level selection.
+    let names: Vec<String> = game.levels.iter().map(|l| l.name.clone()).collect();
+    let mut selected = game.level_index;
+    ui.horizontal(|ui| {
+        if ui.button("◀").clicked() {
+            game.next_level(-1);
+            selected = game.level_index;
+        }
+        egui::ComboBox::from_id_salt("level")
+            .selected_text(format!("{}. {}", selected + 1, names[selected]))
+            .width(220.0)
+            .show_ui(ui, |ui| {
+                for (i, n) in names.iter().enumerate() {
+                    ui.selectable_value(&mut selected, i, format!("{}. {n}", i + 1));
+                }
+            });
+        if ui.button("▶").clicked() {
+            game.next_level(1);
+            selected = game.level_index;
+        }
+    });
+    game.select_level(selected);
+    let level = game.editor.level.clone();
+    if !level.description.is_empty() {
+        ui.label(egui::RichText::new(&level.description).italics());
+    }
+
+    // World.
+    let kin = physics::dynamics::Kinematics::new(level.particle.mass, level.c());
+    let p0 = level.launch_momentum();
+    let gamma0 = kin.gamma(p0);
+    let v0 = kin.velocity(p0).length();
+    ui.label(match level.physics.c {
+        Some(c) => format!(
+            "Launch: T₀ = {:.3}, v₀ = {:.3} c, γ₀ = {:.4}   (c = {c})",
+            level.launch.kinetic_energy,
+            v0 / c,
+            gamma0
+        ),
+        None => format!(
+            "Launch: T₀ = {:.3}, v₀ = {v0:.3} (Newtonian)",
+            level.launch.kinetic_energy
+        ),
+    });
+    ui.label(format!(
+        "Particle: q = {}, m = {}",
+        fmt_si(level.particle.charge),
+        fmt_si(level.particle.mass)
+    ));
+    ui.separator();
+
+    // Charge palette.
+    ui.label(egui::RichText::new("Your charges").strong());
+    ui.label(format!(
+        "{} of {} left",
+        game.editor.charges_left(),
+        level.limits.max_charges
+    ));
+    ui.horizontal(|ui| {
+        ui.label("New charge:");
+        let limits = &level.limits;
+        if limits.allow_positive && limits.allow_negative {
+            let sign = if game.editor.positive { "+" } else { "−" };
+            if ui.button(sign).on_hover_text("Flip sign (S)").clicked() {
+                game.editor.positive = !game.editor.positive;
+            }
+        }
+        for (i, m) in limits.magnitudes.iter().enumerate() {
+            ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_si(*m));
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label("Grid:");
+        for f in 1..=4u32 {
+            let current = game.editor.refinement() == f;
+            if ui.selectable_label(current, format!("{f}×")).clicked() {
+                game.editor.set_refinement(f);
+            }
+        }
+        if ui.button("Clear").clicked() {
+            game.editor.clear();
+        }
+    });
+    if let Some(msg) = &game.editor.message {
+        ui.colored_label(egui::Color32::from_rgb(255, 170, 80), msg);
+    }
+    ui.separator();
+
+    // Result.
+    ui.label(egui::RichText::new("Result").strong());
+    match (&game.preview, game.verdict) {
+        (None, _) => {
+            ui.label("Computing…");
+        }
+        (Some(p), verdict) => {
+            ui.label(format!(
+                "The particle {} after t = {:.3}.",
+                outcome_text(p.outcome),
+                p.flight_time
+            ));
+            match verdict {
+                None => {
+                    ui.label("Verifying at 100× tighter tolerance…");
+                }
+                Some((Status::Verified, Outcome::Arrived)) => {
+                    ui.label(
+                        egui::RichText::new("✔ SOLVED (verified)")
+                            .color(egui::Color32::from_rgb(90, 240, 110))
+                            .size(20.0),
+                    );
+                }
+                Some((Status::Verified, _)) => {
+                    ui.colored_label(egui::Color32::LIGHT_GRAY, "Verified.");
+                }
+                Some((
+                    Status::SmallMargin {
+                        boundary,
+                        margin,
+                        error_estimate,
+                    },
+                    _,
+                )) => {
+                    ui.colored_label(
+                        egui::Color32::YELLOW,
+                        format!(
+                            "⚠ Marginal: passes {} by {margin:.2e} cells, numerical error ≈ {error_estimate:.1e}. Too close to call.",
+                            boundary_text(boundary)
+                        ),
+                    );
+                }
+                Some((Status::OutcomeMismatch { .. }, _)) => {
+                    ui.colored_label(
+                        egui::Color32::YELLOW,
+                        "⚠ Marginal: the outcome depends on numerical precision.",
+                    );
+                }
+                Some((Status::Failed, _)) => {
+                    ui.colored_label(egui::Color32::RED, "Integration failed.");
+                }
+            }
+            egui::Grid::new("diag").num_columns(2).show(ui, |ui| {
+                if level.physics.c.is_some() {
+                    ui.label("max v/c");
+                    ui.label(format!("{:.4}", p.max_speed_over_c));
+                    ui.end_row();
+                }
+                ui.label("energy error |ΔW|/T₀");
+                ui.label(format!("{:.1e}", p.energy_rel_error));
+                ui.end_row();
+                if level.physics.c.is_some() {
+                    ui.label("radiated / T₀ (neglected)");
+                    let text = format!("{:.1e}", p.radiated_fraction);
+                    if p.radiated_fraction > 1e-10 {
+                        ui.colored_label(egui::Color32::YELLOW, text + "  not negligible!");
+                    } else {
+                        ui.label(text);
+                    }
+                    ui.end_row();
+                }
+            });
+        }
+    }
+    ui.separator();
+
+    // Energy bars at the animated point.
+    ui.label(egui::RichText::new("Energy along the flight (units of T₀)").strong());
+    ui.horizontal(|ui| {
+        ui.checkbox(&mut game.animate, "Animate (A)");
+        ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"));
+    });
+    if let Some(p) = &game.preview
+        && let Some(pt) = point_at(
+            p,
+            if game.animate {
+                game.anim_time
+            } else {
+                p.flight_time
+            },
+        )
+    {
+        let t0 = level.launch.kinetic_energy;
+        energy_bar(
+            ui,
+            "kinetic",
+            pt.kinetic / t0,
+            egui::Color32::from_rgb(240, 200, 60),
+        );
+        energy_bar(
+            ui,
+            "potential",
+            pt.potential / t0,
+            egui::Color32::from_rgb(200, 90, 230),
+        );
+        energy_bar(
+            ui,
+            "total − T₀",
+            (pt.kinetic + pt.potential - t0) / t0,
+            egui::Color32::from_rgb(120, 220, 120),
+        );
+        if level.physics.c.is_some() {
+            ui.label(format!("t = {:.2}   v/c = {:.4}", pt.t, pt.speed_over_c));
+        } else {
+            ui.label(format!("t = {:.2}", pt.t));
+        }
+    }
+    ui.separator();
+
+    ui.label(egui::RichText::new("View").strong());
+    ui.checkbox(&mut game.show_potential, "Potential map (V)");
+    ui.label(
+        egui::RichText::new(
+            "Red: uphill for the particle, blue: downhill; contours every T₀/4. \
+             Dark: forbidden by energy conservation.",
+        )
+        .small(),
+    );
+    ui.checkbox(&mut game.show_field_lines, "Field lines (F)");
+    ui.label(
+        egui::RichText::new(
+            "In this 2D slice of a 3D field, lines show direction only, not strength.",
+        )
+        .small(),
+    );
+    ui.separator();
+
+    ui.collapsing("Controls", |ui| {
+        ui.label("Mouse: left click place, right click remove, wheel changes magnitude.");
+        ui.label("Arrows move the cursor (Shift: ×5). Space/Enter place, Del/X remove.");
+        ui.label("S flip sign, Q/E change magnitude, C clear, 1–4 grid refinement.");
+        ui.label("N/P next/previous level, V potential map, F field lines, A animation.");
+    });
+}

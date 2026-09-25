@@ -19,7 +19,7 @@
     }
   },
   "particle": {
-    "charge": 1.0,
+    "charge": 1e-6,
     "mass": 1.0,
     "radius": 0.0
   },
@@ -55,7 +55,7 @@
         8,
         0
       ],
-      "charge": -2.0
+      "charge": -2000000.0
     },
     {
       "node": [
@@ -63,7 +63,7 @@
         12,
         0
       ],
-      "charge": 2.0
+      "charge": 2000000.0
     },
     {
       "node": [
@@ -71,15 +71,15 @@
         5,
         0
       ],
-      "charge": -2.0
+      "charge": -2000000.0
     }
   ],
   "limits": {
     "max_charges": 2,
     "magnitudes": [
-      2.0,
-      4.0,
-      8.0
+      2000000.0,
+      4000000.0,
+      8000000.0
     ],
     "allow_positive": true,
     "allow_negative": true
@@ -91,7 +91,7 @@
         1,
         0
       ],
-      "charge": -8.0
+      "charge": -8000000.0
     }
   ]
 }

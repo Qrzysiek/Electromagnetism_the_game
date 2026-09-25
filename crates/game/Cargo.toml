@@ -10,3 +10,5 @@ workspace = true
 [dependencies]
 physics = { path = "../physics" }
 level = { path = "../level" }
+bevy = "0.19.1"
+bevy_egui = "0.42.0"
