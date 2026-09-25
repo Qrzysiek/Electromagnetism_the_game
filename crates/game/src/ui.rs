@@ -337,7 +337,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         )
         .small(),
     );
-    ui.checkbox(&mut game.show_field_lines, "Field lines (F)");
+    ui.horizontal(|ui| {
+        ui.checkbox(&mut game.show_field_lines, "Field lines (F)");
+        ui.add(egui::Slider::new(&mut game.field_line_density, 4..=48).text("density"));
+    });
     ui.label(
         egui::RichText::new(
             "In this 2D slice of a 3D field, lines show direction only, not strength.",

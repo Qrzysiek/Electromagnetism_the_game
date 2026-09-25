@@ -27,6 +27,9 @@ use worker::{Preview, Request, Response, Worker};
 pub const PANEL_WIDTH: f32 = 340.0;
 const PX_PER_CELL: u32 = 12;
 
+/// A field line for drawing: polyline and arrowheads (position, unit direction of E).
+pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
+
 #[derive(Resource)]
 pub struct Game {
     pub levels: Vec<Level>,
@@ -37,7 +40,11 @@ pub struct Game {
     pub verdict: Option<(Status, Outcome)>,
     pub sent_revision: u64,
     pub visuals_revision: u64,
-    pub field_lines: Vec<Vec<Vec2>>,
+    pub field_lines: Vec<DrawnFieldLine>,
+    /// Number of field lines drawn from the largest charge.
+    pub field_line_density: u32,
+    /// (setup revision, density) the current field lines were computed for.
+    pub field_lines_key: (u64, u32),
     pub show_potential: bool,
     pub show_field_lines: bool,
     pub animate: bool,
@@ -148,6 +155,8 @@ fn main() {
             sent_revision: 0,
             visuals_revision: 0,
             field_lines: Vec::new(),
+            field_line_density: 16,
+            field_lines_key: (0, 0),
             show_potential: true,
             show_field_lines: false,
             animate: true,
@@ -160,17 +169,35 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (input, sync_physics, poll_physics, animate, fit_camera, draw).chain(),
+            (
+                input,
+                sync_physics,
+                update_field_lines,
+                poll_physics,
+                animate,
+                fit_camera,
+                draw,
+            )
+                .chain(),
         )
         .add_systems(EguiPrimaryContextPass, ui::panel)
         .run();
 }
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+fn setup(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut gizmo_store: ResMut<GizmoConfigStore>,
+) {
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection::default_2d()),
+        Msaa::Sample8,
     ));
+    // Smooth polylines: round joints avoid notches between segments.
+    let (config, _) = gizmo_store.config_mut::<DefaultGizmoConfigGroup>();
+    config.line.width = 2.0;
+    config.line.joints = GizmoLineJoint::Round(4);
     let image = images.add(Image::new_fill(
         Extent3d {
             width: 1,
@@ -377,17 +404,36 @@ fn sync_physics(
                 t.translation = Vec3::new(center.x as f32, center.y as f32, -10.0);
             }
         }
-        let charges: Vec<(DVec3, f64)> = level
-            .level_charges
-            .iter()
-            .chain(&game.editor.placement)
-            .map(|c| (level.grid.position(c.node), c.charge))
-            .collect();
-        game.field_lines = visuals::field_lines(&scenario, &charges)
-            .into_iter()
-            .map(|l| l.into_iter().map(to_vec2).collect())
-            .collect();
     }
+}
+
+/// Recomputes the field lines when they are shown and the setup or density changed.
+fn update_field_lines(mut game: ResMut<Game>) {
+    let key = (game.sent_revision, game.field_line_density);
+    if !game.show_field_lines || key == game.field_lines_key {
+        return;
+    }
+    game.field_lines_key = key;
+    let level = &game.editor.level;
+    let scenario = level.scenario(&game.editor.placement);
+    let charges: Vec<(DVec3, f64)> = level
+        .level_charges
+        .iter()
+        .chain(&game.editor.placement)
+        .map(|c| (level.grid.position(c.node), c.charge))
+        .collect();
+    game.field_lines = visuals::field_lines(&scenario, &charges, game.field_line_density)
+        .into_iter()
+        .map(|l| {
+            (
+                l.points.into_iter().map(to_vec2).collect(),
+                l.arrows
+                    .into_iter()
+                    .map(|(p, d)| (to_vec2(p), to_vec2(d)))
+                    .collect(),
+            )
+        })
+        .collect();
 }
 
 fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
@@ -528,8 +574,18 @@ fn draw(
 
     // Field lines.
     if game.show_field_lines {
-        for line in &game.field_lines {
-            gizmos.linestrip_2d(line.iter().copied(), Color::srgba(0.9, 0.9, 0.6, 0.35));
+        // Opaque: translucent segments double-blend where they overlap.
+        let color = Color::srgb(0.62, 0.62, 0.45);
+        let (head, spread) = (0.32, 0.45_f32);
+        for (points, arrows) in &game.field_lines {
+            gizmos.linestrip_2d(points.iter().copied(), color);
+            // Arrowheads pointing along E.
+            for &(p, d) in arrows {
+                let back = -d * head;
+                let tip = p + d * (0.5 * head);
+                gizmos.line_2d(tip, tip + Vec2::from_angle(spread).rotate(back), color);
+                gizmos.line_2d(tip, tip + Vec2::from_angle(-spread).rotate(back), color);
+            }
         }
     }
 
