@@ -1,0 +1,84 @@
+{
+  "format_version": 1,
+  "engine_version": "0.1.0",
+  "name": "Einzel lens",
+  "description": "An Einzel lens focuses charged-particle beams in electron microscopes and ion sources without changing their energy. The beam leaves the source diverging at 20°; bring it back onto the axis at the small detector. Only charges of the particle's sign are available (a decelerating lens).",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "t_max": 300.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "particle": {
+    "charge": 1e-6,
+    "mass": 1.0,
+    "radius": 0.0
+  },
+  "launch": {
+    "node": [
+      0,
+      10,
+      0
+    ],
+    "direction": [
+      0.9396926207859084,
+      0.3420201433256687,
+      0.0
+    ],
+    "kinetic_energy": 0.5
+  },
+  "detector": {
+    "min": [
+      28,
+      9,
+      0
+    ],
+    "max": [
+      30,
+      11,
+      0
+    ]
+  },
+  "level_charges": [],
+  "limits": {
+    "max_charges": 2,
+    "magnitudes": [
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": false,
+    "region": {
+      "min": [
+        12,
+        3,
+        0
+      ],
+      "max": [
+        16,
+        17,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        12,
+        16,
+        0
+      ],
+      "charge": 500000.0
+    }
+  ]
+}

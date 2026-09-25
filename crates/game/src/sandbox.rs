@@ -9,7 +9,7 @@ use std::sync::mpsc::{Receiver, channel};
 use bevy_egui::egui;
 use level::{
     Charge, Detector, ENGINE_VERSION, FORMAT_VERSION, Grid, Launch, Level, Limits, Node,
-    ParticleSpec, TolerancesSpec, WorldPhysics, solve,
+    ParticleSpec, Region2, TolerancesSpec, WorldPhysics, solve,
 };
 use physics::trajectory::{Outcome, RunSettings, run};
 use physics::verify::verify;
@@ -24,6 +24,7 @@ pub enum Tool {
     Launch,
     Aim,
     Detector,
+    Region,
 }
 
 pub struct SolverJob {
@@ -108,6 +109,7 @@ pub fn empty_level() -> Level {
             magnitudes: vec![1e6, 2e6, 4e6],
             allow_positive: true,
             allow_negative: true,
+            region: None,
         },
         reference_solution: Vec::new(),
     }
@@ -207,14 +209,18 @@ pub fn pointer(game: &mut Game, node: Node, pressed: bool, released: bool, right
             }
             true
         }
-        Tool::Detector => {
+        Tool::Detector | Tool::Region => {
             if pressed {
                 game.sandbox.detector_drag = Some(node);
             }
             if released && let Some(a) = game.sandbox.detector_drag.take() {
                 let min = [a[0].min(node[0]), a[1].min(node[1]), 0];
                 let max = [a[0].max(node[0]), a[1].max(node[1]), 0];
-                if min[0] < max[0] && min[1] < max[1] {
+                if tool == Tool::Region {
+                    let region = Region2 { min, max };
+                    game.editor.edit_level(|l| l.limits.region = Some(region));
+                    game.editor.placement.retain(|c| region.contains(c.node));
+                } else if min[0] < max[0] && min[1] < max[1] {
                     game.editor
                         .edit_level(|l| l.detector = Detector { min, max });
                 }
@@ -375,6 +381,7 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
         ui.selectable_value(t, Tool::Launch, "Launch point");
         ui.selectable_value(t, Tool::Aim, "Aim");
         ui.selectable_value(t, Tool::Detector, "Detector (drag)");
+        ui.selectable_value(t, Tool::Region, "Player region (drag)");
     });
     match game.sandbox.tool {
         Tool::LevelCharge => {
@@ -413,6 +420,12 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
             ui.label(
                 egui::RichText::new("Press on one corner, release on the opposite corner.").small(),
             );
+        }
+        Tool::Region => {
+            ui.label(egui::RichText::new("Drag the box where players may place charges.").small());
+            if ui.button("Remove region (place anywhere)").clicked() {
+                game.editor.edit_level(|l| l.limits.region = None);
+            }
         }
     }
     ui.separator();

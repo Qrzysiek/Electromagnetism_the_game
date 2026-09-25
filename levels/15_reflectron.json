@@ -1,0 +1,92 @@
+{
+  "format_version": 1,
+  "engine_version": "0.1.0",
+  "name": "Reflectron",
+  "description": "Time-of-flight mass spectrometers use an electrostatic mirror, the reflectron, to turn ions around and sharpen their arrival times. Build a mirror that sends the ion back to the detector beside the source.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "t_max": 300.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "particle": {
+    "charge": 1e-6,
+    "mass": 1.0,
+    "radius": 0.0
+  },
+  "launch": {
+    "node": [
+      0,
+      13,
+      0
+    ],
+    "direction": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "kinetic_energy": 0.5
+  },
+  "detector": {
+    "min": [
+      0,
+      4,
+      0
+    ],
+    "max": [
+      2,
+      7,
+      0
+    ]
+  },
+  "level_charges": [],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      1000000.0,
+      2000000.0,
+      4000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": false,
+    "region": {
+      "min": [
+        20,
+        0,
+        0
+      ],
+      "max": [
+        29,
+        20,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        20,
+        0,
+        0
+      ],
+      "charge": 4000000.0
+    },
+    {
+      "node": [
+        21,
+        16,
+        0
+      ],
+      "charge": 1000000.0
+    }
+  ]
+}

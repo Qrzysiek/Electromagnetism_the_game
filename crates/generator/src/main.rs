@@ -56,6 +56,11 @@ fn main() {
             let mut best: Option<Vec<level::Charge>> = None;
             let singles = search::single_charge_solutions(&level);
             println!("  verified 1-charge solutions: {}", singles.len());
+            if singles.len() <= 10 {
+                for c in &singles {
+                    println!("    {:?} Q = {:e}", c.node, c.charge);
+                }
+            }
             if let Some(c) = singles.first() {
                 best = Some(vec![*c]);
             }

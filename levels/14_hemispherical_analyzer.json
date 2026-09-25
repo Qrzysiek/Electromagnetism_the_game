@@ -1,0 +1,86 @@
+{
+  "format_version": 1,
+  "engine_version": "0.1.0",
+  "name": "Hemispherical analyzer (XPS)",
+  "description": "Photoelectron spectrometers sort electrons by energy between two concentric hemispheres. Between them the field is exactly that of a point charge at the centre. Bend the particle through 180° into the detector below the source: a circular orbit of radius R needs |qQ| = p·v·R.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "t_max": 300.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "particle": {
+    "charge": 1e-6,
+    "mass": 1.0,
+    "radius": 0.0
+  },
+  "launch": {
+    "node": [
+      4,
+      15,
+      0
+    ],
+    "direction": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "kinetic_energy": 0.5
+  },
+  "detector": {
+    "min": [
+      3,
+      4,
+      0
+    ],
+    "max": [
+      5,
+      6,
+      0
+    ]
+  },
+  "level_charges": [],
+  "limits": {
+    "max_charges": 1,
+    "magnitudes": [
+      2000000.0,
+      3000000.0,
+      4000000.0,
+      5000000.0,
+      6000000.0
+    ],
+    "allow_positive": false,
+    "allow_negative": true,
+    "region": {
+      "min": [
+        4,
+        3,
+        0
+      ],
+      "max": [
+        4,
+        14,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        4,
+        10,
+        0
+      ],
+      "charge": -5000000.0
+    }
+  ]
+}

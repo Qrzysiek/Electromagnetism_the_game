@@ -139,6 +139,23 @@ pub struct Limits {
     pub magnitudes: Vec<f64>,
     pub allow_positive: bool,
     pub allow_negative: bool,
+    /// If set, player charges may only be placed inside this box of nodes (inclusive),
+    /// like the electrode region of a real instrument.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region: Option<Region2>,
+}
+
+/// A box of grid nodes, inclusive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Region2 {
+    pub min: Node,
+    pub max: Node,
+}
+
+impl Region2 {
+    pub fn contains(&self, n: Node) -> bool {
+        (0..3).all(|i| (self.min[i]..=self.max[i]).contains(&n[i]))
+    }
 }
 
 /// Why a player placement is not allowed.
@@ -146,6 +163,7 @@ pub struct Limits {
 pub enum PlacementError {
     TooManyCharges,
     OutsideGrid(Node),
+    OutsideRegion(Node),
     NotInPlane(Node),
     Occupied(Node),
     SignNotAllowed(f64),
@@ -211,6 +229,10 @@ impl Level {
         scale(&mut self.launch.node);
         scale(&mut self.detector.min);
         scale(&mut self.detector.max);
+        if let Some(r) = &mut self.limits.region {
+            scale(&mut r.min);
+            scale(&mut r.max);
+        }
         for c in self
             .level_charges
             .iter_mut()
@@ -231,6 +253,9 @@ impl Level {
         for c in player {
             if !self.grid.contains(c.node) {
                 return Err(PlacementError::OutsideGrid(c.node));
+            }
+            if self.limits.region.is_some_and(|r| !r.contains(c.node)) {
+                return Err(PlacementError::OutsideRegion(c.node));
             }
             if self.grid.is_2d() && c.node[2] != 0 {
                 return Err(PlacementError::NotInPlane(c.node));
@@ -339,6 +364,7 @@ mod tests {
                 magnitudes: vec![1.0, 2.0],
                 allow_positive: true,
                 allow_negative: true,
+                region: None,
             },
             reference_solution: vec![],
         }

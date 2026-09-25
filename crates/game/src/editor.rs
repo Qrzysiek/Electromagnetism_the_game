@@ -239,6 +239,7 @@ pub fn describe(e: &PlacementError) -> String {
     match e {
         PlacementError::TooManyCharges => "No charges left for this level.".into(),
         PlacementError::OutsideGrid(_) => "Outside the grid.".into(),
+        PlacementError::OutsideRegion(_) => "Charges can only go in the marked region.".into(),
         PlacementError::NotInPlane(_) => "Must be in the plane.".into(),
         PlacementError::Occupied(_) => "That node is occupied.".into(),
         PlacementError::SignNotAllowed(_) => "That sign is not allowed here.".into(),

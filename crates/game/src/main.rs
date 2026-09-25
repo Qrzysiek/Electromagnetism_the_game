@@ -678,7 +678,20 @@ fn draw(
         draw_charge(&mut gizmos, c, true);
     }
 
-    // Detector being dragged in the sandbox.
+    // Region where player charges may be placed.
+    if let Some(r) = level.limits.region {
+        let p0 = to_vec2(grid.position(r.min)) - Vec2::splat(0.35);
+        let p1 = to_vec2(grid.position(r.max)) + Vec2::splat(0.35);
+        let blue = Color::srgba(0.45, 0.7, 1.0, 0.55);
+        gizmos.rect_2d((p0 + p1) * 0.5, p1 - p0, blue);
+        gizmos.rect_2d(
+            (p0 + p1) * 0.5,
+            p1 - p0 - Vec2::splat(0.12),
+            blue.with_alpha(0.25),
+        );
+    }
+
+    // Box being dragged in the sandbox (detector or region).
     if let Some(a) = game.sandbox.detector_drag {
         let p0 = to_vec2(grid.position(a));
         let p1 = to_vec2(grid.position(game.editor.cursor));

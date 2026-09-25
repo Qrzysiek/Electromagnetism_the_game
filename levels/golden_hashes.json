@@ -2,5 +2,11 @@
   "01_first_bend": "bd61617be9af0dab",
   "02_the_wall": "c72323a34933581f",
   "03_slingshot": "6caed79bbcdd2f84",
-  "04_fast_lane": "c728b97d2d1d5654"
+  "04_fast_lane": "c728b97d2d1d5654",
+  "11_geiger_marsden": "4cfb08005b6053f4",
+  "12_thomson_crt": "216a9e03f96b0403",
+  "13_einzel_lens": "52fe08cbd4fb189d",
+  "14_hemispherical_analyzer": "be7702323afd264d",
+  "15_reflectron": "04749c4ec91abf44",
+  "16_beta_spectrometer": "9961ec7b17e84393"
 }
