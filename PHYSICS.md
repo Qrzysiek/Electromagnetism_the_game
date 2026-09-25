@@ -9,7 +9,7 @@ Any change to the physics or numerics must update this file in the same commit.
 
 ---
 
-## 1. Units — *design*
+## 1. Units — *implemented* (`crates/physics/src/units.rs`)
 
 Internal units are dimensionless. A world is defined by four SI reference values:
 
@@ -26,9 +26,11 @@ Derived units:
 - velocity `V₀ = L₀ / T₀`
 - the speed of light becomes a dimensionless parameter `c = c_SI / V₀`
 
+`WorldScale` converts between the two. CODATA 2018 constants are used for `k`, `e`, `m_e`, `m_p`; `c` is exact.
+
 In the non-relativistic limit, trajectories depend only on the dimensionless ratio `k q Q / (L E_kin)`. The physical scale enters through `c` (relativity) and, in later stages, through material properties and particle–particle interaction.
 
-## 2. Field sources — *design*
+## 2. Field sources — *validated* (`crates/physics/src/field.rs`: `Coulomb`, `UniformElectric`)
 
 Fixed charges `Q_i` at positions `r_i`, each a rigid sphere of radius `R_i` with a spherically symmetric charge distribution. Outside the sphere (the only region particles can reach), the shell theorem gives exactly:
 
@@ -38,10 +40,12 @@ E(r) = Σ_i k Q_i (r − r_i) / |r − r_i|³
 ```
 
 - The sum is evaluated in f64 in a fixed order (the order in the level file). No softening.
+- Vector arithmetic uses `glam::DVec3`. Its `dot`, `cross` and `length` are plain multiply/add plus IEEE `sqrt`, with no fused multiply-add (checked in the source; `mul_add` is never called). Results are therefore deterministic across platforms.
+- `UniformElectric` (potential `−E·x`) exists for tests with analytic solutions (T6).
 - Test particles are rigid, spherically symmetric and **non-polarizable** (a stated approximation, since a conducting microsphere would feel image forces). Under these assumptions, the force on a test particle of radius `a` equals `q E(center)` exactly, because the force between two non-overlapping spherically symmetric distributions equals the point-charge force.
 - Contact condition: `|x − r_i| ≤ R_i + a`, which means the particle is lost.
 
-## 3. Equation of motion — *design*
+## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 
 State `y = (x, p)`, with:
 
@@ -55,10 +59,16 @@ dp/dt = q (E(x) + v × B(x))
 
 Stage 1 has `B = 0`.
 
-## 4. Conserved quantities (diagnostics only) — *design*
+Implementation details:
+- `c = ∞` is allowed and gives exact Newtonian mechanics (`1/(mc)² = 0`, so `γ = 1`). The non-relativistic tests use this rather than a large finite `c`.
+- The integrator works with the scaled state `(x, p/p_ref)`, where `p_ref = |p₀|` (or `m` if the particle starts at rest). One tolerance is then meaningful for positions (grid units) and momenta alike.
+- Kinetic energy is evaluated as `(γ−1)mc² = p²/(m(γ+1))`, which avoids cancellation at low speed.
+- **Speed limit in floating point:** `|v| = |p|c/sqrt(m²c² + p²)` never exceeds `c`. For `γ ≳ 10⁷`, the rounded quotient can equal `c` exactly. The strict inequality `|v| < c` is guaranteed and tested for `γ < 10⁷`. Nothing uses `v` as state, so this has no effect on the trajectory.
+
+## 4. Conserved quantities (diagnostics only) — *validated* (`crates/physics/src/trajectory.rs`)
 
 Static electric field:
-- Total energy `W = γ m c² + q φ(x)` is conserved.
+- Total energy `W = γ m c² + q φ(x)` is conserved. The code tracks `W − mc² = (γ−1)mc² + qφ`, which is finite for `c = ∞`. `Trajectory::energy_max_abs_error` is the largest `|W(t) − W(0)|` over the accepted steps and the final event state.
 - A single central charge also conserves angular momentum `L = x × p`, which holds relativistically too.
 
 They are computed along every trajectory and reported. They are **never** used to project or correct the state.
@@ -70,7 +80,9 @@ They are computed along every trajectory and reported. They are **never** used t
 - Two tolerance levels:
   - **preview** (fast, live editing)
   - **verify** (at least 100× tighter)
-- The exact values are fixed in M2 after benchmarking the physics problem, and recorded here.
+- **Chosen values (M2):** preview `rtol = atol = 1e-10`, verify `1e-12`.
+  - Benchmark (`cargo bench -p physics --bench preview`): one trajectory through a 50-charge, 40×30-cell level takes 175 µs at tol 1e-8 (41 steps) and 356 µs at 1e-11 (90 steps). Both are far inside the 16 ms frame budget, so even the preview can use a tight tolerance.
+  - Calibration (T10): after one Kepler orbit the global position error is about 30–80 × tol. At 1e-12 that is below 1e-10 grid cells, just above the rounding floor found in M1.
 
 ### 5.1 Why our own port (M1 decision)
 
@@ -118,10 +130,12 @@ The theory predicts 8 for the global error and 8 for the local error of the 7th-
 | 1 | 1.4 | 1.6e-13 | 14 |
 | 10 | 10 | 4.7e-15 | 33 |
 | 1000 | 1000 | 1.9e-14 | 57 |
-- The step size is also capped so that the particle's displacement per step is a fraction of its distance to the nearest charge surface (a safeguard; event location is the primary mechanism).
+
+### 5.3 Why not Boris
+
 - Why not Boris: with `B = 0`, Boris is leapfrog. Its good long-term energy behaviour relies on a fixed step, and an adaptive step (unavoidable with close encounters) breaks that. It may be revisited for magnetic fields.
 
-## 6. Events — *design*
+## 6. Events — *validated* (`crates/physics/src/events.rs`, `trajectory.rs`)
 
 Events are located on the dense-output polynomial of each accepted step:
 - `g_i(t) = |x(t) − r_i| − (R_i + a)` crosses zero: collision with charge `i`.
@@ -129,7 +143,22 @@ Events are located on the dense-output polynomial of each accepted step:
 - `x(t)` leaves the world bounds: lost (a game rule).
 - `t > t_max`: timeout (a game rule).
 
-Within a step, each `g` is sampled at several points of the interpolant to catch grazing approaches that dip below zero and come back. Roots are refined with Brent's method. The earliest event ends the trajectory.
+All event functions are signed distances (sphere, box, world bounds), which are 1-Lipschitz in position. Along the trajectory, `|dg/dt| ≤ |v| ≤ v_max`. On an interval `[a, b]` with `g(a), g(b) > 0`:
+
+```
+min g ≥ (g(a) + g(b) − v_max (b − a)) / 2
+```
+
+- If this bound is positive, the interval is **certified crossing-free**.
+- Otherwise it is bisected, left half first, so the **earliest** crossing is found even when `g` dips below zero and comes back between samples.
+- The crossing time is resolved to adjacent floating-point numbers: the result is the first representable time at which the interpolated `g ≤ 0`.
+- In a typical step all distant obstacles are certified from the two endpoint values alone, so the check costs almost nothing.
+- The earliest event over all functions ends the trajectory. Simultaneous events are ranked obstacle, then bounds, then detector.
+- If an interval can no longer be subdivided and is still not certified (a graze within `v_max · ulp(t)` of the surface), it is treated as a miss. Such a result is marginal by construction (§7).
+
+**Speed bound:** `v_max` is the largest speed sampled on the interpolant at 5 points of the step, times 1.25, capped at `c`. This is the one non-rigorous element: it assumes the speed does not rise by more than 25 % between those samples within one error-controlled step. A rigorous alternative is `v_max = c`, which is looser and slower. It remains available if a counterexample is ever found.
+
+The step size is **not** otherwise limited near obstacles; the certification replaces the displacement cap considered in the design. `Trajectory::closest_sampled` holds, per obstacle, the smallest surface distance among the points evaluated. That is an upper bound on the true closest approach; exact margins are computed in M3.
 
 ## 7. Outcome verification — *design*
 
@@ -140,32 +169,35 @@ For every outcome that matters (reference solutions, final judgement, and the ba
 
 This separates numerical uncertainty (which must never decide the outcome) from physical sensitivity (chaos and grazing orbits, which are real and are handled by level-design robustness requirements).
 
-## 8. Neglected effects and their control — *design*
+## 8. Neglected effects and their control — *implemented*
 
 | Effect | Status in Stage 1 | Control |
 |---|---|---|
-| Radiation (Larmor/Liénard) | neglected | The radiated energy `∫P dt`, with `P = (2/3) k q² γ⁶ (a² − (v × a)²/c²) / c³`, is computed as a diagnostic. If it exceeds a set fraction of the kinetic energy, the level is flagged. |
+| Radiation (Larmor/Liénard) | neglected | The radiated energy `∫P dt`, with `P = (2/3) k q² γ⁶ (a² − (v × a)²/c²) / c³`, is computed as a diagnostic (`Trajectory::radiated_energy`, trapezoidal rule over accepted steps; exactly 0 for `c = ∞`). Flagging levels above a threshold is part of the generator (M5). |
 | Magnetic field of the moving particle acting on others | n/a (single particle) | Stage 6 (Darwin) |
 | Polarization of test particles | neglected (non-polarizable by assumption) | documented assumption |
 | Recoil of fixed charges | none (held fixed by definition) | game rule |
 
-## 9. Validation tests — *design*
+## 9. Validation tests — *validated* (T1–T10); T11 in M3
 
-Thresholds are provisional until the integrator is benchmarked. Measured results are filled in when each test is implemented.
+Run with `cargo test -p physics --test validation --test properties -- --nocapture --test-threads=1`. Unless stated otherwise, tolerance is 1e-12.
 
-| # | Test | Analytic reference | Pass criterion | Result |
+**How the thresholds were set.** Criteria were fixed before measuring, from the target accuracy. The exception is T10: its first version used a 0.8–1.2 slope window guessed before measuring. That version fitted the pre-asymptotic regime of an e = 0.5 orbit (11–43 steps per orbit) and measured 0.78. The theory predicts slope → 1 asymptotically: Hairer's error estimate `err5²/sqrt(err5² + 0.01·err3²)` scales as h⁹, like the local error of the 8th-order solution. The test now measures in the asymptotic regime (e = 0.2, tol 1e-9…1e-14). It additionally guards `error < 100·tol` for both orbits over tol 1e-6…1e-13.
+
+| # | Test | Analytic reference | Pass criterion | Measured |
 |---|---|---|---|---|
-| T1 | Energy conservation, many-charge field | `W` constant | relative drift < 1e-10 at verify tolerance | – |
-| T2 | Rutherford, non-relativistic | `tan(θ/2) = k q Q / (m v∞² b)` | relative error < 1e-8 | – |
-| T3 | Relativistic Coulomb scattering | see below | relative error < 1e-8 | – |
-| T4 | Kepler orbit (`c → ∞`) | `T = 2π sqrt(m a³ / |kqQ|)`, orbit closes, `L` constant | period error < 1e-9, closure < 1e-8 | – |
-| T5 | Relativistic orbit precession | `Δφ = 2π(1/Γ − 1)` per revolution | relative error < 1e-6 | – |
-| T6 | Hyperbolic motion in uniform `E` (test solver) | `x(t) = (mc²/qE)(sqrt(1 + (qEt/mc)²) − 1)` | relative error < 1e-10 | – |
-| T7 | Speed limit | `|v| < c` | always, for extreme fields and energies | – |
-| T8 | Plane of symmetry | out-of-plane coordinate stays 0 | exactly 0 (bitwise) | – |
-| T9 | Grazing events | known closest approach `d` versus `R ± δ` | correct classification down to `δ` at the tolerance level | – |
-| T10 | Convergence | error ∝ tolerance | slope consistent with the method | – |
-| T11 | Determinism | – | bit-identical across runs and Windows/Linux builds | – |
+| T1 | Energy conservation, 20 random charges in 3D, 4 layouts, `c = ∞` and `c = 5` | `W` constant | `max|ΔW| / T₀ < 1e-10` | 1.1e-12 … 1.4e-11 |
+| T2 | Rutherford, non-relativistic, 4 geometries (θ from 0.22 to 2.75 rad) | `tan(θ/2) = κ/(m v∞² b∞)` | relative error < 1e-8 | 8e-13 … 4.9e-12 |
+| T3 | Relativistic Coulomb scattering, repulsive and attractive, `v/c` = 0.45 … 0.98 | `θ = |π − (2/Γ) arccos(−B₀/A)|` | relative error < 1e-8 | 9e-14 … 2.5e-12 |
+| T4 | Kepler orbit, e = 0.5, 10 orbits | `T = 2π sqrt(m a³/|κ|)`, closure, `L` const. | period < 1e-9, closure < 1e-8, `ΔL/L` < 1e-10 | period 3.2e-11, closure 3.5e-9, `ΔL/L` 1.9e-11, `ΔE/E` 5.5e-11 |
+| T5 | Relativistic precession, `c` = 10 and 3 (`v/c` up to 0.5), 20 revolutions | `Δφ = 2π(1/Γ − 1)`; orbit `r(φ)` | relative error < 1e-6; `r(φ)` < 1e-9 | 1.4e-10, 5.9e-11; `r(φ)` 3.2e-10, 8.3e-10 |
+| T6 | Uniform `E`, `p⊥` = 0, 0.5, 3, up to γ ≈ 1000 | `x∥ = (sqrt(ε₀² + (qEct)²) − ε₀)/qE`, `x⊥ = (p⊥c/qE) asinh(qEct/ε₀)` | x, y < 1e-11; p < 1e-12 | x ≤ 4.2e-13, y ≤ 6.2e-13, p ≤ 6.7e-16 |
+| T7 | Speed limit, 64 random fields, `|p|` from 1e-3 to 1e7 | `|v| ≤ c`; `< c` for γ < 1e7 | always | holds |
+| T8 | Plane of symmetry, 64 random in-plane configurations | `z = p_z = 0` | exactly ±0 | holds |
+| T9a | Grazing a sphere on a straight line, closest approach `d` | hit iff `R > d` | correct for `R = d(1 ± δ)` | correct down to δ = 1e-14 |
+| T9b | Grazing in a Coulomb orbit (`c = ∞`, 3; repulsive, attractive) | `r_min = 1/(A + B₀)` | `r_min` < 1e-10; classification at δ = 1e-6, 1e-8 | `r_min` 3e-13 … 2e-12; correct |
+| T10 | Convergence with tolerance | error ∝ tol | asymptotic slope in [0.9, 1.1]; error < 100 tol | slope 0.957; error/tol 28 … 47 (e = 0.2), ≤ 80 (e = 0.5) |
+| T11 | Determinism | – | bit-identical across runs and Windows/Linux builds | M3 |
 
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 

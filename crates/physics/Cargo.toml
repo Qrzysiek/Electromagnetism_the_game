@@ -8,8 +8,15 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+glam = "0.33.10"
 
 
 [dev-dependencies]
+criterion = "0.8.2"
 # Independent DOP853 implementation used as a cross-check in tests only.
 ode_solvers = "0.6.2"
+proptest = "1.11.0"
+
+[[bench]]
+name = "preview"
+harness = false

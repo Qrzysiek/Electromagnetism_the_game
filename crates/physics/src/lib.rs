@@ -3,4 +3,12 @@
 //!
 //! The implemented physics is documented in `PHYSICS.md` at the repository root.
 
+pub mod dynamics;
+pub mod events;
+pub mod field;
+pub mod geometry;
 pub mod integrator;
+pub mod trajectory;
+pub mod units;
+
+pub use glam::DVec3;
