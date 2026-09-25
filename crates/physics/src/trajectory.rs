@@ -1,5 +1,5 @@
-//! Integration of a single test-particle trajectory with events and diagnostics
-//! (PHYSICS.md §3–§6, §8).
+//! Integration of a single test-particle trajectory with events, margins and diagnostics
+//! (PHYSICS.md §3–§8).
 
 use glam::DVec3;
 
@@ -8,6 +8,10 @@ use crate::events::first_crossing;
 use crate::field::FieldSolver;
 use crate::geometry::{Aabb, Region, Sphere};
 use crate::integrator::{self, Dense, Dop853, Settings, Stats};
+
+/// Margins at or above this value (grid units) are not refined further: they are far too
+/// large for numerical error to matter. Refinement starts below twice this value.
+pub const MARGIN_SAFE: f64 = 0.25;
 
 /// Everything that defines one flight.
 #[derive(Clone, Debug)]
@@ -35,6 +39,8 @@ pub struct RunSettings {
     pub max_steps: u64,
     /// Record the state at every accepted step.
     pub record: bool,
+    /// Compute accurate margins to all event boundaries (needed for verification).
+    pub margins: bool,
 }
 
 impl RunSettings {
@@ -44,6 +50,7 @@ impl RunSettings {
             atol: tol,
             max_steps: 1_000_000,
             record: true,
+            margins: true,
         }
     }
 }
@@ -65,6 +72,30 @@ pub struct Sample {
     pub p: DVec3,
 }
 
+/// Minimum of each event function over the flight (PHYSICS.md §7).
+///
+/// For a boundary that was not crossed this is the closest approach (positive). For the
+/// boundary that ended the flight it is the minimum over the step containing the event,
+/// including the part after the event (negative: the penetration depth the trajectory
+/// would have reached). Values `≥ MARGIN_SAFE` are lower-bounded but not refined.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Margins {
+    pub obstacles: Vec<f64>,
+    pub bounds: Option<f64>,
+    pub detector: Option<f64>,
+}
+
+impl Margins {
+    /// All margins, obstacles first.
+    pub fn all(&self) -> impl Iterator<Item = f64> + '_ {
+        self.obstacles
+            .iter()
+            .copied()
+            .chain(self.bounds)
+            .chain(self.detector)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Trajectory {
     pub outcome: Outcome,
@@ -73,7 +104,7 @@ pub struct Trajectory {
     /// States at accepted steps (if recorded), ending with `end`.
     pub samples: Vec<Sample>,
     pub stats: Stats,
-    /// Total energy `W = (γ−1)mc² + qφ` at the start.
+    /// Total energy `W − mc² = (γ−1)mc² + qφ` at the start.
     pub energy_initial: f64,
     /// Kinetic energy at the start.
     pub kinetic_initial: f64,
@@ -81,9 +112,8 @@ pub struct Trajectory {
     pub energy_max_abs_error: f64,
     /// Energy radiated according to the Liénard formula (trapezoidal rule over steps).
     pub radiated_energy: f64,
-    /// Per obstacle: smallest surface distance among evaluated points (a sampled upper
-    /// bound of the true closest approach).
-    pub closest_sampled: Vec<f64>,
+    /// Present when `RunSettings::margins` is set.
+    pub margins: Option<Margins>,
 }
 
 /// View of one accepted step, for observers.
@@ -189,16 +219,17 @@ pub fn run_observed<F: FieldSolver>(
         kinetic_initial,
         energy_max_abs_error: 0.0,
         radiated_energy: 0.0,
-        closest_sampled: vec![f64::INFINITY; scn.obstacles.len()],
+        margins: None,
     };
 
     let mut g_prev: Vec<f64> = events
         .iter()
         .map(|&e| event_value(scn, e, scn.x0))
         .collect();
-    record_closest(&mut traj.closest_sampled, &events, &g_prev);
+    let mut margin: Vec<f64> = g_prev.clone();
     if let Some(k) = g_prev.iter().position(|&g| g <= 0.0) {
         traj.outcome = events[k].outcome();
+        traj.margins = rs.margins.then(|| collect_margins(&events, &margin));
         return traj;
     }
 
@@ -212,6 +243,9 @@ pub fn run_observed<F: FieldSolver>(
     let mut int = Dop853::new(&ode, 0.0, &ode.pack(scn.x0, scn.p0), settings);
     let mut p_prev = power(scn.x0, scn.p0, 0.0);
     let mut g_next = vec![0.0; events.len()];
+    // Triggered event whose penetration depth must be followed past the event step:
+    // (event index, depth so far, minimum not yet reached).
+    let mut pending_depth: Option<(usize, f64, bool)> = None;
 
     loop {
         let t_a = int.t();
@@ -247,9 +281,6 @@ pub fn run_observed<F: FieldSolver>(
         for (k, &ev) in events.iter().enumerate() {
             let mut g = |t: f64| event_value(scn, ev, view.state(t).0);
             let r = first_crossing(&mut g, t_a, t_b, g_prev[k], g_next[k], v_max);
-            if let Event::Obstacle(i) = ev {
-                traj.closest_sampled[i] = traj.closest_sampled[i].min(r.min_sampled);
-            }
             if let Some(t) = r.time
                 && first.is_none_or(|(tf, _)| t < tf)
             {
@@ -261,6 +292,31 @@ pub fn run_observed<F: FieldSolver>(
             Some((t, ev)) => (t, Some(ev)),
             None => (t_b, None),
         };
+
+        if rs.margins {
+            for (k, &ev) in events.iter().enumerate() {
+                let g = |t: f64| event_value(scn, ev, view.state(t).0);
+                let m = if event == Some(ev) {
+                    // Penetration depth along the continued trajectory; followed past
+                    // this step below if the minimum is not reached within it.
+                    let m = minimize_on(&g, t_a, t_b).1;
+                    pending_depth = Some((k, m, g_next[k] <= m));
+                    m
+                } else if event.is_some() {
+                    // Closest approach up to the event time only.
+                    minimize_on(&g, t_a, t_end).1
+                } else {
+                    let lower_bound = 0.5 * (g_prev[k] + g_next[k] - v_max * (t_b - t_a));
+                    if lower_bound < 2.0 * MARGIN_SAFE {
+                        minimize_on(&g, t_a, t_b).1
+                    } else {
+                        g_prev[k].min(g_next[k])
+                    }
+                };
+                margin[k] = margin[k].min(m);
+            }
+        }
+
         let (x, p) = if event.is_some() {
             view.state(t_end)
         } else {
@@ -289,15 +345,95 @@ pub fn run_observed<F: FieldSolver>(
         std::mem::swap(&mut g_prev, &mut g_next);
     }
     traj.stats = int.stats();
+
+    // Follow the continued trajectory (as if the boundary were not there) until the
+    // event function reaches its minimum or the depth is clearly safe. The depth is then
+    // a property of the trajectory, independent of where the steps happened to end.
+    if let Some((k, mut depth, mut unfinished)) = pending_depth {
+        let ev = events[k];
+        let mut steps = 0;
+        while unfinished && depth > -MARGIN_SAFE && steps < 10_000 {
+            steps += 1;
+            let t_a = int.t();
+            if int.step(&ode, f64::MAX, f64::INFINITY).is_err() {
+                // Integration broke down inside the obstacle (e.g. at a point charge):
+                // the penetration is certainly deep.
+                depth = f64::NEG_INFINITY;
+                break;
+            }
+            let view = StepView {
+                ode: &ode,
+                dense: int.dense(),
+            };
+            let g = |t: f64| event_value(scn, ev, view.state(t).0);
+            depth = depth.min(minimize_on(&g, t_a, int.t()).1);
+            let g_end = event_value(scn, ev, ParticleOde::<&F>::position(int.y()));
+            unfinished = g_end <= depth;
+        }
+        margin[k] = margin[k].min(depth);
+    }
+    traj.margins = rs.margins.then(|| collect_margins(&events, &margin));
     traj
 }
 
-fn record_closest(closest: &mut [f64], events: &[Event], g: &[f64]) {
-    for (&ev, &gv) in events.iter().zip(g) {
-        if let Event::Obstacle(i) = ev {
-            closest[i] = closest[i].min(gv);
+fn collect_margins(events: &[Event], margin: &[f64]) -> Margins {
+    let mut m = Margins {
+        obstacles: Vec::new(),
+        bounds: None,
+        detector: None,
+    };
+    for (&ev, &v) in events.iter().zip(margin) {
+        match ev {
+            Event::Obstacle(_) => m.obstacles.push(v),
+            Event::Bounds => m.bounds = Some(v),
+            Event::Detector => m.detector = Some(v),
         }
     }
+    m
+}
+
+/// Minimum `(t, g(t))` of a smooth function on `[a, b]`: 32 samples, then golden-section
+/// search in the bracket around the smallest sample.
+fn minimize_on(g: &impl Fn(f64) -> f64, a: f64, b: f64) -> (f64, f64) {
+    const N: u32 = 32;
+    let t_at = |i: u32| a + (b - a) * f64::from(i) / f64::from(N);
+    let (mut i_min, mut g_min) = (0, g(a));
+    let mut t_min = a;
+    for i in 1..=N {
+        let v = g(t_at(i));
+        if v < g_min {
+            i_min = i;
+            g_min = v;
+            t_min = t_at(i);
+        }
+    }
+    let (mut lo, mut hi) = (t_at(i_min.saturating_sub(1)), t_at((i_min + 1).min(N)));
+    let r = 0.5 * (5f64.sqrt() - 1.0);
+    let mut x1 = hi - r * (hi - lo);
+    let mut x2 = lo + r * (hi - lo);
+    let (mut f1, mut f2) = (g(x1), g(x2));
+    for _ in 0..80 {
+        if f1 < f2 {
+            hi = x2;
+            x2 = x1;
+            f2 = f1;
+            x1 = hi - r * (hi - lo);
+            f1 = g(x1);
+        } else {
+            lo = x1;
+            x1 = x2;
+            f1 = f2;
+            x2 = lo + r * (hi - lo);
+            f2 = g(x2);
+        }
+        if hi - lo <= f64::EPSILON * hi.abs().max(lo.abs()) {
+            break;
+        }
+    }
+    [(x1, f1), (x2, f2)].into_iter().fold(
+        (t_min, g_min),
+        |best, cand| if cand.1 < best.1 { cand } else { best },
+    )
 }
 
 /// Liénard power `P = (2/3) q² γ⁶ (a² − |v×a|²/c²) / c³` (internal units, `k = 1`).

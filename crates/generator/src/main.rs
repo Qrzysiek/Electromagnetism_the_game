@@ -1,5 +1,97 @@
-//! Offline level generator.
+//! Offline level tools: solving and checking levels. (Random level generation: M5.)
+
+mod search;
+
+use std::path::PathBuf;
+
+use clap::{Parser, Subcommand};
+use level::Level;
+use physics::verify::verify;
+
+#[derive(Parser)]
+#[command(about = "Level tools for Electromagnetism the game")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Search for verified solutions of a level.
+    Solve {
+        path: PathBuf,
+        /// Annealing restarts per charge count.
+        #[arg(long, default_value_t = 64)]
+        restarts: u64,
+        /// Iterations per restart.
+        #[arg(long, default_value_t = 400)]
+        iterations: u32,
+        /// Store the first solution with the fewest charges as the reference solution.
+        #[arg(long)]
+        write: bool,
+    },
+    /// Verify the reference solution of a level.
+    Check { path: PathBuf },
+}
+
+fn load(path: &PathBuf) -> Level {
+    let s = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    Level::from_json(&s).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
 
 fn main() {
-    println!("generator: not implemented yet");
+    match Cli::parse().command {
+        Command::Solve {
+            path,
+            restarts,
+            iterations,
+            write,
+        } => {
+            let mut level = load(&path);
+            println!("level '{}'", level.name);
+            let (no_charges, outcome) = search::objective(&level, &[]);
+            println!(
+                "  without player charges: {outcome:?} (closest approach to detector {no_charges:.3})"
+            );
+
+            let mut best: Option<Vec<level::Charge>> = None;
+            let singles = search::single_charge_solutions(&level);
+            println!("  verified 1-charge solutions: {}", singles.len());
+            if let Some(c) = singles.first() {
+                best = Some(vec![*c]);
+            }
+            for k in 2..=level.limits.max_charges as usize {
+                let found = search::anneal(&level, k, restarts, iterations, 0x5EED + k as u64);
+                println!(
+                    "  verified {k}-charge solutions found by annealing: {}",
+                    found.len()
+                );
+                if best.is_none() {
+                    best = found.into_iter().next();
+                }
+            }
+            match best {
+                Some(sol) if write => {
+                    println!("  reference solution: {sol:?}");
+                    level.reference_solution = sol;
+                    std::fs::write(&path, level.to_json() + "\n").expect("write level");
+                }
+                Some(sol) => println!("  best solution: {sol:?}"),
+                None => println!("  no solution found"),
+            }
+        }
+        Command::Check { path } => {
+            let level = load(&path);
+            let placement = &level.reference_solution;
+            let v = verify(&level.scenario(placement), level.tolerances());
+            println!(
+                "{}: placement {:?}, outcome {:?}, status {:?}, flight time {:.3}",
+                level.name,
+                level.check_placement(placement),
+                v.outcome(),
+                v.status,
+                v.verified.end.t
+            );
+        }
+    }
 }

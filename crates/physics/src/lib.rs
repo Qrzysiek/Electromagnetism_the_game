@@ -10,5 +10,6 @@ pub mod geometry;
 pub mod integrator;
 pub mod trajectory;
 pub mod units;
+pub mod verify;
 
 pub use glam::DVec3;

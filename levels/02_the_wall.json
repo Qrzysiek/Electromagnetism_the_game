@@ -1,0 +1,129 @@
+{
+  "format_version": 1,
+  "engine_version": "0.1.0",
+  "name": "The wall",
+  "description": "A wall of positive charges blocks the direct path.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "particle": {
+    "charge": 1.0,
+    "mass": 1.0,
+    "radius": 0.0
+  },
+  "launch": {
+    "node": [
+      0,
+      10,
+      0
+    ],
+    "direction": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "kinetic_energy": 0.5
+  },
+  "detector": {
+    "min": [
+      27,
+      8,
+      0
+    ],
+    "max": [
+      30,
+      12,
+      0
+    ]
+  },
+  "level_charges": [
+    {
+      "node": [
+        15,
+        7,
+        0
+      ],
+      "charge": 0.5
+    },
+    {
+      "node": [
+        15,
+        8,
+        0
+      ],
+      "charge": 0.5
+    },
+    {
+      "node": [
+        15,
+        9,
+        0
+      ],
+      "charge": 0.5
+    },
+    {
+      "node": [
+        15,
+        10,
+        0
+      ],
+      "charge": 0.5
+    },
+    {
+      "node": [
+        15,
+        11,
+        0
+      ],
+      "charge": 0.5
+    },
+    {
+      "node": [
+        15,
+        12,
+        0
+      ],
+      "charge": 0.5
+    },
+    {
+      "node": [
+        15,
+        13,
+        0
+      ],
+      "charge": 0.5
+    }
+  ],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      1.0,
+      2.0,
+      4.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true
+  },
+  "reference_solution": [
+    {
+      "node": [
+        14,
+        2,
+        0
+      ],
+      "charge": -4.0
+    }
+  ]
+}

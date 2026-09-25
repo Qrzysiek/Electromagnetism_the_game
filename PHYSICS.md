@@ -160,14 +160,33 @@ min g ≥ (g(a) + g(b) − v_max (b − a)) / 2
 
 The step size is **not** otherwise limited near obstacles; the certification replaces the displacement cap considered in the design. `Trajectory::closest_sampled` holds, per obstacle, the smallest surface distance among the points evaluated. That is an upper bound on the true closest approach; exact margins are computed in M3.
 
-## 7. Outcome verification — *design*
+## 7. Outcome verification — *validated* (`crates/physics/src/verify.rs`, margins in `trajectory.rs`)
 
-For every outcome that matters (reference solutions, final judgement, and the background refinement of the preview):
-1. Integrate at the verify tolerance.
-2. Record the minimum margin to every event boundary that was **not** triggered, and the margin at the boundary that was.
-3. The result is **verified** if the outcome matches the preview result and every margin exceeds a safety factor times the error estimate (from comparing against a run at the next tighter tolerance). Otherwise it is **marginal**.
+Every flight that matters is computed at two tolerances: preview (1e-10) and verify (1e-12).
 
-This separates numerical uncertainty (which must never decide the outcome) from physical sensitivity (chaos and grazing orbits, which are real and are handled by level-design robustness requirements).
+**Margins.** For each event boundary (every obstacle, the world bounds, the detector), the runner computes the minimum of its event function over the flight:
+- **Boundaries not crossed:** the closest approach (positive). Wherever the certified lower bound of §6 drops below `2 × MARGIN_SAFE` (0.5 cells), it is refined on the dense output with 32 samples plus golden-section search. Larger margins are only lower-bounded.
+- **The boundary that ended the flight:** the penetration depth (negative) of the *continued* trajectory, integrated past the event as if the boundary were absent. Integration continues until the minimum is reached, or the depth exceeds `MARGIN_SAFE` (0.25 cells), or it breaks down at a point charge (depth −∞).
+- A first version used only the step containing the event. That made the depth depend on where steps happened to end, and flagged clear hits as marginal. The continued-trajectory definition is a property of the trajectory alone.
+- **Time:** for flights ending in an event, the remaining time `t_max − t_event`.
+
+**Classification.**
+- **Verified:** both runs give the same outcome, and every margin `m` below `MARGIN_SAFE` satisfies `|m| > SAFETY · |m_preview − m_verify| + FLOOR`, with `SAFETY = 10` and `FLOOR = 1e-9` cells (`FLOOR · t_max` for time).
+- The difference between the runs is a direct estimate of the preview run's error. Since error ∝ tol (T10), it overestimates the verify run's error about 100×. The criterion is therefore conservative by roughly three orders of magnitude.
+- **Marginal** otherwise, with the reason: outcome mismatch, which boundary, its margin, and its error estimate.
+
+**Measured** (`cargo test -p physics --test verification -- --nocapture`). Relativistic (`c = 3`) Coulomb flyby of a sphere of radius `r_min(1 + δ)`:
+
+| δ | gap / depth | outcome | status |
+|---|---|---|---|
+| ±1e-3 | ∓2.27e-3 | hit / miss | verified |
+| ±1e-6 | ∓2.27e-6 | hit / miss | verified |
+| ±1e-11 | ∓(1.8 … 2.7)e-11 | hit / miss | marginal (error estimate 2.6e-12) |
+| ±1e-13 | 4.2e-12, 4.7e-12 | miss, miss (the δ = +1e-13 hit is misclassified) | marginal |
+
+The last row shows the mechanism working as intended. At δ = 1e-13 the integration error exceeds the physical gap, so the outcome is not trustworthy, and the result is flagged instead of reported.
+
+Accuracy of the margins against the analytic gap `r_min δ`: relative error 2e-10 (δ = 1e-2), 2e-8 (1e-4), 2e-6 (1e-6). The absolute error stays about 5e-12 cells.
 
 ## 8. Neglected effects and their control — *implemented*
 
@@ -178,7 +197,7 @@ This separates numerical uncertainty (which must never decide the outcome) from 
 | Polarization of test particles | neglected (non-polarizable by assumption) | documented assumption |
 | Recoil of fixed charges | none (held fixed by definition) | game rule |
 
-## 9. Validation tests — *validated* (T1–T10); T11 in M3
+## 9. Validation tests — *validated*
 
 Run with `cargo test -p physics --test validation --test properties -- --nocapture --test-threads=1`. Unless stated otherwise, tolerance is 1e-12.
 
@@ -197,7 +216,7 @@ Run with `cargo test -p physics --test validation --test properties -- --nocaptu
 | T9a | Grazing a sphere on a straight line, closest approach `d` | hit iff `R > d` | correct for `R = d(1 ± δ)` | correct down to δ = 1e-14 |
 | T9b | Grazing in a Coulomb orbit (`c = ∞`, 3; repulsive, attractive) | `r_min = 1/(A + B₀)` | `r_min` < 1e-10; classification at δ = 1e-6, 1e-8 | `r_min` 3e-13 … 2e-12; correct |
 | T10 | Convergence with tolerance | error ∝ tol | asymptotic slope in [0.9, 1.1]; error < 100 tol | slope 0.957; error/tol 28 … 47 (e = 0.2), ≤ 80 (e = 0.5) |
-| T11 | Determinism | – | bit-identical across runs and Windows/Linux builds | M3 |
+| T11 | Determinism: FNV-1a hash of every bit of the reference trajectories of all `levels/*.json` (both tolerances, samples, margins, step statistics) | – | identical across runs; equal to `levels/golden_hashes.json` (generated on Windows) on Windows and Linux CI | holds |
 
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 
