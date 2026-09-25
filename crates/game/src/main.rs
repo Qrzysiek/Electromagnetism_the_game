@@ -1,17 +1,16 @@
 //! Electromagnetism – the game. Stage 1: 2D levels (a slice of the 3D world).
 
 mod editor;
+mod potential;
 mod ui;
 mod visuals;
 mod worker;
 
 use std::path::PathBuf;
 
-use bevy::asset::RenderAssetUsages;
 use bevy::camera::ScalingMode;
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::window::PrimaryWindow;
 use bevy_egui::input::EguiWantsInput;
 use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
@@ -25,7 +24,6 @@ use worker::{Preview, Request, Response, Worker};
 
 /// Width of the side panel in logical pixels.
 pub const PANEL_WIDTH: f32 = 340.0;
-const PX_PER_CELL: u32 = 12;
 
 /// A field line for drawing: polyline and arrowheads (position, unit direction of E).
 pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
@@ -41,10 +39,11 @@ pub struct Game {
     pub sent_revision: u64,
     pub visuals_revision: u64,
     pub field_lines: Vec<DrawnFieldLine>,
-    /// Number of field lines drawn from the largest charge.
-    pub field_line_density: u32,
+    /// Distance between neighbouring field lines, in cells.
+    pub field_line_spacing: f64,
+    pub field_line_opacity: f32,
     /// (setup revision, density) the current field lines were computed for.
-    pub field_lines_key: (u64, u32),
+    pub field_lines_key: (u64, u64),
     pub show_potential: bool,
     pub show_field_lines: bool,
     pub animate: bool,
@@ -82,12 +81,17 @@ impl Game {
     }
 }
 
+/// Gizmo group for field lines: translucent and without joints (joints overlap the
+/// segments and would double-blend).
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct FieldLineGizmos;
+
 #[derive(Resource)]
 struct PhysicsWorker(Worker);
 
 #[derive(Resource)]
-struct PotentialSprite {
-    image: Handle<Image>,
+struct PotentialQuad {
+    material: Handle<potential::PotentialMaterial>,
     entity: Entity,
 }
 
@@ -146,6 +150,8 @@ fn main() {
             ..default()
         }))
         .add_plugins(EguiPlugin::default())
+        .add_plugins(potential::PotentialPlugin)
+        .init_gizmo_group::<FieldLineGizmos>()
         .insert_resource(Game {
             levels,
             level_index: 0,
@@ -155,7 +161,8 @@ fn main() {
             sent_revision: 0,
             visuals_revision: 0,
             field_lines: Vec::new(),
-            field_line_density: 16,
+            field_line_spacing: 1.5,
+            field_line_opacity: 0.2,
             field_lines_key: (0, 0),
             show_potential: true,
             show_field_lines: false,
@@ -186,7 +193,8 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<potential::PotentialMaterial>>,
     mut gizmo_store: ResMut<GizmoConfigStore>,
 ) {
     commands.spawn((
@@ -198,27 +206,25 @@ fn setup(
     let (config, _) = gizmo_store.config_mut::<DefaultGizmoConfigGroup>();
     config.line.width = 2.0;
     config.line.joints = GizmoLineJoint::Round(4);
-    let image = images.add(Image::new_fill(
-        Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
+    let (config, _) = gizmo_store.config_mut::<FieldLineGizmos>();
+    config.line.width = 1.6;
+    config.line.joints = GizmoLineJoint::None;
+    // Potential map: a unit quad scaled to the world bounds, shaded on the GPU.
+    let material = materials.add(potential::PotentialMaterial {
+        params: potential::PotentialParams {
+            charges: [Vec4::ZERO; potential::MAX_CHARGES],
+            count: 0,
+            u_a: 0.0,
         },
-        TextureDimension::D2,
-        &[0, 0, 0, 255],
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::default(),
-    ));
+    });
     let entity = commands
         .spawn((
-            Sprite {
-                image: image.clone(),
-                ..default()
-            },
+            Mesh2d(meshes.add(Rectangle::new(1.0, 1.0))),
+            MeshMaterial2d(material.clone()),
             Transform::from_xyz(0.0, 0.0, -10.0),
         ))
         .id();
-    commands.insert_resource(PotentialSprite { image, entity });
+    commands.insert_resource(PotentialQuad { material, entity });
 }
 
 /// World position (cell units) of the grid node nearest to `p`.
@@ -360,9 +366,9 @@ fn input(
 fn sync_physics(
     mut game: ResMut<Game>,
     worker: Res<PhysicsWorker>,
-    sprite: Res<PotentialSprite>,
-    mut images: ResMut<Assets<Image>>,
-    mut sprites: Query<(&mut Sprite, &mut Transform)>,
+    quad: Res<PotentialQuad>,
+    mut materials: ResMut<Assets<potential::PotentialMaterial>>,
+    mut transforms: Query<&mut Transform>,
 ) {
     let revision = game.editor.revision + ((game.level_index as u64) << 48);
     if revision == game.sent_revision {
@@ -380,27 +386,22 @@ fn sync_physics(
 
     if game.visuals_revision != revision {
         game.visuals_revision = revision;
-        let img = visuals::potential_image(&scenario, PX_PER_CELL);
-        let bounds = scenario.bounds.expect("bounds");
-        if let Some(mut image) = images.get_mut(&sprite.image) {
-            *image = Image::new(
-                Extent3d {
-                    width: img.width,
-                    height: img.height,
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                img.rgba,
-                TextureFormat::Rgba8UnormSrgb,
-                RenderAssetUsages::default(),
-            );
+        let charges: Vec<(DVec3, f64)> = level
+            .level_charges
+            .iter()
+            .chain(&game.editor.placement)
+            .map(|c| (level.grid.position(c.node), c.charge))
+            .collect();
+        if let Some(mut m) = materials.get_mut(&quad.material) {
+            m.params = potential::params(&scenario, &charges);
         }
-        if let Ok((mut s, mut t)) = sprites.get_mut(sprite.entity) {
+        let bounds = scenario.bounds.expect("bounds");
+        if let Ok(mut t) = transforms.get_mut(quad.entity) {
             let size = bounds.max - bounds.min;
             let center = (bounds.max + bounds.min) * 0.5;
             #[allow(clippy::cast_possible_truncation)]
             {
-                s.custom_size = Some(Vec2::new(size.x as f32, size.y as f32));
+                t.scale = Vec3::new(size.x as f32, size.y as f32, 1.0);
                 t.translation = Vec3::new(center.x as f32, center.y as f32, -10.0);
             }
         }
@@ -409,20 +410,13 @@ fn sync_physics(
 
 /// Recomputes the field lines when they are shown and the setup or density changed.
 fn update_field_lines(mut game: ResMut<Game>) {
-    let key = (game.sent_revision, game.field_line_density);
+    let key = (game.sent_revision, game.field_line_spacing.to_bits());
     if !game.show_field_lines || key == game.field_lines_key {
         return;
     }
     game.field_lines_key = key;
-    let level = &game.editor.level;
-    let scenario = level.scenario(&game.editor.placement);
-    let charges: Vec<(DVec3, f64)> = level
-        .level_charges
-        .iter()
-        .chain(&game.editor.placement)
-        .map(|c| (level.grid.position(c.node), c.charge))
-        .collect();
-    game.field_lines = visuals::field_lines(&scenario, &charges, game.field_line_density)
+    let scenario = game.editor.level.scenario(&game.editor.placement);
+    game.field_lines = visuals::field_lines(&scenario, game.field_line_spacing)
         .into_iter()
         .map(|l| {
             (
@@ -509,10 +503,11 @@ fn to_vec2(v: DVec3) -> Vec2 {
 fn draw(
     game: Res<Game>,
     mut gizmos: Gizmos,
-    sprite: Res<PotentialSprite>,
+    mut line_gizmos: Gizmos<FieldLineGizmos>,
+    quad: Res<PotentialQuad>,
     mut vis: Query<&mut Visibility>,
 ) {
-    if let Ok(mut v) = vis.get_mut(sprite.entity) {
+    if let Ok(mut v) = vis.get_mut(quad.entity) {
         *v = if game.show_potential {
             Visibility::Visible
         } else {
@@ -574,17 +569,16 @@ fn draw(
 
     // Field lines.
     if game.show_field_lines {
-        // Opaque: translucent segments double-blend where they overlap.
-        let color = Color::srgb(0.62, 0.62, 0.45);
-        let (head, spread) = (0.32, 0.45_f32);
+        let color = Color::srgba(0.95, 0.95, 0.75, game.field_line_opacity);
+        let (head, spread) = (0.3, 0.45_f32);
         for (points, arrows) in &game.field_lines {
-            gizmos.linestrip_2d(points.iter().copied(), color);
+            line_gizmos.linestrip_2d(points.iter().copied(), color);
             // Arrowheads pointing along E.
             for &(p, d) in arrows {
                 let back = -d * head;
                 let tip = p + d * (0.5 * head);
-                gizmos.line_2d(tip, tip + Vec2::from_angle(spread).rotate(back), color);
-                gizmos.line_2d(tip, tip + Vec2::from_angle(-spread).rotate(back), color);
+                line_gizmos.line_2d(tip, tip + Vec2::from_angle(spread).rotate(back), color);
+                line_gizmos.line_2d(tip, tip + Vec2::from_angle(-spread).rotate(back), color);
             }
         }
     }
