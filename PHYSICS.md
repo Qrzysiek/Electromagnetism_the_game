@@ -45,7 +45,7 @@ E(r) = Σ_i k Q_i (r − r_i) / |r − r_i|³
 - Test particles are rigid, spherically symmetric and **non-polarizable** (a stated approximation, since a conducting microsphere would feel image forces). Under these assumptions, the force on a test particle of radius `a` equals `q E(center)` exactly, because the force between two non-overlapping spherically symmetric distributions equals the point-charge force.
 - Contact condition: `|x − r_i| ≤ R_i + a`, which means the particle is lost.
 
-## 2.2 Magnetic sources — *validated* (`crates/physics/src/magnetic.rs`, `field.rs::StaticField`)
+## 2.2 Magnetic sources — *validated* (`crates/physics/src/magnetic.rs`, `field.rs::LevelField`)
 
 **Units.** Source strengths are given directly in field units, i.e. already multiplied by `μ₀/4π`:
 - a dipole by `μ = μ₀ m / 4π`,
@@ -74,6 +74,28 @@ So `q v × B` keeps the particle in the plane (test M5). A straight wire perpend
 
 **Energy.** B does no work, so the conserved energy `W` of §4 is unchanged. The forbidden-region map stays exact with magnets.
 
+## 2.3 External fields: stray fields and plane waves — *validated* (`crates/physics/src/external.rs`)
+
+Fields whose sources are outside the arena (disturbances, SPEC §3). `LevelField::external` adds them to the level's own sources. Both kinds are exact solutions of the vacuum Maxwell equations, so they add no approximation:
+
+- **Uniform stray fields** `E` (in the plane) and `B_z`. They are static, and the electric part has potential `−E·x`.
+- **Plane waves** travelling in the plane, linearly polarized in the plane:
+  ```
+  E = E₀ ê cos(ω (t − k̂·x / c) + φ),   B = k̂ × E / c,   ê = ẑ × k̂
+  ```
+  - `B` is along `ẑ` and `E` lies in the plane, so the 2D slice stays exact (test W3).
+  - `k̂·x/c` is multiplied by `ω`, so for `c = ∞` the wave becomes a spatially uniform field oscillating in time with `B = 0`. This is the exact Newtonian limit, used for "mains hum" levels.
+  - `ω = 0` gives a static uniform field `E₀ ê cos φ`, with its potential.
+- A wave travelling out of the plane (k̂ = ±ẑ) with `E` in the plane would have `B` in the plane and push particles out of it. It is therefore not offered in 2D levels.
+
+**Unit consistency.** `B = k̂ × E / c` follows from Faraday's law `∇×E = −∂B/∂t`. That law has this form in every unit system with force `q(E + v×B)`, which is the one used here (§2.2). A unit test checks all four vacuum Maxwell equations for the implemented wave by central differences: `∇·E = ∇·B = 0`, `∇×E = −∂B/∂t`, `∇×B = ∂E/∂t / c²`.
+
+**Levels.** A level lists `disturbances`, each one realization: uniform `E`, `B_z`, and any number of waves. Every shot is flown under every disturbance, and a setup solves the level only if every flight arrives, verified.
+- A "random" disturbance, such as the phase of mains hum, is therefore represented by a finite, fixed set of realizations. The game stays deterministic, and every flight is verified individually.
+- Robustness between the listed realizations (for example at intermediate phases) is not guaranteed. It is a design parameter of the level (how many realizations it lists).
+
+**Diagnostics.** In time-dependent fields the energy of §4 is not conserved (the wave does work). The energy diagnostic is then reported as NaN rather than a misleading number (`FieldSolver::is_static`). Validation instead uses the exact invariants of motion in a plane wave (test W2).
+
 ## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 
 State `y = (x, p)`, with:
@@ -81,12 +103,10 @@ State `y = (x, p)`, with:
 ```
 γ     = sqrt(1 + |p|² / (m² c²))
 dx/dt = v = p / (γ m)
-dp/dt = q (E(x) + v × B(x))
+dp/dt = q (E(x, t) + v × B(x, t))
 ```
 
 `|v| = |p| c / sqrt(m²c² + |p|²) < c` holds for any finite `p`. The speed limit is structural, not enforced after the fact.
-
-Stage 1 has `B = 0`.
 
 Implementation details:
 - `c = ∞` is allowed and gives exact Newtonian mechanics (`1/(mc)² = 0`, so `γ = 1`). The non-relativistic tests use this rather than a large finite `c`.
@@ -96,7 +116,7 @@ Implementation details:
 
 ## 4. Conserved quantities (diagnostics only) — *validated* (`crates/physics/src/trajectory.rs`)
 
-Static electric field:
+Static fields (no plane waves with ω ≠ 0, §2.3):
 - Total energy `W = γ m c² + q φ(x)` is conserved. The code tracks `W − mc² = (γ−1)mc² + qφ`, which is finite for `c = ∞`. `Trajectory::energy_max_abs_error` is the largest `|W(t) − W(0)|` over the accepted steps and the final event state.
 - A single central charge also conserves angular momentum `L = x × p`, which holds relativistically too.
 
@@ -227,6 +247,7 @@ Accuracy of the margins against the analytic gap `r_min δ`: relative error 2e-1
 | Magnetic field of the moving particle acting on others | n/a (single particle) | Stage 6 (Darwin) |
 | Polarization of test particles | neglected (non-polarizable by assumption) | documented assumption |
 | Recoil of fixed charges | none (held fixed by definition) | game rule |
+| Radiation reaction and scattering in waves (Thomson scattering) | neglected | The same radiated-energy diagnostic and the same `< 1e-10 T₀` requirement apply to flights under disturbances (all flights of all shipped levels are checked). |
 
 ## 9. Validation tests — *validated*
 
@@ -268,6 +289,18 @@ Run with `cargo test -p physics --test validation --test properties -- --nocaptu
 | M6 | Straight flight into a ring wire and a straight wire | known hit time | < 1e-12 | ≈ 1e-15 |
 
 Note on M2: the first threshold for |p| drift (1e-12) was stricter than the integration tolerance (also 1e-12). DOP853 does not preserve |p| exactly, so the criterion is the same 1e-10 as for energy in T1.
+
+### External-field tests (`cargo test -p physics --test waves -- --nocapture --test-threads=1`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| W0 | Plane wave (`c` = 3, oblique): Maxwell equations; vector potential | central differences: `∇·E = ∇·B = 0`, `∇×E = −∂B/∂t`, `∇×B = ∂E/∂t/c²`; `E = −∂A/∂t`, `B = ∇×A` | < 1e-7 of the field scale (difference error) | holds |
+| W1 | Newtonian particle in a uniform field `E₀ cos(ωt + φ)`, 4 phases, oblique launch | `v = v₀ + (a/ω)[sin(ωt+φ) − sin φ] ê`, `x = x₀ + v₀t − (a/ω)[(cos(ωt+φ) − cos φ)/ω + t sin φ] ê`, `a = qE₀/m` | `|Δx|/(a/ω²)`, `|Δv|/(a/ω)` < 1e-9 | ≤ 4.5e-12, ≤ 1.7e-13 |
+| W2 | Relativistic particle in a plane wave (`c` = 2), a₀ = qE₀/(mcω) = 0.1, 1, 2, 3; 40 periods; one case with p_z ≠ 0 | Exact invariants (Landau–Lifshitz §47–48): light-front momentum `γmc − p·k̂` and canonical transverse momentum `p_⊥ + qA`. With the mass shell they fix `p` as a function of the wave phase, so this checks the analytic solution for `p`. | drift < 1e-9 of `max(mc, |p|max)` | 3.3e-13 … 3.6e-12 (|p| up to 6 mc) |
+| W3 | Plane of symmetry: charge, dipole, in-plane wave and uniform stray fields | `z = p_z = 0` | exactly ±0 | holds |
+| W4 | Energy with uniform stray E and B_z and a static (ω = 0) wave term, `c = ∞` and 4 | `W` constant, with potential `−E·x` | `max|ΔW|/T₀` < 1e-10 | 2.6e-12 |
+
+The thresholds are the ones of the corresponding T and M tests (1e-9 for trajectory comparisons at tolerance 1e-12, 1e-10 for conserved quantities), fixed before measuring.
 
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 

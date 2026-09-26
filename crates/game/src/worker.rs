@@ -1,19 +1,19 @@
 //! Background physics thread. The editor submits the latest setup (one scenario per
-//! shot); stale requests are dropped. For each request the worker sends every shot's
-//! preview trajectory first, then every shot's verification verdict (SPEC §2.3), so
+//! flight); stale requests are dropped. For each request the worker sends every flight's
+//! preview trajectory first, then every flight's verification verdict (SPEC §2.3), so
 //! rendering never waits for physics.
 
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use physics::DVec3;
-use physics::field::{FieldSolver, StaticField};
+use physics::field::{FieldSolver, LevelField};
 use physics::trajectory::{Outcome, RunSettings, Scenario, Trajectory, run, run_observed};
 use physics::verify::{Status, Tolerances, classify};
 
 pub struct Request {
     pub revision: u64,
-    pub scenarios: Vec<Scenario<StaticField>>,
+    pub scenarios: Vec<Scenario<LevelField>>,
     pub tolerances: Tolerances,
 }
 
@@ -43,12 +43,14 @@ pub struct Preview {
 pub enum Response {
     Preview {
         revision: u64,
-        shot: usize,
+        /// Flight index (`Level::flight_of`).
+        flight: usize,
         preview: Preview,
     },
     Verified {
         revision: u64,
-        shot: usize,
+        /// Flight index (`Level::flight_of`).
+        flight: usize,
         status: Status,
         outcome: Outcome,
     },
@@ -107,7 +109,7 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
             previews.push(traj);
             let msg = Response::Preview {
                 revision: req.revision,
-                shot,
+                flight: shot,
                 preview,
             };
             if tx.send(msg).is_err() {
@@ -128,7 +130,7 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
             let status = classify(&previews[shot], &verified, scn.t_max);
             let msg = Response::Verified {
                 revision: req.revision,
-                shot,
+                flight: shot,
                 status,
                 outcome: verified.outcome,
             };
@@ -139,7 +141,7 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
     }
 }
 
-fn preview_shot(scn: &Scenario<StaticField>, tol: f64) -> (Trajectory, Preview) {
+fn preview_shot(scn: &Scenario<LevelField>, tol: f64) -> (Trajectory, Preview) {
     let mut dense_points: Vec<(f64, DVec3, DVec3)> = Vec::new();
     let traj = run_observed(scn, &RunSettings::with_tolerance(tol), |step| {
         let (a, b) = (step.t_start(), step.t_end());
@@ -163,7 +165,7 @@ fn preview_shot(scn: &Scenario<StaticField>, tol: f64) -> (Trajectory, Preview) 
 }
 
 fn build_path(
-    scn: &Scenario<StaticField>,
+    scn: &Scenario<LevelField>,
     start: &physics::trajectory::Sample,
     dense: &[(f64, DVec3, DVec3)],
     end: &physics::trajectory::Sample,

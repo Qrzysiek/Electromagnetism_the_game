@@ -203,6 +203,8 @@ pub fn run_observed<F: FieldSolver>(
         |x: DVec3, p: DVec3, t: f64| ode.kin.kinetic_energy(p) + q * scn.field.sample(x, t).phi;
     let power = |x: DVec3, p: DVec3, t: f64| radiated_power(&ode, x, p, t);
 
+    // In time-dependent fields the energy is not conserved: no diagnostic (NaN).
+    let is_static = scn.field.is_static();
     let kinetic_initial = ode.kin.kinetic_energy(scn.p0);
     let energy_initial = energy(scn.x0, scn.p0, 0.0);
     let start = Sample {
@@ -217,7 +219,7 @@ pub fn run_observed<F: FieldSolver>(
         stats: Stats::default(),
         energy_initial,
         kinetic_initial,
-        energy_max_abs_error: 0.0,
+        energy_max_abs_error: if is_static { 0.0 } else { f64::NAN },
         radiated_energy: 0.0,
         margins: None,
     };
@@ -324,8 +326,10 @@ pub fn run_observed<F: FieldSolver>(
         };
         let sample = Sample { t: t_end, x, p };
 
-        let dw = (energy(x, p, t_end) - energy_initial).abs();
-        traj.energy_max_abs_error = traj.energy_max_abs_error.max(dw);
+        if is_static {
+            let dw = (energy(x, p, t_end) - energy_initial).abs();
+            traj.energy_max_abs_error = traj.energy_max_abs_error.max(dw);
+        }
         let p_now = power(x, p, t_end);
         traj.radiated_energy += 0.5 * (p_prev + p_now) * (t_end - t_a);
         p_prev = p_now;

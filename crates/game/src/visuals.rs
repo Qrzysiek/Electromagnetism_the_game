@@ -3,7 +3,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use physics::DVec3;
-use physics::field::{FieldSolver, StaticField};
+use physics::field::{FieldSolver, LevelField};
 use physics::trajectory::Scenario;
 
 /// A traced field line with arrowheads along it.
@@ -74,11 +74,7 @@ impl Grid {
 ///
 /// In the 2D slice of a 3D field, line density does not represent field strength
 /// (SPEC §4): lines show direction.
-pub fn field_lines(
-    scn: &Scenario<StaticField>,
-    charge_radius: f64,
-    spacing: f64,
-) -> Vec<FieldLine> {
+pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64) -> Vec<FieldLine> {
     const MAX_STEPS: usize = 400_000;
     const MAX_LINES: usize = 2_000;
     let charges: Vec<DVec3> = scn.field.coulomb.charges().map(|(p, _)| p).collect();

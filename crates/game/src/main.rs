@@ -31,9 +31,9 @@ pub const PANEL_WIDTH: f32 = 340.0;
 /// A field line for drawing: polyline and arrowheads (position, unit direction of E).
 pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
 
-/// Physics results of one shot for the current setup.
+/// Physics results of one flight (a shot under one disturbance) for the current setup.
 #[derive(Clone, Debug, Default)]
-pub struct ShotView {
+pub struct FlightView {
     /// Latest preview (may belong to an older revision until the new one arrives).
     pub preview: Option<Preview>,
     /// Verification verdict for the current revision.
@@ -47,8 +47,11 @@ pub struct Game {
     pub level_paths: Vec<PathBuf>,
     pub level_index: usize,
     pub editor: Editor,
-    pub shots: Vec<ShotView>,
+    /// One view per flight, shot-major (`Level::flight_of`).
+    pub flights: Vec<FlightView>,
     pub active_shot: usize,
+    /// Disturbance whose flight the details panel shows.
+    pub active_disturbance: usize,
     /// Show every shot's trajectory, not only the active one.
     pub show_all_shots: bool,
     pub sent_revision: u64,
@@ -78,8 +81,9 @@ impl Game {
     fn load_level(&mut self, index: usize) {
         self.level_index = index;
         self.editor = Editor::new(self.levels[index].clone());
-        self.shots.clear();
+        self.flights.clear();
         self.active_shot = 0;
+        self.active_disturbance = 0;
         self.anim_time = 0.0;
     }
 
@@ -128,9 +132,47 @@ impl Game {
         self.select_shot((self.active_shot as isize + step).rem_euclid(n) as usize);
     }
 
-    /// Verdict of a shot (`None` while computing).
+    /// Index of the flight of `shot` under disturbance `d`.
+    pub fn flight_index(&self, shot: usize, d: usize) -> usize {
+        shot * self.editor.level.flights_per_shot() + d
+    }
+
+    /// The flight shown in the details panel.
+    pub fn active_flight(&self) -> usize {
+        let d = self
+            .active_disturbance
+            .min(self.editor.level.flights_per_shot() - 1);
+        self.flight_index(self.active_shot, d)
+    }
+
+    pub fn flight_verdict(&self, flight: usize) -> Option<(Status, Outcome)> {
+        self.flights.get(flight).and_then(|s| s.verdict)
+    }
+
+    /// Verdict of a shot over all its flights (`None` while computing): the first flight
+    /// that does not arrive verified, or verified arrival if all do.
     pub fn verdict(&self, shot: usize) -> Option<(Status, Outcome)> {
-        self.shots.get(shot).and_then(|s| s.verdict)
+        let n = self.editor.level.flights_per_shot();
+        let mut all = Vec::with_capacity(n);
+        for d in 0..n {
+            all.push(self.flight_verdict(self.flight_index(shot, d))?);
+        }
+        all.iter()
+            .copied()
+            .find(|v| !matches!(v, (Status::Verified, Outcome::Arrived)))
+            .or(all.first().copied())
+    }
+
+    /// Verdict of the level's disturbance `d` over all shots.
+    pub fn disturbance_verdict(&self, d: usize) -> Option<(Status, Outcome)> {
+        let mut all = Vec::new();
+        for shot in 0..self.shot_count() {
+            all.push(self.flight_verdict(self.flight_index(shot, d))?);
+        }
+        all.iter()
+            .copied()
+            .find(|v| !matches!(v, (Status::Verified, Outcome::Arrived)))
+            .or(all.first().copied())
     }
 
     /// Solved = every shot arrives, verified.
@@ -227,8 +269,9 @@ fn main() {
             level_paths,
             level_index: 0,
             editor,
-            shots: Vec::new(),
+            flights: Vec::new(),
             active_shot: 0,
+            active_disturbance: 0,
             show_all_shots: true,
             sent_revision: 0,
             map_key: (0, 0, None),
@@ -475,15 +518,20 @@ fn sync_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
     game.sent_revision = revision;
     let level = &game.editor.level;
     let n = level.shots.len();
+    let flights = level.flight_count();
+    let per_shot = level.flights_per_shot();
     let scenarios = level.scenarios(&game.editor.placement);
     let tolerances = level.tolerances();
     // Keep old previews on screen until new ones arrive; verdicts are recomputed.
-    game.shots.resize(n, ShotView::default());
-    for s in &mut game.shots {
+    game.flights.resize(flights, FlightView::default());
+    for s in &mut game.flights {
         s.verdict = None;
     }
     if game.active_shot >= n {
         game.active_shot = 0;
+    }
+    if game.active_disturbance >= per_shot {
+        game.active_disturbance = 0;
     }
     worker.0.submit(Request {
         revision,
@@ -563,20 +611,20 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
         match r {
             Response::Preview {
                 revision,
-                shot,
+                flight: shot,
                 preview,
             } if revision == current => {
-                if let Some(s) = game.shots.get_mut(shot) {
+                if let Some(s) = game.flights.get_mut(shot) {
                     s.preview = Some(preview);
                 }
             }
             Response::Verified {
                 revision,
-                shot,
+                flight: shot,
                 status,
                 outcome,
             } if revision == current => {
-                if let Some(s) = game.shots.get_mut(shot) {
+                if let Some(s) = game.flights.get_mut(shot) {
                     s.verdict = Some((status, outcome));
                 }
             }
@@ -590,11 +638,12 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
         return;
     }
     // Longest flight among the shown trajectories.
+    let per_shot = game.editor.level.flights_per_shot();
     let end = game
-        .shots
+        .flights
         .iter()
         .enumerate()
-        .filter(|(i, _)| game.show_all_shots || *i == game.active_shot)
+        .filter(|(i, _)| game.show_all_shots || i / per_shot == game.active_shot)
         .filter_map(|(_, s)| s.preview.as_ref().map(|p| p.flight_time))
         .fold(0.0, f64::max);
     if end <= 0.0 {

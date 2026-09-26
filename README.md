@@ -42,4 +42,8 @@ Switch to **Sandbox** at the top of the panel.
 
 ## Multi-shot levels
 
-A level can have several shots: particles with their own species, launch and detector. **One setup must deliver every shot.** The panel lists the shots with their status (✔ arrived, ✗ lost, ⚠ marginal, … computing).
+A level can have several shots: particles with their own species, launch and detector. **One setup must deliver every shot.** The panel lists the shots with their status (✔ arrived, ✖ lost, ⚠ marginal, … computing).
+
+## Disturbances
+
+Some levels have fields from outside the arena: a stray field that is sometimes switched on, mains hum at different phases, the Earth's field for different orientations. Every shot is flown under every listed disturbance, and the setup must work for all of them. The panel lists the disturbances with their status. Selecting one shows its flight in detail and draws it brightest; the other flights of the shot are drawn fainter, as a bundle. The potential map and the field lines show the level's own sources only. In the sandbox, disturbances are edited in the "Disturbances" section.

@@ -10,7 +10,7 @@ use std::f64::consts::{PI, TAU};
 use common::{Rng, cube};
 use physics::DVec3;
 use physics::dynamics::{Kinematics, Particle};
-use physics::field::{Coulomb, FixedCharge, StaticField, UniformFields};
+use physics::field::{Coulomb, FixedCharge, LevelField, UniformFields};
 use physics::geometry::{Capsule, Shape, Sphere, Torus};
 use physics::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 use physics::trajectory::{Outcome, RunSettings, Scenario, StepView, run, run_observed};
@@ -215,7 +215,7 @@ fn m1_dipole_is_divergence_and_curl_free() {
 
 #[test]
 fn m1_in_plane_sources_give_exactly_perpendicular_field_in_the_plane() {
-    let field = StaticField {
+    let field = LevelField {
         coulomb: Coulomb::default(),
         dipoles: vec![MagneticDipole {
             position: DVec3::new(3.0, 1.0, 0.0),
@@ -238,6 +238,7 @@ fn m1_in_plane_sources_give_exactly_perpendicular_field_in_the_plane() {
             kappa: -0.7,
             wire_radius: 0.05,
         }],
+        external: vec![],
     };
     let mut rng = Rng::new(9);
     for _ in 0..200 {
@@ -411,7 +412,7 @@ fn m3_exb_drift_relativistic() {
 
 // --- M4: energy conservation --------------------------------------------------------------
 
-fn mixed_field(seed: u64) -> (StaticField, Vec<Shape>) {
+fn mixed_field(seed: u64) -> (LevelField, Vec<Shape>) {
     let mut rng = Rng::new(seed);
     let charges: Vec<FixedCharge> = (0..8)
         .map(|_| FixedCharge {
@@ -455,11 +456,12 @@ fn mixed_field(seed: u64) -> (StaticField, Vec<Shape>) {
         major: coil.radius,
         minor: coil.wire_radius,
     }));
-    let field = StaticField {
+    let field = LevelField {
         coulomb: Coulomb::new(&charges),
         dipoles,
         loops: vec![coil],
         polygons: vec![],
+        external: vec![],
     };
     (field, obstacles)
 }

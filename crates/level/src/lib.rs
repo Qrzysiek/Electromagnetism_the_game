@@ -6,14 +6,19 @@
 //! all existing nodes stay exactly where they were.
 //!
 //! Format history: version 1 had a single particle/launch/detector and `level_charges`
-//! with `"charge"` values; it is migrated on load. Version 2 has `shots` and `elements`.
+//! with `"charge"` values; it is migrated on load. Version 2 has `shots` and `elements`,
+//! and optionally `disturbances`.
+//!
+//! **Flights:** every shot is flown once under each disturbance (once, undisturbed, if the
+//! level has none). A setup solves the level when every flight arrives.
 
 pub mod analysis;
 pub mod solve;
 
 use physics::DVec3;
 use physics::dynamics::{Kinematics, Particle};
-use physics::field::{Coulomb, FixedCharge, StaticField};
+use physics::external::{External, PlaneWave};
+use physics::field::{Coulomb, FixedCharge, LevelField};
 use physics::geometry::{Aabb, Capsule, Region, Shape, Sphere, Torus};
 use physics::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 use physics::trajectory::Scenario;
@@ -45,6 +50,63 @@ pub struct Level {
     pub limits: Limits,
     /// A known solution (player elements), if any.
     pub reference_solution: Vec<Element>,
+    /// External disturbances; one setup must work under each of them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disturbances: Vec<Disturbance>,
+}
+
+/// One realization of fields from outside the arena (PHYSICS.md §2.3): uniform stray
+/// fields and plane waves travelling in the plane.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Disturbance {
+    #[serde(default)]
+    pub name: String,
+    /// Uniform stray electric field `[E_x, E_y]` in the plane.
+    #[serde(default)]
+    pub e: [f64; 2],
+    /// Uniform stray magnetic field `B_z` (perpendicular to the plane).
+    #[serde(default)]
+    pub bz: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub waves: Vec<Wave>,
+}
+
+/// A plane wave travelling in the plane, polarized in the plane (its B is along z):
+/// `E = E₀ ê cos(ω (t − k̂·x/c) + φ)` with `ê = ẑ × k̂`. For `c = ∞` it is a uniform field
+/// oscillating in time ("mains hum").
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Wave {
+    /// Amplitude `E₀`.
+    pub amplitude: f64,
+    /// Propagation direction, degrees counter-clockwise from +x.
+    pub direction_deg: f64,
+    /// Angular frequency `ω` (0 gives a static uniform field).
+    pub omega: f64,
+    /// Phase `φ` at `t = 0`, `x = 0`, in degrees.
+    pub phase_deg: f64,
+}
+
+impl Disturbance {
+    /// The external field terms of this disturbance in a world with speed of light `c`.
+    pub fn fields(&self, c: f64) -> Vec<External> {
+        let mut out = Vec::new();
+        if self.e != [0.0, 0.0] || self.bz != 0.0 {
+            out.push(External::Uniform {
+                e: DVec3::new(self.e[0], self.e[1], 0.0),
+                b: DVec3::new(0.0, 0.0, self.bz),
+            });
+        }
+        out.extend(self.waves.iter().map(|w| {
+            External::Wave(PlaneWave::in_plane(
+                w.amplitude,
+                w.direction_deg.to_radians(),
+                w.omega,
+                w.phase_deg.to_radians(),
+                c,
+            ))
+        }));
+        out
+    }
 }
 
 /// One particle to deliver: its species, launch and detector.
@@ -78,6 +140,8 @@ struct LevelFile {
     limits: Limits,
     #[serde(default)]
     reference_solution: Vec<Element>,
+    #[serde(default)]
+    disturbances: Vec<Disturbance>,
 }
 
 impl From<LevelFile> for Level {
@@ -105,6 +169,7 @@ impl From<LevelFile> for Level {
             coils: f.coils,
             limits: f.limits,
             reference_solution: f.reference_solution,
+            disturbances: f.disturbances,
         }
     }
 }
@@ -459,7 +524,7 @@ impl Level {
 
     /// The static field and the obstacles for a placement: level elements first, then
     /// player elements, in the given order (the summation order of the field).
-    pub fn field(&self, player: &[Element]) -> (StaticField, Vec<Shape>) {
+    pub fn field(&self, player: &[Element]) -> (LevelField, Vec<Shape>) {
         let all: Vec<&Element> = self.elements.iter().chain(player).collect();
         let charges: Vec<FixedCharge> = all
             .iter()
@@ -536,35 +601,58 @@ impl Level {
                 }
             }
         }
-        let field = StaticField {
+        let field = LevelField {
             coulomb: Coulomb::new(&charges),
             dipoles,
             loops,
             polygons,
+            external: Vec::new(),
         };
         (field, obstacles)
     }
 
-    /// The physical scenario of one shot for a given player placement.
-    pub fn scenario(&self, shot: usize, player: &[Element]) -> Scenario<StaticField> {
-        let (field, obstacles) = self.field(player);
-        self.scenario_with(shot, field, obstacles)
+    /// Flights per shot: one per disturbance, or one undisturbed flight.
+    pub fn flights_per_shot(&self) -> usize {
+        self.disturbances.len().max(1)
     }
 
-    /// Scenarios of all shots (sharing one field).
-    pub fn scenarios(&self, player: &[Element]) -> Vec<Scenario<StaticField>> {
+    /// Total number of flights, `shots × flights_per_shot`.
+    pub fn flight_count(&self) -> usize {
+        self.shots.len() * self.flights_per_shot()
+    }
+
+    /// Shot and disturbance of flight `i` (flights are ordered shot-major).
+    pub fn flight_of(&self, i: usize) -> (usize, usize) {
+        (i / self.flights_per_shot(), i % self.flights_per_shot())
+    }
+
+    /// The physical scenario of one shot under its first disturbance (or undisturbed).
+    pub fn scenario(&self, shot: usize, player: &[Element]) -> Scenario<LevelField> {
         let (field, obstacles) = self.field(player);
-        (0..self.shots.len())
-            .map(|i| self.scenario_with(i, field.clone(), obstacles.clone()))
+        self.scenario_with(shot, 0, field, obstacles)
+    }
+
+    /// Scenarios of all flights, shot-major (see `flight_of`), sharing one field.
+    pub fn scenarios(&self, player: &[Element]) -> Vec<Scenario<LevelField>> {
+        let (field, obstacles) = self.field(player);
+        (0..self.flight_count())
+            .map(|i| {
+                let (shot, d) = self.flight_of(i);
+                self.scenario_with(shot, d, field.clone(), obstacles.clone())
+            })
             .collect()
     }
 
     fn scenario_with(
         &self,
         shot: usize,
-        field: StaticField,
+        disturbance: usize,
+        mut field: LevelField,
         obstacles: Vec<Shape>,
-    ) -> Scenario<StaticField> {
+    ) -> Scenario<LevelField> {
+        if let Some(d) = self.disturbances.get(disturbance) {
+            field.external = d.fields(self.c());
+        }
         Scenario {
             field,
             obstacles,
@@ -643,6 +731,17 @@ mod tests {
                 region: None,
             },
             reference_solution: vec![],
+            disturbances: vec![Disturbance {
+                name: "hum".into(),
+                e: [0.01, -0.02],
+                bz: 0.003,
+                waves: vec![Wave {
+                    amplitude: 0.1,
+                    direction_deg: 30.0,
+                    omega: 2.0,
+                    phase_deg: 90.0,
+                }],
+            }],
         }
     }
 
@@ -679,6 +778,8 @@ mod tests {
         assert_eq!(l.elements, vec![Element::charge([10, 5, 0], 2e6)]);
         assert_eq!(l.reference_solution, vec![Element::charge([4, 4, 0], -1e6)]);
         assert_eq!(l.limits.max_magnets, 0);
+        assert!(l.disturbances.is_empty());
+        assert_eq!(l.flight_count(), 1);
         // Saving writes version 2, which loads back identically.
         assert_eq!(Level::from_json(&l.to_json()).unwrap(), l);
     }
@@ -719,5 +820,40 @@ mod tests {
             l.check_placement(&[magnet, Element::magnet([7, 6, 0], 5.0)]),
             Err(PlacementError::TooManyMagnets)
         ));
+    }
+}
+
+#[cfg(test)]
+mod flight_tests {
+    use super::*;
+
+    #[test]
+    fn every_shot_flies_under_every_disturbance() {
+        let mut l = Level::from_json(include_str!("../../../levels/06_twin_beams.json")).unwrap();
+        assert_eq!(l.flight_count(), 2);
+        assert!(l.scenarios(&[]).iter().all(|s| s.field.external.is_empty()));
+        l.disturbances = vec![
+            Disturbance::default(),
+            Disturbance {
+                e: [0.5, 0.0],
+                ..Disturbance::default()
+            },
+            Disturbance {
+                waves: vec![Wave {
+                    amplitude: 1.0,
+                    direction_deg: 0.0,
+                    omega: 1.0,
+                    phase_deg: 0.0,
+                }],
+                ..Disturbance::default()
+            },
+        ];
+        let scn = l.scenarios(&[]);
+        assert_eq!(scn.len(), 6);
+        assert_eq!(l.flight_of(4), (1, 1));
+        assert_eq!(scn[4].x0, l.scenario(1, &[]).x0);
+        assert!(scn[3].field.external.is_empty());
+        assert_eq!(scn[4].field.external.len(), 1);
+        assert!(matches!(scn[5].field.external[0], External::Wave(_)));
     }
 }

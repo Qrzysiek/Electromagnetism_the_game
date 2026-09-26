@@ -154,9 +154,15 @@ fn main() {
             for (i, scn) in level.scenarios(placement).iter().enumerate() {
                 let v = verify(scn, level.tolerances());
                 let end = v.verified.end.x;
+                let (shot, d) = level.flight_of(i);
+                let flight = if level.disturbances.is_empty() {
+                    String::new()
+                } else {
+                    format!(" disturbance {}", d + 1)
+                };
                 println!(
-                    "  shot {}: outcome {:?}, status {:?}, flight time {:.3}, ends at ({:.4}, {:.4})",
-                    i + 1,
+                    "  shot {}{flight}: outcome {:?}, status {:?}, flight time {:.3}, ends at ({:.4}, {:.4})",
+                    shot + 1,
                     v.outcome(),
                     v.status,
                     v.verified.end.t,

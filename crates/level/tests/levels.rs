@@ -40,8 +40,10 @@ fn reference_solutions_are_verified() {
             .enumerate()
         {
             let v = verify(scn, level.tolerances());
-            assert_eq!(v.outcome(), Outcome::Arrived, "{name} shot {i}");
-            assert!(v.status.is_verified(), "{name} shot {i}: {:?}", v.status);
+            let (shot, d) = level.flight_of(i);
+            let flight = format!("{name} shot {} disturbance {}", shot + 1, d + 1);
+            assert_eq!(v.outcome(), Outcome::Arrived, "{flight}");
+            assert!(v.status.is_verified(), "{flight}: {:?}", v.status);
         }
     }
 }
@@ -64,7 +66,12 @@ fn neglected_radiation_is_below_numerical_accuracy() {
                 &RunSettings::with_tolerance(level.physics.tolerances.verify),
             );
             let fraction = tr.radiated_energy / tr.kinetic_initial;
-            println!("{name} shot {}: radiated / T0 = {fraction:.2e}", i + 1);
+            let (shot, d) = level.flight_of(i);
+            println!(
+                "{name} shot {} disturbance {}: radiated / T0 = {fraction:.2e}",
+                shot + 1,
+                d + 1
+            );
             assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
         }
     }

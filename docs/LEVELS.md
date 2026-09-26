@@ -35,6 +35,9 @@ verified reference solution for every shot and negligible radiation
 | 15 | First magnet | 5 Placing your own magnets | ≤ 1 magnet |
 | 16 | Calutron | isotope separation with magnets only | ≤ 2 magnets |
 | 17 | Build a Wien filter | crossed fields from charges and magnets | ≤ 4 charges, ≤ 2 magnets |
+| 18 | Stray field | 6 Noise: a stray field switched on and off; aim between | ≤ 1 charge |
+| 19 | Mains hum | uniform AC field at 4 phases acts like a random launch angle; imaging | ≤ 4 charges |
+| 20 | Earth's field | stray B_z of either sign on an electron beam | ≤ 3 charges |
 
 ## Automatic detectors
 
@@ -82,10 +85,15 @@ fails.
 | 15_first_magnet | 3.3 | 8.1e-2 | 32/32 | 14 | 14 / 12 | 0.40 |
 | 16_calutron | 6.5 | < 1.5e-3 | 4/32 | 124 | 2924 / 667 | 0.70 |
 | 17_build_wien_filter | 18.2 | 2.5e-3 | 14/32 | 130 | 644 / 400 | 0.85 |
+| 18_stray_field | 3.8 | 5.0e-2 | 32/32 | 19 | 19 / 20 | 0.62 |
+| 19_mains_hum | 12.3 | < 1.5e-3 | 18/32 | 96 | 407 / 667 | 0.87 |
+| 20_earths_field | 9.6 | 5.0e-4 | 17/32 | 184 | 537 / 2000 | 0.82 |
 
 Notes:
 
-- The introduction levels (1, 12, 15) are meant to be easy.
+- The introduction levels (1, 12, 15, 18) are meant to be easy.
+- Under disturbances (chapter 6) a placement counts as a solution only if every flight
+  arrives, verified. The distance objective sums over all flights.
 - Dempster (13) has in effect one physical parameter (the accelerating voltage, which sets
   all radii). It is kept as the concept level for 180° focusing.
 - The Calutron (16) is the hardest: no random placement out of 2000 solved it, and the

@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{Material2d, Material2dPlugin};
-use physics::field::{FieldSolver, StaticField};
+use physics::field::{FieldSolver, LevelField};
 use physics::trajectory::Scenario;
 
 /// Array sizes; must match `potential.wgsl`.
@@ -86,7 +86,7 @@ pub const GYRO_REFERENCE: f64 = 5.0;
 /// computes `U/T₀`), magnetic sources to `1/b_ref` with `b_ref = |p₀| / (|q| r_ref)`.
 #[allow(clippy::cast_possible_truncation)]
 pub fn params(
-    scn: &Scenario<StaticField>,
+    scn: &Scenario<LevelField>,
     charge_radius: f64,
     magnet_radius: f64,
     mode: MapMode,

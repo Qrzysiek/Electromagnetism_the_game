@@ -79,9 +79,24 @@ def shot(q, m, node, angle_deg, ke, detector):
     }
 
 
+def stray(name, e=(0.0, 0.0), bz=0.0, waves=()):
+    """One disturbance: uniform stray fields plus plane waves (PHYSICS.md 2.3)."""
+    d = {"name": name, "e": list(e), "bz": bz}
+    if waves:
+        d["waves"] = list(waves)
+    return d
+
+
+def wave(amplitude, omega, phase_deg, direction_deg=0.0):
+    """A plane wave travelling towards `direction_deg`, polarized along z x k. For c = inf
+    it is a uniform field E0 cos(omega t + phase) along that polarization."""
+    return {"amplitude": amplitude, "direction_deg": direction_deg, "omega": omega,
+            "phase_deg": phase_deg}
+
+
 def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charges=0,
           magnitudes=(), signs=(True, True), max_magnets=0, strengths=(), region=None,
-          reference=None, c=5.0, t_max=400.0):
+          reference=None, c=5.0, t_max=400.0, disturbances=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -94,6 +109,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
                     "t_max": t_max, "tolerances": {"preview": 1e-10, "verify": 1e-12}},
         "shots": list(shots), "elements": list(elements), "coils": list(coils),
         "limits": limits, "reference_solution": list(reference or []),
+        **({"disturbances": list(disturbances)} if disturbances else {}),
     }
 
 
@@ -331,6 +347,60 @@ def build_wien_filter():
                    charge(11, 13, -0.2 * M), charge(19, 13, -0.2 * M)])
 
 
+# =======================================================================================
+# Chapter: noise. Fields from outside the arena; one setup must work under each of them.
+
+def stray_field():
+    # A 0.5 T0 particle crosses the arena in t ~ 30; a stray E = 6.7e3 gives a = qE/m =
+    # 6.7e-3 and pushes it ~3 cells off course.
+    return level(
+        "Stray field",
+        "Somewhere in the building a high-voltage supply is switched on and off, and with "
+        "it a weak uniform field across your beam line. The beam must reach the detector "
+        "in both cases. Compare the two flights and aim between them.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 12, 30, 16)))],
+        max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2, 4)],
+        disturbances=[stray("supply off"), stray("supply on", e=(0.0, -6.7e3))],
+        c=None)
+
+
+def mains_hum():
+    # Uniform field E0 cos(wt + phi) along y (c = inf). A particle launched at phase phi
+    # drifts with v_y = -(qE0 / m w) sin(phi): the hum acts like a random launch angle.
+    omega, e0 = 0.6, 6e4
+    return level(
+        "Mains hum",
+        "An alternating field from the mains wiring shakes the beam. Launched at different "
+        "moments of the cycle, the particle drifts off at different angles, so no single "
+        "aim works. A lens that images the source onto the detector does not care about "
+        "the launch angle.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((28, 9, 30, 11)))],
+        max_charges=4, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        region=(6, 1, 22, 19),
+        disturbances=[stray(f"phase {p}°", waves=[wave(e0, omega, p, 0.0)])
+                      for p in (0, 90, 180, 270)],
+        c=None)
+
+
+def earths_field():
+    # Electron with p = 1: in B_z = 7.7e3 it circles with R = p / (qB) ~ 130 cells and
+    # drifts ~3 cells sideways over the arena. The lab can be turned around, so the
+    # stray field has either sign.
+    b = 7.7e3
+    return level(
+        "Earth's field",
+        "Cathode-ray tubes had to be adjusted to how they stood in the Earth's magnetic "
+        "field. Your electron beam must hit the detector whichever way the apparatus faces: "
+        "no stray field, or a weak field in or out of the plane. Magnetic bending grows "
+        "with the time spent in the field.",
+        shots=[shot(-1e-6, 1.0, (0, 10), 0.0, 0.5, box((28, 9, 30, 11)))],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        region=(4, 2, 24, 18),
+        disturbances=[stray("no field"), stray("facing north", bz=b),
+                      stray("facing south", bz=-b)],
+        c=None)
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -354,6 +424,10 @@ LEVELS = [
     ("first_magnet", first_magnet),
     ("calutron", calutron),
     ("build_wien_filter", build_wien_filter),
+    # Chapter 6: noise (outside fields; one setup for every disturbance).
+    ("stray_field", stray_field),
+    ("mains_hum", mains_hum),
+    ("earths_field", earths_field),
 ]
 
 
@@ -377,12 +451,15 @@ def landing_points(lvl):
         text = run_generator("check", path)
     finally:
         os.unlink(path)
-    ends = []
+    # One list of (outcome, x, y) per shot: one entry per disturbance.
+    ends = {}
     for line in text.splitlines():
-        m = re.search(r"shot (\d+): outcome (\w+).*ends at \(([-\d.]+), ([-\d.]+)\)", line)
+        m = re.search(r"shot (\d+)(?: disturbance \d+)?: outcome (\w+).*"
+                      r"ends at \(([-\d.]+), ([-\d.]+)\)", line)
         if m:
-            ends.append((m.group(2), float(m.group(3)), float(m.group(4))))
-    return ends
+            ends.setdefault(int(m.group(1)), []).append(
+                (m.group(2), float(m.group(3)), float(m.group(4))))
+    return [ends[k] for k in sorted(ends)]
 
 
 def resolve_auto(lvl):
@@ -407,27 +484,43 @@ def resolve_auto(lvl):
         lvl["reference_solution"] = probe["reference_solution"]
     ends = landing_points(probe)
     placed = []
-    for s, d, (outcome, x, y) in zip(lvl["shots"], autos, ends):
+    for s, d, flights in zip(lvl["shots"], autos, ends):
         if not isinstance(d, Auto):
             continue
-        if outcome != "Arrived":
-            sys.exit(f"{lvl['name']}: a reference flight misses its probe strip ({outcome})")
+        for outcome, _, _ in flights:
+            if outcome != "Arrived":
+                sys.exit(f"{lvl['name']}: a reference flight misses its probe strip ({outcome})")
         x0, y0, x1, y1 = d.strip
-        across = y if d.axis == "x" else x
-        lo = math.floor(across - d.size / 2 + 0.5)
-        # Keep the landing point at least 0.2 cells inside the detector.
-        while across - lo < 0.2:
-            lo -= 1
-        while lo + d.size - across < 0.2:
-            lo += 1
+        acrosses = [y if d.axis == "x" else x for _, x, y in flights]
+        a_lo, a_hi = min(acrosses), max(acrosses)
+        size = d.size
+        if len(acrosses) == 1:
+            across = a_lo
+            lo = math.floor(across - d.size / 2 + 0.5)
+            # Keep the landing point at least 0.2 cells inside the detector.
+            while across - lo < 0.2:
+                lo -= 1
+            while lo + d.size - across < 0.2:
+                lo += 1
+        else:
+            # Under disturbances the landing points spread: the detector covers all of
+            # them with 0.2 cells to spare, growing beyond `size` if it must.
+            while True:
+                lo = math.floor(a_lo - 0.2)
+                if lo + size - a_hi >= 0.2:
+                    break
+                size += 1
+            # Centre the spread in the detector.
+            lo += max(0, math.floor(((lo + size - a_hi) - (a_lo - lo)) / 2))
         # Stay inside the arena.
         n = lvl["grid"]["ny" if d.axis == "x" else "nx"] * lvl["grid"]["subdivision"]
-        lo = max(min(lo, n - d.size), 0)
+        lo = max(min(lo, n - size), 0)
+        across = (a_lo, a_hi)
         # Shots of the same species (particle and energy, differing only in direction)
         # share one detector; different species get detectors of their own.
         screen = (x0, x1) if d.axis == "x" else (y0, y1)
         species = (d.axis, screen, json.dumps(s["particle"]), s["launch"]["kinetic_energy"])
-        placed.append([species, [s], across, across, lo, lo + d.size])
+        placed.append([species, [s], across[0], across[1], lo, lo + size])
     groups = {}
     for p in placed:
         g = groups.setdefault(p[0], p)

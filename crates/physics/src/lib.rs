@@ -5,6 +5,7 @@
 
 pub mod dynamics;
 pub mod events;
+pub mod external;
 pub mod field;
 pub mod geometry;
 pub mod integrator;

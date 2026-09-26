@@ -125,7 +125,7 @@ proptest! {
         p in momentum_magnitude(),
         angle in 0.0..std::f64::consts::TAU,
     ) {
-        use physics::field::StaticField;
+        use physics::field::LevelField;
         use physics::magnetic::{CircularLoop, MagneticDipole};
         let dipoles: Vec<MagneticDipole> = moments
             .iter()
@@ -140,7 +140,7 @@ proptest! {
             .map(|q| Shape::Sphere(Sphere { center: q.position, radius: q.radius }))
             .collect();
         obstacles.extend(dipoles.iter().map(|d| Shape::Sphere(Sphere { center: d.position, radius: d.radius })));
-        let field = StaticField {
+        let field = LevelField {
             coulomb: Coulomb::new(&charges),
             dipoles,
             loops: vec![CircularLoop {
@@ -151,6 +151,7 @@ proptest! {
                 wire_radius: 0.1,
             }],
             polygons: vec![],
+            external: vec![],
         };
         let scn = Scenario {
             field,

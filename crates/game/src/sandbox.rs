@@ -140,6 +140,7 @@ pub fn empty_level() -> Level {
             region: None,
         },
         reference_solution: Vec::new(),
+        disturbances: Vec::new(),
     }
 }
 

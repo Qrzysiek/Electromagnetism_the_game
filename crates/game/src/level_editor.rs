@@ -8,8 +8,8 @@
 
 use bevy_egui::egui;
 use level::{
-    Coil, Detector, Element, ElementKind, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2,
-    Shot, TolerancesSpec, WorldPhysics,
+    Coil, Detector, Disturbance, Element, ElementKind, Grid, Launch, Level, Limits, Node,
+    ParticleSpec, Region2, Shot, TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -331,6 +331,85 @@ fn edit_coils(ui: &mut egui::Ui, coils: &mut Vec<Coil>, grid: &Grid) -> bool {
     focus
 }
 
+fn edit_disturbances(ui: &mut egui::Ui, list: &mut Vec<Disturbance>) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, d) in list.iter_mut().enumerate() {
+        let Disturbance { name, e, bz, waves } = d;
+        ui.push_id(("disturbance", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("{}", i + 1));
+                focus |= ui
+                    .add(egui::TextEdit::singleline(name).desired_width(120.0))
+                    .has_focus();
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("stray E");
+                focus |= si(ui, &mut e[0], 1e-3);
+                focus |= si(ui, &mut e[1], 1e-3);
+                ui.label("B_z");
+                focus |= si(ui, bz, 1e-3);
+            });
+            let mut drop = None;
+            for (k, w) in waves.iter_mut().enumerate() {
+                let Wave {
+                    amplitude,
+                    direction_deg,
+                    omega,
+                    phase_deg,
+                } = w;
+                ui.horizontal(|ui| {
+                    ui.label("  wave E₀");
+                    focus |= si(ui, amplitude, 1e-3);
+                    ui.label("ω");
+                    focus |= ui
+                        .add(
+                            egui::DragValue::new(omega)
+                                .speed(0.01)
+                                .range(0.0..=MAX_POSITIVE),
+                        )
+                        .has_focus();
+                    if ui.small_button("×").clicked() {
+                        drop = Some(k);
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("    towards");
+                    focus |= ui
+                        .add(egui::DragValue::new(direction_deg).speed(1.0).suffix("°"))
+                        .has_focus();
+                    ui.label("phase");
+                    focus |= ui
+                        .add(egui::DragValue::new(phase_deg).speed(1.0).suffix("°"))
+                        .has_focus();
+                });
+            }
+            if let Some(k) = drop {
+                waves.remove(k);
+            }
+            if ui.small_button("+ wave").clicked() {
+                waves.push(Wave {
+                    amplitude: 0.01,
+                    direction_deg: 0.0,
+                    omega: 1.0,
+                    phase_deg: 0.0,
+                });
+            }
+        });
+        ui.separator();
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize && ui.small_button("+ disturbance").clicked() {
+        list.push(Disturbance::default());
+    }
+    focus
+}
+
 fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &Grid) -> bool {
     let Limits {
         max_charges,
@@ -424,6 +503,7 @@ pub fn edit_level(
         limits,
         // Edited in the Solution section (store own elements or a solver result).
         reference_solution: _,
+        disturbances,
     } = level;
     let mut focus = false;
     let mut refine_by = None;
@@ -465,6 +545,8 @@ pub fn edit_level(
         .show(ui, |ui| focus |= edit_elements(ui, elements, &g));
     egui::CollapsingHeader::new(format!("Coils ({})", coils.len()))
         .show(ui, |ui| focus |= edit_coils(ui, coils, &g));
+    egui::CollapsingHeader::new(format!("Disturbances ({})", disturbances.len()))
+        .show(ui, |ui| focus |= edit_disturbances(ui, disturbances));
     egui::CollapsingHeader::new("Player limits")
         .default_open(true)
         .show(ui, |ui| {
@@ -493,6 +575,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         coils,
         limits,
         reference_solution,
+        disturbances,
     } = level;
     let Grid {
         nx,
@@ -590,6 +673,32 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     );
                 }
             }
+        }
+    }
+    if disturbances.len() > MAX_COUNT as usize {
+        return fail("too many disturbances");
+    }
+    for d in disturbances {
+        let Disturbance {
+            name: _,
+            e,
+            bz,
+            waves,
+        } = d;
+        let waves_ok = waves.iter().all(|w| {
+            let Wave {
+                amplitude,
+                direction_deg,
+                omega,
+                phase_deg,
+            } = w;
+            amplitude.is_finite()
+                && direction_deg.is_finite()
+                && (0.0..=MAX_POSITIVE).contains(omega)
+                && phase_deg.is_finite()
+        });
+        if !e.iter().all(|v| v.is_finite()) || !bz.is_finite() || !waves_ok {
+            return fail("disturbance outside the editor's range");
         }
     }
     let Limits {

@@ -228,7 +228,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             for i in 0..n_shots {
                 let mark = match game.verdict(i) {
                     Some((Status::Verified, Outcome::Arrived)) => "✔",
-                    Some((Status::Verified, _)) => "✗",
+                    Some((Status::Verified, _)) => "✖",
                     Some(_) => "⚠",
                     None => "…",
                 };
@@ -252,6 +252,40 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         });
         ui.label(
             egui::RichText::new("One setup must deliver every shot to its own detector.").small(),
+        );
+    }
+    // Disturbances.
+    if !level.disturbances.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Disturbance:");
+            for d in 0..level.disturbances.len() {
+                let mark = match game.disturbance_verdict(d) {
+                    Some((Status::Verified, Outcome::Arrived)) => "✔",
+                    Some((Status::Verified, _)) => "✖",
+                    Some(_) => "⚠",
+                    None => "…",
+                };
+                let name = &level.disturbances[d].name;
+                let label = if name.is_empty() {
+                    format!("{} {mark}", d + 1)
+                } else {
+                    format!("{} {name} {mark}", d + 1)
+                };
+                if ui
+                    .selectable_label(game.active_disturbance == d, label)
+                    .on_hover_text(disturbance_text(&level.disturbances[d]))
+                    .clicked()
+                {
+                    game.active_disturbance = d;
+                }
+            }
+        });
+        ui.label(
+            egui::RichText::new(
+                "Outside fields: the setup must work under every disturbance. All flights \
+                 of a shot are drawn; the selected one is brightest.",
+            )
+            .small(),
         );
     }
     let shot_index = game.active_shot.min(n_shots.saturating_sub(1));
@@ -365,7 +399,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             .size(18.0),
         );
     }
-    let view = game.shots.get(shot_index).cloned().unwrap_or_default();
+    let view = game
+        .flights
+        .get(game.active_flight())
+        .cloned()
+        .unwrap_or_default();
     match (&view.preview, view.verdict) {
         (None, _) => {
             ui.label("Computing…");
@@ -421,7 +459,12 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                     ui.end_row();
                 }
                 ui.label("energy error |ΔW|/T₀");
-                ui.label(format!("{:.1e}", p.energy_rel_error));
+                if p.energy_rel_error.is_nan() {
+                    // Time-dependent fields do work on the particle.
+                    ui.label("n/a (fields vary in time)");
+                } else {
+                    ui.label(format!("{:.1e}", p.energy_rel_error));
+                }
                 ui.end_row();
                 if level.physics.c.is_some() {
                     ui.label("radiated / T₀ (neglected)");
@@ -520,6 +563,43 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ui.label("1–4 grid refinement, [ ] switch shot, H show all shots.");
         ui.label("N/P next/previous level, V map, F field lines, A animation.");
     });
+}
+
+/// One-line description of a disturbance.
+pub fn disturbance_text(d: &level::Disturbance) -> String {
+    let mut parts = Vec::new();
+    if d.e != [0.0, 0.0] {
+        parts.push(format!(
+            "stray E = ({}, {})",
+            fmt_si(d.e[0]),
+            fmt_si(d.e[1])
+        ));
+    }
+    if d.bz != 0.0 {
+        parts.push(format!("stray B_z = {}", fmt_si(d.bz)));
+    }
+    for w in &d.waves {
+        parts.push(if w.omega == 0.0 {
+            format!(
+                "static field {} at {:.0}°",
+                fmt_si(w.amplitude),
+                w.direction_deg + 90.0
+            )
+        } else {
+            format!(
+                "wave E₀ = {}, ω = {}, towards {:.0}°, phase {:.0}°",
+                fmt_si(w.amplitude),
+                fmt_si(w.omega),
+                w.direction_deg,
+                w.phase_deg
+            )
+        });
+    }
+    if parts.is_empty() {
+        "undisturbed".into()
+    } else {
+        parts.join("; ")
+    }
 }
 
 #[cfg(test)]

@@ -310,8 +310,11 @@ pub fn draw(
     };
     gizmos.rect_2d(cur, Vec2::splat(charge_radius * 2.8), cursor_color);
 
-    // Trajectories.
-    for (i, view) in game.shots.iter().enumerate() {
+    // Trajectories: every flight of the shown shots. Under disturbances a shot has one
+    // flight per disturbance; the one selected in the panel is drawn brightest.
+    let active_flight = game.active_flight();
+    for (f, view) in game.flights.iter().enumerate() {
+        let (i, _) = level.flight_of(f);
         let active = i == game.active_shot;
         if !(active || game.show_all_shots) {
             continue;
@@ -319,6 +322,8 @@ pub fn draw(
         let Some(p) = &view.preview else {
             continue;
         };
+        let primary =
+            f == game.flight_index(i, game.active_disturbance.min(level.flights_per_shot() - 1));
         let base = shot_color(i);
         let color = match view.verdict {
             None => Color::srgb(0.95, 0.95, 0.95),
@@ -326,7 +331,13 @@ pub fn draw(
             Some((Status::Verified, _)) => Color::srgb(1.0, 0.45, 0.2),
             Some(_) => Color::srgb(1.0, 0.9, 0.2),
         }
-        .with_alpha(if active { 1.0 } else { 0.55 });
+        .with_alpha(match (active, primary) {
+            (true, true) => 1.0,
+            (false, true) => 0.55,
+            (true, false) => 0.4,
+            (false, false) => 0.2,
+        });
+        let active = f == active_flight;
         gizmos.linestrip_2d(p.path.iter().map(|q| to_vec2(q.x)), color);
         let end = to_vec2(p.path.last().expect("path has points").x);
         if !matches!(p.outcome, Outcome::Arrived) {

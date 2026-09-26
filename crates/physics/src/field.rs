@@ -2,6 +2,7 @@
 
 use glam::DVec3;
 
+use crate::external::External;
 use crate::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 
 /// Fields and potential at a point. Internal units: `k = 1/(4πε₀) = 1`.
@@ -16,11 +17,21 @@ pub struct FieldSample {
 /// Source of external fields acting on test particles.
 pub trait FieldSolver {
     fn sample(&self, x: DVec3, t: f64) -> FieldSample;
+
+    /// True if the fields do not depend on time. Only then is `phi` a potential of `E`
+    /// and the energy `(γ−1)mc² + qφ` conserved.
+    fn is_static(&self) -> bool {
+        true
+    }
 }
 
 impl<F: FieldSolver + ?Sized> FieldSolver for &F {
     fn sample(&self, x: DVec3, t: f64) -> FieldSample {
         (**self).sample(x, t)
+    }
+
+    fn is_static(&self) -> bool {
+        (**self).is_static()
     }
 }
 
@@ -78,17 +89,18 @@ impl FieldSolver for Coulomb {
     }
 }
 
-/// All static sources of a level: fixed charges plus magnets and coils (the electric and
-/// magnetic parts are independent).
+/// All sources of a level: fixed charges, magnets and coils, plus external fields
+/// (uniform stray fields and plane waves, PHYSICS.md §2.3). Summed in this order.
 #[derive(Clone, Debug, Default)]
-pub struct StaticField {
+pub struct LevelField {
     pub coulomb: Coulomb,
     pub dipoles: Vec<MagneticDipole>,
     pub loops: Vec<CircularLoop>,
     pub polygons: Vec<PolygonCoil>,
+    pub external: Vec<External>,
 }
 
-impl StaticField {
+impl LevelField {
     pub fn magnetic(&self, x: DVec3) -> DVec3 {
         let mut b = DVec3::ZERO;
         for d in &self.dipoles {
@@ -104,11 +116,21 @@ impl StaticField {
     }
 }
 
-impl FieldSolver for StaticField {
+impl FieldSolver for LevelField {
     fn sample(&self, x: DVec3, t: f64) -> FieldSample {
         let mut s = self.coulomb.sample(x, t);
         s.b = self.magnetic(x);
+        for ext in &self.external {
+            let f = ext.sample(x, t);
+            s.e += f.e;
+            s.b += f.b;
+            s.phi += f.phi;
+        }
         s
+    }
+
+    fn is_static(&self) -> bool {
+        self.external.iter().all(External::is_static)
     }
 }
 
