@@ -124,7 +124,7 @@ fn potential_colour(p: vec2<f32>) -> vec3<f32> {
     return mix(col, vec3<f32>(0.95, 0.95, 0.85), turning);
 }
 
-fn magnetic_colour(p: vec2<f32>) -> vec3<f32> {
+fn magnetic_field(p: vec2<f32>) -> f32 {
     var b = 0.0;
     // Dipoles with moment along z: B_z = -mu / r^3 in the plane.
     for (var i = 0u; i < params.counts.y; i = i + 1u) {
@@ -153,7 +153,13 @@ fn magnetic_colour(p: vec2<f32>) -> vec3<f32> {
         let denom = max(la * lb * (la * lb + dot(ra, rb)), 1e-12);
         b = b + params.segment_kappa[i].x * cross_z * (la + lb) / denom;
     }
+    return b;
+}
 
+// Colour of the magnetic map for field value b; `fw_k` is the screen-space derivative
+// of the contour variable 4b, computed by the caller (no derivatives in here, so it can
+// be used for supersampling in non-uniform control flow).
+fn magnetic_colour_of(b: f32, fw_k: f32) -> vec3<f32> {
     let s = tanh(b / 1.5);
     let base = vec3<f32>(0.10, 0.11, 0.14);
     var col: vec3<f32>;
@@ -163,7 +169,6 @@ fn magnetic_colour(p: vec2<f32>) -> vec3<f32> {
         col = base - s * vec3<f32>(0.02, 0.45, 0.42);
     }
     let k = b * 4.0;
-    let fw_k = fwidth(k);
     let fade = 1.0 - smoothstep(0.06, 0.25, fw_k);
     if (fade > 0.0) {
         let f = fract(k);
@@ -171,6 +176,29 @@ fn magnetic_colour(p: vec2<f32>) -> vec3<f32> {
         col = mix(col, col + vec3<f32>(0.10), line_cover(d, fw_k, 1.0) * fade);
     }
     return col;
+}
+
+// Magnetic map with adaptive supersampling: where the colour changes quickly between
+// neighbouring pixels (sign changes next to wires and magnets), the field is evaluated
+// at 4 × 4 points inside the pixel and the colours are averaged.
+fn magnetic_colour(p: vec2<f32>) -> vec3<f32> {
+    let b = magnetic_field(p);
+    let fw_k = fwidth(b * 4.0);
+    let fw_s = fwidth(tanh(b / 1.5));
+    let dx = dpdx(p);
+    let dy = dpdy(p);
+    if (fw_s < 0.05) {
+        return magnetic_colour_of(b, fw_k);
+    }
+    var acc = vec3<f32>(0.0);
+    for (var i = 0; i < 4; i = i + 1) {
+        for (var j = 0; j < 4; j = j + 1) {
+            let o = (f32(i) + 0.5) / 4.0 - 0.5;
+            let q = (f32(j) + 0.5) / 4.0 - 0.5;
+            acc = acc + magnetic_colour_of(magnetic_field(p + o * dx + q * dy), fw_k);
+        }
+    }
+    return acc / 16.0;
 }
 
 @fragment

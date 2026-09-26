@@ -25,6 +25,9 @@ use crate::worker::Preview;
 const PX_PER_CELL: f64 = 5.0;
 /// Colour texels per field sample (smooth interpolation of the sampled values).
 const UPSAMPLE: u32 = 4;
+/// Largest change of the compressed value between neighbouring samples that is still
+/// interpolated; steeper cells are evaluated exactly at every colour texel.
+const REFINE_STEP: f32 = 0.3;
 /// Spacing of the E arrows, in cells.
 const ARROW_SPACING: f64 = 1.5;
 /// Quantity used for the colour of the field views.
@@ -325,6 +328,16 @@ pub fn update(
         let j = j.clamp(0, i64::from(h) - 1) as usize;
         values[j * w as usize + i]
     };
+    // Exact value at a fine pixel (for cells where interpolation is not good enough).
+    let exact = |ii: u32, jj: u32| -> f32 {
+        let x = bounds.min.x + (f64::from(ii) + 0.5) / f64::from(wu) * size.x;
+        let y = bounds.max.y - (f64::from(jj) + 0.5) / f64::from(hu) * size.y;
+        let f = sample(v, fr, mode, DVec3::new(x, y, 0.0), t, c);
+        (match quantity {
+            FieldQuantity::Bz => f.map_or(0.0, |(_, b)| compress(b, b_sat, range)),
+            FieldQuantity::E => f.map_or(0.0, |(e, _)| compress(e.length(), e_sat, range)),
+        }) as f32
+    };
     let pixels: Vec<u8> = (0..hu)
         .into_par_iter()
         .flat_map_iter(|jj| {
@@ -334,9 +347,23 @@ pub fn update(
             (0..wu).flat_map(move |ii| {
                 let fx = (f64::from(ii) + 0.5) / f64::from(UPSAMPLE) - 0.5;
                 let (i0, tx) = (fx.floor() as i64, (fx - fx.floor()) as f32);
-                let top = at(i0, j0) * (1.0 - tx) + at(i0 + 1, j0) * tx;
-                let bottom = at(i0, j0 + 1) * (1.0 - tx) + at(i0 + 1, j0 + 1) * tx;
-                let s = top * (1.0 - ty) + bottom * ty;
+                let corners = [
+                    at(i0, j0),
+                    at(i0 + 1, j0),
+                    at(i0, j0 + 1),
+                    at(i0 + 1, j0 + 1),
+                ];
+                let lo = corners.iter().copied().fold(f32::INFINITY, f32::min);
+                let hi = corners.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+                // Adaptive refinement: across a sign change or a steep step the value is
+                // computed exactly at this pixel; elsewhere it is interpolated.
+                let s = if (lo < 0.0 && hi > 0.0) || hi - lo > REFINE_STEP {
+                    exact(ii, jj)
+                } else {
+                    let top = corners[0] * (1.0 - tx) + corners[1] * tx;
+                    let bottom = corners[2] * (1.0 - tx) + corners[3] * tx;
+                    top * (1.0 - ty) + bottom * ty
+                };
                 let a = (s.abs().powf(0.8) * 230.0) as u8;
                 match quantity {
                     FieldQuantity::Bz if s >= 0.0 => [255, 150, 40, a],
