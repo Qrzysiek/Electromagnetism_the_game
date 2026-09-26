@@ -69,14 +69,24 @@ def box(b):
     return {"min": [b[0], b[1], 0], "max": [b[2], b[3], 0]}
 
 
-def shot(q, m, node, angle_deg, ke, detector):
+def shot(q, m, node, angle_deg, ke, detector, time=0.0):
     a = math.radians(angle_deg)
+    launch = {"node": [node[0], node[1], 0], "direction": [math.cos(a), math.sin(a), 0.0],
+              "kinetic_energy": ke}
+    if time:
+        launch["time"] = time
     return {
         "particle": {"charge": q, "mass": m, "radius": 0.0},
-        "launch": {"node": [node[0], node[1], 0], "direction": [math.cos(a), math.sin(a), 0.0],
-                   "kinetic_energy": ke},
+        "launch": launch,
         "detector": detector,
     }
+
+
+def antenna(x, y, p0, angle_deg=0.0):
+    e = {"node": [x, y, 0], "kind": "antenna", "value": p0}
+    if angle_deg:
+        e["angle_deg"] = angle_deg
+    return e
 
 
 def stray(name, e=(0.0, 0.0), bz=0.0, waves=()):
@@ -96,17 +106,23 @@ def wave(amplitude, omega, phase_deg, direction_deg=0.0):
 
 def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charges=0,
           magnitudes=(), signs=(True, True), max_magnets=0, strengths=(), region=None,
-          reference=None, c=5.0, t_max=400.0, disturbances=()):
+          reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
+          amplitudes=(), rf_omega=0.0):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
+    if max_antennas:
+        limits["max_antennas"] = max_antennas
+        limits["antenna_amplitudes"] = list(amplitudes)
     if region:
         limits["region"] = box(region)
     return {
         "format_version": 2, "engine_version": "0.1.0", "name": name, "description": desc,
         "grid": {"nx": grid[0], "ny": grid[1], "nz": 0, "subdivision": 1},
         "physics": {"c": c, "charge_radius": 0.3, "magnet_radius": 0.3, "wire_radius": 0.1,
-                    "t_max": t_max, "tolerances": {"preview": 1e-10, "verify": 1e-12}},
+                    "antenna_radius": 0.3,
+                    "t_max": t_max, "tolerances": {"preview": 1e-10, "verify": 1e-12},
+                    **({"rf_omega": rf_omega} if rf_omega else {})},
         "shots": list(shots), "elements": list(elements), "coils": list(coils),
         "limits": limits, "reference_solution": list(reference or []),
         **({"disturbances": list(disturbances)} if disturbances else {}),
@@ -401,6 +417,52 @@ def earths_field():
         c=None)
 
 
+# =======================================================================================
+# Chapter 7: radio frequency. Antennas: oscillating dipoles with their exact retarded
+# fields (PHYSICS.md 2.4). c = 5; with omega = 0.6 the wavelength 2 pi c / omega = 52
+# cells: the arena is in the near and induction zones, where the field is strongest.
+# The RF period is 10.5; a particle (v = 1) needs ~30 to cross the arena.
+
+RF = 0.6
+RF_PERIOD = 2 * math.pi / RF
+
+
+def rf_kick():
+    return level(
+        "RF kick",
+        "An antenna is a dipole driven by a radio-frequency generator: its field reverses "
+        "every half period. The kick it gives a passing particle depends on the moment it "
+        "passes. Orient and place one antenna to steer the beam into the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 18)))],
+        max_antennas=1, amplitudes=[m * M for m in (1, 2, 4, 8)], rf_omega=RF)
+
+
+def rf_separator():
+    return level(
+        "RF separator",
+        "Identical particles, one launched half an RF period after the other. No static "
+        "field can tell them apart; an oscillating one can. RF separators at CERN sorted "
+        "kaons from pions this way. Send each bunch to its own detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, d, 30, d + 3)), time=t)
+               for t, d in ((0.0, 14), (RF_PERIOD / 2, 3))],
+        max_antennas=2, amplitudes=[m * M for m in (1, 2, 4, 8)],
+        max_charges=1, magnitudes=[m * M for m in (0.5, 1, 2)],
+        region=(4, 3, 24, 17), rf_omega=RF)
+
+
+def streak_camera():
+    return level(
+        "Streak camera",
+        "A streak camera turns time into position: a sweeping field deflects what arrives "
+        "early one way and what arrives late the other. Three bunches leave the source a "
+        "third of an RF period apart; each must hit its own spot on the screen.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((28, d, 30, d + 2)), time=t)
+               for t, d in ((0.0, 15), (RF_PERIOD / 3, 9), (2 * RF_PERIOD / 3, 3))],
+        max_antennas=2, amplitudes=[m * M for m in (1, 2, 4, 8)],
+        max_charges=2, magnitudes=[m * M for m in (0.5, 1, 2)],
+        region=(4, 2, 24, 18), rf_omega=RF)
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -428,6 +490,10 @@ LEVELS = [
     ("stray_field", stray_field),
     ("mains_hum", mains_hum),
     ("earths_field", earths_field),
+    # Chapter 7: radio frequency.
+    ("rf_kick", rf_kick),
+    ("rf_separator", rf_separator),
+    ("streak_camera", streak_camera),
 ]
 
 

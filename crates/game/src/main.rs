@@ -398,6 +398,9 @@ fn input(
         if keys.just_pressed(KeyCode::KeyQ) {
             e.cycle_magnitude(-1);
         }
+        if keys.just_pressed(KeyCode::KeyR) {
+            e.rotate(if step > 1 { -1 } else { 1 });
+        }
         if keys.just_pressed(KeyCode::KeyM) {
             e.toggle_kind();
         }

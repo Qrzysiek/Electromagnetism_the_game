@@ -18,5 +18,8 @@
   "17_build_wien_filter": "0004d084ef82e28e",
   "18_stray_field": "d4b3d01ad191acfb",
   "19_mains_hum": "559b42d092a335cc",
-  "20_earths_field": "0a6b04b5b1b7edc1"
+  "20_earths_field": "0a6b04b5b1b7edc1",
+  "21_rf_kick": "f409e012a12e89cb",
+  "22_rf_separator": "c2072cd90a89abd9",
+  "23_streak_camera": "2228b5d375bdc287"
 }

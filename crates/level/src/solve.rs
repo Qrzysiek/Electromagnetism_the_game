@@ -38,30 +38,39 @@ impl Rng {
 pub fn single_element_options(level: &Level) -> Vec<Element> {
     let m = level.grid.max_node();
     let z_range = if level.grid.is_2d() { 0..=0 } else { 0..=m[2] };
-    let mut kinds: Vec<(ElementKind, f64)> = Vec::new();
+    let mut kinds: Vec<(ElementKind, f64, f64)> = Vec::new();
     for &q in &level.limits.magnitudes {
         if level.limits.allow_positive {
-            kinds.push((ElementKind::Charge, q));
+            kinds.push((ElementKind::Charge, q, 0.0));
         }
         if level.limits.allow_negative {
-            kinds.push((ElementKind::Charge, -q));
+            kinds.push((ElementKind::Charge, -q, 0.0));
         }
     }
     if level.limits.max_magnets > 0 {
         for &mu in &level.limits.magnet_strengths {
-            kinds.push((ElementKind::Magnet, mu));
-            kinds.push((ElementKind::Magnet, -mu));
+            kinds.push((ElementKind::Magnet, mu, 0.0));
+            kinds.push((ElementKind::Magnet, -mu, 0.0));
+        }
+    }
+    if level.limits.max_antennas > 0 {
+        for &p in &level.limits.antenna_amplitudes {
+            for a in crate::ANTENNA_ANGLES {
+                kinds.push((ElementKind::Antenna, p, a));
+                kinds.push((ElementKind::Antenna, -p, a));
+            }
         }
     }
     let mut out = Vec::new();
     for z in z_range {
         for y in 0..=m[1] {
             for x in 0..=m[0] {
-                for &(kind, value) in &kinds {
+                for &(kind, value, angle_deg) in &kinds {
                     let e = Element {
                         node: [x, y, z],
                         kind,
                         value,
+                        angle_deg,
                     };
                     if level.check_placement(&[e]).is_ok() {
                         out.push(e);
@@ -167,19 +176,20 @@ fn anneal_once(
         }
     }
     let (mut score, _) = objective(level, &current);
-    // Allowed values per kind.
-    let values = |kind: ElementKind| -> Vec<f64> {
-        let mut v: Vec<f64> = options
+    // Allowed (value, orientation) pairs per kind.
+    let values = |kind: ElementKind| -> Vec<(f64, f64)> {
+        let mut v: Vec<(f64, f64)> = options
             .iter()
             .filter(|c| c.kind == kind)
-            .map(|c| c.value)
+            .map(|c| (c.value, c.angle_deg))
             .collect();
-        v.sort_by(f64::total_cmp);
+        v.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
         v.dedup();
         v
     };
     let charge_values = values(ElementKind::Charge);
     let magnet_values = values(ElementKind::Magnet);
+    let antenna_values = values(ElementKind::Antenna);
     for it in 0..iterations {
         if score == 0.0 && is_verified_solution(level, &current) {
             return Some(current);
@@ -199,8 +209,9 @@ fn anneal_once(
                 let v = match trial[i].kind {
                     ElementKind::Charge => &charge_values,
                     ElementKind::Magnet => &magnet_values,
+                    ElementKind::Antenna => &antenna_values,
                 };
-                trial[i].value = v[rng.below(v.len())];
+                (trial[i].value, trial[i].angle_deg) = v[rng.below(v.len())];
             }
             _ => trial[i] = options[rng.below(options.len())],
         }

@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "engine_version": "0.1.0",
-  "name": "Slingshot",
-  "description": "The detector is behind you. Attraction can turn the particle around; the fixed negative charge is a hint, but not enough on its own.",
+  "name": "RF kick",
+  "description": "An antenna is a dipole driven by a radio-frequency generator: its field reverses every half period. The kick it gives a passing particle depends on the moment it passes. Orient and place one antenna to steer the beam into the detector.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -15,6 +15,7 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
+    "rf_omega": 0.6,
     "t_max": 400.0,
     "tolerances": {
       "preview": 1e-10,
@@ -30,64 +31,58 @@
       },
       "launch": {
         "node": [
-          6,
-          3,
+          0,
+          10,
           0
         ],
         "direction": [
-          6.123233995736766e-17,
           1.0,
+          0.0,
           0.0
         ],
         "kinetic_energy": 0.5
       },
       "detector": {
         "min": [
-          0,
-          0,
+          27,
+          14,
           0
         ],
         "max": [
-          3,
-          4,
+          30,
+          18,
           0
         ]
       }
     }
   ],
-  "elements": [
-    {
-      "node": [
-        15,
-        12,
-        0
-      ],
-      "kind": "charge",
-      "value": -2000000.0
-    }
-  ],
+  "elements": [],
   "coils": [],
   "limits": {
-    "max_charges": 1,
-    "magnitudes": [
-      1000000.0,
-      2000000.0,
-      4000000.0
-    ],
+    "max_charges": 0,
+    "magnitudes": [],
     "allow_positive": true,
     "allow_negative": true,
     "max_magnets": 0,
-    "magnet_strengths": []
+    "magnet_strengths": [],
+    "max_antennas": 1,
+    "antenna_amplitudes": [
+      1000000.0,
+      2000000.0,
+      4000000.0,
+      8000000.0
+    ]
   },
   "reference_solution": [
     {
       "node": [
-        2,
         0,
+        5,
         0
       ],
-      "kind": "charge",
-      "value": -4000000.0
+      "kind": "antenna",
+      "value": 8000000.0,
+      "angle_deg": 90.0
     }
   ]
 }

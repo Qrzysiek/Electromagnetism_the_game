@@ -2,6 +2,7 @@
 
 use glam::DVec3;
 
+use crate::antenna::OscillatingDipole;
 use crate::external::External;
 use crate::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 
@@ -89,15 +90,20 @@ impl FieldSolver for Coulomb {
     }
 }
 
-/// All sources of a level: fixed charges, magnets and coils, plus external fields
-/// (uniform stray fields and plane waves, PHYSICS.md §2.3). Summed in this order.
+/// All sources of a level: fixed charges, magnets, coils and antennas, plus external
+/// fields (uniform stray fields and plane waves, PHYSICS.md §2.3–2.4). Summed in this
+/// order.
 #[derive(Clone, Debug, Default)]
 pub struct LevelField {
     pub coulomb: Coulomb,
     pub dipoles: Vec<MagneticDipole>,
     pub loops: Vec<CircularLoop>,
     pub polygons: Vec<PolygonCoil>,
+    pub antennas: Vec<OscillatingDipole>,
     pub external: Vec<External>,
+    /// Added to the flight time before evaluating time-dependent sources: a particle
+    /// launched at lab time `t₀` sees the fields at `t₀ + t`.
+    pub time_offset: f64,
 }
 
 impl LevelField {
@@ -120,8 +126,14 @@ impl FieldSolver for LevelField {
     fn sample(&self, x: DVec3, t: f64) -> FieldSample {
         let mut s = self.coulomb.sample(x, t);
         s.b = self.magnetic(x);
+        let t_lab = t + self.time_offset;
+        for a in &self.antennas {
+            let f = a.fields(x, t_lab);
+            s.e += f.e;
+            s.b += f.b;
+        }
         for ext in &self.external {
-            let f = ext.sample(x, t);
+            let f = ext.sample(x, t_lab);
             s.e += f.e;
             s.b += f.b;
             s.phi += f.phi;
@@ -131,6 +143,7 @@ impl FieldSolver for LevelField {
 
     fn is_static(&self) -> bool {
         self.external.iter().all(External::is_static)
+            && self.antennas.iter().all(|a| a.omega == 0.0)
     }
 }
 

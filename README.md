@@ -35,14 +35,19 @@ Switch to **Sandbox** at the top of the panel.
 - Mouse: left click places a charge, right click removes it, the wheel changes the magnitude.
 - Keyboard:
   - Arrows move the cursor (Shift: ×5); Space/Enter place; Del/X remove.
-  - S flips the sign (charges) or orientation (magnets: ⊙ moment out of the plane, ⊗ into it).
-  - Q/E change the magnitude; M switches between charge and magnet; C clears; 1–4 set the grid refinement.
+  - S flips the sign (charges), the orientation (magnets: ⊙ moment out of the plane, ⊗ into it) or the phase (antennas).
+  - R rotates an antenna by 45° (Shift+R: back).
+  - Q/E change the magnitude; M cycles the element kind (charge, magnet, antenna) the level allows; C clears; 1–4 set the grid refinement.
   - Multi-shot levels: `[` / `]` switch the shot; H shows all shots.
   - N/P switch levels; V cycles the map (potential → magnetic B → off); F toggles field lines; A toggles the animation.
 
 ## Multi-shot levels
 
 A level can have several shots: particles with their own species, launch and detector. **One setup must deliver every shot.** The panel lists the shots with their status (✔ arrived, ✖ lost, ⚠ marginal, … computing).
+
+## Antennas
+
+Antennas are small oscillating electric dipoles in the plane, all driven in phase by the level's RF generator (frequency ω). Their fields are exact, including the induction and radiation terms (PHYSICS.md §2.4). The kick they give depends on when a particle passes, so shots launched at different times (shown in the shot's launch time) can be sorted: RF separators, streak cameras. The potential map and field lines show static sources only.
 
 ## Disturbances
 

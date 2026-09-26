@@ -38,6 +38,9 @@ verified reference solution for every shot and negligible radiation
 | 18 | Stray field | 6 Noise: a stray field switched on and off; aim between | ≤ 1 charge |
 | 19 | Mains hum | uniform AC field at 4 phases acts like a random launch angle; imaging | ≤ 4 charges |
 | 20 | Earth's field | stray B_z of either sign on an electron beam | ≤ 3 charges |
+| 21 | RF kick | 7 Radio frequency: an antenna's kick depends on the passing time | ≤ 1 antenna |
+| 22 | RF separator | identical bunches half a period apart to different detectors | ≤ 2 antennas, ≤ 1 charge |
+| 23 | Streak camera | three bunches a third of a period apart to three spots | ≤ 2 antennas, ≤ 2 charges |
 
 ## Automatic detectors
 
@@ -88,10 +91,13 @@ fails.
 | 18_stray_field | 3.8 | 5.0e-2 | 32/32 | 19 | 19 / 20 | 0.62 |
 | 19_mains_hum | 12.3 | < 1.5e-3 | 18/32 | 96 | 407 / 667 | 0.87 |
 | 20_earths_field | 9.6 | 5.0e-4 | 17/32 | 184 | 537 / 2000 | 0.82 |
+| 21_rf_kick | 4.3 | 4.3e-2 | 32/32 | 30 | 30 / 24 | 0.27 |
+| 22_rf_separator | 11.0 | 6.0e-3 | 29/32 | 66 | 107 / 167 | 0.76 |
+| 23_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
 
 Notes:
 
-- The introduction levels (1, 12, 15, 18) are meant to be easy.
+- The introduction levels (1, 12, 15, 18, 21) are meant to be easy.
 - Under disturbances (chapter 6) a placement counts as a solution only if every flight
   arrives, verified. The distance objective sums over all flights.
 - Dempster (13) has in effect one physical parameter (the accelerating voltage, which sets

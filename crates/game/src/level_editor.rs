@@ -29,6 +29,7 @@ const TOLERANCE: std::ops::RangeInclusive<f64> = 1e-18..=1.0;
 pub struct EditTexts {
     pub magnitudes: String,
     pub magnet_strengths: String,
+    pub antenna_amplitudes: String,
 }
 
 pub fn list_to_text(m: &[f64]) -> String {
@@ -141,6 +142,8 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
         charge_radius,
         magnet_radius,
         wire_radius,
+        antenna_radius,
+        rf_omega,
         t_max,
         tolerances,
     } = p;
@@ -159,10 +162,19 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
             f
         }
     });
-    focus |= row(ui, "Radii: charge, magnet, wire", |ui| {
+    focus |= row(ui, "Radii: charge, magnet, wire, antenna", |ui| {
         positive(ui, charge_radius, 0.01, MAX_RADIUS)
             | positive(ui, magnet_radius, 0.01, MAX_RADIUS)
             | positive(ui, wire_radius, 0.01, MAX_RADIUS)
+            | positive(ui, antenna_radius, 0.01, MAX_RADIUS)
+    });
+    focus |= row(ui, "Antenna RF ω", |ui| {
+        ui.add(
+            egui::DragValue::new(rf_omega)
+                .speed(0.01)
+                .range(0.0..=MAX_POSITIVE),
+        )
+        .has_focus()
     });
     focus |= row(ui, "Time limit", |ui| {
         positive(ui, t_max, 1.0, MAX_POSITIVE)
@@ -188,6 +200,7 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
         node: launch_node,
         direction,
         kinetic_energy,
+        time,
     } = launch;
     let Detector { min, max } = detector;
     let mut focus = false;
@@ -225,6 +238,9 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
             | ui.add(egui::DragValue::new(&mut direction[1]).speed(0.01))
                 .has_focus()
     });
+    focus |= row(ui, "Launch time (lab)", |ui| {
+        ui.add(egui::DragValue::new(time).speed(0.05)).has_focus()
+    });
     focus |= row(ui, "Detector corner 1", |ui| node(ui, min, grid));
     focus |= row(ui, "Detector corner 2", |ui| node(ui, max, grid));
     focus
@@ -234,12 +250,17 @@ fn kind_combo(ui: &mut egui::Ui, id: usize, kind: &mut ElementKind) {
     let text = |k: ElementKind| match k {
         ElementKind::Charge => "charge",
         ElementKind::Magnet => "magnet μ",
+        ElementKind::Antenna => "antenna p₀",
     };
     egui::ComboBox::from_id_salt(("element_kind", id))
         .selected_text(text(*kind))
         .width(80.0)
         .show_ui(ui, |ui| {
-            for k in [ElementKind::Charge, ElementKind::Magnet] {
+            for k in [
+                ElementKind::Charge,
+                ElementKind::Magnet,
+                ElementKind::Antenna,
+            ] {
                 ui.selectable_value(kind, k, text(k));
             }
         });
@@ -253,10 +274,16 @@ fn edit_elements(ui: &mut egui::Ui, elements: &mut Vec<Element>, grid: &Grid) ->
             node: n,
             kind,
             value,
+            angle_deg,
         } = e;
         ui.horizontal(|ui| {
             kind_combo(ui, i, kind);
             focus |= si(ui, value, 1e4);
+            if *kind == ElementKind::Antenna {
+                focus |= ui
+                    .add(egui::DragValue::new(angle_deg).speed(1.0).suffix("°"))
+                    .has_focus();
+            }
             focus |= node(ui, n, grid);
             if ui.small_button("×").clicked() {
                 remove = Some(i);
@@ -418,6 +445,8 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         allow_negative,
         max_magnets,
         magnet_strengths,
+        max_antennas,
+        antenna_amplitudes,
         region,
     } = l;
     let mut focus = false;
@@ -450,6 +479,18 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         if r.lost_focus() {
             *magnet_strengths = parse_list(&texts.magnet_strengths);
             texts.magnet_strengths = list_to_text(magnet_strengths);
+        }
+        r.has_focus()
+    });
+    focus |= row(ui, "Player antennas (max)", |ui| {
+        ui.add(egui::DragValue::new(max_antennas).range(0..=MAX_COUNT))
+            .has_focus()
+    });
+    focus |= row(ui, "Allowed antenna amplitudes p₀", |ui| {
+        let r = ui.text_edit_singleline(&mut texts.antenna_amplitudes);
+        if r.lost_focus() {
+            *antenna_amplitudes = parse_list(&texts.antenna_amplitudes);
+            texts.antenna_amplitudes = list_to_text(antenna_amplitudes);
         }
         r.has_focus()
     });
@@ -600,6 +641,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         charge_radius,
         magnet_radius,
         wire_radius,
+        antenna_radius,
+        rf_omega,
         t_max,
         tolerances: TolerancesSpec { preview, verify },
     } = physics;
@@ -607,6 +650,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         || !radius(*charge_radius)
         || !radius(*magnet_radius)
         || !radius(*wire_radius)
+        || !radius(*antenna_radius)
+        || !(0.0..=MAX_POSITIVE).contains(rf_omega)
         || !positive(*t_max)
         || !TOLERANCE.contains(preview)
         || !TOLERANCE.contains(verify)
@@ -627,6 +672,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     node,
                     direction,
                     kinetic_energy,
+                    time,
                 },
             detector: Detector { min, max },
         } = s;
@@ -637,6 +683,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             || !direction.iter().all(|d| d.is_finite())
             || direction[2] != 0.0
             || !positive(*kinetic_energy)
+            || !time.is_finite()
             || !on_grid(min)
             || !on_grid(max)
         {
@@ -647,11 +694,16 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         }
     }
     for e in elements.iter().chain(reference_solution) {
-        let Element { node, kind, value } = e;
+        let Element {
+            node,
+            kind,
+            value,
+            angle_deg,
+        } = e;
         match kind {
-            ElementKind::Charge | ElementKind::Magnet => {}
+            ElementKind::Charge | ElementKind::Magnet | ElementKind::Antenna => {}
         }
-        if !on_grid(node) || !value.is_finite() {
+        if !on_grid(node) || !value.is_finite() || !angle_deg.is_finite() {
             return fail("element outside the grid or with an invalid value");
         }
     }
@@ -708,13 +760,17 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         allow_negative: _,
         max_magnets,
         magnet_strengths,
+        max_antennas,
+        antenna_amplitudes,
         region,
     } = limits;
     if *max_charges > MAX_COUNT
         || *max_magnets > MAX_COUNT
+        || *max_antennas > MAX_COUNT
         || !magnitudes
             .iter()
             .chain(magnet_strengths)
+            .chain(antenna_amplitudes)
             .all(|v| *v > 0.0 && v.is_finite())
     {
         return fail("limits outside the editor's range");

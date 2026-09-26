@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "engine_version": "0.1.0",
-  "name": "Build a Wien filter",
-  "description": "No coil this time: build the whole velocity selector yourself from charges (for E) and magnets (for B). Three ions with different energies must each reach their own detector.",
+  "name": "Streak camera",
+  "description": "A streak camera turns time into position: a sweeping field deflects what arrives early one way and what arrives late the other. Three bunches leave the source a third of an RF period apart; each must hit its own spot on the screen.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -15,6 +15,7 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
+    "rf_omega": 0.6,
     "t_max": 400.0,
     "tolerances": {
       "preview": 1e-10,
@@ -24,45 +25,13 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-06,
+        "charge": 1e-6,
         "mass": 1.0,
         "radius": 0.0
       },
       "launch": {
         "node": [
-          2,
-          10,
-          0
-        ],
-        "direction": [
-          1.0,
-          0.0,
-          0.0
-        ],
-        "kinetic_energy": 0.3
-      },
-      "detector": {
-        "min": [
-          26,
-          12,
-          0
-        ],
-        "max": [
-          28,
-          13,
-          0
-        ]
-      }
-    },
-    {
-      "particle": {
-        "charge": 1e-06,
-        "mass": 1.0,
-        "radius": 0.0
-      },
-      "launch": {
-        "node": [
-          2,
+          0,
           10,
           0
         ],
@@ -75,26 +44,26 @@
       },
       "detector": {
         "min": [
-          26,
-          10,
+          28,
+          15,
           0
         ],
         "max": [
-          28,
-          11,
+          30,
+          17,
           0
         ]
       }
     },
     {
       "particle": {
-        "charge": 1e-06,
+        "charge": 1e-6,
         "mass": 1.0,
         "radius": 0.0
       },
       "launch": {
         "node": [
-          2,
+          0,
           10,
           0
         ],
@@ -103,17 +72,51 @@
           0.0,
           0.0
         ],
-        "kinetic_energy": 1.0
+        "kinetic_energy": 0.5,
+        "time": 3.490658503988659
       },
       "detector": {
         "min": [
-          26,
+          28,
           9,
           0
         ],
         "max": [
-          28,
+          30,
+          11,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
           10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5,
+        "time": 6.981317007977318
+      },
+      "detector": {
+        "min": [
+          28,
+          3,
+          0
+        ],
+        "max": [
+          30,
+          5,
           0
         ]
       }
@@ -122,30 +125,32 @@
   "elements": [],
   "coils": [],
   "limits": {
-    "max_charges": 4,
+    "max_charges": 2,
     "magnitudes": [
-      100000.0,
-      200000.0,
-      300000.0,
-      400000.0
+      500000.0,
+      1000000.0,
+      2000000.0
     ],
     "allow_positive": true,
     "allow_negative": true,
-    "max_magnets": 2,
-    "magnet_strengths": [
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "max_antennas": 2,
+    "antenna_amplitudes": [
       1000000.0,
       2000000.0,
-      3000000.0
+      4000000.0,
+      8000000.0
     ],
     "region": {
       "min": [
-        6,
-        3,
+        4,
+        2,
         0
       ],
       "max": [
         24,
-        17,
+        18,
         0
       ]
     }
@@ -153,57 +158,13 @@
   "reference_solution": [
     {
       "node": [
-        15,
-        6,
+        5,
+        5,
         0
       ],
-      "kind": "magnet",
-      "value": -2000000.0
-    },
-    {
-      "node": [
-        15,
-        14,
-        0
-      ],
-      "kind": "magnet",
-      "value": -2000000.0
-    },
-    {
-      "node": [
-        11,
-        7,
-        0
-      ],
-      "kind": "charge",
-      "value": 200000.0
-    },
-    {
-      "node": [
-        19,
-        7,
-        0
-      ],
-      "kind": "charge",
-      "value": 200000.0
-    },
-    {
-      "node": [
-        11,
-        13,
-        0
-      ],
-      "kind": "charge",
-      "value": -200000.0
-    },
-    {
-      "node": [
-        19,
-        13,
-        0
-      ],
-      "kind": "charge",
-      "value": -200000.0
+      "kind": "antenna",
+      "value": -8000000.0,
+      "angle_deg": 90.0
     }
   ]
 }

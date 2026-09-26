@@ -46,6 +46,10 @@ pub struct Sandbox {
     pub charge_value: f64,
     /// Value μ of level magnets placed with the LevelElement tool.
     pub magnet_value: f64,
+    /// Amplitude p₀ and orientation (degrees) of level antennas placed with the
+    /// LevelElement tool.
+    pub antenna_value: f64,
+    pub antenna_angle: f64,
     /// Strength κ of coils drawn with the coil tools.
     pub coil_kappa: f64,
     pub file_name: String,
@@ -70,6 +74,8 @@ impl Default for Sandbox {
             element_kind: ElementKind::Charge,
             charge_value: 1e6,
             magnet_value: 10.0,
+            antenna_value: 1e6,
+            antenna_angle: 90.0,
             coil_kappa: 1.0,
             file_name: "my_level".into(),
             overwrite: false,
@@ -95,6 +101,7 @@ fn default_shot() -> Shot {
             node: [0, 10, 0],
             direction: [1.0, 0.0, 0.0],
             kinetic_energy: 0.5,
+            time: 0.0,
         },
         detector: Detector {
             min: [27, 8, 0],
@@ -121,6 +128,8 @@ pub fn empty_level() -> Level {
             charge_radius: 0.3,
             magnet_radius: 0.3,
             wire_radius: 0.1,
+            antenna_radius: 0.3,
+            rf_omega: 0.0,
             t_max: 200.0,
             tolerances: TolerancesSpec {
                 preview: 1e-10,
@@ -137,6 +146,8 @@ pub fn empty_level() -> Level {
             allow_negative: true,
             max_magnets: 0,
             magnet_strengths: vec![],
+            max_antennas: 0,
+            antenna_amplitudes: vec![],
             region: None,
         },
         reference_solution: Vec::new(),
@@ -153,6 +164,7 @@ fn sync_texts(game: &mut Game) {
     let limits = &game.editor.base().limits;
     game.sandbox.texts.magnitudes = list_to_text(&limits.magnitudes);
     game.sandbox.texts.magnet_strengths = list_to_text(&limits.magnet_strengths);
+    game.sandbox.texts.antenna_amplitudes = list_to_text(&limits.antenna_amplitudes);
 }
 
 /// Enters sandbox mode, editing the level currently loaded.
@@ -233,9 +245,10 @@ pub fn pointer(
                 return true;
             }
             let kind = game.sandbox.element_kind;
-            let value = match kind {
-                ElementKind::Charge => game.sandbox.charge_value,
-                ElementKind::Magnet => game.sandbox.magnet_value,
+            let (value, angle_deg) = match kind {
+                ElementKind::Charge => (game.sandbox.charge_value, 0.0),
+                ElementKind::Magnet => (game.sandbox.magnet_value, 0.0),
+                ElementKind::Antenna => (game.sandbox.antenna_value, game.sandbox.antenna_angle),
             };
             game.editor.edit_level(|l| {
                 let launch = l.shots.iter().any(|s| s.launch.node == node);
@@ -245,7 +258,12 @@ pub fn pointer(
                         l.elements.remove(i);
                     }
                 } else if !launch && value != 0.0 {
-                    let e = Element { node, kind, value };
+                    let e = Element {
+                        node,
+                        kind,
+                        value,
+                        angle_deg,
+                    };
                     match existing {
                         Some(i) => l.elements[i] = e,
                         None => l.elements.push(e),
@@ -502,9 +520,15 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
                     ElementKind::Magnet,
                     "magnet",
                 );
+                ui.selectable_value(
+                    &mut game.sandbox.element_kind,
+                    ElementKind::Antenna,
+                    "antenna",
+                );
                 let value = match game.sandbox.element_kind {
                     ElementKind::Charge => &mut game.sandbox.charge_value,
                     ElementKind::Magnet => &mut game.sandbox.magnet_value,
+                    ElementKind::Antenna => &mut game.sandbox.antenna_value,
                 };
                 let r = ui.add(
                     egui::DragValue::new(value)
@@ -520,8 +544,20 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
             small(
                 ui,
                 "Left click: place or set value. Right click: remove. Magnet value μ = μ₀m/4π \
-                 (positive: moment out of the plane; in the plane B_z = −μ/r³).",
+                 (positive: moment out of the plane; in the plane B_z = −μ/r³). Antenna: \
+                 dipole amplitude p₀ along the orientation, oscillating at the level's RF ω.",
             );
+            if game.sandbox.element_kind == ElementKind::Antenna {
+                ui.horizontal(|ui| {
+                    ui.label("orientation");
+                    let r = ui.add(
+                        egui::DragValue::new(&mut game.sandbox.antenna_angle)
+                            .speed(1.0)
+                            .suffix("°"),
+                    );
+                    game.text_focus |= r.has_focus();
+                });
+            }
         }
         Tool::PlayerElement => {
             small(

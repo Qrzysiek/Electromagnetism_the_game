@@ -90,6 +90,9 @@ fn config_space_log10(level: &Level, options: &[Element]) -> f64 {
     ) + subsets(
         count(ElementKind::Magnet),
         u64::from(level.limits.max_magnets),
+    ) + subsets(
+        count(ElementKind::Antenna),
+        u64::from(level.limits.max_antennas),
     );
     ln / std::f64::consts::LN_10
 }
@@ -100,15 +103,20 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
     let by_kind = |k: ElementKind| -> Vec<Element> {
         options.iter().copied().filter(|e| e.kind == k).collect()
     };
-    let (charges, magnets) = (by_kind(ElementKind::Charge), by_kind(ElementKind::Magnet));
+    let (charges, magnets, antennas) = (
+        by_kind(ElementKind::Charge),
+        by_kind(ElementKind::Magnet),
+        by_kind(ElementKind::Antenna),
+    );
     loop {
         let nc = rng.below(level.limits.max_charges as usize + 1);
         let nm = rng.below(level.limits.max_magnets as usize + 1);
-        if nc + nm == 0 {
+        let na = rng.below(level.limits.max_antennas as usize + 1);
+        if nc + nm + na == 0 {
             continue;
         }
         let mut p: Vec<Element> = Vec::new();
-        for (pool, n) in [(&charges, nc), (&magnets, nm)] {
+        for (pool, n) in [(&charges, nc), (&magnets, nm), (&antennas, na)] {
             let mut tries = 0;
             while p.iter().filter(|e| pool.contains(e)).count() < n && tries < 100 {
                 tries += 1;
@@ -127,7 +135,8 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
 }
 
 /// One small change: move an element by one or two nodes, change its value to a
-/// neighbouring allowed one, flip its sign, or add/remove an element.
+/// neighbouring allowed one (or rotate an antenna by one step), flip its sign, or
+/// add/remove an element.
 fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -> Vec<Element> {
     for _ in 0..50 {
         let mut t = p.to_vec();
@@ -138,11 +147,30 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
                 let n = t[i].node;
                 t[i].node = [n[0] + d(rng), n[1] + d(rng), n[2]];
             }
+            2 if t.iter().any(|e| e.kind == ElementKind::Antenna) && rng.below(2) == 0 => {
+                // Rotate an antenna by one allowed step.
+                let idx: Vec<usize> = (0..t.len())
+                    .filter(|&j| t[j].kind == ElementKind::Antenna)
+                    .collect();
+                let i = idx[rng.below(idx.len())];
+                let angles = crate::ANTENNA_ANGLES;
+                let k = angles
+                    .iter()
+                    .position(|a| a.to_bits() == t[i].angle_deg.to_bits())
+                    .unwrap_or(0);
+                let k2 = if rng.below(2) == 0 {
+                    (k + angles.len() - 1) % angles.len()
+                } else {
+                    (k + 1) % angles.len()
+                };
+                t[i].angle_deg = angles[k2];
+            }
             2 if !t.is_empty() => {
                 let i = rng.below(t.len());
                 let list = match t[i].kind {
                     ElementKind::Charge => &level.limits.magnitudes,
                     ElementKind::Magnet => &level.limits.magnet_strengths,
+                    ElementKind::Antenna => &level.limits.antenna_amplitudes,
                 };
                 let k = list
                     .iter()

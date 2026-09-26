@@ -117,6 +117,19 @@ fn draw_element(
                 seg(gizmos, p + Vec2::new(-s, s), p + Vec2::new(s, -s), ink);
             }
         }
+        ElementKind::Antenna => {
+            // Arrow along the dipole amplitude p₀ (reversed for the opposite phase).
+            let color = Color::srgb(0.45, 0.95, 0.75);
+            disc(gizmos, p, radius, color);
+            gizmos.circle_2d(p, halo, color.with_alpha(0.4));
+            #[allow(clippy::cast_possible_truncation)]
+            let dir = Vec2::from_angle(e.angle_deg.to_radians() as f32) * e.value.signum() as f32;
+            let tip = p + dir * radius * 0.8;
+            seg(gizmos, p - dir * radius * 0.8, tip, ink);
+            let back = -dir * radius * 0.45;
+            seg(gizmos, tip, tip + Vec2::from_angle(0.6).rotate(back), ink);
+            seg(gizmos, tip, tip + Vec2::from_angle(-0.6).rotate(back), ink);
+        }
     }
     gizmos.circle_2d(p, radius * 1.15, ring);
 }
@@ -242,6 +255,8 @@ pub fn draw(
     let charge_radius = level.physics.charge_radius as f32;
     #[allow(clippy::cast_possible_truncation)]
     let magnet_radius = level.physics.magnet_radius as f32;
+    #[allow(clippy::cast_possible_truncation)]
+    let antenna_radius = level.physics.antenna_radius as f32;
     let scale = |kind: ElementKind| {
         let list = crate::editor::magnitudes(level, kind);
         let from_level = level
@@ -254,12 +269,17 @@ pub fn draw(
             .chain(from_level)
             .fold(1e-300, f64::max)
     };
-    let (q_scale, m_scale) = (scale(ElementKind::Charge), scale(ElementKind::Magnet));
+    let (q_scale, m_scale, a_scale) = (
+        scale(ElementKind::Charge),
+        scale(ElementKind::Magnet),
+        scale(ElementKind::Antenna),
+    );
     let draw_all = |gizmos: &mut Gizmos, list: &[Element], player: bool| {
         for e in list {
             let (r, s) = match e.kind {
                 ElementKind::Charge => (charge_radius, q_scale),
                 ElementKind::Magnet => (magnet_radius, m_scale),
+                ElementKind::Antenna => (antenna_radius, a_scale),
             };
             draw_element(gizmos, grid, e, r, s, player);
         }
@@ -305,6 +325,7 @@ pub fn draw(
     let cur = to_vec2(grid.position(game.editor.cursor));
     let cursor_color = match (game.editor.kind, game.editor.selected_value() > 0.0) {
         (ElementKind::Magnet, _) => Color::srgb(0.9, 0.7, 1.0),
+        (ElementKind::Antenna, _) => Color::srgb(0.6, 1.0, 0.85),
         (ElementKind::Charge, true) => Color::srgb(1.0, 0.6, 0.5),
         (ElementKind::Charge, false) => Color::srgb(0.6, 0.8, 1.0),
     };

@@ -87,11 +87,18 @@ fn obstacle_name(game: &Game, i: usize) -> &'static str {
         .clone()
         .filter(|e| e.kind == ElementKind::Charge)
         .count();
-    let magnets = all.filter(|e| e.kind == ElementKind::Magnet).count();
+    let magnets = all
+        .clone()
+        .filter(|e| e.kind == ElementKind::Magnet)
+        .count();
+    let antennas = all.filter(|e| e.kind == ElementKind::Antenna).count();
+    // Obstacle order of `Level::field`: charges, magnets, antennas, coil wires.
     if i < charges {
         "a charge"
     } else if i < charges + magnets {
         "a magnet"
+    } else if i < charges + magnets + antennas {
+        "an antenna"
     } else {
         "a coil wire"
     }
@@ -314,49 +321,57 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     // Palette.
     let limits = &level.limits;
     ui.label(egui::RichText::new("Your elements").strong());
-    ui.horizontal(|ui| {
-        if limits.max_charges > 0 {
+    let kind_name = |k: ElementKind| match k {
+        ElementKind::Charge => "charges",
+        ElementKind::Magnet => "magnets",
+        ElementKind::Antenna => "antennas",
+    };
+    let allowed: Vec<ElementKind> = crate::editor::KINDS
+        .into_iter()
+        .filter(|&k| crate::editor::max_of(&level, k) > 0)
+        .collect();
+    ui.horizontal_wrapped(|ui| {
+        for &k in &allowed {
             ui.label(format!(
-                "charges {} of {} left",
-                game.editor.left(ElementKind::Charge),
-                limits.max_charges
-            ));
-        }
-        if limits.max_magnets > 0 {
-            ui.label(format!(
-                "magnets {} of {} left",
-                game.editor.left(ElementKind::Magnet),
-                limits.max_magnets
+                "{} {} of {} left",
+                kind_name(k),
+                game.editor.left(k),
+                crate::editor::max_of(&level, k)
             ));
         }
     });
-    if limits.max_charges > 0 && limits.max_magnets > 0 {
+    if allowed.len() > 1 {
         ui.horizontal(|ui| {
             ui.label("Place:");
             let mut kind = game.editor.kind;
-            ui.selectable_value(&mut kind, ElementKind::Charge, "charge");
-            ui.selectable_value(&mut kind, ElementKind::Magnet, "magnet")
-                .on_hover_text("Toggle with M");
+            for &k in &allowed {
+                ui.selectable_value(&mut kind, k, kind_name(k).trim_end_matches('s'))
+                    .on_hover_text("Cycle with M");
+            }
             game.editor.set_kind(kind);
         });
     }
     ui.horizontal_wrapped(|ui| {
         let kind = game.editor.kind;
         let both_signs =
-            kind == ElementKind::Magnet || (limits.allow_positive && limits.allow_negative);
+            kind != ElementKind::Charge || (limits.allow_positive && limits.allow_negative);
         let sign = match (kind, game.editor.positive) {
             (ElementKind::Charge, true) => "+",
             (ElementKind::Charge, false) => "−",
             (ElementKind::Magnet, true) => "⊙",
             (ElementKind::Magnet, false) => "⊗",
+            (ElementKind::Antenna, true) => "phase 0°",
+            (ElementKind::Antenna, false) => "phase 180°",
         };
         let hover = match kind {
             ElementKind::Charge => "Flip sign (S)",
             ElementKind::Magnet => "Flip orientation (S): ⊙ moment out of the plane, ⊗ into it",
+            ElementKind::Antenna => "Flip phase (S): opposite phase of the RF generator",
         };
         ui.label(match kind {
             ElementKind::Charge => "New charge:",
             ElementKind::Magnet => "New magnet μ:",
+            ElementKind::Antenna => "New antenna p₀:",
         });
         if both_signs {
             if ui.button(sign).on_hover_text(hover).clicked() {
@@ -369,6 +384,22 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_si(*m));
         }
     });
+    if game.editor.kind == ElementKind::Antenna {
+        ui.horizontal(|ui| {
+            ui.label("Orientation:");
+            for a in level::ANTENNA_ANGLES {
+                ui.selectable_value(&mut game.editor.angle_deg, a, format!("{a:.0}°"))
+                    .on_hover_text("Rotate with R");
+            }
+        });
+        ui.label(
+            egui::RichText::new(format!(
+                "Antennas oscillate at ω = {} (one RF generator, in phase).",
+                fmt_si(level.physics.rf_omega)
+            ))
+            .small(),
+        );
+    }
     ui.horizontal(|ui| {
         ui.label("Grid:");
         for f in 1..=4u32 {

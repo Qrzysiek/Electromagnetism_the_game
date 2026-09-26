@@ -238,7 +238,7 @@ fn m1_in_plane_sources_give_exactly_perpendicular_field_in_the_plane() {
             kappa: -0.7,
             wire_radius: 0.05,
         }],
-        external: vec![],
+        ..LevelField::default()
     };
     let mut rng = Rng::new(9);
     for _ in 0..200 {
@@ -461,7 +461,7 @@ fn mixed_field(seed: u64) -> (LevelField, Vec<Shape>) {
         dipoles,
         loops: vec![coil],
         polygons: vec![],
-        external: vec![],
+        ..LevelField::default()
     };
     (field, obstacles)
 }

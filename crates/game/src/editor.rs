@@ -1,7 +1,15 @@
-//! Editor state: player elements (charges, magnets) on the grid, cursor, selected element.
+//! Editor state: player elements (charges, magnets, antennas) on the grid, cursor,
+//! selected element.
 //! Independent of the rendering engine so it can be unit tested.
 
-use level::{Element, ElementKind, Level, Node, PlacementError};
+use level::{ANTENNA_ANGLES, Element, ElementKind, Level, Node, PlacementError};
+
+/// Kinds in palette order.
+pub const KINDS: [ElementKind; 3] = [
+    ElementKind::Charge,
+    ElementKind::Magnet,
+    ElementKind::Antenna,
+];
 
 pub struct Editor {
     /// The level as loaded (recommended grid).
@@ -14,8 +22,11 @@ pub struct Editor {
     pub kind: ElementKind,
     /// Index into the allowed values of `kind` for new elements.
     pub magnitude_index: usize,
-    /// Sign of new elements (charges: sign of Q; magnets: moment along +z).
+    /// Sign of new elements (charges: sign of Q; magnets: moment along +z; antennas:
+    /// phase).
     pub positive: bool,
+    /// Orientation of new antennas, degrees (one of `ANTENNA_ANGLES`).
+    pub angle_deg: f64,
     /// Last rejected action, for the status line.
     pub message: Option<String>,
     /// Incremented on every change of the physical setup.
@@ -27,18 +38,36 @@ pub fn magnitudes(level: &Level, kind: ElementKind) -> &[f64] {
     match kind {
         ElementKind::Charge => &level.limits.magnitudes,
         ElementKind::Magnet => &level.limits.magnet_strengths,
+        ElementKind::Antenna => &level.limits.antenna_amplitudes,
     }
+}
+
+/// Maximum number of player elements of a kind.
+pub fn max_of(level: &Level, kind: ElementKind) -> u32 {
+    match kind {
+        ElementKind::Charge => level.limits.max_charges,
+        ElementKind::Magnet => level.limits.max_magnets,
+        ElementKind::Antenna => level.limits.max_antennas,
+    }
+}
+
+/// Whether both signs of a kind are available.
+fn both_signs(level: &Level, kind: ElementKind) -> bool {
+    kind != ElementKind::Charge || (level.limits.allow_positive && level.limits.allow_negative)
+}
+
+fn default_positive(level: &Level, kind: ElementKind) -> bool {
+    kind != ElementKind::Charge || level.limits.allow_positive
 }
 
 impl Editor {
     pub fn new(level: Level) -> Self {
         let m = level.grid.max_node();
-        let kind = if level.limits.max_charges == 0 && level.limits.max_magnets > 0 {
-            ElementKind::Magnet
-        } else {
-            ElementKind::Charge
-        };
-        let positive = kind == ElementKind::Magnet || level.limits.allow_positive;
+        let kind = KINDS
+            .into_iter()
+            .find(|&k| max_of(&level, k) > 0)
+            .unwrap_or(ElementKind::Charge);
+        let positive = default_positive(&level, kind);
         Self {
             base: level.clone(),
             level,
@@ -47,6 +76,7 @@ impl Editor {
             kind,
             magnitude_index: 0,
             positive,
+            angle_deg: ANTENNA_ANGLES[0],
             message: None,
             revision: 1,
         }
@@ -66,32 +96,52 @@ impl Editor {
     }
 
     pub fn left(&self, kind: ElementKind) -> usize {
-        let max = match kind {
-            ElementKind::Charge => self.level.limits.max_charges,
-            ElementKind::Magnet => self.level.limits.max_magnets,
-        } as usize;
+        let max = max_of(&self.level, kind) as usize;
         let used = self.placement.iter().filter(|e| e.kind == kind).count();
         max.saturating_sub(used)
     }
 
     /// Selects the kind of new elements (if the level allows it).
     pub fn set_kind(&mut self, kind: ElementKind) {
-        let allowed = match kind {
-            ElementKind::Charge => self.level.limits.max_charges > 0,
-            ElementKind::Magnet => self.level.limits.max_magnets > 0,
-        };
-        if allowed && kind != self.kind {
+        if max_of(&self.level, kind) > 0 && kind != self.kind {
             self.kind = kind;
             self.magnitude_index = 0;
-            self.positive = kind == ElementKind::Magnet || self.level.limits.allow_positive;
+            self.positive = default_positive(&self.level, kind);
         }
     }
 
+    /// Switches to the next kind the level allows.
     pub fn toggle_kind(&mut self) {
-        self.set_kind(match self.kind {
-            ElementKind::Charge => ElementKind::Magnet,
-            ElementKind::Magnet => ElementKind::Charge,
-        });
+        let i = KINDS.iter().position(|&k| k == self.kind).unwrap_or(0);
+        for step in 1..KINDS.len() {
+            let k = KINDS[(i + step) % KINDS.len()];
+            if max_of(&self.level, k) > 0 {
+                self.set_kind(k);
+                return;
+            }
+        }
+    }
+
+    /// Rotates the antenna under the cursor, or the orientation of new antennas, by one
+    /// step of `ANTENNA_ANGLES` (45°).
+    pub fn rotate(&mut self, step: isize) {
+        let next = |a: f64| {
+            let n = ANTENNA_ANGLES.len() as isize;
+            let i = ANTENNA_ANGLES
+                .iter()
+                .position(|x| x.to_bits() == a.to_bits())
+                .unwrap_or(0) as isize;
+            ANTENNA_ANGLES[(i + step).rem_euclid(n) as usize]
+        };
+        if let Some(i) = self.player_index_at(self.cursor) {
+            if self.placement[i].kind == ElementKind::Antenna {
+                let mut trial = self.placement.clone();
+                trial[i].angle_deg = next(trial[i].angle_deg);
+                let _ = self.try_placement(trial);
+            }
+        } else {
+            self.angle_deg = next(self.angle_deg);
+        }
     }
 
     fn changed(&mut self) {
@@ -137,6 +187,11 @@ impl Editor {
             node: self.cursor,
             kind: self.kind,
             value: self.selected_value(),
+            angle_deg: if self.kind == ElementKind::Antenna {
+                self.angle_deg
+            } else {
+                0.0
+            },
         };
         match self.player_index_at(self.cursor) {
             Some(i) => trial[i] = e,
@@ -159,10 +214,7 @@ impl Editor {
             trial[i].value = -trial[i].value;
             let _ = self.try_placement(trial);
         } else {
-            let limits = &self.level.limits;
-            let both = self.kind == ElementKind::Magnet
-                || (limits.allow_positive && limits.allow_negative);
-            if both {
+            if both_signs(&self.level, self.kind) {
                 self.positive = !self.positive;
             }
         }
@@ -280,12 +332,16 @@ pub fn describe(e: &PlacementError) -> String {
     match e {
         PlacementError::TooManyCharges => "No charges left for this level.".into(),
         PlacementError::TooManyMagnets => "No magnets left for this level.".into(),
+        PlacementError::TooManyAntennas => "No antennas left for this level.".into(),
         PlacementError::OutsideGrid(_) => "Outside the grid.".into(),
         PlacementError::OutsideRegion(_) => "Elements can only go in the marked region.".into(),
         PlacementError::NotInPlane(_) => "Must be in the plane.".into(),
         PlacementError::Occupied(_) => "That node is occupied.".into(),
         PlacementError::SignNotAllowed(_) => "That sign is not allowed here.".into(),
         PlacementError::MagnitudeNotAllowed(_) => "That value is not allowed here.".into(),
+        PlacementError::AngleNotAllowed(_) => {
+            "Antennas can point along 0°, 45°, 90° or 135°.".into()
+        }
     }
 }
 

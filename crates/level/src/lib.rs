@@ -16,6 +16,7 @@ pub mod analysis;
 pub mod solve;
 
 use physics::DVec3;
+use physics::antenna::OscillatingDipole;
 use physics::dynamics::{Kinematics, Particle};
 use physics::external::{External, PlaneWave};
 use physics::field::{Coulomb, FixedCharge, LevelField};
@@ -220,6 +221,15 @@ fn default_wire_radius() -> f64 {
     0.1
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+/// Orientations the player can give an antenna, degrees from +x (the opposite ones are
+/// the same antenna with the sign of its amplitude flipped).
+pub const ANTENNA_ANGLES: [f64; 4] = [0.0, 45.0, 90.0, 135.0];
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorldPhysics {
     /// Speed of light in internal units; `None` means Newtonian mechanics.
@@ -232,6 +242,13 @@ pub struct WorldPhysics {
     /// Radius of coil wires, in cell units.
     #[serde(default = "default_wire_radius")]
     pub wire_radius: f64,
+    /// Radius of every antenna body, in cell units.
+    #[serde(default = "default_radius")]
+    pub antenna_radius: f64,
+    /// Angular frequency of the RF generator that drives every antenna, in phase
+    /// (`p(t) = p₀ cos(ωt)`; 0 means static dipoles).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub rf_omega: f64,
     pub t_max: f64,
     pub tolerances: TolerancesSpec,
 }
@@ -263,6 +280,10 @@ pub struct Launch {
     pub node: Node,
     pub direction: [f64; 3],
     pub kinetic_energy: f64,
+    /// Lab time of the launch. It matters only with time-dependent fields (antennas,
+    /// waves): the particle sees them at `time + t`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub time: f64,
 }
 
 /// Detector: the box spanned by two nodes.
@@ -282,6 +303,11 @@ pub enum ElementKind {
     /// `μ = μ₀ m_z / 4π` (field units, PHYSICS.md §2.2). In the plane its field is
     /// `B_z = −μ / r³`.
     Magnet,
+    /// Antenna: a small oscillating electric dipole in the plane (PHYSICS.md §2.4),
+    /// `p(t) = value · (cos α, sin α, 0) · cos(ω t)` with `α = angle_deg` and
+    /// `ω = physics.rf_omega`. All antennas are driven in phase by one generator; a
+    /// negative value is the opposite phase.
+    Antenna,
 }
 
 /// An element on a grid node.
@@ -292,6 +318,9 @@ pub struct Element {
     pub kind: ElementKind,
     #[serde(alias = "charge")]
     pub value: f64,
+    /// Orientation in the plane, degrees from +x (antennas only).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub angle_deg: f64,
 }
 
 impl Element {
@@ -300,6 +329,7 @@ impl Element {
             node,
             kind: ElementKind::Charge,
             value: q,
+            angle_deg: 0.0,
         }
     }
 
@@ -308,6 +338,16 @@ impl Element {
             node,
             kind: ElementKind::Magnet,
             value: mu,
+            angle_deg: 0.0,
+        }
+    }
+
+    pub fn antenna(node: Node, p0: f64, angle_deg: f64) -> Self {
+        Self {
+            node,
+            kind: ElementKind::Antenna,
+            value: p0,
+            angle_deg,
         }
     }
 }
@@ -342,10 +382,21 @@ pub struct Limits {
     /// Allowed magnet strengths |μ| (either orientation).
     #[serde(default)]
     pub magnet_strengths: Vec<f64>,
+    /// Maximum number of antennas the player may place.
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub max_antennas: u32,
+    /// Allowed antenna amplitudes |p₀| (either phase; orientations `ANTENNA_ANGLES`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub antenna_amplitudes: Vec<f64>,
     /// If set, player elements may only be placed inside this box of nodes (inclusive),
     /// like the electrode region of a real instrument.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<Region2>,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
 }
 
 /// A box of grid nodes, inclusive.
@@ -366,12 +417,14 @@ impl Region2 {
 pub enum PlacementError {
     TooManyCharges,
     TooManyMagnets,
+    TooManyAntennas,
     OutsideGrid(Node),
     OutsideRegion(Node),
     NotInPlane(Node),
     Occupied(Node),
     SignNotAllowed(f64),
     MagnitudeNotAllowed(f64),
+    AngleNotAllowed(f64),
 }
 
 impl Level {
@@ -467,6 +520,9 @@ impl Level {
         if count(ElementKind::Magnet) > self.limits.max_magnets as usize {
             return Err(PlacementError::TooManyMagnets);
         }
+        if count(ElementKind::Antenna) > self.limits.max_antennas as usize {
+            return Err(PlacementError::TooManyAntennas);
+        }
         let mut occupied: Vec<Node> = self.elements.iter().map(|c| c.node).collect();
         occupied.extend(self.shots.iter().map(|s| s.launch.node));
         for e in player {
@@ -517,6 +573,22 @@ impl Level {
                         return Err(PlacementError::MagnitudeNotAllowed(e.value));
                     }
                 }
+                ElementKind::Antenna => {
+                    if !self
+                        .limits
+                        .antenna_amplitudes
+                        .iter()
+                        .any(|m| m.to_bits() == magnitude)
+                    {
+                        return Err(PlacementError::MagnitudeNotAllowed(e.value));
+                    }
+                    if !ANTENNA_ANGLES
+                        .iter()
+                        .any(|a| a.to_bits() == e.angle_deg.to_bits())
+                    {
+                        return Err(PlacementError::AngleNotAllowed(e.angle_deg));
+                    }
+                }
             }
         }
         Ok(())
@@ -544,6 +616,21 @@ impl Level {
                 radius: self.physics.magnet_radius,
             })
             .collect();
+        let antennas: Vec<OscillatingDipole> = all
+            .iter()
+            .filter(|e| e.kind == ElementKind::Antenna)
+            .map(|e| {
+                let a = e.angle_deg.to_radians();
+                OscillatingDipole {
+                    position: self.grid.position(e.node),
+                    amplitude: DVec3::new(a.cos(), a.sin(), 0.0) * e.value,
+                    omega: self.physics.rf_omega,
+                    phase: 0.0,
+                    c: self.c(),
+                    radius: self.physics.antenna_radius,
+                }
+            })
+            .collect();
         let wire = self.physics.wire_radius;
         let mut loops = Vec::new();
         let mut polygons = Vec::new();
@@ -560,6 +647,12 @@ impl Level {
             Shape::Sphere(Sphere {
                 center: d.position,
                 radius: d.radius,
+            })
+        }));
+        obstacles.extend(antennas.iter().map(|a| {
+            Shape::Sphere(Sphere {
+                center: a.position,
+                radius: a.radius,
             })
         }));
         for coil in &self.coils {
@@ -606,7 +699,9 @@ impl Level {
             dipoles,
             loops,
             polygons,
+            antennas,
             external: Vec::new(),
+            time_offset: 0.0,
         };
         (field, obstacles)
     }
@@ -653,6 +748,7 @@ impl Level {
         if let Some(d) = self.disturbances.get(disturbance) {
             field.external = d.fields(self.c());
         }
+        field.time_offset = self.shots[shot].launch.time;
         Scenario {
             field,
             obstacles,
@@ -692,6 +788,8 @@ mod tests {
                 charge_radius: 0.25,
                 magnet_radius: 0.3,
                 wire_radius: 0.1,
+                antenna_radius: 0.3,
+                rf_omega: 1.5,
                 t_max: 100.0,
                 tolerances: TolerancesSpec {
                     preview: 1e-10,
@@ -708,6 +806,7 @@ mod tests {
                     node: [0, 5, 0],
                     direction: [1.0, 0.1, 0.0],
                     kinetic_energy: 0.3,
+                    time: 0.25,
                 },
                 detector: Detector {
                     min: [19, 3, 0],
@@ -728,6 +827,8 @@ mod tests {
                 allow_negative: true,
                 max_magnets: 1,
                 magnet_strengths: vec![5.0],
+                max_antennas: 1,
+                antenna_amplitudes: vec![3.0],
                 region: None,
             },
             reference_solution: vec![],
@@ -819,6 +920,16 @@ mod tests {
         assert!(matches!(
             l.check_placement(&[magnet, Element::magnet([7, 6, 0], 5.0)]),
             Err(PlacementError::TooManyMagnets)
+        ));
+        let antenna = Element::antenna([8, 2, 0], -3.0, 135.0);
+        assert_eq!(l.check_placement(&[ok, magnet, antenna]), Ok(()));
+        assert!(matches!(
+            l.check_placement(&[Element::antenna([8, 2, 0], 3.0, 30.0)]),
+            Err(PlacementError::AngleNotAllowed(_))
+        ));
+        assert!(matches!(
+            l.check_placement(&[antenna, Element::antenna([9, 2, 0], 3.0, 0.0)]),
+            Err(PlacementError::TooManyAntennas)
         ));
     }
 }

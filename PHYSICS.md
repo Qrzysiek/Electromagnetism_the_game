@@ -96,6 +96,24 @@ Fields whose sources are outside the arena (disturbances, SPEC §3). `LevelField
 
 **Diagnostics.** In time-dependent fields the energy of §4 is not conserved (the wave does work). The energy diagnostic is then reported as NaN rather than a misleading number (`FieldSolver::is_static`). Validation instead uses the exact invariants of motion in a plane wave (test W2).
 
+## 2.4 Antennas: oscillating electric dipoles — *validated* (`crates/physics/src/antenna.rs`)
+
+A small antenna is modelled as a point electric dipole `p(t) = p₀ cos(ωt + φ)` inside a solid sphere (an obstacle). Its fields are the exact retarded fields (Jackson §9.2), at `t_r = t − r/c`, with `n` the unit vector from the dipole and units `k = 1`, `μ₀/4π = 1/c²`:
+
+```
+E = [3n(n·p) − p]/r³ + [3n(n·ṗ) − ṗ]/(c r²) + [n × (n × p̈)]/(c² r)
+B = (1/c²) [ṗ × n / r² + p̈ × n / (c r)]
+```
+
+- This is an exact solution of the vacuum Maxwell equations outside the source point, covering the near (quasi-static), induction and radiation zones. Nothing is truncated.
+- For `c = ∞` it becomes the electrostatic dipole field of the instantaneous `p(t)`, with `B = 0`.
+- A dipole in the plane (`p ⊥ ẑ`) gives, at `z = 0`, `E` exactly in the plane and `B` exactly along `ẑ`, so the 2D slice stays exact (test A3).
+- The radiated power is `⟨P⟩ = p₀² ω⁴ / (3c³)` (Larmor). It is supplied by the generator that drives the antenna, which is outside the model.
+
+**Levels.** All antennas of a level are driven in phase by one generator of angular frequency `physics.rf_omega` (φ = 0). An antenna element has amplitude `value` (a negative value is the opposite phase) and orientation `angle_deg`. The player can choose orientations of 0°, 45°, 90° and 135°.
+- A shot may have a launch time `t₀` (`launch.time`). The flight then sees the time-dependent sources at `t₀ + t`, implemented as `LevelField::time_offset`, which is exact.
+- Identical particles launched at different times follow different trajectories only in time-dependent fields. This is the basis of the RF levels.
+
 ## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 
 State `y = (x, p)`, with:
@@ -301,6 +319,18 @@ Note on M2: the first threshold for |p| drift (1e-12) was stricter than the inte
 | W4 | Energy with uniform stray E and B_z and a static (ω = 0) wave term, `c = ∞` and 4 | `W` constant, with potential `−E·x` | `max|ΔW|/T₀` < 1e-10 | 2.6e-12 |
 
 The thresholds are the ones of the corresponding T and M tests (1e-9 for trajectory comparisons at tolerance 1e-12, 1e-10 for conserved quantities), fixed before measuring.
+
+### Antenna tests (`cargo test -p physics --test antenna -- --nocapture --test-threads=1`, and unit tests in `antenna.rs`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| A0 | Maxwell equations at r = 1.4, 5 and 42 (λ = 6.3): near, induction and radiation zones | central differences, step `2.5e-5 · min(r, λ)` | residual < 1e-6 of the compared terms | ≤ 6.6e-8; residuals scale as h² (16× per 4× step), so they are difference error |
+| A0' | `c = ∞` limit | instantaneous static dipole field; `c = 1e9` | < 1e-8 | holds |
+| A1 | Time-averaged Poynting flux `(c²/4π) E×B` through spheres R = 0.2 λ, λ, 20 λ (general p₀ direction, off-origin dipole) | Larmor `p₀²ω⁴/(3c³)`, the same at every R (near-field terms are reactive) | < 1e-10 | 8e-16, 2e-15, 5e-15 |
+| A2 | Static limit ω = 0 | charges ±Q at ±d/2, `Qd = |p₀|`; the difference is the octupole term `O((d/r)²)` | < (d/1.8)² | 9.7e-6 (d = 1e-2), 9.7e-8 (d = 1e-3): scales as d² |
+| A3 | Plane of symmetry: two in-plane antennas, a charge, a launch-time offset | `z = p_z = 0` | exactly ±0 | holds |
+
+A1 is the strongest check. Its quadratures (Gauss–Legendre in cos θ, uniform in φ and in time) are exact for the trigonometric polynomials involved, so any error in the field formulas, including the near and induction terms, would show up directly.
 
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 

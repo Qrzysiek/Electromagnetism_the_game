@@ -151,7 +151,7 @@ proptest! {
                 wire_radius: 0.1,
             }],
             polygons: vec![],
-            external: vec![],
+            ..LevelField::default()
         };
         let scn = Scenario {
             field,
