@@ -31,6 +31,19 @@ enum Command {
     },
     /// Verify the reference solution of a level.
     Check { path: PathBuf },
+    /// Measure difficulty: configuration space, random-guess rate, heuristic search.
+    Analyze {
+        paths: Vec<PathBuf>,
+        /// Random placements sampled.
+        #[arg(long, default_value_t = 2000)]
+        samples: usize,
+        /// Heuristic search runs.
+        #[arg(long, default_value_t = 32)]
+        runs: usize,
+        /// Objective evaluations per search run.
+        #[arg(long, default_value_t = 400)]
+        budget: u32,
+    },
     /// Rewrite level files in the current format (older formats are migrated on load).
     Normalize { paths: Vec<PathBuf> },
 }
@@ -84,6 +97,37 @@ fn main() {
                 }
                 Some(sol) => println!("  best solution: {sol:?}"),
                 None => println!("  no solution found"),
+            }
+        }
+        Command::Analyze {
+            paths,
+            samples,
+            runs,
+            budget,
+        } => {
+            println!(
+                "| level | log10 configs | random solve rate | search success | mean evals | expected effort: search / guessing | smoothness |"
+            );
+            println!("|---|---|---|---|---|---|---|");
+            for path in paths {
+                let level = load(&path);
+                let a = level::analysis::analyze(&level, samples, runs, budget, 0xD1FF);
+                let rate = if a.random_solutions == 0 {
+                    format!("< {:.1e}", a.random_rate())
+                } else {
+                    format!("{:.1e}", a.random_rate())
+                };
+                println!(
+                    "| {} | {:.1} | {rate} | {}/{} | {:.0} | {:.0} / {:.0} | {:.2} |",
+                    path.file_stem().unwrap().to_string_lossy(),
+                    a.config_space_log10,
+                    a.search_successes,
+                    a.search_runs,
+                    a.search_mean_evaluations,
+                    a.expected_search_effort(),
+                    a.expected_guess_effort(),
+                    a.smoothness
+                );
             }
         }
         Command::Normalize { paths } => {

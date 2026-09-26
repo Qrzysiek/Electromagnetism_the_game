@@ -13,7 +13,7 @@ Requires Rust (stable) and, on Windows, the Visual Studio C++ build tools.
 cargo run --release -p game          # the game (run from the repository root)
 cargo test --workspace               # all tests, including physics validation
 cargo run --release -p generator -- check levels/01_first_bend.json
-cargo run --release -p generator -- solve levels/02_the_wall.json
+cargo run --release -p generator -- solve levels/05_the_wall.json
 ```
 
 ## Sandbox (level editor)

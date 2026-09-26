@@ -55,7 +55,8 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 - Charges of the player and the level are fixed and sit on grid nodes. Particle trajectories are continuous.
 - Each level has a recommended grid resolution (the one the generator used). The player may refine it by an integer factor (2×, 3×…), which keeps all old nodes. Arbitrary resolution is available in custom mode.
 - Each level limits the player's charges: count, sign, allowed magnitudes, and optionally a **placement region** (the electrode region of a real instrument).
-- Besides generated levels, a set of levels reproduces real experiments and instruments that point charges can model: Geiger–Marsden scattering, Thomson's cathode-ray tube, an Einzel lens, a hemispherical analyzer (exact: a point charge's field is exactly the field between concentric spheres), a reflectron, and a relativistic beta-ray spectrometer. `scripts/make_experiment_levels.py` defines them.
+- Besides generated levels, a set of levels reproduces real experiments and instruments that point charges can model: Geiger–Marsden scattering, Thomson's cathode-ray tube, an Einzel lens, a hemispherical analyzer (exact: a point charge's field is exactly the field between concentric spheres), a reflectron, and a relativistic beta-ray spectrometer, and the magnetic instruments below. `scripts/levels.py` defines all shipped levels.
+- **Curriculum** (`docs/LEVELS.md`): levels are grouped in chapters by how hard the phenomenon is to understand. Every new element gets an easy introduction level first, and within a chapter difficulty and the number of elements needed rise on average.
 - **The level is solved** when wave 1 (a single particle) reaches B.
 - **Waves** are the endurance and high-score layer: 1 particle, pause, 2, pause, 4, pause, … Later waves feel the particles' interaction more strongly (and, in the future, the response of materials). Pauses let materials relax.
 - **High score (open, candidates below; may be combined):**
@@ -95,7 +96,7 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 3. Rejects trivial levels: without player charges the particle misses, and solutions with k−1 charges are not found in N independent searches.
 4. Requires several distinct solutions (repeated searches from different starting points), so the level can also be solved in ways the generator didn't anticipate.
 5. Robustness: moving any single charge by one cell must not always destroy the solution. The fraction of one-cell perturbations that survive is measured.
-6. Computes a difficulty measure from points 3–5. Numeric thresholds are part of the acceptance criteria.
+6. Computes a difficulty measure from points 3–5. Numeric thresholds are part of the acceptance criteria. Implemented as `generator analyze`: configuration-space size, random solve rate, the success and effort of a local search that sees only the distance objective, and smoothness of the objective across one-move neighbours (`docs/LEVELS.md`).
 7. All reference solutions must be verified, not marginal (§2.3).
 8. From Stage 2: verifies the level by simulating the full wave sequence (expensive, so done precisely only for the best candidates).
 9. A native command-line tool, parallel over candidates. Saves levels as JSON: level charges, A, B, particle species, launch parameters, recommended grid, limits, reference solution, metrics, integrator tolerances and **physics engine version**.

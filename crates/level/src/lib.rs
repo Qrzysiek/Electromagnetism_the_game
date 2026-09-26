@@ -8,6 +8,7 @@
 //! Format history: version 1 had a single particle/launch/detector and `level_charges`
 //! with `"charge"` values; it is migrated on load. Version 2 has `shots` and `elements`.
 
+pub mod analysis;
 pub mod solve;
 
 use physics::DVec3;

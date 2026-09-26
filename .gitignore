@@ -1,2 +1,3 @@
 /target
 **/*.rs.bk
+scripts/__pycache__/

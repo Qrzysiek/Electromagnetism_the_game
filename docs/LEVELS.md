@@ -1,0 +1,96 @@
+# Levels: curriculum and difficulty
+
+`scripts/levels.py` is the single source of truth for the shipped levels: their order,
+designs, reference solutions and automatic detector placement. Rebuild with
+`python scripts/levels.py` (or `--only NN` for one level). Every level must have a
+verified reference solution for every shot and negligible radiation
+(`crates/level/tests/levels.rs`).
+
+## Curriculum rules
+
+- Levels are ordered mostly by how hard the phenomenon is to understand and use.
+- Every new element or concept is introduced by an easy level first.
+- Within a chapter, difficulty and the number of elements needed rise on average. This
+  is a trend, not a strict rule.
+- A good puzzle has a large configuration space, a small solution set, and a "distance to
+  solution" that changes piecewise continuously. A player can then learn from attempts,
+  but guessing or brute force is slow.
+
+| # | Level | Chapter / new idea | Player elements |
+|---|---|---|---|
+| 1 | First bend | 1 Charges: one charge bends a beam | ≤ 1 charge |
+| 2 | Geiger–Marsden | Coulomb scattering, sign and strength | ≤ 1 charge |
+| 3 | Thomson's CRT | two energies; deflection ∝ 1/T | ≤ 2 charges |
+| 4 | Slingshot | bending around a level charge | ≤ 1 charge |
+| 5 | The wall | steering around an obstacle | ≤ 3 charges |
+| 6 | Twin beams | 2 Several shots, one setup | ≤ 2 charges |
+| 7 | Reflectron | reflection; energy-dependent turning point | ≤ 3 charges |
+| 8 | Einzel lens | focusing of an angular spread | ≤ 4 charges |
+| 9 | Hemispherical analyzer | energy dispersion on a circular orbit | ≤ 2 charges |
+| 10 | Fast lane | 3 Relativity: γ changes the bending | ≤ 2 charges |
+| 11 | Beta spectrometer | relativistic circular orbits of two energies | ≤ 2 charges |
+| 12 | First coil | 4 Magnetic fields from level coils | ≤ 1 charge |
+| 13 | Dempster | 180° focusing and mass separation | ≤ 2 charges |
+| 14 | Wien filter | crossed E and B select one speed | ≤ 4 charges |
+| 15 | First magnet | 5 Placing your own magnets | ≤ 1 magnet |
+| 16 | Calutron | isotope separation with magnets only | ≤ 2 magnets |
+| 17 | Build a Wien filter | crossed fields from charges and magnets | ≤ 4 charges, ≤ 2 magnets |
+
+## Automatic detectors
+
+A shot's detector may be given as `Auto(strip, axis, size)`. The script then runs the
+reference solution (or, if the level has none, first asks the solver for a setup that
+brings every shot into its probe strip). It places a `size`-cell detector around the
+landing point, clamped to the arena. Shots of the same species (same particle and energy,
+differing only in direction, as in Dempster's 180° focusing) share one detector.
+Overlapping detectors of different species on the same screen are split at the node
+halfway between their landing points. If the points are too close to split, the build
+fails.
+
+## Difficulty measurements
+
+`cargo run --release -p generator -- analyze levels/[0-9]*.json` (2000 random samples,
+32 search runs with a budget of 400 evaluations each). Columns:
+
+- **log10 configs:** number of distinct player placements within the limits.
+- **random solve rate:** fraction of uniformly random placements that solve every shot,
+  verified. When none were found, the upper estimate 3/n (rule of three) is shown.
+- **search:** a local search that only sees the distance objective, like a player watching
+  the preview (greedy moves with occasional worse moves accepted). Shows its success rate
+  and the mean evaluations of successful runs.
+- **expected effort:** expected number of tried placements for the search (restarting after
+  each failed run) versus for random guessing.
+- **smoothness:** Spearman rank correlation of the distance objective between a placement
+  and a one-move neighbour. High means that attempts carry information.
+
+| level | log10 configs | random solve rate | search success | mean evals | expected effort: search / guessing | smoothness |
+|---|---|---|---|---|---|---|
+| 01_first_bend | 3.6 | 1.1e-1 | 32/32 | 8 | 8 / 9 | 0.61 |
+| 02_geiger_marsden | 3.4 | 2.8e-2 | 32/32 | 33 | 33 / 36 | 0.32 |
+| 03_thomson_crt | 6.1 | 1.9e-2 | 32/32 | 35 | 35 / 53 | 0.73 |
+| 04_slingshot | 3.6 | 9.5e-3 | 27/32 | 155 | 229 / 105 | 0.69 |
+| 05_the_wall | 10.0 | 3.5e-3 | 26/32 | 101 | 194 / 286 | 0.66 |
+| 06_twin_beams | 6.9 | 7.5e-3 | 29/32 | 87 | 128 / 133 | 0.86 |
+| 07_reflectron | 7.9 | 4.5e-3 | 31/32 | 88 | 101 / 222 | 0.83 |
+| 08_einzel_lens | 10.3 | 1.0e-3 | 31/32 | 98 | 111 / 1000 | 0.90 |
+| 09_hemispherical_analyzer | 6.6 | 1.5e-3 | 19/32 | 120 | 394 / 667 | 0.75 |
+| 10_fast_lane | 7.3 | 1.3e-2 | 32/32 | 65 | 65 / 80 | 0.60 |
+| 11_beta_spectrometer | 6.6 | 1.5e-3 | 20/32 | 131 | 371 / 667 | 0.77 |
+| 12_first_coil | 3.6 | 3.3e-1 | 32/32 | 17 | 17 / 3 | 0.44 |
+| 13_dempster | 5.8 | 7.7e-2 | 32/32 | 21 | 21 / 13 | 0.56 |
+| 14_wien_filter | 11.6 | 1.5e-3 | 28/32 | 77 | 134 / 667 | 0.63 |
+| 15_first_magnet | 3.3 | 8.1e-2 | 32/32 | 14 | 14 / 12 | 0.40 |
+| 16_calutron | 6.5 | < 1.5e-3 | 4/32 | 124 | 2924 / 667 | 0.70 |
+| 17_build_wien_filter | 18.2 | 2.5e-3 | 14/32 | 130 | 644 / 400 | 0.85 |
+
+Notes:
+
+- The introduction levels (1, 12, 15) are meant to be easy.
+- Dempster (13) has in effect one physical parameter (the accelerating voltage, which sets
+  all radii). It is kept as the concept level for 180° focusing.
+- The Calutron (16) is the hardest: no random placement out of 2000 solved it, and the
+  search succeeded in 4 of 32 runs. Its difficulty comes from the magnets' strongly
+  non-uniform dipole fields.
+- The search is a rough stand-in for a player. A player who understands the physics (for
+  example the Wien condition v = E/B) should do much better than the search on the later
+  levels, and a player who doesn't should do much worse.

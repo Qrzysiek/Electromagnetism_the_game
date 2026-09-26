@@ -1,0 +1,128 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Thomson's cathode-ray tube (1897)",
+  "description": "J. J. Thomson deflected cathode rays with charged plates and showed they are negative particles: electrons. Here an electron at 0.2 c must hit a one-cell spot on the screen. Two electron energies must hit their own one-cell spots: the deflection falls as 1/T, like in an oscilloscope. Build deflection plates from point charges.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": -1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.4
+      },
+      "detector": {
+        "min": [
+          29,
+          17,
+          0
+        ],
+        "max": [
+          30,
+          18,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": -1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.6
+      },
+      "detector": {
+        "min": [
+          29,
+          14,
+          0
+        ],
+        "max": [
+          30,
+          15,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 2,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      750000.0,
+      1000000.0,
+      1500000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        8,
+        3,
+        0
+      ],
+      "max": [
+        17,
+        17,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        8,
+        4,
+        0
+      ],
+      "kind": "charge",
+      "value": -1000000.0
+    }
+  ]
+}

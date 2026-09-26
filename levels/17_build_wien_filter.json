@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "engine_version": "0.1.0",
-  "name": "Wien filter",
-  "description": "Crossed electric and magnetic fields pass exactly one speed straight through: the electric force qE balances the magnetic force qvB when v = E/B. Slower ions are pushed one way, faster ones the other. The coil provides B; place charges to supply E so that each of the three ions reaches its own detector.",
+  "name": "Build a Wien filter",
+  "description": "No coil this time: build the whole velocity selector yourself from charges (for E) and magnets (for B). Three ions with different energies must each reach their own detector.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -43,7 +43,7 @@
       "detector": {
         "min": [
           26,
-          11,
+          12,
           0
         ],
         "max": [
@@ -75,12 +75,12 @@
       "detector": {
         "min": [
           26,
-          9,
+          10,
           0
         ],
         "max": [
           28,
-          10,
+          11,
           0
         ]
       }
@@ -107,69 +107,67 @@
       "detector": {
         "min": [
           26,
-          8,
+          9,
           0
         ],
         "max": [
           28,
-          9,
+          10,
           0
         ]
       }
     }
   ],
   "elements": [],
-  "coils": [
-    {
-      "shape": "polygon",
-      "vertices": [
-        [
-          1,
-          5,
-          0
-        ],
-        [
-          29,
-          5,
-          0
-        ],
-        [
-          29,
-          15,
-          0
-        ],
-        [
-          1,
-          15,
-          0
-        ]
-      ],
-      "kappa": 25000.0
-    }
-  ],
+  "coils": [],
   "limits": {
     "max_charges": 4,
     "magnitudes": [
       100000.0,
       200000.0,
+      300000.0,
       400000.0
     ],
     "allow_positive": true,
     "allow_negative": true,
+    "max_magnets": 2,
+    "magnet_strengths": [
+      1000000.0,
+      2000000.0,
+      3000000.0
+    ],
     "region": {
       "min": [
-        8,
-        7,
+        6,
+        3,
         0
       ],
       "max": [
-        22,
-        13,
+        24,
+        17,
         0
       ]
     }
   },
   "reference_solution": [
+    {
+      "node": [
+        15,
+        6,
+        0
+      ],
+      "kind": "magnet",
+      "value": -2000000.0
+    },
+    {
+      "node": [
+        15,
+        14,
+        0
+      ],
+      "kind": "magnet",
+      "value": -2000000.0
+    },
     {
       "node": [
         11,

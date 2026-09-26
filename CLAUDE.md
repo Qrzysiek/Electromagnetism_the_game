@@ -17,5 +17,6 @@ Every level that ships must be reproducible by hand in the sandbox.
 
 ## Workflow
 - Before committing: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
-- Level design scripts: `scripts/make_experiment_levels.py`, `scripts/make_magnet_levels.py`. Level tools: `cargo run --release -p generator -- {solve,check,normalize}`.
+- Levels: `scripts/levels.py` is the single source of truth (curriculum order, designs, automatic detector placement); rebuild with `python scripts/levels.py`. Measure difficulty with `cargo run --release -p generator -- analyze levels/[0-9]*.json` and keep `docs/LEVELS.md` up to date. Level tools: `generator {solve,check,normalize,analyze}`.
+- Curriculum rules: every new element or concept gets an easy introduction level first; within a chapter difficulty and the number of elements needed rise on average.
 - Commit messages end with the co-author line used in the history.

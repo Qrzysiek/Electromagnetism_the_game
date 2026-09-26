@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Dempster's mass spectrometer (1918)",
-  "description": "Ions from the source are accelerated by your electrode, then bent by the magnetic field of the large coil. In a uniform field the radius is r = √(2mT)/(qB), so the heavy ions (m = 4) land twice as far out as the light ones (m = 1). Ions leaving at slightly different angles re-converge after half a turn (180° focusing). One accelerating electrode must bring both masses, at both angles, to their detectors.",
+  "description": "Ions from the source are accelerated by your electrodes, then bent by the magnetic field of the large coil. In a uniform field r = √(2mT)/(qB), so masses 1, 2 and 4 land at different places; ions leaving at slightly different angles re-converge after half a turn (180° focusing). One setup must bring all six ions to the detectors of their masses.",
   "grid": {
     "nx": 32,
     "ny": 22,
@@ -43,7 +43,7 @@
       "detector": {
         "min": [
           13,
-          3,
+          2,
           0
         ],
         "max": [
@@ -75,11 +75,75 @@
       "detector": {
         "min": [
           13,
-          3,
+          2,
           0
         ],
         "max": [
           14,
+          5,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 2.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          9,
+          5,
+          0
+        ],
+        "direction": [
+          0.08715574274765814,
+          0.9961946980917455,
+          0.0
+        ],
+        "kinetic_energy": 0.05
+      },
+      "detector": {
+        "min": [
+          17,
+          2,
+          0
+        ],
+        "max": [
+          18,
+          5,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 2.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          9,
+          5,
+          0
+        ],
+        "direction": [
+          -0.08715574274765824,
+          0.9961946980917455,
+          0.0
+        ],
+        "kinetic_energy": 0.05
+      },
+      "detector": {
+        "min": [
+          17,
+          2,
+          0
+        ],
+        "max": [
+          18,
           5,
           0
         ]
@@ -107,11 +171,11 @@
       "detector": {
         "min": [
           22,
-          3,
+          2,
           0
         ],
         "max": [
-          23,
+          24,
           5,
           0
         ]
@@ -139,11 +203,11 @@
       "detector": {
         "min": [
           22,
-          3,
+          2,
           0
         ],
         "max": [
-          23,
+          24,
           5,
           0
         ]
@@ -164,27 +228,32 @@
     }
   ],
   "limits": {
-    "max_charges": 1,
+    "max_charges": 2,
     "magnitudes": [
+      250000.0,
       500000.0,
       750000.0,
       1000000.0,
+      1250000.0,
       1500000.0,
       2000000.0,
+      2500000.0,
       3000000.0,
       4000000.0
     ],
     "allow_positive": true,
-    "allow_negative": false,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
     "region": {
       "min": [
-        8,
+        2,
         1,
         0
       ],
       "max": [
-        10,
-        3,
+        15,
+        4,
         0
       ]
     }

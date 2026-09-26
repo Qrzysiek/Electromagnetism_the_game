@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "engine_version": "0.1.0",
-  "name": "First bend",
-  "description": "Place one charge to bend the beam into the detector. Like charges repel, unlike charges attract.",
+  "name": "Fast lane",
+  "description": "A relativistic particle (v = 0.85 c) is hard to bend: its momentum grows as γmv. Charges that would easily steer a slow particle barely move this one.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -10,7 +10,7 @@
     "subdivision": 1
   },
   "physics": {
-    "c": 5.0,
+    "c": 1.5,
     "charge_radius": 0.3,
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
@@ -23,45 +23,75 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-7,
         "mass": 1.0,
         "radius": 0.0
       },
       "launch": {
         "node": [
           0,
-          10,
+          4,
           0
         ],
         "direction": [
-          1.0,
-          0.0,
+          0.9805806756909201,
+          0.19611613513818404,
           0.0
         ],
-        "kinetic_energy": 0.5
+        "kinetic_energy": 2.0
       },
       "detector": {
         "min": [
           27,
-          16,
+          14,
           0
         ],
         "max": [
           30,
-          20,
+          18,
           0
         ]
       }
     }
   ],
-  "elements": [],
+  "elements": [
+    {
+      "node": [
+        12,
+        8,
+        0
+      ],
+      "kind": "charge",
+      "value": -20000000.0
+    },
+    {
+      "node": [
+        18,
+        12,
+        0
+      ],
+      "kind": "charge",
+      "value": 20000000.0
+    },
+    {
+      "node": [
+        20,
+        5,
+        0
+      ],
+      "kind": "charge",
+      "value": -20000000.0
+    }
+  ],
   "coils": [],
   "limits": {
-    "max_charges": 1,
+    "max_charges": 2,
     "magnitudes": [
-      1000000.0,
-      2000000.0,
-      4000000.0
+      20000000.0,
+      30000000.0,
+      40000000.0,
+      60000000.0,
+      80000000.0
     ],
     "allow_positive": true,
     "allow_negative": true,
@@ -71,12 +101,12 @@
   "reference_solution": [
     {
       "node": [
-        0,
-        0,
+        7,
+        1,
         0
       ],
       "kind": "charge",
-      "value": 4000000.0
+      "value": 60000000.0
     }
   ]
 }

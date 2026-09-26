@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "engine_version": "0.1.0",
-  "name": "Calutron",
-  "description": "Lawrence's calutron separated uranium isotopes on an industrial scale by bending ions in a magnetic field: at equal energy the radius r = √(2mT)/(qB) grows with the mass. Two isotopes leave the source together. Place magnets (uniformly magnetized spheres standing out of the plane) so that each reaches its own detector.",
+  "name": "Einzel lens",
+  "description": "An Einzel lens focuses charged-particle beams in electron microscopes and ion sources. Three rays leave the source at −12°, 0° and +12°; all three must meet in the small detector on the axis. Only charges of the particle's sign are available (a decelerating lens).",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -29,26 +29,26 @@
       },
       "launch": {
         "node": [
-          3,
+          0,
           10,
           0
         ],
         "direction": [
-          1.0,
-          0.0,
+          0.9781476007338057,
+          -0.20791169081775934,
           0.0
         ],
         "kinetic_energy": 0.5
       },
       "detector": {
         "min": [
-          27,
-          13,
+          28,
+          9,
           0
         ],
         "max": [
           30,
-          17,
+          11,
           0
         ]
       }
@@ -56,12 +56,12 @@
     {
       "particle": {
         "charge": 1e-6,
-        "mass": 2.0,
+        "mass": 1.0,
         "radius": 0.0
       },
       "launch": {
         "node": [
-          3,
+          0,
           10,
           0
         ],
@@ -74,13 +74,45 @@
       },
       "detector": {
         "min": [
-          27,
-          3,
+          28,
+          9,
           0
         ],
         "max": [
           30,
-          7,
+          11,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9781476007338057,
+          0.20791169081775934,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          28,
+          9,
+          0
+        ],
+        "max": [
+          30,
+          11,
           0
         ]
       }
@@ -89,25 +121,26 @@
   "elements": [],
   "coils": [],
   "limits": {
-    "max_charges": 0,
-    "magnitudes": [],
-    "allow_positive": true,
-    "allow_negative": true,
-    "max_magnets": 2,
-    "magnet_strengths": [
+    "max_charges": 4,
+    "magnitudes": [
+      250000.0,
+      500000.0,
       1000000.0,
-      2000000.0,
-      4000000.0
+      2000000.0
     ],
+    "allow_positive": true,
+    "allow_negative": false,
+    "max_magnets": 0,
+    "magnet_strengths": [],
     "region": {
       "min": [
         8,
-        3,
+        1,
         0
       ],
       "max": [
-        22,
-        17,
+        18,
+        19,
         0
       ]
     }
@@ -116,20 +149,20 @@
     {
       "node": [
         8,
-        3,
+        7,
         0
       ],
-      "kind": "magnet",
-      "value": 1000000.0
+      "kind": "charge",
+      "value": 250000.0
     },
     {
       "node": [
-        10,
-        10,
+        12,
+        15,
         0
       ],
-      "kind": "magnet",
-      "value": -4000000.0
+      "kind": "charge",
+      "value": 500000.0
     }
   ]
 }
