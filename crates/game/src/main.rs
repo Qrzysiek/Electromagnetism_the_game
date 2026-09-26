@@ -71,6 +71,10 @@ pub struct Game {
     pub show_field_arrows: bool,
     /// Particle field view: only the radiation (acceleration) part of the field.
     pub radiation_only: bool,
+    /// Colour quantity of the field views.
+    pub field_quantity: radiation::FieldQuantity,
+    /// Dynamic range of the field views, in decades.
+    pub field_range_decades: f64,
     pub animate: bool,
     pub playback_speed: f64,
     pub anim_time: f64,
@@ -288,6 +292,8 @@ fn main() {
             show_field_lines: false,
             show_field_arrows: true,
             radiation_only: false,
+            field_quantity: radiation::FieldQuantity::Bz,
+            field_range_decades: 2.5,
             animate: true,
             playback_speed: 1.0,
             anim_time: 0.0,
@@ -325,6 +331,7 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
         Some(MapMode::Magnetic),
         Some(MapMode::Waves),
         Some(MapMode::ParticleField),
+        Some(MapMode::Total),
         None,
     ];
     let available = |m: Option<MapMode>| match m {
@@ -374,11 +381,18 @@ fn dev_capture(
                 sandbox::enter(&mut game);
             }
             game.radiation_only = std::env::var("EM_RAD_ONLY").is_ok_and(|v| v == "1");
+            if std::env::var("EM_QUANTITY").is_ok_and(|v| v == "E") {
+                game.field_quantity = radiation::FieldQuantity::E;
+            }
+            if let Some(d) = std::env::var("EM_RANGE").ok().and_then(|v| v.parse().ok()) {
+                game.field_range_decades = d;
+            }
             if let Ok(m) = std::env::var("EM_MAP") {
                 game.map = match m.as_str() {
                     "magnetic" => Some(MapMode::Magnetic),
                     "waves" => Some(MapMode::Waves),
                     "particle" => Some(MapMode::ParticleField),
+                    "total" => Some(MapMode::Total),
                     "off" => None,
                     _ => Some(MapMode::Potential),
                 };

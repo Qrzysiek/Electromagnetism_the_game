@@ -1,6 +1,7 @@
 //! Time-dependent field views (visual only): the fields of antennas and plane waves
-//! ("Waves") and the Liénard–Wiechert field of the particle itself ("Particle field"),
-//! at the animation time. Computed in f64 on the CPU with the tested physics code
+//! ("Waves"), the Liénard–Wiechert field of the particle itself ("Particle field"), and
+//! everything at once ("Total": static sources, antennas, waves, disturbances and the
+//! particle), at the animation time. Computed in f64 on the CPU with the tested physics code
 //! (`physics::antenna`, `physics::external`, `physics::lienard`), shown as a texture of
 //! B_z (in the plane B is exactly perpendicular to it) plus optional E arrows.
 
@@ -12,6 +13,7 @@ use physics::DVec3;
 use physics::dynamics::Kinematics;
 use physics::external::External;
 use physics::field::{FieldSolver, LevelField};
+use physics::geometry::Shape;
 use physics::lienard::{self, SampledWorldline};
 use rayon::prelude::*;
 
@@ -23,8 +25,14 @@ use crate::worker::Preview;
 const PX_PER_CELL: f64 = 5.0;
 /// Spacing of the E arrows, in cells.
 const ARROW_SPACING: f64 = 1.5;
-/// Dynamic range shown: values from `sat / RANGE` to `sat` are distinguishable.
-const RANGE: f64 = 300.0;
+/// Quantity used for the colour of the field views.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldQuantity {
+    /// B perpendicular to the plane (all of B in the plane), signed.
+    Bz,
+    /// Magnitude of E.
+    E,
+}
 
 #[derive(Resource)]
 pub struct RadiationView {
@@ -38,8 +46,11 @@ pub struct RadiationView {
     charge: f64,
     b_sat: f64,
     e_sat: f64,
-    /// Time of the current texture.
+    /// Time and style (quantity, range) of the current texture.
     time: f64,
+    style: (FieldQuantity, u64, bool),
+    /// Obstacles of the shown flight (the field is not drawn inside sources).
+    obstacles: Vec<Shape>,
     pub arrows: Vec<(Vec2, Vec2)>,
 }
 
@@ -66,6 +77,8 @@ pub fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         b_sat: 1.0,
         e_sat: 1.0,
         time: f64::NAN,
+        style: (FieldQuantity::Bz, 0, false),
+        obstacles: Vec::new(),
         arrows: Vec::new(),
     });
 }
@@ -142,9 +155,10 @@ fn percentile99(mut v: Vec<f64>) -> f64 {
     v[i].max(1e-300)
 }
 
-/// Signed compression into [−1, 1]: asinh scale with `RANGE` decades of visibility.
-fn compress(v: f64, sat: f64) -> f64 {
-    let r = sat / RANGE;
+/// Signed compression into [−1, 1] on an asinh scale: values from `sat / range` to `sat`
+/// are distinguishable (`range` = 10^decades).
+fn compress(v: f64, sat: f64, range: f64) -> f64 {
+    let r = sat / range;
     ((v / r).asinh() / (sat / r).asinh()).clamp(-1.0, 1.0)
 }
 
@@ -161,7 +175,7 @@ pub fn update(
     mut sprites: Query<(&mut Visibility, &mut Transform, &mut Sprite)>,
 ) {
     let mode = match game.map {
-        Some(m @ (MapMode::Waves | MapMode::ParticleField)) => m,
+        Some(m @ (MapMode::Waves | MapMode::ParticleField | MapMode::Total)) => m,
         _ => {
             if let Ok((mut v, _, _)) = sprites.get_mut(view.entity) {
                 *v = Visibility::Hidden;
@@ -171,7 +185,7 @@ pub fn update(
         }
     };
     let level = &game.editor.level;
-    if level.shots.is_empty() || !level.c().is_finite() {
+    if level.shots.is_empty() || (!level.c().is_finite() && mode != MapMode::Total) {
         return;
     }
     let c = level.c();
@@ -189,8 +203,15 @@ pub fn update(
     );
     let bounds = level.bounds();
     let field = {
-        let scn = level.scenarios(&game.editor.placement);
-        time_dependent(&scn[flight].field)
+        let mut scn = level.scenarios(&game.editor.placement);
+        let scn = scn.swap_remove(flight);
+        view.obstacles = scn.obstacles;
+        match mode {
+            // The full field; its time offset is the shot's launch time, so it is
+            // sampled at the flight time.
+            MapMode::Total => scn.field,
+            _ => time_dependent(&scn.field),
+        }
     };
     let launch_time = level.shots[shot].launch.time;
     let _ = disturbance;
@@ -255,10 +276,18 @@ pub fn update(
         MapMode::Waves => launch_time + t_anim,
         _ => t_anim,
     };
-    if t.to_bits() == view.time.to_bits() {
+    let style = (
+        game.field_quantity,
+        game.field_range_decades.to_bits(),
+        game.show_field_arrows,
+    );
+    if t.to_bits() == view.time.to_bits() && style == view.style {
         return;
     }
     view.time = t;
+    view.style = style;
+    let range = 10f64.powf(game.field_range_decades);
+    let quantity = game.field_quantity;
 
     // Texture.
     let started = std::time::Instant::now();
@@ -267,7 +296,7 @@ pub fn update(
         (size.x * PX_PER_CELL).ceil().max(1.0) as u32,
         (size.y * PX_PER_CELL).ceil().max(1.0) as u32,
     );
-    let b_sat = view.b_sat;
+    let (b_sat, e_sat) = (view.b_sat, view.e_sat);
     let v = &*view;
     let fr = &field;
     let pixels: Vec<u8> = (0..h)
@@ -276,13 +305,21 @@ pub fn update(
             let y = bounds.max.y - (f64::from(j) + 0.5) / f64::from(h) * size.y;
             (0..w).flat_map(move |i| {
                 let x = bounds.min.x + (f64::from(i) + 0.5) / f64::from(w) * size.x;
-                let s = sample(v, fr, mode, DVec3::new(x, y, 0.0), t, c)
-                    .map_or(0.0, |(_, b)| compress(b, b_sat));
-                let a = (s.abs().powf(0.8) * 230.0) as u8;
-                if s >= 0.0 {
-                    [255, 150, 40, a]
-                } else {
-                    [40, 190, 255, a]
+                let f = sample(v, fr, mode, DVec3::new(x, y, 0.0), t, c);
+                match quantity {
+                    FieldQuantity::Bz => {
+                        let s = f.map_or(0.0, |(_, b)| compress(b, b_sat, range));
+                        let a = (s.abs().powf(0.8) * 230.0) as u8;
+                        if s >= 0.0 {
+                            [255, 150, 40, a]
+                        } else {
+                            [40, 190, 255, a]
+                        }
+                    }
+                    FieldQuantity::E => {
+                        let s = f.map_or(0.0, |(e, _)| compress(e.length(), e_sat, range));
+                        [255, 235, 140, (s.powf(0.8) * 230.0) as u8]
+                    }
                 }
             })
         })
@@ -307,7 +344,8 @@ pub fn update(
             let mut x = bounds.min.x + 0.5 * ARROW_SPACING;
             while x < bounds.max.x {
                 if let Some((e, _)) = sample(&view, &field, mode, DVec3::new(x, y, 0.0), t, c) {
-                    let len = (compress(e.length(), view.e_sat) * 0.9 * ARROW_SPACING) as f32;
+                    let len =
+                        (compress(e.length(), view.e_sat, range) * 0.9 * ARROW_SPACING) as f32;
                     let d = Vec2::new(e.x as f32, e.y as f32).normalize_or_zero();
                     if len > 0.05 {
                         arrows.push((Vec2::new(x as f32, y as f32), d * len));
@@ -347,6 +385,33 @@ fn sample(
             }
             let f = field.sample(x, t);
             Some((f.e, f.b.z))
+        }
+        MapMode::Total => {
+            if view.obstacles.iter().any(|o| o.signed_distance(x) < 0.0) {
+                return None;
+            }
+            let f = field.sample(x, t);
+            let (mut e, mut bz) = (f.e, f.b.z);
+            if let Some(w) = view.worldline.as_ref() {
+                // The particle's own field: retarded (Liénard–Wiechert) for finite c,
+                // the instantaneous Coulomb field for c = ∞.
+                if c.is_finite() {
+                    let lw = lienard::fields(w, view.charge, c, x, t);
+                    let (r0, _, _) = physics::lienard::Worldline::state(w, lw.retarded_time);
+                    if (x - r0).length() <= 0.15 {
+                        return None;
+                    }
+                    e += lw.e();
+                    bz += lw.b.z;
+                } else {
+                    let d = x - physics::lienard::Worldline::state(w, t).0;
+                    if d.length() <= 0.15 {
+                        return None;
+                    }
+                    e += d * (view.charge / d.length().powi(3));
+                }
+            }
+            Some((e, bz))
         }
         _ => {
             let w = view.worldline.as_ref()?;

@@ -24,6 +24,9 @@ pub enum MapMode {
     Waves,
     /// The particle's own Liénard–Wiechert field at the animation time (`radiation.rs`).
     ParticleField,
+    /// Everything at once: static sources, antennas, waves, disturbances and the
+    /// particle's own field, at the animation time (`radiation.rs`).
+    Total,
 }
 
 #[derive(ShaderType, Debug, Clone, Copy)]
@@ -104,7 +107,7 @@ pub fn params(
         u_a: (q * f.sample(scn.x0, 0.0).phi / t0) as f32,
         mode: match mode {
             MapMode::Potential => 0,
-            MapMode::Magnetic | MapMode::Waves | MapMode::ParticleField => 1,
+            MapMode::Magnetic | MapMode::Waves | MapMode::ParticleField | MapMode::Total => 1,
         },
         wire: f
             .loops

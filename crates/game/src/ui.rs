@@ -607,9 +607,24 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                 "particle field",
             );
         }
+        ui.selectable_value(&mut game.map, Some(MapMode::Total), "total")
+            .on_hover_text("Everything at once: level sources, antennas, waves and the particle");
         ui.selectable_value(&mut game.map, None, "off");
     });
-    if matches!(game.map, Some(MapMode::Waves | MapMode::ParticleField)) {
+    if matches!(
+        game.map,
+        Some(MapMode::Waves | MapMode::ParticleField | MapMode::Total)
+    ) {
+        ui.horizontal(|ui| {
+            use crate::radiation::FieldQuantity;
+            ui.label("Colour:");
+            ui.selectable_value(&mut game.field_quantity, FieldQuantity::Bz, "B_z");
+            ui.selectable_value(&mut game.field_quantity, FieldQuantity::E, "|E|");
+        });
+        ui.add(
+            egui::Slider::new(&mut game.field_range_decades, 1.0..=14.0).text("range (decades)"),
+        )
+        .on_hover_text("How many decades below the strongest field are still visible");
         ui.horizontal(|ui| {
             ui.checkbox(&mut game.show_field_arrows, "E arrows");
             if game.map == Some(MapMode::ParticleField) {
@@ -633,6 +648,13 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
              Colour: B perpendicular to the plane (orange out, blue in), on a logarithmic \
              scale; arrows: E. Near an antenna the field is quasi-static; further out the \
              radiation travels outwards at c."
+        }
+        Some(MapMode::Total) => {
+            "The total field at the animation time: level charges, magnets and coils, \
+             antennas, waves and disturbances, and the particle's own field (retarded, \
+             Liénard–Wiechert). The particle's field is usually far weaker than the \
+             electrodes'; raise the range to see it. Colour: B_z or |E| on a logarithmic \
+             scale; arrows: E."
         }
         Some(MapMode::ParticleField) => {
             "The field of the particle itself (Liénard–Wiechert, exact) at the animation \
