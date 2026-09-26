@@ -45,6 +45,35 @@ E(r) = Σ_i k Q_i (r − r_i) / |r − r_i|³
 - Test particles are rigid, spherically symmetric and **non-polarizable** (a stated approximation, since a conducting microsphere would feel image forces). Under these assumptions, the force on a test particle of radius `a` equals `q E(center)` exactly, because the force between two non-overlapping spherically symmetric distributions equals the point-charge force.
 - Contact condition: `|x − r_i| ≤ R_i + a`, which means the particle is lost.
 
+## 2.2 Magnetic sources — *validated* (`crates/physics/src/magnetic.rs`, `field.rs::StaticField`)
+
+**Units.** Source strengths are given directly in field units, i.e. already multiplied by `μ₀/4π`:
+- a dipole by `μ = μ₀ m / 4π`,
+- a coil by `κ = μ₀ I / 4π`.
+
+With `k = 1/(4πε₀) = 1` internally, `μ₀/4π = 1/c²`. Specifying the sources in field units keeps magnets meaningful in Newtonian levels (`c = ∞`), while the SI relations hold exactly. The unit of B is `M₀ / (Q₀ T₀)` (from `F = q v × B`).
+
+**Sources.** All three are exact closed forms:
+
+| Source | Field | Obstacle |
+|---|---|---|
+| Uniformly magnetized sphere | Outside the sphere, exactly the point-dipole field `B = μ (3(m̂·r̂) r̂ − m̂) / r³` | sphere |
+| Circular coil | Simpson et al. (NASA/TM-2001-209961). With `α² = (a−ρ)² + z²`, `β² = (a+ρ)² + z²`, `m = k² = 4aρ/β²`: `B_z = 2κ/(α²β) [(a² − ρ² − z²) E + α² K]`, `B_ρ = 2κ z β / (α² ρ) g(m)`, with `g(m) = (1 − m/2) E − (1 − m) K` | torus (wire) |
+| Polygonal coil | Sum of exact segment fields `B = κ (r_a × r_b)(|r_a| + |r_b|) / (|r_a| |r_b| (|r_a| |r_b| + r_a·r_b))` | capsules (wires) |
+
+**Circular-coil numerics.**
+- `K` and `E` come from the arithmetic–geometric mean (DLMF 19.8), converging quadratically to full precision.
+- `1 − m = α²/β²` is passed separately, which avoids cancellation near the wire.
+- `g(m)` is `O(m²)`. Evaluated directly it cancels catastrophically near the axis: the first version gave an 85 % error at a point 10⁻¹⁶ off the axis. For `m < 0.05` it is therefore summed as a power series in `m` (DLMF 19.5.1–2), whose `m⁰` and `m¹` terms cancel analytically.
+
+**The 2D slice.** Charges, dipoles perpendicular to the plane (`m ∥ ẑ`) and coils lying in the plane give, at `z = 0`:
+- **E** exactly in the plane,
+- **B** exactly along `ẑ`, with the in-plane components exactly 0, not just small.
+
+So `q v × B` keeps the particle in the plane (test M5). A straight wire perpendicular to the plane would make B in-plane and push the particle out; such wires are therefore for 3D levels only.
+
+**Energy.** B does no work, so the conserved energy `W` of §4 is unchanged. The forbidden-region map stays exact with magnets.
+
 ## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 
 State `y = (x, p)`, with:
@@ -143,7 +172,7 @@ Events are located on the dense-output polynomial of each accepted step:
 - `x(t)` leaves the world bounds: lost (a game rule).
 - `t > t_max`: timeout (a game rule).
 
-All event functions are signed distances (sphere, box, world bounds), which are 1-Lipschitz in position. Along the trajectory, `|dg/dt| ≤ |v| ≤ v_max`. On an interval `[a, b]` with `g(a), g(b) > 0`:
+All event functions are signed distances (sphere, torus, capsule, box, world bounds), which are 1-Lipschitz in position. Along the trajectory, `|dg/dt| ≤ |v| ≤ v_max`. On an interval `[a, b]` with `g(a), g(b) > 0`:
 
 ```
 min g ≥ (g(a) + g(b) − v_max (b − a)) / 2
@@ -219,6 +248,26 @@ Run with `cargo test -p physics --test validation --test properties -- --nocaptu
 | T9b | Grazing in a Coulomb orbit (`c = ∞`, 3; repulsive, attractive) | `r_min = 1/(A + B₀)` | `r_min` < 1e-10; classification at δ = 1e-6, 1e-8 | `r_min` 3e-13 … 2e-12; correct |
 | T10 | Convergence with tolerance | error ∝ tol | asymptotic slope in [0.9, 1.1]; error < 100 tol | slope 0.957; error/tol 28 … 47 (e = 0.2), ≤ 80 (e = 0.5) |
 | T11 | Determinism: FNV-1a hash of every bit of the reference trajectories of all `levels/*.json` (both tolerances, samples, margins, step statistics) | – | identical across runs; equal to `levels/golden_hashes.json` (generated on Windows) on Windows and Linux CI | holds |
+
+### Magnetism tests (`cargo test -p physics --test magnetism -- --nocapture --test-threads=1`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| M1a | Circular coil (tilted, off-centre) on its axis | `B = 2πκ a² / (a² + z²)^(3/2)` | < 1e-14 | ≤ 7.9e-16 |
+| M1b | Circular coil off the axis, including its plane, inside and outside | Biot–Savart, trapezoidal rule with 20000 nodes | < 1e-11 | 1.1e-14 |
+| M1c | Coil far field | Dipole `μ = κπa²`, correction `O((a/r)²)` | < 3(a/r)² | 1.1e-4 at r = 200, 1.1e-6 at r = 2000 (scales as (a/r)²) |
+| M1d | Rectangular coil | Segment-wise Gauss–Legendre quadrature | < 1e-12 | 2.7e-15 |
+| M1e | Regular N-gon converges to the circle | order 2 | slope 1.9–2.1 | 2.00 |
+| M1f | Dipole: ∇·B = 0, ∇×B = 0 | central differences | < 1e-7 of scale | ≤ 3.7e-8 (difference error) |
+| M1g | In-plane sources at z = 0 | `B_x = B_y = 0` | exactly ±0 | holds (200 random points) |
+| M2 | Relativistic cyclotron, γ = 1, 1.12, 3.16, 10 turns | `r = p/(|q|B)`, `T = 2πγm/(|q|B)` | r < 1e-10, closure < 1e-9, |p| < 1e-10 | r ≤ 3.1e-11, closure ≤ 9.7e-10, |p| ≤ 3.1e-11 |
+| M3a | E×B from rest, Newtonian | cycloid `x = (E/Bω)(ωt − sin ωt)`, `y = (E/Bω)(1 − cos ωt)` | < 1e-11 | 5.5e-13 |
+| M3b | E×B from rest, relativistic, E/cB = 0.3, 0.6, 0.9 | drift `v_d = E/B`; cusp period `2π m γ_d³ / (qB)` (Lorentz boost to the frame where E' = 0, B' = B/γ_d) | < 1e-9 | period ≤ 6.3e-13, drift ≤ 7.4e-16 |
+| M4 | Energy with charges, dipoles and a coil; c = ∞ and 5 | `W` constant | < 1e-10 | ≤ 2.7e-11 |
+| M5 | Plane of symmetry with dipoles and a coil (32 random configurations) | `z = p_z = 0` | exactly ±0 | holds |
+| M6 | Straight flight into a ring wire and a straight wire | known hit time | < 1e-12 | ≈ 1e-15 |
+
+Note on M2: the first threshold for |p| drift (1e-12) was stricter than the integration tolerance (also 1e-12). DOP853 does not preserve |p| exactly, so the criterion is the same 1e-10 as for energy in T1.
 
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 

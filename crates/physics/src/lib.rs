@@ -8,6 +8,7 @@ pub mod events;
 pub mod field;
 pub mod geometry;
 pub mod integrator;
+pub mod magnetic;
 pub mod trajectory;
 pub mod units;
 pub mod verify;

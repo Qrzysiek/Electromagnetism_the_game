@@ -5,7 +5,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use physics::DVec3;
 use physics::dynamics::Particle;
 use physics::field::{Coulomb, FixedCharge};
-use physics::geometry::{Aabb, Region, Sphere};
+use physics::geometry::{Aabb, Region, Shape, Sphere};
 use physics::trajectory::{RunSettings, Scenario, run};
 
 /// 50 charges on integer nodes of a 40 × 30 grid (2D slice), deterministic layout.
@@ -38,9 +38,11 @@ fn level_50() -> Scenario<Coulomb> {
     Scenario {
         obstacles: charges
             .iter()
-            .map(|c| Sphere {
-                center: c.position,
-                radius: c.radius,
+            .map(|c| {
+                Shape::Sphere(Sphere {
+                    center: c.position,
+                    radius: c.radius,
+                })
             })
             .collect(),
         field: Coulomb::new(&charges),

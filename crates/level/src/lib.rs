@@ -10,7 +10,7 @@ pub mod solve;
 use physics::DVec3;
 use physics::dynamics::{Kinematics, Particle};
 use physics::field::{Coulomb, FixedCharge};
-use physics::geometry::{Aabb, Region, Sphere};
+use physics::geometry::{Aabb, Region, Shape, Sphere};
 use physics::trajectory::Scenario;
 use physics::verify::Tolerances;
 use serde::{Deserialize, Serialize};
@@ -295,9 +295,11 @@ impl Level {
         Scenario {
             obstacles: charges
                 .iter()
-                .map(|c| Sphere {
-                    center: c.position,
-                    radius: c.radius,
+                .map(|c| {
+                    Shape::Sphere(Sphere {
+                        center: c.position,
+                        radius: c.radius,
+                    })
                 })
                 .collect(),
             field: Coulomb::new(&charges),

@@ -69,7 +69,7 @@ fn razor_thin_outcomes_are_marginal() {
 fn clear_exit_through_bounds_is_verified() {
     use physics::dynamics::{Kinematics, Particle};
     use physics::field::{Coulomb, FixedCharge};
-    use physics::geometry::{Aabb, Region, Sphere};
+    use physics::geometry::{Aabb, Region, Shape, Sphere};
     use physics::trajectory::Scenario;
 
     let charge = FixedCharge {
@@ -80,10 +80,10 @@ fn clear_exit_through_bounds_is_verified() {
     let kin = Kinematics::new(1.0, 5.0);
     let scn = Scenario {
         field: Coulomb::new(&[charge]),
-        obstacles: vec![Sphere {
+        obstacles: vec![Shape::Sphere(Sphere {
             center: charge.position,
             radius: charge.radius,
-        }],
+        })],
         particle: Particle {
             charge: 1e-6,
             mass: 1.0,

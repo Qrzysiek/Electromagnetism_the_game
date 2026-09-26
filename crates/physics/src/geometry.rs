@@ -18,6 +18,66 @@ impl Sphere {
     }
 }
 
+/// Solid torus: a circular wire of radius `minor` bent into a ring of radius `major`
+/// around `center`, in the plane orthogonal to the unit vector `normal`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Torus {
+    pub center: DVec3,
+    pub normal: DVec3,
+    pub major: f64,
+    pub minor: f64,
+}
+
+impl Torus {
+    pub fn signed_distance(&self, x: DVec3) -> f64 {
+        let d = x - self.center;
+        let axial = d.dot(self.normal);
+        let radial = (d - self.normal * axial).length();
+        (radial - self.major).hypot(axial) - self.minor
+    }
+}
+
+/// Capsule: all points within `radius` of the segment from `a` to `b` (a straight wire).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Capsule {
+    pub a: DVec3,
+    pub b: DVec3,
+    pub radius: f64,
+}
+
+impl Capsule {
+    pub fn signed_distance(&self, x: DVec3) -> f64 {
+        let ab = self.b - self.a;
+        let t = ((x - self.a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
+        (x - (self.a + ab * t)).length() - self.radius
+    }
+}
+
+/// A solid obstacle: touching it loses the particle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Shape {
+    Sphere(Sphere),
+    Torus(Torus),
+    Capsule(Capsule),
+}
+
+impl Shape {
+    /// Signed distance, 1-Lipschitz in position for every variant.
+    pub fn signed_distance(&self, x: DVec3) -> f64 {
+        match self {
+            Shape::Sphere(s) => s.signed_distance(x),
+            Shape::Torus(t) => t.signed_distance(x),
+            Shape::Capsule(c) => c.signed_distance(x),
+        }
+    }
+}
+
+impl From<Sphere> for Shape {
+    fn from(s: Sphere) -> Self {
+        Shape::Sphere(s)
+    }
+}
+
 /// Axis-aligned box.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Aabb {
@@ -66,5 +126,25 @@ mod tests {
         assert!((b.signed_distance(DVec3::new(4.0, 0.0, 0.0)) - 3.0).abs() < 1e-15);
         let corner = b.signed_distance(DVec3::new(4.0, 6.0, 3.0));
         assert!((corner - 5.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn torus_and_capsule_distances() {
+        let t = Torus {
+            center: DVec3::ZERO,
+            normal: DVec3::Z,
+            major: 5.0,
+            minor: 0.2,
+        };
+        assert!((t.signed_distance(DVec3::new(0.0, 7.0, 0.0)) - 1.8).abs() < 1e-15);
+        assert!((t.signed_distance(DVec3::new(5.0, 0.0, 1.0)) - 0.8).abs() < 1e-15);
+        assert!((t.signed_distance(DVec3::ZERO) - 4.8).abs() < 1e-15);
+        let c = Capsule {
+            a: DVec3::ZERO,
+            b: DVec3::new(4.0, 0.0, 0.0),
+            radius: 0.1,
+        };
+        assert!((c.signed_distance(DVec3::new(2.0, 3.0, 0.0)) - 2.9).abs() < 1e-15);
+        assert!((c.signed_distance(DVec3::new(7.0, 4.0, 0.0)) - 4.9).abs() < 1e-15);
     }
 }

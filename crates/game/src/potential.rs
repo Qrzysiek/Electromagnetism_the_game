@@ -46,7 +46,7 @@ impl Plugin for PotentialPlugin {
 /// Shader parameters for a scenario: charges pre-scaled to `w = qQ/T₀` so the shader
 /// computes `U/T₀` directly. `charges` are (position, Q) in field summation order.
 #[allow(clippy::cast_possible_truncation)]
-pub fn params(scn: &Scenario<Coulomb>, charges: &[(DVec3, f64)]) -> PotentialParams {
+pub fn params(scn: &Scenario<Coulomb>, charges: &[(DVec3, f64)], radius: f64) -> PotentialParams {
     let kin = physics::dynamics::Kinematics::new(scn.particle.mass, scn.c);
     let t0 = kin.kinetic_energy(scn.p0).max(1e-300);
     let q = scn.particle.charge;
@@ -55,17 +55,12 @@ pub fn params(scn: &Scenario<Coulomb>, charges: &[(DVec3, f64)]) -> PotentialPar
         count: 0,
         u_a: (q * scn.field.sample(scn.x0, 0.0).phi / t0) as f32,
     };
-    for (i, (&(pos, qc), sphere)) in charges
-        .iter()
-        .zip(&scn.obstacles)
-        .take(MAX_CHARGES)
-        .enumerate()
-    {
+    for (i, &(pos, qc)) in charges.iter().take(MAX_CHARGES).enumerate() {
         out.charges[i] = Vec4::new(
             pos.x as f32,
             pos.y as f32,
             (q * qc / t0) as f32,
-            sphere.radius as f32,
+            radius as f32,
         );
         out.count = u32::try_from(i + 1).expect("fits");
     }

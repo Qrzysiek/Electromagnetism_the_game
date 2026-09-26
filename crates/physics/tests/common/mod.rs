@@ -5,7 +5,7 @@
 use physics::DVec3;
 use physics::dynamics::Particle;
 use physics::field::{Coulomb, FixedCharge};
-use physics::geometry::{Aabb, Sphere};
+use physics::geometry::{Aabb, Shape, Sphere};
 use physics::trajectory::{Scenario, StepView};
 
 pub const UNIT_PARTICLE: Particle = Particle {
@@ -30,10 +30,10 @@ pub fn central_charge(
     };
     Scenario {
         field: Coulomb::new(&[charge]),
-        obstacles: vec![Sphere {
+        obstacles: vec![Shape::Sphere(Sphere {
             center: DVec3::ZERO,
             radius: r,
-        }],
+        })],
         particle: UNIT_PARTICLE,
         c,
         x0,

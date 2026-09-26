@@ -2,6 +2,8 @@
 
 use glam::DVec3;
 
+use crate::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
+
 /// Fields and potential at a point. Internal units: `k = 1/(4πε₀) = 1`.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FieldSample {
@@ -62,6 +64,57 @@ impl FieldSolver for Coulomb {
             e,
             b: DVec3::ZERO,
             phi,
+        }
+    }
+}
+
+/// All static sources of a level: fixed charges plus magnets and coils (the electric and
+/// magnetic parts are independent).
+#[derive(Clone, Debug, Default)]
+pub struct StaticField {
+    pub coulomb: Coulomb,
+    pub dipoles: Vec<MagneticDipole>,
+    pub loops: Vec<CircularLoop>,
+    pub polygons: Vec<PolygonCoil>,
+}
+
+impl StaticField {
+    pub fn magnetic(&self, x: DVec3) -> DVec3 {
+        let mut b = DVec3::ZERO;
+        for d in &self.dipoles {
+            b += d.field(x);
+        }
+        for l in &self.loops {
+            b += l.field(x);
+        }
+        for p in &self.polygons {
+            b += p.field(x);
+        }
+        b
+    }
+}
+
+impl FieldSolver for StaticField {
+    fn sample(&self, x: DVec3, t: f64) -> FieldSample {
+        let mut s = self.coulomb.sample(x, t);
+        s.b = self.magnetic(x);
+        s
+    }
+}
+
+/// Uniform static electric and magnetic fields, for tests with analytic solutions.
+#[derive(Clone, Copy, Debug)]
+pub struct UniformFields {
+    pub e: DVec3,
+    pub b: DVec3,
+}
+
+impl FieldSolver for UniformFields {
+    fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
+        FieldSample {
+            e: self.e,
+            b: self.b,
+            phi: -self.e.dot(x),
         }
     }
 }

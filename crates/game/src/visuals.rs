@@ -140,7 +140,11 @@ pub fn field_lines(scn: &Scenario<Coulomb>, spacing: f64) -> Vec<FieldLine> {
     let mut grid = Grid::new(d_sep);
     let mut lines: Vec<FieldLine> = Vec::new();
     let mut queue: VecDeque<DVec3> = VecDeque::new();
-    for s in &scn.obstacles {
+    let spheres = scn.obstacles.iter().filter_map(|o| match o {
+        physics::geometry::Shape::Sphere(s) => Some(*s),
+        _ => None,
+    });
+    for s in spheres {
         for i in 0..8 {
             let a = std::f64::consts::FRAC_PI_4 * f64::from(i) + 0.2;
             queue

@@ -6,7 +6,7 @@ use glam::DVec3;
 use crate::dynamics::{Particle, ParticleOde};
 use crate::events::first_crossing;
 use crate::field::FieldSolver;
-use crate::geometry::{Aabb, Region, Sphere};
+use crate::geometry::{Aabb, Region, Shape};
 use crate::integrator::{self, Dense, Dop853, Settings, Stats};
 
 /// Margins at or above this value (grid units) are not refined further: they are far too
@@ -17,8 +17,8 @@ pub const MARGIN_SAFE: f64 = 0.25;
 #[derive(Clone, Debug)]
 pub struct Scenario<F> {
     pub field: F,
-    /// Solid spheres (fixed charges); touching one loses the particle.
-    pub obstacles: Vec<Sphere>,
+    /// Solid obstacles (charges, magnets, coil wires); touching one loses the particle.
+    pub obstacles: Vec<Shape>,
     pub particle: Particle,
     /// Speed of light in internal units (`f64::INFINITY` for Newtonian mechanics).
     pub c: f64,

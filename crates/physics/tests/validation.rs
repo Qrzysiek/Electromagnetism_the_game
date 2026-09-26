@@ -14,7 +14,7 @@ use common::{
 use physics::DVec3;
 use physics::dynamics::Kinematics;
 use physics::field::{Coulomb, FixedCharge, UniformElectric};
-use physics::geometry::Sphere;
+use physics::geometry::{Shape, Sphere};
 use physics::trajectory::{Outcome, RunSettings, Scenario, run, run_observed};
 
 /// Tolerance used for the "verify" level in these tests.
@@ -39,9 +39,11 @@ fn many_charge_scenario(c: f64, seed: u64) -> Scenario<Coulomb> {
         field: Coulomb::new(&charges),
         obstacles: charges
             .iter()
-            .map(|c| Sphere {
-                center: c.position,
-                radius: c.radius,
+            .map(|c| {
+                Shape::Sphere(Sphere {
+                    center: c.position,
+                    radius: c.radius,
+                })
             })
             .collect(),
         particle: UNIT_PARTICLE,
@@ -303,10 +305,10 @@ fn t9_grazing_straight_line() {
         for (radius, should_hit) in [(d * (1.0 + delta), true), (d * (1.0 - delta), false)] {
             let scn = Scenario {
                 field: Coulomb::new(&[]),
-                obstacles: vec![Sphere {
+                obstacles: vec![Shape::Sphere(Sphere {
                     center: DVec3::ZERO,
                     radius,
-                }],
+                })],
                 particle: UNIT_PARTICLE,
                 c: f64::INFINITY,
                 x0: DVec3::new(-10.0, d, 0.0),

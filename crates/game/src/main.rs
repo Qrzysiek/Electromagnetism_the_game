@@ -440,7 +440,7 @@ fn sync_physics(
             .map(|c| (level.grid.position(c.node), c.charge))
             .collect();
         if let Some(mut m) = materials.get_mut(&quad.material) {
-            m.params = potential::params(&scenario, &charges);
+            m.params = potential::params(&scenario, &charges, level.physics.charge_radius);
         }
         let bounds = scenario.bounds.expect("bounds");
         if let Ok(mut t) = transforms.get_mut(quad.entity) {
