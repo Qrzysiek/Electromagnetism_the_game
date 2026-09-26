@@ -127,6 +127,35 @@ E = q (n − β)(1 − β²) / (κ³ R²)  +  (q/c) n × ((n − β) × β̇) / 
 - For a computed flight the world line is interpolated between the preview's dense-output points: cubic Hermite for position, linear for velocity and acceleration (the acceleration comes from the Lorentz force). Before launch and after the end, the particle is continued with uniform motion. A real launch or stop would itself radiate; this is a stated simplification of the view.
 - **Use.** Visual only: the "particle field" map (§10). The particle's own field does not act on the particle except through radiation reaction (§3.1), the consistent classical treatment of that self-interaction.
 
+## 2.6 Conductors: metal spheres — *validated* (`crates/physics/src/conductor.rs`)
+
+Ideal conductors are equipotentials that carry induced charge. They relax in about ε₀/σ ≈ 1e-19 s, which is instantaneous here. The first conductor shape is the sphere. It can be grounded, held at a potential `V` (by a source), or isolated with a net charge `Q` (floating).
+
+**Fixed sources: images plus fundamental solutions.** Induced charges are computed for spheres held at prescribed potentials (Dirichlet systems):
+1. **Kelvin images.** A charge `q` at `p`, imaged in a grounded sphere of radius `a` at `c`, gives `−q a/|p − c|` at `c + (p − c) a²/|p − c|²`. The images are imaged again in the other spheres, to depth 7 in preview and 8 in verification. This part carries the singular near field exactly.
+2. **Smooth remainder.** The rest is represented by the method of fundamental solutions: `K` equivalent point charges on a shell at 0.6 a inside each sphere (K = 440 in preview, 600 in verification), fitted by least squares to the boundary condition on `2K` surface points (Fibonacci lattices).
+3. **Reuse.** The matrix depends only on the geometry. Its Householder QR factorization (own implementation, deterministic, no FMA) is computed once per geometry and cached. New sources, e.g. a moved player charge, only need a new right-hand side.
+4. **Bias.**
+   - Unit systems `U_j`: sphere `j` at potential 1, the others at 0; seeded by a charge `a_j` at its centre, imaged like a source.
+   - Their net charges form the capacitance matrix `C`.
+   - The source system `G` (all spheres grounded) plus `Σ α_j U_j` gives sphere `i` the potential `α_i` and net charge `G_i + Σ C_ij α_j`.
+   - Grounded: `α = 0`. Fixed potential: `α = V`. Floating: the floating `α` solve the charge equations.
+5. **Accuracy.** This is the first model in the game with a finite, non-integration error, so it is measured and made part of verification:
+   - The boundary residual, i.e. the largest deviation of the surface potential from its value relative to the sources' potential on the surfaces, is measured on 1000 independent points per sphere. For the Dirichlet part it bounds the potential error everywhere outside (maximum principle). Requirement: < 1e-10 at verification resolution.
+   - Preview and verification use different resolutions. So the model error shows up as a preview–verify difference and is compared with the margins like the integration error (§7).
+
+**The particle's image force.** The charges a moving particle induces are:
+- its Kelvin images to depth 6 (grounded spheres);
+- for floating spheres, a correction with the unit systems and `C⁻¹`. By Green's reciprocity, the charge a unit charge at `x` induces on grounded sphere `j` is `−φ_Uj(x)`. Using it makes the correction `q φ_U(x)ᵀ C⁻¹ φ_U(x)` exactly symmetric.
+
+Truncation by depth (not by size), together with the symmetric correction, keeps the interaction symmetric. The image force `q E_self` is then conservative with potential energy `½ q φ_self(x)`, and the conserved energy of §4 becomes `(γ−1)mc² + qφ + ½ q φ_self`. The neglected deeper images are bounded by `ρ^6`, `ρ` the largest image ratio `a_j/(|c_i − c_j| − a_i)`.
+
+**Validity.**
+- Electrostatic response: exact for `c = ∞`. For finite `c`, valid while the particle is slow compared with light over the size of the setup.
+- A point charge touching a conductor meets an infinite image force. The game rule is therefore that contact happens at a small finite distance (the obstacle is the sphere plus a contact shell).
+- Time-dependent sources (antennas, waves) together with conductors would need a full-wave solution and are not combined.
+- Magnetic fields: the metal is non-magnetic and the fields are static, so there is no effect.
+
 ## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 
 State `y = (x, p)`, with:
@@ -373,6 +402,23 @@ A1 is the strongest check. Its quadratures (Gauss–Legendre in cos θ, uniform 
 | L3 | Circular motion at v = 0.8 c, near and far points | vacuum Maxwell equations, central differences | < 1e-6 | ≤ 1.7e-7 (difference error) |
 
 Note on R2: the first version compared LL work with `∫P dt` alone. It found a difference of 1e-4 at every c, falling as 1/distance². That is the Schott energy of the finite start and end points; with it included the agreement is 5–7e-9.
+
+### Conductor tests (`cargo test --release -p physics --test conductors -- --nocapture --test-threads=1`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| K1 | Single sphere: grounded surface potential; image force on a charge at d = 1.5a, 2a, 5a, grounded and isolated-neutral | φ = 0; `−q²ad/(d²−a²)²` and `−q²a³(2d²−a²)/(d³(d²−a²)²)` (Jackson §2.3) | surface < 1e-14 of scale; force < 1e-13 | 3.8e-15; ≤ 1.5e-14 |
+| K2 | Three spheres (grounded, floating Q = 1.5, fixed V = 0.8) near two charges | uniqueness: each surface at its potential (1000 independent points each), floating net charge by Gauss flux of the computed field | residual < 1e-10; charge < 1e-9 | residual 5.1e-11; charge agrees |
+| K2b | Two grounded spheres: an independent reference | the full two-sphere image series (no branching, 200 generations) | < 1e-9 | 8.7e-14 |
+| K3 | Charges induced by a particle (floating and fixed-potential spheres) | boundary conditions within the stated truncation bound ρ^6 | deviation < 10 ρ^6; net charge < ρ^6 q | 4.4e-4 (ρ^6 = 1.6e-2); 1.2e-3 |
+| K4 | Strongly charged particle past a grounded and a floating sphere and a charge, `c = ∞` and 5 | `W + ½ q φ_self` conserved | < 1e-10 | 2.8e-11, 2.7e-11 |
+
+History, so that the numbers above can be judged:
+- The first implementation used the image series alone. With three spheres it branches: every image produces images in all the other spheres, and it ran out of memory at 64 GB.
+- The MFS remainder was then tuned by measurement (a scan over K, shell radius and image depth). Accuracy rises quickly with K and the image depth, and falls as the shell moves outwards.
+- A mirror-symmetric variant of the fit (±z charge pairs) was 50–75× less accurate for unexplained reasons and was dropped.
+- The first K3/K4 version corrected floating spheres with the image tree's own charge totals. That broke the symmetry of the interaction (energy drift 5.6e-6). Reciprocity fixed it (2.8e-11).
+- The K2 requirement is 1e-10 relative, set before measuring, and met only at the verification resolution (preview measured 9.8e-10). That preview–verify gap is exactly what the verification sees.
 
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 

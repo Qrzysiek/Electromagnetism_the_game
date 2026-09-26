@@ -749,6 +749,7 @@ impl Level {
             polygons,
             antennas,
             external: Vec::new(),
+            conductors: physics::conductor::Conductors::default(),
             time_offset: 0.0,
         };
         (field, obstacles)

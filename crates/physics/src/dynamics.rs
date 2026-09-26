@@ -158,11 +158,13 @@ impl<F: FieldSolver> ParticleOde<F> {
         DVec3::new(y[3], y[4], y[5]) * self.p_ref
     }
 
-    /// Force `q(E + v×B)` at state `(x, p)` and time `t`.
+    /// Force `q(E + v×B)` at state `(x, p)` and time `t`, including the image force
+    /// of conductors.
     pub fn force(&self, x: DVec3, p: DVec3, t: f64) -> DVec3 {
         let f = self.field.sample(x, t);
         let v = self.kin.velocity(p);
-        (f.e + v.cross(f.b)) * self.charge
+        let e_self = self.field.self_field(x, self.charge).0;
+        (f.e + e_self + v.cross(f.b)) * self.charge
     }
 }
 
@@ -176,7 +178,8 @@ impl<F: FieldSolver> OdeSystem for ParticleOde<F> {
         let p = self.momentum(y);
         let v = self.kin.velocity(p);
         let f = self.field.sample(x, t);
-        let force = (f.e + v.cross(f.b)) * self.charge;
+        let e_self = self.field.self_field(x, self.charge).0;
+        let force = (f.e + e_self + v.cross(f.b)) * self.charge;
         let dp = force / self.p_ref;
         dy[0] = v.x;
         dy[1] = v.y;

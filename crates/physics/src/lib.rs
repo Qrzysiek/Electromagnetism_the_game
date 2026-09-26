@@ -4,6 +4,7 @@
 //! The implemented physics is documented in `PHYSICS.md` at the repository root.
 
 pub mod antenna;
+pub mod conductor;
 pub mod dynamics;
 pub mod events;
 pub mod external;

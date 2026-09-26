@@ -3,6 +3,7 @@
 use glam::DVec3;
 
 use crate::antenna::OscillatingDipole;
+use crate::conductor::Conductors;
 use crate::external::External;
 use crate::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 
@@ -24,6 +25,13 @@ pub trait FieldSolver {
     fn is_static(&self) -> bool {
         true
     }
+
+    /// Field and potential at `x` of the charges that a charge `q` at `x` induces in the
+    /// scene's conductors (PHYSICS.md §2.6). The force on the particle is `q E`, its
+    /// interaction energy `½ q φ`. Zero without conductors.
+    fn self_field(&self, _x: DVec3, _q: f64) -> (DVec3, f64) {
+        (DVec3::ZERO, 0.0)
+    }
 }
 
 impl<F: FieldSolver + ?Sized> FieldSolver for &F {
@@ -33,6 +41,10 @@ impl<F: FieldSolver + ?Sized> FieldSolver for &F {
 
     fn is_static(&self) -> bool {
         (**self).is_static()
+    }
+
+    fn self_field(&self, x: DVec3, q: f64) -> (DVec3, f64) {
+        (**self).self_field(x, q)
     }
 }
 
@@ -101,6 +113,8 @@ pub struct LevelField {
     pub polygons: Vec<PolygonCoil>,
     pub antennas: Vec<OscillatingDipole>,
     pub external: Vec<External>,
+    /// Conducting spheres and the charges the fixed sources induce on them.
+    pub conductors: Conductors,
     /// Added to the flight time before evaluating time-dependent sources: a particle
     /// launched at lab time `t₀` sees the fields at `t₀ + t`.
     pub time_offset: f64,
@@ -125,6 +139,11 @@ impl LevelField {
 impl FieldSolver for LevelField {
     fn sample(&self, x: DVec3, t: f64) -> FieldSample {
         let mut s = self.coulomb.sample(x, t);
+        if !self.conductors.is_empty() {
+            let c = self.conductors.induced.sample(x, t);
+            s.e += c.e;
+            s.phi += c.phi;
+        }
         s.b = self.magnetic(x);
         let t_lab = t + self.time_offset;
         for a in &self.antennas {
@@ -144,6 +163,10 @@ impl FieldSolver for LevelField {
     fn is_static(&self) -> bool {
         self.external.iter().all(External::is_static)
             && self.antennas.iter().all(|a| a.omega == 0.0)
+    }
+
+    fn self_field(&self, x: DVec3, q: f64) -> (DVec3, f64) {
+        self.conductors.self_field(x, q)
     }
 }
 
