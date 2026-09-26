@@ -68,12 +68,24 @@ impl Grid {
 /// from the charges (where lines must converge), a noticeable part of it runs closer
 /// than `spacing / 2` to an accepted line. Between close charges this leaves few lines.
 ///
+/// Only charges are sources and sinks of E: lines pass magnets and coil wires, which
+/// carry no charge. The total work is capped (`MAX_STEPS` integration steps,
+/// `MAX_LINES` lines), since this runs on the render thread.
+///
 /// In the 2D slice of a 3D field, line density does not represent field strength
 /// (SPEC §4): lines show direction.
-pub fn field_lines(scn: &Scenario<StaticField>, spacing: f64) -> Vec<FieldLine> {
-    if scn.obstacles.is_empty() {
+pub fn field_lines(
+    scn: &Scenario<StaticField>,
+    charge_radius: f64,
+    spacing: f64,
+) -> Vec<FieldLine> {
+    const MAX_STEPS: usize = 400_000;
+    const MAX_LINES: usize = 2_000;
+    let charges: Vec<DVec3> = scn.field.coulomb.charges().map(|(p, _)| p).collect();
+    if charges.is_empty() {
         return Vec::new();
     }
+    let steps = std::cell::Cell::new(0usize);
     let b = scn.bounds.expect("bounds");
     let d_sep = spacing.max(0.2);
     let d_test = 0.5 * d_sep;
@@ -87,9 +99,9 @@ pub fn field_lines(scn: &Scenario<StaticField>, spacing: f64) -> Vec<FieldLine> 
     };
     let inside_bounds = |x: DVec3| x.x > b.min.x && x.y > b.min.y && x.x < b.max.x && x.y < b.max.y;
     let charge_distance = |x: DVec3| {
-        scn.obstacles
+        charges
             .iter()
-            .map(|s| s.signed_distance(x))
+            .map(|c| (x - *c).length() - charge_radius)
             .fold(f64::INFINITY, f64::min)
     };
 
@@ -101,6 +113,10 @@ pub fn field_lines(scn: &Scenario<StaticField>, spacing: f64) -> Vec<FieldLine> 
         let mut ds: f64 = 0.02;
         let mut length = 0.0;
         'outer: for _ in 0..50_000 {
+            steps.set(steps.get() + 1);
+            if steps.get() > MAX_STEPS {
+                break;
+            }
             let Some(d0) = field_dir(x, sign) else { break };
             let xn = loop {
                 let k1 = d0;
@@ -140,15 +156,10 @@ pub fn field_lines(scn: &Scenario<StaticField>, spacing: f64) -> Vec<FieldLine> 
     let mut grid = Grid::new(d_sep);
     let mut lines: Vec<FieldLine> = Vec::new();
     let mut queue: VecDeque<DVec3> = VecDeque::new();
-    let spheres = scn.obstacles.iter().filter_map(|o| match o {
-        physics::geometry::Shape::Sphere(s) => Some(*s),
-        _ => None,
-    });
-    for s in spheres {
+    for c in &charges {
         for i in 0..8 {
             let a = std::f64::consts::FRAC_PI_4 * f64::from(i) + 0.2;
-            queue
-                .push_back(s.center + DVec3::new(a.cos(), a.sin(), 0.0) * (s.radius + 0.6 * d_sep));
+            queue.push_back(*c + DVec3::new(a.cos(), a.sin(), 0.0) * (charge_radius + 0.6 * d_sep));
         }
     }
     let mut sweep: Vec<DVec3> = Vec::new();
@@ -164,6 +175,9 @@ pub fn field_lines(scn: &Scenario<StaticField>, spacing: f64) -> Vec<FieldLine> 
     let mut sweep = sweep.into_iter();
 
     while let Some(seed) = queue.pop_front().or_else(|| sweep.next()) {
+        if steps.get() > MAX_STEPS || lines.len() >= MAX_LINES {
+            break;
+        }
         if !inside_bounds(seed) || charge_distance(seed) < 0.0 {
             continue;
         }
@@ -188,7 +202,9 @@ pub fn field_lines(scn: &Scenario<StaticField>, spacing: f64) -> Vec<FieldLine> 
                 }
             }
         }
-        if crowded > 0.1 * (crowded + free) || crowded > d_sep {
+        // A line that never leaves the convergence zones adds nothing (and accepting such
+        // lines unconditionally let the seed queue grow without bound).
+        if free < d_sep || crowded > 0.1 * (crowded + free) || crowded > d_sep {
             continue;
         }
 
@@ -239,4 +255,36 @@ fn arrows_along(
         s += seg;
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use level::{Element, Level};
+
+    /// Regression: with a coil in the level, lines along the wire were accepted without
+    /// limit and the render thread hung (Dempster level with one electrode).
+    #[test]
+    fn field_lines_terminate_with_coils() {
+        let level = Level::from_json(include_str!("../../../levels/21_dempster.json")).unwrap();
+        let scn = level.scenario(0, &[Element::charge([9, 3, 0], 2e6)]);
+        let start = std::time::Instant::now();
+        let lines = field_lines(&scn, level.physics.charge_radius, 1.5);
+        let elapsed = start.elapsed();
+        println!("{} lines in {elapsed:?}", lines.len());
+        assert!(!lines.is_empty() && lines.len() < 500);
+        // Both ends of every line lie on the charge (the trace stops at the first point
+        // inside its sphere) or beyond the arena edge.
+        let b = level.bounds();
+        let charge = level.grid.position([9, 3, 0]);
+        let r = level.physics.charge_radius;
+        for l in &lines {
+            for end in [l.points[0], *l.points.last().unwrap()] {
+                let at_charge = (end - charge).length() < r;
+                let at_edge =
+                    end.x <= b.min.x || end.y <= b.min.y || end.x >= b.max.x || end.y >= b.max.y;
+                assert!(at_charge || at_edge, "line ends at {end:?}");
+            }
+        }
+    }
 }

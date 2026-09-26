@@ -540,7 +540,8 @@ fn update_field_lines(mut game: ResMut<Game>) {
     }
     game.field_lines_key = key;
     let scenario = game.editor.level.scenario(0, &game.editor.placement);
-    game.field_lines = visuals::field_lines(&scenario, game.field_line_spacing)
+    let radius = game.editor.level.physics.charge_radius;
+    game.field_lines = visuals::field_lines(&scenario, radius, game.field_line_spacing)
         .into_iter()
         .map(|l| {
             (
