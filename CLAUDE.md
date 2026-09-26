@@ -19,7 +19,7 @@ Every level that ships must be reproducible by hand in the sandbox.
 - Before committing: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
 - Levels: `scripts/levels.py` is the single source of truth (curriculum order, designs, automatic detector placement); rebuild with `python scripts/levels.py`. Measure difficulty with `cargo run --release -p generator -- analyze levels/[0-9]*.json` and keep `docs/LEVELS.md` up to date. Level tools: `generator {solve,check,normalize,analyze}`.
 - Curriculum rules: every new element or concept gets an easy introduction level first; within a chapter difficulty and the number of elements needed rise on average.
-- Visual checks without touching the desktop: `EM_CAPTURE=out.png EM_LEVEL=<1-based> [EM_SANDBOX=1] [EM_MAP=potential|magnetic|waves|particle|off] [EM_PLACE=reference|<json>] [EM_TIME=<t>] [EM_RAD_ONLY=1] target/.../game` opens the level, saves a screenshot of its own window and exits. Never send clicks or keys to the desktop.
+- Visual checks without touching the desktop: `EM_CAPTURE=out.png EM_LEVEL=<1-based> [EM_SANDBOX=1] [EM_MAP=potential|magnetic|waves|particle|total|off] [EM_QUANTITY=E] [EM_RANGE=<decades>] [EM_PLACE=reference|<json>] [EM_TIME=<t>] [EM_RAD_ONLY=1] target/.../game` opens the level, saves a screenshot of its own window and exits. Never send clicks or keys to the desktop.
 - `generator trace <level> [--flight N] [--every N]` prints a reference flight (t, x, y, |p|).
 - egui: keep every Grid row narrower than the side panel; an overflowing row makes egui draw a stray full-height line.
 - Commit messages end with the co-author line used in the history.

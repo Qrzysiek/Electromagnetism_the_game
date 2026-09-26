@@ -51,7 +51,8 @@ Antennas are small oscillating electric dipoles in the plane, all driven in phas
 
 ## Radiation
 
-- **Maps:** V cycles potential → magnetic B → waves (antennas and plane waves at the animation time) → particle field (the particle's own Liénard–Wiechert field, optionally only its radiation part) → off. The time-dependent maps have optional E arrows.
+- **Maps:** V cycles potential → magnetic B → waves (antennas and plane waves at the animation time) → particle field (the particle's own Liénard–Wiechert field, optionally only its radiation part) → total (everything at once) → off.
+- The time-dependent maps have optional E arrows, a colour choice (B_z or |E|) and an adjustable dynamic range. Raise the range to see weak contributions such as the particle's own field next to strong electrodes.
 - **Radiation reaction:** levels can include it (chapter 8). The particle then loses the energy it radiates, and the energy bars show kinetic + potential + radiated = constant.
 
 ## Disturbances
