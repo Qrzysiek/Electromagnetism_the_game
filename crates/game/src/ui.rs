@@ -97,6 +97,15 @@ fn obstacle_name(game: &Game, i: usize) -> &'static str {
     }
 }
 
+/// Shortens `s` to at most `n` characters, with an ellipsis.
+fn truncate(s: &str, n: usize) -> String {
+    if s.chars().count() <= n {
+        s.to_string()
+    } else {
+        s.chars().take(n - 1).collect::<String>() + "…"
+    }
+}
+
 fn outcome_text(game: &Game, o: Outcome) -> String {
     match o {
         Outcome::Arrived => "reached the detector".into(),
@@ -185,8 +194,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             selected = game.level_index;
         }
         egui::ComboBox::from_id_salt("level")
-            .selected_text(format!("{}. {}", selected + 1, names[selected]))
-            .width(220.0)
+            .selected_text(truncate(
+                &format!("{}. {}", selected + 1, names[selected]),
+                30,
+            ))
+            .width(230.0)
             .show_ui(ui, |ui| {
                 for (i, n) in names.iter().enumerate() {
                     ui.selectable_value(&mut selected, i, format!("{}. {n}", i + 1));
@@ -294,7 +306,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             game.editor.set_kind(kind);
         });
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let kind = game.editor.kind;
         let both_signs =
             kind == ElementKind::Magnet || (limits.allow_positive && limits.allow_negative);

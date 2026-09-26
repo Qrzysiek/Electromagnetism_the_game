@@ -8,5 +8,8 @@
   "13_einzel_lens": "52fe08cbd4fb189d",
   "14_hemispherical_analyzer": "be7702323afd264d",
   "15_reflectron": "04749c4ec91abf44",
-  "16_beta_spectrometer": "9961ec7b17e84393"
+  "16_beta_spectrometer": "9961ec7b17e84393",
+  "21_dempster": "e97053621c11fdde",
+  "22_wien_filter": "2ae721eb45dc6fe0",
+  "23_calutron": "595b4f4ad72921bf"
 }

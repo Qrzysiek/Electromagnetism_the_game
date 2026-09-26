@@ -109,12 +109,15 @@ fn main() {
             );
             for (i, scn) in level.scenarios(placement).iter().enumerate() {
                 let v = verify(scn, level.tolerances());
+                let end = v.verified.end.x;
                 println!(
-                    "  shot {}: outcome {:?}, status {:?}, flight time {:.3}",
+                    "  shot {}: outcome {:?}, status {:?}, flight time {:.3}, ends at ({:.4}, {:.4})",
                     i + 1,
                     v.outcome(),
                     v.status,
-                    v.verified.end.t
+                    v.verified.end.t,
+                    end.x,
+                    end.y
                 );
             }
         }

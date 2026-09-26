@@ -65,6 +65,8 @@ A single particle in the static field of fixed charges is treated **exactly**, i
   - To be decided after playtesting.
 - Wave particles start with a defined, small spread in position, direction and energy, as a real beam does. Identical initial conditions would be singular.
 - Fast feedback: the wave-1 trajectory recomputes live on every change. There is no start button.
+- **Multi-shot levels:** a level may contain several shots (particle species, launch and detector each). One setup must deliver every shot to its own detector. The UI switches between shots or shows all at once. This is the natural format for instruments that sort particles by mass, energy or angle.
+- **Magnetic elements** (SPEC §9, PHYSICS.md §2.2): magnets (uniformly magnetized spheres standing out of the plane, exact dipole field) as level or player elements, and coils lying in the plane (circle or polygon, exact Biot–Savart) as level elements. Magnet levels: Dempster's mass spectrometer (180° focusing and mass separation), a Wien filter (velocity selector), and the calutron (magnetic isotope separation with player-placed magnets).
 - **Sandbox mode** (level editor): place level charges freely; set the launch point, direction and energy, the particle, c, the detector box, the grid and the player limits. Check solvability with the solver, store a reference solution, and save levels as JSON (`levels/custom/`) alongside generated ones.
 
 ## 4. 2D and 3D modes

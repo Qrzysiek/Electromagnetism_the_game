@@ -35,5 +35,11 @@ Switch to **Sandbox** at the top of the panel.
 - Mouse: left click places a charge, right click removes it, the wheel changes the magnitude.
 - Keyboard:
   - Arrows move the cursor (Shift: ×5); Space/Enter place; Del/X remove.
-  - S flips the sign; Q/E change the magnitude; C clears; 1–4 set the grid refinement.
-  - N/P switch levels; V toggles the potential map; F toggles field lines; A toggles the animation.
+  - S flips the sign (charges) or orientation (magnets: ⊙ moment out of the plane, ⊗ into it).
+  - Q/E change the magnitude; M switches between charge and magnet; C clears; 1–4 set the grid refinement.
+  - Multi-shot levels: `[` / `]` switch the shot; H shows all shots.
+  - N/P switch levels; V cycles the map (potential → magnetic B → off); F toggles field lines; A toggles the animation.
+
+## Multi-shot levels
+
+A level can have several shots: particles with their own species, launch and detector. **One setup must deliver every shot.** The panel lists the shots with their status (✔ arrived, ✗ lost, ⚠ marginal, … computing).

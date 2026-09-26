@@ -1,6 +1,7 @@
 """Levels modelled on real experiments and instruments (point charges only).
 
-Writes levels/1x_*.json. Reference solutions are then found and stored with
+Writes levels/1x_*.json (format v2, single shot). Reference solutions are then found and
+stored with
     cargo run --release -p generator -- solve levels/<file> --write
 
 Units are the game's dimensionless units (k = 1, cell = 1). Particles are weakly
@@ -16,18 +17,22 @@ def level(name, desc, particle, launch, direction_deg, ke, detector, charges, li
           region=None, c=5.0, grid=(30, 20), t_max=300.0):
     a = math.radians(direction_deg)
     return {
-        "format_version": 1,
+        "format_version": 2,
         "engine_version": "0.1.0",
         "name": name,
         "description": desc,
         "grid": {"nx": grid[0], "ny": grid[1], "nz": 0, "subdivision": 1},
-        "physics": {"c": c, "charge_radius": 0.3, "t_max": t_max,
-                    "tolerances": {"preview": 1e-10, "verify": 1e-12}},
-        "particle": {"charge": particle[0], "mass": particle[1], "radius": 0.0},
-        "launch": {"node": [launch[0], launch[1], 0],
-                   "direction": [math.cos(a), math.sin(a), 0.0], "kinetic_energy": ke},
-        "detector": {"min": [detector[0], detector[1], 0], "max": [detector[2], detector[3], 0]},
-        "level_charges": [{"node": [x, y, 0], "charge": q} for (x, y, q) in charges],
+        "physics": {"c": c, "charge_radius": 0.3, "magnet_radius": 0.3, "wire_radius": 0.1,
+                    "t_max": t_max, "tolerances": {"preview": 1e-10, "verify": 1e-12}},
+        "shots": [{
+            "particle": {"charge": particle[0], "mass": particle[1], "radius": 0.0},
+            "launch": {"node": [launch[0], launch[1], 0],
+                       "direction": [math.cos(a), math.sin(a), 0.0], "kinetic_energy": ke},
+            "detector": {"min": [detector[0], detector[1], 0],
+                         "max": [detector[2], detector[3], 0]},
+        }],
+        "elements": [{"node": [x, y, 0], "kind": "charge", "value": q} for (x, y, q) in charges],
+        "coils": [],
         "limits": {"max_charges": limits[0], "magnitudes": limits[1],
                    "allow_positive": limits[2], "allow_negative": limits[3],
                    **({"region": {"min": [region[0], region[1], 0], "max": [region[2], region[3], 0]}}
