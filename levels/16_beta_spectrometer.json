@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Beta-ray spectrometer",
   "description": "Beta decay electrons are fast. Here v = 0.91 c (γ = 2.41). As in the hemispherical analyzer, bend the electron through 180° into the detector, but now the circular-orbit condition |qQ| = γ m v² R differs from the Newtonian 2 T₀ R. Trust relativity, not intuition.",
@@ -12,43 +12,50 @@
   "physics": {
     "c": 1.0,
     "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
     "t_max": 300.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
     }
   },
-  "particle": {
-    "charge": -1e-06,
-    "mass": 1.0,
-    "radius": 0.0
-  },
-  "launch": {
-    "node": [
-      4,
-      17,
-      0
-    ],
-    "direction": [
-      1.0,
-      0.0,
-      0.0
-    ],
-    "kinetic_energy": 1.4142135623730951
-  },
-  "detector": {
-    "min": [
-      3,
-      2,
-      0
-    ],
-    "max": [
-      5,
-      4,
-      0
-    ]
-  },
-  "level_charges": [],
+  "shots": [
+    {
+      "particle": {
+        "charge": -1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          4,
+          17,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 1.4142135623730951
+      },
+      "detector": {
+        "min": [
+          3,
+          2,
+          0
+        ],
+        "max": [
+          5,
+          4,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
   "limits": {
     "max_charges": 1,
     "magnitudes": [
@@ -60,6 +67,8 @@
     ],
     "allow_positive": true,
     "allow_negative": false,
+    "max_magnets": 0,
+    "magnet_strengths": [],
     "region": {
       "min": [
         4,
@@ -80,7 +89,8 @@
         10,
         0
       ],
-      "charge": 14000000.0
+      "kind": "charge",
+      "value": 14000000.0
     }
   ]
 }

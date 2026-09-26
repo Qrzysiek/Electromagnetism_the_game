@@ -1,5 +1,6 @@
 //! Electromagnetism – the game. Stage 1: 2D levels (a slice of the 3D world).
 
+mod draw;
 mod editor;
 mod potential;
 mod sandbox;
@@ -16,11 +17,11 @@ use bevy::window::PrimaryWindow;
 use bevy_egui::input::EguiWantsInput;
 use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
 use level::Level;
-use physics::DVec3;
 use physics::trajectory::Outcome;
 use physics::verify::Status;
 
 use editor::Editor;
+use potential::MapMode;
 use worker::{Preview, Request, Response, Worker};
 
 /// Width of the side panel in logical pixels.
@@ -29,6 +30,15 @@ pub const PANEL_WIDTH: f32 = 340.0;
 /// A field line for drawing: polyline and arrowheads (position, unit direction of E).
 pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
 
+/// Physics results of one shot for the current setup.
+#[derive(Clone, Debug, Default)]
+pub struct ShotView {
+    /// Latest preview (may belong to an older revision until the new one arrives).
+    pub preview: Option<Preview>,
+    /// Verification verdict for the current revision.
+    pub verdict: Option<(Status, Outcome)>,
+}
+
 #[derive(Resource)]
 pub struct Game {
     pub levels: Vec<Level>,
@@ -36,18 +46,21 @@ pub struct Game {
     pub level_paths: Vec<PathBuf>,
     pub level_index: usize,
     pub editor: Editor,
-    pub preview: Option<Preview>,
-    /// Verification verdict for the current revision.
-    pub verdict: Option<(Status, Outcome)>,
+    pub shots: Vec<ShotView>,
+    pub active_shot: usize,
+    /// Show every shot's trajectory, not only the active one.
+    pub show_all_shots: bool,
     pub sent_revision: u64,
-    pub visuals_revision: u64,
+    /// (revision, active shot, mode) the field map was computed for.
+    pub map_key: (u64, usize, Option<MapMode>),
     pub field_lines: Vec<DrawnFieldLine>,
     /// Distance between neighbouring field lines, in cells.
     pub field_line_spacing: f64,
     pub field_line_opacity: f32,
-    /// (setup revision, density) the current field lines were computed for.
+    /// (setup revision, spacing) the current field lines were computed for.
     pub field_lines_key: (u64, u64),
-    pub show_potential: bool,
+    /// Field map shown under the scene (`None`: off).
+    pub map: Option<MapMode>,
     pub show_field_lines: bool,
     pub animate: bool,
     pub playback_speed: f64,
@@ -64,8 +77,8 @@ impl Game {
     fn load_level(&mut self, index: usize) {
         self.level_index = index;
         self.editor = Editor::new(self.levels[index].clone());
-        self.preview = None;
-        self.verdict = None;
+        self.shots.clear();
+        self.active_shot = 0;
         self.anim_time = 0.0;
     }
 
@@ -98,24 +111,47 @@ impl Game {
             .unwrap_or(0);
     }
 
-    /// Solved = verified arrival for the current setup.
+    pub fn shot_count(&self) -> usize {
+        self.editor.level.shots.len()
+    }
+
+    pub fn select_shot(&mut self, shot: usize) {
+        if shot < self.shot_count() {
+            self.active_shot = shot;
+            self.anim_time = 0.0;
+        }
+    }
+
+    pub fn cycle_shot(&mut self, step: isize) {
+        let n = self.shot_count().max(1) as isize;
+        self.select_shot((self.active_shot as isize + step).rem_euclid(n) as usize);
+    }
+
+    /// Verdict of a shot (`None` while computing).
+    pub fn verdict(&self, shot: usize) -> Option<(Status, Outcome)> {
+        self.shots.get(shot).and_then(|s| s.verdict)
+    }
+
+    /// Solved = every shot arrives, verified.
     pub fn solved(&self) -> bool {
-        matches!(self.verdict, Some((Status::Verified, Outcome::Arrived)))
+        let n = self.shot_count();
+        n > 0
+            && (0..n).all(|i| matches!(self.verdict(i), Some((Status::Verified, Outcome::Arrived))))
     }
 }
 
 /// Gizmo group for field lines: translucent and without joints (joints overlap the
 /// segments and would double-blend).
 #[derive(Default, Reflect, GizmoConfigGroup)]
-struct FieldLineGizmos;
+pub struct FieldLineGizmos;
 
 #[derive(Resource)]
 struct PhysicsWorker(Worker);
 
 #[derive(Resource)]
-struct PotentialQuad {
+pub struct PotentialQuad {
     material: Handle<potential::PotentialMaterial>,
-    entity: Entity,
+    pub entity: Entity,
 }
 
 pub fn levels_dir() -> PathBuf {
@@ -157,10 +193,11 @@ fn load_levels() -> (Vec<Level>, Vec<PathBuf>) {
             continue;
         };
         match Level::from_json(&text) {
-            Ok(l) => {
+            Ok(l) if !l.shots.is_empty() => {
                 levels.push(l);
                 paths.push(p);
             }
+            Ok(_) => eprintln!("skipping {}: no shots", p.display()),
             Err(e) => eprintln!("skipping {}: {e}", p.display()),
         }
     }
@@ -189,15 +226,16 @@ fn main() {
             level_paths,
             level_index: 0,
             editor,
-            preview: None,
-            verdict: None,
+            shots: Vec::new(),
+            active_shot: 0,
+            show_all_shots: true,
             sent_revision: 0,
-            visuals_revision: 0,
+            map_key: (0, 0, None),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
             field_line_opacity: 0.2,
             field_lines_key: (0, 0),
-            show_potential: true,
+            map: Some(MapMode::Potential),
             show_field_lines: false,
             animate: true,
             playback_speed: 1.0,
@@ -214,11 +252,12 @@ fn main() {
             (
                 input,
                 sync_physics,
+                update_map,
                 update_field_lines,
                 poll_physics,
                 animate,
                 fit_camera,
-                draw,
+                draw::draw,
             )
                 .chain(),
         )
@@ -244,13 +283,9 @@ fn setup(
     let (config, _) = gizmo_store.config_mut::<FieldLineGizmos>();
     config.line.width = 1.6;
     config.line.joints = GizmoLineJoint::None;
-    // Potential map: a unit quad scaled to the world bounds, shaded on the GPU.
+    // Field map: a unit quad scaled to the world bounds, shaded on the GPU.
     let material = materials.add(potential::PotentialMaterial {
-        params: potential::PotentialParams {
-            charges: [Vec4::ZERO; potential::MAX_CHARGES],
-            count: 0,
-            u_a: 0.0,
-        },
+        params: potential::PotentialParams::default(),
     });
     let entity = commands
         .spawn((
@@ -319,6 +354,9 @@ fn input(
         if keys.just_pressed(KeyCode::KeyQ) {
             e.cycle_magnitude(-1);
         }
+        if keys.just_pressed(KeyCode::KeyM) {
+            e.toggle_kind();
+        }
         if keys.just_pressed(KeyCode::KeyC) {
             e.clear();
         }
@@ -332,11 +370,24 @@ fn input(
                 e.set_refinement(f);
             }
         }
+        if keys.just_pressed(KeyCode::BracketRight) {
+            game.cycle_shot(1);
+        }
+        if keys.just_pressed(KeyCode::BracketLeft) {
+            game.cycle_shot(-1);
+        }
+        if keys.just_pressed(KeyCode::KeyH) {
+            game.show_all_shots = !game.show_all_shots;
+        }
         if keys.just_pressed(KeyCode::KeyF) {
             game.show_field_lines = !game.show_field_lines;
         }
         if keys.just_pressed(KeyCode::KeyV) {
-            game.show_potential = !game.show_potential;
+            game.map = match game.map {
+                Some(MapMode::Potential) => Some(MapMode::Magnetic),
+                Some(MapMode::Magnetic) => None,
+                None => Some(MapMode::Potential),
+            };
         }
         if keys.just_pressed(KeyCode::KeyA) {
             game.animate = !game.animate;
@@ -388,7 +439,7 @@ fn input(
     if on_grid
         && game.sandbox.active
         && (pressed || released || right)
-        && sandbox::pointer(game, node, pressed, released, right)
+        && sandbox::pointer(game, node, world, pressed, released, right)
     {
         return;
     }
@@ -409,68 +460,94 @@ fn input(
     }
 }
 
-/// Sends changed setups to the physics thread and recomputes the visuals.
-fn sync_physics(
-    mut game: ResMut<Game>,
-    worker: Res<PhysicsWorker>,
-    quad: Res<PotentialQuad>,
-    mut materials: ResMut<Assets<potential::PotentialMaterial>>,
-    mut transforms: Query<&mut Transform>,
-) {
-    let revision = game.editor.revision + ((game.level_index as u64) << 48);
+/// Current setup revision (changes with every edit and level switch).
+fn revision(game: &Game) -> u64 {
+    game.editor.revision + ((game.level_index as u64) << 48)
+}
+
+/// Sends changed setups to the physics thread.
+fn sync_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
+    let revision = revision(&game);
     if revision == game.sent_revision {
         return;
     }
     game.sent_revision = revision;
-    game.verdict = None;
-    let level = game.editor.level.clone();
-    let scenario = level.scenario(&game.editor.placement);
+    let level = &game.editor.level;
+    let n = level.shots.len();
+    let scenarios = level.scenarios(&game.editor.placement);
+    let tolerances = level.tolerances();
+    // Keep old previews on screen until new ones arrive; verdicts are recomputed.
+    game.shots.resize(n, ShotView::default());
+    for s in &mut game.shots {
+        s.verdict = None;
+    }
+    if game.active_shot >= n {
+        game.active_shot = 0;
+    }
     worker.0.submit(Request {
         revision,
-        scenario: scenario.clone(),
-        tolerances: level.tolerances(),
+        scenarios,
+        tolerances,
     });
+}
 
-    if game.visuals_revision != revision {
-        game.visuals_revision = revision;
-        let charges: Vec<(DVec3, f64)> = level
-            .level_charges
-            .iter()
-            .chain(&game.editor.placement)
-            .map(|c| (level.grid.position(c.node), c.charge))
-            .collect();
-        if let Some(mut m) = materials.get_mut(&quad.material) {
-            m.params = potential::params(&scenario, &charges, level.physics.charge_radius);
-        }
-        let bounds = scenario.bounds.expect("bounds");
-        if let Ok(mut t) = transforms.get_mut(quad.entity) {
-            let size = bounds.max - bounds.min;
-            let center = (bounds.max + bounds.min) * 0.5;
-            #[allow(clippy::cast_possible_truncation)]
-            {
-                t.scale = Vec3::new(size.x as f32, size.y as f32, 1.0);
-                t.translation = Vec3::new(center.x as f32, center.y as f32, -10.0);
-            }
+/// Updates the GPU field map for the active shot and setup.
+fn update_map(
+    mut game: ResMut<Game>,
+    quad: Res<PotentialQuad>,
+    mut materials: ResMut<Assets<potential::PotentialMaterial>>,
+    mut transforms: Query<&mut Transform>,
+) {
+    let key = (game.sent_revision, game.active_shot, game.map);
+    if key == game.map_key {
+        return;
+    }
+    game.map_key = key;
+    let Some(mode) = game.map else {
+        return;
+    };
+    let level = &game.editor.level;
+    if level.shots.is_empty() {
+        return;
+    }
+    let scenario = level.scenario(game.active_shot, &game.editor.placement);
+    if let Some(mut m) = materials.get_mut(&quad.material) {
+        m.params = potential::params(
+            &scenario,
+            level.physics.charge_radius,
+            level.physics.magnet_radius,
+            mode,
+        );
+    }
+    let bounds = level.bounds();
+    if let Ok(mut t) = transforms.get_mut(quad.entity) {
+        let size = bounds.max - bounds.min;
+        let center = (bounds.max + bounds.min) * 0.5;
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            t.scale = Vec3::new(size.x as f32, size.y as f32, 1.0);
+            t.translation = Vec3::new(center.x as f32, center.y as f32, -10.0);
         }
     }
 }
 
-/// Recomputes the field lines when they are shown and the setup or density changed.
+/// Recomputes the field lines (the electric field does not depend on the shot) when they
+/// are shown and the setup or spacing changed.
 fn update_field_lines(mut game: ResMut<Game>) {
     let key = (game.sent_revision, game.field_line_spacing.to_bits());
-    if !game.show_field_lines || key == game.field_lines_key {
+    if !game.show_field_lines || key == game.field_lines_key || game.shot_count() == 0 {
         return;
     }
     game.field_lines_key = key;
-    let scenario = game.editor.level.scenario(&game.editor.placement);
+    let scenario = game.editor.level.scenario(0, &game.editor.placement);
     game.field_lines = visuals::field_lines(&scenario, game.field_line_spacing)
         .into_iter()
         .map(|l| {
             (
-                l.points.into_iter().map(to_vec2).collect(),
+                l.points.into_iter().map(draw::to_vec2).collect(),
                 l.arrows
                     .into_iter()
-                    .map(|(p, d)| (to_vec2(p), to_vec2(d)))
+                    .map(|(p, d)| (draw::to_vec2(p), draw::to_vec2(d)))
                     .collect(),
             )
         })
@@ -479,17 +556,27 @@ fn update_field_lines(mut game: ResMut<Game>) {
 
 fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
     sandbox::poll(&mut game);
+    let current = game.sent_revision;
     for r in worker.0.poll() {
         match r {
-            Response::Preview(p) if p.revision == game.sent_revision => {
-                game.preview = Some(p);
+            Response::Preview {
+                revision,
+                shot,
+                preview,
+            } if revision == current => {
+                if let Some(s) = game.shots.get_mut(shot) {
+                    s.preview = Some(preview);
+                }
             }
             Response::Verified {
                 revision,
+                shot,
                 status,
                 outcome,
-            } if revision == game.sent_revision => {
-                game.verdict = Some((status, outcome));
+            } if revision == current => {
+                if let Some(s) = game.shots.get_mut(shot) {
+                    s.verdict = Some((status, outcome));
+                }
             }
             _ => {}
         }
@@ -497,10 +584,18 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
 }
 
 fn animate(time: Res<Time>, mut game: ResMut<Game>) {
-    let Some(end) = game.preview.as_ref().map(|p| p.flight_time) else {
-        return;
-    };
     if !game.animate {
+        return;
+    }
+    // Longest flight among the shown trajectories.
+    let end = game
+        .shots
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| game.show_all_shots || *i == game.active_shot)
+        .filter_map(|(_, s)| s.preview.as_ref().map(|p| p.flight_time))
+        .fold(0.0, f64::max);
+    if end <= 0.0 {
         return;
     }
     // Playback in internal time units per second, with a pause at the end.
@@ -541,203 +636,4 @@ fn fit_camera(
         };
     }
     transform.translation = Vec3::new(center.x as f32 + 0.5 * panel_px * s, center.y as f32, 0.0);
-}
-
-#[allow(clippy::cast_possible_truncation)]
-fn to_vec2(v: DVec3) -> Vec2 {
-    Vec2::new(v.x as f32, v.y as f32)
-}
-
-fn draw(
-    game: Res<Game>,
-    mut gizmos: Gizmos,
-    mut line_gizmos: Gizmos<FieldLineGizmos>,
-    quad: Res<PotentialQuad>,
-    mut vis: Query<&mut Visibility>,
-) {
-    if let Ok(mut v) = vis.get_mut(quad.entity) {
-        *v = if game.show_potential {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    let level = &game.editor.level;
-    let grid = level.grid;
-    let m = grid.max_node();
-    let top_right = to_vec2(grid.position(m));
-
-    // Grid: cell lines, plus fainter refined nodes.
-    let cell = Color::srgba(1.0, 1.0, 1.0, 0.035);
-    for i in 0..=grid.nx {
-        #[allow(clippy::cast_precision_loss)]
-        let x = i as f32;
-        gizmos.line_2d(Vec2::new(x, 0.0), Vec2::new(x, top_right.y), cell);
-    }
-    for j in 0..=grid.ny {
-        #[allow(clippy::cast_precision_loss)]
-        let y = j as f32;
-        gizmos.line_2d(Vec2::new(0.0, y), Vec2::new(top_right.x, y), cell);
-    }
-    if grid.subdivision > 1 {
-        let fine = Color::srgba(1.0, 1.0, 1.0, 0.015);
-        for i in 0..=m[0] {
-            let x = to_vec2(grid.position([i, 0, 0])).x;
-            gizmos.line_2d(Vec2::new(x, 0.0), Vec2::new(x, top_right.y), fine);
-        }
-        for j in 0..=m[1] {
-            let y = to_vec2(grid.position([0, j, 0])).y;
-            gizmos.line_2d(Vec2::new(0.0, y), Vec2::new(top_right.x, y), fine);
-        }
-    }
-
-    // World bounds.
-    let b = level.bounds();
-    let (bmin, bmax) = (to_vec2(b.min), to_vec2(b.max));
-    gizmos.rect_2d(
-        (bmin + bmax) * 0.5,
-        bmax - bmin,
-        Color::srgba(1.0, 0.3, 0.3, 0.5),
-    );
-
-    // Detector.
-    let d0 = to_vec2(grid.position(level.detector.min));
-    let d1 = to_vec2(grid.position(level.detector.max));
-    let det_color = if game.solved() {
-        Color::srgb(0.3, 1.0, 0.4)
-    } else {
-        Color::srgb(0.2, 0.8, 0.3)
-    };
-    gizmos.rect_2d((d0 + d1) * 0.5, (d1 - d0).abs(), det_color);
-    gizmos.rect_2d(
-        (d0 + d1) * 0.5,
-        (d1 - d0).abs() - Vec2::splat(0.15),
-        det_color.with_alpha(0.5),
-    );
-
-    // Field lines.
-    if game.show_field_lines {
-        let color = Color::srgba(0.95, 0.95, 0.75, game.field_line_opacity);
-        let (head, spread) = (0.3, 0.45_f32);
-        for (points, arrows) in &game.field_lines {
-            line_gizmos.linestrip_2d(points.iter().copied(), color);
-            // Arrowheads pointing along E.
-            for &(p, d) in arrows {
-                let back = -d * head;
-                let tip = p + d * (0.5 * head);
-                line_gizmos.line_2d(tip, tip + Vec2::from_angle(spread).rotate(back), color);
-                line_gizmos.line_2d(tip, tip + Vec2::from_angle(-spread).rotate(back), color);
-            }
-        }
-    }
-
-    // Launch point and direction.
-    let a = to_vec2(grid.position(level.launch.node));
-    let dir = level.launch.direction;
-    #[allow(clippy::cast_possible_truncation)]
-    let dir = Vec2::new(dir[0] as f32, dir[1] as f32).normalize_or_zero();
-    gizmos.circle_2d(a, 0.25, Color::srgb(1.0, 1.0, 1.0));
-    gizmos.arrow_2d(a, a + dir * 1.5, Color::srgb(1.0, 1.0, 1.0));
-
-    // Charges.
-    #[allow(clippy::cast_possible_truncation)]
-    let radius = level.physics.charge_radius as f32;
-    let q_max = level.limits.magnitudes.iter().copied().fold(1.0, f64::max);
-    let draw_charge = |gizmos: &mut Gizmos, c: &level::Charge, player: bool| {
-        let p = to_vec2(grid.position(c.node));
-        let color = if c.charge > 0.0 {
-            Color::srgb(1.0, 0.35, 0.3)
-        } else {
-            Color::srgb(0.35, 0.6, 1.0)
-        };
-        // Filled disc from concentric circles; the halo grows with |Q|.
-        for k in 1..=6 {
-            #[allow(clippy::cast_precision_loss)]
-            gizmos.circle_2d(p, radius * k as f32 / 6.0, color);
-        }
-        #[allow(clippy::cast_possible_truncation)]
-        let halo = radius * (1.0 + 0.8 * (c.charge.abs() / q_max) as f32);
-        gizmos.circle_2d(p, halo, color.with_alpha(0.4));
-        let s = radius * 0.6;
-        let ink = Color::srgb(0.05, 0.05, 0.05);
-        gizmos.line_2d(p - Vec2::X * s, p + Vec2::X * s, ink);
-        if c.charge > 0.0 {
-            gizmos.line_2d(p - Vec2::Y * s, p + Vec2::Y * s, ink);
-        }
-        let ring = if player {
-            Color::srgb(1.0, 1.0, 1.0)
-        } else {
-            Color::srgb(0.5, 0.5, 0.5)
-        };
-        gizmos.circle_2d(p, radius * 1.15, ring);
-    };
-    for c in &level.level_charges {
-        draw_charge(&mut gizmos, c, false);
-    }
-    for c in &game.editor.placement {
-        draw_charge(&mut gizmos, c, true);
-    }
-
-    // Region where player charges may be placed.
-    if let Some(r) = level.limits.region {
-        let p0 = to_vec2(grid.position(r.min)) - Vec2::splat(0.35);
-        let p1 = to_vec2(grid.position(r.max)) + Vec2::splat(0.35);
-        let blue = Color::srgba(0.45, 0.7, 1.0, 0.55);
-        gizmos.rect_2d((p0 + p1) * 0.5, p1 - p0, blue);
-        gizmos.rect_2d(
-            (p0 + p1) * 0.5,
-            p1 - p0 - Vec2::splat(0.12),
-            blue.with_alpha(0.25),
-        );
-    }
-
-    // Box being dragged in the sandbox (detector or region).
-    if let Some(a) = game.sandbox.detector_drag {
-        let p0 = to_vec2(grid.position(a));
-        let p1 = to_vec2(grid.position(game.editor.cursor));
-        gizmos.rect_2d(
-            (p0 + p1) * 0.5,
-            (p1 - p0).abs(),
-            Color::srgba(0.3, 1.0, 0.4, 0.6),
-        );
-    }
-
-    // Cursor.
-    let cur = to_vec2(grid.position(game.editor.cursor));
-    let cursor_color = if game.editor.selected_charge() > 0.0 {
-        Color::srgb(1.0, 0.6, 0.5)
-    } else {
-        Color::srgb(0.6, 0.8, 1.0)
-    };
-    gizmos.rect_2d(cur, Vec2::splat(radius * 2.8), cursor_color);
-
-    // Trajectory.
-    if let Some(p) = &game.preview {
-        let color = match game.verdict {
-            None => Color::srgb(0.95, 0.95, 0.95),
-            Some((Status::Verified, Outcome::Arrived)) => Color::srgb(0.3, 1.0, 0.4),
-            Some((Status::Verified, _)) => Color::srgb(1.0, 0.55, 0.2),
-            Some(_) => Color::srgb(1.0, 0.9, 0.2),
-        };
-        gizmos.linestrip_2d(p.path.iter().map(|q| to_vec2(q.x)), color);
-        let end = to_vec2(p.path.last().expect("path has points").x);
-        if !matches!(p.outcome, Outcome::Arrived) {
-            let s = 0.3;
-            gizmos.line_2d(end - Vec2::splat(s), end + Vec2::splat(s), color);
-            gizmos.line_2d(end + Vec2::new(-s, s), end + Vec2::new(s, -s), color);
-        }
-        if game.animate
-            && let Some(pt) = ui::point_at(p, game.anim_time)
-        {
-            let x = to_vec2(pt.x);
-            gizmos.circle_2d(x, 0.18, Color::srgb(1.0, 1.0, 0.6));
-            gizmos.circle_2d(x, 0.1, Color::srgb(1.0, 1.0, 0.6));
-            let f = to_vec2(pt.force);
-            if f.length() > 1e-6 {
-                // Force arrow, length ∝ log(1 + |F|), direction exact.
-                let len = (1.0 + f.length()).ln() * 2.0;
-                gizmos.arrow_2d(x, x + f.normalize() * len, Color::srgb(1.0, 0.8, 0.2));
-            }
-        }
-    }
 }

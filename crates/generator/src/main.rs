@@ -31,6 +31,8 @@ enum Command {
     },
     /// Verify the reference solution of a level.
     Check { path: PathBuf },
+    /// Rewrite level files in the current format (older formats are migrated on load).
+    Normalize { paths: Vec<PathBuf> },
 }
 
 fn load(path: &PathBuf) -> Level {
@@ -53,18 +55,18 @@ fn main() {
                 "  without player charges: {outcome:?} (closest approach to detector {no_charges:.3})"
             );
 
-            let mut best: Option<Vec<level::Charge>> = None;
-            let singles = search::single_charge_solutions(&level);
+            let mut best: Option<Vec<level::Element>> = None;
+            let singles = search::single_element_solutions(&level);
             println!("  verified 1-charge solutions: {}", singles.len());
             if singles.len() <= 10 {
                 for c in &singles {
-                    println!("    {:?} Q = {:e}", c.node, c.charge);
+                    println!("    {:?} {:?} {:e}", c.node, c.kind, c.value);
                 }
             }
             if let Some(c) = singles.first() {
                 best = Some(vec![*c]);
             }
-            for k in 2..=level.limits.max_charges as usize {
+            for k in 2..=(level.limits.max_charges + level.limits.max_magnets) as usize {
                 let found = search::anneal(&level, k, restarts, iterations, 0x5EED + k as u64);
                 println!(
                     "  verified {k}-charge solutions found by annealing: {}",
@@ -84,18 +86,37 @@ fn main() {
                 None => println!("  no solution found"),
             }
         }
+        Command::Normalize { paths } => {
+            for path in paths {
+                let level = load(&path);
+                std::fs::write(
+                    &path,
+                    level.to_json()
+                        + "
+",
+                )
+                .expect("write level");
+                println!("{}: format {}", path.display(), level.format_version);
+            }
+        }
         Command::Check { path } => {
             let level = load(&path);
             let placement = &level.reference_solution;
-            let v = verify(&level.scenario(placement), level.tolerances());
             println!(
-                "{}: placement {:?}, outcome {:?}, status {:?}, flight time {:.3}",
+                "{}: placement {:?}",
                 level.name,
-                level.check_placement(placement),
-                v.outcome(),
-                v.status,
-                v.verified.end.t
+                level.check_placement(placement)
             );
+            for (i, scn) in level.scenarios(placement).iter().enumerate() {
+                let v = verify(scn, level.tolerances());
+                println!(
+                    "  shot {}: outcome {:?}, status {:?}, flight time {:.3}",
+                    i + 1,
+                    v.outcome(),
+                    v.status,
+                    v.verified.end.t
+                );
+            }
         }
     }
 }

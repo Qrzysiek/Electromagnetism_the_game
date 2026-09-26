@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "engine_version": "0.1.0",
   "name": "The wall",
   "description": "A wall of positive charges blocks the direct path.",
@@ -12,50 +12,57 @@
   "physics": {
     "c": 5.0,
     "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
     "t_max": 200.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
     }
   },
-  "particle": {
-    "charge": 1e-6,
-    "mass": 1.0,
-    "radius": 0.0
-  },
-  "launch": {
-    "node": [
-      0,
-      10,
-      0
-    ],
-    "direction": [
-      1.0,
-      0.0,
-      0.0
-    ],
-    "kinetic_energy": 0.5
-  },
-  "detector": {
-    "min": [
-      27,
-      8,
-      0
-    ],
-    "max": [
-      30,
-      12,
-      0
-    ]
-  },
-  "level_charges": [
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          27,
+          8,
+          0
+        ],
+        "max": [
+          30,
+          12,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [
     {
       "node": [
         15,
         7,
         0
       ],
-      "charge": 500000.0
+      "kind": "charge",
+      "value": 500000.0
     },
     {
       "node": [
@@ -63,7 +70,8 @@
         8,
         0
       ],
-      "charge": 500000.0
+      "kind": "charge",
+      "value": 500000.0
     },
     {
       "node": [
@@ -71,7 +79,8 @@
         9,
         0
       ],
-      "charge": 500000.0
+      "kind": "charge",
+      "value": 500000.0
     },
     {
       "node": [
@@ -79,7 +88,8 @@
         10,
         0
       ],
-      "charge": 500000.0
+      "kind": "charge",
+      "value": 500000.0
     },
     {
       "node": [
@@ -87,7 +97,8 @@
         11,
         0
       ],
-      "charge": 500000.0
+      "kind": "charge",
+      "value": 500000.0
     },
     {
       "node": [
@@ -95,7 +106,8 @@
         12,
         0
       ],
-      "charge": 500000.0
+      "kind": "charge",
+      "value": 500000.0
     },
     {
       "node": [
@@ -103,9 +115,11 @@
         13,
         0
       ],
-      "charge": 500000.0
+      "kind": "charge",
+      "value": 500000.0
     }
   ],
+  "coils": [],
   "limits": {
     "max_charges": 3,
     "magnitudes": [
@@ -114,7 +128,9 @@
       4000000.0
     ],
     "allow_positive": true,
-    "allow_negative": true
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": []
   },
   "reference_solution": [
     {
@@ -123,7 +139,8 @@
         2,
         0
       ],
-      "charge": -4000000.0
+      "kind": "charge",
+      "value": -4000000.0
     }
   ]
 }

@@ -3,9 +3,11 @@
 
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
+use level::ElementKind;
 use physics::trajectory::Outcome;
 use physics::verify::{Boundary, Status};
 
+use crate::potential::MapMode;
 use crate::worker::{PathPoint, Preview};
 use crate::{Game, PANEL_WIDTH};
 
@@ -72,10 +74,33 @@ pub fn parse_si(text: &str) -> Option<f64> {
     num.trim().parse::<f64>().ok().map(|v| v * scale)
 }
 
-fn outcome_text(o: Outcome) -> String {
+/// What obstacle `i` of a level's scenario is (order: charges, magnets, coil wires; see
+/// `Level::field`).
+fn obstacle_name(game: &Game, i: usize) -> &'static str {
+    let all = game
+        .editor
+        .level
+        .elements
+        .iter()
+        .chain(&game.editor.placement);
+    let charges = all
+        .clone()
+        .filter(|e| e.kind == ElementKind::Charge)
+        .count();
+    let magnets = all.filter(|e| e.kind == ElementKind::Magnet).count();
+    if i < charges {
+        "a charge"
+    } else if i < charges + magnets {
+        "a magnet"
+    } else {
+        "a coil wire"
+    }
+}
+
+fn outcome_text(game: &Game, o: Outcome) -> String {
     match o {
         Outcome::Arrived => "reached the detector".into(),
-        Outcome::Collided(_) => "hit a charge".into(),
+        Outcome::Collided(i) => format!("hit {}", obstacle_name(game, i)),
         Outcome::LeftBounds => "left the map".into(),
         Outcome::Timeout => "ran out of time".into(),
         Outcome::Failed(e) => format!("integration failed ({e})"),
@@ -183,47 +208,118 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ui.label(egui::RichText::new(&level.description).italics());
     }
 
-    // World.
-    let kin = physics::dynamics::Kinematics::new(level.particle.mass, level.c());
-    let p0 = level.launch_momentum();
+    // Shots.
+    let n_shots = level.shots.len();
+    if n_shots > 1 {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Shot:");
+            for i in 0..n_shots {
+                let mark = match game.verdict(i) {
+                    Some((Status::Verified, Outcome::Arrived)) => "✔",
+                    Some((Status::Verified, _)) => "✗",
+                    Some(_) => "⚠",
+                    None => "…",
+                };
+                let c = crate::draw::shot_color(i).to_srgba();
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let color = egui::Color32::from_rgb(
+                    (c.red * 255.0) as u8,
+                    (c.green * 255.0) as u8,
+                    (c.blue * 255.0) as u8,
+                );
+                let text = egui::RichText::new(format!("{} {mark}", i + 1)).color(color);
+                if ui
+                    .selectable_label(game.active_shot == i, text)
+                    .on_hover_text("Switch shot ([ and ])")
+                    .clicked()
+                {
+                    game.select_shot(i);
+                }
+            }
+            ui.checkbox(&mut game.show_all_shots, "show all (H)");
+        });
+        ui.label(
+            egui::RichText::new("One setup must deliver every shot to its own detector.").small(),
+        );
+    }
+    let shot_index = game.active_shot.min(n_shots.saturating_sub(1));
+    let shot = level.shots[shot_index];
+
+    // Launch of the active shot.
+    let kin = physics::dynamics::Kinematics::new(shot.particle.mass, level.c());
+    let p0 = level.launch_momentum(shot_index);
     let gamma0 = kin.gamma(p0);
     let v0 = kin.velocity(p0).length();
+    let t0 = shot.launch.kinetic_energy;
     ui.label(match level.physics.c {
         Some(c) => format!(
-            "Launch: T₀ = {:.3}, v₀ = {:.3} c, γ₀ = {:.4}   (c = {c})",
-            level.launch.kinetic_energy,
-            v0 / c,
-            gamma0
+            "Launch: T₀ = {t0:.3}, v₀ = {:.3} c, γ₀ = {gamma0:.4}   (c = {c})",
+            v0 / c
         ),
-        None => format!(
-            "Launch: T₀ = {:.3}, v₀ = {v0:.3} (Newtonian)",
-            level.launch.kinetic_energy
-        ),
+        None => format!("Launch: T₀ = {t0:.3}, v₀ = {v0:.3} (Newtonian)"),
     });
     ui.label(format!(
         "Particle: q = {}, m = {}",
-        fmt_si(level.particle.charge),
-        fmt_si(level.particle.mass)
+        fmt_si(shot.particle.charge),
+        fmt_si(shot.particle.mass)
     ));
     ui.separator();
 
-    // Charge palette.
-    ui.label(egui::RichText::new("Your charges").strong());
-    ui.label(format!(
-        "{} of {} left",
-        game.editor.charges_left(),
-        level.limits.max_charges
-    ));
+    // Palette.
+    let limits = &level.limits;
+    ui.label(egui::RichText::new("Your elements").strong());
     ui.horizontal(|ui| {
-        ui.label("New charge:");
-        let limits = &level.limits;
-        if limits.allow_positive && limits.allow_negative {
-            let sign = if game.editor.positive { "+" } else { "−" };
-            if ui.button(sign).on_hover_text("Flip sign (S)").clicked() {
+        if limits.max_charges > 0 {
+            ui.label(format!(
+                "charges {} of {} left",
+                game.editor.left(ElementKind::Charge),
+                limits.max_charges
+            ));
+        }
+        if limits.max_magnets > 0 {
+            ui.label(format!(
+                "magnets {} of {} left",
+                game.editor.left(ElementKind::Magnet),
+                limits.max_magnets
+            ));
+        }
+    });
+    if limits.max_charges > 0 && limits.max_magnets > 0 {
+        ui.horizontal(|ui| {
+            ui.label("Place:");
+            let mut kind = game.editor.kind;
+            ui.selectable_value(&mut kind, ElementKind::Charge, "charge");
+            ui.selectable_value(&mut kind, ElementKind::Magnet, "magnet")
+                .on_hover_text("Toggle with M");
+            game.editor.set_kind(kind);
+        });
+    }
+    ui.horizontal(|ui| {
+        let kind = game.editor.kind;
+        let both_signs =
+            kind == ElementKind::Magnet || (limits.allow_positive && limits.allow_negative);
+        let sign = match (kind, game.editor.positive) {
+            (ElementKind::Charge, true) => "+",
+            (ElementKind::Charge, false) => "−",
+            (ElementKind::Magnet, true) => "⊙",
+            (ElementKind::Magnet, false) => "⊗",
+        };
+        let hover = match kind {
+            ElementKind::Charge => "Flip sign (S)",
+            ElementKind::Magnet => "Flip orientation (S): ⊙ moment out of the plane, ⊗ into it",
+        };
+        ui.label(match kind {
+            ElementKind::Charge => "New charge:",
+            ElementKind::Magnet => "New magnet μ:",
+        });
+        if both_signs {
+            if ui.button(sign).on_hover_text(hover).clicked() {
                 game.editor.positive = !game.editor.positive;
             }
+        } else {
+            ui.label(sign);
         }
-        for (i, m) in limits.magnitudes.iter().enumerate() {
+        for (i, m) in crate::editor::magnitudes(&level, kind).iter().enumerate() {
             ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_si(*m));
         }
     });
@@ -246,26 +342,36 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
 
     // Result.
     ui.label(egui::RichText::new("Result").strong());
-    match (&game.preview, game.verdict) {
+    if game.solved() {
+        ui.label(
+            egui::RichText::new(if n_shots > 1 {
+                "✔ SOLVED: every shot arrives (verified)"
+            } else {
+                "✔ SOLVED (verified)"
+            })
+            .color(egui::Color32::from_rgb(90, 240, 110))
+            .size(18.0),
+        );
+    }
+    let view = game.shots.get(shot_index).cloned().unwrap_or_default();
+    match (&view.preview, view.verdict) {
         (None, _) => {
             ui.label("Computing…");
         }
         (Some(p), verdict) => {
+            let who = if n_shots > 1 {
+                format!("Shot {}", shot_index + 1)
+            } else {
+                "The particle".into()
+            };
             ui.label(format!(
-                "The particle {} after t = {:.3}.",
-                outcome_text(p.outcome),
+                "{who} {} after t = {:.3}.",
+                outcome_text(game, p.outcome),
                 p.flight_time
             ));
             match verdict {
                 None => {
                     ui.label("Verifying at 100× tighter tolerance…");
-                }
-                Some((Status::Verified, Outcome::Arrived)) => {
-                    ui.label(
-                        egui::RichText::new("✔ SOLVED (verified)")
-                            .color(egui::Color32::from_rgb(90, 240, 110))
-                            .size(20.0),
-                    );
                 }
                 Some((Status::Verified, _)) => {
                     ui.colored_label(egui::Color32::LIGHT_GRAY, "Verified.");
@@ -320,13 +426,13 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     }
     ui.separator();
 
-    // Energy bars at the animated point.
+    // Energy bars at the animated point of the active shot.
     ui.label(egui::RichText::new("Energy along the flight (units of T₀)").strong());
     ui.horizontal(|ui| {
         ui.checkbox(&mut game.animate, "Animate (A)");
         ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"));
     });
-    if let Some(p) = &game.preview
+    if let Some(p) = &view.preview
         && let Some(pt) = point_at(
             p,
             if game.animate {
@@ -336,7 +442,6 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             },
         )
     {
-        let t0 = level.launch.kinetic_energy;
         energy_bar(
             ui,
             "kinetic",
@@ -364,15 +469,28 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     ui.separator();
 
     ui.label(egui::RichText::new("View").strong());
-    ui.checkbox(&mut game.show_potential, "Potential map (V)");
-    ui.label(
-        egui::RichText::new(
+    ui.horizontal(|ui| {
+        ui.label("Map (V):");
+        ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential");
+        ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B");
+        ui.selectable_value(&mut game.map, None, "off");
+    });
+    let legend = match game.map {
+        Some(MapMode::Potential) => {
             "Red: uphill for the particle, blue: downhill; contours every T₀/4. \
-             Dark: forbidden by energy conservation.",
-        )
-        .small(),
-    );
-    ui.checkbox(&mut game.show_field_lines, "Field lines (F)");
+             Dark: forbidden by energy conservation (exact, also with magnets)."
+        }
+        Some(MapMode::Magnetic) => {
+            "B perpendicular to the plane. Orange: out of the plane, teal: into it. \
+             Value 1 = field in which this particle circles with a 5-cell radius; \
+             contours every 0.25."
+        }
+        None => "",
+    };
+    if !legend.is_empty() {
+        ui.label(egui::RichText::new(legend).small());
+    }
+    ui.checkbox(&mut game.show_field_lines, "Electric field lines (F)");
     ui.add(egui::Slider::new(&mut game.field_line_spacing, 0.5..=4.0).text("spacing (cells)"));
     ui.add(egui::Slider::new(&mut game.field_line_opacity, 0.05..=1.0).text("opacity"));
     ui.label(
@@ -386,8 +504,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     ui.collapsing("Controls", |ui| {
         ui.label("Mouse: left click place, right click remove, wheel changes magnitude.");
         ui.label("Arrows move the cursor (Shift: ×5). Space/Enter place, Del/X remove.");
-        ui.label("S flip sign, Q/E change magnitude, C clear, 1–4 grid refinement.");
-        ui.label("N/P next/previous level, V potential map, F field lines, A animation.");
+        ui.label("S flip sign, Q/E change magnitude, M charge/magnet, C clear.");
+        ui.label("1–4 grid refinement, [ ] switch shot, H show all shots.");
+        ui.label("N/P next/previous level, V map, F field lines, A animation.");
     });
 }
 

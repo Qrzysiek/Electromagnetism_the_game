@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Thomson's cathode-ray tube (1897)",
   "description": "J. J. Thomson deflected cathode rays with charged plates and showed they are negative particles: electrons. Here an electron at 0.2 c must hit a one-cell spot on the screen. Build deflection plates from point charges.",
@@ -12,43 +12,50 @@
   "physics": {
     "c": 5.0,
     "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
     "t_max": 300.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
     }
   },
-  "particle": {
-    "charge": -1e-6,
-    "mass": 1.0,
-    "radius": 0.0
-  },
-  "launch": {
-    "node": [
-      0,
-      10,
-      0
-    ],
-    "direction": [
-      1.0,
-      0.0,
-      0.0
-    ],
-    "kinetic_energy": 0.5
-  },
-  "detector": {
-    "min": [
-      29,
-      15,
-      0
-    ],
-    "max": [
-      30,
-      16,
-      0
-    ]
-  },
-  "level_charges": [],
+  "shots": [
+    {
+      "particle": {
+        "charge": -1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          29,
+          15,
+          0
+        ],
+        "max": [
+          30,
+          16,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
   "limits": {
     "max_charges": 2,
     "magnitudes": [
@@ -57,6 +64,8 @@
     ],
     "allow_positive": true,
     "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
     "region": {
       "min": [
         8,
@@ -77,7 +86,8 @@
         5,
         0
       ],
-      "charge": -1000000.0
+      "kind": "charge",
+      "value": -1000000.0
     }
   ]
 }

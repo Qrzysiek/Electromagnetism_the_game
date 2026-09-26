@@ -1,18 +1,19 @@
-//! Background physics thread. The editor submits the latest setup; stale requests are
-//! dropped. For each request the worker sends the preview trajectory first, then the
-//! verification verdict (SPEC §2.3), so rendering never waits for physics.
+//! Background physics thread. The editor submits the latest setup (one scenario per
+//! shot); stale requests are dropped. For each request the worker sends every shot's
+//! preview trajectory first, then every shot's verification verdict (SPEC §2.3), so
+//! rendering never waits for physics.
 
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use physics::DVec3;
-use physics::field::{Coulomb, FieldSolver};
-use physics::trajectory::{Outcome, RunSettings, Scenario, run, run_observed};
+use physics::field::{FieldSolver, StaticField};
+use physics::trajectory::{Outcome, RunSettings, Scenario, Trajectory, run, run_observed};
 use physics::verify::{Status, Tolerances, classify};
 
 pub struct Request {
     pub revision: u64,
-    pub scenario: Scenario<Coulomb>,
+    pub scenarios: Vec<Scenario<StaticField>>,
     pub tolerances: Tolerances,
 }
 
@@ -30,7 +31,6 @@ pub struct PathPoint {
 
 #[derive(Clone, Debug)]
 pub struct Preview {
-    pub revision: u64,
     pub path: Vec<PathPoint>,
     pub outcome: Outcome,
     pub flight_time: f64,
@@ -41,9 +41,14 @@ pub struct Preview {
 
 #[derive(Clone, Debug)]
 pub enum Response {
-    Preview(Preview),
+    Preview {
+        revision: u64,
+        shot: usize,
+        preview: Preview,
+    },
     Verified {
         revision: u64,
+        shot: usize,
         status: Status,
         outcome: Outcome,
     },
@@ -86,7 +91,7 @@ fn latest(rx: &Receiver<Request>, mut req: Request) -> Request {
 
 fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
     let mut next: Option<Request> = None;
-    loop {
+    'requests: loop {
         let req = match next.take() {
             Some(r) => r,
             None => match rx.recv() {
@@ -95,57 +100,70 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
             },
         };
         let req = latest(rx, req);
-        let scn = &req.scenario;
 
-        let preview_settings = RunSettings::with_tolerance(req.tolerances.preview);
-        let mut dense_points: Vec<(f64, DVec3, DVec3)> = Vec::new();
-        let preview = run_observed(scn, &preview_settings, |step| {
-            let (a, b) = (step.t_start(), step.t_end());
-            for i in 1..=8 {
-                let t = a + (b - a) * f64::from(i) / 8.0;
-                let (x, p) = step.state(t);
-                dense_points.push((t, x, p));
+        let mut previews: Vec<Trajectory> = Vec::new();
+        for (shot, scn) in req.scenarios.iter().enumerate() {
+            let (traj, preview) = preview_shot(scn, req.tolerances.preview);
+            previews.push(traj);
+            let msg = Response::Preview {
+                revision: req.revision,
+                shot,
+                preview,
+            };
+            if tx.send(msg).is_err() {
+                return;
             }
-        });
-        let path = build_path(scn, &preview.samples[0], &dense_points, &preview.end);
-        let max_speed_over_c = path.iter().map(|p| p.speed_over_c).fold(0.0, f64::max);
-        if tx
-            .send(Response::Preview(Preview {
-                revision: req.revision,
-                path,
-                outcome: preview.outcome,
-                flight_time: preview.end.t,
-                energy_rel_error: preview.energy_max_abs_error / preview.kinetic_initial,
-                radiated_fraction: preview.radiated_energy / preview.kinetic_initial,
-                max_speed_over_c,
-            }))
-            .is_err()
-        {
-            return;
+            if let Ok(newer) = rx.try_recv() {
+                next = Some(newer);
+                continue 'requests;
+            }
         }
-
-        // Skip verification if the setup has already changed.
-        if let Ok(newer) = rx.try_recv() {
-            next = Some(newer);
-            continue;
-        }
-        let verified = run(scn, &RunSettings::with_tolerance(req.tolerances.verify));
-        let status = classify(&preview, &verified, scn.t_max);
-        if tx
-            .send(Response::Verified {
+        for (shot, scn) in req.scenarios.iter().enumerate() {
+            // Skip verification if the setup has already changed.
+            if let Ok(newer) = rx.try_recv() {
+                next = Some(newer);
+                continue 'requests;
+            }
+            let verified = run(scn, &RunSettings::with_tolerance(req.tolerances.verify));
+            let status = classify(&previews[shot], &verified, scn.t_max);
+            let msg = Response::Verified {
                 revision: req.revision,
+                shot,
                 status,
                 outcome: verified.outcome,
-            })
-            .is_err()
-        {
-            return;
+            };
+            if tx.send(msg).is_err() {
+                return;
+            }
         }
     }
 }
 
+fn preview_shot(scn: &Scenario<StaticField>, tol: f64) -> (Trajectory, Preview) {
+    let mut dense_points: Vec<(f64, DVec3, DVec3)> = Vec::new();
+    let traj = run_observed(scn, &RunSettings::with_tolerance(tol), |step| {
+        let (a, b) = (step.t_start(), step.t_end());
+        for i in 1..=8 {
+            let t = a + (b - a) * f64::from(i) / 8.0;
+            let (x, p) = step.state(t);
+            dense_points.push((t, x, p));
+        }
+    });
+    let path = build_path(scn, &traj.samples[0], &dense_points, &traj.end);
+    let max_speed_over_c = path.iter().map(|p| p.speed_over_c).fold(0.0, f64::max);
+    let preview = Preview {
+        path,
+        outcome: traj.outcome,
+        flight_time: traj.end.t,
+        energy_rel_error: traj.energy_max_abs_error / traj.kinetic_initial,
+        radiated_fraction: traj.radiated_energy / traj.kinetic_initial,
+        max_speed_over_c,
+    };
+    (traj, preview)
+}
+
 fn build_path(
-    scn: &Scenario<Coulomb>,
+    scn: &Scenario<StaticField>,
     start: &physics::trajectory::Sample,
     dense: &[(f64, DVec3, DVec3)],
     end: &physics::trajectory::Sample,

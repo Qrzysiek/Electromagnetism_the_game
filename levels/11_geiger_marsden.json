@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Geiger–Marsden (1909)",
   "description": "Alpha particles fired at gold foil sometimes bounced straight back: the atom has a tiny, heavy, positive nucleus. Nudge the alpha so it backscatters into the detector. The nucleus field is exact Coulomb; the deflection follows tan(θ/2) = qQ / (2 T₀ b).",
@@ -12,52 +12,60 @@
   "physics": {
     "c": 20.0,
     "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
     "t_max": 300.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
     }
   },
-  "particle": {
-    "charge": 2e-6,
-    "mass": 4.0,
-    "radius": 0.0
-  },
-  "launch": {
-    "node": [
-      0,
-      11,
-      0
-    ],
-    "direction": [
-      1.0,
-      0.0,
-      0.0
-    ],
-    "kinetic_energy": 4.0
-  },
-  "detector": {
-    "min": [
-      0,
-      16,
-      0
-    ],
-    "max": [
-      3,
-      20,
-      0
-    ]
-  },
-  "level_charges": [
+  "shots": [
+    {
+      "particle": {
+        "charge": 2e-6,
+        "mass": 4.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          11,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 4.0
+      },
+      "detector": {
+        "min": [
+          0,
+          16,
+          0
+        ],
+        "max": [
+          3,
+          20,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [
     {
       "node": [
         18,
         10,
         0
       ],
-      "charge": 8000000.0
+      "kind": "charge",
+      "value": 8000000.0
     }
   ],
+  "coils": [],
   "limits": {
     "max_charges": 1,
     "magnitudes": [
@@ -67,6 +75,8 @@
     ],
     "allow_positive": true,
     "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
     "region": {
       "min": [
         3,
@@ -87,7 +97,8 @@
         6,
         0
       ],
-      "charge": -500000.0
+      "kind": "charge",
+      "value": -500000.0
     }
   ]
 }

@@ -1,45 +1,111 @@
-//! Level format: grid, charges, launch parameters, limits and reference solutions
-//! (SPEC §3, §7.9).
+//! Level format: grid, shots (particle, launch, detector), fixed elements, coils, limits
+//! and reference solutions (SPEC §3, §7.9).
 //!
 //! All positions are integer grid nodes. A node `n` lies at `n / subdivision` cell units.
 //! Refining the grid by an integer factor multiplies every node and the subdivision, so
 //! all existing nodes stay exactly where they were.
+//!
+//! Format history: version 1 had a single particle/launch/detector and `level_charges`
+//! with `"charge"` values; it is migrated on load. Version 2 has `shots` and `elements`.
 
 pub mod solve;
 
 use physics::DVec3;
 use physics::dynamics::{Kinematics, Particle};
-use physics::field::{Coulomb, FixedCharge};
-use physics::geometry::{Aabb, Region, Shape, Sphere};
+use physics::field::{Coulomb, FixedCharge, StaticField};
+use physics::geometry::{Aabb, Capsule, Region, Shape, Sphere, Torus};
+use physics::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 use physics::trajectory::Scenario;
 use physics::verify::Tolerances;
 use serde::{Deserialize, Serialize};
 
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Integer grid node `[x, y, z]`.
 pub type Node = [i64; 3];
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(from = "LevelFile")]
 pub struct Level {
     pub format_version: u32,
     /// Physics engine version the level (and its reference solution) was made with.
     pub engine_version: String,
     pub name: String,
-    #[serde(default)]
     pub description: String,
     pub grid: Grid,
     pub physics: WorldPhysics,
+    /// Particles to deliver; one setup must bring every shot to its detector.
+    pub shots: Vec<Shot>,
+    /// Elements placed by the level (charges and magnets; obstacles).
+    pub elements: Vec<Element>,
+    /// Coils placed by the level.
+    pub coils: Vec<Coil>,
+    pub limits: Limits,
+    /// A known solution (player elements), if any.
+    pub reference_solution: Vec<Element>,
+}
+
+/// One particle to deliver: its species, launch and detector.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Shot {
     pub particle: ParticleSpec,
     pub launch: Launch,
     pub detector: Detector,
-    /// Charges placed by the level (obstacles).
-    pub level_charges: Vec<Charge>,
-    pub limits: Limits,
-    /// A known solution (player charges), if any.
+}
+
+/// The on-disk form, accepting both format versions.
+#[derive(Deserialize)]
+struct LevelFile {
+    format_version: u32,
+    engine_version: String,
+    name: String,
     #[serde(default)]
-    pub reference_solution: Vec<Charge>,
+    description: String,
+    grid: Grid,
+    physics: WorldPhysics,
+    #[serde(default)]
+    shots: Vec<Shot>,
+    // Version 1 single shot.
+    particle: Option<ParticleSpec>,
+    launch: Option<Launch>,
+    detector: Option<Detector>,
+    #[serde(default, alias = "level_charges")]
+    elements: Vec<Element>,
+    #[serde(default)]
+    coils: Vec<Coil>,
+    limits: Limits,
+    #[serde(default)]
+    reference_solution: Vec<Element>,
+}
+
+impl From<LevelFile> for Level {
+    fn from(f: LevelFile) -> Self {
+        let mut shots = f.shots;
+        if let (Some(particle), Some(launch), Some(detector)) = (f.particle, f.launch, f.detector) {
+            shots.insert(
+                0,
+                Shot {
+                    particle,
+                    launch,
+                    detector,
+                },
+            );
+        }
+        Level {
+            format_version: FORMAT_VERSION.max(f.format_version),
+            engine_version: f.engine_version,
+            name: f.name,
+            description: f.description,
+            grid: f.grid,
+            physics: f.physics,
+            shots,
+            elements: f.elements,
+            coils: f.coils,
+            limits: f.limits,
+            reference_solution: f.reference_solution,
+        }
+    }
 }
 
 /// Grid of `nx × ny × nz` cells (`nz = 0` for a 2D level in the plane z = 0).
@@ -80,12 +146,26 @@ impl Grid {
     }
 }
 
+fn default_radius() -> f64 {
+    0.3
+}
+
+fn default_wire_radius() -> f64 {
+    0.1
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorldPhysics {
     /// Speed of light in internal units; `None` means Newtonian mechanics.
     pub c: Option<f64>,
     /// Radius of every fixed charge, in cell units.
     pub charge_radius: f64,
+    /// Radius of every magnet (uniformly magnetized sphere), in cell units.
+    #[serde(default = "default_radius")]
+    pub magnet_radius: f64,
+    /// Radius of coil wires, in cell units.
+    #[serde(default = "default_wire_radius")]
+    pub wire_radius: f64,
     pub t_max: f64,
     pub tolerances: TolerancesSpec,
 }
@@ -119,27 +199,84 @@ pub struct Launch {
     pub kinetic_energy: f64,
 }
 
-/// Detector B: the box spanned by two nodes.
+/// Detector: the box spanned by two nodes.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Detector {
     pub min: Node,
     pub max: Node,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ElementKind {
+    /// Fixed charge; `value` is its charge Q.
+    #[default]
+    Charge,
+    /// Magnet: a uniformly magnetized sphere with moment along +z; `value` is
+    /// `μ = μ₀ m_z / 4π` (field units, PHYSICS.md §2.2). In the plane its field is
+    /// `B_z = −μ / r³`.
+    Magnet,
+}
+
+/// An element on a grid node.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Charge {
+pub struct Element {
     pub node: Node,
-    pub charge: f64,
+    #[serde(default)]
+    pub kind: ElementKind,
+    #[serde(alias = "charge")]
+    pub value: f64,
+}
+
+impl Element {
+    pub fn charge(node: Node, q: f64) -> Self {
+        Self {
+            node,
+            kind: ElementKind::Charge,
+            value: q,
+        }
+    }
+
+    pub fn magnet(node: Node, mu: f64) -> Self {
+        Self {
+            node,
+            kind: ElementKind::Magnet,
+            value: mu,
+        }
+    }
+}
+
+/// A coil placed by the level, lying in the plane, with strength `kappa = μ₀ I / 4π`
+/// (current counter-clockwise seen from +z for positive `kappa`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "shape", rename_all = "lowercase")]
+pub enum Coil {
+    Circle {
+        center: Node,
+        /// Radius in cells.
+        radius: f64,
+        kappa: f64,
+    },
+    Polygon {
+        vertices: Vec<Node>,
+        kappa: f64,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Limits {
     pub max_charges: u32,
-    /// Allowed magnitudes |Q|.
+    /// Allowed charge magnitudes |Q|.
     pub magnitudes: Vec<f64>,
     pub allow_positive: bool,
     pub allow_negative: bool,
-    /// If set, player charges may only be placed inside this box of nodes (inclusive),
+    /// Maximum number of magnets the player may place.
+    #[serde(default)]
+    pub max_magnets: u32,
+    /// Allowed magnet strengths |μ| (either orientation).
+    #[serde(default)]
+    pub magnet_strengths: Vec<f64>,
+    /// If set, player elements may only be placed inside this box of nodes (inclusive),
     /// like the electrode region of a real instrument.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<Region2>,
@@ -162,6 +299,7 @@ impl Region2 {
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlacementError {
     TooManyCharges,
+    TooManyMagnets,
     OutsideGrid(Node),
     OutsideRegion(Node),
     NotInPlane(Node),
@@ -183,24 +321,27 @@ impl Level {
         self.physics.c.unwrap_or(f64::INFINITY)
     }
 
-    pub fn particle(&self) -> Particle {
+    pub fn particle(&self, shot: usize) -> Particle {
+        let p = self.shots[shot].particle;
         Particle {
-            charge: self.particle.charge,
-            mass: self.particle.mass,
-            radius: self.particle.radius,
+            charge: p.charge,
+            mass: p.mass,
+            radius: p.radius,
         }
     }
 
-    /// Initial momentum from the launch energy and direction.
-    pub fn launch_momentum(&self) -> DVec3 {
-        let d = self.launch.direction;
-        Kinematics::new(self.particle.mass, self.c())
-            .momentum_from_kinetic_energy(self.launch.kinetic_energy, DVec3::new(d[0], d[1], d[2]))
+    /// Initial momentum of a shot from its launch energy and direction.
+    pub fn launch_momentum(&self, shot: usize) -> DVec3 {
+        let s = &self.shots[shot];
+        let d = s.launch.direction;
+        Kinematics::new(s.particle.mass, self.c())
+            .momentum_from_kinetic_energy(s.launch.kinetic_energy, DVec3::new(d[0], d[1], d[2]))
     }
 
-    pub fn detector_region(&self) -> Region {
-        let a = self.grid.position(self.detector.min);
-        let b = self.grid.position(self.detector.max);
+    pub fn detector_region(&self, shot: usize) -> Region {
+        let d = self.shots[shot].detector;
+        let a = self.grid.position(d.min);
+        let b = self.grid.position(d.max);
         let mut min = a.min(b);
         let mut max = a.max(b);
         if self.grid.is_2d() {
@@ -221,93 +362,216 @@ impl Level {
     }
 
     /// Refines the grid by an integer factor, keeping every node in place.
-    pub fn refine(&mut self, factor: u32, player: &mut [Charge]) {
+    pub fn refine(&mut self, factor: u32, player: &mut [Element]) {
         assert!(factor >= 1);
         let f = i64::from(factor);
         let scale = |n: &mut Node| n.iter_mut().for_each(|v| *v *= f);
         self.grid.subdivision *= factor;
-        scale(&mut self.launch.node);
-        scale(&mut self.detector.min);
-        scale(&mut self.detector.max);
+        for s in &mut self.shots {
+            scale(&mut s.launch.node);
+            scale(&mut s.detector.min);
+            scale(&mut s.detector.max);
+        }
         if let Some(r) = &mut self.limits.region {
             scale(&mut r.min);
             scale(&mut r.max);
         }
-        for c in self
-            .level_charges
+        for c in &mut self.coils {
+            match c {
+                Coil::Circle { center, .. } => scale(center),
+                Coil::Polygon { vertices, .. } => vertices.iter_mut().for_each(scale),
+            }
+        }
+        for e in self
+            .elements
             .iter_mut()
             .chain(self.reference_solution.iter_mut())
             .chain(player.iter_mut())
         {
-            scale(&mut c.node);
+            scale(&mut e.node);
         }
     }
 
     /// Checks a player placement against the level's limits and occupied nodes.
-    pub fn check_placement(&self, player: &[Charge]) -> Result<(), PlacementError> {
-        if player.len() > self.limits.max_charges as usize {
+    pub fn check_placement(&self, player: &[Element]) -> Result<(), PlacementError> {
+        let count = |k: ElementKind| player.iter().filter(|e| e.kind == k).count();
+        if count(ElementKind::Charge) > self.limits.max_charges as usize {
             return Err(PlacementError::TooManyCharges);
         }
-        let mut occupied: Vec<Node> = self.level_charges.iter().map(|c| c.node).collect();
-        occupied.push(self.launch.node);
-        for c in player {
-            if !self.grid.contains(c.node) {
-                return Err(PlacementError::OutsideGrid(c.node));
+        if count(ElementKind::Magnet) > self.limits.max_magnets as usize {
+            return Err(PlacementError::TooManyMagnets);
+        }
+        let mut occupied: Vec<Node> = self.elements.iter().map(|c| c.node).collect();
+        occupied.extend(self.shots.iter().map(|s| s.launch.node));
+        for e in player {
+            if !self.grid.contains(e.node) {
+                return Err(PlacementError::OutsideGrid(e.node));
             }
-            if self.limits.region.is_some_and(|r| !r.contains(c.node)) {
-                return Err(PlacementError::OutsideRegion(c.node));
+            if self.limits.region.is_some_and(|r| !r.contains(e.node)) {
+                return Err(PlacementError::OutsideRegion(e.node));
             }
-            if self.grid.is_2d() && c.node[2] != 0 {
-                return Err(PlacementError::NotInPlane(c.node));
+            if self.grid.is_2d() && e.node[2] != 0 {
+                return Err(PlacementError::NotInPlane(e.node));
             }
-            if occupied.contains(&c.node) {
-                return Err(PlacementError::Occupied(c.node));
+            if occupied.contains(&e.node) {
+                return Err(PlacementError::Occupied(e.node));
             }
-            occupied.push(c.node);
-            let sign_ok = if c.charge > 0.0 {
-                self.limits.allow_positive
-            } else {
-                self.limits.allow_negative
-            };
-            if !sign_ok || c.charge == 0.0 {
-                return Err(PlacementError::SignNotAllowed(c.charge));
+            occupied.push(e.node);
+            if e.value == 0.0 {
+                return Err(PlacementError::SignNotAllowed(e.value));
             }
-            if !self.limits.magnitudes.contains(&c.charge.abs()) {
-                return Err(PlacementError::MagnitudeNotAllowed(c.charge));
+            // Magnitudes come from the level's list and are compared exactly.
+            let magnitude = e.value.abs().to_bits();
+            match e.kind {
+                ElementKind::Charge => {
+                    let sign_ok = if e.value > 0.0 {
+                        self.limits.allow_positive
+                    } else {
+                        self.limits.allow_negative
+                    };
+                    if !sign_ok {
+                        return Err(PlacementError::SignNotAllowed(e.value));
+                    }
+                    if !self
+                        .limits
+                        .magnitudes
+                        .iter()
+                        .any(|m| m.to_bits() == magnitude)
+                    {
+                        return Err(PlacementError::MagnitudeNotAllowed(e.value));
+                    }
+                }
+                ElementKind::Magnet => {
+                    if !self
+                        .limits
+                        .magnet_strengths
+                        .iter()
+                        .any(|m| m.to_bits() == magnitude)
+                    {
+                        return Err(PlacementError::MagnitudeNotAllowed(e.value));
+                    }
+                }
             }
         }
         Ok(())
     }
 
-    /// The physical scenario for a given player placement: level charges first, then
-    /// player charges, in the given order (the summation order of the field).
-    pub fn scenario(&self, player: &[Charge]) -> Scenario<Coulomb> {
-        let charges: Vec<FixedCharge> = self
-            .level_charges
+    /// The static field and the obstacles for a placement: level elements first, then
+    /// player elements, in the given order (the summation order of the field).
+    pub fn field(&self, player: &[Element]) -> (StaticField, Vec<Shape>) {
+        let all: Vec<&Element> = self.elements.iter().chain(player).collect();
+        let charges: Vec<FixedCharge> = all
             .iter()
-            .chain(player)
-            .map(|c| FixedCharge {
-                position: self.grid.position(c.node),
-                charge: c.charge,
+            .filter(|e| e.kind == ElementKind::Charge)
+            .map(|e| FixedCharge {
+                position: self.grid.position(e.node),
+                charge: e.value,
                 radius: self.physics.charge_radius,
             })
             .collect();
-        Scenario {
-            obstacles: charges
-                .iter()
-                .map(|c| {
-                    Shape::Sphere(Sphere {
-                        center: c.position,
-                        radius: c.radius,
-                    })
+        let dipoles: Vec<MagneticDipole> = all
+            .iter()
+            .filter(|e| e.kind == ElementKind::Magnet)
+            .map(|e| MagneticDipole {
+                position: self.grid.position(e.node),
+                moment: DVec3::new(0.0, 0.0, e.value),
+                radius: self.physics.magnet_radius,
+            })
+            .collect();
+        let wire = self.physics.wire_radius;
+        let mut loops = Vec::new();
+        let mut polygons = Vec::new();
+        let mut obstacles: Vec<Shape> = charges
+            .iter()
+            .map(|c| {
+                Shape::Sphere(Sphere {
+                    center: c.position,
+                    radius: c.radius,
                 })
-                .collect(),
-            field: Coulomb::new(&charges),
-            particle: self.particle(),
+            })
+            .collect();
+        obstacles.extend(dipoles.iter().map(|d| {
+            Shape::Sphere(Sphere {
+                center: d.position,
+                radius: d.radius,
+            })
+        }));
+        for coil in &self.coils {
+            match coil {
+                Coil::Circle {
+                    center,
+                    radius,
+                    kappa,
+                } => {
+                    let l = CircularLoop {
+                        center: self.grid.position(*center),
+                        normal: DVec3::Z,
+                        radius: *radius,
+                        kappa: *kappa,
+                        wire_radius: wire,
+                    };
+                    obstacles.push(Shape::Torus(Torus {
+                        center: l.center,
+                        normal: l.normal,
+                        major: l.radius,
+                        minor: wire,
+                    }));
+                    loops.push(l);
+                }
+                Coil::Polygon { vertices, kappa } => {
+                    let v: Vec<DVec3> = vertices.iter().map(|n| self.grid.position(*n)).collect();
+                    for i in 0..v.len() {
+                        obstacles.push(Shape::Capsule(Capsule {
+                            a: v[i],
+                            b: v[(i + 1) % v.len()],
+                            radius: wire,
+                        }));
+                    }
+                    polygons.push(PolygonCoil {
+                        vertices: v,
+                        kappa: *kappa,
+                        wire_radius: wire,
+                    });
+                }
+            }
+        }
+        let field = StaticField {
+            coulomb: Coulomb::new(&charges),
+            dipoles,
+            loops,
+            polygons,
+        };
+        (field, obstacles)
+    }
+
+    /// The physical scenario of one shot for a given player placement.
+    pub fn scenario(&self, shot: usize, player: &[Element]) -> Scenario<StaticField> {
+        let (field, obstacles) = self.field(player);
+        self.scenario_with(shot, field, obstacles)
+    }
+
+    /// Scenarios of all shots (sharing one field).
+    pub fn scenarios(&self, player: &[Element]) -> Vec<Scenario<StaticField>> {
+        let (field, obstacles) = self.field(player);
+        (0..self.shots.len())
+            .map(|i| self.scenario_with(i, field.clone(), obstacles.clone()))
+            .collect()
+    }
+
+    fn scenario_with(
+        &self,
+        shot: usize,
+        field: StaticField,
+        obstacles: Vec<Shape>,
+    ) -> Scenario<StaticField> {
+        Scenario {
+            field,
+            obstacles,
+            particle: self.particle(shot),
             c: self.c(),
-            x0: self.grid.position(self.launch.node),
-            p0: self.launch_momentum(),
-            detector: Some(self.detector_region()),
+            x0: self.grid.position(self.shots[shot].launch.node),
+            p0: self.launch_momentum(shot),
+            detector: Some(self.detector_region(shot)),
             bounds: Some(self.bounds()),
             t_max: self.physics.t_max,
         }
@@ -337,35 +601,44 @@ mod tests {
             physics: WorldPhysics {
                 c: Some(5.0),
                 charge_radius: 0.25,
+                magnet_radius: 0.3,
+                wire_radius: 0.1,
                 t_max: 100.0,
                 tolerances: TolerancesSpec {
                     preview: 1e-10,
                     verify: 1e-12,
                 },
             },
-            particle: ParticleSpec {
-                charge: 1.0,
-                mass: 1.0,
-                radius: 0.0,
-            },
-            launch: Launch {
-                node: [0, 5, 0],
-                direction: [1.0, 0.1, 0.0],
-                kinetic_energy: 0.3,
-            },
-            detector: Detector {
-                min: [19, 3, 0],
-                max: [20, 7, 0],
-            },
-            level_charges: vec![Charge {
-                node: [10, 5, 0],
-                charge: 0.1 + 0.2, // not exactly representable in decimal
+            shots: vec![Shot {
+                particle: ParticleSpec {
+                    charge: 1.0,
+                    mass: 1.0,
+                    radius: 0.0,
+                },
+                launch: Launch {
+                    node: [0, 5, 0],
+                    direction: [1.0, 0.1, 0.0],
+                    kinetic_energy: 0.3,
+                },
+                detector: Detector {
+                    min: [19, 3, 0],
+                    max: [20, 7, 0],
+                },
+            }],
+            // 0.1 + 0.2 is not exactly representable in decimal.
+            elements: vec![Element::charge([10, 5, 0], 0.1 + 0.2)],
+            coils: vec![Coil::Circle {
+                center: [10, 5, 0],
+                radius: 8.0,
+                kappa: 0.5,
             }],
             limits: Limits {
                 max_charges: 2,
                 magnitudes: vec![1.0, 2.0],
                 allow_positive: true,
                 allow_negative: true,
+                max_magnets: 1,
+                magnet_strengths: vec![5.0],
                 region: None,
             },
             reference_solution: vec![],
@@ -378,22 +651,45 @@ mod tests {
         let back = Level::from_json(&l.to_json()).unwrap();
         assert_eq!(l, back);
         assert_eq!(
-            l.level_charges[0].charge.to_bits(),
-            back.level_charges[0].charge.to_bits()
+            l.elements[0].value.to_bits(),
+            back.elements[0].value.to_bits()
         );
+    }
+
+    #[test]
+    fn version_1_files_are_migrated() {
+        let v1 = r#"{
+            "format_version": 1, "engine_version": "0.1.0", "name": "old",
+            "grid": {"nx": 20, "ny": 10, "nz": 0, "subdivision": 1},
+            "physics": {"c": 5.0, "charge_radius": 0.3, "t_max": 100.0,
+                        "tolerances": {"preview": 1e-10, "verify": 1e-12}},
+            "particle": {"charge": 1e-6, "mass": 1.0, "radius": 0.0},
+            "launch": {"node": [0, 5, 0], "direction": [1.0, 0.0, 0.0], "kinetic_energy": 0.5},
+            "detector": {"min": [18, 3, 0], "max": [20, 7, 0]},
+            "level_charges": [{"node": [10, 5, 0], "charge": 2e6}],
+            "limits": {"max_charges": 1, "magnitudes": [1e6], "allow_positive": true,
+                       "allow_negative": true},
+            "reference_solution": [{"node": [4, 4, 0], "charge": -1e6}]
+        }"#;
+        let l = Level::from_json(v1).unwrap();
+        assert_eq!(l.format_version, FORMAT_VERSION);
+        assert_eq!(l.shots.len(), 1);
+        assert_eq!(l.shots[0].launch.node, [0, 5, 0]);
+        assert_eq!(l.elements, vec![Element::charge([10, 5, 0], 2e6)]);
+        assert_eq!(l.reference_solution, vec![Element::charge([4, 4, 0], -1e6)]);
+        assert_eq!(l.limits.max_magnets, 0);
+        // Saving writes version 2, which loads back identically.
+        assert_eq!(Level::from_json(&l.to_json()).unwrap(), l);
     }
 
     #[test]
     fn refinement_keeps_positions() {
         let mut l = sample_level();
-        let before = l.scenario(&[]);
-        let mut player = vec![Charge {
-            node: [3, 4, 0],
-            charge: 1.0,
-        }];
+        let before = l.scenario(0, &[]);
+        let mut player = vec![Element::charge([3, 4, 0], 1.0)];
         let p_before = l.grid.position(player[0].node);
         l.refine(4, &mut player);
-        let after = l.scenario(&[]);
+        let after = l.scenario(0, &[]);
         assert_eq!(before.x0, after.x0);
         assert_eq!(before.obstacles, after.obstacles);
         assert_eq!(p_before, l.grid.position(player[0].node));
@@ -402,30 +698,25 @@ mod tests {
     #[test]
     fn placement_limits() {
         let l = sample_level();
-        let ok = Charge {
-            node: [5, 5, 0],
-            charge: -2.0,
-        };
+        let ok = Element::charge([5, 5, 0], -2.0);
         assert_eq!(l.check_placement(&[ok]), Ok(()));
-        let bad_mag = Charge {
-            node: [5, 5, 0],
-            charge: 3.0,
-        };
         assert!(matches!(
-            l.check_placement(&[bad_mag]),
+            l.check_placement(&[Element::charge([5, 5, 0], 3.0)]),
             Err(PlacementError::MagnitudeNotAllowed(_))
         ));
-        let occupied = Charge {
-            node: [10, 5, 0],
-            charge: 1.0,
-        };
         assert!(matches!(
-            l.check_placement(&[occupied]),
+            l.check_placement(&[Element::charge([10, 5, 0], 1.0)]),
             Err(PlacementError::Occupied(_))
         ));
         assert!(matches!(
             l.check_placement(&[ok, ok, ok]),
             Err(PlacementError::TooManyCharges)
+        ));
+        let magnet = Element::magnet([6, 6, 0], -5.0);
+        assert_eq!(l.check_placement(&[ok, magnet]), Ok(()));
+        assert!(matches!(
+            l.check_placement(&[magnet, Element::magnet([7, 6, 0], 5.0)]),
+            Err(PlacementError::TooManyMagnets)
         ));
     }
 }

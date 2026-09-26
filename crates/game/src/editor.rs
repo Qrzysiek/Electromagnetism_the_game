@@ -1,17 +1,20 @@
-//! Editor state: player charges on the grid, cursor, selected charge value. Independent of
-//! the rendering engine so it can be unit tested.
+//! Editor state: player elements (charges, magnets) on the grid, cursor, selected element.
+//! Independent of the rendering engine so it can be unit tested.
 
-use level::{Charge, Level, Node, PlacementError};
+use level::{Element, ElementKind, Level, Node, PlacementError};
 
 pub struct Editor {
     /// The level as loaded (recommended grid).
     base: Level,
     /// The level at the current refinement.
     pub level: Level,
-    pub placement: Vec<Charge>,
+    pub placement: Vec<Element>,
     pub cursor: Node,
-    /// Index into `level.limits.magnitudes` for new charges.
+    /// Kind of new elements.
+    pub kind: ElementKind,
+    /// Index into the allowed values of `kind` for new elements.
     pub magnitude_index: usize,
+    /// Sign of new elements (charges: sign of Q; magnets: moment along +z).
     pub positive: bool,
     /// Last rejected action, for the status line.
     pub message: Option<String>,
@@ -19,15 +22,29 @@ pub struct Editor {
     pub revision: u64,
 }
 
+/// Allowed magnitudes of a kind in a level.
+pub fn magnitudes(level: &Level, kind: ElementKind) -> &[f64] {
+    match kind {
+        ElementKind::Charge => &level.limits.magnitudes,
+        ElementKind::Magnet => &level.limits.magnet_strengths,
+    }
+}
+
 impl Editor {
     pub fn new(level: Level) -> Self {
         let m = level.grid.max_node();
-        let positive = level.limits.allow_positive;
+        let kind = if level.limits.max_charges == 0 && level.limits.max_magnets > 0 {
+            ElementKind::Magnet
+        } else {
+            ElementKind::Charge
+        };
+        let positive = kind == ElementKind::Magnet || level.limits.allow_positive;
         Self {
             base: level.clone(),
             level,
             placement: Vec::new(),
             cursor: [m[0] / 2, m[1] / 2, 0],
+            kind,
             magnitude_index: 0,
             positive,
             message: None,
@@ -39,20 +56,42 @@ impl Editor {
         self.level.grid.subdivision
     }
 
-    /// Value of a new charge.
-    pub fn selected_charge(&self) -> f64 {
-        let q = self
-            .level
-            .limits
-            .magnitudes
+    /// Value of a new element of the selected kind.
+    pub fn selected_value(&self) -> f64 {
+        let m = magnitudes(&self.level, self.kind)
             .get(self.magnitude_index)
             .copied()
             .unwrap_or(1.0);
-        if self.positive { q } else { -q }
+        if self.positive { m } else { -m }
     }
 
-    pub fn charges_left(&self) -> usize {
-        (self.level.limits.max_charges as usize).saturating_sub(self.placement.len())
+    pub fn left(&self, kind: ElementKind) -> usize {
+        let max = match kind {
+            ElementKind::Charge => self.level.limits.max_charges,
+            ElementKind::Magnet => self.level.limits.max_magnets,
+        } as usize;
+        let used = self.placement.iter().filter(|e| e.kind == kind).count();
+        max.saturating_sub(used)
+    }
+
+    /// Selects the kind of new elements (if the level allows it).
+    pub fn set_kind(&mut self, kind: ElementKind) {
+        let allowed = match kind {
+            ElementKind::Charge => self.level.limits.max_charges > 0,
+            ElementKind::Magnet => self.level.limits.max_magnets > 0,
+        };
+        if allowed && kind != self.kind {
+            self.kind = kind;
+            self.magnitude_index = 0;
+            self.positive = kind == ElementKind::Magnet || self.level.limits.allow_positive;
+        }
+    }
+
+    pub fn toggle_kind(&mut self) {
+        self.set_kind(match self.kind {
+            ElementKind::Charge => ElementKind::Magnet,
+            ElementKind::Magnet => ElementKind::Charge,
+        });
     }
 
     fn changed(&mut self) {
@@ -77,7 +116,7 @@ impl Editor {
     }
 
     /// Tries a new placement; keeps it if the level allows it.
-    fn try_placement(&mut self, trial: Vec<Charge>) -> Result<(), PlacementError> {
+    fn try_placement(&mut self, trial: Vec<Element>) -> Result<(), PlacementError> {
         match self.level.check_placement(&trial) {
             Ok(()) => {
                 self.placement = trial;
@@ -91,16 +130,17 @@ impl Editor {
         }
     }
 
-    /// Places the selected charge at the cursor (replacing a player charge there).
+    /// Places the selected element at the cursor (replacing a player element there).
     pub fn place(&mut self) -> Result<(), PlacementError> {
         let mut trial = self.placement.clone();
-        let c = Charge {
+        let e = Element {
             node: self.cursor,
-            charge: self.selected_charge(),
+            kind: self.kind,
+            value: self.selected_value(),
         };
         match self.player_index_at(self.cursor) {
-            Some(i) => trial[i] = c,
-            None => trial.push(c),
+            Some(i) => trial[i] = e,
+            None => trial.push(e),
         }
         self.try_placement(trial)
     }
@@ -112,36 +152,42 @@ impl Editor {
         }
     }
 
-    /// Flips the sign of the charge under the cursor, or of the selection if none.
+    /// Flips the sign of the element under the cursor, or of the selection if none.
     pub fn flip_sign(&mut self) {
         if let Some(i) = self.player_index_at(self.cursor) {
             let mut trial = self.placement.clone();
-            trial[i].charge = -trial[i].charge;
+            trial[i].value = -trial[i].value;
             let _ = self.try_placement(trial);
         } else {
             let limits = &self.level.limits;
-            if limits.allow_positive && limits.allow_negative {
+            let both = self.kind == ElementKind::Magnet
+                || (limits.allow_positive && limits.allow_negative);
+            if both {
                 self.positive = !self.positive;
             }
         }
     }
 
-    /// Cycles the magnitude of the charge under the cursor, or of the selection if none.
+    /// Cycles the magnitude of the element under the cursor, or of the selection if none.
     pub fn cycle_magnitude(&mut self, step: isize) {
-        let n = self.level.limits.magnitudes.len();
+        let kind = self
+            .player_index_at(self.cursor)
+            .map_or(self.kind, |i| self.placement[i].kind);
+        let list = magnitudes(&self.level, kind).to_vec();
+        let n = list.len();
+        if n == 0 {
+            return;
+        }
         let next = |i: usize| (i as isize + step).rem_euclid(n as isize) as usize;
         if let Some(i) = self.player_index_at(self.cursor) {
-            let q = self.placement[i].charge;
-            let current = self
-                .level
-                .limits
-                .magnitudes
+            let v = self.placement[i].value;
+            // Magnitudes are exact values from the level's list.
+            let current = list
                 .iter()
-                // Magnitudes are exact values from the level's list.
-                .position(|&m| m.to_bits() == q.abs().to_bits())
+                .position(|&m| m.to_bits() == v.abs().to_bits())
                 .unwrap_or(0);
             let mut trial = self.placement.clone();
-            trial[i].charge = q.signum() * self.level.limits.magnitudes[next(current)];
+            trial[i].value = v.signum() * list[next(current)];
             let _ = self.try_placement(trial);
         } else {
             self.magnitude_index = next(self.magnitude_index);
@@ -155,9 +201,9 @@ impl Editor {
         }
     }
 
-    /// Sets the grid refinement factor relative to the level's recommended grid. Charges
+    /// Sets the grid refinement factor relative to the level's recommended grid. Elements
     /// keep their positions; returning to a coarser grid is only possible while every
-    /// player charge still lies on a node of it.
+    /// player element still lies on a node of it.
     pub fn set_refinement(&mut self, factor: u32) {
         let current = self.subdivision() / self.base.grid.subdivision;
         if factor == current || factor == 0 {
@@ -179,15 +225,10 @@ impl Editor {
         let Some(placement) = self
             .placement
             .iter()
-            .map(|c| {
-                convert(c.node).map(|node| Charge {
-                    node,
-                    charge: c.charge,
-                })
-            })
+            .map(|c| convert(c.node).map(|node| Element { node, ..*c }))
             .collect::<Option<Vec<_>>>()
         else {
-            self.message = Some("A charge is not on a node of the coarser grid.".into());
+            self.message = Some("An element is not on a node of the coarser grid.".into());
             return;
         };
         let mut level = self.base.clone();
@@ -208,7 +249,7 @@ impl Editor {
     }
 
     /// Edits the level itself (sandbox). Works on the level's own grid: the refinement is
-    /// reset to 1 first (player charges that do not fit it are removed).
+    /// reset to 1 first (player elements that do not fit it are removed).
     pub fn edit_level(&mut self, f: impl FnOnce(&mut Level)) {
         if self.refinement() != 1 {
             self.set_refinement(1);
@@ -225,7 +266,7 @@ impl Editor {
             self.cursor[1].clamp(0, m[1]),
             0,
         ];
-        let n = self.level.limits.magnitudes.len();
+        let n = magnitudes(&self.level, self.kind).len();
         self.magnitude_index = self.magnitude_index.min(n.saturating_sub(1));
         self.changed();
     }
@@ -238,12 +279,13 @@ impl Editor {
 pub fn describe(e: &PlacementError) -> String {
     match e {
         PlacementError::TooManyCharges => "No charges left for this level.".into(),
+        PlacementError::TooManyMagnets => "No magnets left for this level.".into(),
         PlacementError::OutsideGrid(_) => "Outside the grid.".into(),
-        PlacementError::OutsideRegion(_) => "Charges can only go in the marked region.".into(),
+        PlacementError::OutsideRegion(_) => "Elements can only go in the marked region.".into(),
         PlacementError::NotInPlane(_) => "Must be in the plane.".into(),
         PlacementError::Occupied(_) => "That node is occupied.".into(),
         PlacementError::SignNotAllowed(_) => "That sign is not allowed here.".into(),
-        PlacementError::MagnitudeNotAllowed(_) => "That magnitude is not allowed here.".into(),
+        PlacementError::MagnitudeNotAllowed(_) => "That value is not allowed here.".into(),
     }
 }
 
@@ -261,11 +303,11 @@ mod tests {
         e.set_cursor([5, 5, 0]);
         e.place().unwrap();
         assert_eq!(e.placement.len(), 1);
-        let q0 = e.placement[0].charge;
+        let q0 = e.placement[0].value;
         e.flip_sign();
-        assert_eq!(e.placement[0].charge.to_bits(), (-q0).to_bits());
+        assert_eq!(e.placement[0].value.to_bits(), (-q0).to_bits());
         e.cycle_magnitude(1);
-        assert_ne!(e.placement[0].charge.abs().to_bits(), q0.abs().to_bits());
+        assert_ne!(e.placement[0].value.abs().to_bits(), q0.abs().to_bits());
         // The level allows one charge: a second one elsewhere is rejected.
         e.set_cursor([6, 5, 0]);
         assert!(e.place().is_err());
@@ -273,6 +315,9 @@ mod tests {
         e.set_cursor([5, 5, 0]);
         e.remove();
         assert!(e.placement.is_empty());
+        // No magnets in this level: the kind stays Charge.
+        e.toggle_kind();
+        assert_eq!(e.kind, ElementKind::Charge);
     }
 
     #[test]
@@ -285,10 +330,8 @@ mod tests {
         assert_eq!(e.level.grid.position(e.placement[0].node), before);
         e.set_refinement(1);
         assert_eq!(e.level.grid.position(e.placement[0].node), before);
-        // A charge on a fine-only node blocks coarsening.
+        // An element on a fine-only node blocks coarsening.
         e.set_refinement(2);
-        e.set_cursor([9, 13, 0]);
-        e.remove();
         e.set_cursor([4 * 2, 6 * 2, 0]);
         e.remove();
         e.set_cursor([9, 13, 0]);

@@ -74,13 +74,12 @@ fn level_hashes() -> BTreeMap<String, String> {
     paths.sort();
     for p in paths {
         let level = Level::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();
-        let v = verify(
-            &level.scenario(&level.reference_solution),
-            level.tolerances(),
-        );
         let mut h = Hasher::new();
-        h.trajectory(&v.preview);
-        h.trajectory(&v.verified);
+        for scn in level.scenarios(&level.reference_solution) {
+            let v = verify(&scn, level.tolerances());
+            h.trajectory(&v.preview);
+            h.trajectory(&v.verified);
+        }
         let name = p.file_stem().unwrap().to_string_lossy().into_owned();
         out.insert(name, format!("{:016x}", h.0));
     }

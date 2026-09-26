@@ -34,12 +34,15 @@ fn reference_solutions_are_verified() {
             Ok(()),
             "{name}"
         );
-        let v = verify(
-            &level.scenario(&level.reference_solution),
-            level.tolerances(),
-        );
-        assert_eq!(v.outcome(), Outcome::Arrived, "{name}");
-        assert!(v.status.is_verified(), "{name}: {:?}", v.status);
+        for (i, scn) in level
+            .scenarios(&level.reference_solution)
+            .iter()
+            .enumerate()
+        {
+            let v = verify(scn, level.tolerances());
+            assert_eq!(v.outcome(), Outcome::Arrived, "{name} shot {i}");
+            assert!(v.status.is_verified(), "{name} shot {i}: {:?}", v.status);
+        }
     }
 }
 
@@ -51,12 +54,18 @@ fn reference_solutions_are_verified() {
 #[test]
 fn neglected_radiation_is_below_numerical_accuracy() {
     for (name, level) in shipped_levels() {
-        let tr = run(
-            &level.scenario(&level.reference_solution),
-            &RunSettings::with_tolerance(level.physics.tolerances.verify),
-        );
-        let fraction = tr.radiated_energy / tr.kinetic_initial;
-        println!("{name}: radiated / T0 = {fraction:.2e}");
-        assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
+        for (i, scn) in level
+            .scenarios(&level.reference_solution)
+            .iter()
+            .enumerate()
+        {
+            let tr = run(
+                scn,
+                &RunSettings::with_tolerance(level.physics.tolerances.verify),
+            );
+            let fraction = tr.radiated_energy / tr.kinetic_initial;
+            println!("{name} shot {}: radiated / T0 = {fraction:.2e}", i + 1);
+            assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
+        }
     }
 }

@@ -6,64 +6,99 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, channel};
 
+use bevy::prelude::Vec2;
 use bevy_egui::egui;
 use level::{
-    Charge, Detector, ENGINE_VERSION, FORMAT_VERSION, Grid, Launch, Level, Limits, Node,
-    ParticleSpec, Region2, TolerancesSpec, WorldPhysics, solve,
+    Coil, Detector, ENGINE_VERSION, Element, ElementKind, FORMAT_VERSION, Grid, Launch, Level,
+    Limits, Node, ParticleSpec, Region2, Shot, TolerancesSpec, WorldPhysics, solve,
 };
 use physics::trajectory::{Outcome, RunSettings, run};
 use physics::verify::verify;
 
 use crate::Game;
+use crate::draw::to_vec2;
 use crate::ui::{fmt_si, parse_si};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tool {
-    LevelCharge,
-    PlayerCharge,
+    LevelElement,
+    PlayerElement,
     Launch,
     Aim,
     Detector,
     Region,
+    CoilCircle,
+    CoilRect,
 }
 
 pub struct SolverJob {
     rx: Mutex<Receiver<String>>,
-    solution_rx: Mutex<Receiver<Vec<Charge>>>,
+    solution_rx: Mutex<Receiver<Vec<Element>>>,
 }
 
 pub struct Sandbox {
     pub active: bool,
     pub tool: Tool,
-    /// Value of level charges placed with the LevelCharge tool.
+    /// Kind of level elements placed with the LevelElement tool.
+    pub element_kind: ElementKind,
+    /// Value of level charges placed with the LevelElement tool.
     pub charge_value: f64,
+    /// Value μ of level magnets placed with the LevelElement tool.
+    pub magnet_value: f64,
+    /// Strength κ of coils drawn with the coil tools.
+    pub coil_kappa: f64,
     pub file_name: String,
     pub overwrite: bool,
-    /// First corner of a detector being dragged.
+    /// First corner (or centre) of a box or coil being dragged.
     pub detector_drag: Option<Node>,
-    /// Allowed magnitudes as edited text.
+    /// Allowed charge magnitudes as edited text.
     pub magnitudes_text: String,
+    /// Allowed magnet strengths as edited text.
+    pub magnet_text: String,
     pub status: Vec<String>,
     pub solver: Option<SolverJob>,
     pub solver_report: Vec<String>,
-    pub solver_solution: Option<Vec<Charge>>,
+    pub solver_solution: Option<Vec<Element>>,
 }
 
 impl Default for Sandbox {
     fn default() -> Self {
         Self {
             active: false,
-            tool: Tool::LevelCharge,
+            tool: Tool::LevelElement,
+            element_kind: ElementKind::Charge,
             charge_value: 1e6,
+            magnet_value: 10.0,
+            coil_kappa: 1.0,
             file_name: "my_level".into(),
             overwrite: false,
             detector_drag: None,
             magnitudes_text: String::new(),
+            magnet_text: String::new(),
             status: Vec::new(),
             solver: None,
             solver_report: Vec::new(),
             solver_solution: None,
         }
+    }
+}
+
+fn default_shot() -> Shot {
+    Shot {
+        particle: ParticleSpec {
+            charge: 1e-6,
+            mass: 1.0,
+            radius: 0.0,
+        },
+        launch: Launch {
+            node: [0, 10, 0],
+            direction: [1.0, 0.0, 0.0],
+            kinetic_energy: 0.5,
+        },
+        detector: Detector {
+            min: [27, 8, 0],
+            max: [30, 12, 0],
+        },
     }
 }
 
@@ -83,53 +118,58 @@ pub fn empty_level() -> Level {
         physics: WorldPhysics {
             c: Some(5.0),
             charge_radius: 0.3,
+            magnet_radius: 0.3,
+            wire_radius: 0.1,
             t_max: 200.0,
             tolerances: TolerancesSpec {
                 preview: 1e-10,
                 verify: 1e-12,
             },
         },
-        particle: ParticleSpec {
-            charge: 1e-6,
-            mass: 1.0,
-            radius: 0.0,
-        },
-        launch: Launch {
-            node: [0, 10, 0],
-            direction: [1.0, 0.0, 0.0],
-            kinetic_energy: 0.5,
-        },
-        detector: Detector {
-            min: [27, 8, 0],
-            max: [30, 12, 0],
-        },
-        level_charges: Vec::new(),
+        shots: vec![default_shot()],
+        elements: Vec::new(),
+        coils: Vec::new(),
         limits: Limits {
             max_charges: 2,
             magnitudes: vec![1e6, 2e6, 4e6],
             allow_positive: true,
             allow_negative: true,
+            max_magnets: 0,
+            magnet_strengths: vec![],
             region: None,
         },
         reference_solution: Vec::new(),
     }
 }
 
-fn magnitudes_to_text(m: &[f64]) -> String {
+fn list_to_text(m: &[f64]) -> String {
     m.iter()
         .map(|v| format!("{v:e}"))
         .collect::<Vec<_>>()
         .join(", ")
 }
 
+fn parse_list(text: &str) -> Vec<f64> {
+    text.split(',')
+        .filter_map(|t| parse_si(t.trim()))
+        .filter(|v| *v > 0.0 && v.is_finite())
+        .collect()
+}
+
 pub fn custom_dir() -> PathBuf {
     crate::levels_dir().join("custom")
+}
+
+fn sync_texts(game: &mut Game) {
+    let limits = &game.editor.base().limits;
+    game.sandbox.magnitudes_text = list_to_text(&limits.magnitudes);
+    game.sandbox.magnet_text = list_to_text(&limits.magnet_strengths);
 }
 
 /// Enters sandbox mode, editing the level currently loaded.
 pub fn enter(game: &mut Game) {
     game.sandbox.active = true;
-    game.sandbox.magnitudes_text = magnitudes_to_text(&game.editor.base().limits.magnitudes);
+    sync_texts(game);
     game.sandbox.file_name = slug(&game.editor.base().name);
     game.editor.edit_level(|_| {});
 }
@@ -149,48 +189,89 @@ fn slug(name: &str) -> String {
     if s.is_empty() { "my_level".into() } else { s }
 }
 
-/// Handles a click (or drag end) on grid node `node` with the current tool. Returns true
-/// if the click was consumed (player-charge clicks are left to the normal editor).
-pub fn pointer(game: &mut Game, node: Node, pressed: bool, released: bool, right: bool) -> bool {
+/// Index of the coil whose wire is nearest to `p` (within 0.6 cells).
+fn coil_near(level: &Level, p: Vec2) -> Option<usize> {
+    let grid = level.grid;
+    level
+        .coils
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            let d = match c {
+                Coil::Circle { center, radius, .. } => {
+                    #[allow(clippy::cast_possible_truncation)]
+                    let r = *radius as f32;
+                    (p.distance(to_vec2(grid.position(*center))) - r).abs()
+                }
+                Coil::Polygon { vertices, .. } => {
+                    let v: Vec<Vec2> = vertices
+                        .iter()
+                        .map(|n| to_vec2(grid.position(*n)))
+                        .collect();
+                    (0..v.len())
+                        .map(|k| {
+                            let (a, b) = (v[k], v[(k + 1) % v.len()]);
+                            let t = ((p - a).dot(b - a) / (b - a).length_squared()).clamp(0.0, 1.0);
+                            p.distance(a + (b - a) * t)
+                        })
+                        .fold(f32::INFINITY, f32::min)
+                }
+            };
+            (i, d)
+        })
+        .filter(|&(_, d)| d < 0.6)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| i)
+}
+
+/// Handles a click (or drag end) on grid node `node` (world point `world`) with the
+/// current tool. Returns true if the click was consumed (player-element clicks are left to
+/// the normal editor).
+pub fn pointer(
+    game: &mut Game,
+    node: Node,
+    world: Vec2,
+    pressed: bool,
+    released: bool,
+    right: bool,
+) -> bool {
     let tool = game.sandbox.tool;
+    let shot = game.active_shot;
     match tool {
-        Tool::PlayerCharge => false,
-        Tool::LevelCharge => {
+        Tool::PlayerElement => false,
+        Tool::LevelElement => {
             if !(pressed || right) {
                 return true;
             }
-            let value = game.sandbox.charge_value;
-            let launch = game.editor.base().launch.node;
+            let kind = game.sandbox.element_kind;
+            let value = match kind {
+                ElementKind::Charge => game.sandbox.charge_value,
+                ElementKind::Magnet => game.sandbox.magnet_value,
+            };
             game.editor.edit_level(|l| {
-                let existing = l.level_charges.iter().position(|c| c.node == node);
+                let launch = l.shots.iter().any(|s| s.launch.node == node);
+                let existing = l.elements.iter().position(|c| c.node == node);
                 if right {
                     if let Some(i) = existing {
-                        l.level_charges.remove(i);
+                        l.elements.remove(i);
                     }
-                } else if node != launch && value != 0.0 {
+                } else if !launch && value != 0.0 {
+                    let e = Element { node, kind, value };
                     match existing {
-                        Some(i) => l.level_charges[i].charge = value,
-                        None => l.level_charges.push(Charge {
-                            node,
-                            charge: value,
-                        }),
+                        Some(i) => l.elements[i] = e,
+                        None => l.elements.push(e),
                     }
                 }
             });
-            // A player charge on the same node would overlap.
+            // A player element on the same node would overlap.
             game.editor.placement.retain(|c| c.node != node);
             true
         }
         Tool::Launch => {
             if pressed {
-                let occupied = game
-                    .editor
-                    .base()
-                    .level_charges
-                    .iter()
-                    .any(|c| c.node == node);
+                let occupied = game.editor.base().elements.iter().any(|c| c.node == node);
                 if !occupied {
-                    game.editor.edit_level(|l| l.launch.node = node);
+                    game.editor.edit_level(|l| l.shots[shot].launch.node = node);
                 }
             }
             true
@@ -198,31 +279,69 @@ pub fn pointer(game: &mut Game, node: Node, pressed: bool, released: bool, right
         Tool::Aim => {
             if pressed {
                 game.editor.edit_level(|l| {
-                    let a = l.grid.position(l.launch.node);
+                    let a = l.grid.position(l.shots[shot].launch.node);
                     let b = l.grid.position(node);
                     let d = b - a;
                     if d.length() > 0.0 {
                         let d = d.normalize();
-                        l.launch.direction = [d.x, d.y, 0.0];
+                        l.shots[shot].launch.direction = [d.x, d.y, 0.0];
                     }
                 });
             }
             true
         }
-        Tool::Detector | Tool::Region => {
+        Tool::Detector | Tool::Region | Tool::CoilCircle | Tool::CoilRect => {
+            if right && matches!(tool, Tool::CoilCircle | Tool::CoilRect) {
+                if let Some(i) = coil_near(game.editor.base(), world) {
+                    game.editor.edit_level(|l| {
+                        l.coils.remove(i);
+                    });
+                }
+                return true;
+            }
             if pressed {
                 game.sandbox.detector_drag = Some(node);
             }
             if released && let Some(a) = game.sandbox.detector_drag.take() {
                 let min = [a[0].min(node[0]), a[1].min(node[1]), 0];
                 let max = [a[0].max(node[0]), a[1].max(node[1]), 0];
-                if tool == Tool::Region {
-                    let region = Region2 { min, max };
-                    game.editor.edit_level(|l| l.limits.region = Some(region));
-                    game.editor.placement.retain(|c| region.contains(c.node));
-                } else if min[0] < max[0] && min[1] < max[1] {
-                    game.editor
-                        .edit_level(|l| l.detector = Detector { min, max });
+                let non_empty = min[0] < max[0] && min[1] < max[1];
+                let kappa = game.sandbox.coil_kappa;
+                match tool {
+                    Tool::Region => {
+                        let region = Region2 { min, max };
+                        game.editor.edit_level(|l| l.limits.region = Some(region));
+                        game.editor.placement.retain(|c| region.contains(c.node));
+                    }
+                    Tool::Detector if non_empty => {
+                        game.editor
+                            .edit_level(|l| l.shots[shot].detector = Detector { min, max });
+                    }
+                    Tool::CoilCircle => {
+                        let grid = game.editor.base().grid;
+                        let radius = grid.position(a).distance(grid.position(node));
+                        if radius > 0.5 {
+                            game.editor.edit_level(|l| {
+                                l.coils.push(Coil::Circle {
+                                    center: a,
+                                    radius,
+                                    kappa,
+                                });
+                            });
+                        }
+                    }
+                    Tool::CoilRect if non_empty => {
+                        // Counter-clockwise, so positive κ means counter-clockwise current.
+                        let vertices = vec![
+                            [min[0], min[1], 0],
+                            [max[0], min[1], 0],
+                            [max[0], max[1], 0],
+                            [min[0], max[1], 0],
+                        ];
+                        game.editor
+                            .edit_level(|l| l.coils.push(Coil::Polygon { vertices, kappa }));
+                    }
+                    _ => {}
                 }
             }
             true
@@ -259,24 +378,25 @@ pub fn poll(game: &mut Game) {
 fn start_solver(game: &mut Game) {
     let level = game.editor.base().clone();
     let (tx, rx) = channel::<String>();
-    let (sol_tx, sol_rx) = channel::<Vec<Charge>>();
+    let (sol_tx, sol_rx) = channel::<Vec<Element>>();
     game.sandbox.solver_report = vec!["Searching…".into()];
     game.sandbox.solver_solution = None;
     std::thread::spawn(move || {
         let (score, outcome) = solve::objective(&level, &[]);
         let _ = tx.send(format!(
-            "Without player charges: {outcome:?} (closest approach to the detector {score:.2})"
+            "Without player elements: {outcome:?} (summed distance to the detectors {score:.2})"
         ));
-        let mut best: Option<Vec<Charge>> = None;
-        let singles = solve::single_charge_solutions(&level);
-        let _ = tx.send(format!("Verified 1-charge solutions: {}", singles.len()));
+        let mut best: Option<Vec<Element>> = None;
+        let singles = solve::single_element_solutions(&level);
+        let _ = tx.send(format!("Verified 1-element solutions: {}", singles.len()));
         if let Some(c) = singles.first() {
             best = Some(vec![*c]);
         }
-        for k in 2..=level.limits.max_charges.min(4) as usize {
+        let max = (level.limits.max_charges + level.limits.max_magnets).min(4) as usize;
+        for k in 2..=max {
             let found = solve::anneal(&level, k, 32, 300, 0x5EED + k as u64);
             let _ = tx.send(format!(
-                "Verified {k}-charge solutions found: {}",
+                "Verified {k}-element solutions found: {}",
                 found.len()
             ));
             if best.is_none() {
@@ -300,31 +420,40 @@ fn save(game: &mut Game) {
     level.engine_version = ENGINE_VERSION.to_string();
     let mut status = Vec::new();
     if level.reference_solution.is_empty() {
-        status.push("No reference solution stored (use a solver result or your charges).".into());
+        status.push("No reference solution stored (use a solver result or your elements).".into());
     } else {
-        let v = verify(
-            &level.scenario(&level.reference_solution),
-            level.tolerances(),
-        );
-        if v.outcome() == Outcome::Arrived && v.status.is_verified() {
-            status.push("Reference solution: verified.".into());
-        } else {
-            status.push(format!(
-                "Warning: reference solution not verified ({:?}, {:?}).",
-                v.outcome(),
-                v.status
-            ));
+        let mut all_ok = true;
+        for (i, scn) in level
+            .scenarios(&level.reference_solution)
+            .iter()
+            .enumerate()
+        {
+            let v = verify(scn, level.tolerances());
+            if !(v.outcome() == Outcome::Arrived && v.status.is_verified()) {
+                all_ok = false;
+                status.push(format!(
+                    "Warning: shot {}: reference solution not verified ({:?}, {:?}).",
+                    i + 1,
+                    v.outcome(),
+                    v.status
+                ));
+            }
+            let tr = run(
+                scn,
+                &RunSettings::with_tolerance(level.physics.tolerances.verify),
+            );
+            let rad = tr.radiated_energy / tr.kinetic_initial;
+            if rad > 1e-10 {
+                status.push(format!(
+                    "Warning: shot {}: neglected radiation is {rad:.1e} × T₀ (> 1e-10): \
+                     physically inconsistent. Use a smaller particle charge with larger \
+                     fixed charges.",
+                    i + 1
+                ));
+            }
         }
-        let tr = run(
-            &level.scenario(&level.reference_solution),
-            &RunSettings::with_tolerance(level.physics.tolerances.verify),
-        );
-        let rad = tr.radiated_energy / tr.kinetic_initial;
-        if rad > 1e-10 {
-            status.push(format!(
-                "Warning: neglected radiation is {rad:.1e} × T₀ (> 1e-10): physically inconsistent. \
-                 Use a smaller particle charge with larger fixed charges."
-            ));
+        if all_ok {
+            status.push("Reference solution: verified for every shot.".into());
         }
     }
     let dir = custom_dir();
@@ -349,6 +478,95 @@ fn save(game: &mut Game) {
     game.sandbox.status = status;
 }
 
+fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
+    let small = |ui: &mut egui::Ui, t: &str| {
+        ui.label(egui::RichText::new(t).small());
+    };
+    match game.sandbox.tool {
+        Tool::LevelElement => {
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut game.sandbox.element_kind,
+                    ElementKind::Charge,
+                    "charge",
+                );
+                ui.selectable_value(
+                    &mut game.sandbox.element_kind,
+                    ElementKind::Magnet,
+                    "magnet",
+                );
+                let value = match game.sandbox.element_kind {
+                    ElementKind::Charge => &mut game.sandbox.charge_value,
+                    ElementKind::Magnet => &mut game.sandbox.magnet_value,
+                };
+                let r = ui.add(
+                    egui::DragValue::new(value)
+                        .speed(1e4)
+                        .custom_formatter(|v, _| fmt_si(v))
+                        .custom_parser(parse_si),
+                );
+                game.text_focus |= r.has_focus();
+                if ui.button("±").clicked() {
+                    *value = -*value;
+                }
+            });
+            small(
+                ui,
+                "Left click: place or set value. Right click: remove. Magnet value μ = μ₀m/4π \
+                 (positive: moment out of the plane; in the plane B_z = −μ/r³).",
+            );
+        }
+        Tool::PlayerElement => {
+            small(
+                ui,
+                "Places elements as a player would (with the limits below).",
+            );
+        }
+        Tool::Launch => small(
+            ui,
+            "Click a node to move the launch point of the active shot.",
+        ),
+        Tool::Aim => small(
+            ui,
+            "Click a point: the active shot's launch direction points at it.",
+        ),
+        Tool::Detector => small(
+            ui,
+            "Active shot's detector: press on one corner, release on the opposite one.",
+        ),
+        Tool::Region => {
+            small(ui, "Drag the box where players may place elements.");
+            if ui.button("Remove region (place anywhere)").clicked() {
+                game.editor.edit_level(|l| l.limits.region = None);
+            }
+        }
+        Tool::CoilCircle | Tool::CoilRect => {
+            ui.horizontal(|ui| {
+                ui.label("κ = μ₀I/4π:");
+                let r = ui.add(
+                    egui::DragValue::new(&mut game.sandbox.coil_kappa)
+                        .speed(0.01)
+                        .custom_formatter(|v, _| fmt_si(v))
+                        .custom_parser(parse_si),
+                );
+                game.text_focus |= r.has_focus();
+                if ui.button("±").clicked() {
+                    game.sandbox.coil_kappa = -game.sandbox.coil_kappa;
+                }
+            });
+            small(
+                ui,
+                if game.sandbox.tool == Tool::CoilCircle {
+                    "Press at the centre, release at the radius. Right click on a wire: remove."
+                } else {
+                    "Drag the rectangle. Right click on a wire: remove. Positive κ: \
+                     counter-clockwise current."
+                },
+            );
+        }
+    }
+}
+
 /// Sandbox section of the side panel.
 #[allow(clippy::too_many_lines)]
 pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
@@ -361,79 +579,71 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
     ui.horizontal(|ui| {
         if ui.button("New empty level").clicked() {
             let l = empty_level();
-            game.sandbox.magnitudes_text = magnitudes_to_text(&l.limits.magnitudes);
             game.sandbox.file_name = slug(&l.name);
             game.sandbox.solver_report.clear();
             game.sandbox.solver_solution = None;
             game.sandbox.status.clear();
             game.editor = crate::editor::Editor::new(l);
+            game.active_shot = 0;
+            sync_texts(game);
         }
         if ui.button("Play-test").clicked() {
             game.sandbox.active = false;
         }
     });
 
+    // Shots.
+    let n = game.editor.base().shots.len();
+    ui.horizontal(|ui| {
+        ui.label(format!("Shot {} of {n}", game.active_shot + 1));
+        if ui.button("◀").clicked() {
+            game.cycle_shot(-1);
+        }
+        if ui.button("▶").clicked() {
+            game.cycle_shot(1);
+        }
+        if ui
+            .button("+ copy")
+            .on_hover_text("Add a shot (copy of the active one)")
+            .clicked()
+        {
+            let s = game.editor.base().shots[game.active_shot];
+            game.editor.edit_level(|l| l.shots.push(s));
+            game.active_shot = n;
+        }
+        if n > 1 && ui.button("− remove").clicked() {
+            let i = game.active_shot;
+            game.editor.edit_level(|l| {
+                l.shots.remove(i);
+            });
+            game.active_shot = i.saturating_sub(1);
+        }
+    });
+
     ui.label("Tool (click on the map):");
     ui.horizontal_wrapped(|ui| {
         let t = &mut game.sandbox.tool;
-        ui.selectable_value(t, Tool::LevelCharge, "Level charge");
-        ui.selectable_value(t, Tool::PlayerCharge, "Player charge");
+        ui.selectable_value(t, Tool::LevelElement, "Level element");
+        ui.selectable_value(t, Tool::PlayerElement, "Player element");
         ui.selectable_value(t, Tool::Launch, "Launch point");
         ui.selectable_value(t, Tool::Aim, "Aim");
         ui.selectable_value(t, Tool::Detector, "Detector (drag)");
         ui.selectable_value(t, Tool::Region, "Player region (drag)");
+        ui.selectable_value(t, Tool::CoilCircle, "Coil ○ (drag)");
+        ui.selectable_value(t, Tool::CoilRect, "Coil □ (drag)");
     });
-    match game.sandbox.tool {
-        Tool::LevelCharge => {
-            ui.horizontal(|ui| {
-                ui.label("Charge value:");
-                let r = ui.add(
-                    egui::DragValue::new(&mut game.sandbox.charge_value)
-                        .speed(1e4)
-                        .custom_formatter(|v, _| fmt_si(v))
-                        .custom_parser(parse_si),
-                );
-                game.text_focus |= r.has_focus();
-                if ui.button("±").clicked() {
-                    game.sandbox.charge_value = -game.sandbox.charge_value;
-                }
-            });
-            ui.label(
-                egui::RichText::new("Left click: place or set value. Right click: remove.").small(),
-            );
-        }
-        Tool::PlayerCharge => {
-            ui.label(
-                egui::RichText::new("Places charges as a player would (with the limits below).")
-                    .small(),
-            );
-        }
-        Tool::Launch => {
-            ui.label(egui::RichText::new("Click a node to move the launch point.").small());
-        }
-        Tool::Aim => {
-            ui.label(
-                egui::RichText::new("Click a point: the launch direction points at it.").small(),
-            );
-        }
-        Tool::Detector => {
-            ui.label(
-                egui::RichText::new("Press on one corner, release on the opposite corner.").small(),
-            );
-        }
-        Tool::Region => {
-            ui.label(egui::RichText::new("Drag the box where players may place charges.").small());
-            if ui.button("Remove region (place anywhere)").clicked() {
-                game.editor.edit_level(|l| l.limits.region = None);
-            }
-        }
-    }
+    tool_help(ui, game);
     ui.separator();
 
     // Numeric properties: edit a copy, then apply if anything changed.
+    let shot = game.active_shot;
     let mut l = game.editor.base().clone();
     let before = l.clone();
     let mut focus = false;
+    let drag = |ui: &mut egui::Ui, v: &mut f64, speed: f64, lo: f64, hi: f64| {
+        ui.add(egui::DragValue::new(v).speed(speed).range(lo..=hi))
+            .has_focus()
+    };
     egui::Grid::new("sandbox_props")
         .num_columns(2)
         .show(ui, |ui| {
@@ -441,7 +651,7 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
             focus |= ui.text_edit_singleline(&mut l.name).has_focus();
             ui.end_row();
             ui.label("Description");
-            focus |= ui.text_edit_singleline(&mut l.description).has_focus();
+            focus |= ui.text_edit_multiline(&mut l.description).has_focus();
             ui.end_row();
             ui.label("Grid (cells)");
             ui.horizontal(|ui| {
@@ -472,43 +682,30 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
                     l.physics.c = None;
                 } else {
                     let mut c = l.physics.c.unwrap_or(5.0);
-                    focus |= ui
-                        .add(egui::DragValue::new(&mut c).speed(0.05).range(0.01..=1e9))
-                        .has_focus();
+                    focus |= drag(ui, &mut c, 0.05, 0.01, 1e9);
                     l.physics.c = Some(c);
                 }
             });
             ui.end_row();
-            ui.label("Particle q, m");
+            let s = &mut l.shots[shot];
+            ui.label(format!("Shot {}: particle q, m", shot + 1));
             ui.horizontal(|ui| {
                 focus |= ui
                     .add(
-                        egui::DragValue::new(&mut l.particle.charge)
+                        egui::DragValue::new(&mut s.particle.charge)
                             .speed(1e-8)
                             .custom_formatter(|v, _| fmt_si(v))
                             .custom_parser(parse_si),
                     )
                     .has_focus();
-                focus |= ui
-                    .add(
-                        egui::DragValue::new(&mut l.particle.mass)
-                            .speed(0.01)
-                            .range(1e-12..=1e12),
-                    )
-                    .has_focus();
+                focus |= drag(ui, &mut s.particle.mass, 0.01, 1e-12, 1e12);
             });
             ui.end_row();
-            ui.label("Launch energy T₀");
-            focus |= ui
-                .add(
-                    egui::DragValue::new(&mut l.launch.kinetic_energy)
-                        .speed(0.01)
-                        .range(1e-9..=1e9),
-                )
-                .has_focus();
+            ui.label(format!("Shot {}: launch energy T₀", shot + 1));
+            focus |= drag(ui, &mut s.launch.kinetic_energy, 0.01, 1e-9, 1e9);
             ui.end_row();
-            ui.label("Launch angle (°)");
-            let d = l.launch.direction;
+            ui.label(format!("Shot {}: launch angle (°)", shot + 1));
+            let d = s.launch.direction;
             let mut angle = d[1].atan2(d[0]).to_degrees();
             if ui
                 .add(
@@ -519,54 +716,53 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
                 .changed()
             {
                 let a = angle.to_radians();
-                l.launch.direction = [a.cos(), a.sin(), 0.0];
+                s.launch.direction = [a.cos(), a.sin(), 0.0];
             }
             ui.end_row();
-            ui.label("Charge radius");
-            focus |= ui
-                .add(
-                    egui::DragValue::new(&mut l.physics.charge_radius)
-                        .speed(0.01)
-                        .range(0.01..=2.0),
-                )
-                .has_focus();
+            ui.label("Radii: charge, magnet, wire");
+            ui.horizontal(|ui| {
+                focus |= drag(ui, &mut l.physics.charge_radius, 0.01, 0.01, 2.0);
+                focus |= drag(ui, &mut l.physics.magnet_radius, 0.01, 0.01, 2.0);
+                focus |= drag(ui, &mut l.physics.wire_radius, 0.01, 0.01, 1.0);
+            });
             ui.end_row();
             ui.label("Time limit");
-            focus |= ui
-                .add(
-                    egui::DragValue::new(&mut l.physics.t_max)
-                        .speed(1.0)
-                        .range(1.0..=1e7),
-                )
-                .has_focus();
+            focus |= drag(ui, &mut l.physics.t_max, 1.0, 1.0, 1e7);
             ui.end_row();
             ui.label("Player charges (max)");
             focus |= ui
                 .add(egui::DragValue::new(&mut l.limits.max_charges).range(0..=20))
                 .has_focus();
             ui.end_row();
-            ui.label("Allowed magnitudes");
+            ui.label("Allowed charge magnitudes");
             let r = ui.text_edit_singleline(&mut game.sandbox.magnitudes_text);
             focus |= r.has_focus();
             if r.lost_focus() {
-                let parsed: Vec<f64> = game
-                    .sandbox
-                    .magnitudes_text
-                    .split(',')
-                    .filter_map(|t| t.trim().parse::<f64>().ok())
-                    .filter(|v| *v > 0.0 && v.is_finite())
-                    .collect();
+                let parsed = parse_list(&game.sandbox.magnitudes_text);
                 if !parsed.is_empty() {
                     l.limits.magnitudes = parsed;
                 }
-                game.sandbox.magnitudes_text = magnitudes_to_text(&l.limits.magnitudes);
+                game.sandbox.magnitudes_text = list_to_text(&l.limits.magnitudes);
             }
             ui.end_row();
-            ui.label("Signs allowed");
+            ui.label("Charge signs allowed");
             ui.horizontal(|ui| {
                 ui.checkbox(&mut l.limits.allow_positive, "+");
                 ui.checkbox(&mut l.limits.allow_negative, "−");
             });
+            ui.end_row();
+            ui.label("Player magnets (max)");
+            focus |= ui
+                .add(egui::DragValue::new(&mut l.limits.max_magnets).range(0..=20))
+                .has_focus();
+            ui.end_row();
+            ui.label("Allowed magnet strengths μ");
+            let r = ui.text_edit_singleline(&mut game.sandbox.magnet_text);
+            focus |= r.has_focus();
+            if r.lost_focus() {
+                l.limits.magnet_strengths = parse_list(&game.sandbox.magnet_text);
+                game.sandbox.magnet_text = list_to_text(&l.limits.magnet_strengths);
+            }
             ui.end_row();
         });
     game.text_focus |= focus;
@@ -577,12 +773,14 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
         // Keep everything inside the (possibly resized) grid.
         let m = l.grid.max_node();
         let clamp = |n: Node| [n[0].clamp(0, m[0]), n[1].clamp(0, m[1]), 0];
-        l.level_charges.retain(|c| l.grid.contains(c.node));
-        l.reference_solution.retain(|c| l.grid.contains(c.node));
-        l.launch.node = clamp(l.launch.node);
-        l.detector.min = clamp(l.detector.min);
-        l.detector.max = clamp(l.detector.max);
         let grid = l.grid;
+        l.elements.retain(|c| grid.contains(c.node));
+        l.reference_solution.retain(|c| grid.contains(c.node));
+        for s in &mut l.shots {
+            s.launch.node = clamp(s.launch.node);
+            s.detector.min = clamp(s.detector.min);
+            s.detector.max = clamp(s.detector.max);
+        }
         game.editor.edit_level(|target| *target = l);
         game.editor.placement.retain(|c| grid.contains(c.node));
     }
@@ -591,9 +789,11 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
     // Solutions.
     ui.label(egui::RichText::new("Solution").strong());
     let reference = game.editor.base().reference_solution.len();
-    ui.label(format!("Stored reference solution: {reference} charge(s)."));
+    ui.label(format!(
+        "Stored reference solution: {reference} element(s)."
+    ));
     ui.horizontal_wrapped(|ui| {
-        if ui.button("Use my charges as reference").clicked() {
+        if ui.button("Use my elements as reference").clicked() {
             let p = game.editor.placement.clone();
             game.editor.edit_level(|l| l.reference_solution = p);
         }
@@ -621,7 +821,7 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
     }
     if let Some(sol) = game.sandbox.solver_solution.clone() {
         ui.horizontal(|ui| {
-            ui.label(format!("Found: {} charge(s)", sol.len()));
+            ui.label(format!("Found: {} element(s)", sol.len()));
             if ui.button("Show").clicked() {
                 game.editor.placement = sol.clone();
                 game.editor.edit_level(|_| {});

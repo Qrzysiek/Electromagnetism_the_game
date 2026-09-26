@@ -49,6 +49,16 @@ impl Coulomb {
     }
 }
 
+impl Coulomb {
+    /// Positions and charges, in summation order.
+    pub fn charges(&self) -> impl Iterator<Item = (DVec3, f64)> + '_ {
+        self.positions
+            .iter()
+            .copied()
+            .zip(self.charges.iter().copied())
+    }
+}
+
 impl FieldSolver for Coulomb {
     fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
         let mut e = DVec3::ZERO;
