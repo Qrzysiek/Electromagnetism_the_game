@@ -53,12 +53,37 @@ impl Capsule {
     }
 }
 
+/// A box with one axis along z, rotated in the plane (an electrode), inflated by
+/// `margin` (the corners are rounded, as for a Minkowski sum with a sphere).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OrientedBox {
+    pub center: DVec3,
+    /// Unit in-plane axis of the half-length.
+    pub axis: DVec3,
+    pub half: DVec3,
+    pub margin: f64,
+}
+
+impl OrientedBox {
+    /// Exact Euclidean signed distance (1-Lipschitz).
+    pub fn signed_distance(&self, x: DVec3) -> f64 {
+        let d = x - self.center;
+        let v = DVec3::new(-self.axis.y, self.axis.x, 0.0);
+        let local = DVec3::new(d.dot(self.axis), d.dot(v), d.z);
+        let q = local.abs() - self.half;
+        let outside = q.max(DVec3::ZERO).length();
+        let inside = q.x.max(q.y).max(q.z).min(0.0);
+        outside + inside - self.margin
+    }
+}
+
 /// A solid obstacle: touching it loses the particle.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Shape {
     Sphere(Sphere),
     Torus(Torus),
     Capsule(Capsule),
+    Box(OrientedBox),
 }
 
 impl Shape {
@@ -68,6 +93,7 @@ impl Shape {
             Shape::Sphere(s) => s.signed_distance(x),
             Shape::Torus(t) => t.signed_distance(x),
             Shape::Capsule(c) => c.signed_distance(x),
+            Shape::Box(b) => b.signed_distance(x),
         }
     }
 }

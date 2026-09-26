@@ -865,6 +865,7 @@ impl Level {
             antennas,
             external: Vec::new(),
             conductors: self.conductors_for(&charges, resolution),
+            electrodes: physics::bem::Electrodes::default(),
             time_offset: 0.0,
         };
         (field, obstacles)

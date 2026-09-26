@@ -164,6 +164,18 @@ Truncation by depth (not by size), together with the symmetric correction, keeps
 - Time-dependent sources (antennas, waves) together with conductors would need a full-wave solution and are not combined.
 - Magnetic fields: the metal is non-magnetic and the fields are static, so there is no effect.
 
+## 2.7 Electrodes: metal boxes by the boundary element method — *validated* (`crates/physics/src/bem.rs`, `panel.rs`)
+
+Plates, slabs and walls are rectangular metal boxes standing on the plane of the slice. Each is symmetric about z = 0, with an in-plane length and thickness and a finite height. Their surfaces are cut into flat triangles carrying constant surface charge density. The densities follow from collocation at the triangle centroids (surface potential = electrode potential).
+
+- **Exact panel integrals.** The potential and field of a uniformly charged triangle are evaluated in closed form (Wilton et al. 1984; Graglia 1993), for every panel and at every distance. The field is therefore exactly the gradient of the potential of the panel charges, so energy is conserved to integration accuracy. A first version used a 7-point rule for distant panels. Switching between the two broke exact conservation (1.5e-9 drift), and its accuracy at 4 panel sizes (~1e-4) had been overestimated, so it was removed.
+- **Symmetry.** Only the upper half is meshed. In the plane, a panel's mirror contributes the same potential and E_z reversed, applied exactly, so E_z = 0 bit for bit.
+- **Mesh.** Each face is divided into a grid graded towards the edges (Chebyshev spacing), where the surface density is singular. Panel sizes are 0.5 cells for preview, 0.35 for verification and 1.0 for display.
+- **Linear algebra.** Dense LU (own implementation, deterministic), cached per geometry. The bias is handled as for spheres (§2.6): unit systems and the capacitance matrix, with grounded, fixed-potential and floating electrodes.
+- **Accuracy.** Constant panels are a discretization. The error is measured (E1, E2) and enters verification through the two mesh resolutions (preview and verification).
+- **Particle image force.** Not included for electrodes: it would need a new solve per force evaluation. It scales with q², and levels check that its bound is negligible (§8).
+- **Cost.** A flight through a deflector pair (704 panels) takes 16 ms at preview resolution (E5).
+
 ## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 
 State `y = (x, p)`, with:
@@ -434,6 +446,18 @@ Note on R2: the first version compared LL work with `∫P dt` alone. It found a 
 | D1 | Straight flight at 53.13°, direction windows ±0.01 rad around it | accepted iff half-angle > deviation; margin = half-angle − deviation | margin error < 1e-12 | exact to rounding |
 | D2 | Uniform field, entry energy T₀ + qE·10, three energy windows | analytic entry energy | margin error < 1e-10 | agrees to 6 digits printed |
 | D3 | Direction window 1e-14 rad wider than the flight's angle | must not be verified | SmallMargin (acceptance) or outcome mismatch | SmallMargin, margin 1e-14 |
+
+### Electrode tests (`cargo test --release -p physics --test electrodes -- --nocapture --test-threads=1`, unit tests in `panel.rs`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| P1 | Triangle integrals at 4 points (near and far, above and below) | 6-level subdivided degree-5 quadrature | potential < 1e-9, gradient < 1e-8 | holds |
+| P2 | Gradient integral = ∇ of the potential integral | central differences | < 1e-7 | holds |
+| P3 | Crossing the panel | potential continuous; normal field jumps by 4πσ | < 1e-6 | holds |
+| E1 | Unit cube at potential 1, panels 0.25 → 0.0625 | capacitance 0.66067815·4πε₀a (Hwang & Douglas 2004; Mascagni & Simonov 2004) | convergent; finest < 2e-3 | 6.0e-3, 1.2e-3, 2.1e-4 (order 2.5) |
+| E2 | Charge near a grounded plate, surface potential at non-collocation points | 0 | decreasing; finest < 2e-2 | 1.2e-2, 5.7e-3, 2.6e-3 (order ~1, set by the edge singularity) |
+| E3 | Deflector plates at ±V, c = ∞ and 5 | W = T + qφ conserved | < 1e-10 | 5.9e-12, 6.2e-12 |
+| E4 | Two electrodes (fixed potential, floating) and a charge | E_z = 0 in the plane; the particle stays in it | bit for bit | holds |
 
 ### Conductor tests (`cargo test --release -p physics --test conductors -- --nocapture --test-threads=1`)
 

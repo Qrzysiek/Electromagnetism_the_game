@@ -3,6 +3,7 @@
 use glam::DVec3;
 
 use crate::antenna::OscillatingDipole;
+use crate::bem::Electrodes;
 use crate::conductor::Conductors;
 use crate::external::External;
 use crate::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
@@ -115,6 +116,8 @@ pub struct LevelField {
     pub external: Vec<External>,
     /// Conducting spheres and the charges the fixed sources induce on them.
     pub conductors: Conductors,
+    /// Box electrodes (BEM) with their surface charge.
+    pub electrodes: Electrodes,
     /// Added to the flight time before evaluating time-dependent sources: a particle
     /// launched at lab time `t₀` sees the fields at `t₀ + t`.
     pub time_offset: f64,
@@ -141,6 +144,11 @@ impl FieldSolver for LevelField {
         let mut s = self.coulomb.sample(x, t);
         if !self.conductors.is_empty() {
             let c = self.conductors.induced.sample(x, t);
+            s.e += c.e;
+            s.phi += c.phi;
+        }
+        if !self.electrodes.is_empty() {
+            let c = self.electrodes.sample(x, t);
             s.e += c.e;
             s.phi += c.phi;
         }
