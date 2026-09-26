@@ -370,6 +370,19 @@ fn dev_capture(
         return;
     };
     *frame += 1;
+    // Frame of the screenshot (EM_FRAME, default 120); the exit follows 60 frames later.
+    let shot = std::env::var("EM_FRAME")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(120);
+    if *frame == shot {
+        commands
+            .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+            .observe(bevy::render::view::screenshot::save_to_disk(path.clone()));
+    }
+    if *frame == shot + 60 {
+        exit.write(AppExit::Success);
+    }
     if let Some(t) = std::env::var("EM_TIME")
         .ok()
         .and_then(|v| v.parse::<f64>().ok())
@@ -422,13 +435,19 @@ fn dev_capture(
                 game.editor.edit_level(|_| {});
             }
         }
-        120 => {
-            commands
-                .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
-                .observe(bevy::render::view::screenshot::save_to_disk(path));
+        10 if std::env::var("EM_SPHERE_TEST").is_ok() => {
+            game.editor.edit_level(|l| {
+                l.conductors.push(level::Conductor {
+                    center: [20, 14, 0],
+                    radius: 2.0,
+                    bias: level::ConductorBias::Grounded,
+                });
+            });
         }
-        180 => {
-            exit.write(AppExit::Success);
+        60 if std::env::var("EM_SPHERE_TEST").is_ok() => {
+            game.editor.edit_level(|l| {
+                l.conductors.clear();
+            });
         }
         _ => {}
     }

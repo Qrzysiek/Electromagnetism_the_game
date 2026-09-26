@@ -244,6 +244,20 @@ pub fn run_observed<F: FieldSolver>(
     rs: &RunSettings,
     mut observer: impl FnMut(&StepView<'_, F>),
 ) -> Trajectory {
+    run_cancellable(scn, rs, |step| {
+        observer(step);
+        true
+    })
+    .expect("never cancelled")
+}
+
+/// As `run_observed`, but the observer returns whether to go on; `None` if it stopped the
+/// flight (e.g. because the setup changed and the result is no longer wanted).
+pub fn run_cancellable<F: FieldSolver>(
+    scn: &Scenario<F>,
+    rs: &RunSettings,
+    mut observer: impl FnMut(&StepView<'_, F>) -> bool,
+) -> Option<Trajectory> {
     let p_norm = scn.p0.length();
     let p_ref = if p_norm > 0.0 {
         p_norm
@@ -306,7 +320,7 @@ pub fn run_observed<F: FieldSolver>(
     if let Some(k) = g_prev.iter().position(|&g| g <= 0.0) {
         traj.outcome = events[k].outcome();
         traj.margins = rs.margins.then(|| collect_margins(&events, &margin));
-        return traj;
+        return Some(traj);
     }
 
     let settings = Settings {
@@ -335,7 +349,9 @@ pub fn run_observed<F: FieldSolver>(
         let t_b = int.t();
         let dense = int.dense();
         let view = StepView { ode: &ode, dense };
-        observer(&view);
+        if !observer(&view) {
+            return None;
+        }
 
         // Speed bound on the step: largest sampled speed with a safety margin, never more
         // than c (PHYSICS.md §6).
@@ -483,7 +499,7 @@ pub fn run_observed<F: FieldSolver>(
         m.acceptance = acceptance_margin;
         m
     });
-    traj
+    Some(traj)
 }
 
 /// Whether a minimum found on `[a, b]` lies at the right end, i.e. the function is still
