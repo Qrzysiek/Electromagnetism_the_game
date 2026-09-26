@@ -37,6 +37,8 @@ Switch to **Sandbox** at the top of the panel.
   - Arrows move the cursor (Shift: ×5); Space/Enter place; Del/X remove.
   - S flips the sign (charges), the orientation (magnets: ⊙ moment out of the plane, ⊗ into it) or the phase (antennas).
   - R rotates an antenna by 45° (Shift+R: back); W changes its frequency where the level offers several.
+  - Moving elements: drag them with the mouse, or G to grab / drop with the arrow keys in between, Esc to cancel. In the sandbox, level elements can be dragged too.
+  - **Hardcore** (checkbox next to "Your elements"): sliders instead of the level's fixed values. Any magnitude or frequency between the smallest and largest listed value, and any antenna angle. Each slider has its own linear/log switch. With the cursor on one of your elements the sliders edit it live; Q/E and W then step by ×1.1.
   - Q/E change the magnitude; M cycles the element kind (charge, magnet, antenna) the level allows; C clears; 1–4 set the grid refinement.
   - Multi-shot levels: `[` / `]` switch the shot; H shows all shots.
   - N/P switch levels; V cycles the map (potential → magnetic B → off); F toggles field lines; A toggles the animation.

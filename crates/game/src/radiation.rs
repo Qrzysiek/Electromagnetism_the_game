@@ -23,6 +23,8 @@ use crate::worker::Preview;
 
 /// Texture pixels per cell.
 const PX_PER_CELL: f64 = 5.0;
+/// Colour texels per field sample (smooth interpolation of the sampled values).
+const UPSAMPLE: u32 = 4;
 /// Spacing of the E arrows, in cells.
 const ARROW_SPACING: f64 = 1.5;
 /// Quantity used for the colour of the field views.
@@ -299,31 +301,52 @@ pub fn update(
     let (b_sat, e_sat) = (view.b_sat, view.e_sat);
     let v = &*view;
     let fr = &field;
-    let pixels: Vec<u8> = (0..h)
+    // The field is evaluated at the texel centres of a (w × h) grid. The compressed,
+    // signed value is then interpolated bilinearly onto an UPSAMPLE× finer texture
+    // before colouring, so zero lines (sign changes) and saturation edges come out
+    // smooth instead of breaking into texel-sized dots. Visual only: no new physics.
+    let values: Vec<f32> = (0..h)
         .into_par_iter()
         .flat_map_iter(|j| {
             let y = bounds.max.y - (f64::from(j) + 0.5) / f64::from(h) * size.y;
-            (0..w).flat_map(move |i| {
+            (0..w).map(move |i| {
                 let x = bounds.min.x + (f64::from(i) + 0.5) / f64::from(w) * size.x;
                 let f = sample(v, fr, mode, DVec3::new(x, y, 0.0), t, c);
+                (match quantity {
+                    FieldQuantity::Bz => f.map_or(0.0, |(_, b)| compress(b, b_sat, range)),
+                    FieldQuantity::E => f.map_or(0.0, |(e, _)| compress(e.length(), e_sat, range)),
+                }) as f32
+            })
+        })
+        .collect();
+    let (wu, hu) = (w * UPSAMPLE, h * UPSAMPLE);
+    let at = |i: i64, j: i64| {
+        let i = i.clamp(0, i64::from(w) - 1) as usize;
+        let j = j.clamp(0, i64::from(h) - 1) as usize;
+        values[j * w as usize + i]
+    };
+    let pixels: Vec<u8> = (0..hu)
+        .into_par_iter()
+        .flat_map_iter(|jj| {
+            // Position in texel units, texel centres at integers.
+            let fy = (f64::from(jj) + 0.5) / f64::from(UPSAMPLE) - 0.5;
+            let (j0, ty) = (fy.floor() as i64, (fy - fy.floor()) as f32);
+            (0..wu).flat_map(move |ii| {
+                let fx = (f64::from(ii) + 0.5) / f64::from(UPSAMPLE) - 0.5;
+                let (i0, tx) = (fx.floor() as i64, (fx - fx.floor()) as f32);
+                let top = at(i0, j0) * (1.0 - tx) + at(i0 + 1, j0) * tx;
+                let bottom = at(i0, j0 + 1) * (1.0 - tx) + at(i0 + 1, j0 + 1) * tx;
+                let s = top * (1.0 - ty) + bottom * ty;
+                let a = (s.abs().powf(0.8) * 230.0) as u8;
                 match quantity {
-                    FieldQuantity::Bz => {
-                        let s = f.map_or(0.0, |(_, b)| compress(b, b_sat, range));
-                        let a = (s.abs().powf(0.8) * 230.0) as u8;
-                        if s >= 0.0 {
-                            [255, 150, 40, a]
-                        } else {
-                            [40, 190, 255, a]
-                        }
-                    }
-                    FieldQuantity::E => {
-                        let s = f.map_or(0.0, |(e, _)| compress(e.length(), e_sat, range));
-                        [255, 235, 140, (s.powf(0.8) * 230.0) as u8]
-                    }
+                    FieldQuantity::Bz if s >= 0.0 => [255, 150, 40, a],
+                    FieldQuantity::Bz => [40, 190, 255, a],
+                    FieldQuantity::E => [255, 235, 140, a],
                 }
             })
         })
         .collect();
+    let (w, h) = (wu, hu);
     let mut img = blank(w, h);
     img.data = Some(pixels);
     if let Some(mut slot) = images.get_mut(&view.image) {

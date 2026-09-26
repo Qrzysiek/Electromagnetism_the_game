@@ -335,11 +335,26 @@ pub fn draw(
         (ElementKind::Charge, false) => Color::srgb(0.6, 0.8, 1.0),
     };
     gizmos.rect_2d(cur, Vec2::splat(charge_radius * 2.8), cursor_color);
+    // Element being moved.
+    if let Some((i, _)) = game.editor.grabbed
+        && let Some(e) = game.editor.placement.get(i)
+    {
+        let p = to_vec2(grid.position(e.node));
+        gizmos.circle_2d(p, charge_radius * 2.2, Color::srgb(1.0, 0.95, 0.3));
+    }
 
     // Trajectories: every flight of the shown shots. Under disturbances a shot has one
     // flight per disturbance; the one selected in the panel is drawn brightest.
     let active_flight = game.active_flight();
+    // The particle-field views show one particle's field: draw only that flight.
+    let single = matches!(
+        game.map,
+        Some(crate::potential::MapMode::ParticleField | crate::potential::MapMode::Total)
+    );
     for (f, view) in game.flights.iter().enumerate() {
+        if single && f != active_flight {
+            continue;
+        }
         let (i, _) = level.flight_of(f);
         let active = i == game.active_shot;
         if !(active || game.show_all_shots) {

@@ -58,6 +58,8 @@ pub struct Sandbox {
     pub overwrite: bool,
     /// First corner (or centre) of a box or coil being dragged.
     pub detector_drag: Option<Node>,
+    /// Level element being dragged (its node when picked up).
+    pub element_drag: Option<Node>,
     /// Text buffers of list fields.
     pub texts: crate::level_editor::EditTexts,
     /// Vertices of a polygon coil being drawn.
@@ -83,6 +85,7 @@ impl Default for Sandbox {
             file_name: "my_level".into(),
             overwrite: false,
             detector_drag: None,
+            element_drag: None,
             texts: crate::level_editor::EditTexts::default(),
             pending_polygon: Vec::new(),
             status: Vec::new(),
@@ -153,6 +156,7 @@ pub fn empty_level() -> Level {
             max_antennas: 0,
             antenna_amplitudes: vec![],
             antenna_omegas: vec![],
+            continuous: false,
             region: None,
         },
         reference_solution: Vec::new(),
@@ -247,7 +251,33 @@ pub fn pointer(
     match tool {
         Tool::PlayerElement => false,
         Tool::LevelElement => {
-            if !(pressed || right) {
+            // Pressing on an existing level element picks it up; releasing it on another
+            // free node moves it there (releasing where it was sets its value, as a click).
+            let at = |n: Node| game.editor.base().elements.iter().position(|c| c.node == n);
+            if pressed && at(node).is_some() {
+                game.sandbox.element_drag = Some(node);
+                return true;
+            }
+            if released && let Some(from) = game.sandbox.element_drag.take() {
+                if from != node {
+                    let blocked = at(node).is_some()
+                        || game
+                            .editor
+                            .base()
+                            .shots
+                            .iter()
+                            .any(|s| s.launch.node == node);
+                    if !blocked {
+                        game.editor.edit_level(|l| {
+                            if let Some(e) = l.elements.iter_mut().find(|c| c.node == from) {
+                                e.node = node;
+                            }
+                        });
+                        game.editor.placement.retain(|c| c.node != node);
+                    }
+                    return true;
+                }
+            } else if !(pressed || right) {
                 return true;
             }
             let kind = game.sandbox.element_kind;
@@ -554,7 +584,8 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
             });
             small(
                 ui,
-                "Left click: place or set value. Right click: remove. Magnet value μ = μ₀m/4π \
+                "Left click: place or set value; drag an element to move it. Right click: \
+                 remove. Magnet value μ = μ₀m/4π \
                  (positive: moment out of the plane; in the plane B_z = −μ/r³). Antenna: \
                  dipole amplitude p₀ along the orientation, oscillating at the level's RF ω.",
             );

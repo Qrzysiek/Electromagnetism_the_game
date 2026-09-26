@@ -71,6 +71,9 @@ pub struct Game {
     pub show_field_arrows: bool,
     /// Particle field view: only the radiation (acceleration) part of the field.
     pub radiation_only: bool,
+    /// Hardcore sliders: logarithmic scale for magnitudes and for frequencies.
+    pub log_magnitude: bool,
+    pub log_omega: bool,
     /// Colour quantity of the field views.
     pub field_quantity: radiation::FieldQuantity,
     /// Dynamic range of the field views, in decades.
@@ -80,6 +83,8 @@ pub struct Game {
     pub anim_time: f64,
     pub last_cursor_world: Option<Vec2>,
     pub sandbox: sandbox::Sandbox,
+    /// A player element is being dragged with the mouse.
+    pub mouse_drag: bool,
     /// Set by the UI while a text field has focus (game shortcuts are suspended).
     pub text_focus: bool,
     /// Left edge of the side panel in physical pixels (reported by the UI).
@@ -292,6 +297,8 @@ fn main() {
             show_field_lines: false,
             show_field_arrows: true,
             radiation_only: false,
+            log_magnitude: true,
+            log_omega: false,
             field_quantity: radiation::FieldQuantity::Bz,
             field_range_decades: 2.5,
             animate: true,
@@ -299,6 +306,7 @@ fn main() {
             anim_time: 0.0,
             last_cursor_world: None,
             sandbox: sandbox::Sandbox::default(),
+            mouse_drag: false,
             text_focus: false,
             panel_left_px: None,
         })
@@ -381,6 +389,9 @@ fn dev_capture(
                 sandbox::enter(&mut game);
             }
             game.radiation_only = std::env::var("EM_RAD_ONLY").is_ok_and(|v| v == "1");
+            if std::env::var("EM_HARDCORE").is_ok_and(|v| v == "1") {
+                game.editor.set_continuous(true);
+            }
             if std::env::var("EM_QUANTITY").is_ok_and(|v| v == "E") {
                 game.field_quantity = radiation::FieldQuantity::E;
             }
@@ -491,8 +502,22 @@ fn input(
         if keys.just_pressed(KeyCode::ArrowDown) {
             e.move_cursor(0, -step);
         }
+        if keys.just_pressed(KeyCode::KeyG) {
+            if e.grabbed.is_some() {
+                e.drop_grabbed();
+            } else {
+                e.grab();
+            }
+        }
+        if keys.just_pressed(KeyCode::Escape) {
+            e.cancel_grab();
+        }
         if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) {
-            let _ = e.place();
+            if e.grabbed.is_some() {
+                e.drop_grabbed();
+            } else {
+                let _ = e.place();
+            }
         }
         if keys.just_pressed(KeyCode::Delete)
             || keys.just_pressed(KeyCode::Backspace)
@@ -600,9 +625,18 @@ fn input(
     {
         return;
     }
+    // Left press on one of the player's elements picks it up (drag), elsewhere places.
     if on_grid && pressed {
         game.editor.set_cursor(node);
-        let _ = game.editor.place();
+        if game.editor.grab() {
+            game.mouse_drag = true;
+        } else {
+            let _ = game.editor.place();
+        }
+    }
+    if game.mouse_drag && !mouse.pressed(MouseButton::Left) {
+        game.mouse_drag = false;
+        game.editor.drop_grabbed();
     }
     if on_grid && right {
         game.editor.set_cursor(node);

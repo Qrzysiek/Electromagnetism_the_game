@@ -478,6 +478,7 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         max_antennas,
         antenna_amplitudes,
         antenna_omegas,
+        continuous,
         region,
     } = l;
     let mut focus = false;
@@ -537,6 +538,11 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         }
         r.on_hover_text("Empty: player antennas use the level's RF generator")
             .has_focus()
+    });
+    row(ui, "Continuous values", |ui| {
+        ui.checkbox(continuous, "hardcore")
+            .on_hover_text("Any value within the ranges of the lists above, any orientation");
+        false
     });
     let mut restricted = region.is_some();
     row(ui, "Player region", |ui| {
@@ -813,6 +819,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         max_antennas,
         antenna_amplitudes,
         antenna_omegas,
+        // Any value is editable (a checkbox).
+        continuous: _,
         region,
     } = limits;
     if *max_charges > MAX_COUNT

@@ -321,7 +321,20 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
 
     // Palette.
     let limits = &level.limits;
-    ui.label(egui::RichText::new("Your elements").strong());
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new("Your elements").strong());
+        let mut hard = game.editor.continuous();
+        if ui
+            .checkbox(&mut hard, "hardcore")
+            .on_hover_text(
+                "Continuous values: any magnitude or frequency between the level's smallest \
+                 and largest listed value, any antenna orientation, set with sliders",
+            )
+            .changed()
+        {
+            game.editor.set_continuous(hard);
+        }
+    });
     let kind_name = |k: ElementKind| match k {
         ElementKind::Charge => "charges",
         ElementKind::Magnet => "magnets",
@@ -381,11 +394,15 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         } else {
             ui.label(sign);
         }
-        for (i, m) in crate::editor::magnitudes(&level, kind).iter().enumerate() {
-            ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_si(*m));
+        if !game.editor.continuous() {
+            for (i, m) in crate::editor::magnitudes(&level, kind).iter().enumerate() {
+                ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_si(*m));
+            }
         }
     });
-    if game.editor.kind == ElementKind::Antenna {
+    if game.editor.continuous() {
+        hardcore_controls(ui, game, &level);
+    } else if game.editor.kind == ElementKind::Antenna {
         ui.horizontal(|ui| {
             ui.label("Orientation:");
             for a in level::ANTENNA_ANGLES {
@@ -623,6 +640,26 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             .on_hover_text("Everything at once: level sources, antennas, waves and the particle");
         ui.selectable_value(&mut game.map, None, "off");
     });
+    if matches!(game.map, Some(MapMode::ParticleField | MapMode::Total)) {
+        let (shot, d) = level.flight_of(game.active_flight());
+        let which = if level.disturbances.is_empty() {
+            format!("shot {}", shot + 1)
+        } else {
+            format!("shot {}, disturbance {}", shot + 1, d + 1)
+        };
+        let multi = level.flight_count() > 1;
+        ui.label(
+            egui::RichText::new(format!(
+                "Field of the particle of {which}{}; only its flight is drawn.",
+                if multi {
+                    " (choose with the shot/disturbance tabs or [ ])"
+                } else {
+                    ""
+                }
+            ))
+            .small(),
+        );
+    }
     if matches!(
         game.map,
         Some(MapMode::Waves | MapMode::ParticleField | MapMode::Total)
@@ -698,7 +735,106 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ui.label("1–4 grid refinement, [ ] switch shot, H show all shots.");
         ui.label("N/P next/previous level, V map, F field lines, A animation.");
         ui.label("R rotate antenna (Shift+R back), W antenna frequency, M cycles kinds.");
+        ui.label("Drag your elements with the mouse, or G to grab / drop and Esc to cancel.");
+        ui.label("Hardcore (checkbox): sliders instead of fixed values; Q/E and W step ×1.1.");
     });
+}
+
+/// Hardcore sliders: the element under the cursor if there is one (edited live), else
+/// the values of new elements.
+fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
+    use level::{Element, value_range};
+    let target = game.editor.element_at_cursor();
+    let mut e = match target {
+        Some(i) => game.editor.placement[i],
+        None => Element {
+            node: game.editor.cursor,
+            kind: game.editor.kind,
+            value: game.editor.selected_value(),
+            angle_deg: game.editor.angle_deg,
+            omega: game.editor.selected_omega(),
+        },
+    };
+    ui.label(
+        egui::RichText::new(match target {
+            Some(_) => "Sliders edit the element under the cursor.",
+            None => "Sliders set new elements (move the cursor onto one of yours to edit it).",
+        })
+        .small(),
+    );
+    let mut focus = false;
+    let name = match e.kind {
+        ElementKind::Charge => "|Q|",
+        ElementKind::Magnet => "|μ|",
+        ElementKind::Antenna => "|p₀|",
+    };
+    if let Some((lo, hi)) = value_range(crate::editor::magnitudes(level, e.kind)) {
+        let mut m = e.value.abs();
+        ui.horizontal(|ui| {
+            ui.label(name);
+            if lo < hi {
+                let r = ui.add(
+                    egui::Slider::new(&mut m, lo..=hi)
+                        .logarithmic(game.log_magnitude)
+                        .custom_formatter(|v, _| fmt_si(v))
+                        .custom_parser(parse_si),
+                );
+                focus |= r.has_focus();
+                ui.checkbox(&mut game.log_magnitude, "log");
+            } else {
+                ui.label(fmt_si(lo));
+            }
+        });
+        e.value = e.value.signum() * m;
+    }
+    if e.kind == ElementKind::Antenna {
+        ui.horizontal(|ui| {
+            ui.label("angle");
+            let r = ui.add(
+                egui::Slider::new(&mut e.angle_deg, 0.0..=360.0)
+                    .suffix("°")
+                    .step_by(0.5),
+            );
+            focus |= r.has_focus();
+        });
+        let omegas = &level.limits.antenna_omegas;
+        match (value_range(omegas), e.omega.as_mut()) {
+            (Some((lo, hi)), Some(w)) if lo < hi => {
+                ui.horizontal(|ui| {
+                    ui.label("ω");
+                    let r = ui.add(
+                        egui::Slider::new(w, lo..=hi)
+                            .logarithmic(game.log_omega)
+                            .custom_formatter(|v, _| fmt_si(v))
+                            .custom_parser(parse_si),
+                    );
+                    focus |= r.has_focus();
+                    ui.checkbox(&mut game.log_omega, "log");
+                });
+            }
+            _ => {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "ω = {}",
+                        fmt_si(e.omega.unwrap_or(level.physics.rf_omega))
+                    ))
+                    .small(),
+                );
+            }
+        }
+    }
+    game.text_focus |= focus;
+    match target {
+        Some(i) => game.editor.set_element(i, e),
+        None => {
+            let k = crate::editor::kind_index(e.kind);
+            game.editor.continuous_magnitude[k] = e.value.abs();
+            game.editor.angle_deg = e.angle_deg;
+            if let Some(w) = e.omega {
+                game.editor.continuous_omega = w;
+            }
+        }
+    }
 }
 
 /// One-line description of a disturbance.

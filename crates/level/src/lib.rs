@@ -410,6 +410,11 @@ pub struct Limits {
     /// level's RF generator frequency.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub antenna_omegas: Vec<f64>,
+    /// Hardcore: instead of the listed values, any value between the smallest and the
+    /// largest listed one (magnitudes, strengths, amplitudes, frequencies), and any
+    /// antenna orientation.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub continuous: bool,
     /// If set, player elements may only be placed inside this box of nodes (inclusive),
     /// like the electrode region of a real instrument.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -419,6 +424,25 @@ pub struct Limits {
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
 fn is_zero_u32(v: &u32) -> bool {
     *v == 0
+}
+
+/// Smallest and largest value of a list (the range of hardcore mode).
+pub fn value_range(list: &[f64]) -> Option<(f64, f64)> {
+    let lo = list.iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = list.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    (lo <= hi).then_some((lo, hi))
+}
+
+impl Limits {
+    /// Whether `v` is an allowed value from `list`: exactly one of its entries, or in
+    /// hardcore mode anything in its range.
+    pub fn allows(&self, list: &[f64], v: f64) -> bool {
+        if self.continuous {
+            value_range(list).is_some_and(|(lo, hi)| (lo..=hi).contains(&v))
+        } else {
+            list.iter().any(|m| m.to_bits() == v.to_bits())
+        }
+    }
 }
 
 /// A box of grid nodes, inclusive.
@@ -565,8 +589,9 @@ impl Level {
             if e.value == 0.0 {
                 return Err(PlacementError::SignNotAllowed(e.value));
             }
-            // Magnitudes come from the level's list and are compared exactly.
-            let magnitude = e.value.abs().to_bits();
+            // Magnitudes come from the level's list and are compared exactly (hardcore:
+            // anything within its range).
+            let magnitude = e.value.abs();
             match e.kind {
                 ElementKind::Charge => {
                     let sign_ok = if e.value > 0.0 {
@@ -577,44 +602,36 @@ impl Level {
                     if !sign_ok {
                         return Err(PlacementError::SignNotAllowed(e.value));
                     }
-                    if !self
-                        .limits
-                        .magnitudes
-                        .iter()
-                        .any(|m| m.to_bits() == magnitude)
-                    {
+                    if !self.limits.allows(&self.limits.magnitudes, magnitude) {
                         return Err(PlacementError::MagnitudeNotAllowed(e.value));
                     }
                 }
                 ElementKind::Magnet => {
-                    if !self
-                        .limits
-                        .magnet_strengths
-                        .iter()
-                        .any(|m| m.to_bits() == magnitude)
-                    {
+                    if !self.limits.allows(&self.limits.magnet_strengths, magnitude) {
                         return Err(PlacementError::MagnitudeNotAllowed(e.value));
                     }
                 }
                 ElementKind::Antenna => {
                     if !self
                         .limits
-                        .antenna_amplitudes
-                        .iter()
-                        .any(|m| m.to_bits() == magnitude)
+                        .allows(&self.limits.antenna_amplitudes, magnitude)
                     {
                         return Err(PlacementError::MagnitudeNotAllowed(e.value));
                     }
-                    if !ANTENNA_ANGLES
-                        .iter()
-                        .any(|a| a.to_bits() == e.angle_deg.to_bits())
-                    {
+                    let angle_ok = if self.limits.continuous {
+                        e.angle_deg.is_finite()
+                    } else {
+                        ANTENNA_ANGLES
+                            .iter()
+                            .any(|a| a.to_bits() == e.angle_deg.to_bits())
+                    };
+                    if !angle_ok {
                         return Err(PlacementError::AngleNotAllowed(e.angle_deg));
                     }
                     let omegas = &self.limits.antenna_omegas;
                     let omega_ok = match e.omega {
                         None => omegas.is_empty(),
-                        Some(w) => omegas.iter().any(|o| o.to_bits() == w.to_bits()),
+                        Some(w) => self.limits.allows(omegas, w),
                     };
                     if !omega_ok {
                         return Err(PlacementError::FrequencyNotAllowed(e.omega));
@@ -863,6 +880,7 @@ mod tests {
                 max_antennas: 1,
                 antenna_amplitudes: vec![3.0],
                 antenna_omegas: vec![0.5, 2.0],
+                continuous: false,
                 region: None,
             },
             reference_solution: vec![],
@@ -977,6 +995,23 @@ mod tests {
                 Element::antenna([9, 2, 0], 3.0, 0.0).with_omega(0.5)
             ]),
             Err(PlacementError::TooManyAntennas)
+        ));
+        // Hardcore: anything within the ranges, any orientation.
+        let mut hard = l.clone();
+        hard.limits.continuous = true;
+        let odd = Element::antenna([8, 2, 0], -3.0, 17.0).with_omega(1.3);
+        assert!(l.check_placement(&[odd]).is_err());
+        assert_eq!(
+            hard.check_placement(&[odd, Element::charge([5, 5, 0], 1.7)]),
+            Ok(())
+        );
+        assert!(matches!(
+            hard.check_placement(&[Element::charge([5, 5, 0], 2.1)]),
+            Err(PlacementError::MagnitudeNotAllowed(_))
+        ));
+        assert!(matches!(
+            hard.check_placement(&[odd.with_omega(2.5)]),
+            Err(PlacementError::FrequencyNotAllowed(_))
         ));
         // Each antenna oscillates at its own frequency.
         let (field, _) = l.field(&[antenna]);

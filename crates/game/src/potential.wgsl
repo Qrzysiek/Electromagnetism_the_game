@@ -108,13 +108,15 @@ fn potential_colour(p: vec2<f32>) -> vec3<f32> {
     let fw_u = max(fwidth(u), 1e-6);
     let forbidden = smoothstep(-0.5 * fw_u, 0.5 * fw_u, u - 1.0);
     col = mix(col, col * 0.3, forbidden);
-    // Contours every T0/4; skipped where they would be denser than about 3 pixels.
+    // Contours every T0/4, faded out smoothly where they crowd closer than a few pixels
+    // (a hard cut-off would leave a visible edge, and dense lines alias into moiré).
     let k = u * 4.0;
     let fw_k = fwidth(k);
-    if (fw_k < 0.3) {
+    let fade = 1.0 - smoothstep(0.06, 0.25, fw_k);
+    if (fade > 0.0) {
         let f = fract(k);
         let d = min(f, 1.0 - f);
-        let cover = line_cover(d, fw_k, 1.0) * (1.0 - forbidden);
+        let cover = line_cover(d, fw_k, 1.0) * (1.0 - forbidden) * fade;
         col = mix(col, col + vec3<f32>(0.10), cover);
     }
     // Turning line U = T0.
@@ -162,10 +164,11 @@ fn magnetic_colour(p: vec2<f32>) -> vec3<f32> {
     }
     let k = b * 4.0;
     let fw_k = fwidth(k);
-    if (fw_k < 0.3) {
+    let fade = 1.0 - smoothstep(0.06, 0.25, fw_k);
+    if (fade > 0.0) {
         let f = fract(k);
         let d = min(f, 1.0 - f);
-        col = mix(col, col + vec3<f32>(0.10), line_cover(d, fw_k, 1.0));
+        col = mix(col, col + vec3<f32>(0.10), line_cover(d, fw_k, 1.0) * fade);
     }
     return col;
 }

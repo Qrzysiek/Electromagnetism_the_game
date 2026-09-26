@@ -73,6 +73,8 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 - **Magnetic elements** (SPEC §9, PHYSICS.md §2.2): magnets (uniformly magnetized spheres standing out of the plane, exact dipole field) as level or player elements, and coils lying in the plane (circle or polygon, exact Biot–Savart) as level elements. Magnet levels: Dempster's mass spectrometer (180° focusing and mass separation), a Wien filter (velocity selector), and the calutron (magnetic isotope separation with player-placed magnets).
 - **Harder variants of instruments (planned).** A level shows the idealised solution of an earlier level, then adds a real effect that breaks it: fringe fields, finite electrode size, stray fields, radiation losses, space charge. The player adds elements to make the whole setup work again. Where patching cannot work, the level instead gives a realistic starting point or asks for a design from scratch.
 - **Beams (planned, with Stage 2).** Many particles that interact through their fields: Coulomb and space charge first, then Darwin and Liénard–Wiechert. The goal is to control the whole beam, not just one particle.
+- **Hardcore mode:** continuous values (sliders, linear or log) within the ranges of the level's lists instead of the discrete values, and any antenna orientation. A level can also be hardcore by design (`limits.continuous`).
+- **Moving elements:** mouse drag, or keyboard grab (G) and arrows.
 - **Sandbox mode** (level editor): place level charges freely; set the launch point, direction and energy, the particle, c, the detector box, the grid and the player limits. Check solvability with the solver, store a reference solution, and save levels as JSON (`levels/custom/`) alongside generated ones.
 
 ## 4. 2D and 3D modes

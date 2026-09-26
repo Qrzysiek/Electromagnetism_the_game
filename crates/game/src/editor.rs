@@ -2,7 +2,7 @@
 //! selected element.
 //! Independent of the rendering engine so it can be unit tested.
 
-use level::{ANTENNA_ANGLES, Element, ElementKind, Level, Node, PlacementError};
+use level::{ANTENNA_ANGLES, Element, ElementKind, Level, Node, PlacementError, value_range};
 
 /// Kinds in palette order.
 pub const KINDS: [ElementKind; 3] = [
@@ -29,6 +29,12 @@ pub struct Editor {
     pub angle_deg: f64,
     /// Index into the level's allowed antenna frequencies for new antennas.
     pub omega_index: usize,
+    /// Hardcore mode: magnitudes of new elements per kind (`KINDS` order) and the
+    /// frequency of new antennas, anywhere in the level's ranges.
+    pub continuous_magnitude: [f64; 3],
+    pub continuous_omega: f64,
+    /// Player element being moved (index) and the node it was grabbed at.
+    pub grabbed: Option<(usize, Node)>,
     /// Last rejected action, for the status line.
     pub message: Option<String>,
     /// Incremented on every change of the physical setup.
@@ -70,6 +76,9 @@ impl Editor {
             .find(|&k| max_of(&level, k) > 0)
             .unwrap_or(ElementKind::Charge);
         let positive = default_positive(&level, kind);
+        let continuous_magnitude =
+            KINDS.map(|k| magnitudes(&level, k).first().copied().unwrap_or(1.0));
+        let continuous_omega = level.limits.antenna_omegas.first().copied().unwrap_or(1.0);
         Self {
             base: level.clone(),
             level,
@@ -80,6 +89,9 @@ impl Editor {
             positive,
             angle_deg: ANTENNA_ANGLES[0],
             omega_index: 0,
+            continuous_magnitude,
+            continuous_omega,
+            grabbed: None,
             message: None,
             revision: 1,
         }
@@ -91,11 +103,68 @@ impl Editor {
 
     /// Value of a new element of the selected kind.
     pub fn selected_value(&self) -> f64 {
-        let m = magnitudes(&self.level, self.kind)
-            .get(self.magnitude_index)
-            .copied()
-            .unwrap_or(1.0);
+        let m = if self.continuous() {
+            self.continuous_magnitude[kind_index(self.kind)]
+        } else {
+            magnitudes(&self.level, self.kind)
+                .get(self.magnitude_index)
+                .copied()
+                .unwrap_or(1.0)
+        };
         if self.positive { m } else { -m }
+    }
+
+    /// Hardcore mode: continuous values instead of the level's lists.
+    pub fn continuous(&self) -> bool {
+        self.level.limits.continuous
+    }
+
+    /// Switches hardcore mode. Leaving it snaps every player element to the nearest
+    /// listed value, orientation and frequency.
+    pub fn set_continuous(&mut self, on: bool) {
+        if on == self.continuous() {
+            return;
+        }
+        self.base.limits.continuous = on;
+        self.level.limits.continuous = on;
+        if on {
+            // Start the sliders at the currently selected discrete values.
+            for (i, k) in KINDS.into_iter().enumerate() {
+                let list = magnitudes(&self.level, k);
+                let idx = if k == self.kind {
+                    self.magnitude_index
+                } else {
+                    0
+                };
+                if let Some(&m) = list.get(idx.min(list.len().saturating_sub(1))) {
+                    self.continuous_magnitude[i] = m;
+                }
+            }
+            if let Some(w) = self.selected_omega_discrete() {
+                self.continuous_omega = w;
+            }
+        } else {
+            let level = self.level.clone();
+            for e in &mut self.placement {
+                snap(&level, e);
+            }
+            self.angle_deg = nearest_angle(self.angle_deg).0;
+        }
+        self.changed();
+    }
+
+    /// Changes the player element at index `i` (hardcore sliders); kept if allowed.
+    pub fn set_element(&mut self, i: usize, e: Element) {
+        if self.placement.get(i) != Some(&e) {
+            let mut trial = self.placement.clone();
+            trial[i] = e;
+            let _ = self.try_placement(trial);
+        }
+    }
+
+    /// Index of the player element under the cursor.
+    pub fn element_at_cursor(&self) -> Option<usize> {
+        self.player_index_at(self.cursor)
     }
 
     pub fn left(&self, kind: ElementKind) -> usize {
@@ -128,6 +197,19 @@ impl Editor {
     /// Rotates the antenna under the cursor, or the orientation of new antennas, by one
     /// step of `ANTENNA_ANGLES` (45°).
     pub fn rotate(&mut self, step: isize) {
+        if self.continuous() {
+            let turn = |a: f64| (a + 45.0 * f64::from(step_i32(step))).rem_euclid(360.0);
+            if let Some(i) = self.player_index_at(self.cursor) {
+                if self.placement[i].kind == ElementKind::Antenna {
+                    let mut e = self.placement[i];
+                    e.angle_deg = turn(e.angle_deg);
+                    self.set_element(i, e);
+                }
+            } else {
+                self.angle_deg = turn(self.angle_deg);
+            }
+            return;
+        }
         let next = |a: f64| {
             let n = ANTENNA_ANGLES.len() as isize;
             let i = ANTENNA_ANGLES
@@ -147,9 +229,16 @@ impl Editor {
         }
     }
 
-    /// Frequency of new antennas: one of the level's allowed values, or `None` (the
-    /// level's RF generator) if it lists none.
+    /// Frequency of new antennas: one of the level's allowed values (hardcore: anything
+    /// in their range), or `None` (the level's RF generator) if it lists none.
     pub fn selected_omega(&self) -> Option<f64> {
+        if self.continuous() && !self.level.limits.antenna_omegas.is_empty() {
+            return Some(self.continuous_omega);
+        }
+        self.selected_omega_discrete()
+    }
+
+    fn selected_omega_discrete(&self) -> Option<f64> {
         let list = &self.level.limits.antenna_omegas;
         list.get(self.omega_index.min(list.len().saturating_sub(1)))
             .copied()
@@ -161,6 +250,20 @@ impl Editor {
         let list = self.level.limits.antenna_omegas.clone();
         let n = list.len();
         if n == 0 {
+            return;
+        }
+        if self.continuous() {
+            let (lo, hi) = value_range(&list).expect("non-empty");
+            let scale = |w: f64| (w * STEP.powi(step_i32(step))).clamp(lo, hi);
+            if let Some(i) = self.player_index_at(self.cursor) {
+                if self.placement[i].kind == ElementKind::Antenna {
+                    let mut e = self.placement[i];
+                    e.omega = e.omega.map(scale);
+                    self.set_element(i, e);
+                }
+            } else {
+                self.continuous_omega = scale(self.continuous_omega);
+            }
             return;
         }
         let next = |i: usize| (i as isize + step).clamp(0, n as isize - 1) as usize;
@@ -192,11 +295,57 @@ impl Editor {
         let m = self.level.grid.max_node();
         self.cursor[0] = (self.cursor[0] + dx).clamp(0, m[0]);
         self.cursor[1] = (self.cursor[1] + dy).clamp(0, m[1]);
+        self.follow_grabbed();
     }
 
     pub fn set_cursor(&mut self, node: Node) {
         if self.level.grid.contains(node) {
             self.cursor = node;
+            self.follow_grabbed();
+        }
+    }
+
+    /// Picks up the player element under the cursor to move it; returns whether one was
+    /// there.
+    pub fn grab(&mut self) -> bool {
+        match self.player_index_at(self.cursor) {
+            Some(i) => {
+                self.grabbed = Some((i, self.cursor));
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Puts the grabbed element down where it is.
+    pub fn drop_grabbed(&mut self) {
+        self.grabbed = None;
+    }
+
+    /// Returns the grabbed element to where it was picked up.
+    pub fn cancel_grab(&mut self) {
+        if let Some((i, home)) = self.grabbed.take() {
+            self.move_element(i, home);
+        }
+    }
+
+    /// The grabbed element follows the cursor, to every node where it is allowed
+    /// (over a blocked node it waits and jumps on when the cursor is past it).
+    fn follow_grabbed(&mut self) {
+        if let Some((i, _)) = self.grabbed {
+            self.move_element(i, self.cursor);
+        }
+    }
+
+    fn move_element(&mut self, i: usize, node: Node) {
+        if self.placement.get(i).is_none_or(|e| e.node == node) {
+            return;
+        }
+        let mut trial = self.placement.clone();
+        trial[i].node = node;
+        if self.level.check_placement(&trial).is_ok() {
+            self.placement = trial;
+            self.changed();
         }
     }
 
@@ -241,6 +390,7 @@ impl Editor {
     }
 
     pub fn remove(&mut self) {
+        self.grabbed = None;
         if let Some(i) = self.player_index_at(self.cursor) {
             self.placement.remove(i);
             self.changed();
@@ -270,6 +420,19 @@ impl Editor {
         if n == 0 {
             return;
         }
+        if self.continuous() {
+            let (lo, hi) = value_range(&list).expect("non-empty");
+            let scale = |m: f64| (m * STEP.powi(step_i32(step))).clamp(lo, hi);
+            if let Some(i) = self.player_index_at(self.cursor) {
+                let mut e = self.placement[i];
+                e.value = e.value.signum() * scale(e.value.abs());
+                self.set_element(i, e);
+            } else {
+                let k = kind_index(kind);
+                self.continuous_magnitude[k] = scale(self.continuous_magnitude[k]);
+            }
+            return;
+        }
         let next = |i: usize| (i as isize + step).rem_euclid(n as isize) as usize;
         if let Some(i) = self.player_index_at(self.cursor) {
             let v = self.placement[i].value;
@@ -287,6 +450,7 @@ impl Editor {
     }
 
     pub fn clear(&mut self) {
+        self.grabbed = None;
         if !self.placement.is_empty() {
             self.placement.clear();
             self.changed();
@@ -368,6 +532,68 @@ impl Editor {
     }
 }
 
+/// Factor per key press for continuous values (hardcore).
+const STEP: f64 = 1.1;
+
+fn step_i32(step: isize) -> i32 {
+    i32::try_from(step).unwrap_or(0)
+}
+
+/// Position of a kind in `KINDS`.
+pub fn kind_index(kind: ElementKind) -> usize {
+    KINDS
+        .iter()
+        .position(|&k| k == kind)
+        .expect("all kinds listed")
+}
+
+/// Nearest allowed discrete antenna orientation, and whether the direction flips (an
+/// orientation θ + 180° is the same antenna with the opposite sign).
+fn nearest_angle(a: f64) -> (f64, bool) {
+    let a = a.rem_euclid(360.0);
+    let (base, flip) = if a >= 180.0 {
+        (a - 180.0, true)
+    } else {
+        (a, false)
+    };
+    // Distance on the half circle (0° and 180° are the same line).
+    let dist = |x: f64| {
+        let d = (base - x).abs();
+        d.min(180.0 - d)
+    };
+    let best = ANTENNA_ANGLES
+        .into_iter()
+        .min_by(|x, y| dist(*x).total_cmp(&dist(*y)))
+        .expect("angles");
+    // Wrapping from ~180° to 0° reverses the direction too.
+    let wrapped = base - best > 90.0;
+    (best, flip ^ wrapped)
+}
+
+/// Nearest listed value (on a log scale) to `v`.
+fn nearest_listed(list: &[f64], v: f64) -> Option<f64> {
+    list.iter()
+        .copied()
+        .min_by(|a, b| (a.ln() - v.ln()).abs().total_cmp(&(b.ln() - v.ln()).abs()))
+}
+
+/// Snaps an element to the level's discrete lists (leaving hardcore mode).
+fn snap(level: &Level, e: &mut Element) {
+    if let Some(m) = nearest_listed(magnitudes(level, e.kind), e.value.abs()) {
+        e.value = e.value.signum() * m;
+    }
+    if e.kind == ElementKind::Antenna {
+        let (a, flip) = nearest_angle(e.angle_deg);
+        e.angle_deg = a;
+        if flip {
+            e.value = -e.value;
+        }
+        e.omega = e
+            .omega
+            .and_then(|w| nearest_listed(&level.limits.antenna_omegas, w));
+    }
+}
+
 pub fn describe(e: &PlacementError) -> String {
     match e {
         PlacementError::TooManyCharges => "No charges left for this level.".into(),
@@ -437,5 +663,27 @@ mod tests {
         e.place().unwrap();
         e.set_refinement(1);
         assert_eq!(e.refinement(), 2);
+    }
+
+    #[test]
+    fn grabbed_elements_follow_the_cursor_and_skip_blocked_nodes() {
+        let mut e = Editor::new(level());
+        e.set_cursor([10, 5, 0]);
+        e.place().unwrap();
+        let value = e.placement[0].value;
+        assert!(e.grab());
+        e.move_cursor(2, 1);
+        assert_eq!(e.placement[0].node, [12, 6, 0]);
+        assert_eq!(e.placement[0].value.to_bits(), value.to_bits());
+        // The launch node is blocked: the element waits there and jumps on.
+        let launch = e.level.shots[0].launch.node;
+        e.set_cursor(launch);
+        assert_eq!(e.placement[0].node, [12, 6, 0]);
+        e.set_cursor([4, 4, 0]);
+        assert_eq!(e.placement[0].node, [4, 4, 0]);
+        e.cancel_grab();
+        assert_eq!(e.placement[0].node, [10, 5, 0]);
+        assert!(e.grabbed.is_none());
+        assert_eq!(e.placement.len(), 1);
     }
 }
