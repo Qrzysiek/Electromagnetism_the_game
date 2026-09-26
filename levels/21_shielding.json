@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Shielding",
-  "description": "A strongly charged electrode next to the beam line throws the beam out of the arena. A grounded metal plate between them screens its field: the plate's surface charge cancels much of it on the far side. Place the grounded plate.",
+  "description": "A strong charge next to the beam line throws the beam out of the arena. A grounded metal plate between them screens its field: the charge it induces on the plate cancels much of the field on the far side. Place the grounded plate.",
   "grid": {
     "nx": 30,
     "ny": 20,

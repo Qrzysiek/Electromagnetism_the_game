@@ -14,6 +14,7 @@
 
 pub mod analysis;
 pub mod cost;
+pub mod model;
 pub mod solve;
 
 use physics::DVec3;

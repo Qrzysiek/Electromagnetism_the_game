@@ -724,9 +724,9 @@ def build_a_deflector():
 def shielding():
     return level(
         "Shielding",
-        "A strongly charged electrode next to the beam line throws the beam out of the "
-        "arena. A grounded metal plate between them screens its field: the plate's "
-        "surface charge cancels much of it on the far side. Place the grounded plate.",
+        "A strong charge next to the beam line throws the beam out of the arena. A "
+        "grounded metal plate between them screens its field: the charge it induces on the "
+        "plate cancels much of the field on the far side. Place the grounded plate.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 2))],
         elements=[charge(15, 14, 2 * M)],
         max_plates=1, plate_voltages=[0.0], region=(5, 3, 25, 17),

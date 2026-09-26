@@ -34,23 +34,27 @@ verified reference solution for every shot and negligible radiation
 | 14 | Polarised sphere | an isolated neutral sphere becomes a dipole near a charge | ≤ 2 charges |
 | 15 | Image charge | a grounded sphere answers every charge with an opposite image | ≤ 2 charges |
 | 16 | Deflection plates | 5 Electrodes: real plates with fringe fields (BEM) | ≤ 1 charge |
-| 17 | Real Einzel lens | three apertures at high voltage focus three rays | ≤ 2 charges |
-| 18 | Fast lane | 6 Relativity: γ changes the bending | ≤ 2 charges |
-| 19 | Beta spectrometer | relativistic circular orbits of two energies | ≤ 2 charges |
-| 20 | First coil | 7 Magnetic fields from level coils | ≤ 1 charge |
-| 21 | Dempster | 180° focusing and mass separation | ≤ 2 charges |
-| 22 | Wien filter | crossed E and B select one speed | ≤ 4 charges |
-| 23 | First magnet | 8 Placing your own magnets | ≤ 1 magnet |
-| 24 | Calutron | isotope separation with magnets only | ≤ 2 magnets |
-| 25 | Build a Wien filter | crossed fields from charges and magnets | ≤ 4 charges, ≤ 2 magnets |
-| 26 | Stray field | 9 Noise: a stray field switched on and off; aim between | ≤ 1 charge |
-| 27 | Mains hum | uniform AC field at 4 phases acts like a random launch angle; imaging | ≤ 4 charges |
-| 28 | Earth's field | stray B_z of either sign on an electron beam | ≤ 3 charges |
-| 29 | RF kick | 10 Radio frequency: an antenna's kick depends on the passing time | ≤ 1 antenna |
-| 30 | RF separator | identical bunches half a period apart to different detectors | ≤ 2 antennas, ≤ 1 charge |
-| 31 | Tune the RF | choose the antenna frequency: the phase difference ω Δt decides | ≤ 1 antenna (5 frequencies), ≤ 1 charge |
-| 32 | Streak camera | three bunches a third of a period apart to three spots | ≤ 2 antennas, ≤ 2 charges |
-| 33 | Synchrotron light | 11 Radiation: radiative damping spirals the particle to the axis; only possible with radiation (canonical angular momentum) | 1 magnet on the axis |
+| 17 | Power supply | power supplies: set an electrode's potential instead of placing charges | 1 supply (4 potentials) |
+| 18 | Tune the lens | focus a real Einzel lens with its voltage | 2 supplies (4 potentials) |
+| 19 | Real Einzel lens | three apertures at high voltage focus three rays | ≤ 2 charges |
+| 20 | Build a deflector | placing your own plates (electrodes) | ≤ 1 plate (4 potentials) |
+| 21 | Shielding | a grounded plate screens a charge's field | ≤ 1 grounded plate |
+| 22 | Fast lane | 6 Relativity: γ changes the bending | ≤ 2 charges |
+| 23 | Beta spectrometer | relativistic circular orbits of two energies | ≤ 2 charges |
+| 24 | First coil | 7 Magnetic fields from level coils | ≤ 1 charge |
+| 25 | Dempster | 180° focusing and mass separation | ≤ 2 charges |
+| 26 | Wien filter | crossed E and B select one speed | ≤ 4 charges |
+| 27 | First magnet | 8 Placing your own magnets | ≤ 1 magnet |
+| 28 | Calutron | isotope separation with magnets only | ≤ 2 magnets |
+| 29 | Build a Wien filter | crossed fields from charges and magnets | ≤ 4 charges, ≤ 2 magnets |
+| 30 | Stray field | 9 Noise: a stray field switched on and off; aim between | ≤ 1 charge |
+| 31 | Mains hum | uniform AC field at 4 phases acts like a random launch angle; imaging | ≤ 4 charges |
+| 32 | Earth's field | stray B_z of either sign on an electron beam | ≤ 3 charges |
+| 33 | RF kick | 10 Radio frequency: an antenna's kick depends on the passing time | ≤ 1 antenna |
+| 34 | RF separator | identical bunches half a period apart to different detectors | ≤ 2 antennas, ≤ 1 charge |
+| 35 | Tune the RF | choose the antenna frequency: the phase difference ω Δt decides | ≤ 1 antenna (5 frequencies), ≤ 1 charge |
+| 36 | Streak camera | three bunches a third of a period apart to three spots | ≤ 2 antennas, ≤ 2 charges |
+| 37 | Synchrotron light | 11 Radiation: radiative damping spirals the particle to the axis; only possible with radiation (canonical angular momentum) | 1 magnet on the axis |
 
 ## Automatic detectors
 
@@ -98,35 +102,43 @@ cost more, with 600 samples and 16 runs). Columns:
 | 14_polarized_sphere | 6.6 | 1.2e-2 | 31/32 | 28 | 41 / 83 | 0.61 |
 | 15_image_charge | 7.1 | 1.8e-2 | 25/32 | 68 | 180 / 56 | 0.80 |
 | 16_deflection_plates | 3.2 | 1.7e-1 | 16/16 | 12 | 12 / 6 | 0.44 |
-| 17_real_einzel_lens | 5.8 | 1.0e-2 | 16/16 | 78 | 78 / 100 | 0.80 |
-| 18_fast_lane | 7.3 | 1.3e-2 | 32/32 | 65 | 65 / 80 | 0.60 |
-| 19_beta_spectrometer | 6.6 | 1.5e-3 | 20/32 | 131 | 371 / 667 | 0.77 |
-| 20_first_coil | 3.6 | 3.3e-1 | 32/32 | 17 | 17 / 3 | 0.44 |
-| 21_dempster | 5.8 | 7.7e-2 | 32/32 | 21 | 21 / 13 | 0.56 |
-| 22_wien_filter | 11.6 | 1.5e-3 | 28/32 | 77 | 134 / 667 | 0.63 |
-| 23_first_magnet | 3.3 | 8.1e-2 | 32/32 | 14 | 14 / 12 | 0.40 |
-| 24_calutron | 6.5 | < 1.5e-3 | 4/32 | 124 | 2924 / 667 | 0.70 |
-| 25_build_wien_filter | 18.2 | 2.5e-3 | 14/32 | 130 | 644 / 400 | 0.85 |
-| 26_stray_field | 3.8 | 5.0e-2 | 32/32 | 19 | 19 / 20 | 0.62 |
-| 27_mains_hum | 12.3 | < 1.5e-3 | 18/32 | 96 | 407 / 667 | 0.87 |
-| 28_earths_field | 9.6 | 5.0e-4 | 17/32 | 184 | 537 / 2000 | 0.82 |
-| 29_rf_kick | 4.3 | 4.3e-2 | 32/32 | 30 | 30 / 24 | 0.27 |
-| 30_rf_separator | 11.0 | 6.0e-3 | 29/32 | 66 | 107 / 167 | 0.76 |
-| 31_tune_the_rf | 7.9 | 1.5e-3 | 26/32 | 130 | 223 / 667 | 0.76 |
-| 32_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
-| 33_synchrotron_light | 1.0 | 5.0e-1 | 32/32 | 2 | 2 / 2 | -0.05 |
+| 17_power_supply | 0.7 | 2.8e-1 | 16/16 | 3 | 3 / 4 | -0.43 |
+| 18_tune_the_lens | 1.4 | 3.7e-2 | 11/16 | 23 | 205 / 27 | 0.30 |
+| 19_real_einzel_lens | 5.8 | 1.0e-2 | 16/16 | 78 | 78 / 100 | 0.80 |
+| 20_build_a_deflector | 3.2 | 1.7e-1 | 16/16 | 8 | 8 / 6 | 0.47 |
+| 21_shielding | 2.6 | 3.2e-2 | 16/16 | 36 | 36 / 32 | 0.68 |
+| 22_fast_lane | 7.3 | 1.3e-2 | 32/32 | 65 | 65 / 80 | 0.60 |
+| 23_beta_spectrometer | 6.6 | 1.5e-3 | 20/32 | 131 | 371 / 667 | 0.77 |
+| 24_first_coil | 3.6 | 3.3e-1 | 32/32 | 17 | 17 / 3 | 0.44 |
+| 25_dempster | 5.8 | 7.7e-2 | 32/32 | 21 | 21 / 13 | 0.56 |
+| 26_wien_filter | 11.6 | 1.5e-3 | 28/32 | 77 | 134 / 667 | 0.63 |
+| 27_first_magnet | 3.3 | 8.1e-2 | 32/32 | 14 | 14 / 12 | 0.40 |
+| 28_calutron | 6.5 | < 1.5e-3 | 4/32 | 124 | 2924 / 667 | 0.70 |
+| 29_build_wien_filter | 18.2 | 2.5e-3 | 14/32 | 130 | 644 / 400 | 0.85 |
+| 30_stray_field | 3.8 | 5.0e-2 | 32/32 | 19 | 19 / 20 | 0.62 |
+| 31_mains_hum | 12.3 | < 1.5e-3 | 18/32 | 96 | 407 / 667 | 0.87 |
+| 32_earths_field | 9.6 | 5.0e-4 | 17/32 | 184 | 537 / 2000 | 0.82 |
+| 33_rf_kick | 4.3 | 4.3e-2 | 32/32 | 30 | 30 / 24 | 0.27 |
+| 34_rf_separator | 11.0 | 6.0e-3 | 29/32 | 66 | 107 / 167 | 0.76 |
+| 35_tune_the_rf | 7.9 | 1.5e-3 | 26/32 | 130 | 223 / 667 | 0.76 |
+| 36_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
+| 37_synchrotron_light | 1.0 | 5.0e-1 | 32/32 | 2 | 2 / 2 | -0.05 |
 
 Notes:
 
-- The introduction levels (1, 10, 13, 16, 20, 23, 26, 29, 33) are meant to be easy. Level 33 is a
+- The introduction levels (1, 10, 13, 16, 17, 20, 24, 27, 30, 33, 37) are meant to be easy. Level 37 is a
   concept level (8 choices); harder radiation levels are to come.
 - Under disturbances (chapter 9) a placement counts as a solution only if every flight
   arrives, verified. The distance objective sums over all flights.
-- Dempster (21) has in effect one physical parameter (the accelerating voltage, which sets
+- Dempster (25) has in effect one physical parameter (the accelerating voltage, which sets
   all radii). It is kept as the concept level for 180° focusing.
-- The Calutron (24) is the hardest: no random placement out of 2000 solved it, and the
+- The Calutron (28) is the hardest: no random placement out of 2000 solved it, and the
   search succeeded in 4 of 32 runs. Its difficulty comes from the magnets' strongly
   non-uniform dipole fields.
+- Power supply (17) and Tune the lens (18) are knob levels with tiny configuration spaces
+  (5 and 25 settings). The analysis caches the result of every distinct placement, so
+  such levels cost only their distinct placements; before the cache (and before it knew
+  about supplies), analysing them did not terminate.
 - The search is a rough stand-in for a player. A player who understands the physics (for
   example the Wien condition v = E/B) should do much better than the search on the later
   levels, and a player who doesn't should do much worse.

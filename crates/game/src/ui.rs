@@ -344,6 +344,32 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         fmt_si(shot.particle.charge),
         fmt_si(shot.particle.mass)
     ));
+    egui::CollapsingHeader::new("Physics model and its limits")
+        .id_salt("model_notes")
+        // Opened for developer captures with EM_MODEL=1 (see `dev_capture`).
+        .default_open(std::env::var("EM_MODEL").is_ok_and(|v| v == "1"))
+        .show(ui, |ui| {
+            for n in level.model_notes(&game.editor.placement) {
+                ui.horizontal_wrapped(|ui| {
+                    if n.exact {
+                        ui.colored_label(egui::Color32::from_rgb(110, 210, 120), "exact")
+                    } else {
+                        ui.colored_label(egui::Color32::from_rgb(230, 180, 70), "approx.")
+                    }
+                    .on_hover_text(if n.exact {
+                        "Exact within classical electrodynamics, up to the integration accuracy"
+                    } else {
+                        "An approximation or omission; where it can matter, its size is measured"
+                    });
+                    ui.label(egui::RichText::new(n.text).small());
+                });
+            }
+            ui.label(
+                egui::RichText::new("Details and tests: PHYSICS.md.")
+                    .small()
+                    .weak(),
+            );
+        });
     ui.separator();
 
     // Palette.
