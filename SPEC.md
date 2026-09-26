@@ -71,6 +71,8 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 - **Radiation** (PHYSICS.md §2.5, §3.1, §10): levels may include radiation reaction (Landau–Lifshitz); the particle's own field and the antennas' waves can be shown as animated maps.
 - **Antennas** (PHYSICS.md §2.4): oscillating electric dipoles in the plane with exact retarded fields, driven in phase by one RF generator per level. Shots may have a launch time, so identical particles launched at different moments can be sorted (RF separator, streak camera).
 - **Magnetic elements** (SPEC §9, PHYSICS.md §2.2): magnets (uniformly magnetized spheres standing out of the plane, exact dipole field) as level or player elements, and coils lying in the plane (circle or polygon, exact Biot–Savart) as level elements. Magnet levels: Dempster's mass spectrometer (180° focusing and mass separation), a Wien filter (velocity selector), and the calutron (magnetic isotope separation with player-placed magnets).
+- **Harder variants of instruments (planned).** A level shows the idealised solution of an earlier level, then adds a real effect that breaks it: fringe fields, finite electrode size, stray fields, radiation losses, space charge. The player adds elements to make the whole setup work again. Where patching cannot work, the level instead gives a realistic starting point or asks for a design from scratch.
+- **Beams (planned, with Stage 2).** Many particles that interact through their fields: Coulomb and space charge first, then Darwin and Liénard–Wiechert. The goal is to control the whole beam, not just one particle.
 - **Sandbox mode** (level editor): place level charges freely; set the launch point, direction and energy, the particle, c, the detector box, the grid and the player limits. Check solvability with the solver, store a reference solution, and save levels as JSON (`levels/custom/`) alongside generated ones.
 
 ## 4. 2D and 3D modes
@@ -135,7 +137,8 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 4. **Stage 4: static metals and dielectrics.**
 5. **Stage 5: materials charged by particles, relaxation during pauses.**
 6. **Stage 6: magnetic fields, Darwin approximation, superconductors.**
-7. **Stage 7: Liénard–Wiechert with radiation reaction.** Optionally FDTD/PIC, semiconductors.
+7. **Stage 7: Liénard–Wiechert with radiation reaction.** Optionally FDTD/PIC, semiconductors. (Radiation reaction, antennas and plane waves already exist for single particles; see PHYSICS.md §2.3–2.5, §3.1.)
+8. **Stage 8: part design (§13).** Part editor and library, multipole abstraction with certified error, nesting, scaling, then responsive parts (T-matrix) once materials exist.
 
 ## 11. Physics tests (mandatory from Stage 1)
 
@@ -155,3 +158,54 @@ Each test compares against an analytic result, with thresholds stated in `PHYSIC
 
 - The physical scale of the reference world (cell size, reference particle species, typical energies). Non-relativistic electrostatics is scale-invariant, so this matters from Stage 2 (particle charge scale) and for materials.
 - The final scoring formula (wave-based, speed-based, or a mix; see §3), after playtesting. The architecture must support both: launch speed is a per-run parameter, not baked into the level.
+- Part design (§13): whether particles may pass through parts (opaque, transparent, or per-part apertures); how drive parameters and scaling appear in the UI; how the part library interacts with level progression (unlocks, as in Turing Complete).
+
+## 13. Part design (future stage, after materials)
+
+Inspired by Turing Complete's "build a component, then use it as a component". Here the component is a physical device, and what abstracts it is its field.
+
+### 13.1 What a part is
+
+- **Definition.** A part is a small design made in a part editor (a sandbox at its own scale). It holds elements, coils, antennas, materials (metals, dielectrics, magnetic materials, superconductors) and other parts. It is saved in a part library.
+- **Parameters.** A part declares drive parameters, such as an electrode voltage, a coil current or an RF amplitude and phase, and possibly geometric ones.
+- **Linear parts.** For parts made of linear materials, the field is linear in the drives: `F = Σ_k d_k F_k`. So a part is stored as a few basis fields, one per drive, and an instance is just a set of drive values.
+- **Instances.** An instance has a position, an in-plane rotation, a mirror flag, a size scale `s` and its drive values.
+- **Scaling.** Scaling is exact for linear static parts:
+  - fixed charges give `E ∝ Q/s²`;
+  - electrodes at fixed voltage give `E ∝ V/s`;
+  - coils at fixed current give `B ∝ I/s`.
+
+  So "the same device, twice as big" needs no re-solve.
+- **The 2D slice.** It must stay exact. A part used in 2D must have the plane as its symmetry plane: sources symmetric about z = 0, magnetic moments and currents arranged as in PHYSICS.md §2.2. Rotations about z and mirrors in the plane preserve this, and the editor checks it.
+- **Nesting.** Parts can contain parts (stacks of technology: electrode → lens → column → instrument). A level can require building a part, and later levels can offer it from the player's library, as in Turing Complete's progression.
+
+### 13.2 What a part does to the world (minimal and extended)
+
+1. **Minimum: the external field.** Outside the part's bounding sphere, its field is represented by a multipole expansion: solid harmonics for electrostatic and magnetostatic parts, vector spherical harmonics for time-harmonic, radiating parts. The expansion converges outside the circumscribing sphere, and its truncation error at distance `r` falls as `(R/r)^(p+1)` with a computable bound. The order `p` is chosen per evaluation to meet the tolerance. So the abstraction's error is **certified**, like everything else (§2.3), and verification (a tighter tolerance) automatically uses a higher order.
+2. **Particles through a part: open question, with a natural default.** A part is a sub-scene, so inside its bounding sphere its exact field can always be evaluated from its children. Options:
+   - **Opaque part:** its body is an obstacle, and only the external field matters. This is cheapest and needs only (1).
+   - **Transparent part:** particles fly through. Near and inside the part the field is evaluated from the children (recursively), and far away from the expansion. This is exactly the near/far split of the fast multipole method, so a design's cost stays close to its number of visible parts, not the size of its contents.
+
+   A per-part choice (opaque, or with defined apertures) is likely best. It is decided when the first real parts exist.
+3. **Optional, later: transfer maps.** For parts built as beam optics (lenses, deflectors, analyzers), a design aid can show the part's transfer map from an entry plane to an exit plane: first-order matrices, or higher-order maps as in differential-algebra beam codes such as COSY INFINITY. This is for design hints only. Flights are always tracked exactly through the field.
+
+### 13.3 Materials inside parts, and parts responding to each other
+
+- **Linear response.** A part with conductors or dielectrics responds to external fields: induced charge, polarization. Around the part this response is linear. It is described by a response operator that maps the multipoles of the incoming field to the multipoles of the induced field (the T-matrix of multiple-scattering theory, Waterman). This operator is precomputed once per part definition, e.g. with the BEM solver of §8.
+- **Scene solve.** A scene of several responsive parts then solves a small linear system for their mutual induction: parts × multipole coefficients. It is iterated to a tolerance instead of re-solving the whole geometry.
+- **Nonlinear materials.** Ferromagnets with saturation and some superconductor regimes break superposition. Parts containing them fall back to a full solve of the enclosing scene, or are restricted to their linear range. This is stated per material.
+- **Time-dependent parts.** Antennas and RF structures use frequency-domain expansions (exact outside the bounding sphere, including the radiation zone). Quasi-static parts use static expansions with time-dependent drives.
+
+### 13.4 Performance and accuracy plan
+
+- **Precompute per part definition:** its basis fields, i.e. multipole moments to a high order per drive, plus the response operator if the part is responsive. These are cached in the library with a hash of the definition.
+- **Composition is cheap and exact.** Expansions translate and combine with the fast multipole method's translation operators (multipole-to-multipole, multipole-to-local). These are exact at the truncation order. Rotations about z and mirrors act exactly on the coefficients. So parts of parts cost only their own coefficients.
+- **Evaluation** walks the part tree with an opening criterion, near → children, far → expansion. The order and the criterion come from the error bound, so every field value carries a certified bound that feeds the verification margin (§2.3). Evaluation order is fixed, so results stay deterministic.
+- **Libraries.** Our source counts are small (tens of parts, a few levels of nesting), so an own implementation of solid harmonics and translations is simple and testable. Mature FMM libraries (e.g. exafmm, PVFMM) are references and fallbacks if scenes grow.
+- **Tests,** mandatory when the stage starts:
+  - The expansion converges to the direct sum at the predicted rate `(R/r)^(p+1)`.
+  - Translation and rotation operators match a direct re-expansion.
+  - A nested part matches the flat scene.
+  - Scaling laws hold.
+  - The response operator matches a full BEM solve of two nearby parts.
+  - A particle through a transparent part matches the flat scene.
