@@ -32,6 +32,7 @@ pub fn point_at(p: &Preview, t: f64) -> Option<PathPoint> {
         p: a.p.lerp(b.p, w),
         kinetic: lerp(a.kinetic, b.kinetic),
         potential: lerp(a.potential, b.potential),
+        radiated: lerp(a.radiated, b.radiated),
         force: a.force.lerp(b.force, w),
         speed_over_c: lerp(a.speed_over_c, b.speed_over_c),
     })
@@ -497,7 +498,22 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                     ui.label(format!("{:.1e}", p.energy_rel_error));
                 }
                 ui.end_row();
-                if level.physics.c.is_some() {
+                if p.radiation_reaction {
+                    ui.label("radiated / T₀ (included)");
+                    ui.label(format!("{:.3e}", p.radiation_loss_fraction));
+                    ui.end_row();
+                    ui.label("max |F_rad| / |F_Lorentz|");
+                    let text = format!("{:.1e}", p.reaction_ratio_max);
+                    if p.reaction_ratio_max > 0.05 {
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            text + "  LL approximation strained",
+                        );
+                    } else {
+                        ui.label(text);
+                    }
+                    ui.end_row();
+                } else if level.physics.c.is_some() {
                     ui.label("radiated / T₀ (neglected)");
                     let text = format!("{:.1e}", p.radiated_fraction);
                     if p.radiated_fraction > 1e-10 {
@@ -540,12 +556,34 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             pt.potential / t0,
             egui::Color32::from_rgb(200, 90, 230),
         );
-        energy_bar(
-            ui,
-            "total − T₀",
-            (pt.kinetic + pt.potential - t0) / t0,
-            egui::Color32::from_rgb(120, 220, 120),
-        );
+        if p.radiation_reaction {
+            energy_bar(
+                ui,
+                "radiated",
+                pt.radiated / t0,
+                egui::Color32::from_rgb(90, 200, 255),
+            );
+            energy_bar(
+                ui,
+                "total − T₀",
+                (pt.kinetic + pt.potential + pt.radiated - t0) / t0,
+                egui::Color32::from_rgb(120, 220, 120),
+            );
+            ui.label(
+                egui::RichText::new(
+                    "total = kinetic + potential + radiated: the energy the particle radiates \
+                     is carried away by its field.",
+                )
+                .small(),
+            );
+        } else {
+            energy_bar(
+                ui,
+                "total − T₀",
+                (pt.kinetic + pt.potential - t0) / t0,
+                egui::Color32::from_rgb(120, 220, 120),
+            );
+        }
         if level.physics.c.is_some() {
             ui.label(format!("t = {:.2}   v/c = {:.4}", pt.t, pt.speed_over_c));
         } else {

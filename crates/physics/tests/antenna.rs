@@ -187,6 +187,7 @@ fn a3_plane_symmetry_with_antennas() {
         detector: None,
         bounds: Some(cube(30.0)),
         t_max: 60.0,
+        radiation_reaction: false,
     };
     let tr = run(&scn, &RunSettings::with_tolerance(1e-12));
     println!("A3: {} steps, outcome {:?}", tr.stats.n_accept, tr.outcome);

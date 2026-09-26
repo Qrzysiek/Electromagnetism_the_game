@@ -130,6 +130,7 @@ pub fn empty_level() -> Level {
             wire_radius: 0.1,
             antenna_radius: 0.3,
             rf_omega: 0.0,
+            radiation_reaction: false,
             t_max: 200.0,
             tolerances: TolerancesSpec {
                 preview: 1e-10,

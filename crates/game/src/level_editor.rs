@@ -146,6 +146,7 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
         wire_radius,
         antenna_radius,
         rf_omega,
+        radiation_reaction,
         t_max,
         tolerances,
     } = p;
@@ -180,6 +181,11 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
                 .range(0.0..=MAX_POSITIVE),
         )
         .has_focus()
+    });
+    row(ui, "Radiation reaction", |ui| {
+        ui.checkbox(radiation_reaction, "included")
+            .on_hover_text("Landau–Lifshitz force: the particle loses the energy it radiates");
+        false
     });
     focus |= row(ui, "Time limit", |ui| {
         positive(ui, t_max, 1.0, MAX_POSITIVE)
@@ -651,6 +657,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         wire_radius,
         antenna_radius,
         rf_omega,
+        radiation_reaction: _,
         t_max,
         tolerances: TolerancesSpec { preview, verify },
     } = physics;

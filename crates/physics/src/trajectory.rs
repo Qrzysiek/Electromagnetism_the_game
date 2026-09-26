@@ -3,11 +3,11 @@
 
 use glam::DVec3;
 
-use crate::dynamics::{Particle, ParticleOde};
+use crate::dynamics::{Kinematics, Particle, ParticleOde};
 use crate::events::first_crossing;
 use crate::field::FieldSolver;
 use crate::geometry::{Aabb, Region, Shape};
-use crate::integrator::{self, Dense, Dop853, Settings, Stats};
+use crate::integrator::{self, Dense, Dop853, OdeSystem, Settings, Stats};
 
 /// Margins at or above this value (grid units) are not refined further: they are far too
 /// large for numerical error to matter. Refinement starts below twice this value.
@@ -30,6 +30,8 @@ pub struct Scenario<F> {
     pub bounds: Option<Aabb>,
     /// Maximum flight time (game rule).
     pub t_max: f64,
+    /// Include the particle's radiation reaction (Landau–Lifshitz, PHYSICS.md §3.1).
+    pub radiation_reaction: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -112,6 +114,13 @@ pub struct Trajectory {
     pub energy_max_abs_error: f64,
     /// Energy radiated according to the Liénard formula (trapezoidal rule over steps).
     pub radiated_energy: f64,
+    /// Work done on the particle by the radiation-reaction force (≤ 0 over a flight
+    /// between force-free states; 0 without radiation reaction). Integrated as part of
+    /// the ODE state.
+    pub radiation_work: f64,
+    /// Largest ratio |radiation-reaction force| / |Lorentz force| over the accepted steps:
+    /// the Landau–Lifshitz treatment requires it to be small.
+    pub reaction_ratio_max: f64,
     /// Present when `RunSettings::margins` is set.
     pub margins: Option<Margins>,
 }
@@ -129,6 +138,23 @@ impl<F: FieldSolver> StepView<'_, F> {
 
     pub fn t_end(&self) -> f64 {
         self.dense.t_end()
+    }
+
+    /// Interpolated work done by the radiation-reaction force since launch.
+    pub fn radiation_work(&self, t: f64) -> f64 {
+        if self.ode.radiation_reaction {
+            self.ode.radiation_work(&[
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                self.dense.eval_component(6, t),
+            ])
+        } else {
+            0.0
+        }
     }
 
     /// Interpolated position and momentum.
@@ -188,7 +214,12 @@ pub fn run_observed<F: FieldSolver>(
     } else {
         scn.particle.mass
     };
-    let ode = ParticleOde::new(&scn.field, &scn.particle, scn.c, p_ref);
+    let e_ref = {
+        let k = Kinematics::new(scn.particle.mass, scn.c).kinetic_energy(scn.p0);
+        if k > 0.0 { k } else { scn.particle.mass }
+    };
+    let ode = ParticleOde::new(&scn.field, &scn.particle, scn.c, p_ref)
+        .with_radiation_reaction(scn.radiation_reaction, e_ref);
     let q = scn.particle.charge;
 
     let mut events: Vec<Event> = (0..scn.obstacles.len()).map(Event::Obstacle).collect();
@@ -221,6 +252,8 @@ pub fn run_observed<F: FieldSolver>(
         kinetic_initial,
         energy_max_abs_error: if is_static { 0.0 } else { f64::NAN },
         radiated_energy: 0.0,
+        radiation_work: 0.0,
+        reaction_ratio_max: 0.0,
         margins: None,
     };
 
@@ -326,8 +359,24 @@ pub fn run_observed<F: FieldSolver>(
         };
         let sample = Sample { t: t_end, x, p };
 
+        let work = if event.is_some() {
+            let mut y = vec![0.0; ode.dim()];
+            view.dense.eval(t_end, &mut y);
+            ode.radiation_work(&y)
+        } else {
+            ode.radiation_work(int.y())
+        };
+        traj.radiation_work = work;
+        if ode.radiation_reaction {
+            let lorentz = ode.force(x, p, t_end).length();
+            let rr = ode.radiation_reaction_force(x, p, t_end).length();
+            if lorentz > 0.0 {
+                traj.reaction_ratio_max = traj.reaction_ratio_max.max(rr / lorentz);
+            }
+        }
         if is_static {
-            let dw = (energy(x, p, t_end) - energy_initial).abs();
+            // With radiation reaction, W(t) − W(0) equals the work of that force.
+            let dw = (energy(x, p, t_end) - energy_initial - work).abs();
             traj.energy_max_abs_error = traj.energy_max_abs_error.max(dw);
         }
         let p_now = power(x, p, t_end);

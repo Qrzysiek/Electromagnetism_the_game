@@ -101,6 +101,7 @@ fn clear_exit_through_bounds_is_verified() {
             max: DVec3::new(31.0, 21.0, 1.0),
         }),
         t_max: 200.0,
+        radiation_reaction: false,
     };
     let v = verify(&scn, Tolerances::default());
     println!(

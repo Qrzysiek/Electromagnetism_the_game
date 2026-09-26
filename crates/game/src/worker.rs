@@ -25,6 +25,9 @@ pub struct PathPoint {
     pub kinetic: f64,
     /// Potential energy relative to the launch point, `q(φ(x) − φ(A))`.
     pub potential: f64,
+    /// Energy lost to radiation so far (minus the work of the radiation-reaction force;
+    /// 0 when radiation reaction is off).
+    pub radiated: f64,
     pub force: DVec3,
     pub speed_over_c: f64,
 }
@@ -37,6 +40,12 @@ pub struct Preview {
     pub energy_rel_error: f64,
     pub radiated_fraction: f64,
     pub max_speed_over_c: f64,
+    /// Radiation reaction included in the dynamics.
+    pub radiation_reaction: bool,
+    /// Energy lost to radiation (with radiation reaction), relative to T₀.
+    pub radiation_loss_fraction: f64,
+    /// Largest |F_RR| / |F_Lorentz| (validity of the Landau–Lifshitz treatment).
+    pub reaction_ratio_max: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -142,16 +151,22 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
 }
 
 fn preview_shot(scn: &Scenario<LevelField>, tol: f64) -> (Trajectory, Preview) {
-    let mut dense_points: Vec<(f64, DVec3, DVec3)> = Vec::new();
+    let mut dense_points: Vec<(f64, DVec3, DVec3, f64)> = Vec::new();
     let traj = run_observed(scn, &RunSettings::with_tolerance(tol), |step| {
         let (a, b) = (step.t_start(), step.t_end());
         for i in 1..=8 {
             let t = a + (b - a) * f64::from(i) / 8.0;
             let (x, p) = step.state(t);
-            dense_points.push((t, x, p));
+            dense_points.push((t, x, p, -step.radiation_work(t)));
         }
     });
-    let path = build_path(scn, &traj.samples[0], &dense_points, &traj.end);
+    let path = build_path(
+        scn,
+        &traj.samples[0],
+        &dense_points,
+        &traj.end,
+        -traj.radiation_work,
+    );
     let max_speed_over_c = path.iter().map(|p| p.speed_over_c).fold(0.0, f64::max);
     let preview = Preview {
         path,
@@ -160,6 +175,9 @@ fn preview_shot(scn: &Scenario<LevelField>, tol: f64) -> (Trajectory, Preview) {
         energy_rel_error: traj.energy_max_abs_error / traj.kinetic_initial,
         radiated_fraction: traj.radiated_energy / traj.kinetic_initial,
         max_speed_over_c,
+        radiation_reaction: scn.radiation_reaction && scn.c.is_finite(),
+        radiation_loss_fraction: -traj.radiation_work / traj.kinetic_initial,
+        reaction_ratio_max: traj.reaction_ratio_max,
     };
     (traj, preview)
 }
@@ -167,13 +185,14 @@ fn preview_shot(scn: &Scenario<LevelField>, tol: f64) -> (Trajectory, Preview) {
 fn build_path(
     scn: &Scenario<LevelField>,
     start: &physics::trajectory::Sample,
-    dense: &[(f64, DVec3, DVec3)],
+    dense: &[(f64, DVec3, DVec3, f64)],
     end: &physics::trajectory::Sample,
+    radiated_end: f64,
 ) -> Vec<PathPoint> {
     let kin = physics::dynamics::Kinematics::new(scn.particle.mass, scn.c);
     let q = scn.particle.charge;
     let phi_a = scn.field.sample(scn.x0, 0.0).phi;
-    let point = |t: f64, x: DVec3, p: DVec3| {
+    let point = |t: f64, x: DVec3, p: DVec3, radiated: f64| {
         let f = scn.field.sample(x, t);
         let v = kin.velocity(p);
         PathPoint {
@@ -182,6 +201,7 @@ fn build_path(
             p,
             kinetic: kin.kinetic_energy(p),
             potential: q * (f.phi - phi_a),
+            radiated,
             force: (f.e + v.cross(f.b)) * q,
             speed_over_c: if scn.c.is_finite() {
                 v.length() / scn.c
@@ -190,13 +210,13 @@ fn build_path(
             },
         }
     };
-    let mut path = vec![point(start.t, start.x, start.p)];
+    let mut path = vec![point(start.t, start.x, start.p, 0.0)];
     path.extend(
         dense
             .iter()
-            .filter(|(t, _, _)| *t < end.t)
-            .map(|&(t, x, p)| point(t, x, p)),
+            .filter(|(t, _, _, _)| *t < end.t)
+            .map(|&(t, x, p, r)| point(t, x, p, r)),
     );
-    path.push(point(end.t, end.x, end.p));
+    path.push(point(end.t, end.x, end.p, radiated_end));
     path
 }

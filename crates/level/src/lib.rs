@@ -249,6 +249,10 @@ pub struct WorldPhysics {
     /// (`p(t) = p₀ cos(ωt)`; 0 means static dipoles).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub rf_omega: f64,
+    /// Include the particles' radiation reaction (Landau–Lifshitz, PHYSICS.md §3.1). Off:
+    /// radiation is neglected and must be negligible.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub radiation_reaction: bool,
     pub t_max: f64,
     pub tolerances: TolerancesSpec,
 }
@@ -759,6 +763,7 @@ impl Level {
             detector: Some(self.detector_region(shot)),
             bounds: Some(self.bounds()),
             t_max: self.physics.t_max,
+            radiation_reaction: self.physics.radiation_reaction,
         }
     }
 
@@ -790,6 +795,7 @@ mod tests {
                 wire_radius: 0.1,
                 antenna_radius: 0.3,
                 rf_omega: 1.5,
+                radiation_reaction: true,
                 t_max: 100.0,
                 tolerances: TolerancesSpec {
                     preview: 1e-10,

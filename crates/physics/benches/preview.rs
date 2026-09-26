@@ -63,6 +63,7 @@ fn level_50() -> Scenario<Coulomb> {
             max: DVec3::new(41.0, 31.0, 1.0),
         }),
         t_max: 400.0,
+        radiation_reaction: false,
     }
 }
 

@@ -66,6 +66,16 @@ fn neglected_radiation_is_below_numerical_accuracy() {
                 &RunSettings::with_tolerance(level.physics.tolerances.verify),
             );
             let fraction = tr.radiated_energy / tr.kinetic_initial;
+            if level.physics.radiation_reaction {
+                // Radiation is part of the model; the Landau–Lifshitz treatment must be
+                // valid instead (radiation reaction small against the Lorentz force).
+                assert!(
+                    tr.reaction_ratio_max < 0.05,
+                    "{name}: |F_RR|/|F_L| = {:.3e}",
+                    tr.reaction_ratio_max
+                );
+                continue;
+            }
             let (shot, d) = level.flight_of(i);
             println!(
                 "{name} shot {} disturbance {}: radiated / T0 = {fraction:.2e}",
