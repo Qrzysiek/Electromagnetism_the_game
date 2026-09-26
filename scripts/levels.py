@@ -82,6 +82,14 @@ def shot(q, m, node, angle_deg, ke, detector, time=0.0):
     }
 
 
+def metal(x, y, r, kind="grounded", value=None):
+    """A metal sphere: kind "grounded", "charge" (net charge value) or "potential"."""
+    bias = {"kind": kind}
+    if value is not None:
+        bias["value"] = value
+    return {"center": [x, y, 0], "radius": r, "bias": bias}
+
+
 def antenna(x, y, p0, angle_deg=0.0):
     e = {"node": [x, y, 0], "kind": "antenna", "value": p0}
     if angle_deg:
@@ -107,7 +115,7 @@ def wave(amplitude, omega, phase_deg, direction_deg=0.0):
 def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charges=0,
           magnitudes=(), signs=(True, True), max_magnets=0, strengths=(), region=None,
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
-          amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=()):
+          amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -129,6 +137,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         "shots": list(shots), "elements": list(elements), "coils": list(coils),
         "limits": limits, "reference_solution": list(reference or []),
         **({"disturbances": list(disturbances)} if disturbances else {}),
+        **({"conductors": list(conductors)} if conductors else {}),
     }
 
 
@@ -517,6 +526,47 @@ def tune_the_rf():
         region=(4, 3, 24, 17), rf_omega=RF)
 
 
+# =======================================================================================
+# Metals (PHYSICS.md 2.6). A metal sphere is an equipotential: held at a potential V it
+# acts from outside like a charge V a at its centre, plus the charges that nearby charges
+# induce on it (their images). Values: V = 4e5 on a sphere of radius 2.5 is 1e6 of charge.
+
+def high_voltage_dome():
+    return level(
+        "High-voltage dome",
+        "A metal sphere held at high voltage, like the dome of a Van de Graaff generator. "
+        "From outside it pushes like a big charge at its centre, but it is a conductor: a "
+        "charge you put near it pulls the dome's charge towards itself. The dome lifts the "
+        "beam; add one charge to bring it into the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 16, 30, 19)))],
+        conductors=[metal(15, 4, 2.5, "potential", 3e5)],
+        max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)])
+
+
+def image_charge():
+    return level(
+        "Image charge",
+        "A large grounded sphere. Whatever charge you place near it, the metal answers with "
+        "an opposite image charge inside: near the surface your charge is almost cancelled, "
+        "far away the pair acts like a dipole. Steer the beam around the sphere.",
+        shots=[shot(1e-6, 1.0, (0, 6), 0.0, 0.5, box((27, 13, 30, 17)))],
+        conductors=[metal(14, 10, 3.5, "grounded")],
+        max_charges=2, magnitudes=[m * M for m in (0.5, 1, 2, 4)])
+
+
+def polarized_sphere():
+    return level(
+        "Polarised sphere",
+        "An isolated, uncharged metal sphere next to a strong charge. It stays neutral, but "
+        "its charges separate: the side facing the charge takes the opposite sign, the far "
+        "side the same sign. The sphere becomes a dipole that moves with every charge you "
+        "add. Bring the beam to the detector.",
+        shots=[shot(1e-6, 1.0, (0, 4), 0.0, 0.5, box((27, 15, 30, 18)))],
+        elements=[charge(8, 16, 4 * M)],
+        conductors=[metal(16, 10, 2.5, "charge", 0.0)],
+        max_charges=2, magnitudes=[m * M for m in (0.5, 1, 2, 4)], region=(4, 2, 24, 18))
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -529,27 +579,31 @@ LEVELS = [
     ("reflectron", reflectron),
     ("einzel_lens", einzel_lens),
     ("hemispherical_analyzer", hemispherical_analyzer),
-    # Chapter 3: relativity.
+    # Chapter 3: metals (induced charge).
+    ("high_voltage_dome", high_voltage_dome),
+    ("polarized_sphere", polarized_sphere),
+    ("image_charge", image_charge),
+    # Chapter 4: relativity.
     ("fast_lane", fast_lane),
     ("beta_spectrometer", beta_spectrometer),
-    # Chapter 4: magnetic fields (coils placed by the level).
+    # Chapter 5: magnetic fields (coils placed by the level).
     ("first_coil", first_coil),
     ("dempster", dempster),
     ("wien_filter", wien_filter),
-    # Chapter 5: your own magnets.
+    # Chapter 6: your own magnets.
     ("first_magnet", first_magnet),
     ("calutron", calutron),
     ("build_wien_filter", build_wien_filter),
-    # Chapter 6: noise (outside fields; one setup for every disturbance).
+    # Chapter 7: noise (outside fields; one setup for every disturbance).
     ("stray_field", stray_field),
     ("mains_hum", mains_hum),
     ("earths_field", earths_field),
-    # Chapter 7: radio frequency.
+    # Chapter 8: radio frequency.
     ("rf_kick", rf_kick),
     ("rf_separator", rf_separator),
     ("tune_the_rf", tune_the_rf),
     ("streak_camera", streak_camera),
-    # Chapter 8: radiation.
+    # Chapter 9: radiation.
     ("synchrotron_light", synchrotron_light),
 ]
 

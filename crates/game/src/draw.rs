@@ -228,6 +228,49 @@ pub fn draw(
         draw_coil(&mut gizmos, grid, coil);
     }
 
+    // Metal spheres: a filled metallic disc, rim coloured by how it is held (grey:
+    // grounded, red/blue: positive/negative charge or potential).
+    for c in &level.conductors {
+        let p = to_vec2(grid.position(c.center));
+        #[allow(clippy::cast_possible_truncation)]
+        let r = c.radius as f32;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let rings = ((r / 0.04).ceil() as u32).max(6);
+        for k in 1..=rings {
+            #[allow(clippy::cast_precision_loss)]
+            let rk = r * k as f32 / rings as f32;
+            gizmos
+                .circle_2d(p, rk, Color::srgb(0.42, 0.45, 0.5))
+                .resolution(64);
+        }
+        let rim = match c.bias {
+            level::ConductorBias::Grounded => Color::srgb(0.85, 0.85, 0.85),
+            level::ConductorBias::Charge(v) | level::ConductorBias::Potential(v) if v > 0.0 => {
+                Color::srgb(1.0, 0.45, 0.35)
+            }
+            level::ConductorBias::Charge(v) | level::ConductorBias::Potential(v) if v < 0.0 => {
+                Color::srgb(0.4, 0.65, 1.0)
+            }
+            _ => Color::srgb(0.85, 0.85, 0.85),
+        };
+        gizmos.circle_2d(p, r, rim).resolution(96);
+        if matches!(c.bias, level::ConductorBias::Grounded) {
+            // Ground symbol.
+            let g = p - Vec2::new(0.0, r * 0.35);
+            for (k, w) in [0.35f32, 0.22, 0.1].iter().enumerate() {
+                #[allow(clippy::cast_precision_loss)]
+                let y = g.y - k as f32 * 0.12;
+                seg(
+                    &mut gizmos,
+                    Vec2::new(g.x - w, y),
+                    Vec2::new(g.x + w, y),
+                    rim,
+                );
+            }
+            seg(&mut gizmos, g, g + Vec2::new(0.0, 0.3), rim);
+        }
+    }
+
     // Shots: detectors and launch points. The active shot is drawn brighter.
     for (i, shot) in level.shots.iter().enumerate() {
         let active = i == game.active_shot;

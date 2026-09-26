@@ -136,7 +136,7 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 1. **Stage 1: vacuum, single particle.** 3D core (Coulomb, DOP853, events, outcome verification), 2D mode as a cross-section, editor (mouse and basic keyboard), live trajectory, field lines and potential map, generator points 1–7, saving and loading levels, `PHYSICS.md`. Criteria: all physics tests pass; the trajectory recomputes within one frame (16 ms) with 50 charges at preview tolerance; the generator produces levels meeting points 3–5 and 7.
 2. **Stage 2: waves.** Coulomb interaction between particles, particle–particle collisions, the wave sequence with pauses, score, and a generator that verifies waves.
 3. **Stage 3: full 3D mode.** Layer editing, 3D visualisation, group editing tools.
-4. **Stage 4: static metals and dielectrics.**
+4. **Stage 4: static metals and dielectrics.** Started: metal spheres (grounded, fixed potential, floating) with image forces, PHYSICS.md §2.6, levels 10–12. Next: general electrode shapes (BEM with measured error), dielectrics.
 5. **Stage 5: materials charged by particles, relaxation during pauses.**
 6. **Stage 6: magnetic fields, Darwin approximation, superconductors.**
 7. **Stage 7: Liénard–Wiechert with radiation reaction.** Optionally FDTD/PIC, semiconductors. (Radiation reaction, antennas and plane waves already exist for single particles; see PHYSICS.md §2.3–2.5, §3.1.)

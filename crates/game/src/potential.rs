@@ -10,7 +10,7 @@ use physics::field::{FieldSolver, LevelField};
 use physics::trajectory::Scenario;
 
 /// Array sizes; must match `potential.wgsl`.
-pub const MAX_CHARGES: usize = 256;
+pub const MAX_CHARGES: usize = 1024;
 pub const MAX_MAGNETS: usize = 64;
 pub const MAX_LOOPS: usize = 16;
 pub const MAX_SEGMENTS: usize = 64;
@@ -117,7 +117,8 @@ pub fn params(
             .unwrap_or(0.1) as f32,
         ..PotentialParams::default()
     };
-    let charges = f.coulomb.charges();
+    // Fixed charges and the charges they induce on metal spheres (display resolution).
+    let charges = f.coulomb.charges().chain(f.conductors.induced.charges());
     for (i, (pos, qc)) in charges.take(MAX_CHARGES).enumerate() {
         out.charges[i] = Vec4::new(
             pos.x as f32,

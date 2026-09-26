@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use level::Level;
 use level::solve as search;
-use physics::verify::verify;
 
 #[derive(Parser)]
 #[command(about = "Level tools for Electromagnetism the game")]
@@ -185,8 +184,7 @@ fn main() {
                 level.name,
                 level.check_placement(placement)
             );
-            for (i, scn) in level.scenarios(placement).iter().enumerate() {
-                let v = verify(scn, level.tolerances());
+            for (i, v) in level.verify_flights(placement).iter().enumerate() {
                 let end = v.verified.end.x;
                 let (shot, d) = level.flight_of(i);
                 let flight = if level.disturbances.is_empty() {

@@ -1,7 +1,9 @@
-//! Background physics thread. The editor submits the latest setup (one scenario per
-//! flight); stale requests are dropped. For each request the worker sends every flight's
-//! preview trajectory first, then every flight's verification verdict (SPEC §2.3), so
-//! rendering never waits for physics.
+//! Background physics thread. The editor submits the latest setup (level and player
+//! elements); stale requests are dropped. The worker builds the scenarios (metal spheres
+//! need a one-off factorization per geometry, which must not stall rendering), sends
+//! every flight's preview trajectory first, then every flight's verification verdict
+//! (SPEC §2.3). Verification uses the field at verification resolution (it differs from
+//! the preview's only with metal spheres, PHYSICS.md §2.6).
 
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -13,8 +15,8 @@ use physics::verify::{Status, Tolerances, classify};
 
 pub struct Request {
     pub revision: u64,
-    pub scenarios: Vec<Scenario<LevelField>>,
-    pub tolerances: Tolerances,
+    pub level: level::Level,
+    pub placement: Vec<level::Element>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -111,10 +113,12 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
             },
         };
         let req = latest(rx, req);
+        let scenarios = req.level.scenarios(&req.placement);
+        let tolerances: Tolerances = req.level.tolerances();
 
         let mut previews: Vec<Trajectory> = Vec::new();
-        for (shot, scn) in req.scenarios.iter().enumerate() {
-            let (traj, preview) = preview_shot(scn, req.tolerances.preview);
+        for (shot, scn) in scenarios.iter().enumerate() {
+            let (traj, preview) = preview_shot(scn, tolerances.preview);
             previews.push(traj);
             let msg = Response::Preview {
                 revision: req.revision,
@@ -129,13 +133,19 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
                 continue 'requests;
             }
         }
-        for (shot, scn) in req.scenarios.iter().enumerate() {
+        let fine = if req.level.conductors.is_empty() {
+            scenarios
+        } else {
+            req.level
+                .scenarios_at(&req.placement, physics::conductor::Resolution::Verify)
+        };
+        for (shot, scn) in fine.iter().enumerate() {
             // Skip verification if the setup has already changed.
             if let Ok(newer) = rx.try_recv() {
                 next = Some(newer);
                 continue 'requests;
             }
-            let verified = run(scn, &RunSettings::with_tolerance(req.tolerances.verify));
+            let verified = run(scn, &RunSettings::with_tolerance(tolerances.verify));
             let status = classify(&previews[shot], &verified, scn.t_max);
             let msg = Response::Verified {
                 revision: req.revision,

@@ -150,6 +150,14 @@ Ideal conductors are equipotentials that carry induced charge. They relax in abo
 
 Truncation by depth (not by size), together with the symmetric correction, keeps the interaction symmetric. The image force `q E_self` is then conservative with potential energy `½ q φ_self(x)`, and the conserved energy of §4 becomes `(γ−1)mc² + qφ + ½ q φ_self`. The neglected deeper images are bounded by `ρ^6`, `ρ` the largest image ratio `a_j/(|c_i − c_j| − a_i)`.
 
+**In levels.**
+- `conductors` in the level format. The obstacle is the sphere plus a contact shell of 0.02 cells (`CONTACT_DISTANCE`).
+- Player elements cannot be placed inside or against a sphere.
+- `Level::model_issues` rejects combining metal with antennas or disturbances, and spheres that touch.
+- Verification (`Level::verify_flights`, `physics::verify::verify_pair`) runs the preview flight on the preview conductor model and the tighter flight on the verification model. Their difference enters the verdict.
+- Pictures (potential map, field lines, field views) use a coarse display model (60 equivalent charges, images to depth 2, about 1e-4).
+- The level test `metal_levels_are_accurate_and_consistent` requires a consistent model and a verification-resolution boundary residual below 1e-10 for each reference placement. The shipped levels have one sphere each, where the image method is exact and the residual is about 1e-15.
+
 **Validity.**
 - Electrostatic response: exact for `c = ∞`. For finite `c`, valid while the particle is slow compared with light over the size of the setup.
 - A point charge touching a conductor meets an infinite image force. The game rule is therefore that contact happens at a small finite distance (the obstacle is the sphere plus a contact shell).

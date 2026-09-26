@@ -11,7 +11,6 @@ use std::path::PathBuf;
 
 use level::Level;
 use physics::trajectory::Trajectory;
-use physics::verify::verify;
 
 /// FNV-1a, 64-bit.
 struct Hasher(u64);
@@ -75,8 +74,7 @@ fn level_hashes() -> BTreeMap<String, String> {
     for p in paths {
         let level = Level::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();
         let mut h = Hasher::new();
-        for scn in level.scenarios(&level.reference_solution) {
-            let v = verify(&scn, level.tolerances());
+        for v in level.verify_flights(&level.reference_solution) {
             h.trajectory(&v.preview);
             h.trajectory(&v.verified);
         }

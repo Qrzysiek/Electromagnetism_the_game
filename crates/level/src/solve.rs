@@ -2,7 +2,6 @@
 
 use crate::{Element, ElementKind, Level, Node};
 use physics::trajectory::{Outcome, RunSettings, run};
-use physics::verify::verify;
 use rayon::prelude::*;
 
 /// Deterministic pseudo-random numbers (SplitMix64).
@@ -125,10 +124,10 @@ pub fn objective(level: &Level, placement: &[Element]) -> (f64, Outcome) {
 /// Whether a placement is a verified solution: every shot arrives, verified.
 pub fn is_verified_solution(level: &Level, placement: &[Element]) -> bool {
     level.check_placement(placement).is_ok()
-        && level.scenarios(placement).iter().all(|scn| {
-            let v = verify(scn, level.tolerances());
-            v.outcome() == Outcome::Arrived && v.status.is_verified()
-        })
+        && level
+            .verify_flights(placement)
+            .iter()
+            .all(|v| v.outcome() == Outcome::Arrived && v.status.is_verified())
 }
 
 /// All verified single-element solutions (exhaustive).

@@ -14,7 +14,7 @@
 
 struct Params {
     // xy: position (cells), z: w = q Q / T0, w: sphere radius (cells).
-    charges: array<vec4<f32>, 256>,
+    charges: array<vec4<f32>, 1024>,
     // xy: position, z: mu / b_ref, w: sphere radius.
     magnets: array<vec4<f32>, 64>,
     // xy: centre, z: radius, w: kappa / b_ref.

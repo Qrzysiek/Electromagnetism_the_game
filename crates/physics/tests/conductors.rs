@@ -168,9 +168,9 @@ fn k2_several_spheres_boundary_conditions() {
     println!(
         "K2: {} induced charges, boundary residual (independent points) {:.1e}",
         c.induced.charges().count(),
-        c.boundary_residual
+        c.boundary_residual(&src)
     );
-    assert!(c.boundary_residual < 1e-10);
+    assert!(c.boundary_residual(&src) < 1e-10);
     let mut floating_potential = Vec::new();
     for (i, s) in spheres.iter().enumerate() {
         let v: Vec<f64> = surface(s, 400)

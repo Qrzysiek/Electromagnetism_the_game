@@ -389,6 +389,9 @@ fn dev_capture(
                 sandbox::enter(&mut game);
             }
             game.radiation_only = std::env::var("EM_RAD_ONLY").is_ok_and(|v| v == "1");
+            if std::env::var("EM_LINES").is_ok_and(|v| v == "1") {
+                game.show_field_lines = true;
+            }
             if std::env::var("EM_HARDCORE").is_ok_and(|v| v == "1") {
                 game.editor.set_continuous(true);
             }
@@ -667,8 +670,7 @@ fn sync_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
     let n = level.shots.len();
     let flights = level.flight_count();
     let per_shot = level.flights_per_shot();
-    let scenarios = level.scenarios(&game.editor.placement);
-    let tolerances = level.tolerances();
+    let request_level = level.clone();
     // Keep old previews on screen until new ones arrive; verdicts are recomputed.
     game.flights.resize(flights, FlightView::default());
     for s in &mut game.flights {
@@ -680,10 +682,11 @@ fn sync_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
     if game.active_disturbance >= per_shot {
         game.active_disturbance = 0;
     }
+    let placement = game.editor.placement.clone();
     worker.0.submit(Request {
         revision,
-        scenarios,
-        tolerances,
+        level: request_level,
+        placement,
     });
 }
 
@@ -706,7 +709,7 @@ fn update_map(
     if level.shots.is_empty() {
         return;
     }
-    let scenario = level.scenario(game.active_shot, &game.editor.placement);
+    let scenario = level.display_scenario(game.active_shot, &game.editor.placement);
     if let Some(mut m) = materials.get_mut(&quad.material) {
         m.params = potential::params(
             &scenario,
@@ -735,7 +738,10 @@ fn update_field_lines(mut game: ResMut<Game>) {
         return;
     }
     game.field_lines_key = key;
-    let scenario = game.editor.level.scenario(0, &game.editor.placement);
+    let scenario = game
+        .editor
+        .level
+        .display_scenario(0, &game.editor.placement);
     let radius = game.editor.level.physics.charge_radius;
     game.field_lines = visuals::field_lines(&scenario, radius, game.field_line_spacing)
         .into_iter()

@@ -12,8 +12,7 @@ use level::{
     Coil, Detector, ENGINE_VERSION, Element, ElementKind, FORMAT_VERSION, Grid, Launch, Level,
     Limits, Node, ParticleSpec, Region2, Shot, TolerancesSpec, WorldPhysics, solve,
 };
-use physics::trajectory::{Outcome, RunSettings, run};
-use physics::verify::verify;
+use physics::trajectory::Outcome;
 
 use crate::Game;
 use crate::draw::to_vec2;
@@ -161,6 +160,7 @@ pub fn empty_level() -> Level {
         },
         reference_solution: Vec::new(),
         disturbances: Vec::new(),
+        conductors: Vec::new(),
     }
 }
 
@@ -489,12 +489,11 @@ fn save(game: &mut Game) {
         status.push("No reference solution stored (use a solver result or your elements).".into());
     } else {
         let mut all_ok = true;
-        for (i, scn) in level
-            .scenarios(&level.reference_solution)
+        for (i, v) in level
+            .verify_flights(&level.reference_solution)
             .iter()
             .enumerate()
         {
-            let v = verify(scn, level.tolerances());
             if !(v.outcome() == Outcome::Arrived && v.status.is_verified()) {
                 all_ok = false;
                 status.push(format!(
@@ -504,12 +503,9 @@ fn save(game: &mut Game) {
                     v.status
                 ));
             }
-            let tr = run(
-                scn,
-                &RunSettings::with_tolerance(level.physics.tolerances.verify),
-            );
+            let tr = &v.verified;
             let rad = tr.radiated_energy / tr.kinetic_initial;
-            if rad > 1e-10 {
+            if rad > 1e-10 && !level.physics.radiation_reaction {
                 status.push(format!(
                     "Warning: shot {}: neglected radiation is {rad:.1e} × T₀ (> 1e-10): \
                      physically inconsistent. Use a smaller particle charge with larger \
@@ -521,6 +517,9 @@ fn save(game: &mut Game) {
         if all_ok {
             status.push("Reference solution: verified for every shot.".into());
         }
+    }
+    for issue in level.model_issues() {
+        status.push(format!("Warning: {issue}."));
     }
     let dir = custom_dir();
     let path = dir.join(format!("{}.json", slug(&game.sandbox.file_name)));

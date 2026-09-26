@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use level::Level;
 use physics::trajectory::{Outcome, RunSettings, run};
-use physics::verify::verify;
 
 fn shipped_levels() -> Vec<(String, Level)> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../levels");
@@ -34,12 +33,11 @@ fn reference_solutions_are_verified() {
             Ok(()),
             "{name}"
         );
-        for (i, scn) in level
-            .scenarios(&level.reference_solution)
+        for (i, v) in level
+            .verify_flights(&level.reference_solution)
             .iter()
             .enumerate()
         {
-            let v = verify(scn, level.tolerances());
             let (shot, d) = level.flight_of(i);
             let flight = format!("{name} shot {} disturbance {}", shot + 1, d + 1);
             assert_eq!(v.outcome(), Outcome::Arrived, "{flight}");
@@ -97,9 +95,30 @@ fn radiation_levels_need_radiation() {
         }
         level.physics.radiation_reaction = false;
         let all_arrive = level
-            .scenarios(&level.reference_solution)
+            .verify_flights(&level.reference_solution)
             .iter()
-            .all(|scn| verify(scn, level.tolerances()).outcome() == Outcome::Arrived);
+            .all(|v| v.outcome() == Outcome::Arrived);
         assert!(!all_arrive, "{name} is solved without radiation reaction");
+    }
+}
+
+/// Levels with metal spheres: a consistent model (no unsupported combinations), and the
+/// conductor model accurate at verification resolution for the reference placement
+/// (boundary residual < 1e-10, PHYSICS.md §2.6).
+#[test]
+fn metal_levels_are_accurate_and_consistent() {
+    for (name, level) in shipped_levels() {
+        assert_eq!(level.model_issues(), Vec::<String>::new(), "{name}");
+        if level.conductors.is_empty() {
+            continue;
+        }
+        let (field, _) = level.field_at(
+            &level.reference_solution,
+            physics::conductor::Resolution::Verify,
+        );
+        let sources: Vec<_> = field.coulomb.charges().collect();
+        let residual = field.conductors.boundary_residual(&sources);
+        println!("{name}: conductor boundary residual {residual:.1e}");
+        assert!(residual < 1e-10, "{name}: residual {residual:.3e}");
     }
 }

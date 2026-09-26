@@ -8,8 +8,8 @@
 
 use bevy_egui::egui;
 use level::{
-    Coil, Detector, Disturbance, Element, ElementKind, Grid, Launch, Level, Limits, Node,
-    ParticleSpec, Region2, Shot, TolerancesSpec, Wave, WorldPhysics,
+    Coil, Conductor, ConductorBias, Detector, Disturbance, Element, ElementKind, Grid, Launch,
+    Level, Limits, Node, ParticleSpec, Region2, Shot, TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -388,6 +388,70 @@ fn edit_coils(ui: &mut egui::Ui, coils: &mut Vec<Coil>, grid: &Grid) -> bool {
     focus
 }
 
+fn edit_conductors(ui: &mut egui::Ui, list: &mut Vec<Conductor>, grid: &Grid) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, c) in list.iter_mut().enumerate() {
+        let Conductor {
+            center,
+            radius,
+            bias,
+        } = c;
+        ui.push_id(("conductor", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Sphere {}", i + 1));
+                focus |= node(ui, center, grid);
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("radius");
+                focus |= positive(ui, radius, 0.05, MAX_POSITIVE);
+                let kind = match bias {
+                    ConductorBias::Grounded => 0,
+                    ConductorBias::Charge(_) => 1,
+                    ConductorBias::Potential(_) => 2,
+                };
+                let mut k = kind;
+                egui::ComboBox::from_id_salt(("bias", i))
+                    .selected_text(["grounded", "charge Q", "potential V"][k])
+                    .width(90.0)
+                    .show_ui(ui, |ui| {
+                        for (j, t) in ["grounded", "charge Q", "potential V"].iter().enumerate() {
+                            ui.selectable_value(&mut k, j, *t);
+                        }
+                    });
+                if k != kind {
+                    *bias = match k {
+                        1 => ConductorBias::Charge(0.0),
+                        2 => ConductorBias::Potential(0.0),
+                        _ => ConductorBias::Grounded,
+                    };
+                }
+                match bias {
+                    ConductorBias::Grounded => {}
+                    ConductorBias::Charge(v) | ConductorBias::Potential(v) => {
+                        focus |= si(ui, v, 1e4);
+                    }
+                }
+            });
+        });
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize && ui.small_button("+ metal sphere").clicked() {
+        let m = grid.max_node();
+        list.push(Conductor {
+            center: [m[0] / 2, m[1] / 2, 0],
+            radius: 2.0,
+            bias: ConductorBias::Grounded,
+        });
+    }
+    focus
+}
+
 fn edit_disturbances(ui: &mut egui::Ui, list: &mut Vec<Disturbance>) -> bool {
     let mut focus = false;
     let mut remove = None;
@@ -595,6 +659,7 @@ pub fn edit_level(
         // Edited in the Solution section (store own elements or a solver result).
         reference_solution: _,
         disturbances,
+        conductors,
     } = level;
     let mut focus = false;
     let mut refine_by = None;
@@ -636,6 +701,8 @@ pub fn edit_level(
         .show(ui, |ui| focus |= edit_elements(ui, elements, &g));
     egui::CollapsingHeader::new(format!("Coils ({})", coils.len()))
         .show(ui, |ui| focus |= edit_coils(ui, coils, &g));
+    egui::CollapsingHeader::new(format!("Metal spheres ({})", conductors.len()))
+        .show(ui, |ui| focus |= edit_conductors(ui, conductors, &g));
     egui::CollapsingHeader::new(format!("Disturbances ({})", disturbances.len()))
         .show(ui, |ui| focus |= edit_disturbances(ui, disturbances));
     egui::CollapsingHeader::new("Player limits")
@@ -667,6 +734,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         limits,
         reference_solution,
         disturbances,
+        conductors,
     } = level;
     let Grid {
         nx,
@@ -781,6 +849,23 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     );
                 }
             }
+        }
+    }
+    if conductors.len() > MAX_COUNT as usize {
+        return fail("too many metal spheres");
+    }
+    for c in conductors {
+        let Conductor {
+            center,
+            radius,
+            bias,
+        } = c;
+        let value_ok = match bias {
+            ConductorBias::Grounded => true,
+            ConductorBias::Charge(v) | ConductorBias::Potential(v) => v.is_finite(),
+        };
+        if !on_grid(center) || !(MIN_POSITIVE..=MAX_POSITIVE).contains(radius) || !value_ok {
+            return fail("metal sphere outside the editor's range");
         }
     }
     if disturbances.len() > MAX_COUNT as usize {

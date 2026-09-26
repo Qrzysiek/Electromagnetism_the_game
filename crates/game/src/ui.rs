@@ -93,15 +93,27 @@ fn obstacle_name(game: &Game, i: usize) -> &'static str {
         .filter(|e| e.kind == ElementKind::Magnet)
         .count();
     let antennas = all.filter(|e| e.kind == ElementKind::Antenna).count();
-    // Obstacle order of `Level::field`: charges, magnets, antennas, coil wires.
+    let wires: usize = game
+        .editor
+        .level
+        .coils
+        .iter()
+        .map(|c| match c {
+            level::Coil::Circle { .. } => 1,
+            level::Coil::Polygon { vertices, .. } => vertices.len(),
+        })
+        .sum();
+    // Obstacle order of `Level::field`: charges, magnets, antennas, coil wires, metal.
     if i < charges {
         "a charge"
     } else if i < charges + magnets {
         "a magnet"
     } else if i < charges + magnets + antennas {
         "an antenna"
-    } else {
+    } else if i < charges + magnets + antennas + wires {
         "a coil wire"
+    } else {
+        "a metal sphere"
     }
 }
 

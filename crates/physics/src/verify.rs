@@ -81,8 +81,19 @@ impl Verification {
 
 /// Runs a scenario at both tolerances and classifies the result.
 pub fn verify<F: FieldSolver>(scn: &Scenario<F>, tol: Tolerances) -> Verification {
+    verify_pair(scn, scn, tol)
+}
+
+/// Verification where the tighter run also uses a finer field model (`fine`, e.g.
+/// conductors at verification resolution, PHYSICS.md §2.6), so that the model's own
+/// error enters the comparison like the integration error.
+pub fn verify_pair<F: FieldSolver>(
+    scn: &Scenario<F>,
+    fine: &Scenario<F>,
+    tol: Tolerances,
+) -> Verification {
     let preview = run(scn, &RunSettings::with_tolerance(tol.preview));
-    let verified = run(scn, &RunSettings::with_tolerance(tol.verify));
+    let verified = run(fine, &RunSettings::with_tolerance(tol.verify));
     let status = classify(&preview, &verified, scn.t_max);
     Verification {
         status,

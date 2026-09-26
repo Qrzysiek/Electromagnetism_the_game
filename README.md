@@ -47,6 +47,14 @@ Switch to **Sandbox** at the top of the panel.
 
 A level can have several shots: particles with their own species, launch and detector. **One setup must deliver every shot.** The panel lists the shots with their status (✔ arrived, ✖ lost, ⚠ marginal, … computing).
 
+## Metal spheres
+
+Levels can contain metal spheres. They can be grounded, isolated with a net charge, or held at a potential (like a Van de Graaff dome).
+- Their surface is an equipotential, and charges nearby induce opposite charges on them. So a charge placed next to a grounded sphere is partly cancelled by its "image".
+- Field lines end on the metal at right angles, and the potential map includes the induced charges.
+- Touching a sphere loses the particle.
+- In the sandbox they are edited in the "Metal spheres" section.
+
 ## Antennas
 
 Antennas are small oscillating electric dipoles in the plane. They run at the level's RF generator frequency, or at a frequency you choose where the level offers a choice (W cycles it, Shift+W back; the sandbox can give any antenna its own ω). All start in phase at t = 0. Their fields are exact, including the induction and radiation terms (PHYSICS.md §2.4). The kick they give depends on when a particle passes, so shots launched at different times (shown in the shot's launch time) can be sorted: RF separators, streak cameras. The potential map and field lines show static sources only.

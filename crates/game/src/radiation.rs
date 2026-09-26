@@ -208,7 +208,10 @@ pub fn update(
     );
     let bounds = level.bounds();
     let field = {
-        let mut scn = level.scenarios(&game.editor.placement);
+        let mut scn = level.scenarios_at(
+            &game.editor.placement,
+            physics::conductor::Resolution::Display,
+        );
         let scn = scn.swap_remove(flight);
         view.obstacles = scn.obstacles;
         match mode {

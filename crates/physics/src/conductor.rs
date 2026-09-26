@@ -71,6 +71,8 @@ pub type Charges = Vec<(DVec3, f64)>;
 pub enum Resolution {
     Preview,
     Verify,
+    /// Coarse, for pictures only (potential map, field lines): accurate to about 1e-4.
+    Display,
 }
 
 impl Resolution {
@@ -79,6 +81,7 @@ impl Resolution {
         match self {
             Resolution::Preview => (440, 0.6, 7),
             Resolution::Verify => (600, 0.6, 8),
+            Resolution::Display => (60, 0.6, 2),
         }
     }
 }
@@ -386,10 +389,8 @@ pub struct Conductors {
     /// Indices of floating spheres and the inverse of their capacitance block.
     floating: Vec<usize>,
     floating_inverse: Vec<Vec<f64>>,
-    /// Largest deviation of the surface potentials from their values (independent
-    /// points), relative to the largest potential of the sources and bias on the
-    /// surfaces.
-    pub boundary_residual: f64,
+    /// Potential of each sphere.
+    pub alpha: Vec<f64>,
     /// Relative bound on the neglected part of the particle's image tree.
     pub self_truncation: f64,
 }
@@ -452,23 +453,10 @@ impl Conductors {
             }
         }
 
-        // Residual on independent points.
-        let mut all: Charges = sources.to_vec();
-        all.extend(induced.iter().copied());
-        let potential = |x: DVec3| all.iter().map(|&(p, q)| q / (x - p).length()).sum::<f64>();
-        let mut scale: f64 = alpha.iter().map(|a| a.abs()).fold(0.0, f64::max);
-        let mut residual: f64 = 0.0;
-        for (j, s) in spheres.iter().enumerate() {
-            for u in fibonacci(1000, 2.3) {
-                let x = s.center + u * s.radius;
-                residual = residual.max((potential(x) - alpha[j]).abs());
-                let v: f64 = sources
-                    .iter()
-                    .map(|&(p, q)| (q / (x - p).length()).abs())
-                    .sum();
-                scale = scale.max(v);
-            }
-        }
+        // The source system and the unit systems share their equivalent-charge
+        // positions: merge charges at identical positions (first-occurrence order, so
+        // the summation order stays deterministic).
+        let induced = merge(induced);
         let fixed: Vec<FixedCharge> = induced
             .iter()
             .map(|&(position, charge)| FixedCharge {
@@ -485,13 +473,36 @@ impl Conductors {
             geometry: Some(geo),
             floating,
             floating_inverse,
-            boundary_residual: residual / scale.max(1e-300),
+            alpha,
             self_truncation,
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.spheres.is_empty()
+    }
+
+    /// Largest deviation of the surface potentials from their values, measured on 1000
+    /// independent points per sphere, relative to the largest potential of the sources
+    /// and bias on the surfaces (PHYSICS.md §2.6). Expensive; for checks, not per step.
+    pub fn boundary_residual(&self, sources: &[(DVec3, f64)]) -> f64 {
+        let mut all: Charges = sources.to_vec();
+        all.extend(self.induced.charges());
+        let potential = |x: DVec3| all.iter().map(|&(p, q)| q / (x - p).length()).sum::<f64>();
+        let mut scale: f64 = self.alpha.iter().map(|a| a.abs()).fold(0.0, f64::max);
+        let mut residual: f64 = 0.0;
+        for (j, s) in self.spheres.iter().enumerate() {
+            for u in fibonacci(1000, 2.3) {
+                let x = s.center + u * s.radius;
+                residual = residual.max((potential(x) - self.alpha[j]).abs());
+                let v: f64 = sources
+                    .iter()
+                    .map(|&(p, q)| (q / (x - p).length()).abs())
+                    .sum();
+                scale = scale.max(v);
+            }
+        }
+        residual / scale.max(1e-300)
     }
 
     /// Charges induced by a point charge `q` at `x`: its Kelvin images to depth
@@ -540,6 +551,23 @@ impl Conductors {
         }
         (e, phi)
     }
+}
+
+/// Sums charges at bit-identical positions, keeping first-occurrence order.
+fn merge(charges: Charges) -> Charges {
+    let mut index: HashMap<[u64; 3], usize> = HashMap::new();
+    let mut out: Charges = Vec::with_capacity(charges.len());
+    for (p, q) in charges {
+        let key = [p.x.to_bits(), p.y.to_bits(), p.z.to_bits()];
+        match index.get(&key) {
+            Some(&i) => out[i].1 += q,
+            None => {
+                index.insert(key, out.len());
+                out.push((p, q));
+            }
+        }
+    }
+    out
 }
 
 fn mat_vec(m: &[Vec<f64>], v: &[f64]) -> Vec<f64> {

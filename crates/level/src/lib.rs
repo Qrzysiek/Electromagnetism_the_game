@@ -17,13 +17,14 @@ pub mod solve;
 
 use physics::DVec3;
 use physics::antenna::OscillatingDipole;
+use physics::conductor::{Bias, Conductors, Resolution, SphereConductor};
 use physics::dynamics::{Kinematics, Particle};
 use physics::external::{External, PlaneWave};
 use physics::field::{Coulomb, FixedCharge, LevelField};
 use physics::geometry::{Aabb, Capsule, Region, Shape, Sphere, Torus};
 use physics::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 use physics::trajectory::Scenario;
-use physics::verify::Tolerances;
+use physics::verify::{Tolerances, Verification, verify_pair};
 use serde::{Deserialize, Serialize};
 
 pub const FORMAT_VERSION: u32 = 2;
@@ -54,7 +55,32 @@ pub struct Level {
     /// External disturbances; one setup must work under each of them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disturbances: Vec<Disturbance>,
+    /// Metal spheres placed by the level (PHYSICS.md §2.6).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conductors: Vec<Conductor>,
 }
+
+/// A conducting (metal) sphere placed by the level.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Conductor {
+    pub center: Node,
+    /// Radius in cells.
+    pub radius: f64,
+    pub bias: ConductorBias,
+}
+
+/// How a metal sphere is held: grounded, isolated with a net charge, or at a potential.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "lowercase")]
+pub enum ConductorBias {
+    Grounded,
+    Charge(f64),
+    Potential(f64),
+}
+
+/// A particle touches a metal sphere at this distance from its surface (cells). A point
+/// charge at the surface would feel an infinite image force (PHYSICS.md §2.6).
+pub const CONTACT_DISTANCE: f64 = 0.02;
 
 /// One realization of fields from outside the arena (PHYSICS.md §2.3): uniform stray
 /// fields and plane waves travelling in the plane.
@@ -143,6 +169,8 @@ struct LevelFile {
     reference_solution: Vec<Element>,
     #[serde(default)]
     disturbances: Vec<Disturbance>,
+    #[serde(default)]
+    conductors: Vec<Conductor>,
 }
 
 impl From<LevelFile> for Level {
@@ -171,6 +199,7 @@ impl From<LevelFile> for Level {
             limits: f.limits,
             reference_solution: f.reference_solution,
             disturbances: f.disturbances,
+            conductors: f.conductors,
         }
     }
 }
@@ -585,6 +614,18 @@ impl Level {
             if occupied.contains(&e.node) {
                 return Err(PlacementError::Occupied(e.node));
             }
+            // Not inside or touching a metal sphere.
+            let reach = self
+                .physics
+                .charge_radius
+                .max(self.physics.magnet_radius)
+                .max(self.physics.antenna_radius);
+            let p = self.grid.position(e.node);
+            if self.conductors.iter().any(|c| {
+                (p - self.grid.position(c.center)).length() < c.radius + CONTACT_DISTANCE + reach
+            }) {
+                return Err(PlacementError::Occupied(e.node));
+            }
             occupied.push(e.node);
             if e.value == 0.0 {
                 return Err(PlacementError::SignNotAllowed(e.value));
@@ -642,9 +683,51 @@ impl Level {
         Ok(())
     }
 
-    /// The static field and the obstacles for a placement: level elements first, then
-    /// player elements, in the given order (the summation order of the field).
+    /// The static field and the obstacles for a placement at preview resolution.
     pub fn field(&self, player: &[Element]) -> (LevelField, Vec<Shape>) {
+        self.field_at(player, Resolution::Preview)
+    }
+
+    /// Problems of the physical model of this level (combinations that are not
+    /// supported), as messages. Empty if the level is consistent.
+    pub fn model_issues(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if !self.conductors.is_empty() {
+            let time_dependent = self.limits.max_antennas > 0
+                || self.elements.iter().any(|e| e.kind == ElementKind::Antenna)
+                || !self.disturbances.is_empty();
+            if time_dependent {
+                out.push(
+                    "metal spheres respond electrostatically; antennas and disturbances \
+                     would need a full-wave solution"
+                        .into(),
+                );
+            }
+            for (i, a) in self.conductors.iter().enumerate() {
+                for b in &self.conductors[i + 1..] {
+                    let d = (self.grid.position(a.center) - self.grid.position(b.center)).length();
+                    if d <= a.radius + b.radius + 2.0 * CONTACT_DISTANCE {
+                        out.push("two metal spheres touch or overlap".into());
+                    }
+                }
+                let c = self.grid.position(a.center);
+                let inside = self.elements.iter().any(|e| {
+                    (self.grid.position(e.node) - c).length() < a.radius + CONTACT_DISTANCE + 0.3
+                }) || self.shots.iter().any(|s| {
+                    (self.grid.position(s.launch.node) - c).length() < a.radius + CONTACT_DISTANCE
+                });
+                if inside {
+                    out.push("an element or launch point is inside or at a metal sphere".into());
+                }
+            }
+        }
+        out
+    }
+
+    /// The field and the obstacles for a placement: level elements first, then player
+    /// elements, in the given order (the summation order of the field). Metal spheres
+    /// are computed at the given resolution (PHYSICS.md §2.6).
+    pub fn field_at(&self, player: &[Element], resolution: Resolution) -> (LevelField, Vec<Shape>) {
         let all: Vec<&Element> = self.elements.iter().chain(player).collect();
         let charges: Vec<FixedCharge> = all
             .iter()
@@ -742,6 +825,12 @@ impl Level {
                 }
             }
         }
+        for c in &self.conductors {
+            obstacles.push(Shape::Sphere(Sphere {
+                center: self.grid.position(c.center),
+                radius: c.radius + CONTACT_DISTANCE,
+            }));
+        }
         let field = LevelField {
             coulomb: Coulomb::new(&charges),
             dipoles,
@@ -749,10 +838,71 @@ impl Level {
             polygons,
             antennas,
             external: Vec::new(),
-            conductors: physics::conductor::Conductors::default(),
+            conductors: self.conductors_for(&charges, resolution),
             time_offset: 0.0,
         };
         (field, obstacles)
+    }
+
+    /// Metal spheres with the charges the fixed charges induce on them.
+    fn conductors_for(&self, charges: &[FixedCharge], resolution: Resolution) -> Conductors {
+        if self.conductors.is_empty() {
+            return Conductors::default();
+        }
+        let spheres = self
+            .conductors
+            .iter()
+            .map(|c| SphereConductor {
+                center: self.grid.position(c.center),
+                radius: c.radius,
+                bias: match c.bias {
+                    ConductorBias::Grounded => Bias::Grounded,
+                    ConductorBias::Charge(q) => Bias::Charge(q),
+                    ConductorBias::Potential(v) => Bias::Potential(v),
+                },
+            })
+            .collect();
+        let sources: Vec<(DVec3, f64)> = charges.iter().map(|c| (c.position, c.charge)).collect();
+        Conductors::new(spheres, &sources, resolution)
+    }
+
+    /// One shot's scenario with metal spheres at display resolution (for pictures:
+    /// potential map, field lines, field views).
+    pub fn display_scenario(&self, shot: usize, player: &[Element]) -> Scenario<LevelField> {
+        let (field, obstacles) = self.field_at(player, Resolution::Display);
+        self.scenario_with(shot, 0, field, obstacles)
+    }
+
+    /// Scenarios of all flights with the field at `resolution`.
+    pub fn scenarios_at(
+        &self,
+        player: &[Element],
+        resolution: Resolution,
+    ) -> Vec<Scenario<LevelField>> {
+        let (field, obstacles) = self.field_at(player, resolution);
+        (0..self.flight_count())
+            .map(|i| {
+                let (shot, d) = self.flight_of(i);
+                self.scenario_with(shot, d, field.clone(), obstacles.clone())
+            })
+            .collect()
+    }
+
+    /// Verifies every flight: preview at preview resolution, the tighter run with the
+    /// field at verification resolution (they differ only with metal spheres), so the
+    /// field model's error enters the verdict too.
+    pub fn verify_flights(&self, player: &[Element]) -> Vec<Verification> {
+        let preview = self.scenarios(player);
+        let fine = if self.conductors.is_empty() {
+            preview.clone()
+        } else {
+            self.scenarios_at(player, Resolution::Verify)
+        };
+        preview
+            .iter()
+            .zip(&fine)
+            .map(|(a, b)| verify_pair(a, b, self.tolerances()))
+            .collect()
     }
 
     /// Flights per shot: one per disturbance, or one undisturbed flight.
@@ -896,6 +1046,7 @@ mod tests {
                     phase_deg: 90.0,
                 }],
             }],
+            conductors: vec![],
         }
     }
 

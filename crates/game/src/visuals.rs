@@ -69,7 +69,8 @@ impl Grid {
 /// than `spacing / 2` to an accepted line. Between close charges this leaves few lines.
 ///
 /// Only charges are sources and sinks of E: lines pass magnets and coil wires, which
-/// carry no charge. The total work is capped (`MAX_STEPS` integration steps,
+/// carry no charge, and end on metal spheres (whose induced charge is part of the
+/// field), perpendicular to their surface. The total work is capped (`MAX_STEPS` integration steps,
 /// `MAX_LINES` lines), since this runs on the render thread.
 ///
 /// In the 2D slice of a 3D field, line density does not represent field strength
@@ -78,7 +79,14 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
     const MAX_STEPS: usize = 400_000;
     const MAX_LINES: usize = 2_000;
     let charges: Vec<DVec3> = scn.field.coulomb.charges().map(|(p, _)| p).collect();
-    if charges.is_empty() {
+    let metal: Vec<(DVec3, f64)> = scn
+        .field
+        .conductors
+        .spheres
+        .iter()
+        .map(|s| (s.center, s.radius))
+        .collect();
+    if charges.is_empty() && metal.is_empty() {
         return Vec::new();
     }
     let steps = std::cell::Cell::new(0usize);
@@ -94,10 +102,13 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
         (e.length() > 0.0 && e.is_finite()).then(|| e.normalize() * sign)
     };
     let inside_bounds = |x: DVec3| x.x > b.min.x && x.y > b.min.y && x.x < b.max.x && x.y < b.max.y;
+    // Distance to the nearest place where lines start or end: a charge or a metal
+    // surface.
     let charge_distance = |x: DVec3| {
         charges
             .iter()
             .map(|c| (x - *c).length() - charge_radius)
+            .chain(metal.iter().map(|&(c, r)| (x - c).length() - r))
             .fold(f64::INFINITY, f64::min)
     };
 
@@ -156,6 +167,16 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
         for i in 0..8 {
             let a = std::f64::consts::FRAC_PI_4 * f64::from(i) + 0.2;
             queue.push_back(*c + DVec3::new(a.cos(), a.sin(), 0.0) * (charge_radius + 0.6 * d_sep));
+        }
+    }
+    // Seeds just outside metal surfaces, one per `d_sep` of circumference.
+    for &(c, r) in &metal {
+        let rs = r + 0.6 * d_sep;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let n = ((std::f64::consts::TAU * rs / d_sep).ceil() as u32).max(8);
+        for i in 0..n {
+            let a = std::f64::consts::TAU * f64::from(i) / f64::from(n);
+            queue.push_back(c + DVec3::new(a.cos(), a.sin(), 0.0) * rs);
         }
     }
     let mut sweep: Vec<DVec3> = Vec::new();
@@ -262,7 +283,7 @@ mod tests {
     /// limit and the render thread hung (Dempster level with one electrode).
     #[test]
     fn field_lines_terminate_with_coils() {
-        let level = Level::from_json(include_str!("../../../levels/13_dempster.json")).unwrap();
+        let level = Level::from_json(include_str!("../../../levels/16_dempster.json")).unwrap();
         let scn = level.scenario(0, &[Element::charge([9, 3, 0], 2e6)]);
         let start = std::time::Instant::now();
         let lines = field_lines(&scn, level.physics.charge_radius, 1.5);
