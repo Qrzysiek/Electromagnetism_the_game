@@ -76,7 +76,7 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 - **Detector conditions:** a detector can also require the arrival direction (cone) and kinetic energy (window). They are verified with margins like every boundary (PHYSICS.md §6.1).
 - **Hardcore mode:** continuous values (sliders, linear or log) within the ranges of the level's lists instead of the discrete values, and any antenna orientation. A level can also be hardcore by design (`limits.continuous`).
 - **Moving elements:** mouse drag, or keyboard grab (G) and arrows.
-- **Sandbox mode** (level editor): place level charges freely; set the launch point, direction and energy, the particle, c, the detector box, the grid and the player limits. Check solvability with the solver, store a reference solution, and save levels as JSON (`levels/custom/`) alongside generated ones.
+- **Sandbox mode** (level editor): place level charges freely; set the launch point, direction and energy, the particle, c, the detector box, the grid and the player limits. Check solvability with the solver, store a reference solution, and save levels as JSON (`levels/custom/`) alongside generated ones. Resource meters show the measured cost of the setup (preview and verification time, steps, metal setup time, matrix memory, metal model error) against budgets, so levels stay interactive and inside the tested range of the solvers; the level tests enforce the machine-independent budgets (steps, memory) on shipped levels.
 
 ## 4. 2D and 3D modes
 

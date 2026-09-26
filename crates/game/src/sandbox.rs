@@ -529,6 +529,16 @@ fn save(game: &mut Game) {
     for issue in level.model_issues() {
         status.push(format!("Warning: {issue}."));
     }
+    if let Some((_, cost)) = &game.cost {
+        for m in cost.over_budget() {
+            status.push(format!(
+                "Warning: {} {} is over its limit ({}): see Computational cost.",
+                m.label.to_lowercase(),
+                m.text(),
+                level::cost::format_value(m.limit, m.unit)
+            ));
+        }
+    }
     let dir = custom_dir();
     let path = dir.join(format!("{}.json", slug(&game.sandbox.file_name)));
     if path.exists() && !game.sandbox.overwrite {
@@ -675,6 +685,75 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
 
 /// Sandbox section of the side panel.
 #[allow(clippy::too_many_lines)]
+/// Resource meters of the current setup (`level::cost`): measured times, steps, memory
+/// and metal accuracy against their budgets, on logarithmic bars.
+fn cost_meters(ui: &mut egui::Ui, game: &Game) {
+    let Some((revision, cost)) = &game.cost else {
+        ui.label("Measuring…");
+        return;
+    };
+    if *revision != game.sent_revision {
+        ui.label(
+            egui::RichText::new("Updating… (values of the previous setup)")
+                .small()
+                .color(egui::Color32::YELLOW),
+        );
+    }
+    for m in cost.meters() {
+        ui.horizontal(|ui| {
+            ui.add_sized([80.0, 16.0], egui::Label::new(m.label))
+                .on_hover_text(m.hint);
+            let color = match m.load() {
+                level::cost::Load::Fine => egui::Color32::from_rgb(80, 170, 90),
+                level::cost::Load::High => egui::Color32::from_rgb(220, 170, 50),
+                level::cost::Load::Over => egui::Color32::from_rgb(220, 70, 60),
+            };
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(150.0, 14.0), egui::Sense::hover());
+            response.on_hover_text(m.hint);
+            let painter = ui.painter_at(rect);
+            painter.rect_filled(rect, 2.0, egui::Color32::from_gray(35));
+            #[allow(clippy::cast_possible_truncation)]
+            let at = |f: f64| rect.left() + f as f32 * rect.width();
+            if !m.value.is_nan() {
+                let bar =
+                    egui::Rect::from_x_y_ranges(rect.left()..=at(m.fraction()), rect.y_range());
+                painter.rect_filled(bar, 2.0, color);
+            }
+            let (good, limit) = m.marks();
+            for (f, gray) in [(good, 150), (limit, 230)] {
+                painter.line_segment(
+                    [
+                        egui::pos2(at(f), rect.top()),
+                        egui::pos2(at(f), rect.bottom()),
+                    ],
+                    egui::Stroke::new(1.0, egui::Color32::from_gray(gray)),
+                );
+            }
+            ui.label(m.text());
+        });
+    }
+    let per_eval =
+        level::cost::format_value(cost.seconds_per_evaluation(), level::cost::Unit::Seconds);
+    let mut info = format!(
+        "{} flight(s), {per_eval} per force evaluation",
+        cost.flights
+    );
+    if cost.setup.unknowns > 0 {
+        info += &format!(", {} metal unknowns", cost.setup.unknowns);
+    }
+    ui.label(egui::RichText::new(info).small());
+    ui.label(
+        egui::RichText::new(
+            "Bars are logarithmic; the marks are the budget (grey) and the limit (white). \
+             Times are measured on this computer and extrapolated to all flights while \
+             they are computed.",
+        )
+        .small()
+        .weak(),
+    );
+}
+
 pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
     ui.label(
         egui::RichText::new("Sandbox: level editor")
@@ -746,6 +825,10 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
         ui.selectable_value(t, Tool::CoilPolygon, "Coil polygon (click)");
     });
     tool_help(ui, game);
+    ui.separator();
+    egui::CollapsingHeader::new("Computational cost")
+        .default_open(true)
+        .show(ui, |ui| cost_meters(ui, game));
     ui.separator();
 
     // Every field of the level (see level_editor: completeness invariant). Edit a copy,

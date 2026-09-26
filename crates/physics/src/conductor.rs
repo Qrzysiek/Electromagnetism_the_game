@@ -325,6 +325,7 @@ struct Geometry {
     fit: Fit,
     unit: Vec<Charges>,
     capacitance: Vec<Vec<f64>>,
+    cost: crate::field::SetupCost,
 }
 
 fn geometry_key(spheres: &[SphereConductor], resolution: Resolution) -> Vec<u64> {
@@ -350,6 +351,7 @@ fn cached_geometry(spheres: &[SphereConductor], resolution: Resolution) -> Arc<G
     if let Some(g) = cache.lock().expect("cache").get(&key) {
         return g.clone();
     }
+    let start = std::time::Instant::now();
     let fit = Fit::new(spheres, resolution);
     let n = spheres.len();
     let unit: Vec<Charges> = (0..n)
@@ -365,10 +367,16 @@ fn cached_geometry(spheres: &[SphereConductor], resolution: Resolution) -> Arc<G
     let capacitance: Vec<Vec<f64>> = (0..n)
         .map(|i| (0..n).map(|j| charge_in(spheres, &unit[j], i)).collect())
         .collect();
+    let cost = crate::field::SetupCost {
+        seconds: start.elapsed().as_secs_f64(),
+        bytes: 8 * (fit.qr.len() + fit.tau.len()),
+        unknowns: fit.cols,
+    };
     let g = Arc::new(Geometry {
         fit,
         unit,
         capacitance,
+        cost,
     });
     let mut c = cache.lock().expect("cache");
     if c.len() > 64 {
@@ -480,6 +488,13 @@ impl Conductors {
 
     pub fn is_empty(&self) -> bool {
         self.spheres.is_empty()
+    }
+
+    /// Build cost of the geometry's factorization (zero without spheres).
+    pub fn setup_cost(&self) -> crate::field::SetupCost {
+        self.geometry
+            .as_ref()
+            .map_or_else(Default::default, |g| g.cost)
     }
 
     /// Largest deviation of the surface potentials from their values, measured on 1000

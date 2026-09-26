@@ -27,8 +27,12 @@ Switch to **Sandbox** at the top of the panel.
   - aim (click where the launch direction should point)
   - detector (drag a box)
 - **Panel:** name, grid, c, particle, launch energy and angle, charge radius, time limit and player limits.
+- **Computational cost** (bars under the tools): how hard the setup is on the computer, measured while it is computed.
+  - Meters: preview time (the delay after every change), verification time, steps of the longest flight, and with metal or electrodes the one-off setup time, matrix memory and the metal model's error.
+  - Green is within budget, amber is high, red is over the limit (the marks on each bar). Hover a meter for what drives it.
+  - Budgets and measurement: `crates/level/src/cost.rs`. `generator check` prints the same meters.
 - **Check solvability** runs the solver in the background. You can then store the solution it found, or your own charges, as the reference solution.
-- **Save** writes to `levels/custom/`. The game loads those levels too. On saving, the panel warns if the reference solution is not verified, or if neglected radiation exceeds 10⁻¹⁰ of the launch energy.
+- **Save** writes to `levels/custom/`. The game loads those levels too. On saving, the panel warns if the reference solution is not verified, if neglected radiation exceeds 10⁻¹⁰ of the launch energy, or if a cost meter is over its limit.
 
 ## Controls
 

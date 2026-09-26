@@ -13,6 +13,7 @@
 //! level has none). A setup solves the level when every flight arrives.
 
 pub mod analysis;
+pub mod cost;
 pub mod solve;
 
 use physics::DVec3;

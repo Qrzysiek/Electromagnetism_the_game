@@ -202,6 +202,13 @@ fn main() {
                     end.y
                 );
             }
+            let cost = level.measure_cost(placement);
+            let meters: Vec<String> = cost
+                .meters()
+                .iter()
+                .map(|m| format!("{} {} ({:?})", m.label, m.text(), m.load()))
+                .collect();
+            println!("  cost: {}", meters.join(", "));
         }
     }
 }

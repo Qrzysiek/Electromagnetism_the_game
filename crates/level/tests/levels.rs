@@ -42,6 +42,10 @@ fn reference_solutions_are_verified() {
             let flight = format!("{name} shot {} disturbance {}", shot + 1, d + 1);
             assert_eq!(v.outcome(), Outcome::Arrived, "{flight}");
             assert!(v.status.is_verified(), "{flight}: {:?}", v.status);
+            // Resource budget (level::cost), machine-independent part: steps per flight.
+            #[allow(clippy::cast_precision_loss)]
+            let steps = v.preview.stats.n_step.max(v.verified.stats.n_step) as f64;
+            assert!(steps <= level::cost::STEPS_LIMIT, "{flight}: {steps} steps");
         }
     }
 }
@@ -102,9 +106,10 @@ fn radiation_levels_need_radiation() {
     }
 }
 
-/// Levels with metal spheres: a consistent model (no unsupported combinations), and the
+/// Levels with metal spheres: a consistent model (no unsupported combinations), the
 /// conductor model accurate at verification resolution for the reference placement
-/// (boundary residual < 1e-10, PHYSICS.md §2.6).
+/// (boundary residual < 1e-10, PHYSICS.md §2.6), and its matrices within the memory
+/// budget (level::cost).
 #[test]
 fn metal_levels_are_accurate_and_consistent() {
     for (name, level) in shipped_levels() {
@@ -118,6 +123,9 @@ fn metal_levels_are_accurate_and_consistent() {
         );
         let sources: Vec<_> = field.coulomb.charges().collect();
         let residual = field.conductors.boundary_residual(&sources);
+        #[allow(clippy::cast_precision_loss)]
+        let bytes = field.setup_cost().bytes as f64;
+        assert!(bytes <= level::cost::MEMORY_LIMIT, "{name}: {bytes} bytes");
         println!("{name}: conductor boundary residual {residual:.1e}");
         assert!(residual < 1e-10, "{name}: residual {residual:.3e}");
     }
@@ -137,6 +145,14 @@ fn electrode_image_force_is_negligible() {
         if level.electrodes.is_empty() {
             continue;
         }
+        let (field, _) = level.field_at(
+            &level.reference_solution,
+            physics::conductor::Resolution::Verify,
+        );
+        // Resource budget (level::cost): the BEM matrices.
+        #[allow(clippy::cast_precision_loss)]
+        let bytes = field.setup_cost().bytes as f64;
+        assert!(bytes <= level::cost::MEMORY_LIMIT, "{name}: {bytes} bytes");
         let boxes = physics::bem::Electrodes::shapes_only(level.box_electrodes()).obstacles(0.0);
         let mut worst: f64 = 0.0;
         for (i, scn) in level

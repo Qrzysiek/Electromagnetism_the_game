@@ -249,6 +249,7 @@ struct Geometry {
     lu: Lu,
     unit: Vec<Vec<f64>>,
     capacitance: Vec<Vec<f64>>,
+    cost: crate::field::SetupCost,
 }
 
 fn geometry_key(electrodes: &[BoxElectrode], size: f64) -> Vec<u64> {
@@ -276,6 +277,7 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
     if let Some(g) = cache.lock().expect("cache").get(&key) {
         return g.clone();
     }
+    let start = std::time::Instant::now();
     let mut panels = Vec::new();
     let mut owner = Vec::new();
     for (i, e) in electrodes.iter().enumerate() {
@@ -318,6 +320,11 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
     let capacitance: Vec<Vec<f64>> = (0..m)
         .map(|i| (0..m).map(|j| charge_on(&unit[j], i)).collect())
         .collect();
+    let cost = crate::field::SetupCost {
+        seconds: start.elapsed().as_secs_f64(),
+        bytes: 8 * lu.a.len(),
+        unknowns: n,
+    };
     let g = Arc::new(Geometry {
         panels,
         pre,
@@ -325,6 +332,7 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
         lu,
         unit,
         capacitance,
+        cost,
     });
     let mut c = cache.lock().expect("cache");
     if c.len() > 32 {
@@ -349,6 +357,13 @@ pub struct Electrodes {
 }
 
 impl Electrodes {
+    /// Build cost of the geometry's factorization (zero without electrodes).
+    pub fn setup_cost(&self) -> crate::field::SetupCost {
+        self.geometry
+            .as_ref()
+            .map_or_else(Default::default, |g| g.cost)
+    }
+
     pub fn new(
         electrodes: Vec<BoxElectrode>,
         sources: &[(DVec3, f64)],

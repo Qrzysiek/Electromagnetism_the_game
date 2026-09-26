@@ -103,6 +103,27 @@ impl FieldSolver for Coulomb {
     }
 }
 
+/// One-off cost of a field's linear systems (metal spheres, electrodes): the time it took
+/// to build them (they are cached per geometry afterwards, so this is the cost of a new
+/// geometry), their matrix memory and their number of unknowns.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SetupCost {
+    pub seconds: f64,
+    pub bytes: usize,
+    pub unknowns: usize,
+}
+
+impl std::ops::Add for SetupCost {
+    type Output = Self;
+    fn add(self, o: Self) -> Self {
+        Self {
+            seconds: self.seconds + o.seconds,
+            bytes: self.bytes + o.bytes,
+            unknowns: self.unknowns + o.unknowns,
+        }
+    }
+}
+
 /// All sources of a level: fixed charges, magnets, coils and antennas, plus external
 /// fields (uniform stray fields and plane waves, PHYSICS.md §2.3–2.4). Summed in this
 /// order.
@@ -124,6 +145,11 @@ pub struct LevelField {
 }
 
 impl LevelField {
+    /// Build cost of the field's linear systems (metal spheres and electrodes).
+    pub fn setup_cost(&self) -> SetupCost {
+        self.conductors.setup_cost() + self.electrodes.setup_cost()
+    }
+
     pub fn magnetic(&self, x: DVec3) -> DVec3 {
         let mut b = DVec3::ZERO;
         for d in &self.dipoles {

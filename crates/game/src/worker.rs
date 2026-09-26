@@ -3,13 +3,16 @@
 //! need a one-off factorization per geometry, which must not stall rendering), sends
 //! every flight's preview trajectory first, then every flight's verification verdict
 //! (SPEC §2.3). Verification uses the field at verification resolution (it differs from
-//! the preview's only with metal spheres, PHYSICS.md §2.6).
+//! the preview's only with metal spheres, PHYSICS.md §2.6). Every flight is timed for the
+//! sandbox's resource meters (`level::cost`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use physics::DVec3;
+use physics::conductor::Resolution;
 use physics::field::{FieldSolver, LevelField};
 use physics::trajectory::{Outcome, RunSettings, Scenario, Trajectory, run_cancellable};
 use physics::verify::{Status, Tolerances, classify};
@@ -66,6 +69,11 @@ pub enum Response {
         status: Status,
         outcome: Outcome,
     },
+    /// Measured cost so far (after every flight).
+    Cost {
+        revision: u64,
+        cost: level::cost::Cost,
+    },
 }
 
 pub struct Worker {
@@ -121,17 +129,40 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
             },
         };
         let req = latest(rx, req);
+        let metal = !(req.level.conductors.is_empty() && req.level.electrodes.is_empty());
+        let mut cost = level::cost::Cost::new(&req.level);
         let scenarios = req.level.scenarios(&req.placement);
         let tolerances: Tolerances = req.level.tolerances();
+        if metal {
+            // Also builds (and caches) the display systems off the render thread.
+            let display = req.level.field_at(&req.placement, Resolution::Display).0;
+            cost.add_field(&display);
+            cost.add_field(&scenarios[0].field);
+        }
+        let send_cost = |cost: &level::cost::Cost| {
+            tx.send(Response::Cost {
+                revision: req.revision,
+                cost: *cost,
+            })
+            .is_ok()
+        };
+        if !send_cost(&cost) {
+            return;
+        }
 
         let current = |r: u64| newest.load(Ordering::Acquire) == r;
         let mut previews: Vec<Trajectory> = Vec::new();
         for (shot, scn) in scenarios.iter().enumerate() {
+            let start = Instant::now();
             let Some((traj, preview)) =
                 preview_shot(scn, tolerances.preview, || current(req.revision))
             else {
                 continue 'requests;
             };
+            cost.add_preview(start.elapsed().as_secs_f64(), &traj);
+            if !send_cost(&cost) {
+                return;
+            }
             previews.push(traj);
             let msg = Response::Preview {
                 revision: req.revision,
@@ -149,11 +180,12 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
         if !current(req.revision) {
             continue 'requests;
         }
-        let fine = if req.level.conductors.is_empty() && req.level.electrodes.is_empty() {
-            scenarios
+        let fine = if metal {
+            let fine = req.level.scenarios_at(&req.placement, Resolution::Verify);
+            cost.add_verification_field(&fine[0].field);
+            fine
         } else {
-            req.level
-                .scenarios_at(&req.placement, physics::conductor::Resolution::Verify)
+            scenarios
         };
         for (shot, scn) in fine.iter().enumerate() {
             // Skip verification if the setup has already changed.
@@ -161,6 +193,7 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
                 next = Some(newer);
                 continue 'requests;
             }
+            let start = Instant::now();
             let Some(verified) =
                 run_cancellable(scn, &RunSettings::with_tolerance(tolerances.verify), |_| {
                     current(req.revision)
@@ -168,6 +201,10 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
             else {
                 continue 'requests;
             };
+            cost.add_verification(start.elapsed().as_secs_f64(), &verified);
+            if !send_cost(&cost) {
+                return;
+            }
             let status = classify(&previews[shot], &verified, scn.t_max);
             let msg = Response::Verified {
                 revision: req.revision,

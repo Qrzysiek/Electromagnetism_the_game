@@ -56,6 +56,9 @@ pub struct Game {
     /// Show every shot's trajectory, not only the active one.
     pub show_all_shots: bool,
     pub sent_revision: u64,
+    /// Measured computational cost (sandbox resource meters) and the setup revision it
+    /// belongs to; kept from the previous setup until the new one is measured.
+    pub cost: Option<(u64, level::cost::Cost)>,
     /// (revision, active shot, mode) the field map was computed for.
     pub map_key: (u64, usize, Option<MapMode>),
     pub field_lines: Vec<DrawnFieldLine>,
@@ -288,6 +291,7 @@ fn main() {
             active_disturbance: 0,
             show_all_shots: true,
             sent_revision: 0,
+            cost: None,
             map_key: (0, 0, None),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
@@ -799,6 +803,9 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
                 if let Some(s) = game.flights.get_mut(shot) {
                     s.verdict = Some((status, outcome));
                 }
+            }
+            Response::Cost { revision, cost } if revision == current => {
+                game.cost = Some((revision, cost));
             }
             _ => {}
         }
