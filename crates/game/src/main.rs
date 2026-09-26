@@ -2,6 +2,7 @@
 
 mod draw;
 mod editor;
+mod level_editor;
 mod potential;
 mod sandbox;
 mod ui;

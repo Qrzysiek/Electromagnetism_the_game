@@ -29,6 +29,7 @@ pub enum Tool {
     Region,
     CoilCircle,
     CoilRect,
+    CoilPolygon,
 }
 
 pub struct SolverJob {
@@ -51,10 +52,10 @@ pub struct Sandbox {
     pub overwrite: bool,
     /// First corner (or centre) of a box or coil being dragged.
     pub detector_drag: Option<Node>,
-    /// Allowed charge magnitudes as edited text.
-    pub magnitudes_text: String,
-    /// Allowed magnet strengths as edited text.
-    pub magnet_text: String,
+    /// Text buffers of list fields.
+    pub texts: crate::level_editor::EditTexts,
+    /// Vertices of a polygon coil being drawn.
+    pub pending_polygon: Vec<Node>,
     pub status: Vec<String>,
     pub solver: Option<SolverJob>,
     pub solver_report: Vec<String>,
@@ -73,8 +74,8 @@ impl Default for Sandbox {
             file_name: "my_level".into(),
             overwrite: false,
             detector_drag: None,
-            magnitudes_text: String::new(),
-            magnet_text: String::new(),
+            texts: crate::level_editor::EditTexts::default(),
+            pending_polygon: Vec::new(),
             status: Vec::new(),
             solver: None,
             solver_report: Vec::new(),
@@ -142,28 +143,15 @@ pub fn empty_level() -> Level {
     }
 }
 
-fn list_to_text(m: &[f64]) -> String {
-    m.iter()
-        .map(|v| format!("{v:e}"))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-fn parse_list(text: &str) -> Vec<f64> {
-    text.split(',')
-        .filter_map(|t| parse_si(t.trim()))
-        .filter(|v| *v > 0.0 && v.is_finite())
-        .collect()
-}
-
 pub fn custom_dir() -> PathBuf {
     crate::levels_dir().join("custom")
 }
 
 fn sync_texts(game: &mut Game) {
+    use crate::level_editor::list_to_text;
     let limits = &game.editor.base().limits;
-    game.sandbox.magnitudes_text = list_to_text(&limits.magnitudes);
-    game.sandbox.magnet_text = list_to_text(&limits.magnet_strengths);
+    game.sandbox.texts.magnitudes = list_to_text(&limits.magnitudes);
+    game.sandbox.texts.magnet_strengths = list_to_text(&limits.magnet_strengths);
 }
 
 /// Enters sandbox mode, editing the level currently loaded.
@@ -287,6 +275,24 @@ pub fn pointer(
                         l.shots[shot].launch.direction = [d.x, d.y, 0.0];
                     }
                 });
+            }
+            true
+        }
+        Tool::CoilPolygon => {
+            if pressed {
+                game.sandbox.pending_polygon.push(node);
+            }
+            if right {
+                let vertices = std::mem::take(&mut game.sandbox.pending_polygon);
+                if vertices.len() >= 3 {
+                    let kappa = game.sandbox.coil_kappa;
+                    game.editor
+                        .edit_level(|l| l.coils.push(Coil::Polygon { vertices, kappa }));
+                } else if let Some(i) = coil_near(game.editor.base(), world) {
+                    game.editor.edit_level(|l| {
+                        l.coils.remove(i);
+                    });
+                }
             }
             true
         }
@@ -540,7 +546,7 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
                 game.editor.edit_level(|l| l.limits.region = None);
             }
         }
-        Tool::CoilCircle | Tool::CoilRect => {
+        Tool::CoilCircle | Tool::CoilRect | Tool::CoilPolygon => {
             ui.horizontal(|ui| {
                 ui.label("κ = μ₀I/4π:");
                 let r = ui.add(
@@ -557,7 +563,9 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
             small(
                 ui,
                 if game.sandbox.tool == Tool::CoilCircle {
-                    "Press at the centre, release at the radius. Right click on a wire: remove."
+                    "Press at the centre, release at the radius (exact radius: Coils list                      below). Right click on a wire: remove."
+                } else if game.sandbox.tool == Tool::CoilPolygon {
+                    "Click the vertices in order; right click closes the polygon (at least 3                      vertices). Right click with no pending vertices removes a coil."
                 } else {
                     "Drag the rectangle. Right click on a wire: remove. Positive κ: \
                      counter-clockwise current."
@@ -576,6 +584,12 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
             .size(16.0),
     );
     ui.label(format!("Editing: {}", game.editor.base().name));
+    if let Err(problem) = crate::level_editor::check_editable(game.editor.base()) {
+        ui.colored_label(
+            egui::Color32::YELLOW,
+            format!("⚠ Not fully reproducible with the editor: {problem}"),
+        );
+    }
     ui.horizontal(|ui| {
         if ui.button("New empty level").clicked() {
             let l = empty_level();
@@ -631,141 +645,21 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
         ui.selectable_value(t, Tool::Region, "Player region (drag)");
         ui.selectable_value(t, Tool::CoilCircle, "Coil ○ (drag)");
         ui.selectable_value(t, Tool::CoilRect, "Coil □ (drag)");
+        ui.selectable_value(t, Tool::CoilPolygon, "Coil polygon (click)");
     });
     tool_help(ui, game);
     ui.separator();
 
-    // Numeric properties: edit a copy, then apply if anything changed.
-    let shot = game.active_shot;
+    // Every field of the level (see level_editor: completeness invariant). Edit a copy,
+    // then apply if anything changed.
     let mut l = game.editor.base().clone();
     let before = l.clone();
-    let mut focus = false;
-    let drag = |ui: &mut egui::Ui, v: &mut f64, speed: f64, lo: f64, hi: f64| {
-        ui.add(egui::DragValue::new(v).speed(speed).range(lo..=hi))
-            .has_focus()
-    };
-    egui::Grid::new("sandbox_props")
-        .num_columns(2)
-        .show(ui, |ui| {
-            ui.label("Name");
-            focus |= ui.text_edit_singleline(&mut l.name).has_focus();
-            ui.end_row();
-            ui.label("Description");
-            focus |= ui.text_edit_multiline(&mut l.description).has_focus();
-            ui.end_row();
-            ui.label("Grid (cells)");
-            ui.horizontal(|ui| {
-                focus |= ui
-                    .add(egui::DragValue::new(&mut l.grid.nx).range(4..=200))
-                    .has_focus();
-                ui.label("×");
-                focus |= ui
-                    .add(egui::DragValue::new(&mut l.grid.ny).range(4..=200))
-                    .has_focus();
-            });
-            ui.end_row();
-            ui.label("Nodes per cell");
-            let mut sub = l.grid.subdivision;
-            focus |= ui
-                .add(egui::DragValue::new(&mut sub).range(1..=8))
-                .has_focus();
-            if sub != l.grid.subdivision && sub.is_multiple_of(l.grid.subdivision) {
-                let f = sub / l.grid.subdivision;
-                l.refine(f, &mut []);
-            }
-            ui.end_row();
-            ui.label("Speed of light c");
-            ui.horizontal(|ui| {
-                let mut newtonian = l.physics.c.is_none();
-                ui.checkbox(&mut newtonian, "Newtonian");
-                if newtonian {
-                    l.physics.c = None;
-                } else {
-                    let mut c = l.physics.c.unwrap_or(5.0);
-                    focus |= drag(ui, &mut c, 0.05, 0.01, 1e9);
-                    l.physics.c = Some(c);
-                }
-            });
-            ui.end_row();
-            let s = &mut l.shots[shot];
-            ui.label(format!("Shot {}: particle q, m", shot + 1));
-            ui.horizontal(|ui| {
-                focus |= ui
-                    .add(
-                        egui::DragValue::new(&mut s.particle.charge)
-                            .speed(1e-8)
-                            .custom_formatter(|v, _| fmt_si(v))
-                            .custom_parser(parse_si),
-                    )
-                    .has_focus();
-                focus |= drag(ui, &mut s.particle.mass, 0.01, 1e-12, 1e12);
-            });
-            ui.end_row();
-            ui.label(format!("Shot {}: launch energy T₀", shot + 1));
-            focus |= drag(ui, &mut s.launch.kinetic_energy, 0.01, 1e-9, 1e9);
-            ui.end_row();
-            ui.label(format!("Shot {}: launch angle (°)", shot + 1));
-            let d = s.launch.direction;
-            let mut angle = d[1].atan2(d[0]).to_degrees();
-            if ui
-                .add(
-                    egui::DragValue::new(&mut angle)
-                        .speed(0.5)
-                        .range(-180.0..=180.0),
-                )
-                .changed()
-            {
-                let a = angle.to_radians();
-                s.launch.direction = [a.cos(), a.sin(), 0.0];
-            }
-            ui.end_row();
-            ui.label("Radii: charge, magnet, wire");
-            ui.horizontal(|ui| {
-                focus |= drag(ui, &mut l.physics.charge_radius, 0.01, 0.01, 2.0);
-                focus |= drag(ui, &mut l.physics.magnet_radius, 0.01, 0.01, 2.0);
-                focus |= drag(ui, &mut l.physics.wire_radius, 0.01, 0.01, 1.0);
-            });
-            ui.end_row();
-            ui.label("Time limit");
-            focus |= drag(ui, &mut l.physics.t_max, 1.0, 1.0, 1e7);
-            ui.end_row();
-            ui.label("Player charges (max)");
-            focus |= ui
-                .add(egui::DragValue::new(&mut l.limits.max_charges).range(0..=20))
-                .has_focus();
-            ui.end_row();
-            ui.label("Allowed charge magnitudes");
-            let r = ui.text_edit_singleline(&mut game.sandbox.magnitudes_text);
-            focus |= r.has_focus();
-            if r.lost_focus() {
-                let parsed = parse_list(&game.sandbox.magnitudes_text);
-                if !parsed.is_empty() {
-                    l.limits.magnitudes = parsed;
-                }
-                game.sandbox.magnitudes_text = list_to_text(&l.limits.magnitudes);
-            }
-            ui.end_row();
-            ui.label("Charge signs allowed");
-            ui.horizontal(|ui| {
-                ui.checkbox(&mut l.limits.allow_positive, "+");
-                ui.checkbox(&mut l.limits.allow_negative, "−");
-            });
-            ui.end_row();
-            ui.label("Player magnets (max)");
-            focus |= ui
-                .add(egui::DragValue::new(&mut l.limits.max_magnets).range(0..=20))
-                .has_focus();
-            ui.end_row();
-            ui.label("Allowed magnet strengths μ");
-            let r = ui.text_edit_singleline(&mut game.sandbox.magnet_text);
-            focus |= r.has_focus();
-            if r.lost_focus() {
-                l.limits.magnet_strengths = parse_list(&game.sandbox.magnet_text);
-                game.sandbox.magnet_text = list_to_text(&l.limits.magnet_strengths);
-            }
-            ui.end_row();
-        });
-    game.text_focus |= focus;
+    let result =
+        crate::level_editor::edit_level(ui, &mut l, &mut game.sandbox.texts, game.active_shot);
+    game.text_focus |= result.focus;
+    if let Some(f) = result.refine_by {
+        l.refine(f, &mut []);
+    }
     if !l.limits.allow_positive && !l.limits.allow_negative {
         l.limits.allow_positive = true;
     }

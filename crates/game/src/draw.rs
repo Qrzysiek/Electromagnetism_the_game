@@ -292,6 +292,15 @@ pub fn draw(
         }
     }
 
+    // Polygon coil being drawn in the sandbox.
+    let pending = &game.sandbox.pending_polygon;
+    if !pending.is_empty() {
+        let color = Color::srgba(0.95, 0.6, 0.3, 0.8);
+        let mut pts: Vec<Vec2> = pending.iter().map(|n| to_vec2(grid.position(*n))).collect();
+        pts.push(to_vec2(grid.position(game.editor.cursor)));
+        gizmos.linestrip_2d(pts, color);
+    }
+
     // Cursor.
     let cur = to_vec2(grid.position(game.editor.cursor));
     let cursor_color = match (game.editor.kind, game.editor.selected_value() > 0.0) {
