@@ -306,7 +306,47 @@ fn main() {
                 .chain(),
         )
         .add_systems(EguiPrimaryContextPass, ui::panel)
+        .add_systems(Update, dev_capture)
         .run();
+}
+
+/// Developer capture for testing without input: with `EM_CAPTURE=<file.png>` the game
+/// opens level `EM_LEVEL` (1-based), enters the sandbox if `EM_SANDBOX=1`, lets the
+/// physics settle, saves a screenshot of its own window and exits. No clicks or keys are
+/// sent to the desktop.
+fn dev_capture(
+    mut commands: Commands,
+    mut game: ResMut<Game>,
+    mut frame: Local<u32>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    let Ok(path) = std::env::var("EM_CAPTURE") else {
+        return;
+    };
+    *frame += 1;
+    match *frame {
+        3 => {
+            if let Some(i) = std::env::var("EM_LEVEL")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .filter(|&i| i >= 1 && i <= game.levels.len())
+            {
+                game.select_level(i - 1);
+            }
+            if std::env::var("EM_SANDBOX").is_ok_and(|v| v == "1") {
+                sandbox::enter(&mut game);
+            }
+        }
+        120 => {
+            commands
+                .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+                .observe(bevy::render::view::screenshot::save_to_disk(path));
+        }
+        180 => {
+            exit.write(AppExit::Success);
+        }
+        _ => {}
+    }
 }
 
 fn setup(

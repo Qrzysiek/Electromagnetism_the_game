@@ -23,6 +23,8 @@ const MIN_POSITIVE: f64 = 1e-12;
 const MAX_RADIUS: f64 = 5.0;
 const MAX_COUNT: u32 = 20;
 const TOLERANCE: std::ops::RangeInclusive<f64> = 1e-18..=1.0;
+/// Width of list text fields, so that grid rows fit the panel.
+const LIST_WIDTH: f32 = 100.0;
 
 /// Text buffers for list fields (edited as comma-separated text).
 #[derive(Default)]
@@ -162,11 +164,14 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
             f
         }
     });
-    focus |= row(ui, "Radii: charge, magnet, wire, antenna", |ui| {
+    // At most two values per row: a row wider than the panel makes egui draw a stray
+    // full-height line.
+    focus |= row(ui, "Radii: charge, magnet", |ui| {
         positive(ui, charge_radius, 0.01, MAX_RADIUS)
             | positive(ui, magnet_radius, 0.01, MAX_RADIUS)
-            | positive(ui, wire_radius, 0.01, MAX_RADIUS)
-            | positive(ui, antenna_radius, 0.01, MAX_RADIUS)
+    });
+    focus |= row(ui, "Radii: wire, antenna", |ui| {
+        positive(ui, wire_radius, 0.01, MAX_RADIUS) | positive(ui, antenna_radius, 0.01, MAX_RADIUS)
     });
     focus |= row(ui, "Antenna RF ω", |ui| {
         ui.add(
@@ -179,7 +184,7 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
     focus |= row(ui, "Time limit", |ui| {
         positive(ui, t_max, 1.0, MAX_POSITIVE)
     });
-    focus |= row(ui, "Tolerance: preview, verify", |ui| {
+    focus |= row(ui, "Tolerance prev., ver.", |ui| {
         sci(ui, preview) | sci(ui, verify)
     });
     focus
@@ -454,8 +459,8 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         ui.add(egui::DragValue::new(max_charges).range(0..=MAX_COUNT))
             .has_focus()
     });
-    focus |= row(ui, "Allowed charge magnitudes", |ui| {
-        let r = ui.text_edit_singleline(&mut texts.magnitudes);
+    focus |= row(ui, "Charge values |Q|", |ui| {
+        let r = ui.add(egui::TextEdit::singleline(&mut texts.magnitudes).desired_width(LIST_WIDTH));
         if r.lost_focus() {
             let parsed = parse_list(&texts.magnitudes);
             if !parsed.is_empty() {
@@ -465,7 +470,7 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         }
         r.has_focus()
     });
-    row(ui, "Charge signs allowed", |ui| {
+    row(ui, "Charge signs", |ui| {
         ui.checkbox(allow_positive, "+");
         ui.checkbox(allow_negative, "−");
         false
@@ -474,8 +479,9 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         ui.add(egui::DragValue::new(max_magnets).range(0..=MAX_COUNT))
             .has_focus()
     });
-    focus |= row(ui, "Allowed magnet strengths μ", |ui| {
-        let r = ui.text_edit_singleline(&mut texts.magnet_strengths);
+    focus |= row(ui, "Magnet values |μ|", |ui| {
+        let r = ui
+            .add(egui::TextEdit::singleline(&mut texts.magnet_strengths).desired_width(LIST_WIDTH));
         if r.lost_focus() {
             *magnet_strengths = parse_list(&texts.magnet_strengths);
             texts.magnet_strengths = list_to_text(magnet_strengths);
@@ -486,8 +492,10 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         ui.add(egui::DragValue::new(max_antennas).range(0..=MAX_COUNT))
             .has_focus()
     });
-    focus |= row(ui, "Allowed antenna amplitudes p₀", |ui| {
-        let r = ui.text_edit_singleline(&mut texts.antenna_amplitudes);
+    focus |= row(ui, "Antenna values |p₀|", |ui| {
+        let r = ui.add(
+            egui::TextEdit::singleline(&mut texts.antenna_amplitudes).desired_width(LIST_WIDTH),
+        );
         if r.lost_focus() {
             *antenna_amplitudes = parse_list(&texts.antenna_amplitudes);
             texts.antenna_amplitudes = list_to_text(antenna_amplitudes);
