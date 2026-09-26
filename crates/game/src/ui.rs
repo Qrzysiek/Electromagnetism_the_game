@@ -393,13 +393,25 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                     .on_hover_text("Rotate with R");
             }
         });
-        ui.label(
-            egui::RichText::new(format!(
-                "Antennas oscillate at ω = {} (one RF generator, in phase).",
-                fmt_si(level.physics.rf_omega)
-            ))
-            .small(),
-        );
+        let omegas = &level.limits.antenna_omegas;
+        if omegas.is_empty() {
+            ui.label(
+                egui::RichText::new(format!(
+                    "Antennas oscillate at ω = {} (the level's RF generator).",
+                    fmt_si(level.physics.rf_omega)
+                ))
+                .small(),
+            );
+        } else {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Frequency ω:");
+                for (i, w) in omegas.iter().enumerate() {
+                    ui.selectable_value(&mut game.editor.omega_index, i, fmt_si(*w))
+                        .on_hover_text("Cycle with W (Shift+W: down)");
+                }
+            });
+            ui.label(egui::RichText::new("All antennas start in phase at t = 0.").small());
+        }
     }
     ui.horizontal(|ui| {
         ui.label("Grid:");
@@ -685,7 +697,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ui.label("S flip sign/phase, Q/E change magnitude, C clear.");
         ui.label("1–4 grid refinement, [ ] switch shot, H show all shots.");
         ui.label("N/P next/previous level, V map, F field lines, A animation.");
-        ui.label("R rotate antenna (Shift+R back), M cycles charge/magnet/antenna.");
+        ui.label("R rotate antenna (Shift+R back), W antenna frequency, M cycles kinds.");
     });
 }
 

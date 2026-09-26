@@ -308,9 +308,10 @@ pub enum ElementKind {
     /// `B_z = −μ / r³`.
     Magnet,
     /// Antenna: a small oscillating electric dipole in the plane (PHYSICS.md §2.4),
-    /// `p(t) = value · (cos α, sin α, 0) · cos(ω t)` with `α = angle_deg` and
-    /// `ω = physics.rf_omega`. All antennas are driven in phase by one generator; a
-    /// negative value is the opposite phase.
+    /// `p(t) = value · (cos α, sin α, 0) · cos(ω t)` with `α = angle_deg` and `ω` the
+    /// element's own `omega`, or the level's RF generator `physics.rf_omega` if it has
+    /// none. All antennas start in phase at t = 0; a negative value is the opposite
+    /// phase.
     Antenna,
 }
 
@@ -325,6 +326,9 @@ pub struct Element {
     /// Orientation in the plane, degrees from +x (antennas only).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub angle_deg: f64,
+    /// Own angular frequency (antennas only); `None`: the level's RF generator.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub omega: Option<f64>,
 }
 
 impl Element {
@@ -334,6 +338,7 @@ impl Element {
             kind: ElementKind::Charge,
             value: q,
             angle_deg: 0.0,
+            omega: None,
         }
     }
 
@@ -343,6 +348,7 @@ impl Element {
             kind: ElementKind::Magnet,
             value: mu,
             angle_deg: 0.0,
+            omega: None,
         }
     }
 
@@ -352,7 +358,15 @@ impl Element {
             kind: ElementKind::Antenna,
             value: p0,
             angle_deg,
+            omega: None,
         }
+    }
+
+    /// The same antenna at its own frequency `omega`.
+    #[must_use]
+    pub fn with_omega(mut self, omega: f64) -> Self {
+        self.omega = Some(omega);
+        self
     }
 }
 
@@ -392,6 +406,10 @@ pub struct Limits {
     /// Allowed antenna amplitudes |p₀| (either phase; orientations `ANTENNA_ANGLES`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub antenna_amplitudes: Vec<f64>,
+    /// Frequencies ω the player may give an antenna. Empty: player antennas run at the
+    /// level's RF generator frequency.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub antenna_omegas: Vec<f64>,
     /// If set, player elements may only be placed inside this box of nodes (inclusive),
     /// like the electrode region of a real instrument.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -429,6 +447,7 @@ pub enum PlacementError {
     SignNotAllowed(f64),
     MagnitudeNotAllowed(f64),
     AngleNotAllowed(f64),
+    FrequencyNotAllowed(Option<f64>),
 }
 
 impl Level {
@@ -592,6 +611,14 @@ impl Level {
                     {
                         return Err(PlacementError::AngleNotAllowed(e.angle_deg));
                     }
+                    let omegas = &self.limits.antenna_omegas;
+                    let omega_ok = match e.omega {
+                        None => omegas.is_empty(),
+                        Some(w) => omegas.iter().any(|o| o.to_bits() == w.to_bits()),
+                    };
+                    if !omega_ok {
+                        return Err(PlacementError::FrequencyNotAllowed(e.omega));
+                    }
                 }
             }
         }
@@ -628,7 +655,7 @@ impl Level {
                 OscillatingDipole {
                     position: self.grid.position(e.node),
                     amplitude: DVec3::new(a.cos(), a.sin(), 0.0) * e.value,
-                    omega: self.physics.rf_omega,
+                    omega: e.omega.unwrap_or(self.physics.rf_omega),
                     phase: 0.0,
                     c: self.c(),
                     radius: self.physics.antenna_radius,
@@ -835,6 +862,7 @@ mod tests {
                 magnet_strengths: vec![5.0],
                 max_antennas: 1,
                 antenna_amplitudes: vec![3.0],
+                antenna_omegas: vec![0.5, 2.0],
                 region: None,
             },
             reference_solution: vec![],
@@ -927,16 +955,32 @@ mod tests {
             l.check_placement(&[magnet, Element::magnet([7, 6, 0], 5.0)]),
             Err(PlacementError::TooManyMagnets)
         ));
-        let antenna = Element::antenna([8, 2, 0], -3.0, 135.0);
+        let antenna = Element::antenna([8, 2, 0], -3.0, 135.0).with_omega(2.0);
         assert_eq!(l.check_placement(&[ok, magnet, antenna]), Ok(()));
         assert!(matches!(
-            l.check_placement(&[Element::antenna([8, 2, 0], 3.0, 30.0)]),
+            l.check_placement(&[Element::antenna([8, 2, 0], 3.0, 30.0).with_omega(2.0)]),
             Err(PlacementError::AngleNotAllowed(_))
         ));
+        // The level lists frequencies, so the generator frequency (None) or an
+        // unlisted one is not allowed.
         assert!(matches!(
-            l.check_placement(&[antenna, Element::antenna([9, 2, 0], 3.0, 0.0)]),
+            l.check_placement(&[Element::antenna([8, 2, 0], 3.0, 0.0)]),
+            Err(PlacementError::FrequencyNotAllowed(None))
+        ));
+        assert!(matches!(
+            l.check_placement(&[Element::antenna([8, 2, 0], 3.0, 0.0).with_omega(1.0)]),
+            Err(PlacementError::FrequencyNotAllowed(Some(_)))
+        ));
+        assert!(matches!(
+            l.check_placement(&[
+                antenna,
+                Element::antenna([9, 2, 0], 3.0, 0.0).with_omega(0.5)
+            ]),
             Err(PlacementError::TooManyAntennas)
         ));
+        // Each antenna oscillates at its own frequency.
+        let (field, _) = l.field(&[antenna]);
+        assert_eq!(field.antennas[0].omega.to_bits(), 2.0_f64.to_bits());
     }
 }
 

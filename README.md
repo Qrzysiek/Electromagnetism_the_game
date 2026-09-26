@@ -36,7 +36,7 @@ Switch to **Sandbox** at the top of the panel.
 - Keyboard:
   - Arrows move the cursor (Shift: ×5); Space/Enter place; Del/X remove.
   - S flips the sign (charges), the orientation (magnets: ⊙ moment out of the plane, ⊗ into it) or the phase (antennas).
-  - R rotates an antenna by 45° (Shift+R: back).
+  - R rotates an antenna by 45° (Shift+R: back); W changes its frequency where the level offers several.
   - Q/E change the magnitude; M cycles the element kind (charge, magnet, antenna) the level allows; C clears; 1–4 set the grid refinement.
   - Multi-shot levels: `[` / `]` switch the shot; H shows all shots.
   - N/P switch levels; V cycles the map (potential → magnetic B → off); F toggles field lines; A toggles the animation.
@@ -47,7 +47,7 @@ A level can have several shots: particles with their own species, launch and det
 
 ## Antennas
 
-Antennas are small oscillating electric dipoles in the plane, all driven in phase by the level's RF generator (frequency ω). Their fields are exact, including the induction and radiation terms (PHYSICS.md §2.4). The kick they give depends on when a particle passes, so shots launched at different times (shown in the shot's launch time) can be sorted: RF separators, streak cameras. The potential map and field lines show static sources only.
+Antennas are small oscillating electric dipoles in the plane. They run at the level's RF generator frequency, or at a frequency you choose where the level offers a choice (W cycles it, Shift+W back; the sandbox can give any antenna its own ω). All start in phase at t = 0. Their fields are exact, including the induction and radiation terms (PHYSICS.md §2.4). The kick they give depends on when a particle passes, so shots launched at different times (shown in the shot's launch time) can be sorted: RF separators, streak cameras. The potential map and field lines show static sources only.
 
 ## Radiation
 

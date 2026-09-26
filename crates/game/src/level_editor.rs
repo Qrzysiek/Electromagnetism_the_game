@@ -32,6 +32,7 @@ pub struct EditTexts {
     pub magnitudes: String,
     pub magnet_strengths: String,
     pub antenna_amplitudes: String,
+    pub antenna_omegas: String,
 }
 
 pub fn list_to_text(m: &[f64]) -> String {
@@ -286,6 +287,7 @@ fn edit_elements(ui: &mut egui::Ui, elements: &mut Vec<Element>, grid: &Grid) ->
             kind,
             value,
             angle_deg,
+            omega,
         } = e;
         ui.horizontal(|ui| {
             kind_combo(ui, i, kind);
@@ -294,6 +296,23 @@ fn edit_elements(ui: &mut egui::Ui, elements: &mut Vec<Element>, grid: &Grid) ->
                 focus |= ui
                     .add(egui::DragValue::new(angle_deg).speed(1.0).suffix("°"))
                     .has_focus();
+                let mut own = omega.is_some();
+                ui.checkbox(&mut own, "ω")
+                    .on_hover_text("Own frequency (otherwise the level's RF generator)");
+                match (own, *omega) {
+                    (true, None) => *omega = Some(1.0),
+                    (false, Some(_)) => *omega = None,
+                    _ => {}
+                }
+                if let Some(w) = omega {
+                    focus |= ui
+                        .add(
+                            egui::DragValue::new(w)
+                                .speed(0.01)
+                                .range(0.0..=MAX_POSITIVE),
+                        )
+                        .has_focus();
+                }
             }
             focus |= node(ui, n, grid);
             if ui.small_button("×").clicked() {
@@ -458,6 +477,7 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         magnet_strengths,
         max_antennas,
         antenna_amplitudes,
+        antenna_omegas,
         region,
     } = l;
     let mut focus = false;
@@ -507,6 +527,16 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
             texts.antenna_amplitudes = list_to_text(antenna_amplitudes);
         }
         r.has_focus()
+    });
+    focus |= row(ui, "Antenna ω values", |ui| {
+        let r =
+            ui.add(egui::TextEdit::singleline(&mut texts.antenna_omegas).desired_width(LIST_WIDTH));
+        if r.lost_focus() {
+            *antenna_omegas = parse_list(&texts.antenna_omegas);
+            texts.antenna_omegas = list_to_text(antenna_omegas);
+        }
+        r.on_hover_text("Empty: player antennas use the level's RF generator")
+            .has_focus()
     });
     let mut restricted = region.is_some();
     row(ui, "Player region", |ui| {
@@ -714,11 +744,16 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             kind,
             value,
             angle_deg,
+            omega,
         } = e;
         match kind {
             ElementKind::Charge | ElementKind::Magnet | ElementKind::Antenna => {}
         }
-        if !on_grid(node) || !value.is_finite() || !angle_deg.is_finite() {
+        if !on_grid(node)
+            || !value.is_finite()
+            || !angle_deg.is_finite()
+            || omega.is_some_and(|w| !(0.0..=MAX_POSITIVE).contains(&w))
+        {
             return fail("element outside the grid or with an invalid value");
         }
     }
@@ -777,6 +812,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         magnet_strengths,
         max_antennas,
         antenna_amplitudes,
+        antenna_omegas,
         region,
     } = limits;
     if *max_charges > MAX_COUNT
@@ -786,6 +822,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             .iter()
             .chain(magnet_strengths)
             .chain(antenna_amplitudes)
+            .chain(antenna_omegas)
             .all(|v| *v > 0.0 && v.is_finite())
     {
         return fail("limits outside the editor's range");

@@ -27,6 +27,8 @@ pub struct Editor {
     pub positive: bool,
     /// Orientation of new antennas, degrees (one of `ANTENNA_ANGLES`).
     pub angle_deg: f64,
+    /// Index into the level's allowed antenna frequencies for new antennas.
+    pub omega_index: usize,
     /// Last rejected action, for the status line.
     pub message: Option<String>,
     /// Incremented on every change of the physical setup.
@@ -77,6 +79,7 @@ impl Editor {
             magnitude_index: 0,
             positive,
             angle_deg: ANTENNA_ANGLES[0],
+            omega_index: 0,
             message: None,
             revision: 1,
         }
@@ -144,6 +147,38 @@ impl Editor {
         }
     }
 
+    /// Frequency of new antennas: one of the level's allowed values, or `None` (the
+    /// level's RF generator) if it lists none.
+    pub fn selected_omega(&self) -> Option<f64> {
+        let list = &self.level.limits.antenna_omegas;
+        list.get(self.omega_index.min(list.len().saturating_sub(1)))
+            .copied()
+    }
+
+    /// Changes the frequency of the antenna under the cursor, or of new antennas, to the
+    /// next allowed value.
+    pub fn cycle_omega(&mut self, step: isize) {
+        let list = self.level.limits.antenna_omegas.clone();
+        let n = list.len();
+        if n == 0 {
+            return;
+        }
+        let next = |i: usize| (i as isize + step).clamp(0, n as isize - 1) as usize;
+        if let Some(i) = self.player_index_at(self.cursor) {
+            if self.placement[i].kind == ElementKind::Antenna {
+                let current = list
+                    .iter()
+                    .position(|w| Some(w.to_bits()) == self.placement[i].omega.map(f64::to_bits))
+                    .unwrap_or(0);
+                let mut trial = self.placement.clone();
+                trial[i].omega = Some(list[next(current)]);
+                let _ = self.try_placement(trial);
+            }
+        } else {
+            self.omega_index = next(self.omega_index);
+        }
+    }
+
     fn changed(&mut self) {
         self.revision += 1;
         self.message = None;
@@ -191,6 +226,11 @@ impl Editor {
                 self.angle_deg
             } else {
                 0.0
+            },
+            omega: if self.kind == ElementKind::Antenna {
+                self.selected_omega()
+            } else {
+                None
             },
         };
         match self.player_index_at(self.cursor) {
@@ -339,6 +379,9 @@ pub fn describe(e: &PlacementError) -> String {
         PlacementError::Occupied(_) => "That node is occupied.".into(),
         PlacementError::SignNotAllowed(_) => "That sign is not allowed here.".into(),
         PlacementError::MagnitudeNotAllowed(_) => "That value is not allowed here.".into(),
+        PlacementError::FrequencyNotAllowed(_) => {
+            "That antenna frequency is not available in this level.".into()
+        }
         PlacementError::AngleNotAllowed(_) => {
             "Antennas can point along 0°, 45°, 90° or 135°.".into()
         }

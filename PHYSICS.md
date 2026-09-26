@@ -110,7 +110,7 @@ B = (1/c²) [ṗ × n / r² + p̈ × n / (c r)]
 - A dipole in the plane (`p ⊥ ẑ`) gives, at `z = 0`, `E` exactly in the plane and `B` exactly along `ẑ`, so the 2D slice stays exact (test A3).
 - The radiated power is `⟨P⟩ = p₀² ω⁴ / (3c³)` (Larmor). It is supplied by the generator that drives the antenna, which is outside the model.
 
-**Levels.** All antennas of a level are driven in phase by one generator of angular frequency `physics.rf_omega` (φ = 0). An antenna element has amplitude `value` (a negative value is the opposite phase) and orientation `angle_deg`. The player can choose orientations of 0°, 45°, 90° and 135°.
+**Levels.** Antennas run at the level's RF generator frequency `physics.rf_omega`, or at their own `omega` if they have one. Levels may offer the player a list of frequencies (`limits.antenna_omegas`). All antennas start in phase at t = 0 (φ = 0). An antenna element has amplitude `value` (a negative value is the opposite phase) and orientation `angle_deg`. The player can choose orientations of 0°, 45°, 90° and 135°.
 - A shot may have a launch time `t₀` (`launch.time`). The flight then sees the time-dependent sources at `t₀ + t`, implemented as `LevelField::time_offset`, which is exact.
 - Identical particles launched at different times follow different trajectories only in time-dependent fields. This is the basis of the RF levels.
 

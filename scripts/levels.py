@@ -107,13 +107,15 @@ def wave(amplitude, omega, phase_deg, direction_deg=0.0):
 def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charges=0,
           magnitudes=(), signs=(True, True), max_magnets=0, strengths=(), region=None,
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
-          amplitudes=(), rf_omega=0.0, radiation_reaction=False):
+          amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
     if max_antennas:
         limits["max_antennas"] = max_antennas
         limits["antenna_amplitudes"] = list(amplitudes)
+        if omegas:
+            limits["antenna_omegas"] = list(omegas)
     if region:
         limits["region"] = box(region)
     return {
@@ -497,6 +499,24 @@ def synchrotron_light():
         region=(15, 10, 15, 10), c=2.0, t_max=T_SYNC, radiation_reaction=True)
 
 
+def tune_the_rf():
+    # Bunches 4 time units apart. An antenna at omega sees them at a phase difference of
+    # 4 omega: they are kicked oppositely when that is near pi (omega ~ 0.785) and alike
+    # when it is near 2 pi (omega ~ 1.57).
+    return level(
+        "Tune the RF",
+        "Now you choose the frequency. Two identical bunches leave the source 4 time "
+        "units apart and must reach different detectors. An antenna kicks them "
+        "differently only if they meet it at different phases of its oscillation: the "
+        "phase difference is ω Δt. Pick the frequency, then the orientation and place.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, d, 30, d + 3)), time=t)
+               for t, d in ((0.0, 14), (4.0, 3))],
+        max_antennas=1, amplitudes=[m * M for m in (2, 4, 8)],
+        omegas=[0.2, 0.4, 0.8, 1.2, 1.6],
+        max_charges=1, magnitudes=[m * M for m in (0.5, 1, 2)],
+        region=(4, 3, 24, 17), rf_omega=RF)
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -527,6 +547,7 @@ LEVELS = [
     # Chapter 7: radio frequency.
     ("rf_kick", rf_kick),
     ("rf_separator", rf_separator),
+    ("tune_the_rf", tune_the_rf),
     ("streak_camera", streak_camera),
     # Chapter 8: radiation.
     ("synchrotron_light", synchrotron_light),

@@ -40,8 +40,9 @@ verified reference solution for every shot and negligible radiation
 | 20 | Earth's field | stray B_z of either sign on an electron beam | ≤ 3 charges |
 | 21 | RF kick | 7 Radio frequency: an antenna's kick depends on the passing time | ≤ 1 antenna |
 | 22 | RF separator | identical bunches half a period apart to different detectors | ≤ 2 antennas, ≤ 1 charge |
-| 23 | Streak camera | three bunches a third of a period apart to three spots | ≤ 2 antennas, ≤ 2 charges |
-| 24 | Synchrotron light | 8 Radiation: radiative damping spirals the particle to the axis; only possible with radiation (canonical angular momentum) | 1 magnet on the axis |
+| 23 | Tune the RF | choose the antenna frequency: the phase difference ω Δt decides | ≤ 1 antenna (5 frequencies), ≤ 1 charge |
+| 24 | Streak camera | three bunches a third of a period apart to three spots | ≤ 2 antennas, ≤ 2 charges |
+| 25 | Synchrotron light | 8 Radiation: radiative damping spirals the particle to the axis; only possible with radiation (canonical angular momentum) | 1 magnet on the axis |
 
 ## Automatic detectors
 
@@ -94,12 +95,13 @@ fails.
 | 20_earths_field | 9.6 | 5.0e-4 | 17/32 | 184 | 537 / 2000 | 0.82 |
 | 21_rf_kick | 4.3 | 4.3e-2 | 32/32 | 30 | 30 / 24 | 0.27 |
 | 22_rf_separator | 11.0 | 6.0e-3 | 29/32 | 66 | 107 / 167 | 0.76 |
-| 23_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
-| 24_synchrotron_light | 1.0 | 5.0e-1 | 32/32 | 2 | 2 / 2 | -0.05 |
+| 23_tune_the_rf | 7.9 | 1.5e-3 | 26/32 | 130 | 223 / 667 | 0.76 |
+| 24_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
+| 25_synchrotron_light | 1.0 | 5.0e-1 | 32/32 | 2 | 2 / 2 | -0.05 |
 
 Notes:
 
-- The introduction levels (1, 12, 15, 18, 21, 24) are meant to be easy. Level 24 is a
+- The introduction levels (1, 12, 15, 18, 21, 25) are meant to be easy. Level 25 is a
   concept level (8 choices); harder radiation levels are to come.
 - Under disturbances (chapter 6) a placement counts as a solution only if every flight
   arrives, verified. The distance objective sums over all flights.

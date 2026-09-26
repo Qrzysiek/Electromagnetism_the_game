@@ -50,6 +50,8 @@ pub struct Sandbox {
     /// LevelElement tool.
     pub antenna_value: f64,
     pub antenna_angle: f64,
+    /// Own frequency of level antennas placed with the tool (`None`: RF generator).
+    pub antenna_omega: Option<f64>,
     /// Strength κ of coils drawn with the coil tools.
     pub coil_kappa: f64,
     pub file_name: String,
@@ -76,6 +78,7 @@ impl Default for Sandbox {
             magnet_value: 10.0,
             antenna_value: 1e6,
             antenna_angle: 90.0,
+            antenna_omega: None,
             coil_kappa: 1.0,
             file_name: "my_level".into(),
             overwrite: false,
@@ -149,6 +152,7 @@ pub fn empty_level() -> Level {
             magnet_strengths: vec![],
             max_antennas: 0,
             antenna_amplitudes: vec![],
+            antenna_omegas: vec![],
             region: None,
         },
         reference_solution: Vec::new(),
@@ -166,6 +170,7 @@ fn sync_texts(game: &mut Game) {
     game.sandbox.texts.magnitudes = list_to_text(&limits.magnitudes);
     game.sandbox.texts.magnet_strengths = list_to_text(&limits.magnet_strengths);
     game.sandbox.texts.antenna_amplitudes = list_to_text(&limits.antenna_amplitudes);
+    game.sandbox.texts.antenna_omegas = list_to_text(&limits.antenna_omegas);
 }
 
 /// Enters sandbox mode, editing the level currently loaded.
@@ -246,10 +251,14 @@ pub fn pointer(
                 return true;
             }
             let kind = game.sandbox.element_kind;
-            let (value, angle_deg) = match kind {
-                ElementKind::Charge => (game.sandbox.charge_value, 0.0),
-                ElementKind::Magnet => (game.sandbox.magnet_value, 0.0),
-                ElementKind::Antenna => (game.sandbox.antenna_value, game.sandbox.antenna_angle),
+            let (value, angle_deg, omega) = match kind {
+                ElementKind::Charge => (game.sandbox.charge_value, 0.0, None),
+                ElementKind::Magnet => (game.sandbox.magnet_value, 0.0, None),
+                ElementKind::Antenna => (
+                    game.sandbox.antenna_value,
+                    game.sandbox.antenna_angle,
+                    game.sandbox.antenna_omega,
+                ),
             };
             game.editor.edit_level(|l| {
                 let launch = l.shots.iter().any(|s| s.launch.node == node);
@@ -264,6 +273,7 @@ pub fn pointer(
                         kind,
                         value,
                         angle_deg,
+                        omega,
                     };
                     match existing {
                         Some(i) => l.elements[i] = e,
@@ -557,6 +567,18 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
                             .suffix("°"),
                     );
                     game.text_focus |= r.has_focus();
+                    let mut own = game.sandbox.antenna_omega.is_some();
+                    ui.checkbox(&mut own, "own ω")
+                        .on_hover_text("Otherwise the antenna runs at the level's RF generator");
+                    match (own, game.sandbox.antenna_omega) {
+                        (true, None) => game.sandbox.antenna_omega = Some(1.0),
+                        (false, Some(_)) => game.sandbox.antenna_omega = None,
+                        _ => {}
+                    }
+                    if let Some(w) = &mut game.sandbox.antenna_omega {
+                        let r = ui.add(egui::DragValue::new(w).speed(0.01).range(0.0..=1e12));
+                        game.text_focus |= r.has_focus();
+                    }
                 });
             }
         }

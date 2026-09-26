@@ -135,8 +135,8 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
 }
 
 /// One small change: move an element by one or two nodes, change its value to a
-/// neighbouring allowed one (or rotate an antenna by one step), flip its sign, or
-/// add/remove an element.
+/// neighbouring allowed one (or rotate an antenna by one step, or change its frequency
+/// to a neighbouring allowed one), flip its sign, or add/remove an element.
 fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -> Vec<Element> {
     for _ in 0..50 {
         let mut t = p.to_vec();
@@ -164,6 +164,21 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
                     (k + 1) % angles.len()
                 };
                 t[i].angle_deg = angles[k2];
+                // Or, where the level offers frequencies, change to a neighbouring one.
+                let omegas = &level.limits.antenna_omegas;
+                if !omegas.is_empty() && rng.below(2) == 0 {
+                    t[i].angle_deg = p[i].angle_deg;
+                    let k = omegas
+                        .iter()
+                        .position(|w| Some(w.to_bits()) == t[i].omega.map(f64::to_bits))
+                        .unwrap_or(0);
+                    let k2 = if rng.below(2) == 0 {
+                        k.saturating_sub(1)
+                    } else {
+                        (k + 1).min(omegas.len() - 1)
+                    };
+                    t[i].omega = Some(omegas[k2]);
+                }
             }
             2 if !t.is_empty() => {
                 let i = rng.below(t.len());

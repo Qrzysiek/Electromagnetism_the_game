@@ -38,26 +38,39 @@ impl Rng {
 pub fn single_element_options(level: &Level) -> Vec<Element> {
     let m = level.grid.max_node();
     let z_range = if level.grid.is_2d() { 0..=0 } else { 0..=m[2] };
-    let mut kinds: Vec<(ElementKind, f64, f64)> = Vec::new();
+    let mut kinds: Vec<(ElementKind, f64, f64, Option<f64>)> = Vec::new();
     for &q in &level.limits.magnitudes {
         if level.limits.allow_positive {
-            kinds.push((ElementKind::Charge, q, 0.0));
+            kinds.push((ElementKind::Charge, q, 0.0, None));
         }
         if level.limits.allow_negative {
-            kinds.push((ElementKind::Charge, -q, 0.0));
+            kinds.push((ElementKind::Charge, -q, 0.0, None));
         }
     }
     if level.limits.max_magnets > 0 {
         for &mu in &level.limits.magnet_strengths {
-            kinds.push((ElementKind::Magnet, mu, 0.0));
-            kinds.push((ElementKind::Magnet, -mu, 0.0));
+            kinds.push((ElementKind::Magnet, mu, 0.0, None));
+            kinds.push((ElementKind::Magnet, -mu, 0.0, None));
         }
     }
     if level.limits.max_antennas > 0 {
+        let omegas: Vec<Option<f64>> = if level.limits.antenna_omegas.is_empty() {
+            vec![None]
+        } else {
+            level
+                .limits
+                .antenna_omegas
+                .iter()
+                .copied()
+                .map(Some)
+                .collect()
+        };
         for &p in &level.limits.antenna_amplitudes {
             for a in crate::ANTENNA_ANGLES {
-                kinds.push((ElementKind::Antenna, p, a));
-                kinds.push((ElementKind::Antenna, -p, a));
+                for &w in &omegas {
+                    kinds.push((ElementKind::Antenna, p, a, w));
+                    kinds.push((ElementKind::Antenna, -p, a, w));
+                }
             }
         }
     }
@@ -65,12 +78,13 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
     for z in z_range {
         for y in 0..=m[1] {
             for x in 0..=m[0] {
-                for &(kind, value, angle_deg) in &kinds {
+                for &(kind, value, angle_deg, omega) in &kinds {
                     let e = Element {
                         node: [x, y, z],
                         kind,
                         value,
                         angle_deg,
+                        omega,
                     };
                     if level.check_placement(&[e]).is_ok() {
                         out.push(e);
@@ -176,15 +190,21 @@ fn anneal_once(
         }
     }
     let (mut score, _) = objective(level, &current);
-    // Allowed (value, orientation) pairs per kind.
-    let values = |kind: ElementKind| -> Vec<(f64, f64)> {
-        let mut v: Vec<(f64, f64)> = options
+    // Allowed (value, orientation, frequency) combinations per kind.
+    let values = |kind: ElementKind| -> Vec<(f64, f64, Option<f64>)> {
+        let mut v: Vec<(f64, f64, Option<f64>)> = options
             .iter()
             .filter(|c| c.kind == kind)
-            .map(|c| (c.value, c.angle_deg))
+            .map(|c| (c.value, c.angle_deg, c.omega))
             .collect();
-        v.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
-        v.dedup();
+        let key =
+            |x: &(f64, f64, Option<f64>)| (x.0.to_bits(), x.1.to_bits(), x.2.map(f64::to_bits));
+        v.sort_by(|a, b| {
+            a.0.total_cmp(&b.0)
+                .then(a.1.total_cmp(&b.1))
+                .then(key(a).2.cmp(&key(b).2))
+        });
+        v.dedup_by(|a, b| key(a) == key(b));
         v
     };
     let charge_values = values(ElementKind::Charge);
@@ -211,7 +231,7 @@ fn anneal_once(
                     ElementKind::Magnet => &magnet_values,
                     ElementKind::Antenna => &antenna_values,
                 };
-                (trial[i].value, trial[i].angle_deg) = v[rng.below(v.len())];
+                (trial[i].value, trial[i].angle_deg, trial[i].omega) = v[rng.below(v.len())];
             }
             _ => trial[i] = options[rng.below(options.len())],
         }
