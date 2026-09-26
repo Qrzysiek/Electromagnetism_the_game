@@ -293,6 +293,22 @@ min g ≥ (g(a) + g(b) − v_max (b − a)) / 2
 
 The step size is **not** otherwise limited near obstacles; the certification replaces the displacement cap considered in the design. `Trajectory::closest_sampled` holds, per obstacle, the smallest surface distance among the points evaluated. That is an upper bound on the true closest approach; exact margins are computed in M3.
 
+### 6.1 Detector acceptance — *validated* (`trajectory.rs::Acceptance`)
+
+A detector can require conditions on the arriving particle, as the entrance of the next stage of an instrument does:
+- a direction of motion within a cone (axis, half-angle);
+- a kinetic energy within a band `[min, max]`.
+
+**Decision.** The first entry into the detector box decides. The state at the located entry time (§6) is tested. Inside the acceptance the outcome is `Arrived`; outside it is `Rejected` (the particle is absorbed but not counted).
+
+**Margin.** The signed acceptance margin is the smallest of:
+- the angular margin `half-angle − deviation` (radians);
+- the relative energy margin `min(T − min, max − T) / max`.
+
+It is a verification boundary like the others (§7). A flight whose acceptance margin is not safely larger than its preview–verify difference is marginal, and a flight that flips between the two runs is an outcome mismatch.
+
+**Solver.** The search objective adds the acceptance deficit of a rejected flight, so that near misses are graded.
+
 ## 7. Outcome verification — *validated* (`crates/physics/src/verify.rs`, margins in `trajectory.rs`)
 
 Every flight that matters is computed at two tolerances: preview (1e-10) and verify (1e-12).
@@ -410,6 +426,14 @@ A1 is the strongest check. Its quadratures (Gauss–Legendre in cos θ, uniform 
 | L3 | Circular motion at v = 0.8 c, near and far points | vacuum Maxwell equations, central differences | < 1e-6 | ≤ 1.7e-7 (difference error) |
 
 Note on R2: the first version compared LL work with `∫P dt` alone. It found a difference of 1e-4 at every c, falling as 1/distance². That is the Schott energy of the finite start and end points; with it included the agreement is 5–7e-9.
+
+### Acceptance tests (`cargo test -p physics --test acceptance -- --nocapture`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| D1 | Straight flight at 53.13°, direction windows ±0.01 rad around it | accepted iff half-angle > deviation; margin = half-angle − deviation | margin error < 1e-12 | exact to rounding |
+| D2 | Uniform field, entry energy T₀ + qE·10, three energy windows | analytic entry energy | margin error < 1e-10 | agrees to 6 digits printed |
+| D3 | Direction window 1e-14 rad wider than the flight's angle | must not be verified | SmallMargin (acceptance) or outcome mismatch | SmallMargin, margin 1e-14 |
 
 ### Conductor tests (`cargo test --release -p physics --test conductors -- --nocapture --test-threads=1`)
 

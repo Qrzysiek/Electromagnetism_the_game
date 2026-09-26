@@ -129,6 +129,9 @@ fn truncate(s: &str, n: usize) -> String {
 fn outcome_text(game: &Game, o: Outcome) -> String {
     match o {
         Outcome::Arrived => "reached the detector".into(),
+        Outcome::Rejected => {
+            "entered the detector outside its acceptance (direction or energy)".into()
+        }
         Outcome::Collided(i) => format!("hit {}", obstacle_name(game, i)),
         Outcome::LeftBounds => "left the map".into(),
         Outcome::Timeout => "ran out of time".into(),
@@ -141,6 +144,7 @@ fn boundary_text(b: Boundary) -> &'static str {
         Boundary::Obstacle(_) => "a charge",
         Boundary::Bounds => "the map edge",
         Boundary::Detector => "the detector edge",
+        Boundary::Acceptance => "the detector's direction/energy window",
         Boundary::TimeLimit => "the time limit",
     }
 }
@@ -492,6 +496,28 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                 outcome_text(game, p.outcome),
                 p.flight_time
             ));
+            // Detector acceptance: what is allowed, and how the particle arrived.
+            if let Some(acc) = level.shots[shot_index].detector.acceptance
+                && let Some(last) = p.path.last()
+            {
+                let v = last.p;
+                let dir = v.y.atan2(v.x).to_degrees();
+                let mut parts = Vec::new();
+                if let Some([axis, half]) = acc.direction {
+                    parts.push(format!(
+                        "direction {axis:.0}° ± {half:.1}° (arrives at {dir:.1}°)"
+                    ));
+                }
+                if let Some([lo, hi]) = acc.kinetic {
+                    parts.push(format!(
+                        "energy {lo:.3}–{hi:.3} (arrives with {:.3})",
+                        last.kinetic
+                    ));
+                }
+                ui.label(
+                    egui::RichText::new(format!("Detector accepts: {}", parts.join("; "))).small(),
+                );
+            }
             match verdict {
                 None => {
                     ui.label("Verifying at 100× tighter tolerance…");

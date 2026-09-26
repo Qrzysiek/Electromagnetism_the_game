@@ -36,6 +36,7 @@ fn wave_scenario(
         bounds: Some(cube(1e6)),
         t_max,
         radiation_reaction: false,
+        acceptance: None,
     }
 }
 
@@ -173,6 +174,7 @@ fn w3_plane_symmetry_with_external_fields() {
         bounds: Some(cube(40.0)),
         t_max: 60.0,
         radiation_reaction: false,
+        acceptance: None,
     };
     let tr = run(&scn, &RunSettings::with_tolerance(TOL));
     println!("W3: {} steps, outcome {:?}", tr.stats.n_accept, tr.outcome);
@@ -215,6 +217,7 @@ fn w4_energy_conservation_with_static_stray_fields() {
             bounds: Some(cube(60.0)),
             t_max: 80.0,
             radiation_reaction: false,
+            acceptance: None,
         };
         let tr = run(&scn, &RunSettings::with_tolerance(TOL));
         let rel = tr.energy_max_abs_error / tr.kinetic_initial;

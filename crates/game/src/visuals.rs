@@ -283,7 +283,7 @@ mod tests {
     /// limit and the render thread hung (Dempster level with one electrode).
     #[test]
     fn field_lines_terminate_with_coils() {
-        let level = Level::from_json(include_str!("../../../levels/16_dempster.json")).unwrap();
+        let level = Level::from_json(include_str!("../../../levels/19_dempster.json")).unwrap();
         let scn = level.scenario(0, &[Element::charge([9, 3, 0], 2e6)]);
         let start = std::time::Instant::now();
         let lines = field_lines(&scn, level.physics.charge_radius, 1.5);

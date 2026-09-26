@@ -65,8 +65,18 @@ class Auto:
         self.strip, self.axis, self.size = strip, axis, size
 
 
-def box(b):
-    return {"min": [b[0], b[1], 0], "max": [b[2], b[3], 0]}
+def box(b, direction=None, kinetic=None):
+    """Detector box; optional acceptance: direction = (axis_deg, half_angle_deg),
+    kinetic = (min, max)."""
+    d = {"min": [b[0], b[1], 0], "max": [b[2], b[3], 0]}
+    acc = {}
+    if direction is not None:
+        acc["direction"] = list(direction)
+    if kinetic is not None:
+        acc["kinetic"] = list(kinetic)
+    if acc:
+        d["acceptance"] = acc
+    return d
 
 
 def shot(q, m, node, angle_deg, ke, detector, time=0.0):
@@ -142,7 +152,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
 
 
 # =======================================================================================
-# Chapter 1: charges.
+# charges.
 
 def first_bend():
     return level(
@@ -202,7 +212,7 @@ def thomson_crt():
 
 
 # =======================================================================================
-# Chapter 2: several shots, one setup.
+# several shots, one setup.
 
 def twin_beams():
     return level(
@@ -254,7 +264,7 @@ def einzel_lens():
 
 
 # =======================================================================================
-# Chapter 3: relativity.
+# relativity.
 
 def fast_lane():
     return level(
@@ -285,7 +295,7 @@ def beta_spectrometer():
 
 
 # =======================================================================================
-# Chapter 4: magnetic fields (coils placed by the level).
+# magnetic fields (coils placed by the level).
 
 def first_coil():
     return level(
@@ -333,7 +343,7 @@ def wien_filter():
 
 
 # =======================================================================================
-# Chapter 5: your own magnets.
+# your own magnets.
 
 def first_magnet():
     return level(
@@ -376,7 +386,7 @@ def build_wien_filter():
 
 
 # =======================================================================================
-# Chapter: noise. Fields from outside the arena; one setup must work under each of them.
+# noise. Fields from outside the arena; one setup must work under each of them.
 
 def stray_field():
     # A 0.5 T0 particle crosses the arena in t ~ 30; a stray E = 6.7e3 gives a = qE/m =
@@ -430,7 +440,7 @@ def earths_field():
 
 
 # =======================================================================================
-# Chapter 7: radio frequency. Antennas: oscillating dipoles with their exact retarded
+# radio frequency. Antennas: oscillating dipoles with their exact retarded
 # fields (PHYSICS.md 2.4). c = 5; with omega = 0.6 the wavelength 2 pi c / omega = 52
 # cells: the arena is in the near and induction zones, where the field is strongest.
 # The RF period is 10.5; a particle (v = 1) needs ~30 to cross the arena.
@@ -476,7 +486,7 @@ def streak_camera():
 
 
 # =======================================================================================
-# Chapter 8: radiation. The particle's own radiation is part of the physics
+# radiation. The particle's own radiation is part of the physics
 # (Landau-Lifshitz radiation reaction, PHYSICS.md 3.1). A strongly charged particle
 # (q = m = 1, c = 2: classical radius q^2/(m c^2) = 0.25 cells, tau0 = 2q^2/(3mc^3) =
 # 0.083) in a coil field B ~ 0.1 radiates about 0.1 % of its energy per turn and
@@ -567,6 +577,50 @@ def polarized_sphere():
         max_charges=2, magnitudes=[m * M for m in (0.5, 1, 2, 4)], region=(4, 2, 24, 18))
 
 
+# =======================================================================================
+# Delivering beams: detectors that also require a direction or an energy on arrival, as
+# the entrance of a next stage does (PHYSICS.md 6.1).
+
+def injection():
+    return level(
+        "Injection",
+        "The detector is the entrance of the next accelerator stage: the beam must not only "
+        "hit it, it must enter moving along the axis (+x, within ±8°), or the next stage "
+        "loses it. The beam already reaches the entrance, but at 20°: straighten it. The "
+        "cone shows what is accepted.",
+        shots=[shot(1e-6, 1.0, (0, 5), 20.0, 0.5, box((28, 12, 30, 17), direction=(0.0, 8.0)))],
+        max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)])
+
+
+def soft_landing():
+    # T0 = 0.5; the ions must arrive with 0.02 <= T <= 0.08: a potential hill of
+    # 0.42-0.48 T0 at the detector, without reflecting them.
+    return level(
+        "Soft landing",
+        "Ions for surface science must land gently, or they would smash the surface: they "
+        "may arrive with at most a quarter of their launch energy. The two electrodes at "
+        "the target already brake them; add charges so that they land slowly, on the "
+        "target, without turning back.",
+        # A retarding electrode pair at the target (as deceleration optics have); the
+        # player sets the final braking and keeps the beam on the target.
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((29, 9, 30, 11), kinetic=(0.02, 0.12)))],
+        elements=[charge(28, 6, 0.6 * M), charge(28, 14, 0.6 * M)],
+        max_charges=2, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5, 0.75, 1)],
+        region=(12, 2, 26, 18))
+
+
+def collimator():
+    return level(
+        "Collimator",
+        "Three rays leave the source at −10°, 0° and +10°. All three must reach the "
+        "detector travelling parallel to the axis (within ±3°): a parallel beam, as optics "
+        "downstream expect. Only charges of the particle's sign are available.",
+        shots=[shot(1e-6, 1.0, (0, 10), a, 0.5, box((28, 6, 30, 14), direction=(0.0, 3.0)))
+               for a in (-10.0, 0.0, 10.0)],
+        max_charges=4, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], signs=(True, False),
+        region=(4, 1, 20, 19))
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -579,31 +633,35 @@ LEVELS = [
     ("reflectron", reflectron),
     ("einzel_lens", einzel_lens),
     ("hemispherical_analyzer", hemispherical_analyzer),
-    # Chapter 3: metals (induced charge).
+    # Chapter 3: delivering beams (direction and energy on arrival).
+    ("injection", injection),
+    ("collimator", collimator),
+    ("soft_landing", soft_landing),
+    # Chapter 4: metals (induced charge).
     ("high_voltage_dome", high_voltage_dome),
     ("polarized_sphere", polarized_sphere),
     ("image_charge", image_charge),
-    # Chapter 4: relativity.
+    # Chapter 5: relativity.
     ("fast_lane", fast_lane),
     ("beta_spectrometer", beta_spectrometer),
-    # Chapter 5: magnetic fields (coils placed by the level).
+    # Chapter 6: magnetic fields (coils placed by the level).
     ("first_coil", first_coil),
     ("dempster", dempster),
     ("wien_filter", wien_filter),
-    # Chapter 6: your own magnets.
+    # Chapter 7: your own magnets.
     ("first_magnet", first_magnet),
     ("calutron", calutron),
     ("build_wien_filter", build_wien_filter),
-    # Chapter 7: noise (outside fields; one setup for every disturbance).
+    # Chapter 8: noise (outside fields; one setup for every disturbance).
     ("stray_field", stray_field),
     ("mains_hum", mains_hum),
     ("earths_field", earths_field),
-    # Chapter 8: radio frequency.
+    # Chapter 9: radio frequency.
     ("rf_kick", rf_kick),
     ("rf_separator", rf_separator),
     ("tune_the_rf", tune_the_rf),
     ("streak_camera", streak_camera),
-    # Chapter 9: radiation.
+    # Chapter 10: radiation.
     ("synchrotron_light", synchrotron_light),
 ]
 

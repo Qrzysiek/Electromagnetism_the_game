@@ -337,6 +337,7 @@ fn k4_energy_conservation_with_image_forces() {
             bounds: Some(cube(20.0)),
             t_max: 60.0,
             radiation_reaction: false,
+            acceptance: None,
         };
         let tr = run(&scn, &RunSettings::with_tolerance(1e-12));
         let rel = tr.energy_max_abs_error / tr.kinetic_initial;

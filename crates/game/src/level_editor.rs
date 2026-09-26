@@ -8,8 +8,9 @@
 
 use bevy_egui::egui;
 use level::{
-    Coil, Conductor, ConductorBias, Detector, Disturbance, Element, ElementKind, Grid, Launch,
-    Level, Limits, Node, ParticleSpec, Region2, Shot, TolerancesSpec, Wave, WorldPhysics,
+    Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Element,
+    ElementKind, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2, Shot, TolerancesSpec,
+    Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -214,7 +215,11 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
         kinetic_energy,
         time,
     } = launch;
-    let Detector { min, max } = detector;
+    let Detector {
+        min,
+        max,
+        acceptance,
+    } = detector;
     let mut focus = false;
     focus |= row(ui, "Particle q, m, radius", |ui| {
         si(ui, charge, 1e-8) | positive(ui, mass, 0.01, MAX_POSITIVE) | {
@@ -255,6 +260,52 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
     });
     focus |= row(ui, "Detector corner 1", |ui| node(ui, min, grid));
     focus |= row(ui, "Detector corner 2", |ui| node(ui, max, grid));
+    // Optional conditions on the arriving particle.
+    let mut acc = acceptance.unwrap_or_default();
+    let DetectorAcceptance { direction, kinetic } = &mut acc;
+    focus |= row(ui, "Accept direction", |ui| {
+        let mut on = direction.is_some();
+        ui.checkbox(&mut on, "");
+        match (on, direction.is_some()) {
+            (true, false) => *direction = Some([0.0, 10.0]),
+            (false, true) => *direction = None,
+            _ => {}
+        }
+        let mut f = false;
+        if let Some([axis, half]) = direction {
+            f |= ui
+                .add(egui::DragValue::new(axis).speed(1.0).suffix("°"))
+                .on_hover_text("Axis, degrees from +x")
+                .has_focus();
+            ui.label("±");
+            f |= ui
+                .add(
+                    egui::DragValue::new(half)
+                        .speed(0.5)
+                        .range(0.0..=180.0)
+                        .suffix("°"),
+                )
+                .has_focus();
+        }
+        f
+    });
+    focus |= row(ui, "Accept energy", |ui| {
+        let mut on = kinetic.is_some();
+        ui.checkbox(&mut on, "");
+        match (on, kinetic.is_some()) {
+            (true, false) => *kinetic = Some([0.0, 1.0]),
+            (false, true) => *kinetic = None,
+            _ => {}
+        }
+        let mut f = false;
+        if let Some([lo, hi]) = kinetic {
+            f |= si(ui, lo, 0.01);
+            ui.label("–");
+            f |= si(ui, hi, 0.01);
+        }
+        f
+    });
+    *acceptance = (acc != DetectorAcceptance::default()).then_some(acc);
     focus
 }
 
@@ -793,7 +844,12 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     kinetic_energy,
                     time,
                 },
-            detector: Detector { min, max },
+            detector:
+                Detector {
+                    min,
+                    max,
+                    acceptance,
+                },
         } = s;
         if !charge.is_finite()
             || !positive(*mass)
@@ -805,6 +861,11 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             || !time.is_finite()
             || !on_grid(min)
             || !on_grid(max)
+            || !acceptance.is_none_or(|a| {
+                let DetectorAcceptance { direction, kinetic } = a;
+                direction.is_none_or(|[x, h]| x.is_finite() && (0.0..=180.0).contains(&h))
+                    && kinetic.is_none_or(|[lo, hi]| lo.is_finite() && hi.is_finite() && lo < hi)
+            })
         {
             return Err(format!(
                 "shot {} has a value outside the editor's range",

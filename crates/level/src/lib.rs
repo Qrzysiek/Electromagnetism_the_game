@@ -319,11 +319,37 @@ pub struct Launch {
     pub time: f64,
 }
 
-/// Detector: the box spanned by two nodes.
+/// Detector: the box spanned by two nodes, optionally with conditions on the arriving
+/// particle (as instruments and stages of instruments have).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Detector {
     pub min: Node,
     pub max: Node,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acceptance: Option<DetectorAcceptance>,
+}
+
+/// Conditions on the particle entering a detector (PHYSICS.md §6.1).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct DetectorAcceptance {
+    /// Direction of motion: `[axis, half-angle]`, in degrees (axis from +x).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<[f64; 2]>,
+    /// Kinetic energy `[min, max]`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kinetic: Option<[f64; 2]>,
+}
+
+impl DetectorAcceptance {
+    pub fn to_physics(self) -> physics::trajectory::Acceptance {
+        physics::trajectory::Acceptance {
+            direction: self.direction.map(|[axis, half]| {
+                let a = axis.to_radians();
+                (DVec3::new(a.cos(), a.sin(), 0.0), half.to_radians())
+            }),
+            kinetic: self.kinetic.map(|[lo, hi]| (lo, hi)),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -959,6 +985,10 @@ impl Level {
             bounds: Some(self.bounds()),
             t_max: self.physics.t_max,
             radiation_reaction: self.physics.radiation_reaction,
+            acceptance: self.shots[shot]
+                .detector
+                .acceptance
+                .map(DetectorAcceptance::to_physics),
         }
     }
 
@@ -1012,6 +1042,10 @@ mod tests {
                 detector: Detector {
                     min: [19, 3, 0],
                     max: [20, 7, 0],
+                    acceptance: Some(DetectorAcceptance {
+                        direction: Some([0.0, 20.0]),
+                        kinetic: Some([0.1, 1.0]),
+                    }),
                 },
             }],
             // 0.1 + 0.2 is not exactly representable in decimal.

@@ -281,6 +281,7 @@ fn m2_relativistic_cyclotron_radius_and_period() {
             bounds: None,
             t_max: turns * period,
             radiation_reaction: false,
+            acceptance: None,
         };
         let mut radius_err: f64 = 0.0;
         let mut p_err: f64 = 0.0;
@@ -330,6 +331,7 @@ fn m3_exb_cycloid_newtonian() {
         bounds: None,
         t_max: t_end,
         radiation_reaction: false,
+        acceptance: None,
     };
     let tr = run(&scn, &RunSettings::with_tolerance(TOL));
     let a = e / (b * w);
@@ -373,6 +375,7 @@ fn m3_exb_drift_relativistic() {
             bounds: None,
             t_max: 3.2 * period,
             radiation_reaction: false,
+            acceptance: None,
         };
         // Rests: p_y changes sign from negative to positive (the cusps of the trajectory).
         let mut rests: Vec<(f64, DVec3)> = Vec::new();
@@ -489,6 +492,7 @@ fn m4_energy_conservation_with_magnets() {
                 bounds: Some(cube(30.0)),
                 t_max: 200.0,
                 radiation_reaction: false,
+                acceptance: None,
             };
             let tr = run(&scn, &RunSettings::with_tolerance(TOL));
             let rel = tr.energy_max_abs_error / tr.kinetic_initial;
@@ -541,6 +545,7 @@ fn m6_particle_hits_coil_wire() {
             bounds: Some(cube(20.0)),
             t_max: 100.0,
             radiation_reaction: false,
+            acceptance: None,
         };
         let tr = run(&scn, &RunSettings::with_tolerance(TOL));
         println!("M6 {:?}: {:?} at t = {:.15}", shape, tr.outcome, tr.end.t);

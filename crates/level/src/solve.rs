@@ -113,6 +113,16 @@ pub fn objective(level: &Level, placement: &[Element]) -> (f64, Outcome) {
                 .and_then(|m| m.detector)
                 .unwrap_or(f64::INFINITY);
             score += d.max(0.0);
+            // In the detector but outside its acceptance: how far outside (radians or
+            // relative energy), so that the search can improve on it.
+            if tr.outcome == Outcome::Rejected {
+                let a = tr
+                    .margins
+                    .as_ref()
+                    .and_then(|m| m.acceptance)
+                    .unwrap_or(1.0);
+                score += (-a).max(0.0) + 1e-3;
+            }
             if outcome == Outcome::Arrived {
                 outcome = tr.outcome;
             }

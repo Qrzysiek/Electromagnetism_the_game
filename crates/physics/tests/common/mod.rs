@@ -42,6 +42,7 @@ pub fn central_charge(
         bounds: None,
         t_max,
         radiation_reaction: false,
+        acceptance: None,
     }
 }
 

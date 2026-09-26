@@ -32,6 +32,36 @@ pub struct Scenario<F> {
     pub t_max: f64,
     /// Include the particle's radiation reaction (Landau–Lifshitz, PHYSICS.md §3.1).
     pub radiation_reaction: bool,
+    /// Optional conditions on arrival at the detector (direction, kinetic energy). A
+    /// particle entering the detector outside them is absorbed but not counted
+    /// (`Outcome::Rejected`).
+    pub acceptance: Option<Acceptance>,
+}
+
+/// Conditions on the particle when it enters the detector (PHYSICS.md §6.1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Acceptance {
+    /// Allowed direction of motion: unit axis and half-angle (radians).
+    pub direction: Option<(DVec3, f64)>,
+    /// Allowed kinetic energy `[min, max]`.
+    pub kinetic: Option<(f64, f64)>,
+}
+
+impl Acceptance {
+    /// Signed margin of a state entering the detector: the smallest of the angular
+    /// margin `half-angle − deviation` (radians) and the relative energy margin
+    /// `min(T − min, max − T) / max`. Negative: outside the acceptance.
+    pub fn margin(&self, velocity: DVec3, kinetic: f64) -> f64 {
+        let mut m = f64::INFINITY;
+        if let Some((axis, half)) = self.direction {
+            let dev = velocity.cross(axis).length().atan2(velocity.dot(axis));
+            m = m.min(half - dev);
+        }
+        if let Some((lo, hi)) = self.kinetic {
+            m = m.min((kinetic - lo).min(hi - kinetic) / hi.abs().max(1e-300));
+        }
+        m
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -60,6 +90,8 @@ impl RunSettings {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Outcome {
     Arrived,
+    /// Entered the detector outside its acceptance (direction or energy).
+    Rejected,
     /// Collision with obstacle `i`.
     Collided(usize),
     LeftBounds,
@@ -85,6 +117,9 @@ pub struct Margins {
     pub obstacles: Vec<f64>,
     pub bounds: Option<f64>,
     pub detector: Option<f64>,
+    /// Acceptance margin at the detector (see `Acceptance::margin`), if the flight
+    /// entered a detector with conditions.
+    pub acceptance: Option<f64>,
 }
 
 impl Margins {
@@ -95,6 +130,7 @@ impl Margins {
             .copied()
             .chain(self.bounds)
             .chain(self.detector)
+            .chain(self.acceptance)
     }
 }
 
@@ -403,6 +439,18 @@ pub fn run_observed<F: FieldSolver>(
         std::mem::swap(&mut g_prev, &mut g_next);
     }
     traj.stats = int.stats();
+    // Acceptance of the detector: decided at the moment of entry.
+    let mut acceptance_margin = None;
+    if traj.outcome == Outcome::Arrived
+        && let Some(acc) = scn.acceptance
+    {
+        let v = ode.kin.velocity(traj.end.p);
+        let m = acc.margin(v, ode.kin.kinetic_energy(traj.end.p));
+        acceptance_margin = Some(m);
+        if m < 0.0 {
+            traj.outcome = Outcome::Rejected;
+        }
+    }
 
     // Follow the continued trajectory (as if the boundary were not there) until the
     // event function reaches its minimum or the depth is clearly safe. The depth is then
@@ -430,7 +478,11 @@ pub fn run_observed<F: FieldSolver>(
         }
         margin[k] = margin[k].min(depth);
     }
-    traj.margins = rs.margins.then(|| collect_margins(&events, &margin));
+    traj.margins = rs.margins.then(|| {
+        let mut m = collect_margins(&events, &margin);
+        m.acceptance = acceptance_margin;
+        m
+    });
     traj
 }
 
@@ -446,6 +498,7 @@ fn collect_margins(events: &[Event], margin: &[f64]) -> Margins {
         obstacles: Vec::new(),
         bounds: None,
         detector: None,
+        acceptance: None,
     };
     for (&ev, &v) in events.iter().zip(margin) {
         match ev {

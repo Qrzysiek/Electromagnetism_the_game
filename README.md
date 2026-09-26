@@ -47,6 +47,10 @@ Switch to **Sandbox** at the top of the panel.
 
 A level can have several shots: particles with their own species, launch and detector. **One setup must deliver every shot.** The panel lists the shots with their status (✔ arrived, ✖ lost, ⚠ marginal, … computing).
 
+## Detectors with conditions
+
+Some detectors also require how the particle arrives: moving in a direction (drawn as a cone at the detector) and/or with a kinetic energy in a window, as the entrance of a next stage does. A particle entering outside these conditions is "rejected". The panel shows the allowed values and how the particle arrived. In the sandbox, set them in the shot's "Accept direction" and "Accept energy" rows.
+
 ## Metal spheres
 
 Levels can contain metal spheres. They can be grounded, isolated with a net charge, or held at a potential (like a Van de Graaff dome).

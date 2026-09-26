@@ -283,6 +283,20 @@ pub fn draw(
         let d0 = to_vec2(grid.position(shot.detector.min));
         let d1 = to_vec2(grid.position(shot.detector.max));
         gizmos.rect_2d((d0 + d1) * 0.5, (d1 - d0).abs(), color.with_alpha(alpha));
+        // Accepted directions: a cone (axis and half-angle) at the detector's centre.
+        if let Some([axis, half]) = shot.detector.acceptance.and_then(|a| a.direction) {
+            let c = (d0 + d1) * 0.5;
+            let len = (d1 - d0).abs().min_element().max(1.0) * 0.9;
+            #[allow(clippy::cast_possible_truncation)]
+            let (axis, half) = (axis.to_radians() as f32, half.to_radians() as f32);
+            let dir = Vec2::from_angle(axis);
+            let tail = c - dir * len * 0.5;
+            let cone = color.with_alpha(alpha * 0.8);
+            gizmos.arrow_2d(tail, c + dir * len * 0.5, cone);
+            for s in [-half, half] {
+                gizmos.line_2d(tail, tail + Vec2::from_angle(axis + s) * len, cone);
+            }
+        }
         if solved || active {
             gizmos.rect_2d(
                 (d0 + d1) * 0.5,

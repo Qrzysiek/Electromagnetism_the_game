@@ -111,6 +111,7 @@ fn default_shot() -> Shot {
         detector: Detector {
             min: [27, 8, 0],
             max: [30, 12, 0],
+            acceptance: None,
         },
     }
 }
@@ -380,8 +381,14 @@ pub fn pointer(
                         game.editor.placement.retain(|c| region.contains(c.node));
                     }
                     Tool::Detector if non_empty => {
-                        game.editor
-                            .edit_level(|l| l.shots[shot].detector = Detector { min, max });
+                        game.editor.edit_level(|l| {
+                            let acceptance = l.shots[shot].detector.acceptance;
+                            l.shots[shot].detector = Detector {
+                                min,
+                                max,
+                                acceptance,
+                            };
+                        });
                     }
                     Tool::CoilCircle => {
                         let grid = game.editor.base().grid;

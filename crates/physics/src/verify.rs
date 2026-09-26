@@ -37,6 +37,8 @@ pub enum Boundary {
     Obstacle(usize),
     Bounds,
     Detector,
+    /// Direction or energy condition of the detector at arrival.
+    Acceptance,
     /// Time remaining before `t_max` at the event.
     TimeLimit,
 }
@@ -127,6 +129,9 @@ pub fn classify(a: &Trajectory, b: &Trajectory, t_max: f64) -> Status {
     }
     if let (Some(x), Some(y)) = (ma.detector, mb.detector) {
         boundaries.push((Boundary::Detector, x, y));
+    }
+    if let (Some(x), Some(y)) = (ma.acceptance, mb.acceptance) {
+        boundaries.push((Boundary::Acceptance, x, y));
     }
 
     let mut worst: Option<Status> = None;
