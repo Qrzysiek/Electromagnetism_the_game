@@ -228,6 +228,49 @@ pub fn draw(
         draw_coil(&mut gizmos, grid, coil);
     }
 
+    // Electrodes: filled metallic rectangles (their cross-section in the plane), rim
+    // coloured by bias like the spheres.
+    for e in &level.electrodes {
+        let c = to_vec2(grid.position(e.center));
+        #[allow(clippy::cast_possible_truncation)]
+        let (a, hl, ht) = (
+            e.angle_deg.to_radians() as f32,
+            (e.length / 2.0) as f32,
+            (e.thickness / 2.0) as f32,
+        );
+        let u = Vec2::from_angle(a);
+        let v = u.perp();
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let strips = ((2.0 * ht / 0.03).ceil() as u32).max(2);
+        for k in 0..=strips {
+            #[allow(clippy::cast_precision_loss)]
+            let t = -ht + 2.0 * ht * k as f32 / strips as f32;
+            seg(
+                &mut gizmos,
+                c - u * hl + v * t,
+                c + u * hl + v * t,
+                Color::srgb(0.42, 0.45, 0.5),
+            );
+        }
+        let rim = match e.bias {
+            level::ConductorBias::Charge(x) | level::ConductorBias::Potential(x) if x > 0.0 => {
+                Color::srgb(1.0, 0.45, 0.35)
+            }
+            level::ConductorBias::Charge(x) | level::ConductorBias::Potential(x) if x < 0.0 => {
+                Color::srgb(0.4, 0.65, 1.0)
+            }
+            _ => Color::srgb(0.85, 0.85, 0.85),
+        };
+        let corners = [
+            c - u * hl - v * ht,
+            c + u * hl - v * ht,
+            c + u * hl + v * ht,
+            c - u * hl + v * ht,
+            c - u * hl - v * ht,
+        ];
+        gizmos.linestrip_2d(corners, rim);
+    }
+
     // Metal spheres: a filled metallic disc, rim coloured by how it is held (grey:
     // grounded, red/blue: positive/negative charge or potential).
     for c in &level.conductors {

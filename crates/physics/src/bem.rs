@@ -343,6 +343,9 @@ pub struct Electrodes {
     pub sigma: Vec<f64>,
     /// Potential of each electrode.
     pub potentials: Vec<f64>,
+    /// Evaluate panels as point charges at their centroids (display resolution: cheap,
+    /// for pictures only; physics always uses the exact integrals).
+    pub point_evaluation: bool,
 }
 
 impl Electrodes {
@@ -351,7 +354,9 @@ impl Electrodes {
         sources: &[(DVec3, f64)],
         resolution: Resolution,
     ) -> Self {
-        Self::with_panel_size(electrodes, sources, resolution.panel_size())
+        let mut e = Self::with_panel_size(electrodes, sources, resolution.panel_size());
+        e.point_evaluation = resolution == Resolution::Display;
+        e
     }
 
     /// As `new`, with an explicit largest panel size (cells).
@@ -432,11 +437,20 @@ impl Electrodes {
             geometry: Some(geo),
             sigma,
             potentials: alpha,
+            point_evaluation: false,
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.electrodes.is_empty()
+    }
+
+    /// Geometry only (no charges): for obstacles and containment tests.
+    pub fn shapes_only(electrodes: Vec<BoxElectrode>) -> Self {
+        Self {
+            electrodes,
+            ..Self::default()
+        }
     }
 
     /// Panels (upper halves) with their densities.
@@ -490,7 +504,20 @@ impl FieldSolver for Electrodes {
     fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
         let mut phi = 0.0;
         let mut e = DVec3::ZERO;
-        if let Some(geo) = &self.geometry {
+        if let Some(geo) = &self.geometry
+            && self.point_evaluation
+        {
+            for (t, &s) in geo.panels.iter().zip(&self.sigma) {
+                let q = s * t.area();
+                let c = t.centroid();
+                for y in [c, DVec3::new(c.x, c.y, -c.z)] {
+                    let d = x - y;
+                    let inv = 1.0 / d.length();
+                    phi += q * inv;
+                    e += d * (q * inv * inv * inv);
+                }
+            }
+        } else if let Some(geo) = &self.geometry {
             for ((p, m), &s) in geo.pre.iter().zip(&self.sigma) {
                 let (pp, g) = pair_integrals(p, m, x);
                 phi += s * pp;

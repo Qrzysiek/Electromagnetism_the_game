@@ -133,7 +133,7 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>) {
                 continue 'requests;
             }
         }
-        let fine = if req.level.conductors.is_empty() {
+        let fine = if req.level.conductors.is_empty() && req.level.electrodes.is_empty() {
             scenarios
         } else {
             req.level

@@ -175,6 +175,11 @@ Plates, slabs and walls are rectangular metal boxes standing on the plane of the
 - **Accuracy.** Constant panels are a discretization. The error is measured (E1, E2) and enters verification through the two mesh resolutions (preview and verification).
 - **Particle image force.** Not included for electrodes: it would need a new solve per force evaluation. It scales with q², and levels check that its bound is negligible (§8).
 - **Cost.** A flight through a deflector pair (704 panels) takes 16 ms at preview resolution (E5).
+- **In levels.** `electrodes` in the level format; the obstacle is the box plus the contact shell (§2.6).
+  - `Level::model_issues` rejects combining electrodes with metal spheres (not yet solved together) or with time-dependent sources, and elements or launch points inside an electrode.
+  - Verification uses the verification mesh (0.35 cells) against the preview mesh (0.5 cells).
+  - Pictures (potential map, field lines) use a display mesh (1 cell) with each panel evaluated as a point charge at its centroid. This is cheap, and never used for physics.
+  - The level test `electrode_image_force_is_negligible` bounds the neglected image force by `q²/d²` (four times the force of a flat grounded plane, covering concave corners), relative to `max(|F_Lorentz|, F₀)` with `F₀ = T₀` per cell, along every reference flight, and requires it to be below 1e-10. The first version used |F_Lorentz| alone, which is meaningless where the force passes through zero (it gave 2.2e-10 in the Einzel lens). Measured: 5e-13 and 1.5e-11.
 
 ## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 

@@ -51,6 +51,10 @@ A level can have several shots: particles with their own species, launch and det
 
 Some detectors also require how the particle arrives: moving in a direction (drawn as a cone at the detector) and/or with a kinetic energy in a window, as the entrance of a next stage does. A particle entering outside these conditions is "rejected". The panel shows the allowed values and how the particle arrived. In the sandbox, set them in the shot's "Accept direction" and "Accept energy" rows.
 
+## Electrodes
+
+Levels can contain real electrodes: metal plates, slabs and walls with finite size, grounded or held at a voltage. Their field, including the fringe field at their ends, is computed by the boundary element method (PHYSICS.md §2.7). Field lines end on them, and touching one loses the particle. In the sandbox they are edited in the "Electrodes" section.
+
 ## Metal spheres
 
 Levels can contain metal spheres. They can be grounded, isolated with a net charge, or held at a potential (like a Van de Graaff dome).

@@ -86,7 +86,7 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
         .iter()
         .map(|s| (s.center, s.radius))
         .collect();
-    if charges.is_empty() && metal.is_empty() {
+    if charges.is_empty() && metal.is_empty() && scn.field.electrodes.is_empty() {
         return Vec::new();
     }
     let steps = std::cell::Cell::new(0usize);
@@ -102,6 +102,8 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
         (e.length() > 0.0 && e.is_finite()).then(|| e.normalize() * sign)
     };
     let inside_bounds = |x: DVec3| x.x > b.min.x && x.y > b.min.y && x.x < b.max.x && x.y < b.max.y;
+    // Electrode boxes (lines end on their surfaces).
+    let boxes = scn.field.electrodes.obstacles(0.0);
     // Distance to the nearest place where lines start or end: a charge or a metal
     // surface.
     let charge_distance = |x: DVec3| {
@@ -109,6 +111,7 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
             .iter()
             .map(|c| (x - *c).length() - charge_radius)
             .chain(metal.iter().map(|&(c, r)| (x - c).length() - r))
+            .chain(boxes.iter().map(|b| b.signed_distance(x)))
             .fold(f64::INFINITY, f64::min)
     };
 
@@ -167,6 +170,24 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
         for i in 0..8 {
             let a = std::f64::consts::FRAC_PI_4 * f64::from(i) + 0.2;
             queue.push_back(*c + DVec3::new(a.cos(), a.sin(), 0.0) * (charge_radius + 0.6 * d_sep));
+        }
+    }
+    // Seeds along electrode outlines (in the plane), one per `d_sep`.
+    for e in &scn.field.electrodes.electrodes {
+        let (s, c) = e.angle.sin_cos();
+        let (u, v) = (DVec3::new(c, s, 0.0), DVec3::new(-s, c, 0.0));
+        let (a, b) = (e.half_length + 0.6 * d_sep, e.half_thickness + 0.6 * d_sep);
+        for (o, dir, len) in [
+            (e.center - u * a - v * b, u, 2.0 * a),
+            (e.center - u * a + v * b, u, 2.0 * a),
+            (e.center - u * a - v * b, v, 2.0 * b),
+            (e.center + u * a - v * b, v, 2.0 * b),
+        ] {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let n = ((len / d_sep).ceil() as u32).max(1);
+            for i in 0..=n {
+                queue.push_back(o + dir * (len * f64::from(i) / f64::from(n)));
+            }
         }
     }
     // Seeds just outside metal surfaces, one per `d_sep` of circumference.
@@ -283,7 +304,7 @@ mod tests {
     /// limit and the render thread hung (Dempster level with one electrode).
     #[test]
     fn field_lines_terminate_with_coils() {
-        let level = Level::from_json(include_str!("../../../levels/19_dempster.json")).unwrap();
+        let level = Level::from_json(include_str!("../../../levels/21_dempster.json")).unwrap();
         let scn = level.scenario(0, &[Element::charge([9, 3, 0], 2e6)]);
         let start = std::time::Instant::now();
         let lines = field_lines(&scn, level.physics.charge_radius, 1.5);

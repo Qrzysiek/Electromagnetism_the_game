@@ -122,3 +122,46 @@ fn metal_levels_are_accurate_and_consistent() {
         assert!(residual < 1e-10, "{name}: residual {residual:.3e}");
     }
 }
+
+/// Levels with box electrodes: the particle's image force is not computed for
+/// electrodes (PHYSICS.md §2.7), so it must be negligible. Upper bound q²/d² (four times
+/// the force of a flat grounded plane at distance d, which covers concave corners),
+/// relative to max(|F_Lorentz|, F₀) along every reference flight: < 1e-10. F₀ = T₀ per
+/// cell is the smallest force that matters for the flight (it changes the kinetic energy
+/// by T₀ over one cell); relative to the Lorentz force alone the ratio is meaningless
+/// where that force passes through zero.
+#[test]
+fn electrode_image_force_is_negligible() {
+    use physics::field::FieldSolver;
+    for (name, level) in shipped_levels() {
+        if level.electrodes.is_empty() {
+            continue;
+        }
+        let boxes = physics::bem::Electrodes::shapes_only(level.box_electrodes()).obstacles(0.0);
+        let mut worst: f64 = 0.0;
+        for (i, scn) in level
+            .scenarios(&level.reference_solution)
+            .iter()
+            .enumerate()
+        {
+            let tr = physics::trajectory::run(
+                scn,
+                &physics::trajectory::RunSettings::with_tolerance(level.physics.tolerances.preview),
+            );
+            let shot = &level.shots[level.flight_of(i).0];
+            let q = shot.particle.charge;
+            let f0 = shot.launch.kinetic_energy;
+            for s in &tr.samples {
+                let d = boxes
+                    .iter()
+                    .map(|b| b.signed_distance(s.x))
+                    .fold(f64::INFINITY, f64::min)
+                    .max(1e-3);
+                let f = (scn.field.sample(s.x, s.t).e.length() * q.abs()).max(f0);
+                worst = worst.max(q * q / (d * d) / f);
+            }
+        }
+        println!("{name}: image force bound / max(|F|, F0) <= {worst:.1e}");
+        assert!(worst < 1e-10, "{name}: {worst:.3e}");
+    }
+}

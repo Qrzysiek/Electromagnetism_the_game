@@ -38,6 +38,7 @@ pub struct PotentialParams {
     pub segment_kappa: [Vec4; MAX_SEGMENTS],
     pub counts: UVec4,
     pub u_a: f32,
+    pub solid: u32,
     pub mode: u32,
     pub wire: f32,
 }
@@ -52,6 +53,7 @@ impl Default for PotentialParams {
             segment_kappa: [Vec4::ZERO; MAX_SEGMENTS],
             counts: UVec4::ZERO,
             u_a: 0.0,
+            solid: 0,
             mode: 0,
             wire: 0.1,
         }
@@ -117,17 +119,38 @@ pub fn params(
             .unwrap_or(0.1) as f32,
         ..PotentialParams::default()
     };
-    // Fixed charges and the charges they induce on metal spheres (display resolution).
-    let charges = f.coulomb.charges().chain(f.conductors.induced.charges());
-    for (i, (pos, qc)) in charges.take(MAX_CHARGES).enumerate() {
-        out.charges[i] = Vec4::new(
+    // Fixed charges (solid, in the plane), then the charges induced on metal (display
+    // resolution): sphere images and equivalent charges, and electrode panels as point
+    // charges at their centroids and mirror images (with their z).
+    let fixed: Vec<(physics::DVec3, f64)> = f.coulomb.charges().collect();
+    let mut induced: Vec<(physics::DVec3, f64)> = f.conductors.induced.charges().collect();
+    for (t, s) in f.electrodes.panels() {
+        let c = t.centroid();
+        let q_panel = s * t.area();
+        induced.push((c, q_panel));
+        induced.push((physics::DVec3::new(c.x, c.y, -c.z), q_panel));
+    }
+    let mut n = 0;
+    for (pos, qc) in fixed.iter().take(MAX_CHARGES) {
+        out.charges[n] = Vec4::new(
             pos.x as f32,
             pos.y as f32,
             (q * qc / t0) as f32,
             charge_radius as f32,
         );
-        out.counts.x = count(i + 1);
+        n += 1;
     }
+    out.solid = count(n);
+    for (pos, qc) in induced.iter().take(MAX_CHARGES - n) {
+        out.charges[n] = Vec4::new(
+            pos.x as f32,
+            pos.y as f32,
+            (q * qc / t0) as f32,
+            pos.z as f32,
+        );
+        n += 1;
+    }
+    out.counts.x = count(n);
     for (i, d) in f.dipoles.iter().take(MAX_MAGNETS).enumerate() {
         out.magnets[i] = Vec4::new(
             d.position.x as f32,

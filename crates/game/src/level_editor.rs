@@ -8,7 +8,7 @@
 
 use bevy_egui::egui;
 use level::{
-    Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Element,
+    Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Electrode, Element,
     ElementKind, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2, Shot, TolerancesSpec,
     Wave, WorldPhysics,
 };
@@ -503,6 +503,86 @@ fn edit_conductors(ui: &mut egui::Ui, list: &mut Vec<Conductor>, grid: &Grid) ->
     focus
 }
 
+/// Bias selector shared by metal spheres and electrodes.
+fn bias_editor(ui: &mut egui::Ui, id: (&str, usize), bias: &mut ConductorBias) -> bool {
+    let kind = match bias {
+        ConductorBias::Grounded => 0,
+        ConductorBias::Charge(_) => 1,
+        ConductorBias::Potential(_) => 2,
+    };
+    let mut k = kind;
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(["grounded", "charge Q", "potential V"][k])
+        .width(90.0)
+        .show_ui(ui, |ui| {
+            for (j, t) in ["grounded", "charge Q", "potential V"].iter().enumerate() {
+                ui.selectable_value(&mut k, j, *t);
+            }
+        });
+    if k != kind {
+        *bias = match k {
+            1 => ConductorBias::Charge(0.0),
+            2 => ConductorBias::Potential(0.0),
+            _ => ConductorBias::Grounded,
+        };
+    }
+    match bias {
+        ConductorBias::Grounded => false,
+        ConductorBias::Charge(v) | ConductorBias::Potential(v) => si(ui, v, 1e4),
+    }
+}
+
+fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, e) in list.iter_mut().enumerate() {
+        let Electrode {
+            center,
+            length,
+            thickness,
+            height,
+            angle_deg,
+            bias,
+        } = e;
+        ui.push_id(("electrode", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Electrode {}", i + 1));
+                focus |= node(ui, center, grid);
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("L×T×H");
+                focus |= positive(ui, length, 0.05, MAX_POSITIVE);
+                focus |= positive(ui, thickness, 0.02, MAX_POSITIVE);
+                focus |= positive(ui, height, 0.05, MAX_POSITIVE);
+            });
+            ui.horizontal(|ui| {
+                focus |= ui
+                    .add(egui::DragValue::new(angle_deg).speed(1.0).suffix("°"))
+                    .has_focus();
+                focus |= bias_editor(ui, ("ebias", i), bias);
+            });
+        });
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize && ui.small_button("+ electrode").clicked() {
+        let m = grid.max_node();
+        list.push(Electrode {
+            center: [m[0] / 2, m[1] / 2, 0],
+            length: 6.0,
+            thickness: 0.4,
+            height: 4.0,
+            angle_deg: 0.0,
+            bias: ConductorBias::Grounded,
+        });
+    }
+    focus
+}
+
 fn edit_disturbances(ui: &mut egui::Ui, list: &mut Vec<Disturbance>) -> bool {
     let mut focus = false;
     let mut remove = None;
@@ -711,6 +791,7 @@ pub fn edit_level(
         reference_solution: _,
         disturbances,
         conductors,
+        electrodes,
     } = level;
     let mut focus = false;
     let mut refine_by = None;
@@ -752,6 +833,8 @@ pub fn edit_level(
         .show(ui, |ui| focus |= edit_elements(ui, elements, &g));
     egui::CollapsingHeader::new(format!("Coils ({})", coils.len()))
         .show(ui, |ui| focus |= edit_coils(ui, coils, &g));
+    egui::CollapsingHeader::new(format!("Electrodes ({})", electrodes.len()))
+        .show(ui, |ui| focus |= edit_electrodes(ui, electrodes, &g));
     egui::CollapsingHeader::new(format!("Metal spheres ({})", conductors.len()))
         .show(ui, |ui| focus |= edit_conductors(ui, conductors, &g));
     egui::CollapsingHeader::new(format!("Disturbances ({})", disturbances.len()))
@@ -786,6 +869,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         reference_solution,
         disturbances,
         conductors,
+        electrodes,
     } = level;
     let Grid {
         nx,
@@ -910,6 +994,29 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     );
                 }
             }
+        }
+    }
+    if electrodes.len() > MAX_COUNT as usize {
+        return fail("too many electrodes");
+    }
+    for e in electrodes {
+        let Electrode {
+            center,
+            length,
+            thickness,
+            height,
+            angle_deg,
+            bias,
+        } = e;
+        let value_ok = match bias {
+            ConductorBias::Grounded => true,
+            ConductorBias::Charge(v) | ConductorBias::Potential(v) => v.is_finite(),
+        };
+        let size_ok = [length, thickness, height]
+            .iter()
+            .all(|v| (MIN_POSITIVE..=MAX_POSITIVE).contains(*v));
+        if !on_grid(center) || !size_ok || !angle_deg.is_finite() || !value_ok {
+            return fail("electrode outside the editor's range");
         }
     }
     if conductors.len() > MAX_COUNT as usize {

@@ -100,6 +100,16 @@ def metal(x, y, r, kind="grounded", value=None):
     return {"center": [x, y, 0], "radius": r, "bias": bias}
 
 
+def plate(x, y, length, thickness=0.4, height=4.0, angle_deg=0.0, kind="grounded",
+          value=None):
+    """A box electrode (plate, slab or wall) standing on the plane."""
+    bias = {"kind": kind}
+    if value is not None:
+        bias["value"] = value
+    return {"center": [x, y, 0], "length": length, "thickness": thickness,
+            "height": height, "angle_deg": angle_deg, "bias": bias}
+
+
 def antenna(x, y, p0, angle_deg=0.0):
     e = {"node": [x, y, 0], "kind": "antenna", "value": p0}
     if angle_deg:
@@ -125,7 +135,8 @@ def wave(amplitude, omega, phase_deg, direction_deg=0.0):
 def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charges=0,
           magnitudes=(), signs=(True, True), max_magnets=0, strengths=(), region=None,
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
-          amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=()):
+          amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=(),
+          electrodes=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -148,6 +159,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         "limits": limits, "reference_solution": list(reference or []),
         **({"disturbances": list(disturbances)} if disturbances else {}),
         **({"conductors": list(conductors)} if conductors else {}),
+        **({"electrodes": list(electrodes)} if electrodes else {}),
     }
 
 
@@ -621,6 +633,45 @@ def collimator():
         region=(4, 1, 20, 19))
 
 
+# =======================================================================================
+# Electrodes (PHYSICS.md 2.7): real plates and apertures with their fringe fields,
+# computed by the boundary element method. V is the electrode potential; for the
+# particle q = 1e-6, a potential difference dV costs q dV = 1e-6 dV of kinetic energy
+# (T0 = 0.5 for the usual beams).
+
+def deflection_plates():
+    return level(
+        "Deflection plates",
+        "Real deflection plates, as in a cathode-ray tube: two metal plates at +V and −V. "
+        "Between them the field is nearly uniform, but it bulges out at the ends (the "
+        "fringe field) and the plates' charge rearranges when you bring charges near. Add "
+        "one charge to bring the beam into the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 18)))],
+        electrodes=[plate(11, 13, 8, kind="potential", value=-3e4),
+                    plate(11, 7, 8, kind="potential", value=3e4)],
+        max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], region=(16, 1, 26, 19))
+
+
+def real_einzel_lens():
+    # Three apertures (plate pairs with a gap of 4 cells around y = 10) at x = 10, 14,
+    # 18; the outer ones grounded, the middle one at V. For positive ions a positive V
+    # decelerates and focuses.
+    apertures = []
+    for x, kind, value in ((10, "grounded", None), (14, "potential", 2.5e5),
+                           (18, "grounded", None)):
+        apertures += [plate(x, 15, 6, height=3.0, angle_deg=90.0, kind=kind, value=value),
+                      plate(x, 5, 6, height=3.0, angle_deg=90.0, kind=kind, value=value)]
+    return level(
+        "Real Einzel lens",
+        "The Einzel lens of chapter 2, as it is really built: three metal apertures, the "
+        "middle one at high voltage. Its focus is not quite on the detector, and the rays "
+        "leave at ±6° now. Add up to two charges to bring all three rays into the small "
+        "detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), a, 0.5, box((28, 9, 30, 11))) for a in (-6.0, 0.0, 6.0)],
+        electrodes=apertures,
+        max_charges=2, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5)], region=(20, 2, 27, 18))
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -641,27 +692,30 @@ LEVELS = [
     ("high_voltage_dome", high_voltage_dome),
     ("polarized_sphere", polarized_sphere),
     ("image_charge", image_charge),
-    # Chapter 5: relativity.
+    # Chapter 5: electrodes (real plates and apertures).
+    ("deflection_plates", deflection_plates),
+    ("real_einzel_lens", real_einzel_lens),
+    # Chapter 6: relativity.
     ("fast_lane", fast_lane),
     ("beta_spectrometer", beta_spectrometer),
-    # Chapter 6: magnetic fields (coils placed by the level).
+    # Chapter 7: magnetic fields (coils placed by the level).
     ("first_coil", first_coil),
     ("dempster", dempster),
     ("wien_filter", wien_filter),
-    # Chapter 7: your own magnets.
+    # Chapter 8: your own magnets.
     ("first_magnet", first_magnet),
     ("calutron", calutron),
     ("build_wien_filter", build_wien_filter),
-    # Chapter 8: noise (outside fields; one setup for every disturbance).
+    # Chapter 9: noise (outside fields; one setup for every disturbance).
     ("stray_field", stray_field),
     ("mains_hum", mains_hum),
     ("earths_field", earths_field),
-    # Chapter 9: radio frequency.
+    # Chapter 10: radio frequency.
     ("rf_kick", rf_kick),
     ("rf_separator", rf_separator),
     ("tune_the_rf", tune_the_rf),
     ("streak_camera", streak_camera),
-    # Chapter 10: radiation.
+    # Chapter 11: radiation.
     ("synchrotron_light", synchrotron_light),
 ]
 

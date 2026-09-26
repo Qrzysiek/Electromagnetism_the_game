@@ -13,7 +13,9 @@
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
 
 struct Params {
-    // xy: position (cells), z: w = q Q / T0, w: sphere radius (cells).
+    // xy: position (cells), z: w = q Q / T0, w: sphere radius (cells) for the first
+    // `solid` charges (fixed charges, in the plane), else the charge's z (induced charges
+    // of metal: images and equivalent charges off the plane).
     charges: array<vec4<f32>, 1024>,
     // xy: position, z: mu / b_ref, w: sphere radius.
     magnets: array<vec4<f32>, 64>,
@@ -27,6 +29,8 @@ struct Params {
     counts: vec4<u32>,
     // U / T0 at the launch point.
     u_a: f32,
+    // Number of leading charges that are solid spheres in the plane.
+    solid: u32,
     // 0: potential, 1: magnetic field.
     mode: u32,
     // Coil wire radius (cells).
@@ -67,7 +71,7 @@ fn elliptic_ke(m: f32, m1: f32) -> vec2<f32> {
 // Signed distance to the nearest solid (charge, magnet, coil wire).
 fn solid_distance(p: vec2<f32>) -> f32 {
     var d = 1e9;
-    for (var i = 0u; i < params.counts.x; i = i + 1u) {
+    for (var i = 0u; i < params.solid; i = i + 1u) {
         let c = params.charges[i];
         d = min(d, distance(p, c.xy) - c.w);
     }
@@ -92,7 +96,12 @@ fn potential_colour(p: vec2<f32>) -> vec3<f32> {
     var u = 0.0;
     for (var i = 0u; i < params.counts.x; i = i + 1u) {
         let c = params.charges[i];
-        u = u + c.z / max(distance(p, c.xy), 1e-4);
+        var z = 0.0;
+        if (i >= params.solid) {
+            z = c.w;
+        }
+        let d = p - c.xy;
+        u = u + c.z / max(sqrt(dot(d, d) + z * z), 1e-4);
     }
     u = u - params.u_a;
 

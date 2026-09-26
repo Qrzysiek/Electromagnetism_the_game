@@ -103,7 +103,9 @@ fn obstacle_name(game: &Game, i: usize) -> &'static str {
             level::Coil::Polygon { vertices, .. } => vertices.len(),
         })
         .sum();
-    // Obstacle order of `Level::field`: charges, magnets, antennas, coil wires, metal.
+    let electrodes = game.editor.level.electrodes.len();
+    // Obstacle order of `Level::field`: charges, magnets, antennas, coil wires,
+    // electrodes, metal spheres.
     if i < charges {
         "a charge"
     } else if i < charges + magnets {
@@ -112,6 +114,8 @@ fn obstacle_name(game: &Game, i: usize) -> &'static str {
         "an antenna"
     } else if i < charges + magnets + antennas + wires {
         "a coil wire"
+    } else if i < charges + magnets + antennas + wires + electrodes {
+        "an electrode"
     } else {
         "a metal sphere"
     }

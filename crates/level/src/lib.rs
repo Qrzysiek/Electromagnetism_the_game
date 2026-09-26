@@ -58,6 +58,24 @@ pub struct Level {
     /// Metal spheres placed by the level (PHYSICS.md §2.6).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conductors: Vec<Conductor>,
+    /// Box electrodes (plates, slabs, walls) placed by the level (PHYSICS.md §2.7).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub electrodes: Vec<Electrode>,
+}
+
+/// A rectangular metal box standing on the plane (symmetric about it): a plate, slab or
+/// wall electrode.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Electrode {
+    /// Centre (grid node).
+    pub center: Node,
+    /// In-plane length along `angle_deg`, thickness across it, and height (z), in cells.
+    pub length: f64,
+    pub thickness: f64,
+    pub height: f64,
+    #[serde(default)]
+    pub angle_deg: f64,
+    pub bias: ConductorBias,
 }
 
 /// A conducting (metal) sphere placed by the level.
@@ -171,6 +189,8 @@ struct LevelFile {
     disturbances: Vec<Disturbance>,
     #[serde(default)]
     conductors: Vec<Conductor>,
+    #[serde(default)]
+    electrodes: Vec<Electrode>,
 }
 
 impl From<LevelFile> for Level {
@@ -200,6 +220,7 @@ impl From<LevelFile> for Level {
             reference_solution: f.reference_solution,
             disturbances: f.disturbances,
             conductors: f.conductors,
+            electrodes: f.electrodes,
         }
     }
 }
@@ -647,6 +668,12 @@ impl Level {
                 .max(self.physics.magnet_radius)
                 .max(self.physics.antenna_radius);
             let p = self.grid.position(e.node);
+            if !self.electrodes.is_empty()
+                && physics::bem::Electrodes::shapes_only(self.box_electrodes())
+                    .contains(p, CONTACT_DISTANCE + reach)
+            {
+                return Err(PlacementError::Occupied(e.node));
+            }
             if self.conductors.iter().any(|c| {
                 (p - self.grid.position(c.center)).length() < c.radius + CONTACT_DISTANCE + reach
             }) {
@@ -718,6 +745,32 @@ impl Level {
     /// supported), as messages. Empty if the level is consistent.
     pub fn model_issues(&self) -> Vec<String> {
         let mut out = Vec::new();
+        if !self.electrodes.is_empty() {
+            if !self.conductors.is_empty() {
+                out.push("metal spheres and box electrodes are not yet solved together".into());
+            }
+            let time_dependent = self.limits.max_antennas > 0
+                || self.elements.iter().any(|e| e.kind == ElementKind::Antenna)
+                || !self.disturbances.is_empty();
+            if time_dependent {
+                out.push(
+                    "electrodes respond electrostatically; antennas and disturbances would \
+                     need a full-wave solution"
+                        .into(),
+                );
+            }
+            let boxes = physics::bem::Electrodes::shapes_only(self.box_electrodes());
+            let inside =
+                self.elements
+                    .iter()
+                    .any(|e| boxes.contains(self.grid.position(e.node), CONTACT_DISTANCE + 0.3))
+                    || self.shots.iter().any(|s| {
+                        boxes.contains(self.grid.position(s.launch.node), CONTACT_DISTANCE)
+                    });
+            if inside {
+                out.push("an element or launch point is inside or at an electrode".into());
+            }
+        }
         if !self.conductors.is_empty() {
             let time_dependent = self.limits.max_antennas > 0
                 || self.elements.iter().any(|e| e.kind == ElementKind::Antenna)
@@ -851,6 +904,11 @@ impl Level {
                 }
             }
         }
+        // Electrode boxes with the contact shell.
+        obstacles.extend(
+            physics::bem::Electrodes::shapes_only(self.box_electrodes())
+                .obstacles(CONTACT_DISTANCE),
+        );
         for c in &self.conductors {
             obstacles.push(Shape::Sphere(Sphere {
                 center: self.grid.position(c.center),
@@ -865,10 +923,47 @@ impl Level {
             antennas,
             external: Vec::new(),
             conductors: self.conductors_for(&charges, resolution),
-            electrodes: physics::bem::Electrodes::default(),
+            electrodes: self.electrodes_for(&charges, resolution),
             time_offset: 0.0,
         };
         (field, obstacles)
+    }
+
+    /// Box electrodes with the surface charge the fixed charges induce on them.
+    fn electrodes_for(
+        &self,
+        charges: &[FixedCharge],
+        resolution: Resolution,
+    ) -> physics::bem::Electrodes {
+        if self.electrodes.is_empty() {
+            return physics::bem::Electrodes::default();
+        }
+        let sources: Vec<(DVec3, f64)> = charges.iter().map(|c| (c.position, c.charge)).collect();
+        let res = match resolution {
+            Resolution::Preview => physics::bem::Resolution::Preview,
+            Resolution::Verify => physics::bem::Resolution::Verify,
+            Resolution::Display => physics::bem::Resolution::Display,
+        };
+        physics::bem::Electrodes::new(self.box_electrodes(), &sources, res)
+    }
+
+    /// The electrodes as physics boxes.
+    pub fn box_electrodes(&self) -> Vec<physics::bem::BoxElectrode> {
+        self.electrodes
+            .iter()
+            .map(|e| physics::bem::BoxElectrode {
+                center: self.grid.position(e.center),
+                angle: e.angle_deg.to_radians(),
+                half_length: e.length / 2.0,
+                half_thickness: e.thickness / 2.0,
+                half_height: e.height / 2.0,
+                bias: match e.bias {
+                    ConductorBias::Grounded => Bias::Grounded,
+                    ConductorBias::Charge(q) => Bias::Charge(q),
+                    ConductorBias::Potential(v) => Bias::Potential(v),
+                },
+            })
+            .collect()
     }
 
     /// Metal spheres with the charges the fixed charges induce on them.
@@ -920,7 +1015,7 @@ impl Level {
     /// field model's error enters the verdict too.
     pub fn verify_flights(&self, player: &[Element]) -> Vec<Verification> {
         let preview = self.scenarios(player);
-        let fine = if self.conductors.is_empty() {
+        let fine = if self.conductors.is_empty() && self.electrodes.is_empty() {
             preview.clone()
         } else {
             self.scenarios_at(player, Resolution::Verify)
@@ -1082,6 +1177,7 @@ mod tests {
                 }],
             }],
             conductors: vec![],
+            electrodes: vec![],
         }
     }
 
