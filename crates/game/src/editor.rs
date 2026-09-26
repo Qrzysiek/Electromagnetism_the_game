@@ -1,15 +1,26 @@
-//! Editor state: player elements (charges, magnets, antennas) on the grid, cursor,
-//! selected element.
+//! Editor state: player elements (charges, magnets, antennas, plates, power supplies)
+//! on the grid, cursor, selected element.
 //! Independent of the rendering engine so it can be unit tested.
 
-use level::{ANTENNA_ANGLES, Element, ElementKind, Level, Node, PlacementError, value_range};
+use level::{
+    ANTENNA_ANGLES, ConductorBias, Element, ElementKind, Level, Node, PLATE_ANGLES, PlacementError,
+    value_range,
+};
 
-/// Kinds in palette order.
-pub const KINDS: [ElementKind; 3] = [
+/// Kinds in palette order. Power supplies are not placed from the palette: they are
+/// operated on their electrodes.
+pub const KINDS: [ElementKind; 4] = [
     ElementKind::Charge,
     ElementKind::Magnet,
     ElementKind::Antenna,
+    ElementKind::Plate,
 ];
+
+/// Kinds whose values are signed potentials from a list (plates, power supplies), not a
+/// magnitude with a separate sign.
+pub fn is_signed(kind: ElementKind) -> bool {
+    matches!(kind, ElementKind::Plate | ElementKind::Supply)
+}
 
 pub struct Editor {
     /// The level as loaded (recommended grid).
@@ -27,26 +38,33 @@ pub struct Editor {
     pub positive: bool,
     /// Orientation of new antennas, degrees (one of `ANTENNA_ANGLES`).
     pub angle_deg: f64,
+    /// Orientation of new plates, degrees (one of `PLATE_ANGLES`).
+    pub plate_angle_deg: f64,
     /// Index into the level's allowed antenna frequencies for new antennas.
     pub omega_index: usize,
     /// Hardcore mode: magnitudes of new elements per kind (`KINDS` order) and the
     /// frequency of new antennas, anywhere in the level's ranges.
-    pub continuous_magnitude: [f64; 3],
+    pub continuous_magnitude: [f64; 4],
     pub continuous_omega: f64,
-    /// Player element being moved (index) and the node it was grabbed at.
+    /// Player element being moved (index) and its node when it was grabbed.
     pub grabbed: Option<(usize, Node)>,
+    /// Element node minus cursor node when grabbed (a plate can be picked up anywhere).
+    grab_offset: Node,
     /// Last rejected action, for the status line.
     pub message: Option<String>,
     /// Incremented on every change of the physical setup.
     pub revision: u64,
 }
 
-/// Allowed magnitudes of a kind in a level.
+/// Allowed magnitudes of a kind in a level (signed potentials for plates and power
+/// supplies, see `is_signed`).
 pub fn magnitudes(level: &Level, kind: ElementKind) -> &[f64] {
     match kind {
         ElementKind::Charge => &level.limits.magnitudes,
         ElementKind::Magnet => &level.limits.magnet_strengths,
         ElementKind::Antenna => &level.limits.antenna_amplitudes,
+        ElementKind::Plate => &level.limits.plate_voltages,
+        ElementKind::Supply => &level.limits.supply_voltages,
     }
 }
 
@@ -56,7 +74,16 @@ pub fn max_of(level: &Level, kind: ElementKind) -> u32 {
         ElementKind::Charge => level.limits.max_charges,
         ElementKind::Magnet => level.limits.max_magnets,
         ElementKind::Antenna => level.limits.max_antennas,
+        ElementKind::Plate => level.limits.max_plates,
+        ElementKind::Supply => {
+            u32::try_from(level.electrodes.iter().filter(|e| e.tunable).count()).unwrap_or(0)
+        }
     }
+}
+
+/// Step of a signed potential per key press in hardcore mode: 1/20 of its range.
+fn signed_step(list: &[f64]) -> f64 {
+    value_range(list).map_or(0.0, |(lo, hi)| (hi - lo) / 20.0)
 }
 
 /// Whether both signs of a kind are available.
@@ -88,10 +115,12 @@ impl Editor {
             magnitude_index: 0,
             positive,
             angle_deg: ANTENNA_ANGLES[0],
+            plate_angle_deg: PLATE_ANGLES[0],
             omega_index: 0,
             continuous_magnitude,
             continuous_omega,
             grabbed: None,
+            grab_offset: [0; 3],
             message: None,
             revision: 1,
         }
@@ -111,7 +140,11 @@ impl Editor {
                 .copied()
                 .unwrap_or(1.0)
         };
-        if self.positive { m } else { -m }
+        if is_signed(self.kind) || self.positive {
+            m
+        } else {
+            -m
+        }
     }
 
     /// Hardcore mode: continuous values instead of the level's lists.
@@ -149,6 +182,7 @@ impl Editor {
                 snap(&level, e);
             }
             self.angle_deg = nearest_angle(self.angle_deg).0;
+            self.plate_angle_deg = nearest_plate_angle(self.plate_angle_deg);
         }
         self.changed();
     }
@@ -194,9 +228,34 @@ impl Editor {
         }
     }
 
-    /// Rotates the antenna under the cursor, or the orientation of new antennas, by one
-    /// step of `ANTENNA_ANGLES` (45°).
+    /// Rotates the antenna or plate under the cursor, or the orientation of new ones, by
+    /// one step of `ANTENNA_ANGLES` (45°) or `PLATE_ANGLES` (90°).
     pub fn rotate(&mut self, step: isize) {
+        let on = self.player_index_at(self.cursor);
+        let plate = on.map_or(self.kind, |i| self.placement[i].kind) == ElementKind::Plate;
+        if plate {
+            let turn = |a: f64| {
+                if self.continuous() {
+                    (a + 45.0 * f64::from(step_i32(step))).rem_euclid(180.0)
+                } else {
+                    let n = PLATE_ANGLES.len() as isize;
+                    let i = PLATE_ANGLES
+                        .iter()
+                        .position(|x| x.to_bits() == a.to_bits())
+                        .unwrap_or(0) as isize;
+                    PLATE_ANGLES[(i + step).rem_euclid(n) as usize]
+                }
+            };
+            match on {
+                Some(i) => {
+                    let mut e = self.placement[i];
+                    e.angle_deg = turn(e.angle_deg);
+                    self.set_element(i, e);
+                }
+                None => self.plate_angle_deg = turn(self.plate_angle_deg),
+            }
+            return;
+        }
         if self.continuous() {
             let turn = |a: f64| (a + 45.0 * f64::from(step_i32(step))).rem_euclid(360.0);
             if let Some(i) = self.player_index_at(self.cursor) {
@@ -287,8 +346,57 @@ impl Editor {
         self.message = None;
     }
 
+    /// The player element at a node: one on it, else a plate covering it, else the power
+    /// supply of the tunable electrode under it.
     fn player_index_at(&self, node: Node) -> Option<usize> {
-        self.placement.iter().position(|c| c.node == node)
+        if let Some(i) = self.placement.iter().position(|c| c.node == node) {
+            return Some(i);
+        }
+        let p = self.level.grid.position(node);
+        if let Some(i) = self.placement.iter().position(|e| {
+            e.kind == ElementKind::Plate
+                && physics::bem::Electrodes::shapes_only(vec![self.level.plate_box(e)])
+                    .contains(p, PICK_MARGIN)
+        }) {
+            return Some(i);
+        }
+        let centre = self.tunable_at(node)?;
+        self.placement
+            .iter()
+            .position(|e| e.kind == ElementKind::Supply && e.node == centre)
+    }
+
+    /// Centre node of the tunable level electrode under a node.
+    pub fn tunable_at(&self, node: Node) -> Option<Node> {
+        let p = self.level.grid.position(node);
+        let boxes = self.level.box_electrodes();
+        self.level
+            .electrodes
+            .iter()
+            .zip(boxes)
+            .find(|(e, b)| {
+                e.tunable
+                    && physics::bem::Electrodes::shapes_only(vec![*b]).contains(p, PICK_MARGIN)
+            })
+            .map(|(e, _)| e.center)
+    }
+
+    /// Switches on the power supply of the tunable electrode centred at `centre`, at the
+    /// listed potential nearest to the electrode's own bias.
+    fn add_supply(&mut self, centre: Node) -> Result<(), PlacementError> {
+        let Some(el) = self.level.electrodes.iter().find(|e| e.center == centre) else {
+            return Ok(());
+        };
+        let own = match el.bias {
+            ConductorBias::Potential(v) => v,
+            ConductorBias::Grounded | ConductorBias::Charge(_) => 0.0,
+        };
+        let Some(v) = nearest_linear(&self.level.limits.supply_voltages, own) else {
+            return Ok(());
+        };
+        let mut trial = self.placement.clone();
+        trial.push(Element::supply(centre, v));
+        self.try_placement(trial)
     }
 
     pub fn move_cursor(&mut self, dx: i64, dy: i64) {
@@ -309,11 +417,14 @@ impl Editor {
     /// there.
     pub fn grab(&mut self) -> bool {
         match self.player_index_at(self.cursor) {
-            Some(i) => {
-                self.grabbed = Some((i, self.cursor));
+            // Power supplies stay on their electrodes.
+            Some(i) if self.placement[i].kind != ElementKind::Supply => {
+                let node = self.placement[i].node;
+                self.grabbed = Some((i, node));
+                self.grab_offset = [0, 1, 2].map(|k| node[k] - self.cursor[k]);
                 true
             }
-            None => false,
+            _ => false,
         }
     }
 
@@ -333,7 +444,8 @@ impl Editor {
     /// (over a blocked node it waits and jumps on when the cursor is past it).
     fn follow_grabbed(&mut self) {
         if let Some((i, _)) = self.grabbed {
-            self.move_element(i, self.cursor);
+            let target = [0, 1, 2].map(|k| self.cursor[k] + self.grab_offset[k]);
+            self.move_element(i, target);
         }
     }
 
@@ -365,16 +477,29 @@ impl Editor {
     }
 
     /// Places the selected element at the cursor (replacing a player element there).
+    /// On a tunable electrode it operates its power supply instead: switches it on, or
+    /// steps it to the next potential.
     pub fn place(&mut self) -> Result<(), PlacementError> {
+        if let Some(centre) = self.tunable_at(self.cursor) {
+            if self
+                .placement
+                .iter()
+                .any(|e| e.kind == ElementKind::Supply && e.node == centre)
+            {
+                self.cycle_magnitude(1);
+                return Ok(());
+            }
+            return self.add_supply(centre);
+        }
         let mut trial = self.placement.clone();
         let e = Element {
             node: self.cursor,
             kind: self.kind,
             value: self.selected_value(),
-            angle_deg: if self.kind == ElementKind::Antenna {
-                self.angle_deg
-            } else {
-                0.0
+            angle_deg: match self.kind {
+                ElementKind::Antenna => self.angle_deg,
+                ElementKind::Plate => self.plate_angle_deg,
+                _ => 0.0,
             },
             omega: if self.kind == ElementKind::Antenna {
                 self.selected_omega()
@@ -403,21 +528,44 @@ impl Editor {
             let mut trial = self.placement.clone();
             trial[i].value = -trial[i].value;
             let _ = self.try_placement(trial);
-        } else {
-            if both_signs(&self.level, self.kind) {
-                self.positive = !self.positive;
+        } else if is_signed(self.kind) {
+            // The opposite potential, where the level lists it.
+            if self.continuous() {
+                let k = kind_index(self.kind);
+                let (lo, hi) =
+                    value_range(magnitudes(&self.level, self.kind)).unwrap_or((0.0, 0.0));
+                self.continuous_magnitude[k] = (-self.continuous_magnitude[k]).clamp(lo, hi);
+            } else {
+                let v = self.selected_value();
+                if let Some(j) = magnitudes(&self.level, self.kind)
+                    .iter()
+                    .position(|m| m.to_bits() == (-v).to_bits())
+                {
+                    self.magnitude_index = j;
+                }
             }
+        } else if both_signs(&self.level, self.kind) {
+            self.positive = !self.positive;
         }
     }
 
     /// Cycles the magnitude of the element under the cursor, or of the selection if none.
     pub fn cycle_magnitude(&mut self, step: isize) {
-        let kind = self
-            .player_index_at(self.cursor)
-            .map_or(self.kind, |i| self.placement[i].kind);
+        let on = self.player_index_at(self.cursor);
+        if on.is_none()
+            && let Some(centre) = self.tunable_at(self.cursor)
+        {
+            let _ = self.add_supply(centre);
+            return;
+        }
+        let kind = on.map_or(self.kind, |i| self.placement[i].kind);
         let list = magnitudes(&self.level, kind).to_vec();
         let n = list.len();
         if n == 0 {
+            return;
+        }
+        if is_signed(kind) {
+            self.cycle_signed(on, kind, &list, step);
             return;
         }
         if self.continuous() {
@@ -447,6 +595,72 @@ impl Editor {
         } else {
             self.magnitude_index = next(self.magnitude_index);
         }
+    }
+
+    /// `cycle_magnitude` for signed potentials: the next listed value (hardcore: a step of
+    /// 1/20 of the range).
+    fn cycle_signed(&mut self, on: Option<usize>, kind: ElementKind, list: &[f64], step: isize) {
+        let n = list.len();
+        if self.continuous() {
+            let (lo, hi) = value_range(list).expect("non-empty");
+            let d = signed_step(list) * f64::from(step_i32(step));
+            match on {
+                Some(i) => {
+                    let mut e = self.placement[i];
+                    e.value = (e.value + d).clamp(lo, hi);
+                    self.set_element(i, e);
+                }
+                None => {
+                    let k = kind_index(kind);
+                    self.continuous_magnitude[k] = (self.continuous_magnitude[k] + d).clamp(lo, hi);
+                }
+            }
+            return;
+        }
+        let next = |i: usize| (i as isize + step).rem_euclid(n as isize) as usize;
+        match on {
+            Some(i) => {
+                let v = self.placement[i].value;
+                let current = list
+                    .iter()
+                    .position(|m| m.to_bits() == v.to_bits())
+                    .unwrap_or(0);
+                let mut trial = self.placement.clone();
+                trial[i].value = list[next(current)];
+                let _ = self.try_placement(trial);
+            }
+            None => self.magnitude_index = next(self.magnitude_index),
+        }
+    }
+
+    /// Potential of the power supply of the tunable electrode centred at `centre`
+    /// (`None`: switched off, the electrode keeps its own bias).
+    pub fn supply(&self, centre: Node) -> Option<f64> {
+        self.placement
+            .iter()
+            .find(|e| e.kind == ElementKind::Supply && e.node == centre)
+            .map(|e| e.value)
+    }
+
+    /// Sets or switches off the power supply of the tunable electrode centred at
+    /// `centre`; kept if allowed.
+    pub fn set_supply(&mut self, centre: Node, value: Option<f64>) {
+        if self.supply(centre).map(f64::to_bits) == value.map(f64::to_bits) {
+            return;
+        }
+        let mut trial = self.placement.clone();
+        let at = trial
+            .iter()
+            .position(|e| e.kind == ElementKind::Supply && e.node == centre);
+        match (at, value) {
+            (Some(i), Some(v)) => trial[i].value = v,
+            (Some(i), None) => {
+                trial.remove(i);
+            }
+            (None, Some(v)) => trial.push(Element::supply(centre, v)),
+            (None, None) => {}
+        }
+        let _ = self.try_placement(trial);
     }
 
     pub fn clear(&mut self) {
@@ -535,6 +749,29 @@ impl Editor {
 /// Factor per key press for continuous values (hardcore).
 const STEP: f64 = 1.1;
 
+/// How far outside a plate or electrode the cursor still picks it, in cells.
+const PICK_MARGIN: f64 = 0.3;
+
+/// Nearest listed value to `v` on a linear scale (signed potentials).
+fn nearest_linear(list: &[f64], v: f64) -> Option<f64> {
+    list.iter()
+        .copied()
+        .min_by(|a, b| (a - v).abs().total_cmp(&(b - v).abs()))
+}
+
+/// Nearest allowed discrete plate orientation (a plate turned by 180° is the same).
+fn nearest_plate_angle(a: f64) -> f64 {
+    let a = a.rem_euclid(180.0);
+    let dist = |x: f64| {
+        let d = (a - x).abs();
+        d.min(180.0 - d)
+    };
+    PLATE_ANGLES
+        .into_iter()
+        .min_by(|x, y| dist(*x).total_cmp(&dist(*y)))
+        .expect("angles")
+}
+
 fn step_i32(step: isize) -> i32 {
     i32::try_from(step).unwrap_or(0)
 }
@@ -579,6 +816,15 @@ fn nearest_listed(list: &[f64], v: f64) -> Option<f64> {
 
 /// Snaps an element to the level's discrete lists (leaving hardcore mode).
 fn snap(level: &Level, e: &mut Element) {
+    if is_signed(e.kind) {
+        if let Some(v) = nearest_linear(magnitudes(level, e.kind), e.value) {
+            e.value = v;
+        }
+        if e.kind == ElementKind::Plate {
+            e.angle_deg = nearest_plate_angle(e.angle_deg);
+        }
+        return;
+    }
     if let Some(m) = nearest_listed(magnitudes(level, e.kind), e.value.abs()) {
         e.value = e.value.signum() * m;
     }
@@ -599,17 +845,25 @@ pub fn describe(e: &PlacementError) -> String {
         PlacementError::TooManyCharges => "No charges left for this level.".into(),
         PlacementError::TooManyMagnets => "No magnets left for this level.".into(),
         PlacementError::TooManyAntennas => "No antennas left for this level.".into(),
+        PlacementError::TooManyPlates => "No plates left for this level.".into(),
+        PlacementError::NoTunableElectrode(_) => {
+            "Power supplies belong to the level's tunable electrodes.".into()
+        }
         PlacementError::OutsideGrid(_) => "Outside the grid.".into(),
         PlacementError::OutsideRegion(_) => "Elements can only go in the marked region.".into(),
         PlacementError::NotInPlane(_) => "Must be in the plane.".into(),
-        PlacementError::Occupied(_) => "That node is occupied.".into(),
+        PlacementError::Occupied(_) => {
+            "Occupied (plates keep 1 cell from other electrodes and stay clear of elements, \
+             coils and detectors)."
+                .into()
+        }
         PlacementError::SignNotAllowed(_) => "That sign is not allowed here.".into(),
         PlacementError::MagnitudeNotAllowed(_) => "That value is not allowed here.".into(),
         PlacementError::FrequencyNotAllowed(_) => {
             "That antenna frequency is not available in this level.".into()
         }
         PlacementError::AngleNotAllowed(_) => {
-            "Antennas can point along 0°, 45°, 90° or 135°.".into()
+            "Antennas point along 0°, 45°, 90° or 135°; plates lie along 0° or 90°.".into()
         }
     }
 }
@@ -643,6 +897,76 @@ mod tests {
         // No magnets in this level: the kind stays Charge.
         e.toggle_kind();
         assert_eq!(e.kind, ElementKind::Charge);
+    }
+
+    /// The deflection-plates level with its first plate tunable and room for one player
+    /// plate.
+    fn plate_level() -> Level {
+        let mut l =
+            Level::from_json(include_str!("../../../levels/16_deflection_plates.json")).unwrap();
+        l.electrodes[0].tunable = true;
+        l.limits.supply_voltages = vec![-6e4, -3e4, 0.0, 3e4, 6e4];
+        l.limits.max_plates = 1;
+        l.limits.plate_voltages = vec![-2e4, 0.0, 2e4];
+        l
+    }
+
+    #[test]
+    fn plates_place_rotate_tune_and_move() {
+        let mut e = Editor::new(plate_level());
+        e.set_kind(ElementKind::Plate);
+        assert_eq!(e.kind, ElementKind::Plate);
+        e.set_cursor([21, 10, 0]);
+        e.place().unwrap();
+        assert_eq!(e.placement, vec![Element::plate([21, 10, 0], -2e4, 0.0)]);
+        e.rotate(1);
+        assert_eq!(e.placement[0].angle_deg.to_bits(), 90f64.to_bits());
+        e.cycle_magnitude(1);
+        assert_eq!(e.placement[0].value.to_bits(), 0f64.to_bits());
+        e.flip_sign(); // −0 is not listed: rejected, unchanged.
+        e.cycle_magnitude(1);
+        e.flip_sign();
+        assert_eq!(e.placement[0].value.to_bits(), (-2e4f64).to_bits());
+        // Picked up by its body (1 cell off centre along its length), it keeps the offset.
+        e.set_cursor([21, 11, 0]);
+        assert!(e.grab());
+        e.move_cursor(-2, 0);
+        e.drop_grabbed();
+        assert_eq!(e.placement[0].node, [19, 10, 0]);
+        // A second plate is over the limit.
+        e.set_cursor([24, 4, 0]);
+        assert!(matches!(e.place(), Err(PlacementError::TooManyPlates)));
+        // Right click on its body removes it.
+        e.set_cursor([19, 9, 0]);
+        e.remove();
+        assert!(e.placement.is_empty());
+    }
+
+    #[test]
+    fn power_supplies_are_operated_on_their_electrode() {
+        let mut e = Editor::new(plate_level());
+        let centre = e.level.electrodes[0].center;
+        // Anywhere on the tunable electrode: switches the supply on at the listed potential
+        // nearest to the electrode's own bias (−30k), then steps it.
+        e.set_cursor([centre[0] + 3, centre[1], 0]);
+        e.place().unwrap();
+        assert_eq!(e.supply(centre), Some(-3e4));
+        e.place().unwrap();
+        assert_eq!(e.supply(centre), Some(0.0));
+        e.place().unwrap();
+        e.flip_sign();
+        assert_eq!(e.supply(centre), Some(-3e4));
+        assert!(!e.grab(), "supplies stay on their electrode");
+        e.set_supply(centre, Some(6e4));
+        assert_eq!(e.supply(centre), Some(6e4));
+        e.remove();
+        assert_eq!(e.supply(centre), None);
+        // The other electrode is not tunable: a click there places nothing.
+        let other = e.level.electrodes[1].center;
+        e.set_kind(ElementKind::Charge);
+        e.set_cursor(other);
+        assert!(e.place().is_err());
+        assert!(e.placement.is_empty());
     }
 
     #[test]

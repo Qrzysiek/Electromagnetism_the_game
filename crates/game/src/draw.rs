@@ -130,8 +130,66 @@ fn draw_element(
             seg(gizmos, tip, tip + Vec2::from_angle(0.6).rotate(back), ink);
             seg(gizmos, tip, tip + Vec2::from_angle(-0.6).rotate(back), ink);
         }
+        // Drawn with the electrodes.
+        ElementKind::Plate | ElementKind::Supply => return,
     }
     gizmos.circle_2d(p, radius * 1.15, ring);
+}
+
+/// In-plane outline of an electrode box, closed.
+fn box_outline(b: &physics::bem::BoxElectrode, grow: f32) -> [Vec2; 5] {
+    let c = to_vec2(b.center);
+    #[allow(clippy::cast_possible_truncation)]
+    let (a, hl, ht) = (
+        b.angle as f32,
+        b.half_length as f32 + grow,
+        b.half_thickness as f32 + grow,
+    );
+    let u = Vec2::from_angle(a);
+    let v = u.perp();
+    [
+        c - u * hl - v * ht,
+        c + u * hl - v * ht,
+        c + u * hl + v * ht,
+        c - u * hl + v * ht,
+        c - u * hl - v * ht,
+    ]
+}
+
+/// An electrode: filled metallic rectangle (its cross-section in the plane), rim
+/// coloured by its potential (grey: grounded, red/blue: positive/negative).
+fn draw_box(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode) {
+    let c = to_vec2(b.center);
+    #[allow(clippy::cast_possible_truncation)]
+    let (a, hl, ht) = (
+        b.angle as f32,
+        b.half_length as f32,
+        b.half_thickness as f32,
+    );
+    let u = Vec2::from_angle(a);
+    let v = u.perp();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let strips = ((2.0 * ht / 0.03).ceil() as u32).max(2);
+    for k in 0..=strips {
+        #[allow(clippy::cast_precision_loss)]
+        let t = -ht + 2.0 * ht * k as f32 / strips as f32;
+        seg(
+            gizmos,
+            c - u * hl + v * t,
+            c + u * hl + v * t,
+            Color::srgb(0.42, 0.45, 0.5),
+        );
+    }
+    let rim = match b.bias {
+        physics::conductor::Bias::Charge(x) | physics::conductor::Bias::Potential(x) if x > 0.0 => {
+            Color::srgb(1.0, 0.45, 0.35)
+        }
+        physics::conductor::Bias::Charge(x) | physics::conductor::Bias::Potential(x) if x < 0.0 => {
+            Color::srgb(0.4, 0.65, 1.0)
+        }
+        _ => Color::srgb(0.85, 0.85, 0.85),
+    };
+    gizmos.linestrip_2d(box_outline(b, 0.0), rim);
 }
 
 fn draw_coil(gizmos: &mut Gizmos, grid: Grid, coil: &Coil) {
@@ -228,47 +286,20 @@ pub fn draw(
         draw_coil(&mut gizmos, grid, coil);
     }
 
-    // Electrodes: filled metallic rectangles (their cross-section in the plane), rim
-    // coloured by bias like the spheres.
-    for e in &level.electrodes {
-        let c = to_vec2(grid.position(e.center));
-        #[allow(clippy::cast_possible_truncation)]
-        let (a, hl, ht) = (
-            e.angle_deg.to_radians() as f32,
-            (e.length / 2.0) as f32,
-            (e.thickness / 2.0) as f32,
-        );
-        let u = Vec2::from_angle(a);
-        let v = u.perp();
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let strips = ((2.0 * ht / 0.03).ceil() as u32).max(2);
-        for k in 0..=strips {
-            #[allow(clippy::cast_precision_loss)]
-            let t = -ht + 2.0 * ht * k as f32 / strips as f32;
-            seg(
-                &mut gizmos,
-                c - u * hl + v * t,
-                c + u * hl + v * t,
-                Color::srgb(0.42, 0.45, 0.5),
-            );
-        }
-        let rim = match e.bias {
-            level::ConductorBias::Charge(x) | level::ConductorBias::Potential(x) if x > 0.0 => {
-                Color::srgb(1.0, 0.45, 0.35)
-            }
-            level::ConductorBias::Charge(x) | level::ConductorBias::Potential(x) if x < 0.0 => {
-                Color::srgb(0.4, 0.65, 1.0)
-            }
-            _ => Color::srgb(0.85, 0.85, 0.85),
+    // Electrodes: the level's (at the potentials of the player's power supplies), then
+    // the player's plates. Tunable electrodes get a yellow frame (click them to switch
+    // their supply), player plates a white one.
+    let boxes = level.all_box_electrodes(&game.editor.placement);
+    for (i, b) in boxes.iter().enumerate() {
+        draw_box(&mut gizmos, b);
+        let frame = match level.electrodes.get(i) {
+            Some(e) if e.tunable => Some(Color::srgb(1.0, 0.85, 0.3)),
+            Some(_) => None,
+            None => Some(Color::srgb(1.0, 1.0, 1.0)),
         };
-        let corners = [
-            c - u * hl - v * ht,
-            c + u * hl - v * ht,
-            c + u * hl + v * ht,
-            c - u * hl + v * ht,
-            c - u * hl - v * ht,
-        ];
-        gizmos.linestrip_2d(corners, rim);
+        if let Some(color) = frame {
+            gizmos.linestrip_2d(box_outline(b, 0.12), color);
+        }
     }
 
     // Metal spheres: a filled metallic disc, rim coloured by how it is held (grey:
@@ -385,6 +416,7 @@ pub fn draw(
                 ElementKind::Charge => (charge_radius, q_scale),
                 ElementKind::Magnet => (magnet_radius, m_scale),
                 ElementKind::Antenna => (antenna_radius, a_scale),
+                ElementKind::Plate | ElementKind::Supply => continue,
             };
             draw_element(gizmos, grid, e, r, s, player);
         }
@@ -433,8 +465,33 @@ pub fn draw(
         (ElementKind::Antenna, _) => Color::srgb(0.6, 1.0, 0.85),
         (ElementKind::Charge, true) => Color::srgb(1.0, 0.6, 0.5),
         (ElementKind::Charge, false) => Color::srgb(0.6, 0.8, 1.0),
+        (ElementKind::Plate | ElementKind::Supply, _) => Color::srgb(0.9, 0.9, 0.7),
     };
     gizmos.rect_2d(cur, Vec2::splat(charge_radius * 2.8), cursor_color);
+    // Outline of a new plate at the cursor (not over one of the player's elements or a
+    // tunable electrode, where a click acts on those).
+    if game.editor.kind == ElementKind::Plate
+        && game.editor.left(ElementKind::Plate) > 0
+        && (!game.sandbox.active || game.sandbox.tool == crate::sandbox::Tool::PlayerElement)
+        && game.editor.element_at_cursor().is_none()
+        && game.editor.tunable_at(game.editor.cursor).is_none()
+    {
+        let ghost = level::Element::plate(
+            game.editor.cursor,
+            game.editor.selected_value(),
+            game.editor.plate_angle_deg,
+        );
+        let b = level.plate_box(&ghost);
+        let ok = level
+            .check_placement(&[game.editor.placement.as_slice(), &[ghost]].concat())
+            .is_ok();
+        let color = if ok {
+            Color::srgba(0.9, 0.9, 0.7, 0.7)
+        } else {
+            Color::srgba(1.0, 0.4, 0.3, 0.7)
+        };
+        gizmos.linestrip_2d(box_outline(&b, 0.0), color);
+    }
     // Element being moved.
     if let Some((i, _)) = game.editor.grabbed
         && let Some(e) = game.editor.placement.get(i)

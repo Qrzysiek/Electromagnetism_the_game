@@ -101,13 +101,30 @@ def metal(x, y, r, kind="grounded", value=None):
 
 
 def plate(x, y, length, thickness=0.4, height=4.0, angle_deg=0.0, kind="grounded",
-          value=None):
-    """A box electrode (plate, slab or wall) standing on the plane."""
+          value=None, tunable=False):
+    """A box electrode (plate, slab or wall) standing on the plane; `tunable`: the player
+    sets its potential with a power supply."""
     bias = {"kind": kind}
     if value is not None:
         bias["value"] = value
-    return {"center": [x, y, 0], "length": length, "thickness": thickness,
-            "height": height, "angle_deg": angle_deg, "bias": bias}
+    e = {"center": [x, y, 0], "length": length, "thickness": thickness,
+         "height": height, "angle_deg": angle_deg, "bias": bias}
+    if tunable:
+        e["tunable"] = True
+    return e
+
+
+def player_plate(x, y, v, angle_deg=0.0):
+    """A plate placed by the player (limits.plate size) at potential v."""
+    e = {"node": [x, y, 0], "kind": "plate", "value": v}
+    if angle_deg:
+        e["angle_deg"] = angle_deg
+    return e
+
+
+def supply(x, y, v):
+    """The player's power supply of the tunable electrode centred at (x, y)."""
+    return {"node": [x, y, 0], "kind": "supply", "value": v}
 
 
 def antenna(x, y, p0, angle_deg=0.0):
@@ -136,7 +153,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           magnitudes=(), signs=(True, True), max_magnets=0, strengths=(), region=None,
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
           amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=(),
-          electrodes=()):
+          electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -147,6 +164,13 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
             limits["antenna_omegas"] = list(omegas)
     if region:
         limits["region"] = box(region)
+    if max_plates:
+        limits["max_plates"] = max_plates
+        limits["plate_voltages"] = list(plate_voltages)
+        if plate_size:
+            limits["plate"] = dict(zip(("length", "thickness", "height"), plate_size))
+    if supplies:
+        limits["supply_voltages"] = list(supplies)
     return {
         "format_version": 2, "engine_version": "0.1.0", "name": name, "description": desc,
         "grid": {"nx": grid[0], "ny": grid[1], "nz": 0, "subdivision": 1},
@@ -652,6 +676,63 @@ def deflection_plates():
         max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], region=(16, 1, 26, 19))
 
 
+def power_supply():
+    # The top plate's supply: -120k, -60k, 60k or 120k lands the beam about 4, 2, -2 or
+    # -4 cells from the axis; off (grounded) it flies straight.
+    return level(
+        "Power supply",
+        "Instead of placing charges, turn a knob: the top deflection plate is connected to "
+        "a power supply (yellow frame). Click the plate, or choose in the panel, to set "
+        "its potential. A positive plate pushes positive ions away, a negative one pulls "
+        "them. Bring the beam into the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 2))],
+        electrodes=[plate(11, 13, 8, tunable=True), plate(11, 7, 8)],
+        supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, -1.2e5)])
+
+
+def tune_the_lens():
+    # The middle aperture's halves have a supply each; only both at 300k focus the three
+    # rays into the detector (100k and 200k focus too weakly, 400k too strongly).
+    apertures = []
+    for x, tunable in ((10, False), (14, True), (18, False)):
+        apertures += [plate(x, 15, 6, height=3.0, angle_deg=90.0, tunable=tunable),
+                      plate(x, 5, 6, height=3.0, angle_deg=90.0, tunable=tunable)]
+    return level(
+        "Tune the lens",
+        "A real Einzel lens: three metal apertures, the outer ones grounded. The two halves "
+        "of the middle aperture have a power supply each. At the right voltage the lens "
+        "focuses the three diverging rays into the small detector; too little and they "
+        "stay apart, too much and they cross before it.",
+        shots=[shot(1e-6, 1.0, (0, 10), a, 0.5, Auto((28, 0, 30, 20), "x", 1))
+               for a in (-6.0, 0.0, 6.0)],
+        electrodes=apertures, supplies=[1e5, 2e5, 3e5, 4e5],
+        reference=[supply(14, 15, 3e5), supply(14, 5, 3e5)])
+
+
+def build_a_deflector():
+    return level(
+        "Build a deflector",
+        "Now you build the electrodes. Place one metal plate at a potential of your choice "
+        "near the beam (R turns it, Q/E changes its potential). A plate at a positive "
+        "potential pushes positive ions away. Plates keep a cell away from other metal "
+        "and from the other elements.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 1))],
+        max_plates=1, plate_voltages=[-1e5, -5e4, 5e4, 1e5], region=(5, 3, 22, 17),
+        reference=[player_plate(10, 12, 1e5)])
+
+
+def shielding():
+    return level(
+        "Shielding",
+        "A strongly charged electrode next to the beam line throws the beam out of the "
+        "arena. A grounded metal plate between them screens its field: the plate's "
+        "surface charge cancels much of it on the far side. Place the grounded plate.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 2))],
+        elements=[charge(15, 14, 2 * M)],
+        max_plates=1, plate_voltages=[0.0], region=(5, 3, 25, 17),
+        reference=[player_plate(15, 12, 0.0)])
+
+
 def real_einzel_lens():
     # Three apertures (plate pairs with a gap of 4 cells around y = 10) at x = 10, 14,
     # 18; the outer ones grounded, the middle one at V. For positive ions a positive V
@@ -694,7 +775,11 @@ LEVELS = [
     ("image_charge", image_charge),
     # Chapter 5: electrodes (real plates and apertures).
     ("deflection_plates", deflection_plates),
+    ("power_supply", power_supply),
+    ("tune_the_lens", tune_the_lens),
     ("real_einzel_lens", real_einzel_lens),
+    ("build_a_deflector", build_a_deflector),
+    ("shielding", shielding),
     # Chapter 6: relativity.
     ("fast_lane", fast_lane),
     ("beta_spectrometer", beta_spectrometer),

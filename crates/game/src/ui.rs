@@ -75,8 +75,7 @@ pub fn parse_si(text: &str) -> Option<f64> {
     num.trim().parse::<f64>().ok().map(|v| v * scale)
 }
 
-/// What obstacle `i` of a level's scenario is (order: charges, magnets, coil wires; see
-/// `Level::field`).
+/// What obstacle `i` of a level's scenario is (see `Level::field_at` for the order).
 fn obstacle_name(game: &Game, i: usize) -> &'static str {
     let all = game
         .editor
@@ -104,8 +103,14 @@ fn obstacle_name(game: &Game, i: usize) -> &'static str {
         })
         .sum();
     let electrodes = game.editor.level.electrodes.len();
-    // Obstacle order of `Level::field`: charges, magnets, antennas, coil wires,
-    // electrodes, metal spheres.
+    let plates = game
+        .editor
+        .placement
+        .iter()
+        .filter(|e| e.kind == ElementKind::Plate)
+        .count();
+    // Obstacle order of `Level::field`: charges, magnets, antennas, coil wires, level
+    // electrodes, player plates, metal spheres.
     if i < charges {
         "a charge"
     } else if i < charges + magnets {
@@ -116,6 +121,8 @@ fn obstacle_name(game: &Game, i: usize) -> &'static str {
         "a coil wire"
     } else if i < charges + magnets + antennas + wires + electrodes {
         "an electrode"
+    } else if i < charges + magnets + antennas + wires + electrodes + plates {
+        "one of your plates"
     } else {
         "a metal sphere"
     }
@@ -359,6 +366,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ElementKind::Charge => "charges",
         ElementKind::Magnet => "magnets",
         ElementKind::Antenna => "antennas",
+        ElementKind::Plate => "plates",
+        ElementKind::Supply => "power supplies",
     };
     let allowed: Vec<ElementKind> = crate::editor::KINDS
         .into_iter()
@@ -385,41 +394,51 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             game.editor.set_kind(kind);
         });
     }
-    ui.horizontal_wrapped(|ui| {
-        let kind = game.editor.kind;
-        let both_signs =
-            kind != ElementKind::Charge || (limits.allow_positive && limits.allow_negative);
-        let sign = match (kind, game.editor.positive) {
-            (ElementKind::Charge, true) => "+",
-            (ElementKind::Charge, false) => "−",
-            (ElementKind::Magnet, true) => "⊙",
-            (ElementKind::Magnet, false) => "⊗",
-            (ElementKind::Antenna, true) => "phase 0°",
-            (ElementKind::Antenna, false) => "phase 180°",
-        };
-        let hover = match kind {
-            ElementKind::Charge => "Flip sign (S)",
-            ElementKind::Magnet => "Flip orientation (S): ⊙ moment out of the plane, ⊗ into it",
-            ElementKind::Antenna => "Flip phase (S): opposite phase of the RF generator",
-        };
-        ui.label(match kind {
-            ElementKind::Charge => "New charge:",
-            ElementKind::Magnet => "New magnet μ:",
-            ElementKind::Antenna => "New antenna p₀:",
+    if allowed.is_empty() {
+        // Nothing to place (e.g. only power supplies to set).
+    } else if crate::editor::is_signed(game.editor.kind) {
+        plate_palette(ui, game, &level);
+    } else {
+        ui.horizontal_wrapped(|ui| {
+            let kind = game.editor.kind;
+            let both_signs =
+                kind != ElementKind::Charge || (limits.allow_positive && limits.allow_negative);
+            let sign = match (kind, game.editor.positive) {
+                (ElementKind::Charge, true) => "+",
+                (ElementKind::Charge, false) => "−",
+                (ElementKind::Magnet, true) => "⊙",
+                (ElementKind::Magnet, false) => "⊗",
+                (ElementKind::Antenna, true) => "phase 0°",
+                (ElementKind::Antenna, false) => "phase 180°",
+                (ElementKind::Plate | ElementKind::Supply, _) => "",
+            };
+            let hover = match kind {
+                ElementKind::Charge => "Flip sign (S)",
+                ElementKind::Magnet => "Flip orientation (S): ⊙ moment out of the plane, ⊗ into it",
+                ElementKind::Antenna => "Flip phase (S): opposite phase of the RF generator",
+                ElementKind::Plate | ElementKind::Supply => "",
+            };
+            ui.label(match kind {
+                ElementKind::Charge => "New charge:",
+                ElementKind::Magnet => "New magnet μ:",
+                ElementKind::Antenna => "New antenna p₀:",
+                ElementKind::Plate | ElementKind::Supply => "",
+            });
+            if both_signs {
+                if ui.button(sign).on_hover_text(hover).clicked() {
+                    game.editor.positive = !game.editor.positive;
+                }
+            } else {
+                ui.label(sign);
+            }
+            if !game.editor.continuous() {
+                for (i, m) in crate::editor::magnitudes(&level, kind).iter().enumerate() {
+                    ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_si(*m));
+                }
+            }
         });
-        if both_signs {
-            if ui.button(sign).on_hover_text(hover).clicked() {
-                game.editor.positive = !game.editor.positive;
-            }
-        } else {
-            ui.label(sign);
-        }
-        if !game.editor.continuous() {
-            for (i, m) in crate::editor::magnitudes(&level, kind).iter().enumerate() {
-                ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_si(*m));
-            }
-        }
-    });
+    }
+    supplies(ui, game, &level);
     if game.editor.continuous() {
         hardcore_controls(ui, game, &level);
     } else if game.editor.kind == ElementKind::Antenna {
@@ -589,6 +608,22 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                     let text = format!("{:.1e}", p.radiated_fraction);
                     if p.radiated_fraction > 1e-10 {
                         ui.colored_label(egui::Color32::YELLOW, text + "  not negligible!");
+                    } else {
+                        ui.label(text);
+                    }
+                    ui.end_row();
+                }
+                if p.image_force_bound > 0.0 {
+                    ui.label("electrode image force (neglected)")
+                        .on_hover_text(
+                            "Bound on the force of the charge the particle induces on the                              electrodes, relative to the force that matters (PHYSICS.md §2.7).                              It grows as the particle passes closer to metal.",
+                        );
+                    let text = format!("≤ {:.1e}", p.image_force_bound);
+                    if p.image_force_bound > level::IMAGE_FORCE_LIMIT {
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            text + "  not negligible: keep away from the metal",
+                        );
                     } else {
                         ui.label(text);
                     }
@@ -782,6 +817,102 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     });
 }
 
+/// A potential for display: "grounded" or its value.
+pub fn fmt_potential(v: f64) -> String {
+    if v == 0.0 {
+        "grounded".into()
+    } else {
+        format!("V = {}", fmt_si(v))
+    }
+}
+
+/// Palette row for new plates: potential and orientation.
+fn plate_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
+    ui.horizontal_wrapped(|ui| {
+        ui.label("New plate:");
+        if !game.editor.continuous() {
+            for (i, v) in level.limits.plate_voltages.iter().enumerate() {
+                ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_potential(*v))
+                    .on_hover_text("Q/E or the wheel: next potential; S: the opposite one");
+            }
+        }
+    });
+    if !game.editor.continuous() {
+        ui.horizontal(|ui| {
+            ui.label("Orientation:");
+            for (a, name) in level::PLATE_ANGLES.into_iter().zip(["along x", "along y"]) {
+                ui.selectable_value(&mut game.editor.plate_angle_deg, a, name)
+                    .on_hover_text("Rotate with R");
+            }
+        });
+    }
+    let s = level.limits.plate;
+    ui.label(
+        egui::RichText::new(format!(
+            "Plates are {} × {} cells in the plane, {} high, and keep {} cell from other \
+             electrodes.",
+            s.length,
+            s.thickness,
+            s.height,
+            level::PLATE_CLEARANCE
+        ))
+        .small(),
+    );
+}
+
+/// The power supplies of the level's tunable electrodes: off (the electrode keeps its
+/// own bias) or one of the listed potentials. Clicking an electrode on the map steps it.
+fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
+    let tunable: Vec<(usize, &level::Electrode)> = level
+        .electrodes
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.tunable)
+        .collect();
+    if tunable.is_empty() {
+        return;
+    }
+    ui.label(egui::RichText::new("Power supplies").strong())
+        .on_hover_text(
+            "Click a tunable electrode (yellow frame) to switch its supply on or to the next \
+             potential; S flips it, right click switches it off.",
+        );
+    let list = level.limits.supply_voltages.clone();
+    for (i, e) in tunable {
+        let own = match e.bias {
+            level::ConductorBias::Grounded => "grounded".to_string(),
+            level::ConductorBias::Potential(v) => fmt_potential(v),
+            level::ConductorBias::Charge(q) => format!("charge {}", fmt_si(q)),
+        };
+        let current = game.editor.supply(e.center);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(format!("Electrode {}:", i + 1));
+            let mut choice = current;
+            if game.editor.continuous() {
+                let mut on = current.is_some();
+                ui.checkbox(&mut on, "on");
+                if let Some((lo, hi)) = level::value_range(&list) {
+                    let mut v = current.unwrap_or(lo.max(0.0_f64.min(hi)));
+                    let r = ui.add_enabled(
+                        on,
+                        egui::Slider::new(&mut v, lo..=hi)
+                            .custom_formatter(|v, _| fmt_si(v))
+                            .custom_parser(parse_si),
+                    );
+                    game.text_focus |= r.has_focus();
+                    choice = on.then_some(v);
+                }
+            } else {
+                ui.selectable_value(&mut choice, None, format!("off ({own})"));
+                for v in &list {
+                    ui.selectable_value(&mut choice, Some(*v), fmt_potential(*v));
+                }
+            }
+            game.editor.set_supply(e.center, choice);
+        });
+    }
+}
+
 /// Hardcore sliders: the element under the cursor if there is one (edited live), else
 /// the values of new elements.
 fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
@@ -809,8 +940,38 @@ fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         ElementKind::Charge => "|Q|",
         ElementKind::Magnet => "|μ|",
         ElementKind::Antenna => "|p₀|",
+        ElementKind::Plate | ElementKind::Supply => "V",
     };
-    if let Some((lo, hi)) = value_range(crate::editor::magnitudes(level, e.kind)) {
+    let signed = crate::editor::is_signed(e.kind);
+    if signed {
+        // Signed potentials on a linear scale (the range may include 0).
+        if let Some((lo, hi)) = value_range(crate::editor::magnitudes(level, e.kind)) {
+            ui.horizontal(|ui| {
+                ui.label(name);
+                if lo < hi {
+                    let r = ui.add(
+                        egui::Slider::new(&mut e.value, lo..=hi)
+                            .custom_formatter(|v, _| fmt_si(v))
+                            .custom_parser(parse_si),
+                    );
+                    focus |= r.has_focus();
+                } else {
+                    ui.label(fmt_si(lo));
+                }
+            });
+        }
+        if e.kind == ElementKind::Plate {
+            ui.horizontal(|ui| {
+                ui.label("angle");
+                let r = ui.add(
+                    egui::Slider::new(&mut e.angle_deg, 0.0..=180.0)
+                        .suffix("°")
+                        .step_by(0.5),
+                );
+                focus |= r.has_focus();
+            });
+        }
+    } else if let Some((lo, hi)) = value_range(crate::editor::magnitudes(level, e.kind)) {
         let mut m = e.value.abs();
         ui.horizontal(|ui| {
             ui.label(name);
@@ -868,6 +1029,11 @@ fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     game.text_focus |= focus;
     match target {
         Some(i) => game.editor.set_element(i, e),
+        None if signed => {
+            let k = crate::editor::kind_index(e.kind);
+            game.editor.continuous_magnitude[k] = e.value;
+            game.editor.plate_angle_deg = e.angle_deg;
+        }
         None => {
             let k = crate::editor::kind_index(e.kind);
             game.editor.continuous_magnitude[k] = e.value.abs();

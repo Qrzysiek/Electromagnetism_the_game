@@ -290,7 +290,7 @@ impl Level {
     pub fn measure_cost(&self, player: &[Element]) -> Cost {
         let mut cost = Cost::new(self);
         let tol = self.tolerances();
-        let metal = !(self.conductors.is_empty() && self.electrodes.is_empty());
+        let metal = self.has_metal(player);
         let preview = self.scenarios(player);
         if metal {
             cost.add_field(&self.field_at(player, Resolution::Display).0);

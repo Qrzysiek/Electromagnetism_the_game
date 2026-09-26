@@ -158,6 +158,10 @@ pub fn empty_level() -> Level {
             antenna_omegas: vec![],
             continuous: false,
             region: None,
+            max_plates: 0,
+            plate_voltages: vec![],
+            plate: level::PlateSize::default(),
+            supply_voltages: vec![],
         },
         reference_solution: Vec::new(),
         disturbances: Vec::new(),
@@ -177,6 +181,8 @@ fn sync_texts(game: &mut Game) {
     game.sandbox.texts.magnet_strengths = list_to_text(&limits.magnet_strengths);
     game.sandbox.texts.antenna_amplitudes = list_to_text(&limits.antenna_amplitudes);
     game.sandbox.texts.antenna_omegas = list_to_text(&limits.antenna_omegas);
+    game.sandbox.texts.plate_voltages = list_to_text(&limits.plate_voltages);
+    game.sandbox.texts.supply_voltages = list_to_text(&limits.supply_voltages);
 }
 
 /// Enters sandbox mode, editing the level currently loaded.
@@ -291,6 +297,8 @@ pub fn pointer(
                     game.sandbox.antenna_angle,
                     game.sandbox.antenna_omega,
                 ),
+                // Level electrodes are edited in the "Electrodes" section.
+                ElementKind::Plate | ElementKind::Supply => return true,
             };
             game.editor.edit_level(|l| {
                 let launch = l.shots.iter().any(|s| s.launch.node == node);
@@ -586,7 +594,9 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
                 let value = match game.sandbox.element_kind {
                     ElementKind::Charge => &mut game.sandbox.charge_value,
                     ElementKind::Magnet => &mut game.sandbox.magnet_value,
-                    ElementKind::Antenna => &mut game.sandbox.antenna_value,
+                    ElementKind::Antenna | ElementKind::Plate | ElementKind::Supply => {
+                        &mut game.sandbox.antenna_value
+                    }
                 };
                 let r = ui.add(
                     egui::DragValue::new(value)

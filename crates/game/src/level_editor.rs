@@ -34,6 +34,8 @@ pub struct EditTexts {
     pub magnet_strengths: String,
     pub antenna_amplitudes: String,
     pub antenna_omegas: String,
+    pub plate_voltages: String,
+    pub supply_voltages: String,
 }
 
 pub fn list_to_text(m: &[f64]) -> String {
@@ -41,6 +43,18 @@ pub fn list_to_text(m: &[f64]) -> String {
         .map(|v| format!("{v:e}"))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// A list of signed values (potentials; 0 allowed), without duplicates.
+fn parse_signed_list(text: &str) -> Vec<f64> {
+    let mut out: Vec<f64> = text
+        .split(',')
+        .filter_map(|t| parse_si(t.trim()))
+        .filter(|v| v.is_finite())
+        .collect();
+    out.sort_by(f64::total_cmp);
+    out.dedup();
+    out
 }
 
 fn parse_list(text: &str) -> Vec<f64> {
@@ -314,6 +328,8 @@ fn kind_combo(ui: &mut egui::Ui, id: usize, kind: &mut ElementKind) {
         ElementKind::Charge => "charge",
         ElementKind::Magnet => "magnet μ",
         ElementKind::Antenna => "antenna p₀",
+        ElementKind::Plate => "plate V",
+        ElementKind::Supply => "supply V",
     };
     egui::ComboBox::from_id_salt(("element_kind", id))
         .selected_text(text(*kind))
@@ -543,11 +559,16 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
             height,
             angle_deg,
             bias,
+            tunable,
         } = e;
         ui.push_id(("electrode", i), |ui| {
             ui.horizontal(|ui| {
                 ui.label(format!("Electrode {}", i + 1));
                 focus |= node(ui, center, grid);
+                ui.checkbox(tunable, "tunable").on_hover_text(
+                    "The player sets its potential with a power supply (Limits: supply \
+                     voltages); otherwise it keeps the bias below",
+                );
                 if ui.small_button("×").clicked() {
                     remove = Some(i);
                 }
@@ -578,6 +599,7 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
             height: 4.0,
             angle_deg: 0.0,
             bias: ConductorBias::Grounded,
+            tunable: false,
         });
     }
     focus
@@ -675,6 +697,10 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         antenna_omegas,
         continuous,
         region,
+        max_plates,
+        plate_voltages,
+        plate,
+        supply_voltages,
     } = l;
     let mut focus = false;
     focus |= row(ui, "Player charges (max)", |ui| {
@@ -732,6 +758,35 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
             texts.antenna_omegas = list_to_text(antenna_omegas);
         }
         r.on_hover_text("Empty: player antennas use the level's RF generator")
+            .has_focus()
+    });
+    focus |= row(ui, "Player plates (max)", |ui| {
+        ui.add(egui::DragValue::new(max_plates).range(0..=MAX_COUNT))
+            .has_focus()
+    });
+    focus |= row(ui, "Plate potentials V", |ui| {
+        let r =
+            ui.add(egui::TextEdit::singleline(&mut texts.plate_voltages).desired_width(LIST_WIDTH));
+        if r.lost_focus() {
+            *plate_voltages = parse_signed_list(&texts.plate_voltages);
+            texts.plate_voltages = list_to_text(plate_voltages);
+        }
+        r.on_hover_text("Signed; 0 is a grounded plate").has_focus()
+    });
+    focus |= row(ui, "Plate L×T×H", |ui| {
+        let mut f = positive(ui, &mut plate.length, 0.05, MAX_POSITIVE);
+        f |= positive(ui, &mut plate.thickness, 0.02, MAX_POSITIVE);
+        f |= positive(ui, &mut plate.height, 0.05, MAX_POSITIVE);
+        f
+    });
+    focus |= row(ui, "Supply voltages V", |ui| {
+        let r = ui
+            .add(egui::TextEdit::singleline(&mut texts.supply_voltages).desired_width(LIST_WIDTH));
+        if r.lost_focus() {
+            *supply_voltages = parse_signed_list(&texts.supply_voltages);
+            texts.supply_voltages = list_to_text(supply_voltages);
+        }
+        r.on_hover_text("Potentials of the power supplies of tunable electrodes (signed)")
             .has_focus()
     });
     row(ui, "Continuous values", |ui| {
@@ -957,7 +1012,11 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             ));
         }
     }
-    for e in elements.iter().chain(reference_solution) {
+    for (e, reference) in elements
+        .iter()
+        .map(|e| (e, false))
+        .chain(reference_solution.iter().map(|e| (e, true)))
+    {
         let Element {
             node,
             kind,
@@ -967,6 +1026,11 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         } = e;
         match kind {
             ElementKind::Charge | ElementKind::Magnet | ElementKind::Antenna => {}
+            // Player-only kinds (the level's own electrodes are `electrodes`).
+            ElementKind::Plate | ElementKind::Supply if reference => {}
+            ElementKind::Plate | ElementKind::Supply => {
+                return fail("plates and power supplies are player elements");
+            }
         }
         if !on_grid(node)
             || !value.is_finite()
@@ -1007,6 +1071,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             height,
             angle_deg,
             bias,
+            // A checkbox.
+            tunable: _,
         } = e;
         let value_ok = match bias {
             ConductorBias::Grounded => true,
@@ -1075,10 +1141,26 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         // Any value is editable (a checkbox).
         continuous: _,
         region,
+        max_plates,
+        plate_voltages,
+        plate,
+        supply_voltages,
     } = limits;
+    let plate_ok = [plate.length, plate.thickness, plate.height]
+        .iter()
+        .all(|v| (MIN_POSITIVE..=MAX_POSITIVE).contains(v));
+    if !plate_ok
+        || !plate_voltages
+            .iter()
+            .chain(supply_voltages)
+            .all(|v| v.is_finite())
+    {
+        return fail("plate limits outside the editor's range");
+    }
     if *max_charges > MAX_COUNT
         || *max_magnets > MAX_COUNT
         || *max_antennas > MAX_COUNT
+        || *max_plates > MAX_COUNT
         || !magnitudes
             .iter()
             .chain(magnet_strengths)

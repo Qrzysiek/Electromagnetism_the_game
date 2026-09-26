@@ -59,6 +59,12 @@ Some detectors also require how the particle arrives: moving in a direction (dra
 
 Levels can contain real electrodes: metal plates, slabs and walls with finite size, grounded or held at a voltage. Their field, including the fringe field at their ends, is computed by the boundary element method (PHYSICS.md §2.7). Field lines end on them, and touching one loses the particle. In the sandbox they are edited in the "Electrodes" section.
 
+Some levels let you build or tune electrodes yourself:
+- **Plates:** select "plate" in the palette and click to place one. R turns it (along x or y), Q/E or the wheel changes its potential, and it can be dragged by its body. Plates keep 1 cell away from other metal and stay clear of elements, coils and detectors; an outline at the cursor shows whether a plate fits there.
+- **Power supplies:** electrodes with a yellow frame are tunable. Click one to switch its supply on or to the next potential (S: the opposite one, right click: off), or choose in the "Power supplies" panel.
+- The flight details show a bound on the electrodes' neglected image force, with a warning if a flight passes so close to metal that it is no longer negligible.
+- In the sandbox: "Player plates", "Plate potentials", "Plate L×T×H" and "Supply voltages" in the limits, "tunable" on each electrode.
+
 ## Metal spheres
 
 Levels can contain metal spheres. They can be grounded, isolated with a net charge, or held at a potential (like a Van de Graaff dome).

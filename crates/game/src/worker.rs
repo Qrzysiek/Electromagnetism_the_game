@@ -52,6 +52,9 @@ pub struct Preview {
     pub radiation_loss_fraction: f64,
     /// Largest |F_RR| / |F_Lorentz| (validity of the Landau–Lifshitz treatment).
     pub reaction_ratio_max: f64,
+    /// Bound on the electrodes' neglected image force along the path, relative to the
+    /// force that matters (`level::electrode_image_force_bound`); 0 without electrodes.
+    pub image_force_bound: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -129,7 +132,7 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
             },
         };
         let req = latest(rx, req);
-        let metal = !(req.level.conductors.is_empty() && req.level.electrodes.is_empty());
+        let metal = req.level.has_metal(&req.placement);
         let mut cost = level::cost::Cost::new(&req.level);
         let scenarios = req.level.scenarios(&req.placement);
         let tolerances: Tolerances = req.level.tolerances();
@@ -243,6 +246,11 @@ fn preview_shot(
         -traj.radiation_work,
     );
     let max_speed_over_c = path.iter().map(|p| p.speed_over_c).fold(0.0, f64::max);
+    let image_force_bound = level::electrode_image_force_bound(
+        scn,
+        traj.kinetic_initial,
+        path.iter().map(|p| (p.x, p.t)),
+    );
     let preview = Preview {
         path,
         outcome: traj.outcome,
@@ -253,6 +261,7 @@ fn preview_shot(
         radiation_reaction: scn.radiation_reaction && scn.c.is_finite(),
         radiation_loss_fraction: -traj.radiation_work / traj.kinetic_initial,
         reaction_ratio_max: traj.reaction_ratio_max,
+        image_force_bound,
     };
     Some((traj, preview))
 }

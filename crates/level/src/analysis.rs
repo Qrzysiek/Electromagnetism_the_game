@@ -186,6 +186,34 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
                     ElementKind::Charge => &level.limits.magnitudes,
                     ElementKind::Magnet => &level.limits.magnet_strengths,
                     ElementKind::Antenna => &level.limits.antenna_amplitudes,
+                    // Signed lists: step to a neighbouring potential, or turn a plate.
+                    kind @ (ElementKind::Plate | ElementKind::Supply) => {
+                        if kind == ElementKind::Plate && rng.below(2) == 0 {
+                            t[i].angle_deg = if t[i].angle_deg == 0.0 { 90.0 } else { 0.0 };
+                        } else {
+                            let list = if kind == ElementKind::Plate {
+                                &level.limits.plate_voltages
+                            } else {
+                                &level.limits.supply_voltages
+                            };
+                            let mut sorted = list.clone();
+                            sorted.sort_by(f64::total_cmp);
+                            let k = sorted
+                                .iter()
+                                .position(|v| v.to_bits() == t[i].value.to_bits())
+                                .unwrap_or(0);
+                            let k2 = if rng.below(2) == 0 {
+                                k.saturating_sub(1)
+                            } else {
+                                (k + 1).min(sorted.len() - 1)
+                            };
+                            t[i].value = sorted[k2];
+                        }
+                        if !t.is_empty() && t != p && level.check_placement(&t).is_ok() {
+                            return t;
+                        }
+                        continue;
+                    }
                 };
                 let k = list
                     .iter()

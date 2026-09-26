@@ -33,7 +33,8 @@ impl Rng {
 }
 
 /// Every single element the player may place (all free nodes × allowed signed values of
-/// every allowed kind).
+/// every allowed kind, plates in every allowed orientation, and the power supplies of the
+/// tunable electrodes).
 pub fn single_element_options(level: &Level) -> Vec<Element> {
     let m = level.grid.max_node();
     let z_range = if level.grid.is_2d() { 0..=0 } else { 0..=m[2] };
@@ -73,7 +74,23 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
             }
         }
     }
+    if level.limits.max_plates > 0 {
+        for &v in &level.limits.plate_voltages {
+            for a in crate::PLATE_ANGLES {
+                kinds.push((ElementKind::Plate, v, a, None));
+            }
+        }
+    }
     let mut out = Vec::new();
+    // Power supplies sit on the centres of the tunable electrodes.
+    for e in level.electrodes.iter().filter(|e| e.tunable) {
+        for &v in &level.limits.supply_voltages {
+            let s = Element::supply(e.center, v);
+            if level.check_placement(&[s]).is_ok() {
+                out.push(s);
+            }
+        }
+    }
     for z in z_range {
         for y in 0..=m[1] {
             for x in 0..=m[0] {
@@ -219,6 +236,8 @@ fn anneal_once(
     let charge_values = values(ElementKind::Charge);
     let magnet_values = values(ElementKind::Magnet);
     let antenna_values = values(ElementKind::Antenna);
+    let plate_values = values(ElementKind::Plate);
+    let supply_values = values(ElementKind::Supply);
     for it in 0..iterations {
         if score == 0.0 && is_verified_solution(level, &current) {
             return Some(current);
@@ -239,6 +258,8 @@ fn anneal_once(
                     ElementKind::Charge => &charge_values,
                     ElementKind::Magnet => &magnet_values,
                     ElementKind::Antenna => &antenna_values,
+                    ElementKind::Plate => &plate_values,
+                    ElementKind::Supply => &supply_values,
                 };
                 (trial[i].value, trial[i].angle_deg, trial[i].omega) = v[rng.below(v.len())];
             }

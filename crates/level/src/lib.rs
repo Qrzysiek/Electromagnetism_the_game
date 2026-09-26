@@ -77,6 +77,11 @@ pub struct Electrode {
     #[serde(default)]
     pub angle_deg: f64,
     pub bias: ConductorBias,
+    /// The player sets this electrode's potential with a power supply (an element of kind
+    /// `Supply` on its centre, one of `limits.supply_voltages`); without one it keeps
+    /// `bias`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub tunable: bool,
 }
 
 /// A conducting (metal) sphere placed by the level.
@@ -281,6 +286,14 @@ fn is_zero(v: &f64) -> bool {
 /// the same antenna with the sign of its amplitude flipped).
 pub const ANTENNA_ANGLES: [f64; 4] = [0.0, 45.0, 90.0, 135.0];
 
+/// Orientations of player plates (along x or along y); any angle in hardcore mode.
+pub const PLATE_ANGLES: [f64; 2] = [0.0, 90.0];
+
+/// Smallest gap between the surfaces of two electrodes when one of them is a player
+/// plate, in cells: two panels of the preview mesh (0.5 cells, PHYSICS.md §2.7), so that
+/// the surface charge between them is resolved.
+pub const PLATE_CLEARANCE: f64 = 1.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorldPhysics {
     /// Speed of light in internal units; `None` means Newtonian mechanics.
@@ -390,6 +403,13 @@ pub enum ElementKind {
     /// none. All antennas start in phase at t = 0; a negative value is the opposite
     /// phase.
     Antenna,
+    /// Plate electrode placed by the player (PHYSICS.md §2.7): a box of the level's
+    /// `limits.plate` size centred on the node, its length along `angle_deg`, held at the
+    /// potential `value` (0: grounded).
+    Plate,
+    /// Power supply of a tunable level electrode: sets the potential `value` of the
+    /// electrode centred on this node.
+    Supply,
 }
 
 /// An element on a grid node.
@@ -424,6 +444,26 @@ impl Element {
             node,
             kind: ElementKind::Magnet,
             value: mu,
+            angle_deg: 0.0,
+            omega: None,
+        }
+    }
+
+    pub fn plate(node: Node, potential: f64, angle_deg: f64) -> Self {
+        Self {
+            node,
+            kind: ElementKind::Plate,
+            value: potential,
+            angle_deg,
+            omega: None,
+        }
+    }
+
+    pub fn supply(node: Node, potential: f64) -> Self {
+        Self {
+            node,
+            kind: ElementKind::Supply,
+            value: potential,
             angle_deg: 0.0,
             omega: None,
         }
@@ -493,9 +533,48 @@ pub struct Limits {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub continuous: bool,
     /// If set, player elements may only be placed inside this box of nodes (inclusive),
-    /// like the electrode region of a real instrument.
+    /// like the electrode region of a real instrument. Player plates must lie inside it
+    /// entirely.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<Region2>,
+    /// Maximum number of plates (electrodes) the player may place.
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub max_plates: u32,
+    /// Potentials a player plate may be held at (signed; 0 is grounded).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plate_voltages: Vec<f64>,
+    /// Size of the player's plates.
+    #[serde(default, skip_serializing_if = "PlateSize::is_default")]
+    pub plate: PlateSize,
+    /// Potentials the power supply of a tunable level electrode may be set to (signed).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub supply_voltages: Vec<f64>,
+}
+
+/// Size of a player plate, in cells: in-plane length (along its angle), thickness across
+/// it, and height (z, symmetric about the plane).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlateSize {
+    pub length: f64,
+    pub thickness: f64,
+    pub height: f64,
+}
+
+impl Default for PlateSize {
+    fn default() -> Self {
+        Self {
+            length: 4.0,
+            thickness: 0.4,
+            height: 4.0,
+        }
+    }
+}
+
+impl PlateSize {
+    #[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
@@ -541,6 +620,9 @@ pub enum PlacementError {
     TooManyCharges,
     TooManyMagnets,
     TooManyAntennas,
+    TooManyPlates,
+    /// A power supply that is not on the centre of a tunable electrode.
+    NoTunableElectrode(Node),
     OutsideGrid(Node),
     OutsideRegion(Node),
     NotInPlane(Node),
@@ -625,6 +707,12 @@ impl Level {
                 Coil::Polygon { vertices, .. } => vertices.iter_mut().for_each(scale),
             }
         }
+        for c in &mut self.conductors {
+            scale(&mut c.center);
+        }
+        for e in &mut self.electrodes {
+            scale(&mut e.center);
+        }
         for e in self
             .elements
             .iter_mut()
@@ -647,9 +735,18 @@ impl Level {
         if count(ElementKind::Antenna) > self.limits.max_antennas as usize {
             return Err(PlacementError::TooManyAntennas);
         }
+        if count(ElementKind::Plate) > self.limits.max_plates as usize {
+            return Err(PlacementError::TooManyPlates);
+        }
+        self.check_supplies(player)?;
+        // Plates first: point elements are checked against every electrode.
+        let boxes = self.check_plates(player)?;
         let mut occupied: Vec<Node> = self.elements.iter().map(|c| c.node).collect();
         occupied.extend(self.shots.iter().map(|s| s.launch.node));
         for e in player {
+            if matches!(e.kind, ElementKind::Plate | ElementKind::Supply) {
+                continue;
+            }
             if !self.grid.contains(e.node) {
                 return Err(PlacementError::OutsideGrid(e.node));
             }
@@ -669,9 +766,8 @@ impl Level {
                 .max(self.physics.magnet_radius)
                 .max(self.physics.antenna_radius);
             let p = self.grid.position(e.node);
-            if !self.electrodes.is_empty()
-                && physics::bem::Electrodes::shapes_only(self.box_electrodes())
-                    .contains(p, CONTACT_DISTANCE + reach)
+            if physics::bem::Electrodes::shapes_only(boxes.clone())
+                .contains(p, CONTACT_DISTANCE + reach)
             {
                 return Err(PlacementError::Occupied(e.node));
             }
@@ -732,9 +828,211 @@ impl Level {
                         return Err(PlacementError::FrequencyNotAllowed(e.omega));
                     }
                 }
+                ElementKind::Plate | ElementKind::Supply => unreachable!("checked above"),
             }
         }
         Ok(())
+    }
+
+    /// Power supplies: each on the centre of a different tunable electrode, at an allowed
+    /// potential.
+    fn check_supplies(&self, player: &[Element]) -> Result<(), PlacementError> {
+        let mut supplied: Vec<Node> = Vec::new();
+        for e in player.iter().filter(|e| e.kind == ElementKind::Supply) {
+            if !self
+                .electrodes
+                .iter()
+                .any(|x| x.tunable && x.center == e.node)
+            {
+                return Err(PlacementError::NoTunableElectrode(e.node));
+            }
+            if supplied.contains(&e.node) {
+                return Err(PlacementError::Occupied(e.node));
+            }
+            supplied.push(e.node);
+            if !self.limits.allows(&self.limits.supply_voltages, e.value) {
+                return Err(PlacementError::MagnitudeNotAllowed(e.value));
+            }
+        }
+        Ok(())
+    }
+
+    /// Player plates: allowed orientation and potential, entirely inside the grid and the
+    /// player region, at least `PLATE_CLEARANCE` from every other electrode, clear of
+    /// metal spheres, coil wires, elements, launch points and detectors. Returns every
+    /// electrode box of the placement (level electrodes first).
+    fn check_plates(
+        &self,
+        player: &[Element],
+    ) -> Result<Vec<physics::bem::BoxElectrode>, PlacementError> {
+        let mut boxes = self.box_electrodes();
+        let reach = self
+            .physics
+            .charge_radius
+            .max(self.physics.magnet_radius)
+            .max(self.physics.antenna_radius);
+        let grid_rect = self.node_rect(Region2 {
+            min: [0, 0, 0],
+            max: self.grid.max_node(),
+        });
+        for e in player.iter().filter(|e| e.kind == ElementKind::Plate) {
+            if !self.grid.contains(e.node) {
+                return Err(PlacementError::OutsideGrid(e.node));
+            }
+            if self.grid.is_2d() && e.node[2] != 0 {
+                return Err(PlacementError::NotInPlane(e.node));
+            }
+            let angle_ok = if self.limits.continuous {
+                e.angle_deg.is_finite()
+            } else {
+                PLATE_ANGLES
+                    .iter()
+                    .any(|a| a.to_bits() == e.angle_deg.to_bits())
+            };
+            if !angle_ok {
+                return Err(PlacementError::AngleNotAllowed(e.angle_deg));
+            }
+            if !self.limits.allows(&self.limits.plate_voltages, e.value) {
+                return Err(PlacementError::MagnitudeNotAllowed(e.value));
+            }
+            let b = self.plate_box(e);
+            let corners = rect_corners(&b);
+            if !corners.iter().all(|c| rect_contains(&grid_rect, *c)) {
+                return Err(PlacementError::OutsideGrid(e.node));
+            }
+            if let Some(r) = self.limits.region {
+                let region = self.node_rect(r);
+                if !corners.iter().all(|c| rect_contains(&region, *c)) {
+                    return Err(PlacementError::OutsideRegion(e.node));
+                }
+            }
+            let blocked = boxes
+                .iter()
+                .any(|o| rect_distance(&corners, &rect_corners(o)) < PLATE_CLEARANCE)
+                || self.shots.iter().any(|s| {
+                    rect_distance(
+                        &corners,
+                        &self.node_rect(Region2 {
+                            min: s.detector.min,
+                            max: s.detector.max,
+                        }),
+                    ) <= 0.0
+                });
+            let one = physics::bem::Electrodes::shapes_only(vec![b]);
+            let points = self
+                .elements
+                .iter()
+                .map(|x| (self.grid.position(x.node), reach))
+                .chain(
+                    self.shots
+                        .iter()
+                        .map(|s| (self.grid.position(s.launch.node), reach)),
+                )
+                .chain(self.coil_points().map(|p| (p, self.physics.wire_radius)))
+                .chain(
+                    self.conductors
+                        .iter()
+                        .map(|c| (self.grid.position(c.center), c.radius + PLATE_CLEARANCE)),
+                );
+            let touching = points
+                .into_iter()
+                .any(|(p, r)| one.contains(p, CONTACT_DISTANCE + r));
+            if blocked || touching {
+                return Err(PlacementError::Occupied(e.node));
+            }
+            boxes.push(b);
+        }
+        Ok(boxes)
+    }
+
+    /// Points along every coil wire, at most 0.1 cells apart (for clearance checks).
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    fn coil_points(&self) -> impl Iterator<Item = DVec3> + '_ {
+        self.coils.iter().flat_map(move |c| {
+            let mut out = Vec::new();
+            match c {
+                Coil::Circle { center, radius, .. } => {
+                    let c = self.grid.position(*center);
+                    let n = ((std::f64::consts::TAU * radius / 0.1).ceil() as usize).max(8);
+                    for i in 0..n {
+                        let a = std::f64::consts::TAU * i as f64 / n as f64;
+                        out.push(c + DVec3::new(a.cos(), a.sin(), 0.0) * *radius);
+                    }
+                }
+                Coil::Polygon { vertices, .. } => {
+                    for i in 0..vertices.len() {
+                        let a = self.grid.position(vertices[i]);
+                        let b = self.grid.position(vertices[(i + 1) % vertices.len()]);
+                        let n = (((b - a).length() / 0.1).ceil() as usize).max(1);
+                        for k in 0..n {
+                            out.push(a + (b - a) * (k as f64 / n as f64));
+                        }
+                    }
+                }
+            }
+            out
+        })
+    }
+
+    /// The rectangle of a box of nodes, in cells (in-plane corners).
+    fn node_rect(&self, r: Region2) -> [DVec3; 4] {
+        let (a, b) = (self.grid.position(r.min), self.grid.position(r.max));
+        [
+            DVec3::new(a.x, a.y, 0.0),
+            DVec3::new(b.x, a.y, 0.0),
+            DVec3::new(b.x, b.y, 0.0),
+            DVec3::new(a.x, b.y, 0.0),
+        ]
+    }
+
+    /// The box of a player plate.
+    pub fn plate_box(&self, e: &Element) -> physics::bem::BoxElectrode {
+        let s = self.limits.plate;
+        physics::bem::BoxElectrode {
+            center: self.grid.position(e.node),
+            angle: e.angle_deg.to_radians(),
+            half_length: s.length / 2.0,
+            half_thickness: s.thickness / 2.0,
+            half_height: s.height / 2.0,
+            bias: if e.value == 0.0 {
+                Bias::Grounded
+            } else {
+                Bias::Potential(e.value)
+            },
+        }
+    }
+
+    /// Every electrode of a placement: the level's (at the potentials of the player's
+    /// power supplies where set), then the player's plates.
+    pub fn all_box_electrodes(&self, player: &[Element]) -> Vec<physics::bem::BoxElectrode> {
+        let mut boxes = self.box_electrodes();
+        for (b, e) in boxes.iter_mut().zip(&self.electrodes) {
+            if let Some(s) = player
+                .iter()
+                .find(|s| s.kind == ElementKind::Supply && e.tunable && s.node == e.center)
+            {
+                b.bias = Bias::Potential(s.value);
+            }
+        }
+        boxes.extend(
+            player
+                .iter()
+                .filter(|e| e.kind == ElementKind::Plate)
+                .map(|e| self.plate_box(e)),
+        );
+        boxes
+    }
+
+    /// Whether a placement has metal (spheres, electrodes or player plates), whose model
+    /// differs between preview and verification resolution.
+    pub fn has_metal(&self, player: &[Element]) -> bool {
+        !self.conductors.is_empty()
+            || !self.electrodes.is_empty()
+            || player.iter().any(|e| e.kind == ElementKind::Plate)
     }
 
     /// The static field and the obstacles for a placement at preview resolution.
@@ -746,7 +1044,22 @@ impl Level {
     /// supported), as messages. Empty if the level is consistent.
     pub fn model_issues(&self) -> Vec<String> {
         let mut out = Vec::new();
-        if !self.electrodes.is_empty() {
+        if self.limits.max_plates > 0 && self.limits.plate_voltages.is_empty() {
+            out.push("player plates need at least one allowed potential".into());
+        }
+        let tunable: Vec<Node> = self
+            .electrodes
+            .iter()
+            .filter(|e| e.tunable)
+            .map(|e| e.center)
+            .collect();
+        if !tunable.is_empty() && self.limits.supply_voltages.is_empty() {
+            out.push("tunable electrodes need at least one supply voltage".into());
+        }
+        if (1..tunable.len()).any(|i| tunable[..i].contains(&tunable[i])) {
+            out.push("two tunable electrodes share a centre node".into());
+        }
+        if !self.electrodes.is_empty() || self.limits.max_plates > 0 {
             if !self.conductors.is_empty() {
                 out.push("metal spheres and box electrodes are not yet solved together".into());
             }
@@ -905,10 +1218,10 @@ impl Level {
                 }
             }
         }
-        // Electrode boxes with the contact shell.
+        // Electrode boxes (the level's, then the player's plates) with the contact shell.
+        let boxes = self.all_box_electrodes(player);
         obstacles.extend(
-            physics::bem::Electrodes::shapes_only(self.box_electrodes())
-                .obstacles(CONTACT_DISTANCE),
+            physics::bem::Electrodes::shapes_only(boxes.clone()).obstacles(CONTACT_DISTANCE),
         );
         for c in &self.conductors {
             obstacles.push(Shape::Sphere(Sphere {
@@ -924,31 +1237,13 @@ impl Level {
             antennas,
             external: Vec::new(),
             conductors: self.conductors_for(&charges, resolution),
-            electrodes: self.electrodes_for(&charges, resolution),
+            electrodes: electrodes_for(boxes, &charges, resolution),
             time_offset: 0.0,
         };
         (field, obstacles)
     }
 
-    /// Box electrodes with the surface charge the fixed charges induce on them.
-    fn electrodes_for(
-        &self,
-        charges: &[FixedCharge],
-        resolution: Resolution,
-    ) -> physics::bem::Electrodes {
-        if self.electrodes.is_empty() {
-            return physics::bem::Electrodes::default();
-        }
-        let sources: Vec<(DVec3, f64)> = charges.iter().map(|c| (c.position, c.charge)).collect();
-        let res = match resolution {
-            Resolution::Preview => physics::bem::Resolution::Preview,
-            Resolution::Verify => physics::bem::Resolution::Verify,
-            Resolution::Display => physics::bem::Resolution::Display,
-        };
-        physics::bem::Electrodes::new(self.box_electrodes(), &sources, res)
-    }
-
-    /// The electrodes as physics boxes.
+    /// The level's electrodes as physics boxes, at their own bias.
     pub fn box_electrodes(&self) -> Vec<physics::bem::BoxElectrode> {
         self.electrodes
             .iter()
@@ -966,7 +1261,107 @@ impl Level {
             })
             .collect()
     }
+}
 
+/// Largest image force the electrodes would exert on the particle (neglected, PHYSICS.md
+/// §2.7) at the points `(x, t)` of a flight, bounded by `q²/d²` (four times the force of
+/// a flat grounded plane at distance `d`, which covers concave corners), relative to
+/// `max(|qE|, F₀)` with `F₀ = T₀` per cell, the smallest force that matters for the
+/// flight (relative to the Lorentz force alone the ratio is meaningless where that force
+/// passes through zero). 0 without electrodes.
+pub fn electrode_image_force_bound(
+    scn: &Scenario<LevelField>,
+    kinetic_initial: f64,
+    points: impl IntoIterator<Item = (DVec3, f64)>,
+) -> f64 {
+    use physics::field::FieldSolver;
+    if scn.field.electrodes.is_empty() {
+        return 0.0;
+    }
+    let boxes = scn.field.electrodes.obstacles(0.0);
+    let q = scn.particle.charge;
+    let mut worst: f64 = 0.0;
+    for (x, t) in points {
+        let d = boxes
+            .iter()
+            .map(|b| b.signed_distance(x))
+            .fold(f64::INFINITY, f64::min)
+            .max(1e-3);
+        let f = (scn.field.sample(x, t).e.length() * q.abs()).max(kinetic_initial);
+        worst = worst.max(q * q / (d * d) / f);
+    }
+    worst
+}
+
+/// Largest neglected image force that is still below the numerical accuracy (relative to
+/// the force that matters, see `electrode_image_force_bound`).
+pub const IMAGE_FORCE_LIMIT: f64 = 1e-10;
+
+/// Box electrodes with the surface charge the fixed charges induce on them.
+fn electrodes_for(
+    boxes: Vec<physics::bem::BoxElectrode>,
+    charges: &[FixedCharge],
+    resolution: Resolution,
+) -> physics::bem::Electrodes {
+    if boxes.is_empty() {
+        return physics::bem::Electrodes::default();
+    }
+    let sources: Vec<(DVec3, f64)> = charges.iter().map(|c| (c.position, c.charge)).collect();
+    let res = match resolution {
+        Resolution::Preview => physics::bem::Resolution::Preview,
+        Resolution::Verify => physics::bem::Resolution::Verify,
+        Resolution::Display => physics::bem::Resolution::Display,
+    };
+    physics::bem::Electrodes::new(boxes, &sources, res)
+}
+
+/// In-plane corners of an electrode box (z = 0), counter-clockwise.
+fn rect_corners(b: &physics::bem::BoxElectrode) -> [DVec3; 4] {
+    let u = DVec3::new(b.angle.cos(), b.angle.sin(), 0.0) * b.half_length;
+    let v = DVec3::new(-b.angle.sin(), b.angle.cos(), 0.0) * b.half_thickness;
+    let c = DVec3::new(b.center.x, b.center.y, 0.0);
+    [c - u - v, c + u - v, c + u + v, c - u + v]
+}
+
+/// Whether a point lies in a convex counter-clockwise polygon (boundary included).
+fn rect_contains(r: &[DVec3; 4], p: DVec3) -> bool {
+    (0..4).all(|i| {
+        let (a, b) = (r[i], r[(i + 1) % 4]);
+        (b - a).x * (p - a).y - (b - a).y * (p - a).x >= -1e-12
+    })
+}
+
+fn segment_distance(p: DVec3, a: DVec3, b: DVec3) -> f64 {
+    let ab = b - a;
+    let t = ((p - a).dot(ab) / ab.length_squared().max(1e-300)).clamp(0.0, 1.0);
+    (p - (a + ab * t)).length()
+}
+
+fn segments_cross(a: DVec3, b: DVec3, c: DVec3, d: DVec3) -> bool {
+    let cross = |o: DVec3, p: DVec3, q: DVec3| (p - o).x * (q - o).y - (p - o).y * (q - o).x;
+    let (d1, d2) = (cross(c, d, a), cross(c, d, b));
+    let (d3, d4) = (cross(a, b, c), cross(a, b, d));
+    d1 * d2 < 0.0 && d3 * d4 < 0.0
+}
+
+/// Distance between two convex quadrilaterals in the plane (0 if they overlap).
+fn rect_distance(a: &[DVec3; 4], b: &[DVec3; 4]) -> f64 {
+    let overlap = a.iter().any(|p| rect_contains(b, *p))
+        || b.iter().any(|p| rect_contains(a, *p))
+        || (0..4)
+            .any(|i| (0..4).any(|j| segments_cross(a[i], a[(i + 1) % 4], b[j], b[(j + 1) % 4])));
+    if overlap {
+        return 0.0;
+    }
+    let one_way = |p: &[DVec3; 4], q: &[DVec3; 4]| {
+        p.iter()
+            .flat_map(|x| (0..4).map(move |j| segment_distance(*x, q[j], q[(j + 1) % 4])))
+            .fold(f64::INFINITY, f64::min)
+    };
+    one_way(a, b).min(one_way(b, a))
+}
+
+impl Level {
     /// Metal spheres with the charges the fixed charges induce on them.
     fn conductors_for(&self, charges: &[FixedCharge], resolution: Resolution) -> Conductors {
         if self.conductors.is_empty() {
@@ -1016,10 +1411,10 @@ impl Level {
     /// field model's error enters the verdict too.
     pub fn verify_flights(&self, player: &[Element]) -> Vec<Verification> {
         let preview = self.scenarios(player);
-        let fine = if self.conductors.is_empty() && self.electrodes.is_empty() {
-            preview.clone()
-        } else {
+        let fine = if self.has_metal(player) {
             self.scenarios_at(player, Resolution::Verify)
+        } else {
+            preview.clone()
         };
         preview
             .iter()
@@ -1164,6 +1559,14 @@ mod tests {
                 antenna_omegas: vec![0.5, 2.0],
                 continuous: false,
                 region: None,
+                max_plates: 1,
+                plate_voltages: vec![0.0, 5e4],
+                plate: PlateSize {
+                    length: 3.0,
+                    thickness: 0.5,
+                    height: 2.0,
+                },
+                supply_voltages: vec![-1e4, 1e4],
             },
             reference_solution: vec![],
             disturbances: vec![Disturbance {
@@ -1219,6 +1622,170 @@ mod tests {
         assert_eq!(l.flight_count(), 1);
         // Saving writes version 2, which loads back identically.
         assert_eq!(Level::from_json(&l.to_json()).unwrap(), l);
+    }
+
+    /// A static level with one tunable electrode (at (5, 8), along x), room for two player
+    /// plates and no coils.
+    fn plate_level() -> Level {
+        let mut l = sample_level();
+        l.coils.clear();
+        l.disturbances.clear();
+        l.limits.max_antennas = 0;
+        l.limits.max_plates = 2;
+        l.limits.plate_voltages = vec![0.0, 1e4];
+        l.limits.supply_voltages = vec![-2e4, 2e4];
+        l.limits.plate = PlateSize::default();
+        l.electrodes = vec![Electrode {
+            center: [5, 8, 0],
+            length: 4.0,
+            thickness: 0.4,
+            height: 4.0,
+            angle_deg: 0.0,
+            bias: ConductorBias::Grounded,
+            tunable: true,
+        }];
+        l
+    }
+
+    #[test]
+    fn plate_and_supply_placement() {
+        let l = plate_level();
+        let plate = |x, y, v, a| Element::plate([x, y, 0], v, a);
+        let err = |p: &[Element]| l.check_placement(p);
+        assert_eq!(err(&[plate(14, 2, 1e4, 0.0)]), Ok(()));
+        assert_eq!(err(&[plate(14, 2, 0.0, 90.0)]), Ok(()), "grounded plate");
+        assert!(matches!(
+            err(&[plate(14, 2, 1e4, 45.0)]),
+            Err(PlacementError::AngleNotAllowed(_))
+        ));
+        assert!(matches!(
+            err(&[plate(14, 2, 5e3, 0.0)]),
+            Err(PlacementError::MagnitudeNotAllowed(_))
+        ));
+        // Sticking out of the grid (x from −1 to 3).
+        assert!(matches!(
+            err(&[plate(1, 2, 1e4, 0.0)]),
+            Err(PlacementError::OutsideGrid(_))
+        ));
+        // On the launch point, on the level charge, across the detector.
+        for p in [
+            plate(2, 5, 1e4, 0.0),
+            plate(10, 5, 1e4, 0.0),
+            plate(18, 5, 1e4, 0.0),
+        ] {
+            assert!(
+                matches!(err(&[p]), Err(PlacementError::Occupied(_))),
+                "{p:?}"
+            );
+        }
+        // Clearance: gap 0.6 < 1 between two plates or to the level electrode; 1.6 is fine.
+        assert!(matches!(
+            err(&[plate(14, 2, 1e4, 0.0), plate(14, 3, 1e4, 0.0)]),
+            Err(PlacementError::Occupied(_))
+        ));
+        assert_eq!(
+            err(&[plate(14, 2, 1e4, 0.0), plate(14, 4, 1e4, 0.0)]),
+            Ok(())
+        );
+        assert!(matches!(
+            err(&[plate(5, 7, 1e4, 0.0)]),
+            Err(PlacementError::Occupied(_))
+        ));
+        assert_eq!(err(&[plate(5, 6, 1e4, 0.0)]), Ok(()));
+        // Crossing plates overlap without any corner inside the other.
+        assert!(matches!(
+            err(&[plate(14, 4, 1e4, 0.0), plate(14, 4, 0.0, 90.0)]),
+            Err(PlacementError::Occupied(_))
+        ));
+        // A charge on or in a player plate.
+        for c in [[14, 2, 0], [15, 2, 0]] {
+            assert!(matches!(
+                err(&[plate(14, 2, 1e4, 0.0), Element::charge(c, 1.0)]),
+                Err(PlacementError::Occupied(_))
+            ));
+        }
+        assert!(matches!(
+            err(&[
+                plate(14, 2, 1e4, 0.0),
+                plate(14, 4, 1e4, 0.0),
+                plate(14, 6, 1e4, 0.0)
+            ]),
+            Err(PlacementError::TooManyPlates)
+        ));
+        // Power supplies: on the tunable electrode's centre, once, at a listed potential.
+        assert_eq!(err(&[Element::supply([5, 8, 0], 2e4)]), Ok(()));
+        assert!(matches!(
+            err(&[Element::supply([6, 8, 0], 2e4)]),
+            Err(PlacementError::NoTunableElectrode(_))
+        ));
+        assert!(matches!(
+            err(&[Element::supply([5, 8, 0], 1e4)]),
+            Err(PlacementError::MagnitudeNotAllowed(_))
+        ));
+        assert!(matches!(
+            err(&[
+                Element::supply([5, 8, 0], 2e4),
+                Element::supply([5, 8, 0], -2e4)
+            ]),
+            Err(PlacementError::Occupied(_))
+        ));
+        assert_eq!(l.model_issues(), Vec::<String>::new());
+    }
+
+    /// A player plate is the same electrode as a level electrode at the same place and
+    /// potential, and a power supply sets the potential of its electrode: identical
+    /// fields and obstacles.
+    #[test]
+    fn plates_and_supplies_are_electrodes() {
+        use physics::field::FieldSolver;
+        let l = plate_level();
+        let player = [
+            Element::plate([14, 2, 0], 1e4, 90.0),
+            Element::supply([5, 8, 0], -2e4),
+        ];
+        let mut fixed = l.clone();
+        fixed.electrodes[0].tunable = false;
+        fixed.electrodes[0].bias = ConductorBias::Potential(-2e4);
+        fixed.electrodes.push(Electrode {
+            center: [14, 2, 0],
+            length: 4.0,
+            thickness: 0.4,
+            height: 4.0,
+            angle_deg: 90.0,
+            bias: ConductorBias::Potential(1e4),
+            tunable: false,
+        });
+        let (a, oa) = l.field(&player);
+        let (b, ob) = fixed.field(&[]);
+        assert_eq!(oa, ob);
+        for x in [DVec3::new(3.0, 3.0, 0.0), DVec3::new(12.0, 6.0, 0.5)] {
+            let (fa, fb) = (a.sample(x, 0.0), b.sample(x, 0.0));
+            assert_eq!(fa.phi.to_bits(), fb.phi.to_bits());
+            assert_eq!(fa.e, fb.e);
+        }
+        // The supply matters: without it the electrode is grounded.
+        let (c, _) = l.field(&player[..1]);
+        let x = DVec3::new(5.0, 6.0, 0.0);
+        assert!((c.sample(x, 0.0).phi - a.sample(x, 0.0).phi).abs() > 1e3);
+        assert!(l.has_metal(&[]) && !sample_level().has_metal(&[]));
+        assert!(sample_level().has_metal(&player[..1]));
+    }
+
+    /// Refining keeps metal in place too (metal sphere and electrode centres are nodes),
+    /// and power supplies stay on their electrodes.
+    #[test]
+    fn refinement_keeps_metal_in_place() {
+        let mut l = plate_level();
+        l.conductors.push(Conductor {
+            center: [15, 7, 0],
+            radius: 1.0,
+            bias: ConductorBias::Grounded,
+        });
+        let mut player = vec![Element::supply([5, 8, 0], 2e4)];
+        let before = l.scenario(0, &player).obstacles;
+        l.refine(2, &mut player);
+        assert_eq!(before, l.scenario(0, &player).obstacles);
+        assert_eq!(l.check_placement(&player), Ok(()));
     }
 
     #[test]
