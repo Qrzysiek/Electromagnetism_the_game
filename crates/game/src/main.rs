@@ -4,6 +4,7 @@ mod draw;
 mod editor;
 mod level_editor;
 mod potential;
+mod radiation;
 mod sandbox;
 mod ui;
 mod visuals;
@@ -66,6 +67,10 @@ pub struct Game {
     /// Field map shown under the scene (`None`: off).
     pub map: Option<MapMode>,
     pub show_field_lines: bool,
+    /// E arrows on the time-dependent field views.
+    pub show_field_arrows: bool,
+    /// Particle field view: only the radiation (acceleration) part of the field.
+    pub radiation_only: bool,
     pub animate: bool,
     pub playback_speed: f64,
     pub anim_time: f64,
@@ -281,6 +286,8 @@ fn main() {
             field_lines_key: (0, 0),
             map: Some(MapMode::Potential),
             show_field_lines: false,
+            show_field_arrows: true,
+            radiation_only: false,
             animate: true,
             playback_speed: 1.0,
             anim_time: 0.0,
@@ -290,7 +297,7 @@ fn main() {
             panel_left_px: None,
         })
         .insert_resource(PhysicsWorker(Worker::spawn()))
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, radiation::setup))
         .add_systems(
             Update,
             (
@@ -307,11 +314,35 @@ fn main() {
         )
         .add_systems(EguiPrimaryContextPass, ui::panel)
         .add_systems(Update, dev_capture)
+        .add_systems(Update, radiation::update.after(animate).before(draw::draw))
         .run();
 }
 
+/// Next map in the V-key cycle, skipping views the level has nothing to show in.
+pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
+    let order = [
+        Some(MapMode::Potential),
+        Some(MapMode::Magnetic),
+        Some(MapMode::Waves),
+        Some(MapMode::ParticleField),
+        None,
+    ];
+    let available = |m: Option<MapMode>| match m {
+        Some(MapMode::Waves) => radiation::waves_available(level),
+        Some(MapMode::ParticleField) => radiation::particle_field_available(level),
+        _ => true,
+    };
+    let i = order.iter().position(|&m| m == map).unwrap_or(0);
+    (1..=order.len())
+        .map(|k| order[(i + k) % order.len()])
+        .find(|&m| available(m))
+        .unwrap_or(None)
+}
+
 /// Developer capture for testing without input: with `EM_CAPTURE=<file.png>` the game
-/// opens level `EM_LEVEL` (1-based), enters the sandbox if `EM_SANDBOX=1`, lets the
+/// opens level `EM_LEVEL` (1-based), enters the sandbox if `EM_SANDBOX=1`, selects the map
+/// `EM_MAP` (potential, magnetic, waves, particle, off), places `EM_PLACE` (JSON list of
+/// elements, or "reference"), holds the animation at `EM_TIME`, lets the
 /// physics settle, saves a screenshot of its own window and exits. No clicks or keys are
 /// sent to the desktop.
 fn dev_capture(
@@ -324,6 +355,12 @@ fn dev_capture(
         return;
     };
     *frame += 1;
+    if let Some(t) = std::env::var("EM_TIME")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+    {
+        game.anim_time = t;
+    }
     match *frame {
         3 => {
             if let Some(i) = std::env::var("EM_LEVEL")
@@ -335,6 +372,26 @@ fn dev_capture(
             }
             if std::env::var("EM_SANDBOX").is_ok_and(|v| v == "1") {
                 sandbox::enter(&mut game);
+            }
+            game.radiation_only = std::env::var("EM_RAD_ONLY").is_ok_and(|v| v == "1");
+            if let Ok(m) = std::env::var("EM_MAP") {
+                game.map = match m.as_str() {
+                    "magnetic" => Some(MapMode::Magnetic),
+                    "waves" => Some(MapMode::Waves),
+                    "particle" => Some(MapMode::ParticleField),
+                    "off" => None,
+                    _ => Some(MapMode::Potential),
+                };
+            }
+            if let Ok(p) = std::env::var("EM_PLACE") {
+                // Player elements as JSON, e.g. the level's reference solution: "reference".
+                let placement = if p == "reference" {
+                    game.editor.level.reference_solution.clone()
+                } else {
+                    serde_json::from_str(&p).unwrap_or_default()
+                };
+                game.editor.placement = placement;
+                game.editor.edit_level(|_| {});
             }
         }
         120 => {
@@ -470,11 +527,7 @@ fn input(
             game.show_field_lines = !game.show_field_lines;
         }
         if keys.just_pressed(KeyCode::KeyV) {
-            game.map = match game.map {
-                Some(MapMode::Potential) => Some(MapMode::Magnetic),
-                Some(MapMode::Magnetic) => None,
-                None => Some(MapMode::Potential),
-            };
+            game.map = next_map(&game.editor.level, game.map);
         }
         if keys.just_pressed(KeyCode::KeyA) {
             game.animate = !game.animate;
@@ -595,7 +648,7 @@ fn update_map(
         return;
     }
     game.map_key = key;
-    let Some(mode) = game.map else {
+    let Some(mode @ (MapMode::Potential | MapMode::Magnetic)) = game.map else {
         return;
     };
     let level = &game.editor.level;

@@ -10,6 +10,7 @@ pub mod external;
 pub mod field;
 pub mod geometry;
 pub mod integrator;
+pub mod lienard;
 pub mod magnetic;
 pub mod trajectory;
 pub mod units;

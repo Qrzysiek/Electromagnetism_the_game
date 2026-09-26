@@ -49,6 +49,11 @@ A level can have several shots: particles with their own species, launch and det
 
 Antennas are small oscillating electric dipoles in the plane, all driven in phase by the level's RF generator (frequency ω). Their fields are exact, including the induction and radiation terms (PHYSICS.md §2.4). The kick they give depends on when a particle passes, so shots launched at different times (shown in the shot's launch time) can be sorted: RF separators, streak cameras. The potential map and field lines show static sources only.
 
+## Radiation
+
+- **Maps:** V cycles potential → magnetic B → waves (antennas and plane waves at the animation time) → particle field (the particle's own Liénard–Wiechert field, optionally only its radiation part) → off. The time-dependent maps have optional E arrows.
+- **Radiation reaction:** levels can include it (chapter 8). The particle then loses the energy it radiates, and the energy bars show kinetic + potential + radiated = constant.
+
 ## Disturbances
 
 Some levels have fields from outside the arena: a stray field that is sometimes switched on, mains hum at different phases, the Earth's field for different orientations. Every shot is flown under every listed disturbance, and the setup must work for all of them. The panel lists the disturbances with their status. Selecting one shows its flight in detail and draws it brightest; the other flights of the shot are drawn fainter, as a bundle. The potential map and the field lines show the level's own sources only. In the sandbox, disturbances are edited in the "Disturbances" section.

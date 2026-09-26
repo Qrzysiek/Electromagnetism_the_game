@@ -114,6 +114,19 @@ B = (1/c²) [ṗ × n / r² + p̈ × n / (c r)]
 - A shot may have a launch time `t₀` (`launch.time`). The flight then sees the time-dependent sources at `t₀ + t`, implemented as `LevelField::time_offset`, which is exact.
 - Identical particles launched at different times follow different trajectories only in time-dependent fields. This is the basis of the RF levels.
 
+## 2.5 The particle's own field: Liénard–Wiechert — *validated* (`crates/physics/src/lienard.rs`)
+
+The exact field of a point charge on an arbitrary world line (Jackson §14.1). With `R = x − r(t_r)`, `n = R/|R|`, `β = v/c`, `κ = 1 − n·β` at the retarded time `t_r`, where `|x − r(t_r)| = c (t − t_r)`:
+
+```
+E = q (n − β)(1 − β²) / (κ³ R²)  +  (q/c) n × ((n − β) × β̇) / (κ³ R),     B = n × E / c
+```
+
+- The first term is the velocity (generalized Coulomb) field; the second, proportional to the acceleration, is the radiation field.
+- The retarded time is the root of `g(t_r) = c(t − t_r) − |x − r(t_r)|`, which is strictly decreasing for `|v| < c`. It is found by bracketing and bisection to full precision.
+- For a computed flight the world line is interpolated between the preview's dense-output points: cubic Hermite for position, linear for velocity and acceleration (the acceleration comes from the Lorentz force). Before launch and after the end, the particle is continued with uniform motion. A real launch or stop would itself radiate; this is a stated simplification of the view.
+- **Use.** Visual only: the "particle field" map (§10). The particle's own field does not act on the particle except through radiation reaction (§3.1), the consistent classical treatment of that self-interaction.
+
 ## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 
 State `y = (x, p)`, with:
@@ -131,6 +144,22 @@ Implementation details:
 - The integrator works with the scaled state `(x, p/p_ref)`, where `p_ref = |p₀|` (or `m` if the particle starts at rest). One tolerance is then meaningful for positions (grid units) and momenta alike.
 - Kinetic energy is evaluated as `(γ−1)mc² = p²/(m(γ+1))`, which avoids cancellation at low speed.
 - **Speed limit in floating point:** `|v| = |p|c/sqrt(m²c² + p²)` never exceeds `c`. For `γ ≳ 10⁷`, the rounded quotient can equal `c` exactly. The strict inequality `|v| < c` is guaranteed and tested for `γ < 10⁷`. Nothing uses `v` as state, so this has no effect on the trajectory.
+
+## 3.1 Radiation reaction — *validated* (`dynamics.rs::radiation_reaction_force`)
+
+An accelerated charge radiates, and the energy comes from the particle. Levels can include this (`physics.radiation_reaction`) through the Landau–Lifshitz force (Classical Theory of Fields §76), written for force `q(E + v×B)`, `k = 1`, `μ₀/4π = 1/c²`:
+
+```
+f = (2q³/3mc³) γ [DE/Dt + v × DB/Dt]
+  + (2q⁴/3m²c⁴) [c E×B + c B×(B×v) + E (v·E)/c]
+  − (2q⁴/3m²c⁵) γ² v [(E + v×B)² − (E·v)²/c²]
+```
+
+- **Why LL.** The Lorentz–Abraham–Dirac equation has runaway and pre-acceleration solutions. LL is its reduction of order, consistent to first order in `τ₀ = 2q²/(3mc³)`, with no runaways. It is valid while the reaction force is small against the Lorentz force; each trajectory reports `max |F_RR| / |F_L|`. Shipped levels require it below 0.05 (`level/tests/levels.rs`), and the game flags it.
+- **The derivative term.** `D/Dt = ∂/∂t + v·∇` is a central difference of the field along the world line over 1e-5 cells. Its relative error (about 1e-10) is far below the O(τ₀) accuracy of LL itself. It is deterministic.
+- **Energy bookkeeping.** The work of `f` is integrated as a 7th ODE component. So `kinetic + potential + radiated = const` holds to integration accuracy, and the energy diagnostic of §4 checks exactly this.
+- **Consistency.** `c = ∞` gives no reaction. With the flag off, the dynamics are bit-identical to before (6-component state).
+- **Levels.** A level with radiation reaction must need it: with the flag off, its reference solution must fail (test `radiation_levels_need_radiation`).
 
 ## 4. Conserved quantities (diagnostics only) — *validated* (`crates/physics/src/trajectory.rs`)
 
@@ -260,7 +289,7 @@ Accuracy of the margins against the analytic gap `r_min δ`: relative error 2e-1
 
 | Effect | Status in Stage 1 | Control |
 |---|---|---|
-| Radiation (Larmor/Liénard) | neglected | The radiated energy `∫P dt`, with `P = (2/3) k q² γ⁶ (a² − (v × a)²/c²) / c³`, is computed as a diagnostic (`Trajectory::radiated_energy`, trapezoidal rule over accepted steps; exactly 0 for `c = ∞`). Flagging levels above a threshold is part of the generator (M5). |
+| Radiation (Larmor/Liénard) | neglected, unless the level includes radiation reaction (§3.1) | The radiated energy `∫P dt`, with `P = (2/3) k q² γ⁶ (a² − (v × a)²/c²) / c³`, is computed as a diagnostic (`Trajectory::radiated_energy`, trapezoidal rule over accepted steps; exactly 0 for `c = ∞`). Flagging levels above a threshold is part of the generator (M5). |
 | | | **Consistency requirement (found in M4):** radiated fraction per close pass ≈ `r_cl / r`, with `r_cl = k q²/(mc²)` the particle's classical radius. The first demo levels used `q = m = 1`, `c = 1.5…5`, giving `r_cl` = 0.04–0.44 cells. Their neglected radiation was 1e-4 to 2 × T₀, so they were physically inconsistent. Fix, as in real accelerators: weakly charged particle (`q = 10⁻⁶`), strongly charged electrodes (`Q ~ 10⁶`). Trajectories depend only on `qQ/m` and `c`, so the puzzles are unchanged. Neglected radiation of the reference flights is now 1e-16 … 1.7e-11 × T₀. Test `level/tests/levels.rs` requires `< 1e-10` for every shipped level; the game flags player setups above that. |
 | Magnetic field of the moving particle acting on others | n/a (single particle) | Stage 6 (Darwin) |
 | Polarization of test particles | neglected (non-polarizable by assumption) | documented assumption |
@@ -332,6 +361,19 @@ The thresholds are the ones of the corresponding T and M tests (1e-9 for traject
 
 A1 is the strongest check. Its quadratures (Gauss–Legendre in cos θ, uniform in φ and in time) are exact for the trigonometric polynomials involved, so any error in the field formulas, including the near and induction terms, would show up directly.
 
+### Radiation tests (`cargo test -p physics --test radiation_reaction --test lienard -- --nocapture --test-threads=1`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| R1 | Synchrotron damping in uniform B, γ₀ = 1.05, 2, 10, 600 time units (\|p\| falls 8–40×) | LL reduces exactly to `du/dt = −(κ/m) u sqrt(1 + u²)`, `κ = 2q⁴B²/(3m²c³)`, so `u(t) = 1/sinh(asinh(1/u₀) + κt/m)` | \|Δu\|/u₀ < 1e-9; energy balance < 1e-10 | ≤ 8.5e-13; balance ≤ 3.2e-12 |
+| R2 | Coulomb scattering at c = 5, 10, 20 | LL work = −∫P_Liénard dt + ΔE_Schott, `E_S = τ₀ m γ⁴ v·a`, up to O(τ₀ω) | relative difference < τ₀ω | 5.0e-9, 6.5e-9, 7.1e-9 (τ₀ω = 7e-3 … 1e-4) |
+| R3 | `c = ∞` | no reaction | bit-identical to the flag off | holds |
+| L1 | Uniformly moving charge, v/c = 0.05 … 0.95 | Heaviside field from the present position | < 1e-12 | 2.6e-15 |
+| L2 | Slowly oscillating charge (Aω/c = 5e-4, 5e-5), radiation zone | oscillating-dipole field `p₀ = qA` (independent code, §2.4) | < 20 Aω/c | 2.8e-5, 2.8e-6: linear in A as expected |
+| L3 | Circular motion at v = 0.8 c, near and far points | vacuum Maxwell equations, central differences | < 1e-6 | ≤ 1.7e-7 (difference error) |
+
+Note on R2: the first version compared LL work with `∫P dt` alone. It found a difference of 1e-4 at every c, falling as 1/distance². That is the Schott energy of the finite start and end points; with it included the agreement is 5–7e-9.
+
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 
 Take potential energy `κ/r` with `κ = k q Q`, conserved energy `W = γmc² + κ/r`, angular momentum `L`, and `u = 1/r`. The orbit equation is:
@@ -350,3 +392,11 @@ A    = sqrt( (W² − m²c⁴) / (L² c² Γ²) + B₀² )
 
 - **Scattering (`W > mc²`):** the asymptotes satisfy `cos(Γφ∞) = −B₀/A`, so the deflection angle is `θ = |π − (2/Γ) arccos(−B₀/A)|`. As `c → ∞`, this reduces to the Rutherford formula of T2.
 - **Bound orbit (`κ < 0`, `W < mc²`):** successive periapsides are separated by `2π/Γ`, so the precession per revolution is `Δφ = 2π(1/Γ − 1)`.
+
+## 10. Visualisation of time-dependent fields (visual only) — `crates/game/src/radiation.rs`
+
+- **Waves** map: the fields of antennas and plane waves at the animation's lab time.
+- **Particle field** map: the Liénard–Wiechert field of the active flight at the animation's flight time. Optionally the radiation part only (the acceleration term, which falls as 1/R).
+- Both are computed in f64 on the CPU with the tested physics code (§2.3–2.5) on a 5-pixels-per-cell texture, which is bilinearly filtered, plus optional E arrows. Measured cost: at 5 px/cell, median 2.1 ms per frame for the particle field and 0.3 ms for waves (measured in release builds).
+- **Scales.** The colour is B_z, which is the whole of B in the plane, on an asinh (log-like) scale. It is saturated at the 99th percentile of |B_z| sampled over one RF period or over the flight.
+- **Wavelength.** The wavelength of the particle's cyclotron radiation, 2πc/ω_c, is often much larger than the arena (≈ 120 cells in "Synchrotron light"). The arena then lies in the near and induction zones, and the map shows the rotating near field rather than detached spiral wave fronts. That is the physically correct picture.

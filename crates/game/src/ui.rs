@@ -593,12 +593,31 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     ui.separator();
 
     ui.label(egui::RichText::new("View").strong());
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Map (V):");
         ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential");
         ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B");
+        if crate::radiation::waves_available(&level) {
+            ui.selectable_value(&mut game.map, Some(MapMode::Waves), "waves");
+        }
+        if crate::radiation::particle_field_available(&level) {
+            ui.selectable_value(
+                &mut game.map,
+                Some(MapMode::ParticleField),
+                "particle field",
+            );
+        }
         ui.selectable_value(&mut game.map, None, "off");
     });
+    if matches!(game.map, Some(MapMode::Waves | MapMode::ParticleField)) {
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut game.show_field_arrows, "E arrows");
+            if game.map == Some(MapMode::ParticleField) {
+                ui.checkbox(&mut game.radiation_only, "radiation part only")
+                    .on_hover_text("Only the acceleration term of the field (falls as 1/R)");
+            }
+        });
+    }
     let legend = match game.map {
         Some(MapMode::Potential) => {
             "Red: uphill for the particle, blue: downhill; contours every T₀/4. \
@@ -608,6 +627,19 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             "B perpendicular to the plane. Orange: out of the plane, teal: into it. \
              Value 1 = field in which this particle circles with a 5-cell radius; \
              contours every 0.25."
+        }
+        Some(MapMode::Waves) => {
+            "Fields of the antennas and waves at the animation time (exact retarded fields). \
+             Colour: B perpendicular to the plane (orange out, blue in), on a logarithmic \
+             scale; arrows: E. Near an antenna the field is quasi-static; further out the \
+             radiation travels outwards at c."
+        }
+        Some(MapMode::ParticleField) => {
+            "The field of the particle itself (Liénard–Wiechert, exact) at the animation \
+             time. Every change of velocity sends out a radiation pulse at c; the energy it \
+             carries is what the particle loses (radiation reaction, when included). \
+             Colour: B perpendicular to the plane, logarithmic; arrows: E. Before launch the \
+             particle is taken to move uniformly."
         }
         None => "",
     };
@@ -628,9 +660,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     ui.collapsing("Controls", |ui| {
         ui.label("Mouse: left click place, right click remove, wheel changes magnitude.");
         ui.label("Arrows move the cursor (Shift: ×5). Space/Enter place, Del/X remove.");
-        ui.label("S flip sign, Q/E change magnitude, M charge/magnet, C clear.");
+        ui.label("S flip sign/phase, Q/E change magnitude, C clear.");
         ui.label("1–4 grid refinement, [ ] switch shot, H show all shots.");
         ui.label("N/P next/previous level, V map, F field lines, A animation.");
+        ui.label("R rotate antenna (Shift+R back), M cycles charge/magnet/antenna.");
     });
 }
 

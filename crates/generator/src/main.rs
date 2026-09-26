@@ -46,6 +46,15 @@ enum Command {
     },
     /// Rewrite level files in the current format (older formats are migrated on load).
     Normalize { paths: Vec<PathBuf> },
+    /// Print the reference flight of one flight index: t, x, y, |p|, radiated energy.
+    Trace {
+        path: PathBuf,
+        #[arg(long, default_value_t = 0)]
+        flight: usize,
+        /// Print every n-th accepted step.
+        #[arg(long, default_value_t = 20)]
+        every: usize,
+    },
 }
 
 fn load(path: &PathBuf) -> Level {
@@ -142,6 +151,31 @@ fn main() {
                 .expect("write level");
                 println!("{}: format {}", path.display(), level.format_version);
             }
+        }
+        Command::Trace {
+            path,
+            flight,
+            every,
+        } => {
+            let level = load(&path);
+            let scn = &level.scenarios(&level.reference_solution)[flight];
+            let tr = physics::trajectory::run(
+                scn,
+                &physics::trajectory::RunSettings::with_tolerance(level.physics.tolerances.preview),
+            );
+            for s in tr.samples.iter().step_by(every.max(1)) {
+                println!(
+                    "{:10.3} {:9.4} {:9.4} {:.6e}",
+                    s.t,
+                    s.x.x,
+                    s.x.y,
+                    s.p.length()
+                );
+            }
+            println!(
+                "end {:?} t = {:.3}, radiated (LL work) {:.4e}, max |F_RR|/|F_L| {:.2e}",
+                tr.outcome, tr.end.t, -tr.radiation_work, tr.reaction_ratio_max
+            );
         }
         Command::Check { path } => {
             let level = load(&path);

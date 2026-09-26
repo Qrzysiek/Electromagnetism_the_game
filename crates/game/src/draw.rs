@@ -180,10 +180,15 @@ pub fn draw(
     mut gizmos: Gizmos,
     mut line_gizmos: Gizmos<FieldLineGizmos>,
     quad: Res<PotentialQuad>,
+    radiation: Res<crate::radiation::RadiationView>,
     mut vis: Query<&mut Visibility>,
 ) {
+    crate::radiation::draw_arrows(&mut gizmos, &radiation);
     if let Ok(mut v) = vis.get_mut(quad.entity) {
-        *v = if game.map.is_some() {
+        *v = if matches!(
+            game.map,
+            Some(crate::potential::MapMode::Potential | crate::potential::MapMode::Magnetic)
+        ) {
             Visibility::Visible
         } else {
             Visibility::Hidden

@@ -86,3 +86,20 @@ fn neglected_radiation_is_below_numerical_accuracy() {
         }
     }
 }
+
+/// Levels that include radiation reaction must need it: with radiation switched off, the
+/// reference solution must not solve them (otherwise the radiation is decoration).
+#[test]
+fn radiation_levels_need_radiation() {
+    for (name, mut level) in shipped_levels() {
+        if !level.physics.radiation_reaction {
+            continue;
+        }
+        level.physics.radiation_reaction = false;
+        let all_arrive = level
+            .scenarios(&level.reference_solution)
+            .iter()
+            .all(|scn| verify(scn, level.tolerances()).outcome() == Outcome::Arrived);
+        assert!(!all_arrive, "{name} is solved without radiation reaction");
+    }
+}

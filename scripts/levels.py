@@ -107,7 +107,7 @@ def wave(amplitude, omega, phase_deg, direction_deg=0.0):
 def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charges=0,
           magnitudes=(), signs=(True, True), max_magnets=0, strengths=(), region=None,
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
-          amplitudes=(), rf_omega=0.0):
+          amplitudes=(), rf_omega=0.0, radiation_reaction=False):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -122,7 +122,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         "physics": {"c": c, "charge_radius": 0.3, "magnet_radius": 0.3, "wire_radius": 0.1,
                     "antenna_radius": 0.3,
                     "t_max": t_max, "tolerances": {"preview": 1e-10, "verify": 1e-12},
-                    **({"rf_omega": rf_omega} if rf_omega else {})},
+                    **({"rf_omega": rf_omega} if rf_omega else {}),
+                    **({"radiation_reaction": True} if radiation_reaction else {})},
         "shots": list(shots), "elements": list(elements), "coils": list(coils),
         "limits": limits, "reference_solution": list(reference or []),
         **({"disturbances": list(disturbances)} if disturbances else {}),
@@ -463,6 +464,39 @@ def streak_camera():
         region=(4, 2, 24, 18), rf_omega=RF)
 
 
+# =======================================================================================
+# Chapter 8: radiation. The particle's own radiation is part of the physics
+# (Landau-Lifshitz radiation reaction, PHYSICS.md 3.1). A strongly charged particle
+# (q = m = 1, c = 2: classical radius q^2/(m c^2) = 0.25 cells, tau0 = 2q^2/(3mc^3) =
+# 0.083) in a coil field B ~ 0.1 radiates about 0.1 % of its energy per turn and
+# spirals inwards over ~30 turns. |F_rad|/|F_Lorentz| ~ 1e-2, where the LL
+# treatment is accurate.
+
+T_SYNC = 600.0
+
+
+def synchrotron_light():
+    # T0 = 0.43 at c = 2 gives p = 0.95 = r q B(r) at r = 6: the orbit circles the coil
+    # axis. The field is axisymmetric about the axis (coil + a magnet on it), so without
+    # radiation the canonical angular momentum is conserved and the particle cannot
+    # reach the axis; radiation damping (rate ~ B^2) shrinks the orbit onto it.
+    return level(
+        "Synchrotron light",
+        "An accelerated charge radiates, and the particle loses the energy it radiates. "
+        "In a magnetic field it circles, radiates on every turn and slowly spirals "
+        "inwards: synchrotron radiation, the reason electron rings need constant "
+        "re-acceleration. Without radiation this particle could never reach the "
+        "centre. Put a magnet on the axis so that it radiates fast enough to get there "
+        "in time: the radiated power grows with the square of the field. Switch the map "
+        "to 'particle field' to watch the radiation leave.",
+        shots=[shot(1.0, 1.0, (15, 4), 180.0, 0.43, box((13, 8, 17, 12)))],
+        coils=[circle_coil(15, 10, 9.5, 0.162)],
+        # Checked: with radiation reaction switched off no allowed magnet solves it
+        # (a magnet of 8 would, by field geometry alone, so it is not offered).
+        max_magnets=1, strengths=[0.5, 1.0, 2.0, 4.0],
+        region=(15, 10, 15, 10), c=2.0, t_max=T_SYNC, radiation_reaction=True)
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -494,6 +528,8 @@ LEVELS = [
     ("rf_kick", rf_kick),
     ("rf_separator", rf_separator),
     ("streak_camera", streak_camera),
+    # Chapter 8: radiation.
+    ("synchrotron_light", synchrotron_light),
 ]
 
 

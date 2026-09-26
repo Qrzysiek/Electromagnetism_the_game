@@ -20,6 +20,10 @@ pub const MAX_SEGMENTS: usize = 64;
 pub enum MapMode {
     Potential,
     Magnetic,
+    /// Fields of antennas and plane waves at the animation time (`radiation.rs`).
+    Waves,
+    /// The particle's own Liénard–Wiechert field at the animation time (`radiation.rs`).
+    ParticleField,
 }
 
 #[derive(ShaderType, Debug, Clone, Copy)]
@@ -100,7 +104,7 @@ pub fn params(
         u_a: (q * f.sample(scn.x0, 0.0).phi / t0) as f32,
         mode: match mode {
             MapMode::Potential => 0,
-            MapMode::Magnetic => 1,
+            MapMode::Magnetic | MapMode::Waves | MapMode::ParticleField => 1,
         },
         wire: f
             .loops

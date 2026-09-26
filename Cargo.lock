@@ -3037,6 +3037,8 @@ dependencies = [
  "bevy_egui",
  "level",
  "physics",
+ "rayon",
+ "serde_json",
 ]
 
 [[package]]
