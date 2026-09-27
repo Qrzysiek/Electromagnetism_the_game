@@ -404,23 +404,31 @@ pub fn update(
             }
             _ => (0.0, if t_final > 0.0 { t_final } else { 1.0 }),
         };
-        let mut bs = Vec::new();
-        let mut es = Vec::new();
-        for k in 0..8 {
-            let t = t0 + (t1 - t0) * (f64::from(k) + 0.5) / 8.0;
-            let mut y = bounds.min.y;
-            while y <= bounds.max.y {
-                let mut x = bounds.min.x;
-                while x <= bounds.max.x {
-                    if let Some((e, b)) = sample(&view, &field, mode, DVec3::new(x, y, 0.0), t, c) {
-                        bs.push(b.abs());
-                        es.push(e.length());
-                    }
-                    x += 1.0;
-                }
-                y += 1.0;
-            }
-        }
+        // Sampled over 8 times on the cell grid, in parallel.
+        let points: Vec<(f64, DVec3)> = (0..8)
+            .flat_map(|k| {
+                let t = t0 + (t1 - t0) * (f64::from(k) + 0.5) / 8.0;
+                let (nx, ny) = (size.x.floor() as u32, size.y.floor() as u32);
+                (0..=ny).flat_map(move |j| {
+                    (0..=nx).map(move |i| {
+                        (
+                            t,
+                            DVec3::new(
+                                bounds.min.x + f64::from(i),
+                                bounds.min.y + f64::from(j),
+                                0.0,
+                            ),
+                        )
+                    })
+                })
+            })
+            .collect();
+        let v = &*view;
+        let fr = &field;
+        let (bs, es): (Vec<f64>, Vec<f64>) = points
+            .par_iter()
+            .filter_map(|&(t, x)| sample(v, fr, mode, x, t, c).map(|(e, b)| (b.abs(), e.length())))
+            .unzip();
         view.b_sat = percentile99(bs);
         view.e_sat = percentile99(es);
         view.neglected_only = neglected_only;
@@ -571,22 +579,27 @@ pub fn update(
     view.style = style;
     let mut arrows = Vec::new();
     if game.show_field_arrows {
+        let mut points = Vec::new();
         let mut y = bounds.min.y + 0.5 * ARROW_SPACING;
         while y < bounds.max.y {
             let mut x = bounds.min.x + 0.5 * ARROW_SPACING;
             while x < bounds.max.x {
-                if let Some((e, _)) = sample(&view, &field, mode, DVec3::new(x, y, 0.0), t, c) {
-                    let len =
-                        (compress(e.length(), view.e_sat, range) * 0.9 * ARROW_SPACING) as f32;
-                    let d = Vec2::new(e.x as f32, e.y as f32).normalize_or_zero();
-                    if len > 0.05 {
-                        arrows.push((Vec2::new(x as f32, y as f32), d * len));
-                    }
-                }
+                points.push(DVec3::new(x, y, 0.0));
                 x += ARROW_SPACING;
             }
             y += ARROW_SPACING;
         }
+        let v = &*view;
+        let fr = &field;
+        arrows = points
+            .par_iter()
+            .filter_map(|&x| {
+                let (e, _) = sample(v, fr, mode, x, t, c)?;
+                let len = (compress(e.length(), v.e_sat, range) * 0.9 * ARROW_SPACING) as f32;
+                let d = Vec2::new(e.x as f32, e.y as f32).normalize_or_zero();
+                (len > 0.05).then_some((Vec2::new(x.x as f32, x.y as f32), d * len))
+            })
+            .collect();
     }
     view.arrows = arrows;
     if std::env::var("EM_CAPTURE").is_ok() {
