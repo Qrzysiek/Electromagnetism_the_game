@@ -37,7 +37,19 @@ pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
 #[derive(Clone, Debug, Default)]
 pub struct BeamView {
     pub preview: Option<worker::BeamPreview>,
+    /// Setup revision the preview belongs to (older while a new one is computed).
+    pub preview_revision: u64,
     pub verified: Option<Vec<(Status, Outcome)>>,
+}
+
+/// State of the computation for the current setup.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Progress {
+    /// New flights are being computed; the paths shown belong to the previous setup.
+    Flying,
+    /// Flights shown are current; their verification is running.
+    Verifying,
+    Done,
 }
 
 /// Physics results of one flight (a shot under one disturbance) for the current setup.
@@ -45,6 +57,8 @@ pub struct BeamView {
 pub struct FlightView {
     /// Latest preview (may belong to an older revision until the new one arrives).
     pub preview: Option<Preview>,
+    /// Setup revision the preview belongs to.
+    pub preview_revision: u64,
     /// Verification verdict for the current revision.
     pub verdict: Option<(Status, Outcome)>,
 }
@@ -207,6 +221,30 @@ impl Game {
     }
 
     /// The flight shown in the details panel.
+    /// What the physics thread is still doing for the current setup: new flights (the
+    /// paths shown are from the previous setup), or the verification.
+    pub fn progress(&self) -> Progress {
+        let current = self.sent_revision;
+        let (stale, verifying) = if self.editor.level.has_beams() {
+            (
+                self.beams.iter().any(|b| b.preview_revision != current),
+                self.beams.iter().any(|b| b.verified.is_none()),
+            )
+        } else {
+            (
+                self.flights.iter().any(|f| f.preview_revision != current),
+                self.flights.iter().any(|f| f.verdict.is_none()),
+            )
+        };
+        if stale {
+            Progress::Flying
+        } else if verifying {
+            Progress::Verifying
+        } else {
+            Progress::Done
+        }
+    }
+
     pub fn active_flight(&self) -> usize {
         let d = self
             .active_disturbance
@@ -866,6 +904,7 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
             } if revision == current => {
                 if let Some(s) = game.flights.get_mut(shot) {
                     s.preview = Some(preview);
+                    s.preview_revision = revision;
                 }
             }
             Response::Verified {
@@ -885,6 +924,7 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
             } if revision == current => {
                 if let Some(b) = game.beams.get_mut(flight) {
                     b.preview = Some(preview);
+                    b.preview_revision = revision;
                 }
             }
             Response::BeamVerified {

@@ -554,6 +554,26 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     }
     ui.separator();
 
+    // What the physics thread is doing for this setup.
+    match game.progress() {
+        crate::Progress::Flying => {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new());
+                ui.label(
+                    egui::RichText::new("Computing the new flights…")
+                        .color(egui::Color32::from_rgb(255, 210, 120)),
+                );
+            });
+            ui.label(egui::RichText::new("Faded paths: before your change.").small());
+        }
+        crate::Progress::Verifying => {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new());
+                ui.label("Verifying…");
+            });
+        }
+        crate::Progress::Done => {}
+    }
     if level.has_beams() {
         beam_result(ui, game, &level);
     } else {

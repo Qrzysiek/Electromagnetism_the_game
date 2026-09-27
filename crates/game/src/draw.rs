@@ -567,12 +567,14 @@ pub fn draw(
             Some((Status::Verified, _)) => Color::srgb(1.0, 0.45, 0.2),
             Some(_) => Color::srgb(1.0, 0.9, 0.2),
         }
-        .with_alpha(match (active, primary) {
-            (true, true) => 1.0,
-            (false, true) => 0.55,
-            (true, false) => 0.4,
-            (false, false) => 0.2,
-        });
+        .with_alpha(
+            match (active, primary) {
+                (true, true) => 1.0,
+                (false, true) => 0.55,
+                (true, false) => 0.4,
+                (false, false) => 0.2,
+            } * stale_fade(view.preview_revision, game.sent_revision),
+        );
         let active = f == active_flight;
         gizmos.linestrip_2d(p.path.iter().map(|q| to_vec2(q.x)), color);
         let end = to_vec2(p.path.last().expect("path has points").x);
@@ -646,11 +648,13 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
                 Some((Status::Verified, _)) => Color::srgb(1.0, 0.45, 0.2),
                 Some(_) => Color::srgb(1.0, 0.9, 0.2),
             }
-            .with_alpha(match (primary, arrived) {
-                (true, true) => 0.75,
-                (true, false) => 0.4,
-                (false, _) => 0.12,
-            });
+            .with_alpha(
+                match (primary, arrived) {
+                    (true, true) => 0.75,
+                    (true, false) => 0.4,
+                    (false, _) => 0.12,
+                } * stale_fade(view.preview_revision, game.sent_revision),
+            );
             gizmos.linestrip_2d(path.iter().map(|(_, x)| to_vec2(*x)), color);
             if game.animate
                 && primary
@@ -659,5 +663,14 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
                 gizmos.circle_2d(to_vec2(x), 0.08, Color::srgb(1.0, 1.0, 0.6));
             }
         }
+    }
+}
+
+/// Paths of a previous setup (while the new one is computed) are drawn faded.
+fn stale_fade(preview_revision: u64, current: u64) -> f32 {
+    if preview_revision == current {
+        1.0
+    } else {
+        0.3
     }
 }
