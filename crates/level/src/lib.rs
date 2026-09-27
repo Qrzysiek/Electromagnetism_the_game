@@ -1368,9 +1368,6 @@ impl Level {
                 out.push("opposite charges in one beam could collide (not modelled)".into());
             }
         }
-        if self.physics.radiation_reaction {
-            out.push("radiation reaction is not modelled for beams".into());
-        }
         if self.shots.iter().any(|s| s.launch.time != 0.0) {
             out.push("beam shots are launched together at t = 0".into());
         }

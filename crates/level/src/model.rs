@@ -143,6 +143,15 @@ impl Level {
                         "Beam: all particles fly together and repel each other with the exact \
                      Coulomb force (for c = ∞ that is the whole interaction).",
                     )
+                } else if self.physics.beam_interaction && self.physics.radiation_reaction {
+                    note(
+                        true,
+                        "Beam: all particles fly together and act on each other with their exact \
+                     retarded (Liénard–Wiechert) fields, magnetic attraction and radiation \
+                     included, and each feels its own radiation reaction (Landau–Lifshitz). \
+                     Before launch they are taken to move uniformly; a particle that is \
+                     absorbed stops acting once the news has travelled at c.",
+                    )
                 } else if self.physics.beam_interaction {
                     note(
                         true,

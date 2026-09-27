@@ -26,6 +26,36 @@ pub struct Particle {
     pub moment: f64,
 }
 
+/// Landau–Lifshitz radiation-reaction force on a charge `q` with momentum `p` at `(x, t)`
+/// in the fields `fields(x, t) = (E, B)` (see `ParticleOde::radiation_reaction_force`;
+/// shared with the beam runner, where the fields include the other particles' retarded
+/// fields). Requires finite `c`.
+pub fn landau_lifshitz(
+    q: f64,
+    kin: &Kinematics,
+    p: DVec3,
+    fields: impl Fn(DVec3, f64) -> (DVec3, DVec3),
+    x: DVec3,
+    t: f64,
+) -> DVec3 {
+    let (c, m) = (kin.c, kin.mass);
+    let gamma = kin.gamma(p);
+    let v = kin.velocity(p);
+    let (e, b) = fields(x, t);
+    let h = 1e-5 / v.length().max(1.0);
+    let (ep, bp) = fields(x + v * h, t + h);
+    let (em, bm) = fields(x - v * h, t - h);
+    let de = (ep - em) / (2.0 * h);
+    let db = (bp - bm) / (2.0 * h);
+    let a1 = 2.0 * q * q * q / (3.0 * m * c * c * c);
+    let a2 = 2.0 * q.powi(4) / (3.0 * m * m * c.powi(4));
+    let lorentz = e + v.cross(b);
+    let ev = e.dot(v);
+    (de + v.cross(db)) * (a1 * gamma)
+        + (e.cross(b) * c + b.cross(b.cross(v)) * c + e * (ev / c)) * a2
+        - v * (a2 / c * gamma * gamma * (lorentz.length_squared() - ev * ev / (c * c)))
+}
+
 /// Relativistic kinematics for one particle species in a world with speed of light `c`.
 #[derive(Clone, Copy, Debug)]
 pub struct Kinematics {
@@ -146,23 +176,17 @@ impl<F: FieldSolver> ParticleOde<F> {
         if !c.is_finite() {
             return DVec3::ZERO;
         }
-        let (q, m) = (self.charge, self.kin.mass);
-        let gamma = self.kin.gamma(p);
-        let v = self.kin.velocity(p);
-        let f = self.field.sample(x, t);
-        let (e, b) = (f.e, f.b);
-        let h = 1e-5 / v.length().max(1.0);
-        let fp = self.field.sample(x + v * h, t + h);
-        let fm = self.field.sample(x - v * h, t - h);
-        let de = (fp.e - fm.e) / (2.0 * h);
-        let db = (fp.b - fm.b) / (2.0 * h);
-        let a1 = 2.0 * q * q * q / (3.0 * m * c * c * c);
-        let a2 = 2.0 * q.powi(4) / (3.0 * m * m * c.powi(4));
-        let lorentz = e + v.cross(b);
-        let ev = e.dot(v);
-        (de + v.cross(db)) * (a1 * gamma)
-            + (e.cross(b) * c + b.cross(b.cross(v)) * c + e * (ev / c)) * a2
-            - v * (a2 / c * gamma * gamma * (lorentz.length_squared() - ev * ev / (c * c)))
+        landau_lifshitz(
+            self.charge,
+            &self.kin,
+            p,
+            |x, t| {
+                let f = self.field.sample(x, t);
+                (f.e, f.b)
+            },
+            x,
+            t,
+        )
     }
 
     pub fn position(y: &[f64]) -> DVec3 {

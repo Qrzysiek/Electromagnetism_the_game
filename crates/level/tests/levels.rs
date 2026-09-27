@@ -46,11 +46,17 @@ fn reference_solutions_are_verified() {
             // The model neglects each particle's radiation (PHYSICS.md §3.3): the energy it
             // radiates (Liénard, with the other particles' fields) must be below the
             // numerical accuracy, as for single flights.
+            // With radiation reaction the Landau–Lifshitz treatment must be valid instead.
             if level.physics.c.is_some() {
                 for f in &v {
                     for t in &f.verified.trajectories {
-                        let fraction = t.radiated_energy / t.kinetic_initial;
-                        assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
+                        if level.physics.radiation_reaction {
+                            let r = t.reaction_ratio_max;
+                            assert!(r < 0.05, "{name}: |F_RR|/|F_L| = {r:.3e}");
+                        } else {
+                            let fraction = t.radiated_energy / t.kinetic_initial;
+                            assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
+                        }
                     }
                 }
             }

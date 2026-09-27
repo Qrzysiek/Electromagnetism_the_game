@@ -40,6 +40,7 @@ fn beam(
         t_max,
         interact,
         gates: Vec::new(),
+        radiation_reaction: false,
     }
 }
 
@@ -195,6 +196,7 @@ fn scene(interact: bool) -> BeamScenario<Coulomb> {
         t_max: 60.0,
         interact,
         gates: Vec::new(),
+        radiation_reaction: false,
     }
 }
 
@@ -526,4 +528,122 @@ fn b8_retarded_beam_is_deterministic_and_verified() {
         "B8: {} steps ({} at c = ∞), {} restarts",
         b.stats.n_step, coulomb.stats.n_step, b.restarts
     );
+}
+
+/// B9: radiation reaction in beams. Without interaction, particles with radiation
+/// reaction (Landau–Lifshitz, validated for single flights in §3.1) fly as they do alone:
+/// two strongly charged particles spiralling in the field of a fixed attractive charge
+/// (c = 2), compared with the single-particle runner.
+#[test]
+fn b9_beam_radiation_reaction_matches_single_flights() {
+    let charge = FixedCharge {
+        position: DVec3::ZERO,
+        charge: -4.0,
+        radius: 0.0,
+    };
+    // Circular speed at r: v² = 4 q / (m r) for q = 1, m = 1 (Newtonian estimate).
+    let launch = |r: f64| BeamParticle {
+        particle: particle(1.0, 1.0),
+        x0: DVec3::new(r, 0.0, 0.0),
+        p0: DVec3::new(0.0, (4.0 / r.abs()).sqrt().copysign(r) * 0.95, 0.0),
+        detector: None,
+        acceptance: None,
+    };
+    let mut scn = beam(
+        Coulomb::new(&[charge]),
+        vec![],
+        vec![launch(8.0), launch(-10.0)],
+        false,
+        40.0,
+    );
+    scn.c = 2.0;
+    scn.radiation_reaction = true;
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let mut worst: f64 = 0.0;
+    for (i, (b, t)) in scn.particles.iter().zip(&r.trajectories).enumerate() {
+        let one = Scenario {
+            field: scn.field.clone(),
+            obstacles: vec![],
+            particle: b.particle,
+            c: scn.c,
+            x0: b.x0,
+            p0: b.p0,
+            detector: None,
+            bounds: None,
+            t_max: scn.t_max,
+            radiation_reaction: true,
+            acceptance: None,
+            gates: Vec::new(),
+        };
+        let s = run(&one, &RunSettings::with_tolerance(TOL));
+        let d = (t.end.x - s.end.x).length();
+        let lost = 1.0 - s.end.p.length() / b.p0.length();
+        println!(
+            "B9 particle {i}: end points differ by {d:.1e}; |F_rr|/|F| up to {:.1e} (single \
+             {:.1e}); radiation changed |p| by {lost:.2}",
+            t.reaction_ratio_max, s.reaction_ratio_max
+        );
+        assert!(t.reaction_ratio_max > 0.0);
+        worst = worst.max(d);
+    }
+    assert!(r.energy_max_rel_error.is_nan());
+    assert!(worst < 1e-8, "{worst:.3e}");
+}
+
+/// B10: classical positronium. Charges +q and −q (mass m each) on a circular orbit of
+/// separation s radiate as a rotating dipole d = q s: P = (2/3) d̈²/c³, so that
+/// d(s³)/dt = −16 q⁴ / (m² c³). Each particle's own radiation reaction supplies only half
+/// of this; the other half is the O(1/c³) part of the other particle's retarded field
+/// (mutual radiation reaction). The measured rate therefore tests the self-force and the
+/// retarded interaction together. Here v = 0.01c; corrections are O(v²/c²).
+#[test]
+fn b10_positronium_decays_at_the_dipole_rate() {
+    let (q, m, c, s0): (f64, f64, f64, f64) = (2f64.sqrt(), 1.0, 100.0, 1.0);
+    let v = q / (2.0 * m * s0).sqrt();
+    let body = |sign: f64| BeamParticle {
+        particle: particle(sign * q, m),
+        x0: DVec3::new(sign * 0.5 * s0, 0.0, 0.0),
+        p0: DVec3::new(0.0, sign * m * v, 0.0),
+        detector: None,
+        acceptance: None,
+    };
+    let t_max = 300.0;
+    let mut scn = beam(
+        Coulomb::new(&[]),
+        vec![],
+        vec![body(1.0), body(-1.0)],
+        true,
+        t_max,
+    );
+    scn.c = c;
+    scn.radiation_reaction = true;
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let (a, b) = (&r.trajectories[0], &r.trajectories[1]);
+    assert_eq!(a.samples.len(), b.samples.len());
+    // Mean of s³ over the first and the last 10 orbits (the orbit is circular only to
+    // O(v²/c²), so s oscillates slightly).
+    let period = 2.0 * std::f64::consts::PI * (m * s0.powi(3) / (2.0 * q * q)).sqrt();
+    let window = 10.0 * period;
+    let mean = |from: f64, to: f64| {
+        let (mut sum, mut time) = (0.0, 0.0);
+        for w in a.samples.windows(2).zip(b.samples.windows(2)) {
+            let ((a0, a1), (b0, b1)) = ((w.0[0], w.0[1]), (w.1[0], w.1[1]));
+            if a0.t >= from && a1.t <= to {
+                let s3 = |p: DVec3, q: DVec3| (p - q).length().powi(3);
+                let dt = a1.t - a0.t;
+                sum += 0.5 * (s3(a0.x, b0.x) + s3(a1.x, b1.x)) * dt;
+                time += dt;
+            }
+        }
+        sum / time
+    };
+    let rate = (mean(t_max - window, t_max) - mean(0.0, window)) / (t_max - window);
+    let expected = -16.0 * q.powi(4) / (m * m * c.powi(3));
+    let rel = rate / expected - 1.0;
+    println!(
+        "B10: d(s³)/dt = {rate:.6e}, dipole formula {expected:.6e}: relative difference \
+         {rel:.1e} (self-force alone would give 0.5); {} steps",
+        r.stats.n_step
+    );
+    assert!(rel.abs() < 1e-2, "{rel:.3e}");
 }
