@@ -17,9 +17,15 @@ cast_possible_truncation = "warn"
 cast_precision_loss = "warn"
 float_cmp = "warn"
 
+# Debug builds: line tables only for our code (backtraces keep file and line), no debug
+# info for dependencies. Full debug info for Bevy made a debug build ~27 GB on disk.
+[profile.dev]
+debug = "line-tables-only"
+
 # Physics tests are slow in debug builds; optimize dependencies even in dev.
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
 
 [profile.test]
 opt-level = 3
