@@ -262,6 +262,7 @@ impl Level {
             gates: base.gates,
             radiation_reaction: self.physics.radiation_reaction,
             retarded: self.physics.beam_retarded,
+            fates: physics::beam::Fates::default(),
         }
     }
 

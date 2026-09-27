@@ -54,6 +54,9 @@ struct Source {
     samples: Vec<(f64, DVec3, DVec3, DVec3)>,
     charge: f64,
     end: Option<(f64, DVec3)>,
+    /// Whether its charge stays where it was absorbed (a body; `Fate::Stop`) rather than
+    /// being drained (the detector).
+    stays: bool,
 }
 
 #[derive(ShaderType, Debug, Clone, Copy, Default)]
@@ -357,26 +360,42 @@ pub fn update(
                         .iter()
                         .zip(&b.ends)
                         .zip(&shots)
-                        .filter(|((l, _), _)| !l.is_empty())
-                        .map(|((l, &end), &s)| {
+                        .zip(&b.outcomes)
+                        .filter(|(((l, _), _), _)| !l.is_empty())
+                        .map(|(((l, &end), &s), &o)| {
                             let samples = with_past(l, &bounds, c);
                             Source {
                                 line: SampledWorldline::new(&samples),
                                 samples,
                                 charge: level.shots[s].particle.charge,
                                 end,
+                                stays: matches!(o, physics::trajectory::Outcome::Collided(_)),
                             }
                         })
                         .collect()
                 })
             }
             None => preview
-                .and_then(|p| worldline(p, level.shots[shot].particle.mass, c))
-                .map(|(line, samples)| Source {
-                    line,
-                    samples,
-                    charge: level.shots[shot].particle.charge,
-                    end: None,
+                .and_then(|p| {
+                    use physics::trajectory::Outcome;
+                    let (line, samples) = worldline(p, level.shots[shot].particle.mass, c)?;
+                    let last = p.path.last()?;
+                    // Absorbed by a body (the charge stays) or by the detector (drained);
+                    // otherwise it flies on.
+                    let (end, stays) = match p.outcome {
+                        Outcome::Collided(_) => (Some((last.t, last.x)), true),
+                        Outcome::Arrived | Outcome::Rejected | Outcome::SkippedGate(_) => {
+                            (Some((last.t, last.x)), false)
+                        }
+                        _ => (None, false),
+                    };
+                    Some(Source {
+                        line,
+                        samples,
+                        charge: level.shots[shot].particle.charge,
+                        end,
+                        stays,
+                    })
                 })
                 .into_iter()
                 .collect(),
@@ -499,7 +518,12 @@ pub fn update(
             if s.end.is_some() { 1.0 } else { 0.0 },
         ]);
         let (te, xe) = s.end.unwrap_or((f64::INFINITY, DVec3::ZERO));
-        items.push([(te - t).min(1e30) as f32, xe.x as f32, xe.y as f32, 0.0]);
+        items.push([
+            (te - t).min(1e30) as f32,
+            xe.x as f32,
+            xe.y as f32,
+            if s.stays { 1.0 } else { 0.0 },
+        ]);
         for &(ts, x, v, a) in &s.samples {
             samples.push([(ts - t) as f32, x.x as f32, x.y as f32, v.x as f32]);
             samples.push([v.y as f32, a.x as f32, a.y as f32, 0.0]);
@@ -662,7 +686,17 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
     for s in &view.sources {
         let w = &s.line;
         if !c.is_finite() {
-            if s.end.is_some_and(|(te, _)| t >= te) {
+            if let Some((te, xe)) = s.end
+                && t >= te
+            {
+                // Absorbed: its charge at rest where it stopped, or drained.
+                if s.stays {
+                    let d = x - xe;
+                    if d.length() <= 0.15 {
+                        return None;
+                    }
+                    e += d * (s.charge / d.length().powi(3));
+                }
                 continue;
             }
             let d = x - w.state(t).0;
@@ -672,11 +706,18 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
             e += d * (s.charge / d.length().powi(3));
             continue;
         }
-        // Gone once the light cone of its absorption has passed (as in the dynamics).
-        let gone = s
-            .end
-            .is_some_and(|(te, xe)| c * (t - te) >= (x - xe).length());
-        if !gone {
+        // Once the light cone of its absorption has passed (as in the dynamics): a charge
+        // at rest where it stopped, or nothing if it was drained.
+        let absorbed = s.end.filter(|&(te, xe)| c * (t - te) >= (x - xe).length());
+        if let Some((_, xe)) = absorbed {
+            if s.stays && !view.radiation_only {
+                let d = x - xe;
+                if d.length() <= 0.15 {
+                    return None;
+                }
+                e += d * (s.charge / d.length().powi(3));
+            }
+        } else {
             let f = lienard::fields(w, s.charge, c, x, t);
             let r = x - w.state(f.retarded_time).0;
             if r.length() <= 0.15 {
@@ -693,7 +734,16 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
         }
         // What the quasi-static interaction uses instead: the fields of the present
         // state continued back with constant acceleration, while the particle flies.
-        if view.neglected_only && s.end.is_none_or(|(te, _)| t < te) {
+        if view.neglected_only
+            && let Some((te, xe)) = s.end
+            && t >= te
+        {
+            // The dynamics has the absorbed charge at rest at once (or drained).
+            if s.stays {
+                let d = x - xe;
+                e -= d * (s.charge / d.length().powi(3));
+            }
+        } else if view.neglected_only {
             let (r, v, a) = w.state(t);
             if (x - r).length() <= 0.15 {
                 return None;

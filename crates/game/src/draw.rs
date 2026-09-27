@@ -656,11 +656,16 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
                 } * stale_fade(view.preview_revision, game.sent_revision),
             );
             gizmos.linestrip_2d(path.iter().map(|(_, x)| to_vec2(*x)), color);
-            if game.animate
-                && primary
-                && let Some(x) = path_at(path, game.anim_time)
-            {
-                gizmos.circle_2d(to_vec2(x), 0.08, Color::srgb(1.0, 1.0, 0.6));
+            if game.animate && primary {
+                if let Some(x) = path_at(path, game.anim_time) {
+                    gizmos.circle_2d(to_vec2(x), 0.08, Color::srgb(1.0, 1.0, 0.6));
+                } else if matches!(p.outcomes[i], Outcome::Collided(_))
+                    && let Some(&(t_end, x)) = path.last()
+                    && game.anim_time > t_end
+                {
+                    // Absorbed by a body: its charge stays there at rest.
+                    gizmos.circle_2d(to_vec2(x), 0.08, Color::srgb(0.75, 0.75, 0.6));
+                }
             }
         }
     }

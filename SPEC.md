@@ -88,6 +88,7 @@ A single particle in the static field of fixed charges is treated **exactly**, i
   - Components: R, C, L and sources exact; diodes (Shockley equation) and transistors (Ebers–Moll or square-law) as stated semiclassical device models with fitted parameters.
   - Validity: quasi-static (circuit much smaller than the wavelength), measured. Tests: RC/RLC transients, diode I–V, energy balance of circuit + field + particles, Ramo (induced current integrates to the delivered charge).
   - First-principles devices (drift–diffusion semiconductors, resistive bodies with J = σE) stay far-future (§10, Stage 7).
+- **Order of the next work** (owner, 2026-09-27): realistic iterations of the instrument levels, then the Jackson series, then circuits, then the inside of the components.
 - **Inside the components: electrons (planned, in this order).**
   1. *Vacuum tubes* (exact classical electrodynamics): thermionic emission from a cathode, space-charge-limited current (validated against the Child–Langmuir law), the vacuum diode (rectification), the triode (a grid controls the current: amplification), later magnetron and klystron. Needs beams interacting near metal (the charges each electron induces on the electrodes) and continuous emission (particles launched over time).
   2. *Metals and resistors*, the Drude picture: classical electrons scattering off the lattice with a mean free time; Ohm's law and Joule heating emerge. Stated as a model: real conduction electrons are a quantum Fermi gas. Random collisions (fixed seed) make outcomes statistical.

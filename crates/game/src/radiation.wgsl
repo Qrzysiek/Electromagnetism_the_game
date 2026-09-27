@@ -22,7 +22,8 @@ struct Params {
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
 // World-line samples, two per sample: (τ, x, y, vx), (vy, ax, ay, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> samples: array<vec4<f32>>;
-// Items, two vec4 each: charges (offset, count, q, has_end), (τ_end, x_end, y_end, 0);
+// Items, two vec4 each: charges (offset, count, q, has_end), (τ_end, x_end, y_end,
+// 1 if its charge stays where it was absorbed, 0 if drained);
 // then antennas (x, y, p0x, p0y), (ω, phase now, radius, 0); then waves (k̂x, k̂y, êx, êy),
 // (E0, ω, phase now at x = 0, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(2) var<storage, read> items: array<vec4<f32>>;
@@ -242,9 +243,19 @@ fn charges(p: vec2<f32>) -> Charges {
         if (n == 0u) {
             continue;
         }
+        let stays = end.w > 0.5;
         if (c == 0.0) {
-            // c = ∞: the Coulomb field of the present position, while the charge exists.
+            // c = ∞: the Coulomb field of the present position; once absorbed, of where
+            // it stopped (its charge stays) or none (drained).
             if (has_end && end.x <= 0.0) {
+                if (stays) {
+                    let d = p - end.yz;
+                    let r = length(d);
+                    if (r <= 0.15) {
+                        return Charges(f, false);
+                    }
+                    f.e = f.e + d * (q / (r * r * r));
+                }
                 continue;
             }
             let s = present(o, n);
@@ -256,9 +267,19 @@ fn charges(p: vec2<f32>) -> Charges {
             f.e = f.e + d * (q / (r * r * r));
             continue;
         }
-        // Gone once the light cone of its absorption has passed.
-        let gone = has_end && c * (-end.x) >= length(p - end.yz);
-        if (!gone) {
+        // Once the light cone of its absorption has passed: at rest where it stopped
+        // (its charge stays), or gone (drained).
+        let absorbed = has_end && c * (-end.x) >= length(p - end.yz);
+        if (absorbed) {
+            if (stays && !radiation_only) {
+                let d = p - end.yz;
+                let r = length(d);
+                if (r <= 0.15) {
+                    return Charges(f, false);
+                }
+                f.e = f.e + d * (q / (r * r * r));
+            }
+        } else {
             let s = retarded(o, n, p, c);
             if (length(p - s.x) <= 0.15) {
                 return Charges(f, false);
@@ -267,7 +288,14 @@ fn charges(p: vec2<f32>) -> Charges {
             f.e = f.e + l.e;
             f.bz = f.bz + l.bz;
         }
-        if (neglected_only && (!has_end || end.x > 0.0)) {
+        if (neglected_only && has_end && end.x <= 0.0) {
+            // The dynamics has the absorbed charge at rest at once (or drained).
+            if (stays) {
+                let d = p - end.yz;
+                let r = max(length(d), 1e-6);
+                f.e = f.e - d * (q / (r * r * r));
+            }
+        } else if (neglected_only) {
             let s = present(o, n);
             if (length(p - s.x) <= 0.15) {
                 return Charges(f, false);

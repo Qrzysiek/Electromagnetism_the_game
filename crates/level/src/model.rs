@@ -197,6 +197,12 @@ impl Level {
                     )
                 },
             );
+            if self.physics.beam_interaction {
+                out.push(note(
+                    false,
+                    "Absorbed particles: one that hits a body stops there and its charge stays, at rest, still acting on the others; one that enters the detector (a grounded Faraday cup) is carried away; one that leaves the arena flies on and keeps acting (it only counts as lost).",
+                ));
+            }
             out.push(note(
                 false,
                 "The beam is a fixed sample (quasi-random) of its distribution: the same \

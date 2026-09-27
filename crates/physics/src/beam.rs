@@ -67,6 +67,40 @@ pub struct BeamParticle {
     pub acceptance: Option<Acceptance>,
 }
 
+/// What happens to a particle at a boundary (PHYSICS.md §3.3). Charge is conserved: an
+/// absorbed charge either stays where it was absorbed or is carried away.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fate {
+    /// Absorbed and carried away (grounded metal, e.g. a Faraday cup, which screens the
+    /// charge's field from outside): its field disappears, at once for `c = ∞`, where the
+    /// light cone of the absorption passes otherwise.
+    Drain,
+    /// Absorbed where it hits, its charge staying there at rest (an insulating body): it
+    /// keeps acting as a charge at rest.
+    Stop,
+    /// Not a physical boundary (the edge of the arena, which is only the view): the
+    /// particle flies on and keeps acting; it only counts as lost.
+    Pass,
+}
+
+/// Fates at the three kinds of boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fates {
+    pub detector: Fate,
+    pub obstacles: Fate,
+    pub bounds: Fate,
+}
+
+impl Default for Fates {
+    fn default() -> Self {
+        Self {
+            detector: Fate::Drain,
+            obstacles: Fate::Stop,
+            bounds: Fate::Pass,
+        }
+    }
+}
+
 /// A beam flight: the shared scene and the particles, all launched at t = 0.
 #[derive(Clone, Debug)]
 pub struct BeamScenario<F> {
@@ -89,6 +123,8 @@ pub struct BeamScenario<F> {
     /// Each particle's radiation reaction (Landau–Lifshitz, PHYSICS.md §3.1) in the total
     /// field; no effect for `c = ∞`.
     pub radiation_reaction: bool,
+    /// What happens to a particle at each kind of boundary.
+    pub fates: Fates,
 }
 
 /// Result of a beam flight: one trajectory per particle (in launch order; their `stats`
@@ -124,6 +160,14 @@ enum Event {
 }
 
 impl Event {
+    fn fate(self, fates: &Fates) -> Fate {
+        match self {
+            Event::Obstacle(_) => fates.obstacles,
+            Event::Bounds => fates.bounds,
+            Event::Detector => fates.detector,
+        }
+    }
+
     fn outcome(self) -> Outcome {
         match self {
             Event::Obstacle(i) => Outcome::Collided(i),
@@ -144,6 +188,10 @@ struct BeamOde<'a, F> {
     p_ref: f64,
     /// Retarded interaction (finite `c`): the recorded motion of every particle.
     past: Option<&'a Past>,
+    /// Charges of absorbed particles at rest where they stopped (`Fate::Stop`), acting as
+    /// static sources (in the Coulomb and quasi-static interactions; the retarded one
+    /// has them in its record).
+    stopped: Vec<(usize, f64, DVec3)>,
 }
 
 /// Recorded motion of the beam for the retarded interaction: the dense output of every
@@ -156,6 +204,9 @@ struct Past {
     /// Removal time and position of each particle (infinite time while it flies).
     t_off: RefCell<Vec<f64>>,
     x_off: RefCell<Vec<DVec3>>,
+    /// Whether a removed particle stayed where it stopped (at rest from then on) rather
+    /// than being drained.
+    stays: RefCell<Vec<bool>>,
     kin: Vec<Kinematics>,
     p_ref: f64,
     /// Acceleration of each particle at launch (external fields and the others'
@@ -195,6 +246,10 @@ impl Past {
     /// Position, velocity and acceleration of particle `j` at time `t`: `before_launch`,
     /// then the recorded motion, extrapolated a little past its end (see `EXTRAPOLATION`).
     fn state<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
+        // At rest where it stopped.
+        if self.stays.borrow()[j] && t >= self.t_off.borrow()[j] {
+            return (self.x_off.borrow()[j], DVec3::ZERO, DVec3::ZERO);
+        }
         let kin = &self.kin[j];
         // Last segment starting before t that contains j.
         let segments = self.segments.borrow();
@@ -287,10 +342,11 @@ impl Past {
         // field of a removed particle is gone once the light cone has passed its removal
         // (decided from the exact removal point).
         let t_off = self.t_off.borrow()[j];
-        if t_off.is_finite() && c * (t - t_off) >= (x - self.x_off.borrow()[j]).length() {
+        let stays = self.stays.borrow()[j];
+        if !stays && t_off.is_finite() && c * (t - t_off) >= (x - self.x_off.borrow()[j]).length() {
             return (DVec3::ZERO, DVec3::ZERO);
         }
-        let mut hi = t.min(t_off);
+        let mut hi = if stays { t } else { t.min(t_off) };
         let mut g_hi = g(hi);
         if g_hi >= 0.0 {
             return (DVec3::ZERO, DVec3::ZERO);
@@ -385,6 +441,14 @@ impl<F: FieldSolver> BeamOde<'_, F> {
                 force += (e + v.cross(b)) * part.charge;
             }
         } else if self.scn.interact && part.charge != 0.0 {
+            for &(j, qs, xs) in &self.stopped {
+                // A particle's ghost does not feel its own stopped charge.
+                if j != self.members[k] {
+                    let d = x - xs;
+                    let r2 = d.length_squared();
+                    force += d * (part.charge * qs / (r2 * r2.sqrt()));
+                }
+            }
             for (j, &src) in self.source.iter().enumerate() {
                 if j == k || !src {
                     continue;
@@ -454,6 +518,14 @@ impl<F: FieldSolver> BeamOde<'_, F> {
             e += ej;
             b += bj;
         }
+        // Charges at rest where absorbed particles stopped: their Coulomb fields.
+        for &(j, qs, xs) in &self.stopped {
+            if j != self.members[k] {
+                let d = x - xs;
+                let r2 = d.length_squared();
+                e += d * (qs / (r2 * r2.sqrt()));
+            }
+        }
         (e, b)
     }
 
@@ -512,6 +584,11 @@ impl<F: FieldSolver> BeamOde<'_, F> {
                         w += part.charge * qj / (x - Self::x(y, j)).length();
                     }
                 }
+                for &(j, qs, xs) in &self.stopped {
+                    if j != self.members[k] {
+                        w += part.charge * qs / (x - xs).length();
+                    }
+                }
             }
         }
         w
@@ -539,11 +616,16 @@ enum Phase {
     Flying,
     /// Finished; its continued trajectory is followed to find the penetration depth
     /// into boundary `event` (index into the particle's events), `depth` so far; it ends
-    /// when the depth stops decreasing or reaches `GHOST_DEPTH`.
+    /// when the depth stops decreasing or reaches `GHOST_DEPTH`. With `real` it is the
+    /// particle itself flying on (`Fate::Pass`): a source, and `Free` afterwards.
     Ghost {
         event: usize,
         depth: f64,
+        real: bool,
     },
+    /// Flew on past a boundary that is not physical (`Fate::Pass`): integrated and acting
+    /// on the others, without events; its outcome is decided.
+    Free,
     Done,
 }
 
@@ -668,8 +750,11 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     let mut neglected = vec![(0.0f64, 0.0f64); n];
     // Largest speed (in units of c) of any particle so far, for pruning the record.
     let mut beta_max: f64 = 0.0;
+    // Where absorbed particles stopped, with their charge staying (`Fate::Stop`).
+    let mut stopped: Vec<Option<DVec3>> = vec![None; n];
     let past = Past {
         segments: RefCell::new(Vec::new()),
+        stays: RefCell::new(vec![false; n]),
         t_off: RefCell::new(vec![f64::INFINITY; n]),
         x_off: RefCell::new(scn.particles.iter().map(|b| b.x0).collect()),
         kin: scn
@@ -684,10 +769,23 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             Vec::new()
         },
     };
-    // Particles that end at launch never act.
-    for (i, t) in tracks.iter().enumerate() {
+    // Particles that end at launch: drained, stopped there, or flying on.
+    for (i, t) in tracks.iter_mut().enumerate() {
         if matches!(t.phase, Phase::Done) {
-            past.t_off.borrow_mut()[i] = 0.0;
+            let k = t
+                .g_prev
+                .iter()
+                .position(|&g| g <= 0.0)
+                .expect("ended at launch");
+            match events[k].fate(&scn.fates) {
+                Fate::Drain => past.t_off.borrow_mut()[i] = 0.0,
+                Fate::Stop => {
+                    past.t_off.borrow_mut()[i] = 0.0;
+                    past.stays.borrow_mut()[i] = true;
+                    stopped[i] = Some(scn.particles[i].x0);
+                }
+                Fate::Pass => t.phase = Phase::Free,
+            }
         }
     }
 
@@ -695,12 +793,22 @@ pub fn run_beam_cancellable<F: FieldSolver>(
         let members: Vec<usize> = (0..n)
             .filter(|&i| !matches!(tracks[i].phase, Phase::Done))
             .collect();
-        if members.is_empty() {
+        // The flight is over when no particle is left in play (only particles flying on
+        // outside the arena, which nothing is left to feel).
+        if !members
+            .iter()
+            .any(|&i| !matches!(tracks[i].phase, Phase::Free))
+        {
             break;
         }
         let source: Vec<bool> = members
             .iter()
-            .map(|&i| matches!(tracks[i].phase, Phase::Flying))
+            .map(|&i| {
+                matches!(
+                    tracks[i].phase,
+                    Phase::Flying | Phase::Free | Phase::Ghost { real: true, .. }
+                )
+            })
             .collect();
         let ode = BeamOde {
             scn,
@@ -712,6 +820,14 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 .collect(),
             p_ref,
             past: retarded.then_some(&past),
+            stopped: stopped
+                .iter()
+                .enumerate()
+                .filter_map(|(i, s)| {
+                    let q = scn.particles[i].particle.charge;
+                    s.filter(|_| q != 0.0).map(|x| (i, q, x))
+                })
+                .collect(),
         };
         let mut y0 = Vec::with_capacity(6 * members.len());
         for &i in &members {
@@ -960,7 +1076,12 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                                 let (t_min, m) = minimize_on(&g, t_a, t_b);
                                 tracks[i].margin[e] = tracks[i].margin[e].min(m.max(-GHOST_DEPTH));
                                 let unfinished = minimum_at_end(t_min, t_a, t_b);
-                                tracks[i].phase = Phase::Ghost { event: e, depth: m };
+                                let real = ev.fate(&scn.fates) == Fate::Pass;
+                                tracks[i].phase = Phase::Ghost {
+                                    event: e,
+                                    depth: m,
+                                    real,
+                                };
                                 if !rs.margins || !unfinished || m <= -GHOST_DEPTH {
                                     finish_ghost(&mut tracks[i]);
                                 }
@@ -989,18 +1110,18 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             tracks[i].g_prev.clone_from(&g_next[k]);
                         }
                     }
-                    Phase::Ghost { event, depth, .. } => {
+                    Phase::Ghost { event, depth, real } => {
                         let g = |t: f64| event_value(events[event], i, pos(k, t));
                         let (t_min, m) = minimize_on(&g, t_a, t_b);
                         let depth = depth.min(m);
                         let unfinished = minimum_at_end(t_min, t_a, t_b);
-                        tracks[i].phase = Phase::Ghost { event, depth };
+                        tracks[i].phase = Phase::Ghost { event, depth, real };
                         if !unfinished || depth <= -GHOST_DEPTH {
                             finish_ghost(&mut tracks[i]);
                             ghosts_done = true;
                         }
                     }
-                    Phase::Done => {}
+                    Phase::Free | Phase::Done => {}
                 }
             }
 
@@ -1026,8 +1147,19 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             if let Some((_, k, e)) = first {
                 let i = members[k];
                 tracks[i].traj.outcome = events[e].outcome();
-                past.t_off.borrow_mut()[i] = t_end;
-                past.x_off.borrow_mut()[i] = tracks[i].traj.end.x;
+                match events[e].fate(&scn.fates) {
+                    Fate::Drain => {
+                        past.t_off.borrow_mut()[i] = t_end;
+                        past.x_off.borrow_mut()[i] = tracks[i].traj.end.x;
+                    }
+                    Fate::Stop => {
+                        past.t_off.borrow_mut()[i] = t_end;
+                        past.x_off.borrow_mut()[i] = tracks[i].traj.end.x;
+                        past.stays.borrow_mut()[i] = true;
+                        stopped[i] = Some(tracks[i].traj.end.x);
+                    }
+                    Fate::Pass => {}
+                }
                 if tracks[i].traj.outcome == Outcome::Arrived
                     && let Some(g) = tracks[i].gates.missing()
                 {
@@ -1070,7 +1202,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             tracks[i].phase = Phase::Done;
                         }
                         Phase::Ghost { .. } => finish_ghost(&mut tracks[i]),
-                        Phase::Done => {}
+                        Phase::Free | Phase::Done => {}
                     }
                 }
                 stats = add_stats(stats, int.stats());
@@ -1141,10 +1273,17 @@ pub fn run_beam_cancellable<F: FieldSolver>(
 pub const GHOST_DEPTH: f64 = 0.01;
 
 fn finish_ghost(t: &mut Track) {
-    if let Phase::Ghost { event, depth, .. } = t.phase {
+    let mut real = false;
+    if let Phase::Ghost {
+        event,
+        depth,
+        real: r,
+    } = t.phase
+    {
         t.margin[event] = t.margin[event].min(depth.max(-GHOST_DEPTH));
+        real = r;
     }
-    t.phase = Phase::Done;
+    t.phase = if real { Phase::Free } else { Phase::Done };
 }
 
 /// Fields `(E, B)` at `x` of a charge `q` moving uniformly with velocity `v` that is now

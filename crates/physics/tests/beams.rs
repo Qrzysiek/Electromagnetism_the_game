@@ -6,7 +6,7 @@ mod common;
 
 use common::Rng;
 use physics::DVec3;
-use physics::beam::{BeamParticle, BeamScenario, GHOST_DEPTH, run_beam};
+use physics::beam::{BeamParticle, BeamScenario, Fates, GHOST_DEPTH, run_beam};
 use physics::dynamics::Particle;
 use physics::field::{Coulomb, FixedCharge};
 use physics::geometry::{Aabb, Region, Shape, Sphere};
@@ -42,6 +42,7 @@ fn beam(
         gates: Vec::new(),
         radiation_reaction: false,
         retarded: false,
+        fates: Fates::default(),
     }
 }
 
@@ -199,6 +200,7 @@ fn scene(interact: bool) -> BeamScenario<Coulomb> {
         gates: Vec::new(),
         radiation_reaction: false,
         retarded: false,
+        fates: Fates::default(),
     }
 }
 
@@ -755,4 +757,110 @@ fn b13_accelerated_fields_match_lienard_wiechert() {
         worst = worst.max(rel);
     }
     assert!(worst < 1e-6, "{worst:.3e}");
+}
+
+/// B14: the edge of the arena is not a physical boundary (`Fate::Pass`): a particle that
+/// leaves it is lost for the game but flies on and keeps acting on the others. Their
+/// flights equal those in the same scene without any edge.
+#[test]
+fn b14_leaving_the_arena_changes_nothing_for_the_others() {
+    let launch = |y: f64, vy: f64| BeamParticle {
+        particle: particle(0.5, 1.0),
+        x0: DVec3::new(0.0, y, 0.0),
+        p0: DVec3::new(1.0, vy, 0.0),
+        detector: None,
+        acceptance: None,
+    };
+    let particles = vec![launch(0.0, 0.0), launch(1.0, 0.8), launch(-1.0, 0.05)];
+    let mut edged = beam(Coulomb::new(&[]), vec![], particles.clone(), true, 12.0);
+    edged.bounds = Some(Aabb {
+        min: DVec3::new(-5.0, -30.0, -1.0),
+        max: DVec3::new(30.0, 4.0, 1.0),
+    });
+    let open = beam(Coulomb::new(&[]), vec![], particles, true, 12.0);
+    let (a, b) = (
+        run_beam(&edged, &RunSettings::with_tolerance(TOL)),
+        run_beam(&open, &RunSettings::with_tolerance(TOL)),
+    );
+    assert_eq!(a.trajectories[1].outcome, Outcome::LeftBounds);
+    assert_eq!(a.trajectories[2].outcome, Outcome::Timeout);
+    let mut worst: f64 = 0.0;
+    for i in [0, 2] {
+        let d = (a.trajectories[i].end.x - b.trajectories[i].end.x).length();
+        println!(
+            "B14 particle {i}: {:?}; end points with and without the edge differ by {d:.1e} \
+             (particle 1 left at t = {:.3})",
+            a.trajectories[i].outcome, a.trajectories[1].end.t
+        );
+        worst = worst.max(d);
+    }
+    assert!(worst < 1e-9, "{worst:.3e}");
+}
+
+/// B15: an absorbed particle's charge stays where it stopped (`Fate::Stop`, charge
+/// conservation). A particle launched inside a body stops at once; another one then flies
+/// exactly as alone in the fixed charges plus that charge at rest.
+#[test]
+fn b15_a_stopped_charge_keeps_acting() {
+    let body = FixedCharge {
+        position: DVec3::new(6.0, -3.0, 0.0),
+        charge: 0.0,
+        radius: 0.5,
+    };
+    let (q_stop, x_stop) = (0.7, DVec3::new(6.1, -3.0, 0.0));
+    let mover = BeamParticle {
+        particle: particle(0.5, 1.0),
+        x0: DVec3::new(0.0, 0.0, 0.0),
+        p0: DVec3::new(1.0, 0.0, 0.0),
+        detector: None,
+        acceptance: None,
+    };
+    let stuck = BeamParticle {
+        particle: particle(q_stop, 1.0),
+        x0: x_stop,
+        p0: DVec3::new(0.3, 0.0, 0.0),
+        detector: None,
+        acceptance: None,
+    };
+    let obstacles = vec![Shape::Sphere(Sphere {
+        center: body.position,
+        radius: body.radius,
+    })];
+    let scn = beam(
+        Coulomb::new(&[body]),
+        obstacles.clone(),
+        vec![mover, stuck],
+        true,
+        12.0,
+    );
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    assert_eq!(r.trajectories[1].outcome, Outcome::Collided(0));
+    let alone = Scenario {
+        field: Coulomb::new(&[
+            body,
+            FixedCharge {
+                position: x_stop,
+                charge: q_stop,
+                radius: 0.0,
+            },
+        ]),
+        obstacles,
+        particle: mover.particle,
+        c: f64::INFINITY,
+        x0: mover.x0,
+        p0: mover.p0,
+        detector: None,
+        bounds: None,
+        t_max: 12.0,
+        radiation_reaction: false,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    let s = run(&alone, &RunSettings::with_tolerance(TOL));
+    let d = (r.trajectories[0].end.x - s.end.x).length();
+    let deflection = (s.end.x - (mover.x0 + DVec3::new(12.0, 0.0, 0.0))).length();
+    println!(
+        "B15: end points differ by {d:.1e}; the stopped charge deflected it by {deflection:.3}"
+    );
+    assert!(deflection > 0.1 && d < 1e-9, "{d:.3e}");
 }

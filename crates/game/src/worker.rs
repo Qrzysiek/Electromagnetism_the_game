@@ -72,8 +72,9 @@ pub struct BeamPreview {
     /// Quasi-static interaction: the largest estimated relative error of a particle's
     /// interaction impulse (`BeamRun::neglected_retardation`).
     pub retardation_max: f64,
-    /// Per particle: world-line samples `(t, x, v, a)` (for the field views), and where
-    /// and when it was removed (None if it flew to the time limit).
+    /// Per particle: world-line samples `(t, x, v, a)` (for the field views; a particle
+    /// that left the arena flies on, and its samples go on), and where and when it was
+    /// absorbed (None if it flew to the time limit or left the arena).
     pub worldlines: Vec<Vec<(f64, DVec3, DVec3, DVec3)>>,
     pub ends: Vec<Option<(f64, DVec3)>>,
 }
@@ -444,12 +445,17 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &AtomicU64) -> bool {
             path.push((traj.end.t, traj.end.x));
         }
         for (line, traj) in lines.iter_mut().zip(&run.trajectories) {
-            line.retain(|l| l.0 <= traj.end.t);
+            if traj.outcome != Outcome::LeftBounds {
+                line.retain(|l| l.0 <= traj.end.t);
+            }
         }
         let ends = run
             .trajectories
             .iter()
-            .map(|t| (t.outcome != Outcome::Timeout).then_some((t.end.t, t.end.x)))
+            .map(|t| {
+                (!matches!(t.outcome, Outcome::Timeout | Outcome::LeftBounds))
+                    .then_some((t.end.t, t.end.x))
+            })
             .collect();
         if let Some(t) = run.trajectories.first() {
             cost.add_preview(start.elapsed().as_secs_f64(), t);
