@@ -72,6 +72,10 @@ pub struct BeamPreview {
     /// Quasi-static interaction: the largest estimated relative error of a particle's
     /// interaction impulse (`BeamRun::neglected_retardation`).
     pub retardation_max: f64,
+    /// Per particle: world-line samples `(t, x, v, a)` (for the field views), and where
+    /// and when it was removed (None if it flew to the time limit).
+    pub worldlines: Vec<Vec<(f64, DVec3, DVec3, DVec3)>>,
+    pub ends: Vec<Option<(f64, DVec3)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -278,13 +282,33 @@ fn beam_request(req: &Request, tx: &Sender<Response>, newest: &AtomicU64) -> boo
     for (flight, scn) in preview_scns.iter().enumerate() {
         let mut paths: Vec<Vec<(f64, DVec3)>> =
             scn.particles.iter().map(|b| vec![(0.0, b.x0)]).collect();
+        let kins: Vec<physics::dynamics::Kinematics> = scn
+            .particles
+            .iter()
+            .map(|b| physics::dynamics::Kinematics::new(b.particle.mass, scn.c))
+            .collect();
+        let mut lines: Vec<Vec<(f64, DVec3, DVec3, DVec3)>> = vec![Vec::new(); scn.particles.len()];
         let start = Instant::now();
         let Some(run) = physics::beam::run_beam_cancellable(
             scn,
             &RunSettings::with_tolerance(tol.preview),
-            |dense, members, _| {
+            |dense, members, p_ref| {
                 let (a, b) = (dense.t_start(), dense.t_end());
                 for (k, &i) in members.iter().enumerate() {
+                    // World line: position, velocity, acceleration (from the derivative
+                    // of the dense output) at 5 points of the step.
+                    for s in 0..=4 {
+                        let t = a + (b - a) * f64::from(s) / 4.0;
+                        if lines[i].last().is_some_and(|l| t <= l.0) {
+                            continue;
+                        }
+                        let comp = |c: usize| dense.eval_component(6 * k + c, t);
+                        let der = |c: usize| dense.eval_derivative_component(6 * k + c, t);
+                        let x = DVec3::new(comp(0), comp(1), comp(2));
+                        let p = DVec3::new(comp(3), comp(4), comp(5)) * p_ref;
+                        let dp = DVec3::new(der(3), der(4), der(5)) * p_ref;
+                        lines[i].push((t, x, kins[i].velocity(p), kins[i].acceleration(p, dp)));
+                    }
                     for s in 1..=4 {
                         let t = a + (b - a) * f64::from(s) / 4.0;
                         let x = DVec3::new(
@@ -305,6 +329,14 @@ fn beam_request(req: &Request, tx: &Sender<Response>, newest: &AtomicU64) -> boo
             path.retain(|(t, _)| *t < traj.end.t);
             path.push((traj.end.t, traj.end.x));
         }
+        for (line, traj) in lines.iter_mut().zip(&run.trajectories) {
+            line.retain(|l| l.0 <= traj.end.t);
+        }
+        let ends = run
+            .trajectories
+            .iter()
+            .map(|t| (t.outcome != Outcome::Timeout).then_some((t.end.t, t.end.x)))
+            .collect();
         if let Some(t) = run.trajectories.first() {
             cost.add_preview(start.elapsed().as_secs_f64(), t);
         }
@@ -313,6 +345,8 @@ fn beam_request(req: &Request, tx: &Sender<Response>, newest: &AtomicU64) -> boo
             shots: shots.clone(),
             outcomes: run.trajectories.iter().map(|t| t.outcome).collect(),
             energy_rel_error: run.energy_max_rel_error,
+            worldlines: lines,
+            ends,
             retardation_max: run
                 .neglected_retardation
                 .iter()

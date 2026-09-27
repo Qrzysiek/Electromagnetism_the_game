@@ -797,17 +797,26 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             format!("shot {}, disturbance {}", shot + 1, d + 1)
         };
         let multi = level.flight_count() > 1;
-        ui.label(
-            egui::RichText::new(format!(
+        let text = if level.has_beams() {
+            if level.disturbances.is_empty() {
+                "Field of every particle of the beam.".to_string()
+            } else {
+                format!(
+                    "Field of every particle of the beam, disturbance {}.",
+                    d + 1
+                )
+            }
+        } else {
+            format!(
                 "Field of the particle of {which}{}; only its flight is drawn.",
                 if multi {
                     " (choose with the shot/disturbance tabs or [ ])"
                 } else {
                     ""
                 }
-            ))
-            .small(),
-        );
+            )
+        };
+        ui.label(egui::RichText::new(text).small());
     }
     if matches!(
         game.map,
@@ -828,6 +837,17 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             if game.map == Some(MapMode::ParticleField) {
                 ui.checkbox(&mut game.radiation_only, "radiation part only")
                     .on_hover_text("Only the acceleration term of the field (falls as 1/R)");
+            }
+        });
+        let quasi_static = level.has_beams()
+            && level.physics.beam_interaction
+            && !level.physics.beam_retarded
+            && level.physics.c.is_some();
+        ui.horizontal(|ui| {
+            if quasi_static {
+                ui.checkbox(&mut game.neglected_only, "left out by the model").on_hover_text(
+                    "The beam's full retarded field minus the fields the quasi-static interaction uses (present states continued with constant acceleration): what the dynamics leaves out (PHYSICS.md §3.3)",
+                );
             }
         });
     }
@@ -861,6 +881,22 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
              Liénard–Wiechert). The particle's field is usually far weaker than the \
              electrodes'; raise the range to see it. Colour: B_z or |E| on a logarithmic \
              scale; arrows: E."
+        }
+        Some(MapMode::ParticleField) if level.has_beams() && game.neglected_only => {
+            "What the quasi-static beam interaction leaves out of the dynamics: the full \
+             retarded field of all particles minus the fields it uses (each particle's \
+             present state continued back with constant acceleration). Mostly the change \
+             of acceleration during the light travel time, and the delay with which an \
+             absorbed particle's field disappears. Same colour scale as the full field: \
+             raise the range to see how small it is."
+        }
+        Some(MapMode::ParticleField) if level.has_beams() => {
+            "The retarded (Liénard–Wiechert, exact) field of every particle of the beam at \
+             the animation time, from their computed flights. Every change of velocity \
+             sends out radiation at c. Before launch each particle is taken to move with \
+             its launch acceleration; an absorbed particle's field disappears as the news \
+             of its absorption spreads at c. Colour: B perpendicular to the plane, \
+             logarithmic; arrows: E."
         }
         Some(MapMode::ParticleField) => {
             "The field of the particle itself (Liénard–Wiechert, exact) at the animation \

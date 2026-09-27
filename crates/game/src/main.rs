@@ -84,6 +84,8 @@ pub struct Game {
     pub show_field_arrows: bool,
     /// Particle field view: only the radiation (acceleration) part of the field.
     pub radiation_only: bool,
+    /// Beam field views: only the part the quasi-static interaction leaves out.
+    pub neglected_only: bool,
     /// Hardcore sliders: logarithmic scale for magnitudes and for frequencies.
     pub log_magnitude: bool,
     pub log_omega: bool,
@@ -128,6 +130,7 @@ impl Game {
             show_field_lines: false,
             show_field_arrows: true,
             radiation_only: false,
+            neglected_only: false,
             log_magnitude: true,
             log_omega: false,
             field_quantity: radiation::FieldQuantity::Bz,
@@ -453,6 +456,7 @@ fn dev_capture(
                 sandbox::enter(&mut game);
             }
             game.radiation_only = std::env::var("EM_RAD_ONLY").is_ok_and(|v| v == "1");
+            game.neglected_only = std::env::var("EM_NEGLECTED").is_ok_and(|v| v == "1");
             if std::env::var("EM_LINES").is_ok_and(|v| v == "1") {
                 game.show_field_lines = true;
             }

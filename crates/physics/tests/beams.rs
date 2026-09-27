@@ -710,3 +710,49 @@ fn b12_quasi_static_against_retarded() {
         qs.stats.n_step, exact.stats.n_step
     );
 }
+
+/// B13: `accelerated_fields` (the quasi-static interaction's field of a source continued
+/// back with constant acceleration) equals the general Liénard–Wiechert computation
+/// (`lienard::fields`, bisection-free Newton on a sampled world line) for the same
+/// world line (`r + v τ + a τ²/2`, `v + a τ` while `|a τ| ≤ 0.1 c`, uniform before), at
+/// points near and far, ahead and behind (the far ones see the uniform part).
+#[test]
+fn b13_accelerated_fields_match_lienard_wiechert() {
+    use physics::lienard::{SampledWorldline, fields};
+    let (q, c) = (0.7, 5.0);
+    let (r, v, a) = (
+        DVec3::new(1.0, 2.0, 0.0),
+        DVec3::new(3.0, 1.0, 0.0),
+        DVec3::new(-0.4, 0.9, 0.0),
+    );
+    // Dense samples of the same curve (the sampled world line interpolates them).
+    let samples: Vec<_> = (0..=20000)
+        .map(|k| {
+            let tau = -20.0 + 20.0 * f64::from(k) / 20000.0;
+            let lim = 0.1 * c / a.length();
+            let tc = tau.max(-lim);
+            let (rc, vc) = (r + v * tc + a * (0.5 * tc * tc), v + a * tc);
+            let acc = if tau >= -lim { a } else { DVec3::ZERO };
+            (tau, rc + vc * (tau - tc), vc, acc)
+        })
+        .collect();
+    let w = SampledWorldline::new(&samples);
+    let mut worst: f64 = 0.0;
+    for x in [
+        DVec3::new(1.5, 2.2, 0.0),
+        DVec3::new(-4.0, 7.0, 0.0),
+        DVec3::new(20.0, -5.0, 0.0),
+        DVec3::new(-30.0, -12.0, 0.0),
+    ] {
+        let (e, b) = physics::beam::accelerated_fields(q, c, x, 0.0, r, v, a);
+        let f = fields(&w, q, c, x, 0.0);
+        let rel = ((e - f.e()).length() / f.e().length()).max((b - f.b).length() / f.b.length());
+        println!(
+            "B13 at {x}: |E| {:.4e}, relative difference {rel:.1e}",
+            f.e().length()
+        );
+        assert!(rel.is_finite(), "at {x}");
+        worst = worst.max(rel);
+    }
+    assert!(worst < 1e-6, "{worst:.3e}");
+}

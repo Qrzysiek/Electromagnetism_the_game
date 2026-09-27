@@ -106,7 +106,10 @@ pub struct BeamRun {
     pub restarts: usize,
     /// Quasi-static interaction: per particle, the estimated relative error of the
     /// interaction's impulse: the time integral of the neglected fields of the others (from
-    /// their jerk, `Σ_j |q_j| γ_j² |ȧ_j| / c³`), over that of the fields kept, `Σ_j |E_j|`
+    /// their jerk, `Σ_j |q_j| γ_j² |ȧ_j| / (c³ κ)` with the Doppler factor κ = 1 − n·β
+    /// for the longer light delay ahead of a source, plus `|q_j| γ_j² |a_j| / (c² R)` for
+    /// pairs so far apart that the source's past is taken as uniform), over that of the
+    /// fields kept, `Σ_j |E_j|`
     /// (sampled at the step ends; 0 without quasi-static interaction). The trajectory
     /// error follows the impulse error: a short plunge of a neighbour matters little.
     pub neglected_retardation: Vec<f64>,
@@ -870,8 +873,21 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                         if l != k && source[l] && qj != 0.0 {
                             let (xj, pj) = (BeamOde::<F>::x(&y_end, l), ode.p(&y_end, l));
                             let g = ode.kin[l].gamma(pj);
-                            missing += qj.abs() * g * g * jerk[l].length() / scn.c.powi(3);
                             let vj = ode.kin[l].velocity(pj);
+                            // The light delay grows ahead of a moving source: about
+                            // R / (c κ) with κ = 1 − n·β, the Doppler factor.
+                            let d = xi - xj;
+                            let r = d.length();
+                            let kappa = (1.0 - d.dot(vj) / (r * scn.c)).max(1e-6);
+                            let delay = r / (scn.c * kappa);
+                            missing +=
+                                qj.abs() * g * g * jerk[l].length() / (scn.c.powi(3) * kappa);
+                            // Beyond the constant-acceleration range (|a τ| > 0.1 c) the
+                            // past is continued uniformly: first-order error there.
+                            let a_now = accel(l, t_end).length();
+                            if a_now * delay > 0.1 * scn.c {
+                                missing += qj.abs() * g * g * a_now / (scn.c * scn.c * r);
+                            }
                             present += heaviside_fields(qj, scn.c, xi, xj, vj).0.length();
                         }
                     }
@@ -1184,9 +1200,11 @@ const EXTRAPOLATION: f64 = 2.0;
 
 /// Liénard–Wiechert fields `(E, B)` at `x`, a time `dt` after the present, of a charge
 /// `q` now at `r` with velocity `v` and acceleration `a`, whose past is taken as
-/// `r + v τ + a τ²/2` (velocity `v + a τ`, acceleration `a`): the retarded time is solved
-/// on this curve by Newton's method. Exact for uniform acceleration to second order in τ;
-/// the error is of the order of the jerk, `|ȧ| τ³` in position with τ = R/c.
+/// `r + v τ + a τ²/2` (velocity `v + a τ`, acceleration `a`) while `|a τ| ≤ 0.1 c`, and
+/// uniform motion before that (so that the past never becomes superluminal: far points
+/// in a strong field see the source's older past, which constant acceleration would not
+/// describe anyway). The retarded time is solved on this curve by Newton's method. The
+/// error is of the order of the jerk, `|ȧ| τ³` in position with τ = R/c.
 pub fn accelerated_fields(
     q: f64,
     c: f64,
@@ -1196,7 +1214,12 @@ pub fn accelerated_fields(
     v: DVec3,
     a: DVec3,
 ) -> (DVec3, DVec3) {
-    let at = |tau: f64| (r + v * tau + a * (0.5 * tau * tau), v + a * tau);
+    let tau_lim = 0.1 * c / a.length().max(1e-300);
+    let at = |tau: f64| {
+        let tc = tau.max(-tau_lim);
+        let (rc, vc) = (r + v * tc + a * (0.5 * tc * tc), v + a * tc);
+        (rc + vc * (tau - tc), vc)
+    };
     // Retarded τ: the root of g(τ) = c (dt − τ) − |x − r(τ)|, from the uniform-motion guess.
     let mut tau = dt - (x - r).length() / c;
     for _ in 0..50 {
@@ -1213,7 +1236,8 @@ pub fn accelerated_fields(
         }
     }
     let (rp, vp) = at(tau);
-    let f = fields_from(q, c, x, tau, rp, vp, a);
+    let ap = if tau >= -tau_lim { a } else { DVec3::ZERO };
+    let f = fields_from(q, c, x, tau, rp, vp, ap);
     (f.e(), f.b)
 }
 

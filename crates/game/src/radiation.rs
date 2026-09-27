@@ -1,7 +1,10 @@
 //! Time-dependent field views (visual only): the fields of antennas and plane waves
-//! ("Waves"), the Liénard–Wiechert field of the particle itself ("Particle field"), and
-//! everything at once ("Total": static sources, antennas, waves, disturbances and the
-//! particle), at the animation time. Computed in f64 on the CPU with the tested physics code
+//! ("Waves"), the Liénard–Wiechert field of the particle itself, or of every particle of
+//! a beam ("Particle field"), and everything at once ("Total": static sources, antennas,
+//! waves, disturbances and the particles), at the animation time. For a beam at finite c
+//! with the quasi-static interaction, the view can show only what that model leaves out
+//! of the dynamics: the full retarded field minus the quasi-static fields of the
+//! particles' present states (PHYSICS.md §3.3). Computed in f64 on the CPU with the tested physics code
 //! (`physics::antenna`, `physics::external`, `physics::lienard`), shown as a texture of
 //! B_z (in the plane B is exactly perpendicular to it) plus optional E arrows.
 
@@ -39,16 +42,27 @@ pub enum FieldQuantity {
     E,
 }
 
+/// A moving charge of the field views: its world line, its charge, and when and where it
+/// was absorbed (its field then disappears where the light cone of that moment passes,
+/// as in the beam dynamics).
+struct Source {
+    line: SampledWorldline,
+    charge: f64,
+    end: Option<(f64, DVec3)>,
+}
+
 #[derive(Resource)]
 pub struct RadiationView {
     image: Handle<Image>,
     entity: Entity,
-    /// (revision, flight, mode, flight time of the preview, radiation only) the scales
-    /// and world line were computed for.
-    key: Option<(u64, usize, MapMode, u64, bool)>,
+    /// (revision, flight, mode, flight time of the preview, radiation only, neglected
+    /// only) the scales and world lines were computed for.
+    key: Option<(u64, usize, MapMode, u64, bool, bool)>,
     radiation_only: bool,
-    worldline: Option<SampledWorldline>,
-    charge: f64,
+    /// Show only the part of the beam's field the quasi-static interaction leaves out.
+    neglected_only: bool,
+    /// The moving charges shown: one particle, or every particle of a beam.
+    sources: Vec<Source>,
     b_sat: f64,
     e_sat: f64,
     /// Time and style (quantity, range) of the current texture.
@@ -77,8 +91,8 @@ pub fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         entity,
         key: None,
         radiation_only: false,
-        worldline: None,
-        charge: 0.0,
+        neglected_only: false,
+        sources: Vec::new(),
         b_sat: 1.0,
         e_sat: 1.0,
         time: f64::NAN,
@@ -149,6 +163,36 @@ fn worldline(preview: &Preview, mass: f64, c: f64) -> Option<SampledWorldline> {
     (!samples.is_empty()).then(|| SampledWorldline::new(&samples))
 }
 
+/// A beam particle's world line with its motion before launch prepended: its launch
+/// acceleration continued back (as the exact retarded beam dynamics assumes, PHYSICS.md
+/// §3.3) over the light time across the arena, so that no switch-on shell appears.
+fn with_past(
+    line: &[(f64, DVec3, DVec3, DVec3)],
+    bounds: &physics::geometry::Aabb,
+    c: f64,
+) -> Vec<(f64, DVec3, DVec3, DVec3)> {
+    let Some(&(t0, x0, v0, a0)) = line.first() else {
+        return Vec::new();
+    };
+    let span = (bounds.max - bounds.min).length() / c * 1.2;
+    // Constant acceleration while its velocity change stays below 0.1c.
+    let span = span.min(0.1 * c / a0.length().max(1e-300));
+    let mut out: Vec<_> = (1..=32)
+        .rev()
+        .map(|k| {
+            let dt = -span * f64::from(k) / 32.0;
+            (
+                t0 + dt,
+                x0 + v0 * dt + a0 * (0.5 * dt * dt),
+                v0 + a0 * dt,
+                a0,
+            )
+        })
+        .collect();
+    out.extend_from_slice(line);
+    out
+}
+
 /// 99th percentile of a list of magnitudes (ignoring non-finite values).
 fn percentile99(mut v: Vec<f64>) -> f64 {
     v.retain(|x| x.is_finite());
@@ -199,12 +243,30 @@ pub fn update(
     let preview = game.flights.get(flight).and_then(|f| f.preview.as_ref());
 
     // Scales and world line: once per setup, flight and mode.
+    // A beam: every particle's world line, from the active disturbance's flight.
+    let beam = level.has_beams().then(|| {
+        let d = game
+            .active_disturbance
+            .min(game.beams.len().saturating_sub(1));
+        game.beams.get(d).and_then(|b| b.preview.as_ref())
+    });
+    let t_final = match beam {
+        Some(b) => b.map_or(0.0, |b| {
+            b.worldlines
+                .iter()
+                .filter_map(|l| l.last().map(|s| s.0))
+                .fold(0.0, f64::max)
+        }),
+        None => preview.map_or(0.0, |p| p.flight_time),
+    };
+    let neglected_only = game.neglected_only && beam.is_some();
     let key = (
         game.sent_revision,
         flight,
         mode,
-        preview.map_or(0, |p| p.flight_time.to_bits()),
+        t_final.to_bits(),
         game.radiation_only,
+        neglected_only,
     );
     let bounds = level.bounds();
     let field = {
@@ -227,8 +289,36 @@ pub fn update(
         view.key = Some(key);
         view.time = f64::NAN;
         view.radiation_only = game.radiation_only;
-        view.worldline = preview.and_then(|p| worldline(p, level.shots[shot].particle.mass, c));
-        view.charge = level.shots[shot].particle.charge;
+        // Scales from the full field: the part left out by the model is shown on the same
+        // colour scale, so that its true size is seen (set after the scales).
+        view.neglected_only = false;
+        view.sources = match beam {
+            Some(b) => {
+                let shots = level.beam_shots();
+                b.map_or_else(Vec::new, |b| {
+                    b.worldlines
+                        .iter()
+                        .zip(&b.ends)
+                        .zip(&shots)
+                        .filter(|((l, _), _)| !l.is_empty())
+                        .map(|((l, &end), &s)| Source {
+                            line: SampledWorldline::new(&with_past(l, &bounds, c)),
+                            charge: level.shots[s].particle.charge,
+                            end,
+                        })
+                        .collect()
+                })
+            }
+            None => preview
+                .and_then(|p| worldline(p, level.shots[shot].particle.mass, c))
+                .map(|line| Source {
+                    line,
+                    charge: level.shots[shot].particle.charge,
+                    end: None,
+                })
+                .into_iter()
+                .collect(),
+        };
         // Sample over one RF period (waves) or over the flight (particle).
         let (t0, t1) = match mode {
             MapMode::Waves => {
@@ -248,10 +338,7 @@ pub fn update(
                 };
                 (launch_time, launch_time + period)
             }
-            _ => (
-                0.0,
-                view.worldline.as_ref().map_or(1.0, SampledWorldline::t_end),
-            ),
+            _ => (0.0, if t_final > 0.0 { t_final } else { 1.0 }),
         };
         let mut bs = Vec::new();
         let mut es = Vec::new();
@@ -272,13 +359,20 @@ pub fn update(
         }
         view.b_sat = percentile99(bs);
         view.e_sat = percentile99(es);
+        view.neglected_only = neglected_only;
+        if std::env::var("EM_CAPTURE").is_ok() {
+            eprintln!(
+                "radiation scales: B {:.3e}, E {:.3e}",
+                view.b_sat, view.e_sat
+            );
+        }
     }
 
     // Time shown: lab time for waves, flight time for the particle's own field.
     let t_anim = if game.animate {
         game.anim_time
     } else {
-        preview.map_or(0.0, |p| p.flight_time)
+        t_final
     };
     let t = match mode {
         MapMode::Waves => launch_time + t_anim,
@@ -444,45 +538,65 @@ fn sample(
                 return None;
             }
             let f = field.sample(x, t);
-            let (mut e, mut bz) = (f.e, f.b.z);
-            if let Some(w) = view.worldline.as_ref() {
-                // The particle's own field: retarded (Liénard–Wiechert) for finite c,
-                // the instantaneous Coulomb field for c = ∞.
-                if c.is_finite() {
-                    let lw = lienard::fields(w, view.charge, c, x, t);
-                    let (r0, _, _) = physics::lienard::Worldline::state(w, lw.retarded_time);
-                    if (x - r0).length() <= 0.15 {
-                        return None;
-                    }
-                    e += lw.e();
-                    bz += lw.b.z;
-                } else {
-                    let d = x - physics::lienard::Worldline::state(w, t).0;
-                    if d.length() <= 0.15 {
-                        return None;
-                    }
-                    e += d * (view.charge / d.length().powi(3));
-                }
-            }
-            Some((e, bz))
+            let (e, bz) = charges(view, x, t, c)?;
+            Some((f.e + e, f.b.z + bz))
         }
-        _ => {
-            let w = view.worldline.as_ref()?;
-            let f = lienard::fields(w, view.charge, c, x, t);
-            let (r0, _, _) = physics::lienard::Worldline::state(w, f.retarded_time);
-            let r = x - r0;
+        _ => charges(view, x, t, c),
+    }
+}
+
+/// `(E, B_z)` of the moving charges at `x`, time `t` (`None` right at one): retarded
+/// (Liénard–Wiechert) for finite c, Coulomb for c = ∞. Options: only the radiation
+/// (acceleration) part; or only what the quasi-static beam interaction leaves out (the
+/// retarded field minus the quasi-static fields of the present states).
+fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64)> {
+    use physics::lienard::Worldline;
+    let (mut e, mut bz) = (DVec3::ZERO, 0.0);
+    for s in &view.sources {
+        let w = &s.line;
+        if !c.is_finite() {
+            if s.end.is_some_and(|(te, _)| t >= te) {
+                continue;
+            }
+            let d = x - w.state(t).0;
+            if d.length() <= 0.15 {
+                return None;
+            }
+            e += d * (s.charge / d.length().powi(3));
+            continue;
+        }
+        // Gone once the light cone of its absorption has passed (as in the dynamics).
+        let gone = s
+            .end
+            .is_some_and(|(te, xe)| c * (t - te) >= (x - xe).length());
+        if !gone {
+            let f = lienard::fields(w, s.charge, c, x, t);
+            let r = x - w.state(f.retarded_time).0;
             if r.length() <= 0.15 {
                 return None;
             }
             if view.radiation_only {
                 // B = n × E / c holds for each part separately.
-                let n = r.normalize();
-                Some((f.e_radiation, n.cross(f.e_radiation).z / c))
+                e += f.e_radiation;
+                bz += r.normalize().cross(f.e_radiation).z / c;
             } else {
-                Some((f.e(), f.b.z))
+                e += f.e();
+                bz += f.b.z;
             }
         }
+        // What the quasi-static interaction uses instead: the fields of the present
+        // state continued back with constant acceleration, while the particle flies.
+        if view.neglected_only && s.end.is_none_or(|(te, _)| t < te) {
+            let (r, v, a) = w.state(t);
+            if (x - r).length() <= 0.15 {
+                return None;
+            }
+            let (eq, bq) = physics::beam::accelerated_fields(s.charge, c, x, 0.0, r, v, a);
+            e -= eq;
+            bz -= bq.z;
+        }
     }
+    Some((e, bz))
 }
 
 /// Draws the E arrows (called from `draw::draw`).

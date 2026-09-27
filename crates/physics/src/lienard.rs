@@ -24,33 +24,49 @@ pub trait Worldline {
 
 /// Retarded time for the field point `x` at time `t`: the root of
 /// `g(t_r) = c (t − t_r) − |x − r(t_r)|`, which is strictly decreasing for `|v| < c`.
-/// Found by bracketing and bisection to full precision.
+/// Bracketed, then Newton's method (`g' = −c + n·v`) kept inside the bracket, with
+/// bisection where it would leave it, to rounding.
 pub fn retarded_time(w: &impl Worldline, c: f64, x: DVec3, t: f64) -> f64 {
     let g = |tr: f64| c * (t - tr) - (x - w.state(tr).0).length();
     let mut hi = t;
-    if g(hi) >= 0.0 {
+    let mut g_hi = g(hi);
+    if g_hi >= 0.0 {
         return hi;
     }
     // g(t − s) ≥ c s − |x − r(t)| − v_max s: expand the bracket until g > 0.
-    let mut step = (x - w.state(t).0).length() / c;
+    let mut step = -g_hi / c;
     let mut lo = t - step;
-    while g(lo) <= 0.0 {
-        hi = lo;
+    let mut g_lo = g(lo);
+    while g_lo <= 0.0 {
+        (hi, g_hi) = (lo, g_lo);
         step *= 2.0;
-        lo = t - step;
+        lo = hi - step;
+        g_lo = g(lo);
     }
-    for _ in 0..200 {
-        let mid = 0.5 * (lo + hi);
-        if mid <= lo || mid >= hi {
+    let mut tr = lo + (hi - lo) * g_lo / (g_lo - g_hi);
+    for _ in 0..100 {
+        let (r, v, _) = w.state(tr);
+        let d = x - r;
+        let dist = d.length();
+        let gv = c * (t - tr) - dist;
+        if gv > 0.0 {
+            lo = tr;
+        } else {
+            hi = tr;
+        }
+        let slope = -c + d.dot(v) / dist.max(1e-300);
+        let mut next = tr - gv / slope;
+        if !(next > lo && next < hi) {
+            next = 0.5 * (lo + hi);
+        }
+        let tol = 4.0 * f64::EPSILON * t.abs().max(1.0);
+        let done = (next - tr).abs() <= tol || hi - lo <= tol;
+        tr = next;
+        if done {
             break;
         }
-        if g(mid) > 0.0 {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
     }
-    0.5 * (lo + hi)
+    tr
 }
 
 /// Liénard–Wiechert `(E, B)` of charge `q` on world line `w`, at `x` and time `t`.
