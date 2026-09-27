@@ -4,13 +4,21 @@
 //! waves, disturbances and the particles), at the animation time. For a beam at finite c
 //! with the quasi-static interaction, the view can show only what that model leaves out
 //! of the dynamics: the full retarded field minus the quasi-static fields of the
-//! particles' present states (PHYSICS.md §3.3). Computed in f64 on the CPU with the tested physics code
-//! (`physics::antenna`, `physics::external`, `physics::lienard`), shown as a texture of
-//! B_z (in the plane B is exactly perpendicular to it) plus optional E arrows.
+//! particles' present states (PHYSICS.md §3.3).
+//!
+//! The map is drawn on the GPU (`radiation.wgsl`), every pixel at every frame: the
+//! analytic antenna and wave fields, and the retarded fields of the charges from their
+//! world-line samples. The static part of the total field (charges, magnets, coils,
+//! metal, uniform stray fields) does not change in time: it is computed once per setup on
+//! the CPU in f64 with the tested physics code and handed to the shader on a grid. The
+//! colour scales and the E arrows are computed on the CPU (`sample`, `charges`).
 
-use bevy::asset::RenderAssetUsages;
+use bevy::asset::{AssetPath, embedded_asset, embedded_path};
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::render::render_resource::{AsBindGroup, ShaderType};
+use bevy::render::storage::ShaderBuffer;
+use bevy::shader::ShaderRef;
+use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 use level::Level;
 use physics::DVec3;
 use physics::dynamics::Kinematics;
@@ -24,13 +32,8 @@ use crate::Game;
 use crate::potential::MapMode;
 use crate::worker::Preview;
 
-/// Texture pixels per cell.
-const PX_PER_CELL: f64 = 5.0;
-/// Colour texels per field sample (smooth interpolation of the sampled values).
-const UPSAMPLE: u32 = 4;
-/// Largest change of the compressed value between neighbouring samples that is still
-/// interpolated; steeper cells are evaluated exactly at every colour texel.
-const REFINE_STEP: f32 = 0.3;
+/// Grid points per cell of the static part of the total field.
+const STATIC_PER_CELL: f64 = 6.0;
 /// Spacing of the E arrows, in cells.
 const ARROW_SPACING: f64 = 1.5;
 /// Quantity used for the colour of the field views.
@@ -47,13 +50,60 @@ pub enum FieldQuantity {
 /// as in the beam dynamics).
 struct Source {
     line: SampledWorldline,
+    /// The samples `(t, x, v, a)` of the world line (for the GPU).
+    samples: Vec<(f64, DVec3, DVec3, DVec3)>,
     charge: f64,
     end: Option<(f64, DVec3)>,
 }
 
+#[derive(ShaderType, Debug, Clone, Copy, Default)]
+pub struct FieldParams {
+    /// min.x, min.y, size.x, size.y of the arena.
+    pub area: Vec4,
+    /// c (0 for infinite), B saturation, E saturation, dynamic range.
+    pub scales: Vec4,
+    /// Static grid width, height, 1 if present; number of charges.
+    pub grid: UVec4,
+    /// Antennas, waves, flags (1 radiation only, 2 left out by the model, 4 colour |E|).
+    pub counts: UVec4,
+}
+
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct FieldMaterial {
+    #[uniform(0)]
+    pub params: FieldParams,
+    #[storage(1, read_only)]
+    pub samples: Handle<ShaderBuffer>,
+    #[storage(2, read_only)]
+    pub items: Handle<ShaderBuffer>,
+    #[storage(3, read_only)]
+    pub statics: Handle<ShaderBuffer>,
+}
+
+impl Material2d for FieldMaterial {
+    fn fragment_shader() -> ShaderRef {
+        ShaderRef::Path(
+            AssetPath::from_path_buf(embedded_path!("radiation.wgsl")).with_source("embedded"),
+        )
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
+    }
+}
+
+pub struct FieldViewPlugin;
+
+impl Plugin for FieldViewPlugin {
+    fn build(&self, app: &mut App) {
+        embedded_asset!(app, "radiation.wgsl");
+        app.add_plugins(Material2dPlugin::<FieldMaterial>::default());
+    }
+}
+
 #[derive(Resource)]
 pub struct RadiationView {
-    image: Handle<Image>,
+    material: Handle<FieldMaterial>,
     entity: Entity,
     /// (revision, flight, mode, flight time of the preview, radiation only, neglected
     /// only) the scales and world lines were computed for.
@@ -65,7 +115,7 @@ pub struct RadiationView {
     sources: Vec<Source>,
     b_sat: f64,
     e_sat: f64,
-    /// Time and style (quantity, range) of the current texture.
+    /// Time and style (quantity, range, arrows) of the current arrows.
     time: f64,
     style: (FieldQuantity, u64, bool),
     /// Obstacles of the shown flight (the field is not drawn inside sources).
@@ -73,21 +123,33 @@ pub struct RadiationView {
     pub arrows: Vec<(Vec2, Vec2)>,
 }
 
-pub fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    let image = images.add(blank(1, 1));
+/// A storage buffer must not be empty.
+fn buffer(v: Vec<[f32; 4]>) -> ShaderBuffer {
+    ShaderBuffer::from(if v.is_empty() { vec![[0.0f32; 4]] } else { v })
+}
+
+pub fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<FieldMaterial>>,
+    mut buffers: ResMut<Assets<ShaderBuffer>>,
+) {
+    let material = materials.add(FieldMaterial {
+        params: FieldParams::default(),
+        samples: buffers.add(buffer(Vec::new())),
+        items: buffers.add(buffer(Vec::new())),
+        statics: buffers.add(buffer(Vec::new())),
+    });
     let entity = commands
         .spawn((
-            Sprite {
-                image: image.clone(),
-                custom_size: Some(Vec2::ONE),
-                ..default()
-            },
+            Mesh2d(meshes.add(Rectangle::new(1.0, 1.0))),
+            MeshMaterial2d(material.clone()),
             Transform::from_xyz(0.0, 0.0, -9.0),
             Visibility::Hidden,
         ))
         .id();
     commands.insert_resource(RadiationView {
-        image,
+        material,
         entity,
         key: None,
         radiation_only: false,
@@ -100,20 +162,6 @@ pub fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         obstacles: Vec::new(),
         arrows: Vec::new(),
     });
-}
-
-fn blank(w: u32, h: u32) -> Image {
-    Image::new_fill(
-        Extent3d {
-            width: w,
-            height: h,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        &[0, 0, 0, 0],
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::default(),
-    )
 }
 
 /// Whether the level has time-dependent sources to show.
@@ -148,7 +196,12 @@ fn time_dependent(field: &LevelField) -> LevelField {
 
 /// World line of a computed flight: positions, velocities and accelerations (from the
 /// Lorentz force) at the preview's path points.
-fn worldline(preview: &Preview, mass: f64, c: f64) -> Option<SampledWorldline> {
+#[allow(clippy::type_complexity)]
+fn worldline(
+    preview: &Preview,
+    mass: f64,
+    c: f64,
+) -> Option<(SampledWorldline, Vec<(f64, DVec3, DVec3, DVec3)>)> {
     let kin = Kinematics::new(mass, c);
     let mut samples: Vec<(f64, DVec3, DVec3, DVec3)> = Vec::new();
     for p in &preview.path {
@@ -160,7 +213,7 @@ fn worldline(preview: &Preview, mass: f64, c: f64) -> Option<SampledWorldline> {
         let a = (p.force - v * (v.dot(p.force) / (c * c))) / (gamma * mass);
         samples.push((p.t, p.x, v, a));
     }
-    (!samples.is_empty()).then(|| SampledWorldline::new(&samples))
+    (!samples.is_empty()).then(|| (SampledWorldline::new(&samples), samples))
 }
 
 /// A beam particle's world line with its motion before launch prepended: its launch
@@ -212,7 +265,7 @@ fn compress(v: f64, sat: f64, range: f64) -> f64 {
 }
 
 #[allow(
-    clippy::too_many_arguments,
+    clippy::too_many_lines,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::cast_precision_loss
@@ -220,13 +273,14 @@ fn compress(v: f64, sat: f64, range: f64) -> f64 {
 pub fn update(
     game: Res<Game>,
     mut view: ResMut<RadiationView>,
-    mut images: ResMut<Assets<Image>>,
-    mut sprites: Query<(&mut Visibility, &mut Transform, &mut Sprite)>,
+    mut materials: ResMut<Assets<FieldMaterial>>,
+    mut buffers: ResMut<Assets<ShaderBuffer>>,
+    mut quads: Query<(&mut Visibility, &mut Transform)>,
 ) {
     let mode = match game.map {
         Some(m @ (MapMode::Waves | MapMode::ParticleField | MapMode::Total)) => m,
         _ => {
-            if let Ok((mut v, _, _)) = sprites.get_mut(view.entity) {
+            if let Ok((mut v, _)) = quads.get_mut(view.entity) {
                 *v = Visibility::Hidden;
             }
             view.arrows.clear();
@@ -239,10 +293,8 @@ pub fn update(
     }
     let c = level.c();
     let flight = game.active_flight();
-    let (shot, disturbance) = level.flight_of(flight);
+    let (shot, _) = level.flight_of(flight);
     let preview = game.flights.get(flight).and_then(|f| f.preview.as_ref());
-
-    // Scales and world line: once per setup, flight and mode.
     // A beam: every particle's world line, from the active disturbance's flight.
     let beam = level.has_beams().then(|| {
         let d = game
@@ -269,6 +321,7 @@ pub fn update(
         neglected_only,
     );
     let bounds = level.bounds();
+    let size = bounds.max - bounds.min;
     let field = {
         let mut scn = level.scenarios_at(
             &game.editor.placement,
@@ -284,14 +337,18 @@ pub fn update(
         }
     };
     let launch_time = level.shots[shot].launch.time;
-    let _ = disturbance;
+    let Some((samples_h, items_h, statics_h)) = materials
+        .get(&view.material)
+        .map(|m| (m.samples.clone(), m.items.clone(), m.statics.clone()))
+    else {
+        return;
+    };
+
+    // Once per setup, flight and mode: world lines, colour scales, the static field.
     if view.key != Some(key) {
         view.key = Some(key);
         view.time = f64::NAN;
         view.radiation_only = game.radiation_only;
-        // Scales from the full field: the part left out by the model is shown on the same
-        // colour scale, so that its true size is seen (set after the scales).
-        view.neglected_only = false;
         view.sources = match beam {
             Some(b) => {
                 let shots = level.beam_shots();
@@ -301,25 +358,32 @@ pub fn update(
                         .zip(&b.ends)
                         .zip(&shots)
                         .filter(|((l, _), _)| !l.is_empty())
-                        .map(|((l, &end), &s)| Source {
-                            line: SampledWorldline::new(&with_past(l, &bounds, c)),
-                            charge: level.shots[s].particle.charge,
-                            end,
+                        .map(|((l, &end), &s)| {
+                            let samples = with_past(l, &bounds, c);
+                            Source {
+                                line: SampledWorldline::new(&samples),
+                                samples,
+                                charge: level.shots[s].particle.charge,
+                                end,
+                            }
                         })
                         .collect()
                 })
             }
             None => preview
                 .and_then(|p| worldline(p, level.shots[shot].particle.mass, c))
-                .map(|line| Source {
+                .map(|(line, samples)| Source {
                     line,
+                    samples,
                     charge: level.shots[shot].particle.charge,
                     end: None,
                 })
                 .into_iter()
                 .collect(),
         };
-        // Sample over one RF period (waves) or over the flight (particle).
+        // Scales from the full field: the part left out by the model is shown on the same
+        // colour scale, so that its true size is seen.
+        view.neglected_only = false;
         let (t0, t1) = match mode {
             MapMode::Waves => {
                 let w = field
@@ -360,6 +424,40 @@ pub fn update(
         view.b_sat = percentile99(bs);
         view.e_sat = percentile99(es);
         view.neglected_only = neglected_only;
+        // The static part of the total field, once (it does not change in time).
+        let grid = if mode == MapMode::Total {
+            let (w, h) = (
+                (size.x * STATIC_PER_CELL).ceil().max(2.0) as u32,
+                (size.y * STATIC_PER_CELL).ceil().max(2.0) as u32,
+            );
+            let still = static_part(&field);
+            let obstacles = &view.obstacles;
+            let data: Vec<[f32; 4]> = (0..h)
+                .into_par_iter()
+                .flat_map_iter(|j| {
+                    let y = bounds.min.y + (f64::from(j) + 0.5) / f64::from(h) * size.y;
+                    let still = &still;
+                    (0..w).map(move |i| {
+                        let x = bounds.min.x + (f64::from(i) + 0.5) / f64::from(w) * size.x;
+                        let x = DVec3::new(x, y, 0.0);
+                        if obstacles.iter().any(|o| o.signed_distance(x) < 0.0) {
+                            return [0.0, 0.0, 0.0, 1.0];
+                        }
+                        let f = still.sample(x, 0.0);
+                        [f.e.x as f32, f.e.y as f32, f.b.z as f32, 0.0]
+                    })
+                })
+                .collect();
+            if let Some(mut b) = buffers.get_mut(&statics_h) {
+                *b = buffer(data);
+            }
+            UVec4::new(w, h, 1, 0)
+        } else {
+            UVec4::ZERO
+        };
+        if let Some(mut m) = materials.get_mut(&view.material) {
+            m.params.grid = grid;
+        }
         if std::env::var("EM_CAPTURE").is_ok() {
             eprintln!(
                 "radiation scales: B {:.3e}, E {:.3e}",
@@ -368,7 +466,7 @@ pub fn update(
         }
     }
 
-    // Time shown: lab time for waves, flight time for the particle's own field.
+    // Time shown: lab time for waves, flight time for the particles' own fields.
     let t_anim = if game.animate {
         game.anim_time
     } else {
@@ -378,6 +476,89 @@ pub fn update(
         MapMode::Waves => launch_time + t_anim,
         _ => t_anim,
     };
+    let range = 10f64.powf(game.field_range_decades);
+    let quantity = game.field_quantity;
+
+    // GPU inputs for this frame: times relative to t, phases at t.
+    let started = std::time::Instant::now();
+    let mut samples: Vec<[f32; 4]> = Vec::new();
+    let mut items: Vec<[f32; 4]> = Vec::new();
+    for s in &view.sources {
+        items.push([
+            (samples.len() / 2) as f32,
+            s.samples.len() as f32,
+            s.charge as f32,
+            if s.end.is_some() { 1.0 } else { 0.0 },
+        ]);
+        let (te, xe) = s.end.unwrap_or((f64::INFINITY, DVec3::ZERO));
+        items.push([(te - t).min(1e30) as f32, xe.x as f32, xe.y as f32, 0.0]);
+        for &(ts, x, v, a) in &s.samples {
+            samples.push([(ts - t) as f32, x.x as f32, x.y as f32, v.x as f32]);
+            samples.push([v.y as f32, a.x as f32, a.y as f32, 0.0]);
+        }
+    }
+    // Phases reduced in f64 (f32 would lose them over long times).
+    let tau = std::f64::consts::TAU;
+    let t_field = t + field.time_offset;
+    for a in &field.antennas {
+        let ph = (a.omega * t_field + a.phase).rem_euclid(tau);
+        items.push([
+            a.position.x as f32,
+            a.position.y as f32,
+            a.amplitude.x as f32,
+            a.amplitude.y as f32,
+        ]);
+        items.push([a.omega as f32, ph as f32, a.radius as f32, 0.0]);
+    }
+    let mut n_waves = 0u32;
+    for e in &field.external {
+        if let External::Wave(w) = e
+            && w.omega != 0.0
+        {
+            let ph = (w.omega * t_field + w.phase).rem_euclid(tau);
+            items.push([
+                w.direction.x as f32,
+                w.direction.y as f32,
+                w.polarization.x as f32,
+                w.polarization.y as f32,
+            ]);
+            items.push([w.amplitude as f32, w.omega as f32, ph as f32, 0.0]);
+            n_waves += 1;
+        }
+    }
+    if let Some(mut b) = buffers.get_mut(&samples_h) {
+        *b = buffer(samples);
+    }
+    if let Some(mut b) = buffers.get_mut(&items_h) {
+        *b = buffer(items);
+    }
+    let flags = u32::from(view.radiation_only)
+        | (u32::from(view.neglected_only) << 1)
+        | (u32::from(quantity == FieldQuantity::E) << 2);
+    if let Some(mut m) = materials.get_mut(&view.material) {
+        m.params.area = Vec4::new(
+            bounds.min.x as f32,
+            bounds.min.y as f32,
+            size.x as f32,
+            size.y as f32,
+        );
+        m.params.scales = Vec4::new(
+            if c.is_finite() { c as f32 } else { 0.0 },
+            view.b_sat as f32,
+            view.e_sat as f32,
+            range as f32,
+        );
+        m.params.grid.w = view.sources.len() as u32;
+        m.params.counts = UVec4::new(field.antennas.len() as u32, n_waves, flags, 0);
+    }
+    if let Ok((mut vis, mut tr)) = quads.get_mut(view.entity) {
+        *vis = Visibility::Visible;
+        let center = (bounds.max + bounds.min) * 0.5;
+        tr.translation = Vec3::new(center.x as f32, center.y as f32, -9.0);
+        tr.scale = Vec3::new(size.x as f32, size.y as f32, 1.0);
+    }
+
+    // E arrows (CPU): only when the time or the style changed.
     let style = (
         game.field_quantity,
         game.field_range_decades.to_bits(),
@@ -388,102 +569,6 @@ pub fn update(
     }
     view.time = t;
     view.style = style;
-    let range = 10f64.powf(game.field_range_decades);
-    let quantity = game.field_quantity;
-
-    // Texture.
-    let started = std::time::Instant::now();
-    let size = bounds.max - bounds.min;
-    let (w, h) = (
-        (size.x * PX_PER_CELL).ceil().max(1.0) as u32,
-        (size.y * PX_PER_CELL).ceil().max(1.0) as u32,
-    );
-    let (b_sat, e_sat) = (view.b_sat, view.e_sat);
-    let v = &*view;
-    let fr = &field;
-    // The field is evaluated at the texel centres of a (w × h) grid. The compressed,
-    // signed value is then interpolated bilinearly onto an UPSAMPLE× finer texture
-    // before colouring, so zero lines (sign changes) and saturation edges come out
-    // smooth instead of breaking into texel-sized dots. Visual only: no new physics.
-    let values: Vec<f32> = (0..h)
-        .into_par_iter()
-        .flat_map_iter(|j| {
-            let y = bounds.max.y - (f64::from(j) + 0.5) / f64::from(h) * size.y;
-            (0..w).map(move |i| {
-                let x = bounds.min.x + (f64::from(i) + 0.5) / f64::from(w) * size.x;
-                let f = sample(v, fr, mode, DVec3::new(x, y, 0.0), t, c);
-                (match quantity {
-                    FieldQuantity::Bz => f.map_or(0.0, |(_, b)| compress(b, b_sat, range)),
-                    FieldQuantity::E => f.map_or(0.0, |(e, _)| compress(e.length(), e_sat, range)),
-                }) as f32
-            })
-        })
-        .collect();
-    let (wu, hu) = (w * UPSAMPLE, h * UPSAMPLE);
-    let at = |i: i64, j: i64| {
-        let i = i.clamp(0, i64::from(w) - 1) as usize;
-        let j = j.clamp(0, i64::from(h) - 1) as usize;
-        values[j * w as usize + i]
-    };
-    // Exact value at a fine pixel (for cells where interpolation is not good enough).
-    let exact = |ii: u32, jj: u32| -> f32 {
-        let x = bounds.min.x + (f64::from(ii) + 0.5) / f64::from(wu) * size.x;
-        let y = bounds.max.y - (f64::from(jj) + 0.5) / f64::from(hu) * size.y;
-        let f = sample(v, fr, mode, DVec3::new(x, y, 0.0), t, c);
-        (match quantity {
-            FieldQuantity::Bz => f.map_or(0.0, |(_, b)| compress(b, b_sat, range)),
-            FieldQuantity::E => f.map_or(0.0, |(e, _)| compress(e.length(), e_sat, range)),
-        }) as f32
-    };
-    let pixels: Vec<u8> = (0..hu)
-        .into_par_iter()
-        .flat_map_iter(|jj| {
-            // Position in texel units, texel centres at integers.
-            let fy = (f64::from(jj) + 0.5) / f64::from(UPSAMPLE) - 0.5;
-            let (j0, ty) = (fy.floor() as i64, (fy - fy.floor()) as f32);
-            (0..wu).flat_map(move |ii| {
-                let fx = (f64::from(ii) + 0.5) / f64::from(UPSAMPLE) - 0.5;
-                let (i0, tx) = (fx.floor() as i64, (fx - fx.floor()) as f32);
-                let corners = [
-                    at(i0, j0),
-                    at(i0 + 1, j0),
-                    at(i0, j0 + 1),
-                    at(i0 + 1, j0 + 1),
-                ];
-                let lo = corners.iter().copied().fold(f32::INFINITY, f32::min);
-                let hi = corners.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-                // Adaptive refinement: across a sign change or a steep step the value is
-                // computed exactly at this pixel; elsewhere it is interpolated.
-                let s = if (lo < 0.0 && hi > 0.0) || hi - lo > REFINE_STEP {
-                    exact(ii, jj)
-                } else {
-                    let top = corners[0] * (1.0 - tx) + corners[1] * tx;
-                    let bottom = corners[2] * (1.0 - tx) + corners[3] * tx;
-                    top * (1.0 - ty) + bottom * ty
-                };
-                let a = (s.abs().powf(0.8) * 230.0) as u8;
-                match quantity {
-                    FieldQuantity::Bz if s >= 0.0 => [255, 150, 40, a],
-                    FieldQuantity::Bz => [40, 190, 255, a],
-                    FieldQuantity::E => [255, 235, 140, a],
-                }
-            })
-        })
-        .collect();
-    let (w, h) = (wu, hu);
-    let mut img = blank(w, h);
-    img.data = Some(pixels);
-    if let Some(mut slot) = images.get_mut(&view.image) {
-        *slot = img;
-    }
-    if let Ok((mut vis, mut tr, mut sprite)) = sprites.get_mut(view.entity) {
-        *vis = Visibility::Visible;
-        let center = (bounds.max + bounds.min) * 0.5;
-        tr.translation = Vec3::new(center.x as f32, center.y as f32, -9.0);
-        sprite.custom_size = Some(Vec2::new(size.x as f32, size.y as f32));
-    }
-
-    // E arrows.
     let mut arrows = Vec::new();
     if game.show_field_arrows {
         let mut y = bounds.min.y + 0.5 * ARROW_SPACING;
@@ -510,6 +595,15 @@ pub fn update(
             started.elapsed().as_secs_f64() * 1e3
         );
     }
+}
+
+/// The static part of a level field: without antennas and oscillating waves.
+fn static_part(field: &LevelField) -> LevelField {
+    let mut f = field.clone();
+    f.antennas.clear();
+    f.external
+        .retain(|e| !matches!(e, External::Wave(w) if w.omega != 0.0));
+    f
 }
 
 /// `(E, B_z)` of the shown sources at `x`, time `t`; `None` inside a source.

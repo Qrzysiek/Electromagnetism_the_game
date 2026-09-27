@@ -400,6 +400,7 @@ fn main() {
         }))
         .add_plugins(EguiPlugin::default())
         .add_plugins(potential::PotentialPlugin)
+        .add_plugins(radiation::FieldViewPlugin)
         .init_gizmo_group::<FieldLineGizmos>()
         .insert_resource(Game::new(levels, level_paths))
         .insert_resource(PhysicsWorker(Worker::spawn()))
