@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{Material2d, Material2dPlugin};
+use level::beam::Launch;
 use physics::field::{FieldSolver, LevelField};
 use physics::trajectory::Scenario;
 
@@ -14,6 +15,7 @@ pub const MAX_CHARGES: usize = 1024;
 pub const MAX_MAGNETS: usize = 64;
 pub const MAX_LOOPS: usize = 16;
 pub const MAX_SEGMENTS: usize = 64;
+pub const MAX_LIMITS: usize = 64;
 
 /// Which field the map shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,7 +38,10 @@ pub struct PotentialParams {
     pub loops: [Vec4; MAX_LOOPS],
     pub segments: [Vec4; MAX_SEGMENTS],
     pub segment_kappa: [Vec4; MAX_SEGMENTS],
+    pub limits: [Vec4; MAX_LIMITS],
     pub counts: UVec4,
+    pub limit_count: u32,
+    pub phi_weight: f32,
     pub u_a: f32,
     pub solid: u32,
     pub mode: u32,
@@ -52,7 +57,10 @@ impl Default for PotentialParams {
             loops: [Vec4::ZERO; MAX_LOOPS],
             segments: [Vec4::ZERO; MAX_SEGMENTS],
             segment_kappa: [Vec4::ZERO; MAX_SEGMENTS],
+            limits: [Vec4::ZERO; MAX_LIMITS],
             counts: UVec4::ZERO,
+            limit_count: 0,
+            phi_weight: 0.0,
             u_a: 0.0,
             solid: 0,
             mode: 0,
@@ -93,13 +101,19 @@ fn count(n: usize) -> u32 {
 /// the magnetic map.
 pub const GYRO_REFERENCE: f64 = 5.0;
 
-/// Shader parameters for one shot. Charges are pre-scaled to `w = qQ/T₀` (the shader
-/// computes `U/T₀`), magnetic sources to `1/b_ref` with `b_ref = |p₀| / (|q| r_ref)`, or
-/// for a neutral particle with a magnetic moment `m`, `b_ref = T₀ / |m|`. The moment's
-/// energy `−m B_z` enters `U` with the weight `−m b_ref / T₀`.
+/// Shader parameters for one shot. The shader sums `Φ = Σ Q/r` over the charges and the
+/// field `B_z / b_ref` of the magnetic sources (pre-scaled by `1/b_ref`, with
+/// `b_ref = |p₀| / (|q| r_ref)`, or for a neutral particle with a magnetic moment `m`,
+/// `b_ref = T₀ / |m|`); the colours show the shot's `U/T₀ = (q Φ − m B_z)/T₀`.
+///
+/// The dark region is where every particle in `limits` is forbidden by energy
+/// conservation: each group (one shot, or one beam) contributes the highest total energy
+/// `E = T + U(x₀)` of its particles, and a point is dark only when `U > E` there for
+/// every group. More than `MAX_LIMITS` groups: no dark region (never too large).
 #[allow(clippy::cast_possible_truncation)]
 pub fn params(
     scn: &Scenario<LevelField>,
+    limits: &[Vec<Launch>],
     charge_radius: f64,
     magnet_radius: f64,
     mode: MapMode,
@@ -118,6 +132,7 @@ pub fn params(
     let at_a = f.sample(scn.x0, 0.0);
     let mut out = PotentialParams {
         u_a: ((q * at_a.phi - m * at_a.b.z) / t0) as f32,
+        phi_weight: (q / t0) as f32,
         moment_weight: (-m * b_ref / t0) as f32,
         mode: match mode {
             MapMode::Potential => 0,
@@ -144,22 +159,12 @@ pub fn params(
     }
     let mut n = 0;
     for (pos, qc) in fixed.iter().take(MAX_CHARGES) {
-        out.charges[n] = Vec4::new(
-            pos.x as f32,
-            pos.y as f32,
-            (q * qc / t0) as f32,
-            charge_radius as f32,
-        );
+        out.charges[n] = Vec4::new(pos.x as f32, pos.y as f32, *qc as f32, charge_radius as f32);
         n += 1;
     }
     out.solid = count(n);
     for (pos, qc) in induced.iter().take(MAX_CHARGES - n) {
-        out.charges[n] = Vec4::new(
-            pos.x as f32,
-            pos.y as f32,
-            (q * qc / t0) as f32,
-            pos.z as f32,
-        );
+        out.charges[n] = Vec4::new(pos.x as f32, pos.y as f32, *qc as f32, pos.z as f32);
         n += 1;
     }
     out.counts.x = count(n);
@@ -195,5 +200,27 @@ pub fn params(
         }
     }
     out.counts.w = count(n);
+    if limits.len() <= MAX_LIMITS {
+        for (i, group) in limits.iter().enumerate() {
+            // Highest total energy of the group, in units of its highest kinetic energy.
+            let (mut e, mut t) = (f64::NEG_INFINITY, 1e-300_f64);
+            let (mut qg, mut mg) = (0.0, 0.0);
+            for l in group {
+                let kin = physics::dynamics::Kinematics::new(l.particle.mass, scn.c);
+                let tk = kin.kinetic_energy(l.p0);
+                let at = f.sample(l.x0, 0.0);
+                (qg, mg) = (l.particle.charge, l.particle.moment);
+                e = e.max(tk + qg * at.phi - mg * at.b.z);
+                t = t.max(tk);
+            }
+            out.limits[i] = Vec4::new(
+                (qg / t) as f32,
+                (-mg * b_ref / t) as f32,
+                (e / t) as f32,
+                0.0,
+            );
+        }
+        out.limit_count = count(limits.len());
+    }
     out
 }

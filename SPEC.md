@@ -131,7 +131,7 @@ A single particle in the static field of fixed charges is treated **exactly**, i
 ## 6. Visualisation
 
 - Field lines start on a small sphere around each charge, with the number of lines proportional to the charge (3D). Traced on the CPU in f64 (cheap and exact enough).
-- A vector field (arrows) on a chosen slice. A potential map in 2D (a fragment shader evaluating the potential per pixel, antialiased contours, forbidden region `q(φ − φ_A) > T₀` shaded) and equipotential surfaces in 3D, computed on the GPU in f32 (visual only, never used for gameplay).
+- A vector field (arrows) on a chosen slice. A potential map in 2D (a fragment shader evaluating the potential per pixel, antialiased contours, forbidden region shaded: points no particle shown can reach, `U > E` for every shot, where a beam counts with its highest total energy `E = T + U(x₀)` over its particles; with one shot selected ("show all" off) only that shot's particles) and equipotential surfaces in 3D, computed on the GPU in f32 (visual only, never used for gameplay).
 - Learning aids: slow motion, the force vector on the particle, a kinetic/potential energy bar during flight (relativistic kinetic energy `(γ−1)mc²`), the active physics model indicator, and the verified/marginal status of the result.
 
 ## 7. Level generator

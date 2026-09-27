@@ -2,8 +2,9 @@
 //
 // Mode 0, potential: colour shows the particle's potential energy relative to the launch
 // point, U / T0 = [q (phi - phi_A) - m (B_z - B_z,A)] / T0 (m: its magnetic moment): red
-// uphill, blue downhill, contours every T0/4. U > T0 is forbidden by energy conservation
-// (dark); its boundary, the turning line U = T0, is bright.
+// uphill, blue downhill, contours every T0/4. Dark: forbidden by energy conservation for
+// every particle shown (each group, a shot or a beam, forbids U > E with E its highest
+// total energy); its boundary, the turning line, is bright.
 //
 // Mode 1, magnetic field: B_z in units of b_ref: for a charged particle the field in which
 // it circles with a 5-cell gyroradius (so the value is 5 / r_gyro); for a neutral one with
@@ -15,7 +16,7 @@
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
 
 struct Params {
-    // xy: position (cells), z: w = q Q / T0, w: sphere radius (cells) for the first
+    // xy: position (cells), z: charge Q, w: sphere radius (cells) for the first
     // `solid` charges (fixed charges, in the plane), else the charge's z (induced charges
     // of metal: images and equivalent charges off the plane).
     charges: array<vec4<f32>, 1024>,
@@ -27,8 +28,15 @@ struct Params {
     segments: array<vec4<f32>, 64>,
     // x: kappa / b_ref of the segment.
     segment_kappa: array<vec4<f32>, 64>,
+    // Energy limits, one per group of particles: x: q / T, y: -m b_ref / T, z: E / T.
+    // Forbidden for the group where x Phi + y B_z / b_ref > z.
+    limits: array<vec4<f32>, 64>,
     // Numbers of charges, magnets, loops, segments.
     counts: vec4<u32>,
+    // Number of energy limits (0: no dark region).
+    limit_count: u32,
+    // q / T0 of the shot the colours show: weight of Phi = sum Q / r in U / T0.
+    phi_weight: f32,
     // U / T0 at the launch point.
     u_a: f32,
     // Number of leading charges that are solid spheres in the plane.
@@ -97,7 +105,7 @@ fn solid_distance(p: vec2<f32>) -> f32 {
 }
 
 fn potential_colour(p: vec2<f32>) -> vec3<f32> {
-    var u = 0.0;
+    var phi = 0.0;
     for (var i = 0u; i < params.counts.x; i = i + 1u) {
         let c = params.charges[i];
         var z = 0.0;
@@ -105,12 +113,24 @@ fn potential_colour(p: vec2<f32>) -> vec3<f32> {
             z = c.w;
         }
         let d = p - c.xy;
-        u = u + c.z / max(sqrt(dot(d, d) + z * z), 1e-4);
+        phi = phi + c.z / max(sqrt(dot(d, d) + z * z), 1e-4);
     }
-    if (params.moment_weight != 0.0) {
-        u = u + params.moment_weight * magnetic_field(p);
+    var b = 0.0;
+    if (params.moment_weight != 0.0 || params.limit_count > 0u) {
+        b = magnetic_field(p);
     }
-    u = u - params.u_a;
+    let u = params.phi_weight * phi + params.moment_weight * b - params.u_a;
+    // Excess of U over the allowed energy, the least over the groups: > 0 forbidden.
+    var g = 0.0;
+    if (params.limit_count > 0u) {
+        g = 1e30;
+        for (var i = 0u; i < params.limit_count; i = i + 1u) {
+            let l = params.limits[i];
+            g = min(g, l.x * phi + l.y * b - l.z);
+        }
+    } else {
+        g = -1e30;
+    }
 
     let s = tanh(u / 1.5);
     let base = vec3<f32>(0.10, 0.11, 0.14);
@@ -120,9 +140,9 @@ fn potential_colour(p: vec2<f32>) -> vec3<f32> {
     } else {
         col = base - s * vec3<f32>(0.02, 0.18, 0.55);
     }
-    // Forbidden region (U > T0), antialiased edge.
-    let fw_u = max(fwidth(u), 1e-6);
-    let forbidden = smoothstep(-0.5 * fw_u, 0.5 * fw_u, u - 1.0);
+    // Forbidden region, antialiased edge.
+    let fw_g = max(fwidth(g), 1e-6);
+    let forbidden = smoothstep(-0.5 * fw_g, 0.5 * fw_g, g);
     col = mix(col, col * 0.3, forbidden);
     // Contours every T0/4, faded out smoothly where they crowd closer than a few pixels
     // (a hard cut-off would leave a visible edge, and dense lines alias into moiré).
@@ -135,8 +155,8 @@ fn potential_colour(p: vec2<f32>) -> vec3<f32> {
         let cover = line_cover(d, fw_k, 1.0) * (1.0 - forbidden) * fade;
         col = mix(col, col + vec3<f32>(0.10), cover);
     }
-    // Turning line U = T0.
-    let turning = line_cover(abs(u - 1.0), fw_u, 2.0);
+    // Turning line (g = 0).
+    let turning = line_cover(abs(g), fw_g, 2.0);
     return mix(col, vec3<f32>(0.95, 0.95, 0.85), turning);
 }
 

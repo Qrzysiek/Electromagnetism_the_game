@@ -235,7 +235,7 @@ A particle may carry a magnetic moment `m ẑ` perpendicular to the plane (`Part
   - Polygon coil: per segment, `ra × rb` is linear in the height and the scalar factor even in it, so `∂B/∂z = −F (a − b) × ẑ`. Per segment this is not the gradient of that segment's B_z (a lone segment's field is not curl-free); summed over the closed polygon it is.
   - Time-dependent B (antennas, waves) is not included; those levels have electric fields and are rejected above.
 - **Radiation of the moment.** Neglected. A moving moment carries the electric dipole `v×m/c²`, which radiates `2|ȧ×m|²/(3c⁷)` (ȧ: the jerk); the magnetic quadrupole term is of the same order. `level::moment_radiation_estimate` uses `m²|ȧ|²/c⁷` along the flight. It is shown with the neglected radiation in the game and checked below 1e-10 of T₀ by the level test (Stern–Gerlach: 1.7e-20 and 3.5e-20).
-- **Maps.** The potential map shows `U = q(φ − φ_A) − m(B_z − B_z,A)`, so energy conservation's forbidden regions hold for moments too. For a neutral particle the magnetic map's unit is the field with `|m B_z| = T₀`.
+- **Maps.** The potential map shows `U = q(φ − φ_A) − m(B_z − B_z,A)`, so energy conservation's forbidden regions hold for moments too. The dark region is the intersection over the particles shown: each shot, or each beam with the highest total energy `T + U(x₀)` of its particles, forbids `U > E`. With interacting beam particles it is only a guide (they exchange energy). For a neutral particle the magnetic map's unit is the field with `|m B_z| = T₀`.
 
 ## 3.3 Beams: many interacting particles — *validated* (`crates/physics/src/beam.rs`)
 

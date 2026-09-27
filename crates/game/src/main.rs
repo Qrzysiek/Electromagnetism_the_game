@@ -70,7 +70,7 @@ pub struct Game {
     /// belongs to; kept from the previous setup until the new one is measured.
     pub cost: Option<(u64, level::cost::Cost)>,
     /// (revision, active shot, mode) the field map was computed for.
-    pub map_key: (u64, usize, Option<MapMode>),
+    pub map_key: (u64, usize, bool, Option<MapMode>),
     pub field_lines: Vec<DrawnFieldLine>,
     /// Distance between neighbouring field lines, in cells.
     pub field_line_spacing: f64,
@@ -119,7 +119,7 @@ impl Game {
             show_all_shots: true,
             sent_revision: 0,
             cost: None,
-            map_key: (0, 0, None),
+            map_key: (0, 0, false, None),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
             field_line_opacity: 0.2,
@@ -775,7 +775,12 @@ fn update_map(
     mut materials: ResMut<Assets<potential::PotentialMaterial>>,
     mut transforms: Query<&mut Transform>,
 ) {
-    let key = (game.sent_revision, game.active_shot, game.map);
+    let key = (
+        game.sent_revision,
+        game.active_shot,
+        game.show_all_shots,
+        game.map,
+    );
     if key == game.map_key {
         return;
     }
@@ -788,9 +793,19 @@ fn update_map(
         return;
     }
     let scenario = level.display_scenario(game.active_shot, &game.editor.placement);
+    // The dark region: forbidden for every particle shown (the whole beam of a beam
+    // shot, every shot in the collective view).
+    let mut limits = vec![Vec::new(); level.shots.len()];
+    for l in level.launches() {
+        limits[l.shot].push(l);
+    }
+    if !game.show_all_shots {
+        limits = vec![std::mem::take(&mut limits[game.active_shot])];
+    }
     if let Some(mut m) = materials.get_mut(&quad.material) {
         m.params = potential::params(
             &scenario,
+            &limits,
             level.physics.charge_radius,
             level.physics.magnet_radius,
             mode,

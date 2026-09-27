@@ -12,13 +12,22 @@
 use physics::DVec3;
 use physics::beam::{BeamParticle, BeamRun, BeamScenario, run_beam};
 use physics::conductor::Resolution;
-use physics::dynamics::Kinematics;
+use physics::dynamics::{Kinematics, Particle};
 use physics::field::LevelField;
 use physics::trajectory::{Outcome, RunSettings};
 use physics::verify::{Status, classify};
 use serde::{Deserialize, Serialize};
 
 use crate::{Element, Level};
+
+/// Launch state of one particle of a level (see `Level::launches`).
+#[derive(Clone, Copy, Debug)]
+pub struct Launch {
+    pub shot: usize,
+    pub particle: Particle,
+    pub x0: DVec3,
+    pub p0: DVec3,
+}
 
 /// Shape of the beam's spreads.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -225,38 +234,23 @@ impl Level {
     ) -> BeamScenario<LevelField> {
         let (field, obstacles) = self.field_at(player, resolution);
         let base = self.scenario_with(0, disturbance, field, obstacles);
-        let mut particles = Vec::new();
-        // All particles of the level are one sample sequence: shot `s` continues where
-        // the previous shots stopped, so particles of different shots never coincide.
-        let mut index = 0;
-        for (s, shot) in self.shots.iter().enumerate() {
-            let one = self.scenario_with(s, disturbance, LevelField::default(), Vec::new());
-            let spec = shot.beam.unwrap_or(BeamSpec {
-                count: 1,
-                ..BeamSpec::default()
-            });
-            let d = one.p0.normalize();
-            let across = DVec3::new(-d.y, d.x, 0.0);
-            let kin = Kinematics::new(one.particle.mass, one.c);
-            let t0 = shot.launch.kinetic_energy;
-            for i in 0..spec.count {
-                let [a, l, ang, e] = if shot.beam.is_some() {
-                    spec.offsets(index + i)
-                } else {
-                    [0.0; 4]
-                };
-                let (sin, cos) = (ang * spec.angle_spread_deg).to_radians().sin_cos();
-                let dir = d * cos + across * sin;
-                particles.push(BeamParticle {
-                    particle: one.particle,
-                    x0: one.x0 + across * (a * spec.width) + d * (l * spec.length),
-                    p0: kin.momentum_from_kinetic_energy(t0 * (1.0 + e * spec.energy_spread), dir),
-                    detector: one.detector,
-                    acceptance: one.acceptance,
-                });
-            }
-            index += spec.count;
-        }
+        let targets: Vec<_> = (0..self.shots.len())
+            .map(|s| {
+                let one = self.scenario_with(s, disturbance, LevelField::default(), Vec::new());
+                (one.detector, one.acceptance)
+            })
+            .collect();
+        let particles = self
+            .launches()
+            .into_iter()
+            .map(|l| BeamParticle {
+                particle: l.particle,
+                x0: l.x0,
+                p0: l.p0,
+                detector: targets[l.shot].0,
+                acceptance: targets[l.shot].1,
+            })
+            .collect();
         BeamScenario {
             field: base.field,
             obstacles: base.obstacles,
@@ -266,6 +260,44 @@ impl Level {
             t_max: base.t_max,
             interact: self.physics.beam_interaction,
         }
+    }
+
+    /// Launch states of every particle of the level in beam-flight order: one per plain
+    /// shot, `count` per beam shot.
+    pub fn launches(&self) -> Vec<Launch> {
+        let mut out = Vec::new();
+        // All particles of the level are one sample sequence: shot `s` continues where
+        // the previous shots stopped, so particles of different shots never coincide.
+        let mut index = 0;
+        for (s, shot) in self.shots.iter().enumerate() {
+            let particle = self.particle(s);
+            let x0 = self.grid.position(shot.launch.node);
+            let spec = shot.beam.unwrap_or(BeamSpec {
+                count: 1,
+                ..BeamSpec::default()
+            });
+            let d = self.launch_momentum(s).normalize();
+            let across = DVec3::new(-d.y, d.x, 0.0);
+            let kin = Kinematics::new(particle.mass, self.c());
+            let t0 = shot.launch.kinetic_energy;
+            for i in 0..spec.count {
+                let [a, l, ang, e] = if shot.beam.is_some() {
+                    spec.offsets(index + i)
+                } else {
+                    [0.0; 4]
+                };
+                let (sin, cos) = (ang * spec.angle_spread_deg).to_radians().sin_cos();
+                let dir = d * cos + across * sin;
+                out.push(Launch {
+                    shot: s,
+                    particle,
+                    x0: x0 + across * (a * spec.width) + d * (l * spec.length),
+                    p0: kin.momentum_from_kinetic_energy(t0 * (1.0 + e * spec.energy_spread), dir),
+                });
+            }
+            index += spec.count;
+        }
+        out
     }
 
     /// Shot of each particle of the beam flights, in order.

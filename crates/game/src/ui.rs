@@ -833,8 +833,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     }
     let legend = match game.map {
         Some(MapMode::Potential) => {
-            "Red: uphill for the particle, blue: downhill; contours every T₀/4. \
-             Dark: forbidden by energy conservation (exact, also with magnets)."
+            "Red: uphill for this shot's particle, blue: downhill; contours every T₀/4. \
+             Dark: forbidden by energy conservation for every particle shown (all shots \
+             with \"show all\"; a beam counts with its most energetic particle). Exact, \
+             also with magnets; with interacting beam particles only a guide, since they \
+             exchange energy."
         }
         Some(MapMode::Magnetic) if shot.particle.charge == 0.0 && shot.particle.moment != 0.0 => {
             "B perpendicular to the plane. Orange: out of the plane, teal: into it. \
