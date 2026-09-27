@@ -237,6 +237,17 @@ A particle may carry a magnetic moment `m ẑ` perpendicular to the plane (`Part
 - **Radiation of the moment.** Neglected. A moving moment carries the electric dipole `v×m/c²`, which radiates `2|ȧ×m|²/(3c⁷)` (ȧ: the jerk); the magnetic quadrupole term is of the same order. `level::moment_radiation_estimate` uses `m²|ȧ|²/c⁷` along the flight. It is shown with the neglected radiation in the game and checked below 1e-10 of T₀ by the level test (Stern–Gerlach: 1.7e-20 and 3.5e-20).
 - **Maps.** The potential map shows `U = q(φ − φ_A) − m(B_z − B_z,A)`, so energy conservation's forbidden regions hold for moments too. For a neutral particle the magnetic map's unit is the field with `|m B_z| = T₀`.
 
+## 3.3 Beams: many interacting particles — *validated* (`crates/physics/src/beam.rs`)
+
+All particles of a beam form one ODE system (one state vector, one step size), launched together at t = 0.
+
+- **Interaction, exact for c = ∞.** The pairwise Coulomb force `q_i q_j (x_i − x_j)/r³`. For `c = ∞` it is the whole interaction: the magnetic and retarded parts, and all interactions of magnetic moments (with each other and with moving charges), scale as `1/c²` and vanish. For finite `c` the interaction is not modelled (`run_beam` refuses it); the exact choice there is retarded Liénard–Wiechert fields between the particles (SPEC §3, Beams).
+- **External fields** act on each particle as in a single flight (§3, §3.2).
+- **Events.** Each particle has the events of a single flight, found with the same certified crossing search (§6). The earliest event of any particle ends the step at that time; the particle's outcome is recorded and the integration restarts there without it as a source (the right-hand side changes, so a new integration starts).
+- **Ghosts and margins.** A finished particle is still integrated as a *ghost*: pushed by the particles still flying, pushing none (so their physics is exact), until its penetration depth into the boundary it crossed stops growing or exceeds `MARGIN_SAFE`. That is how the single-particle runner follows the continued trajectory. Margins are then properties of the trajectories, not of where steps ended, and every particle is verified by the usual comparison of preview and verification (§7). A beam that turns chaotic shows up as disagreement.
+- **Energy diagnostic.** Kinetic, external potential, moment and pair energies of the particles still flying; checked between removals.
+- **Not yet supported:** opposite charges in one beam (they could collide; particle–particle contact is not an event), metal (the charge one particle induces acts on the others), radiation reaction.
+
 ## 4. Conserved quantities (diagnostics only) — *validated* (`crates/physics/src/trajectory.rs`)
 
 Static fields (no plane waves with ω ≠ 0, §2.3):
@@ -516,6 +527,17 @@ History, so that the numbers above can be judged:
 | S4 | Charged particle with a moment gyrating in a coil's field, c = 5 | (γ−1)mc² − m B_z conserved (also the trajectory's own diagnostic) | < 1e-10 | 4.5e-11 |
 
 Found while writing G1: with a fixed step of 1e-3, the finite difference itself was off by 5e-5 at a point 0.03 cells from a wire (its error grows like (h/d)⁴); the exact gradient was right. The step now scales with the distance.
+
+### Beam tests (`cargo test --release -p physics --test beams -- --nocapture --test-threads=1`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| B1 | Two interacting charges (different masses) | relative coordinate = one-body problem of the reduced mass in a fixed charge's field (single-particle runner); centre of mass uniform | < 1e-9 | 1.4e-13; 1.1e-15 |
+| B2 | Coulomb explosion of 12 like charges | energy, momentum, angular momentum conserved | < 1e-10, 1e-12, 1e-12 | 1.7e-13, 2.3e-17, 2.8e-15 |
+| B3 | Non-interacting beam: collision, arrival, leaving the bounds, and a grazing pass (0.02–0.2 cells) | each particle flown alone by the single-particle runner | same outcomes; event times and margins (clamped at MARGIN_SAFE) < 1e-8 | ≤ 9.3e-12; ≤ 1.6e-15 |
+| B4 | The same beam interacting | deterministic (bit-identical reruns); every particle verified (preview/verify) | verified | all verified; energy drift 3.2e-12 |
+
+Found by B3 and B4 while writing them: when a particle's event cut a step short, the other particles' event values were kept from the step's end rather than the event time; and when only ghosts were left the run stopped, so the last particle's penetration depth was taken from its event step alone (preview and verification then disagreed on it). Both fixed.
 
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 

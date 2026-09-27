@@ -506,7 +506,7 @@ pub fn run_cancellable<F: FieldSolver>(
 /// Whether a minimum found on `[a, b]` lies at the right end, i.e. the function is still
 /// decreasing there. Decided from the location of the minimum, not by comparing values:
 /// the integrator state and the dense output at `b` differ by rounding.
-fn minimum_at_end(t_min: f64, a: f64, b: f64) -> bool {
+pub(crate) fn minimum_at_end(t_min: f64, a: f64, b: f64) -> bool {
     t_min >= b - 1e-6 * (b - a)
 }
 
@@ -529,7 +529,7 @@ fn collect_margins(events: &[Event], margin: &[f64]) -> Margins {
 
 /// Minimum `(t, g(t))` of a smooth function on `[a, b]`: 32 samples, then golden-section
 /// search in the bracket around the smallest sample.
-fn minimize_on(g: &impl Fn(f64) -> f64, a: f64, b: f64) -> (f64, f64) {
+pub(crate) fn minimize_on(g: &impl Fn(f64) -> f64, a: f64, b: f64) -> (f64, f64) {
     const N: u32 = 32;
     let t_at = |i: u32| a + (b - a) * f64::from(i) / f64::from(N);
     let (mut i_min, mut g_min) = (0, g(a));
