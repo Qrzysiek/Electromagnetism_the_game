@@ -6,7 +6,7 @@ mod common;
 
 use common::Rng;
 use physics::DVec3;
-use physics::beam::{BeamParticle, BeamScenario, run_beam};
+use physics::beam::{BeamParticle, BeamScenario, GHOST_DEPTH, run_beam};
 use physics::dynamics::Particle;
 use physics::field::{Coulomb, FixedCharge};
 use physics::geometry::{Aabb, Region, Shape, Sphere};
@@ -94,6 +94,7 @@ fn b1_two_body_reduces_to_one_body() {
         t_max,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let r1 = run(&one, &RunSettings::with_tolerance(TOL)).end;
     let rel = ((a.x - b.x) - r1.x).length() / r1.x.length();
@@ -215,6 +216,7 @@ fn b3_non_interacting_beam_matches_single_flights() {
         t_max: scn.t_max,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let grazing = (0..200)
         .map(|k| BeamParticle {
@@ -246,13 +248,15 @@ fn b3_non_interacting_beam_matches_single_flights() {
             t_max: scn.t_max,
             radiation_reaction: false,
             acceptance: None,
+            gates: Vec::new(),
         };
         let s = run(&one, &RunSettings::with_tolerance(TOL));
         assert_eq!(t.outcome, s.outcome, "particle {i}");
         let (mt, ms) = (t.margins.as_ref().unwrap(), s.margins.as_ref().unwrap());
         // Margins beyond MARGIN_SAFE are lower bounds, deliberately not refined (and
-        // ignored by the verification): compare them clamped.
-        let clamp = |m: f64| m.clamp(-MARGIN_SAFE, MARGIN_SAFE);
+        // ignored by the verification), and ghosts record penetration depths only down
+        // to GHOST_DEPTH: compare them clamped.
+        let clamp = |m: f64| m.clamp(-GHOST_DEPTH, MARGIN_SAFE);
         let dm = mt
             .all()
             .zip(ms.all())

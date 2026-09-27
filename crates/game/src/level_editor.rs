@@ -287,6 +287,16 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
     focus |= row(ui, "Detector corner 1", |ui| node(ui, min, grid));
     focus |= row(ui, "Detector corner 2", |ui| node(ui, max, grid));
     // Optional conditions on the arriving particle.
+    focus |= edit_acceptance(ui, acceptance);
+    focus |= edit_beam(ui, beam);
+    focus
+}
+
+/// A shot fired as a beam (`level::beam`): count, spreads, distribution, required
+/// transmission and seed.
+/// Optional conditions on a particle entering a detector or gate: direction and energy.
+fn edit_acceptance(ui: &mut egui::Ui, acceptance: &mut Option<DetectorAcceptance>) -> bool {
+    let mut focus = false;
     let mut acc = acceptance.unwrap_or_default();
     let DetectorAcceptance { direction, kinetic } = &mut acc;
     focus |= row(ui, "Accept direction", |ui| {
@@ -332,12 +342,46 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
         f
     });
     *acceptance = (acc != DetectorAcceptance::default()).then_some(acc);
-    focus |= edit_beam(ui, beam);
     focus
 }
 
-/// A shot fired as a beam (`level::beam`): count, spreads, distribution, required
-/// transmission and seed.
+/// The instrument's gates (stages every flight must pass, in order): corners and
+/// optional conditions.
+fn edit_gates(ui: &mut egui::Ui, list: &mut Vec<Detector>, grid: &Grid) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, gate) in list.iter_mut().enumerate() {
+        let Detector {
+            min,
+            max,
+            acceptance,
+        } = gate;
+        ui.push_id(("gate", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Gate {}", i + 1));
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            focus |= row(ui, "  corner 1", |ui| node(ui, min, grid));
+            focus |= row(ui, "  corner 2", |ui| node(ui, max, grid));
+            focus |= edit_acceptance(ui, acceptance);
+        });
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize && ui.small_button("+ gate").clicked() {
+        let m = grid.max_node();
+        list.push(Detector {
+            min: [m[0] / 2, m[1] / 2 - 2, 0],
+            max: [m[0] / 2 + 1, m[1] / 2 + 2, 0],
+            acceptance: None,
+        });
+    }
+    focus
+}
+
 fn edit_beam(ui: &mut egui::Ui, beam: &mut Option<BeamSpec>) -> bool {
     let mut on = beam.is_some();
     row(ui, "Beam", |ui| {
@@ -934,6 +978,7 @@ pub fn edit_level(
         disturbances,
         conductors,
         electrodes,
+        gates,
     } = level;
     let mut focus = false;
     let mut refine_by = None;
@@ -981,6 +1026,10 @@ pub fn edit_level(
         .show(ui, |ui| focus |= edit_conductors(ui, conductors, &g));
     egui::CollapsingHeader::new(format!("Disturbances ({})", disturbances.len()))
         .show(ui, |ui| focus |= edit_disturbances(ui, disturbances));
+    egui::CollapsingHeader::new(format!("Gates ({})", gates.len()))
+        .show(ui, |ui| focus |= edit_gates(ui, gates, &g))
+        .header_response
+        .on_hover_text("Stages every flight must pass, in order, before its detector counts");
     egui::CollapsingHeader::new("Player limits")
         .default_open(true)
         .show(ui, |ui| {
@@ -1012,7 +1061,26 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         disturbances,
         conductors,
         electrodes,
+        gates,
     } = level;
+    if gates.len() > MAX_COUNT as usize {
+        return Err("too many gates".into());
+    }
+    for g in gates {
+        let Detector {
+            min,
+            max,
+            acceptance,
+        } = g;
+        let acc_ok = acceptance.is_none_or(|a| {
+            let DetectorAcceptance { direction, kinetic } = a;
+            direction.is_none_or(|[x, h]| x.is_finite() && (0.0..=180.0).contains(&h))
+                && kinetic.is_none_or(|[lo, hi]| lo.is_finite() && hi.is_finite() && lo < hi)
+        });
+        if !grid.contains(*min) || !grid.contains(*max) || !acc_ok {
+            return Err("gate outside the editor's range".into());
+        }
+    }
     let Grid {
         nx,
         ny,

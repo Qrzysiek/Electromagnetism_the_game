@@ -189,6 +189,7 @@ fn a3_plane_symmetry_with_antennas() {
         t_max: 60.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let tr = run(&scn, &RunSettings::with_tolerance(1e-12));
     println!("A3: {} steps, outcome {:?}", tr.stats.n_accept, tr.outcome);

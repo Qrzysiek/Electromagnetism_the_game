@@ -15,7 +15,7 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
-    "t_max": 400.0,
+    "t_max": 80.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12

@@ -345,6 +345,44 @@ pub fn draw(
         }
     }
 
+    // Gates: dashed violet boxes, numbered by dots at their top edge (1, 2, …), with the
+    // accepted directions as a cone like detectors.
+    let violet = Color::srgb(0.8, 0.55, 1.0);
+    for (k, gate) in level.gates.iter().enumerate() {
+        let (a, b) = (
+            to_vec2(grid.position(gate.min)),
+            to_vec2(grid.position(gate.max)),
+        );
+        let (lo, hi) = (a.min(b), a.max(b));
+        let corners = [lo, Vec2::new(hi.x, lo.y), hi, Vec2::new(lo.x, hi.y), lo];
+        for w in corners.windows(2) {
+            let n = ((w[1] - w[0]).length() / 0.3).ceil().max(1.0);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            for i in (0..n as u32).step_by(2) {
+                #[allow(clippy::cast_precision_loss)]
+                let (s, e) = (i as f32 / n, ((i + 1) as f32 / n).min(1.0));
+                seg(&mut gizmos, w[0].lerp(w[1], s), w[0].lerp(w[1], e), violet);
+            }
+        }
+        for i in 0..=k {
+            #[allow(clippy::cast_precision_loss)]
+            let p = Vec2::new(lo.x + 0.25 + 0.25 * i as f32, hi.y + 0.25);
+            disc(&mut gizmos, p, 0.07, violet);
+        }
+        if let Some([axis, half]) = gate.acceptance.and_then(|a| a.direction) {
+            let c = (lo + hi) * 0.5;
+            let len = (hi - lo).min_element().max(1.0) * 0.9;
+            #[allow(clippy::cast_possible_truncation)]
+            let (axis, half) = (axis.to_radians() as f32, half.to_radians() as f32);
+            let dir = Vec2::from_angle(axis);
+            let tail = c - dir * len * 0.5;
+            gizmos.arrow_2d(tail, c + dir * len * 0.5, violet);
+            for s in [-half, half] {
+                gizmos.line_2d(tail, tail + Vec2::from_angle(axis + s) * len, violet);
+            }
+        }
+    }
+
     // Shots: detectors and launch points. The active shot is drawn brighter.
     for (i, shot) in level.shots.iter().enumerate() {
         let active = i == game.active_shot;

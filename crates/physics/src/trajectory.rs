@@ -36,6 +36,18 @@ pub struct Scenario<F> {
     /// particle entering the detector outside them is absorbed but not counted
     /// (`Outcome::Rejected`).
     pub acceptance: Option<Acceptance>,
+    /// Gates the particle must pass, in order, before the detector counts (multi-stage
+    /// instruments, PHYSICS.md §6.2). Entering the detector with a gate still missing
+    /// ends the flight as `Outcome::SkippedGate`.
+    pub gates: Vec<Gate>,
+}
+
+/// A pass-through region with optional conditions on the particle entering it
+/// (PHYSICS.md §6.2). Gates must not overlap each other or contain the launch point.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Gate {
+    pub region: Region,
+    pub acceptance: Option<Acceptance>,
 }
 
 /// Conditions on the particle when it enters the detector (PHYSICS.md §6.1).
@@ -92,6 +104,8 @@ pub enum Outcome {
     Arrived,
     /// Entered the detector outside its acceptance (direction or energy).
     Rejected,
+    /// Entered the detector without having passed gate `i` (and the ones after it).
+    SkippedGate(usize),
     /// Collision with obstacle `i`.
     Collided(usize),
     LeftBounds,
@@ -120,6 +134,12 @@ pub struct Margins {
     /// Acceptance margin at the detector (see `Acceptance::margin`), if the flight
     /// entered a detector with conditions.
     pub acceptance: Option<f64>,
+    /// Per gate: the smallest signed distance to it after the previous gate was passed
+    /// (negative: the depth reached inside; positive: the closest approach). Infinite if
+    /// the previous gate was never passed.
+    pub gates: Vec<f64>,
+    /// Per gate with conditions: the acceptance margin at the last entry.
+    pub gate_acceptance: Vec<Option<f64>>,
 }
 
 impl Margins {
@@ -131,6 +151,8 @@ impl Margins {
             .chain(self.bounds)
             .chain(self.detector)
             .chain(self.acceptance)
+            .chain(self.gates.iter().copied())
+            .chain(self.gate_acceptance.iter().flatten().copied())
     }
 }
 
@@ -313,6 +335,20 @@ pub fn run_cancellable<F: FieldSolver>(
         margins: None,
     };
 
+    // Gates (PHYSICS.md §6.2): the next one to pass, the time from which each gate's
+    // margin is tracked (when the previous one was passed), margins, acceptance margins.
+    let n_gates = scn.gates.len();
+    let gate_value = |k: usize, x: DVec3| scn.gates[k].region.signed_distance(x);
+    let mut next_gate = 0usize;
+    let mut gate_from = vec![0.0; n_gates];
+    let mut gate_margin = vec![f64::INFINITY; n_gates];
+    let mut gate_acc: Vec<Option<f64>> = vec![None; n_gates];
+    let mut gate_prev = if n_gates > 0 {
+        gate_value(0, scn.x0)
+    } else {
+        f64::INFINITY
+    };
+
     let mut g_prev: Vec<f64> = events
         .iter()
         .map(|&e| event_value(scn, e, scn.x0))
@@ -410,6 +446,58 @@ pub fn run_cancellable<F: FieldSolver>(
             }
         }
 
+        // Gates crossed in this step (up to a terminal event), in order; then the margins
+        // of the gates whose tracking has started.
+        if n_gates > 0 {
+            let mut t_from = t_a;
+            while next_gate < n_gates {
+                let k = next_gate;
+                let g_end = gate_value(k, view.state(t_end).0);
+                if gate_prev <= 0.0 {
+                    // Inside after an entry outside its conditions: wait until it leaves.
+                    gate_prev = g_end;
+                    break;
+                }
+                let mut g = |t: f64| gate_value(k, view.state(t).0);
+                match first_crossing(&mut g, t_from, t_end, gate_prev, g_end, v_max).time {
+                    Some(tc) => {
+                        let (_, p) = view.state(tc);
+                        let ok = match scn.gates[k].acceptance {
+                            Some(acc) => {
+                                let m = acc.margin(ode.kin.velocity(p), ode.kin.kinetic_energy(p));
+                                gate_acc[k] = Some(m);
+                                m >= 0.0
+                            }
+                            None => true,
+                        };
+                        if !ok {
+                            gate_prev = g_end;
+                            break;
+                        }
+                        next_gate += 1;
+                        t_from = tc;
+                        if next_gate < n_gates {
+                            gate_from[next_gate] = tc;
+                            gate_prev = gate_value(next_gate, view.state(tc).0);
+                        }
+                    }
+                    None => {
+                        gate_prev = g_end;
+                        break;
+                    }
+                }
+            }
+            if rs.margins {
+                for k in 0..n_gates.min(next_gate + 1) {
+                    let from = gate_from[k].max(t_a);
+                    if from < t_end {
+                        let g = |t: f64| gate_value(k, view.state(t).0);
+                        gate_margin[k] = gate_margin[k].min(minimize_on(&g, from, t_end).1);
+                    }
+                }
+            }
+        }
+
         let (x, p) = if event.is_some() {
             view.state(t_end)
         } else {
@@ -458,6 +546,9 @@ pub fn run_cancellable<F: FieldSolver>(
     traj.stats = int.stats();
     // Acceptance of the detector: decided at the moment of entry.
     let mut acceptance_margin = None;
+    if traj.outcome == Outcome::Arrived && next_gate < n_gates {
+        traj.outcome = Outcome::SkippedGate(next_gate);
+    }
     if traj.outcome == Outcome::Arrived
         && let Some(acc) = scn.acceptance
     {
@@ -498,6 +589,8 @@ pub fn run_cancellable<F: FieldSolver>(
     traj.margins = rs.margins.then(|| {
         let mut m = collect_margins(&events, &margin);
         m.acceptance = acceptance_margin;
+        m.gates = gate_margin;
+        m.gate_acceptance = gate_acc;
         m
     });
     Some(traj)
@@ -516,6 +609,8 @@ fn collect_margins(events: &[Event], margin: &[f64]) -> Margins {
         bounds: None,
         detector: None,
         acceptance: None,
+        gates: Vec::new(),
+        gate_acceptance: Vec::new(),
     };
     for (&ev, &v) in events.iter().zip(margin) {
         match ev {

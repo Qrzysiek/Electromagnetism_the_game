@@ -170,7 +170,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
           amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=(),
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
-          beam_interaction=False):
+          beam_interaction=False, gates=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -202,6 +202,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         **({"disturbances": list(disturbances)} if disturbances else {}),
         **({"conductors": list(conductors)} if conductors else {}),
         **({"electrodes": list(electrodes)} if electrodes else {}),
+        **({"gates": list(gates)} if gates else {}),
     }
 
 
@@ -793,6 +794,22 @@ def real_einzel_lens():
 
 
 # =======================================================================================
+# Multi-stage instruments (PHYSICS.md 6.2): gates are stages every flight must pass, in
+# order, before its detector counts, e.g. first prepare the beam, then do the experiment.
+
+def two_stages():
+    return level(
+        "Two stages",
+        "Real instruments work in stages, and a particle only counts if it went through "
+        "every stage in order. Here the particle must first pass the gate (the violet "
+        "dashed box) and only then enter the detector. Reaching the detector without "
+        "passing the gate does not count.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 20)))],
+        gates=[box((10, 11, 13, 14))],
+        max_charges=1, magnitudes=[1 * M, 2 * M, 4 * M])
+
+
+# =======================================================================================
 # Beams (PHYSICS.md 3.3): many particles at once, with spreads in position, direction and
 # energy; the goal is a verified transmission. Harder, less forgiving versions of earlier
 # levels. Interaction between the particles is exact for c = inf, so beam levels are
@@ -810,7 +827,7 @@ def space_charge():
         "position, direction and energy. The particles repel each other, so the beam spreads "
         "out on the way (space charge). Bend it into the detector: at least 90 % of it must "
         "arrive, verified.",
-        c=None, beam_interaction=True,
+        c=None, t_max=80.0, beam_interaction=True,
         shots=[shot(1e-6 * K, K, (0, 10), 0.0, 0.5 * K, box((27, 15, 30, 19)),
                     beam=beam(16, 0.9))],
         max_charges=1, magnitudes=[1 * M, 2 * M, 4 * M],
@@ -825,13 +842,45 @@ def stern_gerlach_beam():
         "at least 90 % of it. The state pulled towards the magnet passes closer to it and "
         "fans out more. (Neutral atoms hardly interact; in this Newtonian level, not at "
         "all.)",
-        c=None,
+        c=None, t_max=80.0,
         shots=[shot(0.0, 1.0, (0, 10), 0.0, 0.5, box((27, 7, 30, 9)), moment=1e-6,
                     beam=beam(12, 0.9, energy=0.02)),
-               shot(0.0, 1.0, (0, 10), 0.0, 0.5, box((27, 10, 30, 14)), moment=-1e-6,
+               shot(0.0, 1.0, (0, 10), 0.0, 0.5, box((27, 10, 30, 15)), moment=-1e-6,
                     beam=beam(12, 0.9, energy=0.02))],
         max_magnets=1, strengths=[m * M for m in (0.5, 1, 2)], region=(6, 3, 22, 17),
         reference=[magnet(14, 13, M)])
+
+
+def collimated_beam():
+    return level(
+        "Collimated beam",
+        "The collimator again, for a real beam: 16 particles leave the source with a spread "
+        "of directions (σ = 4°) and repel each other on the way. At least 90 % must reach "
+        "the detector travelling parallel to the axis (within ±3°). Only charges of the "
+        "particle's sign are available.",
+        c=None, t_max=80.0, beam_interaction=True,
+        shots=[shot(1e-6 * K, K, (0, 10), 0.0, 0.5 * K, box((28, 6, 30, 14), direction=(0.0, 3.0)),
+                    beam=beam(16, 0.9, angle_deg=4.0))],
+        max_charges=4, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], signs=(True, False),
+        region=(4, 1, 20, 19), reference=None)
+
+
+def velocity_selector():
+    # The Wien filter of chapter 7 with two speeds mixed in one beam (T0 = 0.3 and 1.0),
+    # 2 % energy spread each, repelling each other.
+    return level(
+        "Velocity selector",
+        "A beam with two groups of ions, slow and fast, mixed and repelling each other. The "
+        "coil provides B; place charges for E so that crossed fields sort the beam by speed: "
+        "at least 90 % of each group must reach its own detector.",
+        c=None, t_max=80.0, beam_interaction=True,
+        shots=[shot(1e-6 * K, K, (2, 10), 0.0, e * K, box(b), beam=beam(12, 0.9, energy=0.02))
+               for e, b in ((0.3, (26, 11, 28, 14)), (1.0, (26, 7, 28, 9)))],
+        coils=[rect_coil(1, 5, 29, 15, 2.5e4)],
+        max_charges=4, magnitudes=[m * M for m in (0.1, 0.15, 0.2, 0.3, 0.4)],
+        region=(6, 6, 24, 14),
+        reference=[charge(11, 7, 0.2 * M), charge(19, 7, 0.2 * M),
+                   charge(11, 13, -0.2 * M), charge(19, 13, -0.2 * M)])
 
 
 LEVELS = [
@@ -885,9 +934,13 @@ LEVELS = [
     ("streak_camera", streak_camera),
     # Chapter 12: radiation.
     ("synchrotron_light", synchrotron_light),
-    # Chapter 13: beams.
+    # Chapter 13: multi-stage instruments.
+    ("two_stages", two_stages),
+    # Chapter 14: beams.
     ("space_charge", space_charge),
     ("stern_gerlach_beam", stern_gerlach_beam),
+    ("collimated_beam", collimated_beam),
+    ("velocity_selector", velocity_selector),
 ]
 
 

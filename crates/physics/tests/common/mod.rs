@@ -44,6 +44,7 @@ pub fn central_charge(
         t_max,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     }
 }
 

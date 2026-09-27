@@ -226,6 +226,9 @@ impl Level {
         let (field, obstacles) = self.field_at(player, resolution);
         let base = self.scenario_with(0, disturbance, field, obstacles);
         let mut particles = Vec::new();
+        // All particles of the level are one sample sequence: shot `s` continues where
+        // the previous shots stopped, so particles of different shots never coincide.
+        let mut index = 0;
         for (s, shot) in self.shots.iter().enumerate() {
             let one = self.scenario_with(s, disturbance, LevelField::default(), Vec::new());
             let spec = shot.beam.unwrap_or(BeamSpec {
@@ -238,7 +241,7 @@ impl Level {
             let t0 = shot.launch.kinetic_energy;
             for i in 0..spec.count {
                 let [a, l, ang, e] = if shot.beam.is_some() {
-                    spec.offsets(i)
+                    spec.offsets(index + i)
                 } else {
                     [0.0; 4]
                 };
@@ -252,6 +255,7 @@ impl Level {
                     acceptance: one.acceptance,
                 });
             }
+            index += spec.count;
         }
         BeamScenario {
             field: base.field,

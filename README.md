@@ -65,6 +65,10 @@ Some levels let you build or tune electrodes yourself:
 - The flight details show a bound on the electrodes' neglected image force, with a warning if a flight passes so close to metal that it is no longer negligible.
 - In the sandbox: "Player plates", "Plate potentials", "Plate L×T×H" and "Supply voltages" in the limits, "tunable" on each electrode.
 
+## Gates (multi-stage instruments)
+
+Some levels have gates: violet dashed boxes, numbered by dots, that every flight must pass in order before its detector counts, sometimes with a required direction (a cone) or energy. They are the stages of an instrument, for example "first make the beam parallel, then bend it into the experiment". A flight that reaches the detector without passing a gate "entered the detector without passing gate N". In the sandbox, gates are edited in the "Gates" section (PHYSICS.md §6.2).
+
 ## Beams
 
 Some levels fire a whole beam: many particles with a spread in position, direction and energy (Gaussian or uniform), always the same fixed sample so the result is verifiable. The goal is a share of the beam, for example 90 %, arriving verified. In Newtonian levels the particles can repel each other exactly (space charge), so the beam spreads out on its way. Every particle's path is drawn in its shot's colour; lost particles are fainter. The panel shows each beam shot's verified transmission against its requirement. In the sandbox a shot becomes a beam with "fire as a beam" (count, spreads, distribution, transmission, seed), and "Beam interaction" switches the repulsion on (PHYSICS.md §3.3).

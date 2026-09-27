@@ -147,6 +147,7 @@ fn outcome_text(game: &Game, o: Outcome) -> String {
         Outcome::LeftBounds => "left the map".into(),
         Outcome::Timeout => "ran out of time".into(),
         Outcome::Failed(e) => format!("integration failed ({e})"),
+        Outcome::SkippedGate(i) => format!("entered the detector without passing gate {}", i + 1),
     }
 }
 
@@ -157,6 +158,8 @@ fn boundary_text(b: Boundary) -> &'static str {
         Boundary::Detector => "the detector edge",
         Boundary::Acceptance => "the detector's direction/energy window",
         Boundary::TimeLimit => "the time limit",
+        Boundary::Gate(_) => "a gate's edge",
+        Boundary::GateAcceptance(_) => "a gate's direction/energy window",
     }
 }
 

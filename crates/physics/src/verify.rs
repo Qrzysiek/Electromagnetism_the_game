@@ -41,6 +41,10 @@ pub enum Boundary {
     Acceptance,
     /// Time remaining before `t_max` at the event.
     TimeLimit,
+    /// Penetration into (or closest approach to) gate `i`.
+    Gate(usize),
+    /// Conditions of gate `i` at entry.
+    GateAcceptance(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -132,6 +136,19 @@ pub fn classify(a: &Trajectory, b: &Trajectory, t_max: f64) -> Status {
     }
     if let (Some(x), Some(y)) = (ma.acceptance, mb.acceptance) {
         boundaries.push((Boundary::Acceptance, x, y));
+    }
+    for (i, (&x, &y)) in ma.gates.iter().zip(&mb.gates).enumerate() {
+        boundaries.push((Boundary::Gate(i), x, y));
+    }
+    for (i, (x, y)) in ma
+        .gate_acceptance
+        .iter()
+        .zip(&mb.gate_acceptance)
+        .enumerate()
+    {
+        if let (Some(x), Some(y)) = (x, y) {
+            boundaries.push((Boundary::GateAcceptance(i), *x, *y));
+        }
     }
 
     let mut worst: Option<Status> = None;

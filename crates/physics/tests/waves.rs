@@ -37,6 +37,7 @@ fn wave_scenario(
         t_max,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     }
 }
 
@@ -176,6 +177,7 @@ fn w3_plane_symmetry_with_external_fields() {
         t_max: 60.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let tr = run(&scn, &RunSettings::with_tolerance(TOL));
     println!("W3: {} steps, outcome {:?}", tr.stats.n_accept, tr.outcome);
@@ -219,6 +221,7 @@ fn w4_energy_conservation_with_static_stray_fields() {
             t_max: 80.0,
             radiation_reaction: false,
             acceptance: None,
+            gates: Vec::new(),
         };
         let tr = run(&scn, &RunSettings::with_tolerance(TOL));
         let rel = tr.energy_max_abs_error / tr.kinetic_initial;

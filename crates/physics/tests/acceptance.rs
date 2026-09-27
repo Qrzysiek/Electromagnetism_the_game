@@ -28,6 +28,7 @@ fn scenario(e: f64, acceptance: Acceptance) -> Scenario<UniformElectric> {
         t_max: 100.0,
         radiation_reaction: false,
         acceptance: Some(acceptance),
+        gates: Vec::new(),
     }
 }
 

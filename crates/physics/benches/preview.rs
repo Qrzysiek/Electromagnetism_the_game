@@ -66,6 +66,7 @@ fn level_50() -> Scenario<Coulomb> {
         t_max: 400.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     }
 }
 

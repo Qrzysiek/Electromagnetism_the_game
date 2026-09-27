@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
 
 use physics::trajectory::Outcome;
 use rayon::prelude::*;
@@ -32,6 +34,45 @@ type Key = Vec<[u64; 7]>;
 struct Memo {
     objective: Mutex<HashMap<Key, (f64, Outcome)>>,
     verified: Mutex<HashMap<Key, bool>>,
+    /// Distinct placements flown, and the total and largest wall time of their
+    /// objectives (for the progress log).
+    flown: AtomicUsize,
+    seconds: Mutex<(f64, f64)>,
+}
+
+/// An objective evaluation slower than this is logged with its placement.
+const SLOW_SECONDS: f64 = 1.0;
+
+/// Progress of one phase of the analysis, logged to stderr every 10 %.
+struct Progress {
+    what: String,
+    total: usize,
+    done: AtomicUsize,
+    start: Instant,
+}
+
+impl Progress {
+    fn new(what: String, total: usize) -> Self {
+        eprintln!("[analyze] {what}: {total} …");
+        Self {
+            what,
+            total,
+            done: AtomicUsize::new(0),
+            start: Instant::now(),
+        }
+    }
+
+    fn tick(&self) {
+        let n = self.done.fetch_add(1, Ordering::Relaxed) + 1;
+        if self.total >= 10 && (n * 10 / self.total) != ((n - 1) * 10 / self.total) {
+            eprintln!(
+                "[analyze] {}: {n}/{} after {:.1} s",
+                self.what,
+                self.total,
+                self.start.elapsed().as_secs_f64()
+            );
+        }
+    }
 }
 
 fn key(p: &[Element]) -> Key {
@@ -59,9 +100,38 @@ impl Memo {
         if let Some(r) = self.objective.lock().expect("memo").get(&k) {
             return *r;
         }
+        let start = Instant::now();
         let r = objective(level, p);
+        let t = start.elapsed().as_secs_f64();
+        self.flown.fetch_add(1, Ordering::Relaxed);
+        {
+            let mut s = self.seconds.lock().expect("memo");
+            s.0 += t;
+            s.1 = s.1.max(t);
+        }
+        if t > SLOW_SECONDS {
+            eprintln!(
+                "[analyze] slow evaluation: {t:.1} s, outcome {:?}, placement {:?}",
+                r.1,
+                p.iter()
+                    .map(|e| (e.kind, e.node, e.value))
+                    .collect::<Vec<_>>()
+            );
+        }
         self.objective.lock().expect("memo").insert(k, r);
         r
+    }
+
+    fn report(&self, phase: &str, start: Instant) {
+        let (total, max) = *self.seconds.lock().expect("memo");
+        eprintln!(
+            "[analyze] {phase} done in {:.1} s; {} distinct placements flown so far, {:.1} s \
+             of flights, slowest {:.2} s",
+            start.elapsed().as_secs_f64(),
+            self.flown.load(Ordering::Relaxed),
+            total,
+            max
+        );
     }
 
     /// Whether `p` is a verified solution (only flown if its objective says it arrives).
@@ -395,30 +465,41 @@ pub fn analyze(level: &Level, samples: usize, runs: usize, budget: u32, seed: u6
     let options = single_element_options(level);
     let config_space_log10 = config_space_log10(level, &options);
     let memo = Memo::default();
+    let name = &level.name;
 
     // Random guessing.
+    let start = Instant::now();
+    let progress = Progress::new(format!("{name}: random placements"), samples);
     let random_solutions = (0..samples)
         .into_par_iter()
         .filter(|&i| {
             let mut rng = Rng::new(seed ^ (i as u64).wrapping_mul(0x9E37_79B9));
             let p = random_placement(level, &options, &mut rng);
-            memo.solves(level, &p)
+            let ok = memo.solves(level, &p);
+            progress.tick();
+            ok
         })
         .count();
+    memo.report(&format!("{name}: random placements"), start);
 
     // Heuristic search.
+    let start = Instant::now();
+    let progress = Progress::new(format!("{name}: search runs"), runs);
     let results: Vec<Option<u32>> = (0..runs)
         .into_par_iter()
         .map(|r| {
-            search(
+            let found = search(
                 level,
                 &options,
                 budget,
                 seed.wrapping_add(1000 + r as u64),
                 &memo,
-            )
+            );
+            progress.tick();
+            found
         })
         .collect();
+    memo.report(&format!("{name}: search"), start);
     let successes: Vec<u32> = results.into_iter().flatten().collect();
     #[allow(clippy::cast_precision_loss)]
     let search_mean_evaluations = if successes.is_empty() {
@@ -428,6 +509,7 @@ pub fn analyze(level: &Level, samples: usize, runs: usize, budget: u32, seed: u6
     };
 
     // Smoothness.
+    let start = Instant::now();
     let pairs: Vec<(f64, f64)> = (0..samples.min(400))
         .into_par_iter()
         .map(|i| {
@@ -437,6 +519,7 @@ pub fn analyze(level: &Level, samples: usize, runs: usize, budget: u32, seed: u6
             (memo.objective(level, &p).0, memo.objective(level, &q).0)
         })
         .collect();
+    memo.report(&format!("{name}: smoothness"), start);
     let (a, b): (Vec<f64>, Vec<f64>) = pairs.into_iter().unzip();
 
     Analysis {

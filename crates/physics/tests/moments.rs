@@ -173,6 +173,7 @@ fn s1_stern_gerlach_impulse() {
             t_max: 600.0,
             radiation_reaction: false,
             acceptance: None,
+            gates: Vec::new(),
         };
         run(&scn, &RunSettings::with_tolerance(TOL)).end.p.y
     };
@@ -211,6 +212,7 @@ fn central_run(c: f64, m: f64, speed_over_c: f64, b: f64) -> (f64, f64) {
         t_max: 40.0 / v,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let energy = |x: DVec3, p: DVec3| kin.kinetic_energy(p) - m * scn.field.sample(x, 0.0).b.z;
     let (e0, l0) = (energy(scn.x0, scn.p0), scn.x0.cross(scn.p0).z);
@@ -291,6 +293,7 @@ fn s4_charged_moment_in_coil_field() {
         t_max: 60.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let energy = |x: DVec3, p: DVec3| kin.kinetic_energy(p) - 0.3 * scn.field.sample(x, 0.0).b.z;
     let e0 = energy(scn.x0, scn.p0);

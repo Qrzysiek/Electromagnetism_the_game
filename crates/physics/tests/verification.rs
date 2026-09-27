@@ -104,6 +104,7 @@ fn clear_exit_through_bounds_is_verified() {
         t_max: 200.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let v = verify(&scn, Tolerances::default());
     println!(

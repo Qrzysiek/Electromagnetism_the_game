@@ -244,8 +244,9 @@ All particles of a beam form one ODE system (one state vector, one step size), l
 - **Interaction, exact for c = ∞.** The pairwise Coulomb force `q_i q_j (x_i − x_j)/r³`. For `c = ∞` it is the whole interaction: the magnetic and retarded parts, and all interactions of magnetic moments (with each other and with moving charges), scale as `1/c²` and vanish. For finite `c` the interaction is not modelled (`run_beam` refuses it); the exact choice there is retarded Liénard–Wiechert fields between the particles (SPEC §3, Beams).
 - **External fields** act on each particle as in a single flight (§3, §3.2).
 - **Events.** Each particle has the events of a single flight, found with the same certified crossing search (§6). The earliest event of any particle ends the step at that time; the particle's outcome is recorded and the integration restarts there without it as a source (the right-hand side changes, so a new integration starts).
-- **Ghosts and margins.** A finished particle is still integrated as a *ghost*: pushed by the particles still flying, pushing none (so their physics is exact), until its penetration depth into the boundary it crossed stops growing or exceeds `MARGIN_SAFE`. That is how the single-particle runner follows the continued trajectory. Margins are then properties of the trajectories, not of where steps ended, and every particle is verified by the usual comparison of preview and verification (§7). A beam that turns chaotic shows up as disagreement.
+- **Ghosts and margins.** A finished particle is still integrated as a *ghost*: pushed by the particles still flying, pushing none (so their physics is exact), until its penetration depth into the boundary it crossed stops growing or reaches `GHOST_DEPTH` (0.01 cells); a depth beyond that is recorded as exactly `−GHOST_DEPTH` in every run, far above the numerical error. (A ghost shares the step size of the whole beam. Followed to `MARGIN_SAFE` like a single flight, a ghost that hit a 0.3-cell point charge dived to 0.05 cells from its centre, and its huge force forced tiny steps on every particle: whole beams failed with `StepSizeTooSmall`. Found with the analysis log.) That is how the single-particle runner follows the continued trajectory. Margins are then properties of the trajectories, not of where steps ended, and every particle is verified by the usual comparison of preview and verification (§7). A beam that turns chaotic shows up as disagreement.
 - **Energy diagnostic.** Kinetic, external potential, moment and pair energies of the particles still flying; checked between removals.
+- **Step budget.** `RunSettings::max_steps` applies to the whole flight across the restarts (first version: per segment, so a beam flight was effectively unlimited). Searches (`solve::objective`) use the cost budget `STEPS_LIMIT` (2e5): a placement needing more, e.g. ions trapped gyrating in a coil's field until the time limit, counts as failed.
 - **In levels** (`level::beam`). A shot may be a beam: `count` particles sampled deterministically (scrambled Halton sequence, bases 2, 3, 5, 7; Gaussian by the inverse normal CDF, truncated at ±3σ, or uniform) in transverse and longitudinal position, direction and energy. All shots of a beam level fly together (one flight per disturbance); each particle has its shot's detector. A beam shot is solved when at least its `transmission` share arrives with a verified outcome. `Level::model_issues` rejects interaction at finite c or with metal, opposite charges in an interacting beam, radiation reaction, launch times other than 0, and energy spreads that would give non-positive energies.
 - **Not yet supported:** opposite charges in one beam (they could collide; particle–particle contact is not an event), metal (the charge one particle induces acts on the others), radiation reaction.
 
@@ -359,6 +360,16 @@ A detector can require conditions on the arriving particle, as the entrance of t
 It is a verification boundary like the others (§7). A flight whose acceptance margin is not safely larger than its preview–verify difference is marginal, and a flight that flips between the two runs is an outcome mismatch.
 
 **Solver.** The search objective adds the acceptance deficit of a rejected flight, so that near misses are graded.
+
+### 6.2 Gates: multi-stage instruments — *validated* (`trajectory.rs::Gate`)
+
+A level may list gates: boxes every flight must pass, in order, before its detector counts, each with optional conditions like a detector's (§6.1). They model the stages of an instrument, for example preparing a parallel beam before the experiment.
+
+- **Passing.** Only the next gate in order counts. Its entry is located with the certified crossing search (§6), and the state there is tested against its conditions. Inside them the gate is passed; outside, it is not, and the flight may still pass it on a later entry (after leaving it). A gate entered out of order does not count.
+- **Detector.** Entering the detector with a gate still missing ends the flight as `SkippedGate(i)`.
+- **Margins.** For each gate, the smallest signed distance to it from the moment the previous gate was passed: the depth reached inside if it was entered, the closest approach if not. The flight continues through a gate, so this depth needs no follow-through. It is refined on every step (golden-section search on the dense output). Together with the acceptance margin at the last entry, it is a verification boundary like the others (§7).
+- **Rules** (`Level::model_issues`): gates must not overlap each other or contain a launch point; beams do not support gates yet.
+- **Solver.** A flight that did not pass every gate adds the distance to the first gate it did not pass, plus its acceptance deficit, so that the search is led through the stages in order.
 
 ## 7. Outcome verification — *validated* (`crates/physics/src/verify.rs`, margins in `trajectory.rs`)
 
@@ -487,6 +498,15 @@ Note on R2: the first version compared LL work with `∫P dt` alone. It found a 
 | D1 | Straight flight at 53.13°, direction windows ±0.01 rad around it | accepted iff half-angle > deviation; margin = half-angle − deviation | margin error < 1e-12 | exact to rounding |
 | D2 | Uniform field, entry energy T₀ + qE·10, three energy windows | analytic entry energy | margin error < 1e-10 | agrees to 6 digits printed |
 | D3 | Direction window 1e-14 rad wider than the flight's angle | must not be verified | SmallMargin (acceptance) or outcome mismatch | SmallMargin, margin 1e-14 |
+
+### Gate tests (`cargo test --release -p physics --test gates -- --nocapture`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| GA1 | Straight flight through two gates in order | arrival; depth margins = distance from the line to the nearest face | < 1e-12 | exact (−0.5, −0.7) |
+| GA2 | A gate off the path; gates passed out of order | `SkippedGate`; closest approach 2.7 | < 1e-12 | exact |
+| GA3 | Gate with a ±5° direction window, entries at 10° and 2° | not passed / passed; margin 5° − angle | < 1e-12 | exact |
+| GA4 | Grazing a gate's edge by 1e-11 | must not be verified | SmallMargin (gate) or mismatch | SmallMargin, margin −1e-11 |
 
 ### Electrode tests (`cargo test --release -p physics --test electrodes -- --nocapture --test-threads=1`, unit tests in `panel.rs`)
 

@@ -118,6 +118,7 @@ fn e3_energy_conservation() {
             t_max: 40.0,
             radiation_reaction: false,
             acceptance: None,
+            gates: Vec::new(),
         };
         let tr = run(&scn, &RunSettings::with_tolerance(1e-12));
         let rel = tr.energy_max_abs_error / tr.kinetic_initial;
@@ -169,6 +170,7 @@ fn e4_plane_symmetry() {
         t_max: 40.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let tr = run(&scn, &RunSettings::with_tolerance(1e-12));
     println!("E4: {:?} after {} steps", tr.outcome, tr.stats.n_accept);
@@ -203,6 +205,7 @@ fn e5_timing() {
         t_max: 40.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     };
     let start = std::time::Instant::now();
     let tr = run(&scn, &RunSettings::with_tolerance(1e-10));

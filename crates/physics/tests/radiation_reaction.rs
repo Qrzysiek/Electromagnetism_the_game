@@ -45,6 +45,7 @@ fn r1_synchrotron_damping_exact() {
             t_max: 600.0,
             radiation_reaction: true,
             acceptance: None,
+            gates: Vec::new(),
         };
         let tr = run(&scn, &RunSettings::with_tolerance(TOL));
         let exact = |t: f64| 1.0 / ((1.0 / u0).asinh() + kappa / m * t).sinh();
@@ -108,6 +109,7 @@ fn r2_radiated_energy_matches_larmor_in_scattering() {
             t_max: 5000.0,
             radiation_reaction: true,
             acceptance: None,
+            gates: Vec::new(),
         };
         // Accurate Larmor–Liénard integral: Simpson's rule on every step's dense output.
         let mut larmor = 0.0;
@@ -181,6 +183,7 @@ fn r3_no_reaction_without_finite_c() {
         t_max: 50.0,
         radiation_reaction: rr,
         acceptance: None,
+        gates: Vec::new(),
     };
     let (a, b) = (
         run(&make(false), &RunSettings::with_tolerance(TOL)),

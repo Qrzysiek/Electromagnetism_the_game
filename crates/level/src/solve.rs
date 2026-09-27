@@ -119,6 +119,13 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
 pub fn objective(level: &Level, placement: &[Element]) -> (f64, Outcome) {
     let mut rs = RunSettings::with_tolerance(level.physics.tolerances.preview);
     rs.record = false;
+    // Searches stay within the cost budget (level::cost): a placement whose flight needs
+    // more steps (e.g. ions trapped gyrating until the time limit) counts as failed
+    // instead of costing minutes. Found with the analysis log.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    {
+        rs.max_steps = crate::cost::STEPS_LIMIT as u64;
+    }
     if level.has_beams() {
         return beam_objective(level, placement, &rs);
     }
@@ -143,12 +150,31 @@ pub fn objective(level: &Level, placement: &[Element]) -> (f64, Outcome) {
                     .unwrap_or(1.0);
                 score += (-a).max(0.0) + 1e-3;
             }
+            score += gate_shortfall(&tr);
             if outcome == Outcome::Arrived {
                 outcome = tr.outcome;
             }
         }
     }
     (score, outcome)
+}
+
+/// For a flight that did not pass every gate: the distance to the first gate it did not
+/// pass (its closest approach), and how far outside that gate's conditions it entered,
+/// so that the search is guided through the stages in order.
+fn gate_shortfall(tr: &physics::trajectory::Trajectory) -> f64 {
+    let Some(m) = tr.margins.as_ref() else {
+        return 0.0;
+    };
+    for (k, &g) in m.gates.iter().enumerate() {
+        let acc = m.gate_acceptance.get(k).copied().flatten();
+        let passed = g <= 0.0 && acc.is_none_or(|a| a >= 0.0);
+        if !passed {
+            let distance = if g.is_finite() { g.max(0.0) } else { 50.0 };
+            return distance + acc.map_or(0.0, |a| (-a).max(0.0)) + 1e-3;
+        }
+    }
+    0.0
 }
 
 /// Beam version of `objective`: for each beam shot that falls short of its required

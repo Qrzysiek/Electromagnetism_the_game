@@ -55,6 +55,7 @@ fn many_charge_scenario(c: f64, seed: u64) -> Scenario<Coulomb> {
         t_max: 200.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     }
 }
 
@@ -277,6 +278,7 @@ fn t6_hyperbolic_motion_uniform_field() {
                 t_max: t_end,
                 radiation_reaction: false,
                 acceptance: None,
+                gates: Vec::new(),
             };
             let tr = run(&scn, &RunSettings::with_tolerance(TOL));
             let eps0 = (m * m * c.powi(4) + p_perp * p_perp * c * c).sqrt();
@@ -322,6 +324,7 @@ fn t9_grazing_straight_line() {
                 t_max: 100.0,
                 radiation_reaction: false,
                 acceptance: None,
+                gates: Vec::new(),
             };
             let tr = run(&scn, &RunSettings::with_tolerance(1e-8));
             let hit = tr.outcome == Outcome::Collided(0);

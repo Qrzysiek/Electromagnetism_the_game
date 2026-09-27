@@ -64,6 +64,11 @@ pub struct Level {
     /// Box electrodes (plates, slabs, walls) placed by the level (PHYSICS.md §2.7).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub electrodes: Vec<Electrode>,
+    /// Stages of the instrument: boxes every flight must pass, in order, before its
+    /// detector counts, each with optional conditions on the entering particle
+    /// (PHYSICS.md §6.2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gates: Vec<Detector>,
 }
 
 /// A rectangular metal box standing on the plane (symmetric about it): a plate, slab or
@@ -202,6 +207,8 @@ struct LevelFile {
     conductors: Vec<Conductor>,
     #[serde(default)]
     electrodes: Vec<Electrode>,
+    #[serde(default)]
+    gates: Vec<Detector>,
 }
 
 impl From<LevelFile> for Level {
@@ -233,6 +240,7 @@ impl From<LevelFile> for Level {
             disturbances: f.disturbances,
             conductors: f.conductors,
             electrodes: f.electrodes,
+            gates: f.gates,
         }
     }
 }
@@ -679,7 +687,16 @@ impl Level {
     }
 
     pub fn detector_region(&self, shot: usize) -> Region {
-        let d = self.shots[shot].detector;
+        self.box_region(self.shots[shot].detector)
+    }
+
+    /// The region of gate `i`.
+    pub fn gate_region(&self, i: usize) -> Region {
+        self.box_region(self.gates[i])
+    }
+
+    /// A box of nodes as a region (a slab through the plane in 2D).
+    fn box_region(&self, d: Detector) -> Region {
         let a = self.grid.position(d.min);
         let b = self.grid.position(d.max);
         let mut min = a.min(b);
@@ -1059,6 +1076,7 @@ impl Level {
     /// supported), as messages. Empty if the level is consistent.
     pub fn model_issues(&self) -> Vec<String> {
         let mut out = Vec::new();
+        self.gate_issues(&mut out);
         if self.has_beams() {
             self.beam_issues(&mut out);
         }
@@ -1286,6 +1304,39 @@ impl Level {
         (field, obstacles)
     }
 
+    /// Gates: they must not overlap (each other) or contain a launch point, and beams do
+    /// not support them yet.
+    fn gate_issues(&self, out: &mut Vec<String>) {
+        if self.gates.is_empty() {
+            return;
+        }
+        let rect = |d: &Detector| {
+            let (a, b) = (self.grid.position(d.min), self.grid.position(d.max));
+            (a.min(b), a.max(b))
+        };
+        let overlap = |(a0, a1): (DVec3, DVec3), (b0, b1): (DVec3, DVec3)| {
+            a0.x <= b1.x && b0.x <= a1.x && a0.y <= b1.y && b0.y <= a1.y
+        };
+        for (i, g) in self.gates.iter().enumerate() {
+            if self.gates[i + 1..]
+                .iter()
+                .any(|h| overlap(rect(g), rect(h)))
+            {
+                out.push("two gates overlap".into());
+            }
+            let (lo, hi) = rect(g);
+            if self.shots.iter().any(|s| {
+                let p = self.grid.position(s.launch.node);
+                (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y)
+            }) {
+                out.push("a launch point lies in a gate".into());
+            }
+        }
+        if self.has_beams() {
+            out.push("gates are not yet supported for beams".into());
+        }
+    }
+
     /// Beams (PHYSICS.md §3.3): what the beam runner models.
     fn beam_issues(&self, out: &mut Vec<String>) {
         if self.physics.beam_interaction {
@@ -1300,6 +1351,25 @@ impl Level {
                 out.push(
                     "interacting beams with metal: the charge one particle induces would act \
                      on the others (not modelled)"
+                        .into(),
+                );
+            }
+            // Interacting particles launched at the same point would have an infinite
+            // interaction: a beam needs a position spread, and a single shot must not
+            // share its launch point with other particles.
+            let zero_spread = |s: &Shot| s.beam.is_none_or(|b| b.width == 0.0 && b.length == 0.0);
+            let crowded = self.shots.iter().enumerate().any(|(i, a)| {
+                zero_spread(a)
+                    && (a.beam.is_some_and(|b| b.count > 1)
+                        || self
+                            .shots
+                            .iter()
+                            .enumerate()
+                            .any(|(j, b)| j != i && b.launch.node == a.launch.node))
+            });
+            if crowded {
+                out.push(
+                    "interacting particles launched at the same point (give the beam a                      position spread)"
                         .into(),
                 );
             }
@@ -1602,6 +1672,12 @@ impl Level {
                 .detector
                 .acceptance
                 .map(DetectorAcceptance::to_physics),
+            gates: (0..self.gates.len())
+                .map(|i| physics::trajectory::Gate {
+                    region: self.gate_region(i),
+                    acceptance: self.gates[i].acceptance.map(DetectorAcceptance::to_physics),
+                })
+                .collect(),
         }
     }
 
@@ -1706,6 +1782,7 @@ mod tests {
             }],
             conductors: vec![],
             electrodes: vec![],
+            gates: vec![],
         }
     }
 

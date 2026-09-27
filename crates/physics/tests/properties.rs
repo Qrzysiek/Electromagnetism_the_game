@@ -36,6 +36,7 @@ fn scenario(charges: Vec<FixedCharge>, c: f64, x0: DVec3, p0: DVec3) -> Scenario
         t_max: 20.0,
         radiation_reaction: false,
         acceptance: None,
+        gates: Vec::new(),
     }
 }
 
@@ -168,6 +169,7 @@ proptest! {
             t_max: 20.0,
             radiation_reaction: false,
             acceptance: None,
+            gates: Vec::new(),
         };
         let tr = run(&scn, &RunSettings::with_tolerance(1e-9));
         for s in tr.samples.iter().chain([&tr.end]) {

@@ -56,8 +56,11 @@ verified reference solution for every shot and negligible radiation
 | 36 | Tune the RF | choose the antenna frequency: the phase difference ω Δt decides | ≤ 1 antenna (5 frequencies), ≤ 1 charge |
 | 37 | Streak camera | three bunches a third of a period apart to three spots | ≤ 2 antennas, ≤ 2 charges |
 | 38 | Synchrotron light | 12 Radiation: radiative damping spirals the particle to the axis; only possible with radiation (canonical angular momentum) | 1 magnet on the axis |
-| 39 | Space charge | 13 Beams: 16 particles repel each other; ≥ 90 % must arrive, verified | ≤ 1 charge |
-| 40 | Stern–Gerlach beam | both spin states as spread beams, each to its own detector | ≤ 1 magnet |
+| 39 | Two stages | 13 Multi-stage instruments: a gate to pass before the detector counts | ≤ 1 charge |
+| 40 | Space charge | 14 Beams: 16 particles repel each other; ≥ 90 % must arrive, verified | ≤ 1 charge |
+| 41 | Stern–Gerlach beam | both spin states as spread beams, each to its own detector | ≤ 1 magnet |
+| 42 | Collimated beam | the collimator for a spread, interacting beam (±3°) | ≤ 4 charges |
+| 43 | Velocity selector | two speeds in one interacting beam sorted by crossed fields | ≤ 4 charges |
 
 ## Automatic detectors
 
@@ -127,12 +130,15 @@ cost more, with 600 samples and 16 runs). Columns:
 | 36_tune_the_rf | 7.9 | 1.5e-3 | 26/32 | 130 | 223 / 667 | 0.76 |
 | 37_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
 | 38_synchrotron_light | 1.0 | 5.0e-1 | 32/32 | 2 | 2 / 2 | -0.05 |
-| 39_space_charge | 3.6 | 5.2e-2 | 32/32 | 40 | 40 / 19 | 0.71 |
-| 40_stern_gerlach_beam | 3.2 | 3.6e-2 | 28/32 | 35 | 92 / 28 | 0.67 |
+| 39_two_stages | 3.6 | 6.0e-2 | 32/32 | 74 | 74 / 17 | 0.70 |
+| 40_space_charge | 3.6 | 5.2e-2 | 32/32 | 40 | 40 / 19 | 0.71 |
+| 41_stern_gerlach_beam | 3.2 | 3.3e-2 | 27/32 | 38 | 113 / 30 | 0.67 |
+| 42_collimated_beam | 11.1 | < 1.5e-3 | 31/32 | 95 | 107 / 667 | 0.88 |
+| 43_velocity_selector | 11.6 | < 1.5e-3 | 17/32 | 143 | 496 / 667 | 0.68 |
 
 Notes:
 
-- The introduction levels (1, 10, 13, 16, 17, 20, 24, 27, 30, 31, 34, 38, 39) are meant to be easy. Level 38 is a
+- The introduction levels (1, 10, 13, 16, 17, 20, 24, 27, 30, 31, 34, 38, 39, 40) are meant to be easy. Level 38 is a
   concept level (8 choices); harder radiation levels are to come.
 - Under disturbances (chapter 10) a placement counts as a solution only if every flight
   arrives, verified. The distance objective sums over all flights.
@@ -145,9 +151,14 @@ Notes:
   (5 and 25 settings). The analysis caches the result of every distinct placement, so
   such levels cost only their distinct placements; before the cache (and before it knew
   about supplies), analysing them did not terminate.
-- Beam levels (39, 40) are harder versions of single-particle levels (1 and 30): a
+- Beam levels (40–43) are harder versions of single-particle levels (1, 30, 11, 26): a
   placement solves them only if the required share of the beam arrives, verified. Their
   objective for the search sums the detector distances of the closest missing particles.
+- The analysis logs its progress to stderr (`[analyze]` lines: phases with timing, distinct
+  placements flown, the slowest evaluation, and every evaluation slower than 1 s with its
+  placement). The log found why the velocity selector's analysis ran for hours (placements
+  trapping the ions for 1e6 steps, and a beam bug); searches now stay within the step
+  budget of the cost meters.
 - The search is a rough stand-in for a player. A player who understands the physics (for
   example the Wien condition v = E/B) should do much better than the search on the later
   levels, and a player who doesn't should do much worse.

@@ -179,7 +179,7 @@ enum Phase {
     Flying,
     /// Finished; its continued trajectory is followed to find the penetration depth
     /// into boundary `event` (index into the particle's events), `depth` so far; it ends
-    /// when the depth stops decreasing or is clearly deep (`MARGIN_SAFE`).
+    /// when the depth stops decreasing or reaches `GHOST_DEPTH`.
     Ghost {
         event: usize,
         depth: f64,
@@ -333,7 +333,16 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             y0.extend_from_slice(&[x.x, x.y, x.z, s.x, s.y, s.z]);
         }
         let energy0 = ode.energy(&y0, t_now);
-        let mut int = Dop853::new(&ode, t_now, &y0, settings);
+        // One step budget for the whole flight, over all segments.
+        if stats.n_step >= rs.max_steps {
+            failed = Some(crate::integrator::dop853::Error::MaxStepsReached);
+            break 'segments;
+        }
+        let segment = Settings {
+            max_steps: rs.max_steps - stats.n_step,
+            ..settings
+        };
+        let mut int = Dop853::new(&ode, t_now, &y0, segment);
         let mut y = vec![0.0; ode.dim()];
         loop {
             let t_a = int.t();
@@ -412,10 +421,10 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             if first.is_some_and(|(_, kk, ee)| kk == k && ee == e) {
                                 // Penetration depth, followed past this step as a ghost.
                                 let (t_min, m) = minimize_on(&g, t_a, t_b);
-                                tracks[i].margin[e] = tracks[i].margin[e].min(m);
+                                tracks[i].margin[e] = tracks[i].margin[e].min(m.max(-GHOST_DEPTH));
                                 let unfinished = minimum_at_end(t_min, t_a, t_b);
                                 tracks[i].phase = Phase::Ghost { event: e, depth: m };
-                                if !rs.margins || !unfinished || m <= -MARGIN_SAFE {
+                                if !rs.margins || !unfinished || m <= -GHOST_DEPTH {
                                     finish_ghost(&mut tracks[i]);
                                 }
                             } else if rs.margins {
@@ -449,7 +458,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                         let depth = depth.min(m);
                         let unfinished = minimum_at_end(t_min, t_a, t_b);
                         tracks[i].phase = Phase::Ghost { event, depth };
-                        if !unfinished || depth <= -MARGIN_SAFE {
+                        if !unfinished || depth <= -GHOST_DEPTH {
                             finish_ghost(&mut tracks[i]);
                             ghosts_done = true;
                         }
@@ -494,6 +503,8 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                         bounds: None,
                         detector: None,
                         acceptance: Some(m),
+                        gates: Vec::new(),
+                        gate_acceptance: Vec::new(),
                     });
                 }
                 t_now = t_end;
@@ -542,6 +553,8 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     bounds: None,
                     detector: None,
                     acceptance,
+                    gates: Vec::new(),
+                    gate_acceptance: Vec::new(),
                 };
                 for (&ev, &v) in events.iter().zip(&t.margin) {
                     match ev {
@@ -563,9 +576,17 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     })
 }
 
+/// Depth to which ghosts are followed into the boundary they crossed, and at which their
+/// penetration margin is capped. A ghost shares the step size of the whole beam: followed
+/// deep into a point charge (as far as `MARGIN_SAFE`, 0.05 cells from its centre for a
+/// 0.3-cell charge) its huge force forced tiny steps on every particle, so that whole
+/// beams failed (`StepSizeTooSmall`). A depth reached is recorded as at most this much,
+/// the same in every run, so it verifies (it is far above the numerical error).
+pub const GHOST_DEPTH: f64 = 0.01;
+
 fn finish_ghost(t: &mut Track) {
     if let Phase::Ghost { event, depth, .. } = t.phase {
-        t.margin[event] = t.margin[event].min(depth);
+        t.margin[event] = t.margin[event].min(depth.max(-GHOST_DEPTH));
     }
     t.phase = Phase::Done;
 }
