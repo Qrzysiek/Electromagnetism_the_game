@@ -936,6 +936,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
 /// Beam levels: verified transmission of every beam shot in every flight against its
 /// requirement, and the diagnostics of the selected flight.
 fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
+    ui.horizontal(|ui| {
+        ui.checkbox(&mut game.animate, "Animate (A)");
+        ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"));
+    });
     ui.label(egui::RichText::new("Result").strong());
     if game.solved() {
         ui.label(

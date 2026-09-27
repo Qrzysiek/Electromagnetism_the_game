@@ -154,8 +154,101 @@ fn latest(rx: &Receiver<Request>, mut req: Request) -> Request {
     req
 }
 
-fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64) {
+/// Sends responses to the game and records them, so that a finished computation can be
+/// replayed for an identical setup.
+struct Sink<'a> {
+    tx: &'a Sender<Response>,
+    record: std::cell::RefCell<Vec<Response>>,
+}
+
+impl Sink<'_> {
+    /// `Err` if the game has gone away.
+    fn send(&self, r: Response) -> Result<(), ()> {
+        self.record.borrow_mut().push(r.clone());
+        self.tx.send(r).map_err(|_| ())
+    }
+}
+
+/// Results of recent setups, keyed by their content (level and placement): editing a
+/// setup back to one computed before (undo, moving an element back, switching levels
+/// back and forth) replays its results instead of computing them again. Only complete
+/// computations are kept, the most recent first.
+struct ResultCache {
+    entries: std::collections::VecDeque<(u64, Vec<Response>)>,
+}
+
+/// How many setups the cache keeps.
+const CACHE_SETUPS: usize = 24;
+
+impl ResultCache {
+    fn key(req: &Request) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        serde_json::to_string(&(&req.level, &req.placement))
+            .unwrap_or_default()
+            .hash(&mut h);
+        h.finish()
+    }
+
+    fn get(&mut self, key: u64) -> Option<Vec<Response>> {
+        let i = self.entries.iter().position(|e| e.0 == key)?;
+        let entry = self.entries.remove(i)?;
+        let out = entry.1.clone();
+        self.entries.push_front(entry);
+        Some(out)
+    }
+
+    fn put(&mut self, key: u64, responses: Vec<Response>) {
+        self.entries.retain(|e| e.0 != key);
+        self.entries.push_front((key, responses));
+        self.entries.truncate(CACHE_SETUPS);
+    }
+}
+
+/// A recorded response for another revision (the same setup).
+fn retag(r: Response, revision: u64) -> Response {
+    match r {
+        Response::Preview {
+            flight, preview, ..
+        } => Response::Preview {
+            revision,
+            flight,
+            preview,
+        },
+        Response::Verified {
+            flight,
+            status,
+            outcome,
+            ..
+        } => Response::Verified {
+            revision,
+            flight,
+            status,
+            outcome,
+        },
+        Response::BeamPreview {
+            flight, preview, ..
+        } => Response::BeamPreview {
+            revision,
+            flight,
+            preview,
+        },
+        Response::BeamVerified {
+            flight, results, ..
+        } => Response::BeamVerified {
+            revision,
+            flight,
+            results,
+        },
+        Response::Cost { cost, .. } => Response::Cost { revision, cost },
+    }
+}
+
+fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &AtomicU64) {
     let mut next: Option<Request> = None;
+    let mut cache = ResultCache {
+        entries: std::collections::VecDeque::new(),
+    };
     'requests: loop {
         let req = match next.take() {
             Some(r) => r,
@@ -165,9 +258,27 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
             },
         };
         let req = latest(rx, req);
+        let key = ResultCache::key(&req);
+        if let Some(responses) = cache.get(key) {
+            for r in responses {
+                if out.send(retag(r, req.revision)).is_err() {
+                    return;
+                }
+            }
+            continue 'requests;
+        }
+        let sink = Sink {
+            tx: out,
+            record: std::cell::RefCell::new(Vec::new()),
+        };
+        let tx = &sink;
+        let current = |r: u64| newest.load(Ordering::Acquire) == r;
         if req.level.has_beams() {
             if !beam_request(&req, tx, newest) {
                 return;
+            }
+            if current(req.revision) {
+                cache.put(key, sink.record.into_inner());
             }
             continue 'requests;
         }
@@ -192,7 +303,6 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
             return;
         }
 
-        let current = |r: u64| newest.load(Ordering::Acquire) == r;
         let mut previews: Vec<Trajectory> = Vec::new();
         for (shot, scn) in scenarios.iter().enumerate() {
             let start = Instant::now();
@@ -258,12 +368,16 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
                 return;
             }
         }
+        // Complete (a newer request would have abandoned it): keep for replay.
+        if current(req.revision) {
+            cache.put(key, sink.record.into_inner());
+        }
     }
 }
 
 /// A beam level: per flight the preview (every particle's path), then the per-particle
 /// verification, with the measured cost. Returns `false` if the game has gone away.
-fn beam_request(req: &Request, tx: &Sender<Response>, newest: &AtomicU64) -> bool {
+fn beam_request(req: &Request, tx: &Sink<'_>, newest: &AtomicU64) -> bool {
     let current = || newest.load(Ordering::Acquire) == req.revision;
     let tol = req.level.tolerances();
     let mut cost = level::cost::Cost::new(&req.level);
@@ -489,4 +603,36 @@ fn build_path(
     );
     path.push(point(end.t, end.x, end.p, radiated_end));
     path
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cost(revision: u64) -> Response {
+        Response::BeamVerified {
+            revision,
+            flight: 0,
+            results: Vec::new(),
+        }
+    }
+
+    /// The cache returns what was put under a key, most recent first, forgets the
+    /// oldest beyond its size, and replayed responses carry the new revision.
+    #[test]
+    fn result_cache_replays_and_evicts() {
+        let mut c = ResultCache {
+            entries: std::collections::VecDeque::new(),
+        };
+        for k in 0..(CACHE_SETUPS as u64 + 3) {
+            c.put(k, vec![cost(k)]);
+        }
+        assert!(c.get(0).is_none(), "oldest evicted");
+        let r = c.get(5).expect("kept");
+        assert!(matches!(
+            retag(r[0].clone(), 99),
+            Response::BeamVerified { revision: 99, .. }
+        ));
+        assert_eq!(c.entries.front().map(|e| e.0), Some(5), "moved to front");
+    }
 }
