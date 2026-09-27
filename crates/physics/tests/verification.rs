@@ -88,6 +88,7 @@ fn clear_exit_through_bounds_is_verified() {
             charge: 1e-6,
             mass: 1.0,
             radius: 0.0,
+            moment: 0.0,
         },
         c: 5.0,
         x0: DVec3::new(0.0, 10.0, 0.0),

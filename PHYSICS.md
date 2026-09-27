@@ -221,6 +221,22 @@ f = (2q³/3mc³) γ [DE/Dt + v × DB/Dt]
 - **Consistency.** `c = ∞` gives no reaction. With the flag off, the dynamics are bit-identical to before (6-component state).
 - **Levels.** A level with radiation reaction must need it: with the flag off, its reference solution must fail (test `radiation_levels_need_radiation`).
 
+## 3.2 Magnetic moments (spin states) — *validated* (`dynamics.rs::moment_force`, `magnetic.rs::grad_bz*`)
+
+A particle may carry a magnetic moment `m ẑ` perpendicular to the plane (`ParticleSpec::moment`; up for m > 0, down for m < 0). Neutral particles with a moment give Stern–Gerlach.
+
+- **No torque.** In the plane every source gives B along z (§2.2), so `m ∥ B`: the moment keeps its direction. A spin state along z stays a spin state; the model has no superpositions (an unpolarized beam is a 50/50 mixture of the two states).
+- **Force.** Its energy is `U = −m B_z`, so the force is `m ∇B_z`, in the plane (`∂B_z/∂z = 0` at z = 0 by symmetry).
+- **Relativistic, exact for E = 0.** The interaction Lagrangian is `m·B′/γ`, with `B′` the rest-frame field. For motion in the plane, B along z and E = 0, `B′_z = γ B_z`, so it equals `m B_z`: velocity independent. Hence `d(γmv)/dt = q v×B + m ∇B_z` exactly, and `γmc² − m B_z` and (for a central field) `|x × p|` are conserved (tests S3, S4).
+- **Not modelled.** With E ≠ 0 at finite c, `B′_z = γ(B_z − (v×E)_z/c²)` makes the Lagrangian velocity dependent (the Aharonov–Casher / hidden-momentum physics). `Level::model_issues` rejects moments together with electric sources at finite c, and with radiation reaction. For c = ∞ those terms vanish, so any sources are allowed.
+- **Gradient of B_z, exactly.** Outside the currents `∇×B = 0`, so in the plane `∇B_z = ∂B_in-plane/∂z` at z = 0.
+  - Magnet: the direct gradient of the dipole field.
+  - Circular coil: `∂B_z/∂ρ = 2κ β g(m) / (α² ρ)` (the z-derivative of `B_ρ`), which reuses the series-evaluated bracket `g` of §2.2, so it is accurate on the axis too.
+  - Polygon coil: per segment, `ra × rb` is linear in the height and the scalar factor even in it, so `∂B/∂z = −F (a − b) × ẑ`. Per segment this is not the gradient of that segment's B_z (a lone segment's field is not curl-free); summed over the closed polygon it is.
+  - Time-dependent B (antennas, waves) is not included; those levels have electric fields and are rejected above.
+- **Radiation of the moment.** Neglected. A moving moment carries the electric dipole `v×m/c²`, which radiates `2|ȧ×m|²/(3c⁷)` (ȧ: the jerk); the magnetic quadrupole term is of the same order. `level::moment_radiation_estimate` uses `m²|ȧ|²/c⁷` along the flight. It is shown with the neglected radiation in the game and checked below 1e-10 of T₀ by the level test (Stern–Gerlach: 1.7e-20 and 3.5e-20).
+- **Maps.** The potential map shows `U = q(φ − φ_A) − m(B_z − B_z,A)`, so energy conservation's forbidden regions hold for moments too. For a neutral particle the magnetic map's unit is the field with `|m B_z| = T₀`.
+
 ## 4. Conserved quantities (diagnostics only) — *validated* (`crates/physics/src/trajectory.rs`)
 
 Static fields (no plane waves with ω ≠ 0, §2.3):
@@ -367,7 +383,9 @@ Accuracy of the margins against the analytic gap `r_min δ`: relative error 2e-1
 |---|---|---|
 | Radiation (Larmor/Liénard) | neglected, unless the level includes radiation reaction (§3.1) | The radiated energy `∫P dt`, with `P = (2/3) k q² γ⁶ (a² − (v × a)²/c²) / c³`, is computed as a diagnostic (`Trajectory::radiated_energy`, trapezoidal rule over accepted steps; exactly 0 for `c = ∞`). Flagging levels above a threshold is part of the generator (M5). |
 | | | **Consistency requirement (found in M4):** radiated fraction per close pass ≈ `r_cl / r`, with `r_cl = k q²/(mc²)` the particle's classical radius. The first demo levels used `q = m = 1`, `c = 1.5…5`, giving `r_cl` = 0.04–0.44 cells. Their neglected radiation was 1e-4 to 2 × T₀, so they were physically inconsistent. Fix, as in real accelerators: weakly charged particle (`q = 10⁻⁶`), strongly charged electrodes (`Q ~ 10⁶`). Trajectories depend only on `qQ/m` and `c`, so the puzzles are unchanged. Neglected radiation of the reference flights is now 1e-16 … 1.7e-11 × T₀. Test `level/tests/levels.rs` requires `< 1e-10` for every shipped level; the game flags player setups above that. |
-| Magnetic field of the moving particle acting on others | n/a (single particle) | Stage 6 (Darwin) |
+| Radiation of a particle's magnetic moment | neglected | Estimate `m²∫|ȧ|²dt/c⁷` (§3.2), added to the radiated-energy diagnostic in the game and in the `< 1e-10 T₀` level test. |
+| Moment in an electric field at finite c (motional / hidden-momentum terms) | not modelled | rejected by `Level::model_issues` (§3.2) |
+| Magnetic field of the moving particle acting on others | n/a (single particle) | beams: exact Coulomb for c = ∞, retarded fields otherwise (SPEC §3) |
 | Polarization of test particles | neglected (non-polarizable by assumption) | documented assumption |
 | Recoil of fixed charges | none (held fixed by definition) | game rule |
 | Radiation reaction and scattering in waves (Thomson scattering) | neglected | The same radiated-energy diagnostic and the same `< 1e-10 T₀` requirement apply to flights under disturbances (all flights of all shipped levels are checked). |
@@ -486,6 +504,18 @@ History, so that the numbers above can be judged:
 - A mirror-symmetric variant of the fit (±z charge pairs) was 50–75× less accurate for unexplained reasons and was dropped.
 - The first K3/K4 version corrected floating spheres with the image tree's own charge totals. That broke the symmetry of the interaction (energy drift 5.6e-6). Reciprocity fixed it (2.8e-11).
 - The K2 requirement is 1e-10 relative, set before measuring, and met only at the verification resolution (preview measured 9.8e-10). That preview–verify gap is exactly what the verification sees.
+
+### Magnetic-moment tests (`cargo test --release -p physics --test moments -- --nocapture --test-threads=1`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| G1 | Exact ∇B_z of a magnet, a circular and a polygon coil (7 points: on the axis, inside, outside, down to 0.03 cells from a wire) | 4th-order central difference, step scaled with the distance to the nearest source | < 1e-9 relative | 4.3e-12, 8.2e-10, 6.2e-10 |
+| S1 | Neutral moment ±m past a magnet (impulse limit) | Δp_y = 4mμ/(v b³); the odd part (Δp(m) − Δp(−m))/2 cancels the O(m²) term | < 1e-6 | 4.4e-10; opposite kicks |
+| S2 | Newtonian central problem U = mμ/r³, repulsive and attractive | energy T − m B_z and angular momentum conserved | < 1e-10 | ≤ 7.3e-13; ≤ 3.9e-14 |
+| S3 | Relativistic (v = 0.8c), repulsive and attractive | γmc² − m B_z and \|x × p\| conserved | < 1e-10 | 2.4e-13; ≤ 7.2e-15 |
+| S4 | Charged particle with a moment gyrating in a coil's field, c = 5 | (γ−1)mc² − m B_z conserved (also the trajectory's own diagnostic) | < 1e-10 | 4.5e-11 |
+
+Found while writing G1: with a fixed step of 1e-3, the finite difference itself was off by 5e-5 at a point 0.03 cells from a wire (its error grows like (h/d)⁴); the exact gradient was right. The step now scales with the distance.
 
 ### Analytic reference for T3 and T5 (relativistic Coulomb problem)
 

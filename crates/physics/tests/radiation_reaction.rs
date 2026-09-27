@@ -35,6 +35,7 @@ fn r1_synchrotron_damping_exact() {
                 charge: q,
                 mass: m,
                 radius: 0.0,
+                moment: 0.0,
             },
             c,
             x0: DVec3::ZERO,

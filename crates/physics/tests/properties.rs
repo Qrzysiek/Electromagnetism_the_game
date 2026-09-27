@@ -26,6 +26,7 @@ fn scenario(charges: Vec<FixedCharge>, c: f64, x0: DVec3, p0: DVec3) -> Scenario
             charge: 1.0,
             mass: 1.0,
             radius: 0.0,
+            moment: 0.0,
         },
         c,
         x0,
@@ -158,7 +159,7 @@ proptest! {
         let scn = Scenario {
             field,
             obstacles,
-            particle: Particle { charge: 1.0, mass: 1.0, radius: 0.0 },
+            particle: Particle { charge: 1.0, mass: 1.0, radius: 0.0, moment: 0.0 },
             c,
             x0: DVec3::new(-20.0, 0.5, 0.0),
             p0: DVec3::new(angle.cos(), angle.sin(), 0.0) * p,

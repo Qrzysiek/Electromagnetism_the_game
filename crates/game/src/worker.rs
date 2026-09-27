@@ -29,7 +29,7 @@ pub struct PathPoint {
     pub x: DVec3,
     pub p: DVec3,
     pub kinetic: f64,
-    /// Potential energy relative to the launch point, `q(φ(x) − φ(A))`.
+    /// Potential energy relative to the launch point, `q(φ(x) − φ(A)) − m(B_z(x) − B_z(A))`.
     pub potential: f64,
     /// Energy lost to radiation so far (minus the work of the radiation-reaction force;
     /// 0 when radiation reaction is off).
@@ -251,12 +251,15 @@ fn preview_shot(
         traj.kinetic_initial,
         path.iter().map(|p| (p.x, p.t)),
     );
+    // Charge radiation plus the magnetic moment's (estimate), both neglected.
+    let moment_radiation =
+        level::moment_radiation_estimate(scn, path.iter().map(|p| (p.x, p.p, p.t)));
     let preview = Preview {
         path,
         outcome: traj.outcome,
         flight_time: traj.end.t,
         energy_rel_error: traj.energy_max_abs_error / traj.kinetic_initial,
-        radiated_fraction: traj.radiated_energy / traj.kinetic_initial,
+        radiated_fraction: (traj.radiated_energy + moment_radiation) / traj.kinetic_initial,
         max_speed_over_c,
         radiation_reaction: scn.radiation_reaction && scn.c.is_finite(),
         radiation_loss_fraction: -traj.radiation_work / traj.kinetic_initial,
@@ -274,8 +277,9 @@ fn build_path(
     radiated_end: f64,
 ) -> Vec<PathPoint> {
     let kin = physics::dynamics::Kinematics::new(scn.particle.mass, scn.c);
-    let q = scn.particle.charge;
-    let phi_a = scn.field.sample(scn.x0, 0.0).phi;
+    let (q, moment) = (scn.particle.charge, scn.particle.moment);
+    let at_a = scn.field.sample(scn.x0, 0.0);
+    let (phi_a, bz_a) = (at_a.phi, at_a.b.z);
     let point = |t: f64, x: DVec3, p: DVec3, radiated: f64| {
         let f = scn.field.sample(x, t);
         let v = kin.velocity(p);
@@ -284,9 +288,9 @@ fn build_path(
             x,
             p,
             kinetic: kin.kinetic_energy(p),
-            potential: q * (f.phi - phi_a),
+            potential: q * (f.phi - phi_a) - moment * (f.b.z - bz_a),
             radiated,
-            force: (f.e + v.cross(f.b)) * q,
+            force: (f.e + v.cross(f.b)) * q + scn.field.grad_bz(x, t) * moment,
             speed_over_c: if scn.c.is_finite() {
                 v.length() / scn.c
             } else {

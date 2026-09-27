@@ -12,6 +12,7 @@ pub const UNIT_PARTICLE: Particle = Particle {
     charge: 1.0,
     mass: 1.0,
     radius: 0.0,
+    moment: 0.0,
 };
 
 /// One fixed charge `q` at the origin (radius `r`), unit test particle.

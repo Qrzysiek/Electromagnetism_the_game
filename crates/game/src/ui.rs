@@ -339,11 +339,30 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ),
         None => format!("Launch: T₀ = {t0:.3}, v₀ = {v0:.3} (Newtonian)"),
     });
-    ui.label(format!(
-        "Particle: q = {}, m = {}",
-        fmt_si(shot.particle.charge),
-        fmt_si(shot.particle.mass)
-    ));
+    ui.label(if shot.particle.moment == 0.0 {
+        format!(
+            "Particle: q = {}, m = {}",
+            fmt_si(shot.particle.charge),
+            fmt_si(shot.particle.mass)
+        )
+    } else {
+        format!(
+            "Particle: q = {}, m = {}, magnetic moment along {} of {} (spin {})",
+            fmt_si(shot.particle.charge),
+            fmt_si(shot.particle.mass),
+            if shot.particle.moment > 0.0 {
+                "+z"
+            } else {
+                "−z"
+            },
+            fmt_si(shot.particle.moment.abs()),
+            if shot.particle.moment > 0.0 {
+                "up"
+            } else {
+                "down"
+            }
+        )
+    });
     egui::CollapsingHeader::new("Physics model and its limits")
         .id_salt("model_notes")
         // Opened for developer captures with EM_MODEL=1 (see `dev_capture`).
@@ -432,15 +451,17 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
             let sign = match (kind, game.editor.positive) {
                 (ElementKind::Charge, true) => "+",
                 (ElementKind::Charge, false) => "−",
-                (ElementKind::Magnet, true) => "⊙",
-                (ElementKind::Magnet, false) => "⊗",
+                (ElementKind::Magnet, true) => "out (+z)",
+                (ElementKind::Magnet, false) => "in (−z)",
                 (ElementKind::Antenna, true) => "phase 0°",
                 (ElementKind::Antenna, false) => "phase 180°",
                 (ElementKind::Plate | ElementKind::Supply, _) => "",
             };
             let hover = match kind {
                 ElementKind::Charge => "Flip sign (S)",
-                ElementKind::Magnet => "Flip orientation (S): ⊙ moment out of the plane, ⊗ into it",
+                ElementKind::Magnet => {
+                    "Flip orientation (S): moment out of the plane (+z) or into it (−z)"
+                }
                 ElementKind::Antenna => "Flip phase (S): opposite phase of the RF generator",
                 ElementKind::Plate | ElementKind::Supply => "",
             };
@@ -789,6 +810,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         Some(MapMode::Potential) => {
             "Red: uphill for the particle, blue: downhill; contours every T₀/4. \
              Dark: forbidden by energy conservation (exact, also with magnets)."
+        }
+        Some(MapMode::Magnetic) if shot.particle.charge == 0.0 && shot.particle.moment != 0.0 => {
+            "B perpendicular to the plane. Orange: out of the plane, teal: into it. \
+             Value 1 = field in which this particle's magnetic energy |m B| equals T₀; \
+             contours every 0.25."
         }
         Some(MapMode::Magnetic) => {
             "B perpendicular to the plane. Orange: out of the plane, teal: into it. \

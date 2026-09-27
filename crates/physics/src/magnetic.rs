@@ -26,6 +26,18 @@ impl MagneticDipole {
         let r_hat = r * inv_r;
         (r_hat * (3.0 * self.moment.dot(r_hat)) - self.moment) * inv_r3
     }
+
+    /// Exact gradient of `B_z`, from `B_z = 3 (M·r) r_z / r⁵ − M_z / r³`:
+    /// `∇B_z = 3 (M r_z + (M·r) ẑ) / r⁵ − 15 (M·r) r_z r / r⁷ + 3 M_z r / r⁵`.
+    pub fn grad_bz(&self, x: DVec3) -> DVec3 {
+        let r = x - self.position;
+        let r2 = r.length_squared();
+        let inv_r5 = 1.0 / (r2 * r2 * r2.sqrt());
+        let m = self.moment;
+        let mr = m.dot(r);
+        (m * r.z + DVec3::Z * mr) * (3.0 * inv_r5) - r * (15.0 * mr * r.z * inv_r5 / r2)
+            + r * (3.0 * m.z * inv_r5)
+    }
 }
 
 /// Circular coil (thin wire of radius `wire_radius`) of radius `radius` around `center`
@@ -129,6 +141,28 @@ impl CircularLoop {
         let rho_hat = if rho > 0.0 { radial / rho } else { DVec3::ZERO };
         n * bz + rho_hat * b_rho
     }
+
+    /// Gradient of the component of B along `normal`, at a point in the loop's plane
+    /// (outside the wire). There B is curl-free, so `∂B_z/∂ρ = ∂B_ρ/∂z`; with
+    /// `B_ρ = 2κ z β g(m) / (α² ρ)` and α, β, m even in z, at z = 0 this is
+    /// `2κ β g(m) / (α² ρ)`, along ρ̂ (zero on the axis). `g` is the series-evaluated
+    /// bracket of `field`, so the result is accurate near the axis too.
+    pub fn grad_bz_in_plane(&self, x: DVec3) -> DVec3 {
+        let n = self.normal;
+        let d = x - self.center;
+        let radial = d - n * d.dot(n);
+        let rho = radial.length();
+        if rho == 0.0 {
+            return DVec3::ZERO;
+        }
+        let a = self.radius;
+        let alpha2 = (a - rho) * (a - rho);
+        let beta2 = (a + rho) * (a + rho);
+        let beta = beta2.sqrt();
+        let m = 4.0 * a * rho / beta2;
+        let dbz_drho = 2.0 * self.kappa * beta / (alpha2 * rho) * loop_bracket(m, alpha2 / beta2);
+        radial / rho * dbz_drho
+    }
 }
 
 /// Closed polygonal coil through `vertices` (the last connects back to the first),
@@ -160,6 +194,27 @@ impl PolygonCoil {
             b += segment_field(a - x, c - x, self.kappa);
         }
         b
+    }
+
+    /// Gradient of `B_z` at a point in the coil's plane (z = const, outside the wires).
+    /// The closed coil's field is curl-free there, so `∇B_z = ∂B_in-plane/∂z`. For one
+    /// segment at height h above the point, `ra × rb = u × v − h (u − v) × ẑ`, and the
+    /// scalar factor of `segment_field` is even in h, so `∂B/∂z = −F (a − b) × ẑ` with
+    /// `F = κ (|u| + |v|) / (|u| |v| (|u| |v| + u·v))`. (Per segment this is not the
+    /// gradient of that segment's B_z, whose field alone is not curl-free; summed over
+    /// the closed polygon it is.)
+    pub fn grad_bz_in_plane(&self, x: DVec3) -> DVec3 {
+        let n = self.vertices.len();
+        let mut g = DVec3::ZERO;
+        for i in 0..n {
+            let a = self.vertices[i];
+            let b = self.vertices[(i + 1) % n];
+            let (u, v) = (a - x, b - x);
+            let (lu, lv) = (u.length(), v.length());
+            let f = self.kappa * (lu + lv) / (lu * lv * (lu * lv + u.dot(v)));
+            g -= (a - b).cross(DVec3::Z) * f;
+        }
+        g
     }
 }
 

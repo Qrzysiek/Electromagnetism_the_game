@@ -33,6 +33,13 @@ pub trait FieldSolver {
     fn self_field(&self, _x: DVec3, _q: f64) -> (DVec3, f64) {
         (DVec3::ZERO, 0.0)
     }
+
+    /// Gradient of `B_z` at a point of the plane z = 0, for the force `m ∇B_z` on a
+    /// magnetic moment `m ẑ` (PHYSICS.md §3.2). Covers the static magnetic sources
+    /// (magnets, coils); zero for fields without them.
+    fn grad_bz(&self, _x: DVec3, _t: f64) -> DVec3 {
+        DVec3::ZERO
+    }
 }
 
 impl<F: FieldSolver + ?Sized> FieldSolver for &F {
@@ -46,6 +53,10 @@ impl<F: FieldSolver + ?Sized> FieldSolver for &F {
 
     fn self_field(&self, x: DVec3, q: f64) -> (DVec3, f64) {
         (**self).self_field(x, q)
+    }
+
+    fn grad_bz(&self, x: DVec3, t: f64) -> DVec3 {
+        (**self).grad_bz(x, t)
     }
 }
 
@@ -201,6 +212,23 @@ impl FieldSolver for LevelField {
 
     fn self_field(&self, x: DVec3, q: f64) -> (DVec3, f64) {
         self.conductors.self_field(x, q)
+    }
+
+    /// Magnets and coils (uniform stray B has no gradient). Time-dependent magnetic
+    /// fields (antennas, waves) are not included: levels do not combine them with
+    /// magnetic moments (`Level::model_issues`).
+    fn grad_bz(&self, x: DVec3, _t: f64) -> DVec3 {
+        let mut g = DVec3::ZERO;
+        for d in &self.dipoles {
+            g += d.grad_bz(x);
+        }
+        for l in &self.loops {
+            g += l.grad_bz_in_plane(x);
+        }
+        for p in &self.polygons {
+            g += p.grad_bz_in_plane(x);
+        }
+        g
     }
 }
 

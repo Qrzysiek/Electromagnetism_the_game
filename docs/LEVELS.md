@@ -47,14 +47,15 @@ verified reference solution for every shot and negligible radiation
 | 27 | First magnet | 8 Placing your own magnets | ≤ 1 magnet |
 | 28 | Calutron | isotope separation with magnets only | ≤ 2 magnets |
 | 29 | Build a Wien filter | crossed fields from charges and magnets | ≤ 4 charges, ≤ 2 magnets |
-| 30 | Stray field | 9 Noise: a stray field switched on and off; aim between | ≤ 1 charge |
-| 31 | Mains hum | uniform AC field at 4 phases acts like a random launch angle; imaging | ≤ 4 charges |
-| 32 | Earth's field | stray B_z of either sign on an electron beam | ≤ 3 charges |
-| 33 | RF kick | 10 Radio frequency: an antenna's kick depends on the passing time | ≤ 1 antenna |
-| 34 | RF separator | identical bunches half a period apart to different detectors | ≤ 2 antennas, ≤ 1 charge |
-| 35 | Tune the RF | choose the antenna frequency: the phase difference ω Δt decides | ≤ 1 antenna (5 frequencies), ≤ 1 charge |
-| 36 | Streak camera | three bunches a third of a period apart to three spots | ≤ 2 antennas, ≤ 2 charges |
-| 37 | Synchrotron light | 11 Radiation: radiative damping spirals the particle to the axis; only possible with radiation (canonical angular momentum) | 1 magnet on the axis |
+| 30 | Stern–Gerlach | 9 Magnetic moments: neutral atoms with spin up or down, force m grad B_z | ≤ 1 magnet |
+| 31 | Stray field | 10 Noise: a stray field switched on and off; aim between | ≤ 1 charge |
+| 32 | Mains hum | uniform AC field at 4 phases acts like a random launch angle; imaging | ≤ 4 charges |
+| 33 | Earth's field | stray B_z of either sign on an electron beam | ≤ 3 charges |
+| 34 | RF kick | 11 Radio frequency: an antenna's kick depends on the passing time | ≤ 1 antenna |
+| 35 | RF separator | identical bunches half a period apart to different detectors | ≤ 2 antennas, ≤ 1 charge |
+| 36 | Tune the RF | choose the antenna frequency: the phase difference ω Δt decides | ≤ 1 antenna (5 frequencies), ≤ 1 charge |
+| 37 | Streak camera | three bunches a third of a period apart to three spots | ≤ 2 antennas, ≤ 2 charges |
+| 38 | Synchrotron light | 12 Radiation: radiative damping spirals the particle to the axis; only possible with radiation (canonical angular momentum) | 1 magnet on the axis |
 
 ## Automatic detectors
 
@@ -115,20 +116,21 @@ cost more, with 600 samples and 16 runs). Columns:
 | 27_first_magnet | 3.3 | 8.1e-2 | 32/32 | 14 | 14 / 12 | 0.40 |
 | 28_calutron | 6.5 | < 1.5e-3 | 4/32 | 124 | 2924 / 667 | 0.70 |
 | 29_build_wien_filter | 18.2 | 2.5e-3 | 14/32 | 130 | 644 / 400 | 0.85 |
-| 30_stray_field | 3.8 | 5.0e-2 | 32/32 | 19 | 19 / 20 | 0.62 |
-| 31_mains_hum | 12.3 | < 1.5e-3 | 18/32 | 96 | 407 / 667 | 0.87 |
-| 32_earths_field | 9.6 | 5.0e-4 | 17/32 | 184 | 537 / 2000 | 0.82 |
-| 33_rf_kick | 4.3 | 4.3e-2 | 32/32 | 30 | 30 / 24 | 0.27 |
-| 34_rf_separator | 11.0 | 6.0e-3 | 29/32 | 66 | 107 / 167 | 0.76 |
-| 35_tune_the_rf | 7.9 | 1.5e-3 | 26/32 | 130 | 223 / 667 | 0.76 |
-| 36_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
-| 37_synchrotron_light | 1.0 | 5.0e-1 | 32/32 | 2 | 2 / 2 | -0.05 |
+| 30_stern_gerlach | 3.2 | 8.2e-2 | 32/32 | 10 | 10 / 12 | 0.66 |
+| 31_stray_field | 3.8 | 5.0e-2 | 32/32 | 19 | 19 / 20 | 0.62 |
+| 32_mains_hum | 12.3 | < 1.5e-3 | 18/32 | 96 | 407 / 667 | 0.87 |
+| 33_earths_field | 9.6 | 5.0e-4 | 17/32 | 184 | 537 / 2000 | 0.82 |
+| 34_rf_kick | 4.3 | 4.3e-2 | 32/32 | 30 | 30 / 24 | 0.27 |
+| 35_rf_separator | 11.0 | 6.0e-3 | 29/32 | 66 | 107 / 167 | 0.76 |
+| 36_tune_the_rf | 7.9 | 1.5e-3 | 26/32 | 130 | 223 / 667 | 0.76 |
+| 37_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
+| 38_synchrotron_light | 1.0 | 5.0e-1 | 32/32 | 2 | 2 / 2 | -0.05 |
 
 Notes:
 
-- The introduction levels (1, 10, 13, 16, 17, 20, 24, 27, 30, 33, 37) are meant to be easy. Level 37 is a
+- The introduction levels (1, 10, 13, 16, 17, 20, 24, 27, 30, 31, 34, 38) are meant to be easy. Level 38 is a
   concept level (8 choices); harder radiation levels are to come.
-- Under disturbances (chapter 9) a placement counts as a solution only if every flight
+- Under disturbances (chapter 10) a placement counts as a solution only if every flight
   arrives, verified. The distance objective sums over all flights.
 - Dempster (25) has in effect one physical parameter (the accelerating voltage, which sets
   all radii). It is kept as the concept level for 180° focusing.

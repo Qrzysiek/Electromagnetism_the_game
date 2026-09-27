@@ -28,12 +28,13 @@
   "27_first_magnet": "763cde8920f40d82",
   "28_calutron": "acb588e6f23cb889",
   "29_build_wien_filter": "0004d084ef82e28e",
-  "30_stray_field": "d4b3d01ad191acfb",
-  "31_mains_hum": "559b42d092a335cc",
-  "32_earths_field": "0a6b04b5b1b7edc1",
-  "33_rf_kick": "f409e012a12e89cb",
-  "34_rf_separator": "c2072cd90a89abd9",
-  "35_tune_the_rf": "d78233e6759a1e58",
-  "36_streak_camera": "2228b5d375bdc287",
-  "37_synchrotron_light": "ffb06e7c1f25d8d9"
+  "30_stern_gerlach": "51daccd029d2bcda",
+  "31_stray_field": "d4b3d01ad191acfb",
+  "32_mains_hum": "559b42d092a335cc",
+  "33_earths_field": "0a6b04b5b1b7edc1",
+  "34_rf_kick": "f409e012a12e89cb",
+  "35_rf_separator": "c2072cd90a89abd9",
+  "36_tune_the_rf": "d78233e6759a1e58",
+  "37_streak_camera": "2228b5d375bdc287",
+  "38_synchrotron_light": "ffb06e7c1f25d8d9"
 }

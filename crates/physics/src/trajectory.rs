@@ -282,10 +282,11 @@ pub fn run_cancellable<F: FieldSolver>(
 
     // With conductors, the particle's interaction with its own induced charges adds
     // ½ q φ_self (PHYSICS.md §2.6).
+    // A magnetic moment adds −m B_z (PHYSICS.md §3.2).
     let energy = |x: DVec3, p: DVec3, t: f64| {
-        ode.kin.kinetic_energy(p)
-            + q * scn.field.sample(x, t).phi
-            + 0.5 * q * scn.field.self_field(x, q).1
+        let f = scn.field.sample(x, t);
+        ode.kin.kinetic_energy(p) + q * f.phi + 0.5 * q * scn.field.self_field(x, q).1
+            - scn.particle.moment * f.b.z
     };
     let power = |x: DVec3, p: DVec3, t: f64| radiated_power(&ode, x, p, t);
 

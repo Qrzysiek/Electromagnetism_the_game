@@ -66,6 +66,25 @@ impl Level {
                  radiation terms).",
             ));
         }
+        if self.shots.iter().any(|s| s.particle.moment != 0.0) {
+            out.push(note(
+                true,
+                "Magnetic moments: fixed perpendicular to the plane (a spin state, up or \
+                 down); B is perpendicular to the plane too, so there is no torque and the \
+                 force is m grad B_z, exactly (also relativistically, without electric fields).",
+            ));
+            out.push(note(
+                false,
+                "Spin is classical here: each particle is in one of the two states measured \
+                 along z (an unpolarised beam is a 50/50 mixture), not in a superposition.",
+            ));
+            out.push(note(
+                false,
+                "The radiation of the accelerated magnetic moment is neglected: its estimate \
+                 m² ∫|da/dt|² dt / c⁷ (a moving moment carries an electric dipole v×m/c²) is \
+                 checked to be below 1e-10 of the launch energy in the shipped levels.",
+            ));
+        }
         if !self.disturbances.is_empty() {
             out.push(note(
                 true,
@@ -147,7 +166,7 @@ mod tests {
         let plates = shipped("20_build_a_deflector.json");
         assert!(has(&plates, &[], "image force"));
         assert!(has(&plates, &[], "Radiation is neglected"));
-        let sync = shipped("37_synchrotron_light.json");
+        let sync = shipped("38_synchrotron_light.json");
         assert!(has(&sync, &[], "Landau–Lifshitz"));
         assert!(has(&sync, &[], "Coils"));
         // Exact statements come first.

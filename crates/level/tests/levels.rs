@@ -67,7 +67,10 @@ fn neglected_radiation_is_below_numerical_accuracy() {
                 scn,
                 &RunSettings::with_tolerance(level.physics.tolerances.verify),
             );
-            let fraction = tr.radiated_energy / tr.kinetic_initial;
+            // Charge (Liénard) plus the estimate for a magnetic moment (PHYSICS.md §3.2).
+            let moment =
+                level::moment_radiation_estimate(scn, tr.samples.iter().map(|s| (s.x, s.p, s.t)));
+            let fraction = (tr.radiated_energy + moment) / tr.kinetic_initial;
             if level.physics.radiation_reaction {
                 // Radiation is part of the model; the Landau–Lifshitz treatment must be
                 // valid instead (radiation reaction small against the Lorentz force).

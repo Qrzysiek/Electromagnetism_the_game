@@ -79,14 +79,18 @@ def box(b, direction=None, kinetic=None):
     return d
 
 
-def shot(q, m, node, angle_deg, ke, detector, time=0.0):
+def shot(q, m, node, angle_deg, ke, detector, time=0.0, moment=0.0):
+    """`moment`: magnetic moment along z (spin up > 0, spin down < 0)."""
     a = math.radians(angle_deg)
     launch = {"node": [node[0], node[1], 0], "direction": [math.cos(a), math.sin(a), 0.0],
               "kinetic_energy": ke}
     if time:
         launch["time"] = time
+    particle = {"charge": q, "mass": m, "radius": 0.0}
+    if moment:
+        particle["moment"] = moment
     return {
-        "particle": {"charge": q, "mass": m, "radius": 0.0},
+        "particle": particle,
         "launch": launch,
         "detector": detector,
     }
@@ -419,6 +423,27 @@ def build_wien_filter():
         reference=[magnet(15, 6, -2 * M), magnet(15, 14, -2 * M),
                    charge(11, 7, 0.2 * M), charge(19, 7, 0.2 * M),
                    charge(11, 13, -0.2 * M), charge(19, 13, -0.2 * M)])
+
+
+# =======================================================================================
+# Magnetic moments (PHYSICS.md 3.2). A neutral particle with a magnetic moment m along z
+# (a spin state) feels no Lorentz force but the force m grad B_z. For a magnet mu the
+# potential is U = m mu / r^3; flying past at distance b it is kicked by 4 m mu / (v b^3).
+# With m = 1e-6 and mu = 1e6 a pass at 3 cells deflects by about 0.15 rad.
+
+def stern_gerlach():
+    return level(
+        "Stern–Gerlach (1922)",
+        "Stern and Gerlach sent silver atoms through a strongly non-uniform magnetic field. "
+        "The atoms are neutral, but each carries a tiny magnetic moment, whose energy −m·B "
+        "changes where the field changes: the beam split in two, one part for each spin "
+        "state. Here the two spin states fly as two shots. Place a magnet so that each "
+        "reaches its own detector: one state is pushed towards stronger field, the other "
+        "away (see the magnetic map).",
+        shots=[shot(0.0, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 2), moment=m)
+               for m in (1e-6, -1e-6)],
+        max_magnets=1, strengths=[m * M for m in (0.5, 1, 2)], region=(6, 3, 22, 17),
+        reference=[magnet(14, 13, M)])
 
 
 # =======================================================================================
@@ -791,16 +816,18 @@ LEVELS = [
     ("first_magnet", first_magnet),
     ("calutron", calutron),
     ("build_wien_filter", build_wien_filter),
-    # Chapter 9: noise (outside fields; one setup for every disturbance).
+    # Chapter 9: magnetic moments (spin).
+    ("stern_gerlach", stern_gerlach),
+    # Chapter 10: noise (outside fields; one setup for every disturbance).
     ("stray_field", stray_field),
     ("mains_hum", mains_hum),
     ("earths_field", earths_field),
-    # Chapter 10: radio frequency.
+    # Chapter 11: radio frequency.
     ("rf_kick", rf_kick),
     ("rf_separator", rf_separator),
     ("tune_the_rf", tune_the_rf),
     ("streak_camera", streak_camera),
-    # Chapter 11: radiation.
+    # Chapter 12: radiation.
     ("synchrotron_light", synchrotron_light),
 ]
 

@@ -101,6 +101,7 @@ fn default_shot() -> Shot {
             charge: 1e-6,
             mass: 1.0,
             radius: 0.0,
+            moment: 0.0,
         },
         launch: Launch {
             node: [0, 10, 0],

@@ -342,6 +342,10 @@ pub struct ParticleSpec {
     pub charge: f64,
     pub mass: f64,
     pub radius: f64,
+    /// Magnetic moment along z (a spin state perpendicular to the plane); its energy is
+    /// `−moment · B_z` (PHYSICS.md §3.2).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub moment: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -653,6 +657,7 @@ impl Level {
             charge: p.charge,
             mass: p.mass,
             radius: p.radius,
+            moment: p.moment,
         }
     }
 
@@ -1045,6 +1050,31 @@ impl Level {
     /// supported), as messages. Empty if the level is consistent.
     pub fn model_issues(&self) -> Vec<String> {
         let mut out = Vec::new();
+        if self.shots.iter().any(|s| s.particle.moment != 0.0) {
+            // m ∇B_z is exact for E = 0, or for c = ∞ (PHYSICS.md §3.2). At finite c an
+            // electric field adds velocity-dependent (Aharonov–Casher / hidden-momentum)
+            // terms that are not modelled.
+            let electric = self.elements.iter().any(|e| e.kind != ElementKind::Magnet)
+                || self.limits.max_charges > 0
+                || self.limits.max_antennas > 0
+                || self.limits.max_plates > 0
+                || !self.conductors.is_empty()
+                || !self.electrodes.is_empty()
+                || self
+                    .disturbances
+                    .iter()
+                    .any(|d| d.e != [0.0, 0.0] || !d.waves.is_empty());
+            if self.physics.c.is_some() && electric {
+                out.push(
+                    "magnetic moments with electric fields at finite c need terms that are not \
+                     modelled (use c = ∞, or magnetic fields only)"
+                        .into(),
+                );
+            }
+            if self.physics.radiation_reaction {
+                out.push("radiation reaction is not modelled for magnetic moments".into());
+            }
+        }
         if self.limits.max_plates > 0 && self.limits.plate_voltages.is_empty() {
             out.push("player plates need at least one allowed potential".into());
         }
@@ -1294,6 +1324,37 @@ pub fn electrode_image_force_bound(
     worst
 }
 
+/// Estimated energy radiated by the particle's magnetic moment `m` along the states
+/// `(x, p, t)` of a flight (neglected, PHYSICS.md §3.2). A moving moment carries the
+/// electric dipole `v×m/c²`, which radiates `2|ȧ×m|²/(3c⁷)` (`ȧ`: the jerk); the magnetic
+/// quadrupole term is of the same order, so the estimate is `m²|ȧ|²/c⁷`, with the jerk
+/// from the force between consecutive states. 0 for `c = ∞` or without a moment.
+pub fn moment_radiation_estimate(
+    scn: &Scenario<LevelField>,
+    states: impl IntoIterator<Item = (DVec3, DVec3, f64)>,
+) -> f64 {
+    let (m, c) = (scn.particle.moment, scn.c);
+    if m == 0.0 || !c.is_finite() {
+        return 0.0;
+    }
+    let ode = physics::dynamics::ParticleOde::new(&scn.field, &scn.particle, c, 1.0);
+    let accel =
+        |x: DVec3, p: DVec3, t: f64| ode.force(x, p, t) / (ode.kin.gamma(p) * scn.particle.mass);
+    let mut w = 0.0;
+    let mut prev: Option<(DVec3, f64)> = None;
+    for (x, p, t) in states {
+        let a = accel(x, p, t);
+        if let Some((a0, t0)) = prev
+            && t > t0
+        {
+            let jerk = (a - a0) / (t - t0);
+            w += m * m * jerk.length_squared() / c.powi(7) * (t - t0);
+        }
+        prev = Some((a, t));
+    }
+    w
+}
+
 /// Largest neglected image force that is still below the numerical accuracy (relative to
 /// the force that matters, see `electrode_image_force_bound`).
 pub const IMAGE_FORCE_LIMIT: f64 = 1e-10;
@@ -1525,6 +1586,7 @@ mod tests {
                     charge: 1.0,
                     mass: 1.0,
                     radius: 0.0,
+                    moment: 0.0,
                 },
                 launch: Launch {
                     node: [0, 5, 0],

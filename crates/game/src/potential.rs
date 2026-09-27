@@ -41,6 +41,7 @@ pub struct PotentialParams {
     pub solid: u32,
     pub mode: u32,
     pub wire: f32,
+    pub moment_weight: f32,
 }
 
 impl Default for PotentialParams {
@@ -56,6 +57,7 @@ impl Default for PotentialParams {
             solid: 0,
             mode: 0,
             wire: 0.1,
+            moment_weight: 0.0,
         }
     }
 }
@@ -92,7 +94,9 @@ fn count(n: usize) -> u32 {
 pub const GYRO_REFERENCE: f64 = 5.0;
 
 /// Shader parameters for one shot. Charges are pre-scaled to `w = qQ/T₀` (the shader
-/// computes `U/T₀`), magnetic sources to `1/b_ref` with `b_ref = |p₀| / (|q| r_ref)`.
+/// computes `U/T₀`), magnetic sources to `1/b_ref` with `b_ref = |p₀| / (|q| r_ref)`, or
+/// for a neutral particle with a magnetic moment `m`, `b_ref = T₀ / |m|`. The moment's
+/// energy `−m B_z` enters `U` with the weight `−m b_ref / T₀`.
 #[allow(clippy::cast_possible_truncation)]
 pub fn params(
     scn: &Scenario<LevelField>,
@@ -102,11 +106,19 @@ pub fn params(
 ) -> PotentialParams {
     let kin = physics::dynamics::Kinematics::new(scn.particle.mass, scn.c);
     let t0 = kin.kinetic_energy(scn.p0).max(1e-300);
-    let q = scn.particle.charge;
-    let b_ref = (scn.p0.length() / (q.abs() * GYRO_REFERENCE)).max(1e-300);
+    let (q, m) = (scn.particle.charge, scn.particle.moment);
+    let b_ref = if q != 0.0 {
+        (scn.p0.length() / (q.abs() * GYRO_REFERENCE)).max(1e-300)
+    } else if m != 0.0 {
+        t0 / m.abs()
+    } else {
+        1.0
+    };
     let f = &scn.field;
+    let at_a = f.sample(scn.x0, 0.0);
     let mut out = PotentialParams {
-        u_a: (q * f.sample(scn.x0, 0.0).phi / t0) as f32,
+        u_a: ((q * at_a.phi - m * at_a.b.z) / t0) as f32,
+        moment_weight: (-m * b_ref / t0) as f32,
         mode: match mode {
             MapMode::Potential => 0,
             MapMode::Magnetic | MapMode::Waves | MapMode::ParticleField | MapMode::Total => 1,

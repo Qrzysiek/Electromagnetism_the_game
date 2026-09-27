@@ -15,12 +15,15 @@ use glam::DVec3;
 use crate::field::FieldSolver;
 use crate::integrator::OdeSystem;
 
-/// A test particle: rigid, spherically symmetric, non-polarizable.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// A test particle: rigid, spherically symmetric, non-polarizable, with an optional
+/// magnetic moment `moment · ẑ` fixed perpendicular to the plane (a spin state; its
+/// interaction energy in its rest frame is `−moment · B′_z`, PHYSICS.md §3.2).
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Particle {
     pub charge: f64,
     pub mass: f64,
     pub radius: f64,
+    pub moment: f64,
 }
 
 /// Relativistic kinematics for one particle species in a world with speed of light `c`.
@@ -68,6 +71,8 @@ impl Kinematics {
 pub struct ParticleOde<F> {
     pub field: F,
     pub charge: f64,
+    /// Magnetic moment along z (force `moment ∇B_z`).
+    pub moment: f64,
     pub kin: Kinematics,
     pub p_ref: f64,
     /// Include the Landau–Lifshitz radiation-reaction force (no effect for `c = ∞`).
@@ -81,6 +86,7 @@ impl<F: FieldSolver> ParticleOde<F> {
         Self {
             field,
             charge: particle.charge,
+            moment: particle.moment,
             kin: Kinematics::new(particle.mass, c),
             p_ref,
             radiation_reaction: false,
@@ -159,12 +165,21 @@ impl<F: FieldSolver> ParticleOde<F> {
     }
 
     /// Force `q(E + v×B)` at state `(x, p)` and time `t`, including the image force
-    /// of conductors.
+    /// of conductors and the force `m ∇B_z` on the magnetic moment.
     pub fn force(&self, x: DVec3, p: DVec3, t: f64) -> DVec3 {
         let f = self.field.sample(x, t);
         let v = self.kin.velocity(p);
         let e_self = self.field.self_field(x, self.charge).0;
-        (f.e + e_self + v.cross(f.b)) * self.charge
+        (f.e + e_self + v.cross(f.b)) * self.charge + self.moment_force(x, t)
+    }
+
+    /// Force on the magnetic moment, `m ∇B_z` (zero without a moment).
+    pub fn moment_force(&self, x: DVec3, t: f64) -> DVec3 {
+        if self.moment == 0.0 {
+            DVec3::ZERO
+        } else {
+            self.field.grad_bz(x, t) * self.moment
+        }
     }
 }
 
@@ -179,7 +194,7 @@ impl<F: FieldSolver> OdeSystem for ParticleOde<F> {
         let v = self.kin.velocity(p);
         let f = self.field.sample(x, t);
         let e_self = self.field.self_field(x, self.charge).0;
-        let force = (f.e + e_self + v.cross(f.b)) * self.charge;
+        let force = (f.e + e_self + v.cross(f.b)) * self.charge + self.moment_force(x, t);
         let dp = force / self.p_ref;
         dy[0] = v.x;
         dy[1] = v.y;

@@ -222,6 +222,7 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
         charge,
         mass,
         radius,
+        moment,
     } = particle;
     let Launch {
         node: launch_node,
@@ -245,6 +246,7 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
             .has_focus()
         }
     });
+    focus |= row(ui, "Magnetic moment m_z", |ui| si(ui, moment, 1e-8));
     focus |= row(ui, "Launch node", |ui| node(ui, launch_node, grid));
     focus |= row(ui, "Launch energy T₀", |ui| {
         positive(ui, kinetic_energy, 0.01, MAX_POSITIVE)
@@ -975,6 +977,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     charge,
                     mass,
                     radius: r,
+                    moment,
                 },
             launch:
                 Launch {
@@ -991,6 +994,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                 },
         } = s;
         if !charge.is_finite()
+            || !moment.is_finite()
             || !positive(*mass)
             || !(0.0..=MAX_RADIUS).contains(r)
             || !on_grid(node)

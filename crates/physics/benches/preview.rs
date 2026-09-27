@@ -50,6 +50,7 @@ fn level_50() -> Scenario<Coulomb> {
             charge: 1.0,
             mass: 1.0,
             radius: 0.0,
+            moment: 0.0,
         },
         c: 100.0,
         x0: DVec3::new(0.0, 15.0, 0.0),

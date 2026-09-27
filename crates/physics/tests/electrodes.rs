@@ -159,6 +159,7 @@ fn e4_plane_symmetry() {
             charge: 1.0,
             mass: 1.0,
             radius: 0.0,
+            moment: 0.0,
         },
         c: 3.0,
         x0: DVec3::new(-8.0, 1.0, 0.0),

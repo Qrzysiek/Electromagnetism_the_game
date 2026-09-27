@@ -329,6 +329,7 @@ fn k4_energy_conservation_with_image_forces() {
                 charge: 1.0,
                 mass: 1.0,
                 radius: 0.05,
+                moment: 0.0,
             },
             c,
             x0: DVec3::new(-6.0, 1.2, 0.0),

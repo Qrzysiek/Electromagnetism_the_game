@@ -166,6 +166,7 @@ fn w3_plane_symmetry_with_external_fields() {
             charge: 1.0,
             mass: 1.0,
             radius: 0.0,
+            moment: 0.0,
         },
         c,
         x0: DVec3::new(-6.0, -1.0, 0.0),

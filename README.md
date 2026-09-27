@@ -65,6 +65,10 @@ Some levels let you build or tune electrodes yourself:
 - The flight details show a bound on the electrodes' neglected image force, with a warning if a flight passes so close to metal that it is no longer negligible.
 - In the sandbox: "Player plates", "Plate potentials", "Plate L×T×H" and "Supply voltages" in the limits, "tunable" on each electrode.
 
+## Magnetic moments (spin)
+
+Particles can carry a magnetic moment perpendicular to the plane: spin up or spin down. Neutral atoms with a moment feel no Lorentz force but the force m ∇B_z, which pushes one spin state towards stronger field and the other away: the Stern–Gerlach experiment (PHYSICS.md §3.2). The potential map then shows the particle's magnetic energy −m B_z, and the magnetic map is scaled to it. In the sandbox the moment is set per shot ("Magnetic moment m_z").
+
 ## Metal spheres
 
 Levels can contain metal spheres. They can be grounded, isolated with a net charge, or held at a potential (like a Van de Graaff dome).

@@ -1,12 +1,14 @@
 // Field maps, computed per pixel (visual only, f32).
 //
-// Mode 0, potential: colour shows U / T0 = q (phi - phi_A) / T0 from the particle's point
-// of view: red uphill, blue downhill, contours every T0/4. U > T0 is forbidden by energy
-// conservation (dark); its boundary, the turning line U = T0, is bright.
+// Mode 0, potential: colour shows the particle's potential energy relative to the launch
+// point, U / T0 = [q (phi - phi_A) - m (B_z - B_z,A)] / T0 (m: its magnetic moment): red
+// uphill, blue downhill, contours every T0/4. U > T0 is forbidden by energy conservation
+// (dark); its boundary, the turning line U = T0, is bright.
 //
-// Mode 1, magnetic field: B_z in units of b_ref, the field in which the particle of the
-// active shot circles with a 5-cell gyroradius (so the value is 5 / r_gyro). Orange: B out
-// of the plane, teal: into the plane; contours every 0.25.
+// Mode 1, magnetic field: B_z in units of b_ref: for a charged particle the field in which
+// it circles with a 5-cell gyroradius (so the value is 5 / r_gyro); for a neutral one with
+// a moment m, the field with |m B_z| = T0. Orange: B out of the plane, teal: into the
+// plane; contours every 0.25.
 //
 // Lines are antialiased with screen-space derivatives, so the maps are sharp at any zoom.
 
@@ -35,6 +37,8 @@ struct Params {
     mode: u32,
     // Coil wire radius (cells).
     wire: f32,
+    // -m b_ref / T0: weight of B_z / b_ref in U / T0 (0 without a magnetic moment).
+    moment_weight: f32,
 };
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
@@ -102,6 +106,9 @@ fn potential_colour(p: vec2<f32>) -> vec3<f32> {
         }
         let d = p - c.xy;
         u = u + c.z / max(sqrt(dot(d, d) + z * z), 1e-4);
+    }
+    if (params.moment_weight != 0.0) {
+        u = u + params.moment_weight * magnetic_field(p);
     }
     u = u - params.u_a;
 
