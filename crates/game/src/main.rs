@@ -95,6 +95,43 @@ pub struct Game {
 }
 
 impl Game {
+    pub fn new(levels: Vec<Level>, level_paths: Vec<PathBuf>) -> Self {
+        let editor = Editor::new(levels[0].clone());
+        Self {
+            levels,
+            level_paths,
+            level_index: 0,
+            editor,
+            flights: Vec::new(),
+            active_shot: 0,
+            active_disturbance: 0,
+            show_all_shots: true,
+            sent_revision: 0,
+            cost: None,
+            map_key: (0, 0, None),
+            field_lines: Vec::new(),
+            field_line_spacing: 1.5,
+            field_line_opacity: 0.2,
+            field_lines_key: (0, 0),
+            map: Some(MapMode::Potential),
+            show_field_lines: false,
+            show_field_arrows: true,
+            radiation_only: false,
+            log_magnitude: true,
+            log_omega: false,
+            field_quantity: radiation::FieldQuantity::Bz,
+            field_range_decades: 2.5,
+            animate: true,
+            playback_speed: 1.0,
+            anim_time: 0.0,
+            last_cursor_world: None,
+            sandbox: sandbox::Sandbox::default(),
+            mouse_drag: false,
+            text_focus: false,
+            panel_left_px: None,
+        }
+    }
+
     fn load_level(&mut self, index: usize) {
         self.level_index = index;
         self.editor = Editor::new(self.levels[index].clone());
@@ -267,7 +304,6 @@ fn load_levels() -> (Vec<Level>, Vec<PathBuf>) {
 fn main() {
     let (levels, level_paths) = load_levels();
     assert!(!levels.is_empty(), "no levels found");
-    let editor = Editor::new(levels[0].clone());
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.06, 0.06, 0.08)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -281,39 +317,7 @@ fn main() {
         .add_plugins(EguiPlugin::default())
         .add_plugins(potential::PotentialPlugin)
         .init_gizmo_group::<FieldLineGizmos>()
-        .insert_resource(Game {
-            levels,
-            level_paths,
-            level_index: 0,
-            editor,
-            flights: Vec::new(),
-            active_shot: 0,
-            active_disturbance: 0,
-            show_all_shots: true,
-            sent_revision: 0,
-            cost: None,
-            map_key: (0, 0, None),
-            field_lines: Vec::new(),
-            field_line_spacing: 1.5,
-            field_line_opacity: 0.2,
-            field_lines_key: (0, 0),
-            map: Some(MapMode::Potential),
-            show_field_lines: false,
-            show_field_arrows: true,
-            radiation_only: false,
-            log_magnitude: true,
-            log_omega: false,
-            field_quantity: radiation::FieldQuantity::Bz,
-            field_range_decades: 2.5,
-            animate: true,
-            playback_speed: 1.0,
-            anim_time: 0.0,
-            last_cursor_world: None,
-            sandbox: sandbox::Sandbox::default(),
-            mouse_drag: false,
-            text_focus: false,
-            panel_left_px: None,
-        })
+        .insert_resource(Game::new(levels, level_paths))
         .insert_resource(PhysicsWorker(Worker::spawn()))
         .add_systems(Startup, (setup, radiation::setup))
         .add_systems(
@@ -490,7 +494,7 @@ fn setup(
 }
 
 /// World position (cell units) of the grid node nearest to `p`.
-fn nearest_node(game: &Game, p: Vec2) -> [i64; 3] {
+pub fn nearest_node(game: &Game, p: Vec2) -> [i64; 3] {
     let s = f64::from(game.editor.subdivision());
     #[allow(clippy::cast_possible_truncation)]
     let r = |v: f32| (f64::from(v) * s).round() as i64;
@@ -647,7 +651,7 @@ fn input(
     if on_grid
         && game.sandbox.active
         && (pressed || released || right)
-        && sandbox::pointer(game, node, world, pressed, released, right)
+        && sandbox::pointer_at(game, world, pressed, released, right)
     {
         return;
     }

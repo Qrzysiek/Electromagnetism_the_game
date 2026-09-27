@@ -247,7 +247,29 @@ fn coil_near(level: &Level, p: Vec2) -> Option<usize> {
 /// Handles a click (or drag end) on grid node `node` (world point `world`) with the
 /// current tool. Returns true if the click was consumed (player-element clicks are left to
 /// the normal editor).
-pub fn pointer(
+/// A sandbox click at world position `world`. Tools that edit the level work on its own
+/// grid: a refined play grid is left first, so that the clicked node is in the level's
+/// units (`Editor::edit_level` would reset it anyway, and a node of the finer grid would
+/// then name a different place).
+pub fn pointer_at(
+    game: &mut Game,
+    world: Vec2,
+    pressed: bool,
+    released: bool,
+    right: bool,
+) -> bool {
+    if game.sandbox.tool != Tool::PlayerElement && game.editor.refinement() != 1 {
+        game.editor.edit_level(|_| {});
+    }
+    let node = crate::nearest_node(game, world);
+    if !game.editor.level.grid.contains(node) {
+        return false;
+    }
+    game.editor.set_cursor(node);
+    pointer(game, node, world, pressed, released, right)
+}
+
+fn pointer(
     game: &mut Game,
     node: Node,
     world: Vec2,
@@ -765,6 +787,40 @@ fn cost_meters(ui: &mut egui::Ui, game: &Game) {
     );
 }
 
+/// Applies an edited copy `l` of the level (sandbox panel). A refinement of the level's
+/// grid by `refine_by` keeps every position: the level (edited copy), and the player's
+/// elements, whose nodes are scaled too.
+fn commit_level_edit(game: &mut Game, mut l: Level, before: &Level, refine_by: Option<u32>) {
+    if let Some(f) = refine_by {
+        l.refine(f, &mut []);
+    }
+    if l == *before {
+        return;
+    }
+    // Keep everything inside the (possibly resized) grid.
+    let m = l.grid.max_node();
+    let clamp = |n: Node| [n[0].clamp(0, m[0]), n[1].clamp(0, m[1]), 0];
+    let grid = l.grid;
+    l.elements.retain(|c| grid.contains(c.node));
+    l.reference_solution.retain(|c| grid.contains(c.node));
+    for s in &mut l.shots {
+        s.launch.node = clamp(s.launch.node);
+        s.detector.min = clamp(s.detector.min);
+        s.detector.max = clamp(s.detector.max);
+    }
+    // `edit_level` first returns the player's elements to the level's own grid (as it
+    // was before the edit); a refinement then scales them with the level.
+    game.editor.edit_level(|target| *target = l);
+    if let Some(f) = refine_by {
+        let f = i64::from(f);
+        for e in &mut game.editor.placement {
+            e.node = e.node.map(|v| v * f);
+        }
+        game.editor.cursor = game.editor.cursor.map(|v| v * f);
+    }
+    game.editor.placement.retain(|c| grid.contains(c.node));
+}
+
 pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
     ui.label(
         egui::RichText::new("Sandbox: level editor")
@@ -849,27 +905,10 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
     let result =
         crate::level_editor::edit_level(ui, &mut l, &mut game.sandbox.texts, game.active_shot);
     game.text_focus |= result.focus;
-    if let Some(f) = result.refine_by {
-        l.refine(f, &mut []);
-    }
     if !l.limits.allow_positive && !l.limits.allow_negative {
         l.limits.allow_positive = true;
     }
-    if l != before {
-        // Keep everything inside the (possibly resized) grid.
-        let m = l.grid.max_node();
-        let clamp = |n: Node| [n[0].clamp(0, m[0]), n[1].clamp(0, m[1]), 0];
-        let grid = l.grid;
-        l.elements.retain(|c| grid.contains(c.node));
-        l.reference_solution.retain(|c| grid.contains(c.node));
-        for s in &mut l.shots {
-            s.launch.node = clamp(s.launch.node);
-            s.detector.min = clamp(s.detector.min);
-            s.detector.max = clamp(s.detector.max);
-        }
-        game.editor.edit_level(|target| *target = l);
-        game.editor.placement.retain(|c| grid.contains(c.node));
-    }
+    commit_level_edit(game, l, &before, result.refine_by);
     ui.separator();
 
     // Solutions.
@@ -936,5 +975,67 @@ pub fn panel(ui: &mut egui::Ui, game: &mut Game) {
     });
     for s in &game.sandbox.status {
         ui.label(egui::RichText::new(s).small());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn game() -> Game {
+        let level = Level::from_json(include_str!("../../../levels/01_first_bend.json")).unwrap();
+        let mut g = Game::new(vec![level], vec![PathBuf::from("01_first_bend.json")]);
+        enter(&mut g);
+        g.sandbox.tool = Tool::LevelElement;
+        g
+    }
+
+    fn click(g: &mut Game, x: f32, y: f32, right: bool) {
+        pointer_at(g, Vec2::new(x, y), !right, false, right);
+        pointer_at(g, Vec2::new(x, y), false, !right, false);
+    }
+
+    /// Regression: after refining the play grid, level elements could not be removed
+    /// (the clicked node was in the finer grid's units, the level in its own), and new
+    /// ones landed at twice their position.
+    #[test]
+    fn level_edits_after_a_grid_change_hit_the_clicked_place() {
+        let mut g = game();
+        let n0 = g.editor.base().elements.len();
+        click(&mut g, 5.0, 5.0, false);
+        assert_eq!(g.editor.base().elements.len(), n0 + 1);
+        g.editor.set_refinement(2);
+        click(&mut g, 5.0, 5.0, true);
+        assert_eq!(
+            g.editor.base().elements.len(),
+            n0,
+            "removed on the finer grid"
+        );
+        g.editor.set_refinement(3);
+        click(&mut g, 7.0, 3.0, false);
+        let e = g.editor.base().elements.last().unwrap();
+        let pos = g.editor.base().grid.position(e.node);
+        assert_eq!((pos.x, pos.y), (7.0, 3.0));
+    }
+
+    /// Changing "Nodes per cell" refines the level; the player's elements keep their
+    /// positions too (they used to keep their node numbers and jump).
+    #[test]
+    fn refining_the_level_keeps_the_player_elements_in_place() {
+        let mut g = game();
+        g.editor.set_cursor([5, 5, 0]);
+        g.editor.place().unwrap();
+        let before_pos = g.editor.level.grid.position(g.editor.placement[0].node);
+        let l = g.editor.base().clone();
+        commit_level_edit(&mut g, l.clone(), &l, Some(2));
+        assert_eq!(g.editor.base().grid.subdivision, 2);
+        assert_eq!(
+            g.editor.level.grid.position(g.editor.placement[0].node),
+            before_pos
+        );
+        // And it can still be removed where it is.
+        g.editor.set_cursor(g.editor.placement[0].node);
+        g.editor.remove();
+        assert!(g.editor.placement.is_empty());
     }
 }
