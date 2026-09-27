@@ -1336,13 +1336,6 @@ impl Level {
     /// Beams (PHYSICS.md §3.3): what the beam runner models.
     fn beam_issues(&self, out: &mut Vec<String>) {
         if self.physics.beam_interaction {
-            if self.physics.c.is_some() {
-                out.push(
-                    "interacting beams need c = ∞ (at finite c the interaction needs \
-                     retarded fields, not yet modelled)"
-                        .into(),
-                );
-            }
             if self.has_metal(&[]) || self.limits.max_plates > 0 {
                 out.push(
                     "interacting beams with metal: the charge one particle induces would act \

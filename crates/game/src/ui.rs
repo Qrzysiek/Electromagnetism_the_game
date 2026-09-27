@@ -940,17 +940,24 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             .iter()
             .filter(|o| **o != Outcome::Arrived)
             .count();
+        let energy = if p.energy_rel_error.is_nan() {
+            // Retarded interaction: the particles exchange energy with the field.
+            format!(
+                "largest radiated share of a particle {:.1e} (neglected)",
+                p.radiated_max
+            )
+        } else {
+            format!("energy drift of the whole beam {:.1e}", p.energy_rel_error)
+        };
         ui.label(
             egui::RichText::new(format!(
-                "{} particles{}; {lost} lost in the preview; energy drift of the whole beam \
-                 {:.1e}.",
+                "{} particles{}; {lost} lost in the preview; {energy}.",
                 p.paths.len(),
-                if level.physics.beam_interaction {
-                    ", interacting"
-                } else {
-                    ", not interacting"
+                match (level.physics.beam_interaction, level.physics.c) {
+                    (false, _) => ", not interacting",
+                    (true, None) => ", interacting",
+                    (true, Some(_)) => ", interacting (retarded fields)",
                 },
-                p.energy_rel_error
             ))
             .small(),
         );

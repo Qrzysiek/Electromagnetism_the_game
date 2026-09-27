@@ -59,6 +59,12 @@ pub fn retarded_time(w: &impl Worldline, c: f64, x: DVec3, t: f64) -> f64 {
 pub fn fields(w: &impl Worldline, q: f64, c: f64, x: DVec3, t: f64) -> LwField {
     let tr = retarded_time(w, c, x, t);
     let (r, v, a) = w.state(tr);
+    fields_from(q, c, x, tr, r, v, a)
+}
+
+/// Liénard–Wiechert `(E, B)` at `x` of charge `q` whose retarded time `tr` and state there
+/// (position `r`, velocity `v`, acceleration `a`) are already known.
+pub fn fields_from(q: f64, c: f64, x: DVec3, tr: f64, r: DVec3, v: DVec3, a: DVec3) -> LwField {
     let d = x - r;
     let dist = d.length();
     let n = d / dist;

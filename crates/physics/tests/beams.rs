@@ -388,3 +388,142 @@ fn b5_beam_gates_match_single_flights() {
     }
     assert!(worst < 1e-8, "{worst:.3e}");
 }
+
+/// B6: space charge of a relativistic beam. Two equal charges q, mass m, move side by side
+/// at v = 0.8c (uniformly before launch), a distance d apart, and are released at t = 0.
+/// The equations (Lorentz force, retarded fields) are Lorentz covariant, so in the lab
+/// the pair does exactly what it does in its rest frame, slowed by γ: there it starts at
+/// rest and explodes under the Coulomb force (to O(u²/c²) in its own speed u ≪ c), the
+/// separation doubling after t' = √(m d³/(4q²)) [√2 + ln(1 + √2)]. The lab time is γ t'.
+/// Instantaneous Coulomb forces would give t' (no dilation) with Newtonian mechanics and
+/// √γ t' with relativistic mechanics; the magnetic attraction of the retarded fields
+/// makes the net transverse force q²/(γ r²), the 1/γ² reduction of space charge.
+#[test]
+fn b6_comoving_pair_explodes_time_dilated() {
+    let (q, m, d, c) = (2.5e-3, 1.0, 1.0, 5.0);
+    let v = 0.8 * c;
+    let gamma = 1.0 / (1.0 - 0.64f64).sqrt();
+    // Each particle is removed when the separation has doubled (y = ±d).
+    let side = |y: f64| {
+        let (lo, hi) = if y > 0.0 { (d, 1e3) } else { (-1e3, -d) };
+        BeamParticle {
+            particle: particle(q, m),
+            x0: DVec3::new(0.0, y, 0.0),
+            p0: DVec3::new(gamma * m * v, 0.0, 0.0),
+            detector: Some(Region::Box(Aabb {
+                min: DVec3::new(-1e5, lo, -1.0),
+                max: DVec3::new(1e5, hi, 1.0),
+            })),
+            acceptance: None,
+        }
+    };
+    let mut scn = beam(
+        Coulomb::new(&[]),
+        vec![],
+        vec![side(0.5 * d), side(-0.5 * d)],
+        true,
+        2000.0,
+    );
+    scn.c = c;
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let t_lab = r.trajectories[0].end.t;
+    let t_rest = (m * d.powi(3) / (4.0 * q * q)).sqrt() * (2f64.sqrt() + (1.0 + 2f64.sqrt()).ln());
+    let rel = (t_lab / (gamma * t_rest) - 1.0).abs();
+    let u = q * 2f64.sqrt() / m.sqrt(); // rest-frame speed at doubling
+    println!(
+        "B6: doubling after t = {t_lab:.4} (lab); γ t' = {:.4}; relative difference {rel:.1e} \
+         (u/c = {:.1e}); Coulomb-only would give {t_rest:.1} (Newtonian) or {:.1} \
+         (relativistic); {} steps, radiated {:.1e} of T",
+        gamma * t_rest,
+        u / c,
+        gamma.sqrt() * t_rest,
+        r.stats.n_step,
+        r.trajectories[0].radiated_energy / r.trajectories[0].kinetic_initial
+    );
+    for t in &r.trajectories {
+        assert_eq!(t.outcome, Outcome::Arrived);
+    }
+    assert!(
+        r.energy_max_rel_error.is_nan(),
+        "not a conserved quantity at finite c"
+    );
+    assert!(rel < 1e-5, "{rel:.3e}");
+}
+
+/// B7: slow particles at finite c approach the Coulomb interaction of c = ∞. The
+/// leading difference is the Darwin interaction (Jackson §12.6), of order v²/c²: the
+/// deviation of the end points from the c = ∞ flight must fall by 4 when c doubles.
+#[test]
+fn b7_retarded_interaction_tends_to_coulomb_as_one_over_c_squared() {
+    let launch = |y: f64, vy: f64| BeamParticle {
+        particle: particle(0.3, 1.0),
+        x0: DVec3::new(0.0, y, 0.0),
+        p0: DVec3::new(1.0, vy, 0.0),
+        detector: None,
+        acceptance: None,
+    };
+    let at = |c: f64| {
+        let mut scn = beam(
+            Coulomb::new(&[]),
+            vec![],
+            vec![launch(0.5, 0.2), launch(-0.5, -0.1), launch(0.1, -0.3)],
+            true,
+            10.0,
+        );
+        scn.c = c;
+        let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+        r.trajectories.iter().map(|t| t.end.x).collect::<Vec<_>>()
+    };
+    let exact = at(f64::INFINITY);
+    let dev = |c: f64| {
+        at(c)
+            .iter()
+            .zip(&exact)
+            .map(|(a, b)| (*a - *b).length())
+            .fold(0.0, f64::max)
+    };
+    let (d1, d2, d3) = (dev(50.0), dev(100.0), dev(200.0));
+    println!(
+        "B7: deviation from c = ∞ at c = 50, 100, 200: {d1:.3e}, {d2:.3e}, {d3:.3e}; ratios \
+         {:.3}, {:.3}",
+        d1 / d2,
+        d2 / d3
+    );
+    assert!(d3 > 0.0);
+    assert!((d1 / d2 - 4.0).abs() < 0.2 && (d2 / d3 - 4.0).abs() < 0.1);
+}
+
+/// B8: the interacting beam of B4 at c = 5 (speeds up to 0.25c): deterministic, every
+/// particle verified by the preview/verify comparison, the retarded interaction changes
+/// the flights compared with c = ∞, and the radiated energy is estimated.
+#[test]
+fn b8_retarded_beam_is_deterministic_and_verified() {
+    let mut scn = scene(true);
+    scn.c = 5.0;
+    let a = run_beam(&scn, &RunSettings::with_tolerance(1e-10));
+    let b = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let b2 = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    for (x, y) in b.trajectories.iter().zip(&b2.trajectories) {
+        assert_eq!(x.end.x.x.to_bits(), y.end.x.x.to_bits());
+        assert_eq!(x.end.p.y.to_bits(), y.end.p.y.to_bits());
+    }
+    let mut free = scene(true);
+    free.c = f64::INFINITY;
+    let coulomb = run_beam(&free, &RunSettings::with_tolerance(TOL));
+    for (i, (pa, pb)) in a.trajectories.iter().zip(&b.trajectories).enumerate() {
+        let status = classify(pa, pb, scn.t_max);
+        let shift = (pb.end.x - coulomb.trajectories[i].end.x).length();
+        println!(
+            "B8 particle {i}: {:?}, {status:?}; differs from c = ∞ by {shift:.3}; radiated \
+             {:.1e} of T",
+            pb.outcome,
+            pb.radiated_energy / pb.kinetic_initial
+        );
+        assert!(status.is_verified(), "particle {i}: {status:?}");
+        assert!(pb.radiated_energy > 0.0);
+    }
+    println!(
+        "B8: {} steps ({} at c = ∞), {} restarts",
+        b.stats.n_step, coulomb.stats.n_step, b.restarts
+    );
+}

@@ -43,6 +43,17 @@ fn reference_solutions_are_verified() {
                 }
             }
             assert!(level.beams_solved(&v), "{name}");
+            // The model neglects each particle's radiation (PHYSICS.md §3.3): the energy it
+            // radiates (Liénard, with the other particles' fields) must be below the
+            // numerical accuracy, as for single flights.
+            if level.physics.c.is_some() {
+                for f in &v {
+                    for t in &f.verified.trajectories {
+                        let fraction = t.radiated_energy / t.kinetic_initial;
+                        assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
+                    }
+                }
+            }
             continue;
         }
         for (i, v) in level

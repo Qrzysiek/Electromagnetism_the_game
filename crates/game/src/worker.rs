@@ -64,8 +64,11 @@ pub struct BeamPreview {
     pub paths: Vec<Vec<(f64, DVec3)>>,
     pub shots: Vec<usize>,
     pub outcomes: Vec<Outcome>,
-    /// Energy drift of the whole system (between removals), relative.
+    /// Energy drift of the whole system (between removals), relative; NaN at finite c
+    /// with interaction (the field carries energy).
     pub energy_rel_error: f64,
+    /// Largest radiated energy of a particle (Liénard), relative to its launch energy.
+    pub radiated_max: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -307,6 +310,11 @@ fn beam_request(req: &Request, tx: &Sender<Response>, newest: &AtomicU64) -> boo
             shots: shots.clone(),
             outcomes: run.trajectories.iter().map(|t| t.outcome).collect(),
             energy_rel_error: run.energy_max_rel_error,
+            radiated_max: run
+                .trajectories
+                .iter()
+                .map(|t| t.radiated_energy / t.kinetic_initial)
+                .fold(0.0, f64::max),
         };
         let msg = Response::BeamPreview {
             revision: req.revision,

@@ -417,10 +417,13 @@ mod tests {
         assert!(moved.length() > 1e-3);
         assert!(v[0].verified.energy_max_rel_error < 1e-9);
         assert_eq!(l.beams_solved(&v), ok * 2 >= n);
-        // Interacting beams at finite c are rejected.
+        // At finite c the interaction is retarded: accepted, and the particles alone no
+        // longer conserve energy (NaN diagnostic).
         let mut c = l.clone();
         c.physics.c = Some(5.0);
-        assert!(!c.model_issues().is_empty());
+        assert_eq!(c.model_issues(), Vec::<String>::new());
+        let r = c.verify_beams(&c.reference_solution);
+        assert!(r[0].verified.energy_max_rel_error.is_nan());
     }
 
     /// The sample is deterministic, within the truncation, and its moments are close to

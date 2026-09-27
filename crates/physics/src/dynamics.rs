@@ -59,6 +59,15 @@ impl Kinematics {
         p.length_squared() / (self.mass * (self.gamma(p) + 1.0))
     }
 
+    /// Acceleration `dv/dt = (F − v (v·F)/c²) / (γ m)` of a particle with momentum `p`
+    /// under the force `F = dp/dt`.
+    pub fn acceleration(&self, p: DVec3, force: DVec3) -> DVec3 {
+        let gamma = self.gamma(p);
+        let v = p / (gamma * self.mass);
+        let inv_c_sq = self.inv_mc_sq * self.mass * self.mass;
+        (force - v * (v.dot(force) * inv_c_sq)) / (gamma * self.mass)
+    }
+
     /// Momentum of magnitude corresponding to kinetic energy `t`, along `direction`.
     pub fn momentum_from_kinetic_energy(&self, t: f64, direction: DVec3) -> DVec3 {
         // p² = T² / c² + 2 m T.

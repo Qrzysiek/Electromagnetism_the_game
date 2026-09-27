@@ -136,24 +136,36 @@ impl Level {
         }
         if self.has_beams() {
             let charged = self.shots.iter().any(|s| s.particle.charge != 0.0);
-            out.push(if self.physics.beam_interaction {
-                note(
-                    true,
-                    "Beam: all particles fly together and repel each other with the exact \
+            out.push(
+                if self.physics.beam_interaction && self.physics.c.is_none() {
+                    note(
+                        true,
+                        "Beam: all particles fly together and repel each other with the exact \
                      Coulomb force (for c = ∞ that is the whole interaction).",
-                )
-            } else if self.physics.c.is_none() && !charged {
-                note(
-                    true,
-                    "Beam of neutral particles: for c = ∞ their moments do not interact (the \
+                    )
+                } else if self.physics.beam_interaction {
+                    note(
+                        true,
+                        "Beam: all particles fly together and act on each other with their exact \
+                     retarded (Liénard–Wiechert) fields, magnetic attraction and radiation \
+                     included. Before launch they are taken to move uniformly; a particle \
+                     that is absorbed stops acting once the news has travelled at c. Each \
+                     particle's own radiation reaction is left out (its radiated energy is \
+                     checked to be negligible).",
+                    )
+                } else if self.physics.c.is_none() && !charged {
+                    note(
+                        true,
+                        "Beam of neutral particles: for c = ∞ their moments do not interact (the \
                      interaction scales as 1/c²).",
-                )
-            } else {
-                note(
-                    false,
-                    "Beam: the particles' interaction with each other is left out.",
-                )
-            });
+                    )
+                } else {
+                    note(
+                        false,
+                        "Beam: the particles' interaction with each other is left out.",
+                    )
+                },
+            );
             out.push(note(
                 false,
                 "The beam is a fixed sample (quasi-random) of its distribution: the same \

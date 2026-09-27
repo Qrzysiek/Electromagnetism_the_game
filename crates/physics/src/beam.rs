@@ -1,10 +1,21 @@
 //! Beams: many particles in one ODE system, interacting with each other (PHYSICS.md §3.3).
 //!
-//! All particles share one state vector and one step size. The interaction is the exact
-//! pairwise Coulomb force for `c = ∞`, where it is the whole interaction: the magnetic
-//! and retarded parts, and every interaction of magnetic moments, scale as `1/c²` and
-//! vanish. For finite `c` the interaction is not modelled here (`BeamScenario::interact`
-//! must be off, or the level must be Newtonian).
+//! All particles share one state vector and one step size. The interaction is exact
+//! classical electrodynamics between point charges:
+//!
+//! - For `c = ∞` it is the pairwise Coulomb force, which is then the whole interaction:
+//!   the magnetic and retarded parts, and every interaction of magnetic moments, scale as
+//!   `1/c²` and vanish.
+//! - For finite `c` each particle feels the Liénard–Wiechert fields (`lienard.rs`) of the
+//!   others at their retarded times, taken from the recorded motion (the dense output of
+//!   every accepted step). Every step is shorter than a third of the light travel time
+//!   between the closest pair, so that every retarded time falls into the recorded past
+//!   and the system stays an explicit ODE. Before launch the particles move uniformly
+//!   (with their launch velocity). A removed particle acts for as long as its field from
+//!   before the removal is on its way: its charge is taken to be drained at the moment of
+//!   removal, as it vanishes for `c = ∞`. The moments' interaction (O(1/c²)) and each
+//!   particle's own radiation reaction are not modelled; the radiated energy is
+//!   estimated per particle (Liénard formula) so that neglecting it can be checked.
 //!
 //! Each particle has the events and gates of a single flight (obstacles, bounds, detector,
 //! gates in order). The earliest event of any particle ends the step there; that
@@ -16,6 +27,8 @@
 //! steps ended, and the existing verification (`verify::classify`) applies to every
 //! particle.
 
+use std::cell::RefCell;
+
 use glam::DVec3;
 
 use crate::dynamics::{Kinematics, Particle};
@@ -24,6 +37,7 @@ use crate::field::FieldSolver;
 use crate::geometry::{Aabb, Region, Shape};
 use crate::integrator::OdeSystem;
 use crate::integrator::dop853::{Dense, Dop853, Settings, Stats};
+use crate::lienard::fields_from;
 use crate::trajectory::{
     Acceptance, Gate, GateTracker, MARGIN_SAFE, Margins, Outcome, RunSettings, Sample, Trajectory,
     minimize_on, minimum_at_end,
@@ -49,7 +63,8 @@ pub struct BeamScenario<F> {
     pub c: f64,
     pub bounds: Option<Aabb>,
     pub t_max: f64,
-    /// Coulomb interaction between the particles (requires `c = ∞`).
+    /// Interaction between the particles: Coulomb for `c = ∞`, retarded Liénard–Wiechert
+    /// fields for finite `c`.
     pub interact: bool,
     /// Gates every particle must pass, in order, before its detector counts (as for single
     /// flights, PHYSICS.md §6.2).
@@ -63,7 +78,9 @@ pub struct BeamRun {
     pub trajectories: Vec<Trajectory>,
     pub stats: Stats,
     /// Largest relative change of the total energy of the particles still flying
-    /// (kinetic, external potential, moments, pair interaction), between removals.
+    /// (kinetic, external potential, moments, pair interaction), between removals. NaN for
+    /// interacting particles at finite `c`, where the particles alone do not conserve
+    /// energy (the field carries energy, and radiates it).
     pub energy_max_rel_error: f64,
     /// Integrator restarts (one per removal and per finished ghost).
     pub restarts: usize,
@@ -96,6 +113,123 @@ struct BeamOde<'a, F> {
     source: Vec<bool>,
     kin: Vec<Kinematics>,
     p_ref: f64,
+    /// Retarded interaction (finite `c`): the recorded motion of every particle.
+    past: Option<&'a Past>,
+}
+
+/// Recorded motion of the beam for the retarded interaction: the dense output of every
+/// accepted step (valid up to `t_stop`, where an event may have cut it short), with the
+/// particles it contains, and for every particle the time its charge was removed.
+struct Past {
+    segments: RefCell<Vec<Segment>>,
+    /// Removal time of each particle (infinite while it flies).
+    t_off: RefCell<Vec<f64>>,
+    kin: Vec<Kinematics>,
+    p_ref: f64,
+}
+
+struct Segment {
+    dense: Dense,
+    t_start: f64,
+    t_stop: f64,
+    /// Particle indices (sorted): member `k` is the state's block `k`.
+    members: Vec<usize>,
+}
+
+impl Past {
+    /// Position, velocity and acceleration of particle `j` at time `t`: uniform motion
+    /// before launch, the recorded motion after, continued uniformly beyond what is
+    /// recorded (reached only while bracketing a retarded time).
+    fn state<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
+        let b = &scn.particles[j];
+        let kin = &self.kin[j];
+        // Last segment starting before t that contains j.
+        let segments = self.segments.borrow();
+        let upto = segments.partition_point(|s| s.t_start < t);
+        let found = segments[..upto]
+            .iter()
+            .rev()
+            .find_map(|s| s.members.binary_search(&j).ok().map(|k| (s, k)));
+        let Some((seg, k)) = found else {
+            let v0 = kin.velocity(b.p0);
+            return (b.x0 + v0 * t, v0, DVec3::ZERO);
+        };
+        let d = &seg.dense;
+        let tt = t.min(seg.t_stop);
+        let comp = |i: usize| d.eval_component(6 * k + i, tt);
+        let x = DVec3::new(comp(0), comp(1), comp(2));
+        let p = DVec3::new(comp(3), comp(4), comp(5)) * self.p_ref;
+        let v = kin.velocity(p);
+        if t > seg.t_stop {
+            return (x + v * (t - seg.t_stop), v, DVec3::ZERO);
+        }
+        let dp = DVec3::new(
+            d.eval_derivative_component(6 * k + 3, tt),
+            d.eval_derivative_component(6 * k + 4, tt),
+            d.eval_derivative_component(6 * k + 5, tt),
+        ) * self.p_ref;
+        (x, v, kin.acceleration(p, dp))
+    }
+
+    /// Force on a charge `q` at `x` moving with `v`, at time `t`, from the retarded fields
+    /// of particle `j`; zero once the field of its removal has arrived.
+    #[allow(clippy::too_many_arguments)]
+    fn force_from<F>(
+        &self,
+        scn: &BeamScenario<F>,
+        j: usize,
+        q: f64,
+        x: DVec3,
+        v: DVec3,
+        t: f64,
+    ) -> DVec3 {
+        let c = scn.c;
+        let qj = scn.particles[j].particle.charge;
+        let g = |tr: f64| c * (t - tr) - (x - self.state(scn, j, tr).0).length();
+        // The retarded time is the root of g, which decreases strictly (|v| < c). The
+        // field of a removed particle is gone once the light cone has passed its removal.
+        let mut hi = t.min(self.t_off.borrow()[j]);
+        let mut g_hi = g(hi);
+        if g_hi >= 0.0 {
+            return DVec3::ZERO;
+        }
+        let mut step = -g_hi / c;
+        let mut lo = hi - step;
+        let mut g_lo = g(lo);
+        while g_lo <= 0.0 {
+            (hi, g_hi) = (lo, g_lo);
+            step *= 2.0;
+            lo = hi - step;
+            g_lo = g(lo);
+        }
+        // Newton's method, kept inside the bracket (bisection when it would leave it).
+        let mut tr = lo + (hi - lo) * g_lo / (g_lo - g_hi);
+        for _ in 0..100 {
+            let (r, vr, _) = self.state(scn, j, tr);
+            let d = x - r;
+            let dist = d.length();
+            let gv = c * (t - tr) - dist;
+            if gv > 0.0 {
+                lo = tr;
+            } else {
+                hi = tr;
+            }
+            let slope = -c + d.dot(vr) / dist;
+            let mut next = tr - gv / slope;
+            if !(next > lo && next < hi) {
+                next = 0.5 * (lo + hi);
+            }
+            let tol = 4.0 * f64::EPSILON * t.abs().max(1.0);
+            let done = (next - tr).abs() <= tol || hi - lo <= tol;
+            tr = next;
+            if done {
+                break;
+            }
+        }
+        let (r, vr, ar) = self.state(scn, j, tr);
+        let f = fields_from(qj, c, x, tr, r, vr, ar);
+        (f.e() + v.cross(f.b)) * q
+    }
 }
 
 impl<F: FieldSolver> BeamOde<'_, F> {
@@ -118,7 +252,16 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         if part.moment != 0.0 {
             force += self.scn.field.grad_bz(x, t) * part.moment;
         }
-        if self.scn.interact && part.charge != 0.0 {
+        if let Some(past) = self.past {
+            if part.charge != 0.0 {
+                let i = self.members[k];
+                for j in 0..self.scn.particles.len() {
+                    if j != i && self.scn.particles[j].particle.charge != 0.0 {
+                        force += past.force_from(self.scn, j, part.charge, x, v, t);
+                    }
+                }
+            }
+        } else if self.scn.interact && part.charge != 0.0 {
             for (j, &src) in self.source.iter().enumerate() {
                 if j == k || !src {
                     continue;
@@ -150,7 +293,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
                 + part.charge * f.phi
                 + 0.5 * part.charge * self.scn.field.self_field(x, part.charge).1
                 - part.moment * f.b.z;
-            if self.scn.interact {
+            if self.scn.interact && self.past.is_none() {
                 for j in k + 1..self.members.len() {
                     if self.source[j] {
                         let qj = self.scn.particles[self.members[j]].particle.charge;
@@ -227,10 +370,6 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     rs: &RunSettings,
     mut observer: impl FnMut(&Dense, &[usize], f64) -> bool,
 ) -> Option<BeamRun> {
-    assert!(
-        !scn.interact || scn.c.is_infinite(),
-        "beam interaction is only modelled for c = ∞"
-    );
     let n = scn.particles.len();
     let mut events: Vec<Event> = (0..scn.obstacles.len()).map(Event::Obstacle).collect();
     if scn.bounds.is_some() {
@@ -310,6 +449,23 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     // Current state of every particle that is flying or a ghost.
     let mut states: Vec<(DVec3, DVec3)> = scn.particles.iter().map(|b| (b.x0, b.p0)).collect();
     let mut failed: Option<crate::integrator::dop853::Error> = None;
+    let retarded = scn.interact && scn.c.is_finite();
+    let past = Past {
+        segments: RefCell::new(Vec::new()),
+        t_off: RefCell::new(vec![f64::INFINITY; n]),
+        kin: scn
+            .particles
+            .iter()
+            .map(|b| Kinematics::new(b.particle.mass, scn.c))
+            .collect(),
+        p_ref,
+    };
+    // Particles that end at launch never act.
+    for (i, t) in tracks.iter().enumerate() {
+        if matches!(t.phase, Phase::Done) {
+            past.t_off.borrow_mut()[i] = 0.0;
+        }
+    }
 
     'segments: loop {
         let members: Vec<usize> = (0..n)
@@ -331,6 +487,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 .map(|&i| Kinematics::new(scn.particles[i].particle.mass, scn.c))
                 .collect(),
             p_ref,
+            past: retarded.then_some(&past),
         };
         let mut y0 = Vec::with_capacity(6 * members.len());
         for &i in &members {
@@ -352,7 +509,28 @@ pub fn run_beam_cancellable<F: FieldSolver>(
         let mut y = vec![0.0; ode.dim()];
         loop {
             let t_a = int.t();
-            let reached_end = match int.step(&ode, scn.t_max, f64::INFINITY) {
+            // Retarded interaction: every step shorter than a third of the light travel
+            // time between the closest pair of a charged member and a flying source. In
+            // a step of length h the distance shrinks by less than 2ch, so it stays above
+            // ch, and every retarded time of the step lies before its start: in the record.
+            let h_cap = if retarded {
+                let mut r_min = f64::INFINITY;
+                for (k, &i) in members.iter().enumerate() {
+                    if scn.particles[i].particle.charge == 0.0 {
+                        continue;
+                    }
+                    let xi = BeamOde::<F>::x(int.y(), k);
+                    for (l, &j) in members.iter().enumerate() {
+                        if j != i && source[l] && scn.particles[j].particle.charge != 0.0 {
+                            r_min = r_min.min((xi - BeamOde::<F>::x(int.y(), l)).length());
+                        }
+                    }
+                }
+                r_min / (3.0 * scn.c)
+            } else {
+                f64::INFINITY
+            };
+            let reached_end = match int.step(&ode, scn.t_max, h_cap) {
                 Ok(done) => done,
                 Err(e) => {
                     failed = Some(e);
@@ -415,6 +593,33 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 }
             }
             let t_end = first.map_or(t_b, |(t, _, _)| t);
+            if retarded {
+                past.segments.borrow_mut().push(Segment {
+                    dense: dense.clone(),
+                    t_start: t_a,
+                    t_stop: t_end,
+                    members: members.clone(),
+                });
+            }
+            // Radiated energy of the flying particles (Liénard power, trapezoidal rule),
+            // from the force given by the derivative of the dense output.
+            if scn.c.is_finite() {
+                for (k, &i) in members.iter().enumerate() {
+                    if matches!(tracks[i].phase, Phase::Flying) {
+                        let q = scn.particles[i].particle.charge;
+                        let power = |t: f64| {
+                            let dp = DVec3::new(
+                                dense.eval_derivative_component(6 * k + 3, t),
+                                dense.eval_derivative_component(6 * k + 4, t),
+                                dense.eval_derivative_component(6 * k + 5, t),
+                            ) * p_ref;
+                            larmor_power(&ode.kin[k], q, mom(k, t), dp)
+                        };
+                        tracks[i].traj.radiated_energy +=
+                            0.5 * (power(t_a) + power(t_end)) * (t_end - t_a);
+                    }
+                }
+            }
 
             // Gates passed by the flying particles up to `t_end`.
             for (k, &i) in members.iter().enumerate() {
@@ -509,6 +714,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             if let Some((_, k, e)) = first {
                 let i = members[k];
                 tracks[i].traj.outcome = events[e].outcome();
+                past.t_off.borrow_mut()[i] = t_end;
                 if tracks[i].traj.outcome == Outcome::Arrived
                     && let Some(g) = tracks[i].gates.missing()
                 {
@@ -597,7 +803,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     Some(BeamRun {
         trajectories,
         stats,
-        energy_max_rel_error: energy_err,
+        energy_max_rel_error: if retarded { f64::NAN } else { energy_err },
         restarts,
     })
 }
@@ -615,6 +821,21 @@ fn finish_ghost(t: &mut Track) {
         t.margin[event] = t.margin[event].min(depth.max(-GHOST_DEPTH));
     }
     t.phase = Phase::Done;
+}
+
+/// Liénard power `(2/3) q² γ⁶ (a² − |v×a|²/c²) / c³` of a particle with momentum `p` under
+/// the force `dp` (units `k = 1`).
+fn larmor_power(kin: &Kinematics, q: f64, p: DVec3, dp: DVec3) -> f64 {
+    let c = kin.c;
+    let gamma = kin.gamma(p);
+    let v = kin.velocity(p);
+    let a = kin.acceleration(p, dp);
+    (2.0 / 3.0)
+        * q
+        * q
+        * gamma.powi(6)
+        * (a.length_squared() - v.cross(a).length_squared() / (c * c))
+        / (c * c * c)
 }
 
 fn add_stats(a: Stats, b: Stats) -> Stats {

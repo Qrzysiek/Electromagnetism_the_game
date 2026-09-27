@@ -136,6 +136,29 @@ impl Dense {
         c(0) + s * (c(1) + s1 * (c(2) + s * (c(3) + s1 * conpar)))
     }
 
+    /// Time derivative of component `i` of the interpolant at `t` (the derivative of the
+    /// polynomial of `eval_component`, one order less accurate).
+    pub fn eval_derivative_component(&self, i: usize, t: f64) -> f64 {
+        let n = self.n;
+        let c = |r: usize| self.cont[r * n + i];
+        let s = (t - self.t_old) / self.h;
+        let s1 = 1.0 - s;
+        // Values and d/ds of the nested factors, innermost first.
+        let q3 = c(6) + s * c(7);
+        let dq3 = c(7);
+        let q2 = c(5) + s1 * q3;
+        let dq2 = -q3 + s1 * dq3;
+        let q = c(4) + s * q2;
+        let dq = q2 + s * dq2;
+        let p4 = c(3) + s1 * q;
+        let dp4 = -q + s1 * dq;
+        let p3 = c(2) + s * p4;
+        let dp3 = p4 + s * dp4;
+        let p2 = c(1) + s1 * p3;
+        let dp2 = -p3 + s1 * dp3;
+        (p2 + s * dp2) / self.h
+    }
+
     pub fn eval(&self, t: f64, out: &mut [f64]) {
         for (i, o) in out.iter_mut().enumerate() {
             *o = self.eval_component(i, t);
@@ -453,6 +476,47 @@ mod tests {
             let sum: f64 = (0..3).map(|i| BHH[i + 1] * c[i].powi(q - 1)).sum();
             assert!(close(sum, 1.0 / f64::from(q)), "q = {q}: {sum}");
         }
+    }
+
+    /// The derivative of the dense output matches `f` at both ends of every step (the
+    /// interpolant is built from them) and the exact derivative inside, for the harmonic
+    /// oscillator `y = (cos t, −sin t)`.
+    #[test]
+    fn dense_derivative_matches_the_exact_derivative() {
+        struct Osc;
+        impl OdeSystem for Osc {
+            fn dim(&self) -> usize {
+                2
+            }
+            fn rhs(&self, _t: f64, y: &[f64], dy: &mut [f64]) {
+                dy[0] = y[1];
+                dy[1] = -y[0];
+            }
+        }
+        let settings = Settings {
+            rtol: 1e-12,
+            atol: 1e-12,
+            dense: true,
+            ..Settings::default()
+        };
+        let mut int = Dop853::new(&Osc, 0.0, &[1.0, 0.0], settings);
+        let mut worst: f64 = 0.0;
+        let mut ends: f64 = 0.0;
+        while !int.step(&Osc, 10.0, f64::INFINITY).unwrap() {
+            let d = int.dense();
+            for k in 0..=8 {
+                let t = d.t_start() + (d.t_end() - d.t_start()) * f64::from(k) / 8.0;
+                worst = worst
+                    .max((d.eval_derivative_component(0, t) + t.sin()).abs())
+                    .max((d.eval_derivative_component(1, t) + t.cos()).abs());
+            }
+            let t = d.t_end();
+            ends = ends
+                .max((d.eval_derivative_component(0, t) - int.dy()[0]).abs())
+                .max((d.eval_derivative_component(1, t) - int.dy()[1]).abs());
+        }
+        assert!(worst < 1e-9, "inside: {worst:e}");
+        assert!(ends < 1e-12, "at the ends: {ends:e}");
     }
 
     #[test]
