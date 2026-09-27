@@ -33,6 +33,18 @@ fn reference_solutions_are_verified() {
             Ok(()),
             "{name}"
         );
+        if level.has_beams() {
+            // Every beam shot reaches its verified transmission in every flight.
+            let v = level.verify_beams(&level.reference_solution);
+            for (d, f) in v.iter().enumerate() {
+                for s in 0..level.shots.len() {
+                    let (ok, n) = f.transmitted(s);
+                    println!("{name} flight {d} shot {s}: {ok}/{n} arrive, verified");
+                }
+            }
+            assert!(level.beams_solved(&v), "{name}");
+            continue;
+        }
         for (i, v) in level
             .verify_flights(&level.reference_solution)
             .iter()

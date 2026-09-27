@@ -134,7 +134,32 @@ impl Level {
                  compared with light crossing the setup.",
             ));
         }
-        if self.shots.len() > 1 {
+        if self.has_beams() {
+            let charged = self.shots.iter().any(|s| s.particle.charge != 0.0);
+            out.push(if self.physics.beam_interaction {
+                note(
+                    true,
+                    "Beam: all particles fly together and repel each other with the exact \
+                     Coulomb force (for c = ∞ that is the whole interaction).",
+                )
+            } else if self.physics.c.is_none() && !charged {
+                note(
+                    true,
+                    "Beam of neutral particles: for c = ∞ their moments do not interact (the \
+                     interaction scales as 1/c²).",
+                )
+            } else {
+                note(
+                    false,
+                    "Beam: the particles' interaction with each other is left out.",
+                )
+            });
+            out.push(note(
+                false,
+                "The beam is a fixed sample (quasi-random) of its distribution: the same \
+                 particles every time, so the result is verifiable.",
+            ));
+        } else if self.shots.len() > 1 {
             out.push(note(
                 false,
                 "Shots fly one at a time: particles do not interact with each other.",

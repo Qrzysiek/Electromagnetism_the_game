@@ -261,11 +261,28 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ui.horizontal_wrapped(|ui| {
             ui.label("Shot:");
             for i in 0..n_shots {
-                let mark = match game.verdict(i) {
-                    Some((Status::Verified, Outcome::Arrived)) => "✔",
-                    Some((Status::Verified, _)) => "✖",
-                    Some(_) => "⚠",
-                    None => "…",
+                let mark = if level.has_beams() {
+                    // Beams: the shot's verified transmission in every flight.
+                    let need = level.shots[i].beam.map_or(1.0, |b| b.transmission);
+                    let all: Option<Vec<bool>> = (0..game.beams.len().max(1))
+                        .map(|d| {
+                            #[allow(clippy::cast_precision_loss)]
+                            game.beam_transmission(d, i)
+                                .map(|(ok, n)| ok as f64 >= need * n as f64 - 1e-9)
+                        })
+                        .collect();
+                    match all {
+                        None => "…",
+                        Some(v) if v.iter().all(|&x| x) => "✔",
+                        Some(_) => "✖",
+                    }
+                } else {
+                    match game.verdict(i) {
+                        Some((Status::Verified, Outcome::Arrived)) => "✔",
+                        Some((Status::Verified, _)) => "✖",
+                        Some(_) => "⚠",
+                        None => "…",
+                    }
                 };
                 let c = crate::draw::shot_color(i).to_srgba();
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -334,10 +351,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     let t0 = shot.launch.kinetic_energy;
     ui.label(match level.physics.c {
         Some(c) => format!(
-            "Launch: T₀ = {t0:.3}, v₀ = {:.3} c, γ₀ = {gamma0:.4}   (c = {c})",
+            "Launch: T₀ = {}, v₀ = {:.3} c, γ₀ = {gamma0:.4}   (c = {c})",
+            energy_text(t0),
             v0 / c
         ),
-        None => format!("Launch: T₀ = {t0:.3}, v₀ = {v0:.3} (Newtonian)"),
+        None => format!("Launch: T₀ = {}, v₀ = {v0:.3} (Newtonian)", energy_text(t0)),
     });
     ui.label(if shot.particle.moment == 0.0 {
         format!(
@@ -533,95 +551,99 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     }
     ui.separator();
 
-    // Result.
-    ui.label(egui::RichText::new("Result").strong());
-    if game.solved() {
-        ui.label(
-            egui::RichText::new(if n_shots > 1 {
-                "✔ SOLVED: every shot arrives (verified)"
-            } else {
-                "✔ SOLVED (verified)"
-            })
-            .color(egui::Color32::from_rgb(90, 240, 110))
-            .size(18.0),
-        );
-    }
-    let view = game
-        .flights
-        .get(game.active_flight())
-        .cloned()
-        .unwrap_or_default();
-    match (&view.preview, view.verdict) {
-        (None, _) => {
-            ui.label("Computing…");
+    if level.has_beams() {
+        beam_result(ui, game, &level);
+    } else {
+        // Result.
+        ui.label(egui::RichText::new("Result").strong());
+        if game.solved() {
+            ui.label(
+                egui::RichText::new(if n_shots > 1 {
+                    "✔ SOLVED: every shot arrives (verified)"
+                } else {
+                    "✔ SOLVED (verified)"
+                })
+                .color(egui::Color32::from_rgb(90, 240, 110))
+                .size(18.0),
+            );
         }
-        (Some(p), verdict) => {
-            let who = if n_shots > 1 {
-                format!("Shot {}", shot_index + 1)
-            } else {
-                "The particle".into()
-            };
-            ui.label(format!(
-                "{who} {} after t = {:.3}.",
-                outcome_text(game, p.outcome),
-                p.flight_time
-            ));
-            // Detector acceptance: what is allowed, and how the particle arrived.
-            if let Some(acc) = level.shots[shot_index].detector.acceptance
-                && let Some(last) = p.path.last()
-            {
-                let v = last.p;
-                let dir = v.y.atan2(v.x).to_degrees();
-                let mut parts = Vec::new();
-                if let Some([axis, half]) = acc.direction {
-                    parts.push(format!(
-                        "direction {axis:.0}° ± {half:.1}° (arrives at {dir:.1}°)"
-                    ));
-                }
-                if let Some([lo, hi]) = acc.kinetic {
-                    parts.push(format!(
-                        "energy {lo:.3}–{hi:.3} (arrives with {:.3})",
-                        last.kinetic
-                    ));
-                }
-                ui.label(
-                    egui::RichText::new(format!("Detector accepts: {}", parts.join("; "))).small(),
-                );
+        let view = game
+            .flights
+            .get(game.active_flight())
+            .cloned()
+            .unwrap_or_default();
+        match (&view.preview, view.verdict) {
+            (None, _) => {
+                ui.label("Computing…");
             }
-            match verdict {
-                None => {
-                    ui.label("Verifying at 100× tighter tolerance…");
+            (Some(p), verdict) => {
+                let who = if n_shots > 1 {
+                    format!("Shot {}", shot_index + 1)
+                } else {
+                    "The particle".into()
+                };
+                ui.label(format!(
+                    "{who} {} after t = {:.3}.",
+                    outcome_text(game, p.outcome),
+                    p.flight_time
+                ));
+                // Detector acceptance: what is allowed, and how the particle arrived.
+                if let Some(acc) = level.shots[shot_index].detector.acceptance
+                    && let Some(last) = p.path.last()
+                {
+                    let v = last.p;
+                    let dir = v.y.atan2(v.x).to_degrees();
+                    let mut parts = Vec::new();
+                    if let Some([axis, half]) = acc.direction {
+                        parts.push(format!(
+                            "direction {axis:.0}° ± {half:.1}° (arrives at {dir:.1}°)"
+                        ));
+                    }
+                    if let Some([lo, hi]) = acc.kinetic {
+                        parts.push(format!(
+                            "energy {lo:.3}–{hi:.3} (arrives with {:.3})",
+                            last.kinetic
+                        ));
+                    }
+                    ui.label(
+                        egui::RichText::new(format!("Detector accepts: {}", parts.join("; ")))
+                            .small(),
+                    );
                 }
-                Some((Status::Verified, _)) => {
-                    ui.colored_label(egui::Color32::LIGHT_GRAY, "Verified.");
-                }
-                Some((
-                    Status::SmallMargin {
-                        boundary,
-                        margin,
-                        error_estimate,
-                    },
-                    _,
-                )) => {
-                    ui.colored_label(
+                match verdict {
+                    None => {
+                        ui.label("Verifying at 100× tighter tolerance…");
+                    }
+                    Some((Status::Verified, _)) => {
+                        ui.colored_label(egui::Color32::LIGHT_GRAY, "Verified.");
+                    }
+                    Some((
+                        Status::SmallMargin {
+                            boundary,
+                            margin,
+                            error_estimate,
+                        },
+                        _,
+                    )) => {
+                        ui.colored_label(
                         egui::Color32::YELLOW,
                         format!(
                             "⚠ Marginal: passes {} by {margin:.2e} cells, numerical error ≈ {error_estimate:.1e}. Too close to call.",
                             boundary_text(boundary)
                         ),
                     );
+                    }
+                    Some((Status::OutcomeMismatch { .. }, _)) => {
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            "⚠ Marginal: the outcome depends on numerical precision.",
+                        );
+                    }
+                    Some((Status::Failed, _)) => {
+                        ui.colored_label(egui::Color32::RED, "Integration failed.");
+                    }
                 }
-                Some((Status::OutcomeMismatch { .. }, _)) => {
-                    ui.colored_label(
-                        egui::Color32::YELLOW,
-                        "⚠ Marginal: the outcome depends on numerical precision.",
-                    );
-                }
-                Some((Status::Failed, _)) => {
-                    ui.colored_label(egui::Color32::RED, "Integration failed.");
-                }
-            }
-            egui::Grid::new("diag").num_columns(2).show(ui, |ui| {
+                egui::Grid::new("diag").num_columns(2).show(ui, |ui| {
                 if level.physics.c.is_some() {
                     ui.label("max v/c");
                     ui.label(format!("{:.4}", p.max_speed_over_c));
@@ -677,74 +699,74 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                     ui.end_row();
                 }
             });
+            }
         }
-    }
-    ui.separator();
+        ui.separator();
 
-    // Energy bars at the animated point of the active shot.
-    ui.label(egui::RichText::new("Energy along the flight (units of T₀)").strong());
-    ui.horizontal(|ui| {
-        ui.checkbox(&mut game.animate, "Animate (A)");
-        ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"));
-    });
-    if let Some(p) = &view.preview
-        && let Some(pt) = point_at(
-            p,
-            if game.animate {
-                game.anim_time
-            } else {
-                p.flight_time
-            },
-        )
-    {
-        energy_bar(
-            ui,
-            "kinetic",
-            pt.kinetic / t0,
-            egui::Color32::from_rgb(240, 200, 60),
-        );
-        energy_bar(
-            ui,
-            "potential",
-            pt.potential / t0,
-            egui::Color32::from_rgb(200, 90, 230),
-        );
-        if p.radiation_reaction {
+        // Energy bars at the animated point of the active shot.
+        ui.label(egui::RichText::new("Energy along the flight (units of T₀)").strong());
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut game.animate, "Animate (A)");
+            ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"));
+        });
+        if let Some(p) = &view.preview
+            && let Some(pt) = point_at(
+                p,
+                if game.animate {
+                    game.anim_time
+                } else {
+                    p.flight_time
+                },
+            )
+        {
             energy_bar(
                 ui,
-                "radiated",
-                pt.radiated / t0,
-                egui::Color32::from_rgb(90, 200, 255),
+                "kinetic",
+                pt.kinetic / t0,
+                egui::Color32::from_rgb(240, 200, 60),
             );
             energy_bar(
                 ui,
-                "total − T₀",
-                (pt.kinetic + pt.potential + pt.radiated - t0) / t0,
-                egui::Color32::from_rgb(120, 220, 120),
+                "potential",
+                pt.potential / t0,
+                egui::Color32::from_rgb(200, 90, 230),
             );
-            ui.label(
-                egui::RichText::new(
-                    "total = kinetic + potential + radiated: the energy the particle radiates \
+            if p.radiation_reaction {
+                energy_bar(
+                    ui,
+                    "radiated",
+                    pt.radiated / t0,
+                    egui::Color32::from_rgb(90, 200, 255),
+                );
+                energy_bar(
+                    ui,
+                    "total − T₀",
+                    (pt.kinetic + pt.potential + pt.radiated - t0) / t0,
+                    egui::Color32::from_rgb(120, 220, 120),
+                );
+                ui.label(
+                    egui::RichText::new(
+                        "total = kinetic + potential + radiated: the energy the particle radiates \
                      is carried away by its field.",
-                )
-                .small(),
-            );
-        } else {
-            energy_bar(
-                ui,
-                "total − T₀",
-                (pt.kinetic + pt.potential - t0) / t0,
-                egui::Color32::from_rgb(120, 220, 120),
-            );
+                    )
+                    .small(),
+                );
+            } else {
+                energy_bar(
+                    ui,
+                    "total − T₀",
+                    (pt.kinetic + pt.potential - t0) / t0,
+                    egui::Color32::from_rgb(120, 220, 120),
+                );
+            }
+            if level.physics.c.is_some() {
+                ui.label(format!("t = {:.2}   v/c = {:.4}", pt.t, pt.speed_over_c));
+            } else {
+                ui.label(format!("t = {:.2}", pt.t));
+            }
         }
-        if level.physics.c.is_some() {
-            ui.label(format!("t = {:.2}   v/c = {:.4}", pt.t, pt.speed_over_c));
-        } else {
-            ui.label(format!("t = {:.2}", pt.t));
-        }
+        ui.separator();
     }
-    ui.separator();
-
     ui.label(egui::RichText::new("View").strong());
     ui.horizontal_wrapped(|ui| {
         ui.label("Map (V):");
@@ -867,6 +889,85 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         ui.label("Drag your elements with the mouse, or G to grab / drop and Esc to cancel.");
         ui.label("Hardcore (checkbox): sliders instead of fixed values; Q/E and W step ×1.1.");
     });
+}
+
+/// Beam levels: verified transmission of every beam shot in every flight against its
+/// requirement, and the diagnostics of the selected flight.
+fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
+    ui.label(egui::RichText::new("Result").strong());
+    if game.solved() {
+        ui.label(
+            egui::RichText::new("✔ SOLVED: every beam delivers its share (verified)")
+                .color(egui::Color32::from_rgb(90, 240, 110))
+                .size(18.0),
+        );
+    }
+    let flights = game.beams.len().max(1);
+    for d in 0..flights {
+        if flights > 1 {
+            ui.label(egui::RichText::new(format!("Disturbance {}", d + 1)).small());
+        }
+        for (s, shot) in level.shots.iter().enumerate() {
+            let need = shot.beam.map_or(1.0, |b| b.transmission);
+            let text = match game.beam_transmission(d, s) {
+                None => format!("Shot {}: computing…", s + 1),
+                Some((ok, n)) => {
+                    #[allow(clippy::cast_precision_loss)]
+                    let enough = ok as f64 >= need * n as f64 - 1e-9;
+                    format!(
+                        "Shot {}: {ok} of {n} arrive, verified (need {:.0} %) {}",
+                        s + 1,
+                        need * 100.0,
+                        if enough { "✔" } else { "✘" }
+                    )
+                }
+            };
+            ui.colored_label(shot_color32(s), text);
+        }
+    }
+    let d = game
+        .active_disturbance
+        .min(game.beams.len().saturating_sub(1));
+    if let Some(p) = game.beams.get(d).and_then(|b| b.preview.as_ref()) {
+        let lost = p
+            .outcomes
+            .iter()
+            .filter(|o| **o != Outcome::Arrived)
+            .count();
+        ui.label(
+            egui::RichText::new(format!(
+                "{} particles{}; {lost} lost in the preview; energy drift of the whole beam \
+                 {:.1e}.",
+                p.paths.len(),
+                if level.physics.beam_interaction {
+                    ", interacting"
+                } else {
+                    ", not interacting"
+                },
+                p.energy_rel_error
+            ))
+            .small(),
+        );
+    }
+    ui.separator();
+}
+
+/// The drawing colour of a shot, for egui.
+fn shot_color32(shot: usize) -> egui::Color32 {
+    let c = crate::draw::shot_color(shot).to_srgba();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u8;
+    egui::Color32::from_rgb(b(c.red), b(c.green), b(c.blue))
+}
+
+/// A launch energy: plain for ordinary values, with SI prefixes for the large ones of
+/// scaled beams.
+fn energy_text(t: f64) -> String {
+    if t.abs() >= 1e4 {
+        fmt_si(t)
+    } else {
+        format!("{t:.3}")
+    }
 }
 
 /// A potential for display: "grounded" or its value.

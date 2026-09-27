@@ -65,6 +65,10 @@ Some levels let you build or tune electrodes yourself:
 - The flight details show a bound on the electrodes' neglected image force, with a warning if a flight passes so close to metal that it is no longer negligible.
 - In the sandbox: "Player plates", "Plate potentials", "Plate L×T×H" and "Supply voltages" in the limits, "tunable" on each electrode.
 
+## Beams
+
+Some levels fire a whole beam: many particles with a spread in position, direction and energy (Gaussian or uniform), always the same fixed sample so the result is verifiable. The goal is a share of the beam, for example 90 %, arriving verified. In Newtonian levels the particles can repel each other exactly (space charge), so the beam spreads out on its way. Every particle's path is drawn in its shot's colour; lost particles are fainter. The panel shows each beam shot's verified transmission against its requirement. In the sandbox a shot becomes a beam with "fire as a beam" (count, spreads, distribution, transmission, seed), and "Beam interaction" switches the repulsion on (PHYSICS.md §3.3).
+
 ## Magnetic moments (spin)
 
 Particles can carry a magnetic moment perpendicular to the plane: spin up or spin down. Neutral atoms with a moment feel no Lorentz force but the force m ∇B_z, which pushes one spin state towards stronger field and the other away: the Stern–Gerlach experiment (PHYSICS.md §3.2). The potential map then shows the particle's magnetic energy −m B_z, and the magnetic map is scaled to it. In the sandbox the moment is set per shot ("Magnetic moment m_z").

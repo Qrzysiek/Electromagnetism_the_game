@@ -36,8 +36,6 @@ fn beam(
         obstacles,
         particles,
         c: f64::INFINITY,
-        detector: None,
-        acceptance: None,
         bounds: None,
         t_max,
         interact,
@@ -62,11 +60,15 @@ fn b1_two_body_reduces_to_one_body() {
                 particle: particle(qa, ma),
                 x0: xa,
                 p0: va * ma,
+                detector: None,
+                acceptance: None,
             },
             BeamParticle {
                 particle: particle(qb, mb),
                 x0: xb,
                 p0: vb * mb,
+                detector: None,
+                acceptance: None,
             },
         ],
         true,
@@ -123,6 +125,8 @@ fn b2_coulomb_explosion_conserves_energy_momentum_angular_momentum() {
                 particle: particle(0.3, m),
                 x0: x,
                 p0: v * m,
+                detector: None,
+                acceptance: None,
             }
         })
         .collect();
@@ -159,10 +163,16 @@ fn scene(interact: bool) -> BeamScenario<Coulomb> {
         charge: -2.0,
         radius: 0.3,
     };
+    let detector = Some(Region::Box(Aabb {
+        min: DVec3::new(20.0, -2.0, -1.0),
+        max: DVec3::new(22.0, 4.0, 1.0),
+    }));
     let launch = |y: f64, vy: f64, v: f64| BeamParticle {
         particle: particle(0.5, 1.0),
         x0: DVec3::new(0.0, y, 0.0),
         p0: DVec3::new(v, vy, 0.0),
+        detector,
+        acceptance: None,
     };
     BeamScenario {
         field: Coulomb::new(&[charge]),
@@ -176,11 +186,6 @@ fn scene(interact: bool) -> BeamScenario<Coulomb> {
             launch(-3.0, -0.4, 1.0), // out of bounds
         ],
         c: f64::INFINITY,
-        detector: Some(Region::Box(Aabb {
-            min: DVec3::new(20.0, -2.0, -1.0),
-            max: DVec3::new(22.0, 4.0, 1.0),
-        })),
-        acceptance: None,
         bounds: Some(Aabb {
             min: DVec3::new(-1.0, -6.0, -1.0),
             max: DVec3::new(23.0, 8.0, 1.0),
@@ -205,7 +210,7 @@ fn b3_non_interacting_beam_matches_single_flights() {
         c: scn.c,
         x0: b.x0,
         p0: b.p0,
-        detector: scn.detector,
+        detector: b.detector,
         bounds: scn.bounds,
         t_max: scn.t_max,
         radiation_reaction: false,
@@ -216,6 +221,8 @@ fn b3_non_interacting_beam_matches_single_flights() {
             particle: particle(0.5, 1.0),
             x0: DVec3::new(0.0, 1.0 + 0.01 * f64::from(k), 0.0),
             p0: DVec3::new(1.2, -0.05, 0.0),
+            detector: scn.particles[0].detector,
+            acceptance: None,
         })
         .find(|b| {
             let t = run(&single(b), &RunSettings::with_tolerance(TOL));
@@ -234,7 +241,7 @@ fn b3_non_interacting_beam_matches_single_flights() {
             c: scn.c,
             x0: b.x0,
             p0: b.p0,
-            detector: scn.detector,
+            detector: b.detector,
             bounds: scn.bounds,
             t_max: scn.t_max,
             radiation_reaction: false,

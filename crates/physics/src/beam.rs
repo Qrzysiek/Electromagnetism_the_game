@@ -28,12 +28,15 @@ use crate::trajectory::{
     minimum_at_end,
 };
 
-/// One particle of a beam with its launch state.
+/// One particle of a beam with its launch state and its own detector (particles of
+/// different species may be meant for different detectors).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BeamParticle {
     pub particle: Particle,
     pub x0: DVec3,
     pub p0: DVec3,
+    pub detector: Option<Region>,
+    pub acceptance: Option<Acceptance>,
 }
 
 /// A beam flight: the shared scene and the particles, all launched at t = 0.
@@ -43,8 +46,6 @@ pub struct BeamScenario<F> {
     pub obstacles: Vec<Shape>,
     pub particles: Vec<BeamParticle>,
     pub c: f64,
-    pub detector: Option<Region>,
-    pub acceptance: Option<Acceptance>,
     pub bounds: Option<Aabb>,
     pub t_max: f64,
     /// Coulomb interaction between the particles (requires `c = ∞`).
@@ -200,12 +201,27 @@ pub fn run_beam<F: FieldSolver>(scn: &BeamScenario<F>, rs: &RunSettings) -> Beam
 
 /// As `run_beam`, calling `observer(dense, members, p_ref)` after every accepted step
 /// (member `k` of the state is particle `members[k]`; its position is component
-/// `6k..6k+3`, its momentum `p_ref ×` components `6k+3..6k+6`).
+/// `6k..6k+3`, its momentum `p_ref ×` components `6k+3..6k+6`). Ghosts are members too:
+/// their states after their end time are not part of their trajectories.
 pub fn run_beam_observed<F: FieldSolver>(
     scn: &BeamScenario<F>,
     rs: &RunSettings,
     mut observer: impl FnMut(&Dense, &[usize], f64),
 ) -> BeamRun {
+    run_beam_cancellable(scn, rs, |d, m, p| {
+        observer(d, m, p);
+        true
+    })
+    .expect("never cancelled")
+}
+
+/// As `run_beam_observed`, but the observer returns whether to go on; `None` if it
+/// stopped the run.
+pub fn run_beam_cancellable<F: FieldSolver>(
+    scn: &BeamScenario<F>,
+    rs: &RunSettings,
+    mut observer: impl FnMut(&Dense, &[usize], f64) -> bool,
+) -> Option<BeamRun> {
     assert!(
         !scn.interact || scn.c.is_infinite(),
         "beam interaction is only modelled for c = ∞"
@@ -215,13 +231,18 @@ pub fn run_beam_observed<F: FieldSolver>(
     if scn.bounds.is_some() {
         events.push(Event::Bounds);
     }
-    if scn.detector.is_some() {
+    // One detector event for all; a particle without a detector never reaches it.
+    if scn.particles.iter().any(|b| b.detector.is_some()) {
         events.push(Event::Detector);
     }
-    let event_value = |ev: Event, part: &Particle, x: DVec3| match ev {
-        Event::Obstacle(i) => scn.obstacles[i].signed_distance(x) - part.radius,
+    let event_value = |ev: Event, i: usize, x: DVec3| match ev {
+        Event::Obstacle(o) => {
+            scn.obstacles[o].signed_distance(x) - scn.particles[i].particle.radius
+        }
         Event::Bounds => -scn.bounds.expect("bounds").signed_distance(x),
-        Event::Detector => scn.detector.expect("detector").signed_distance(x),
+        Event::Detector => scn.particles[i]
+            .detector
+            .map_or(f64::INFINITY, |d| d.signed_distance(x)),
     };
     #[allow(clippy::cast_precision_loss)]
     let p_ref = {
@@ -232,17 +253,15 @@ pub fn run_beam_observed<F: FieldSolver>(
     let mut tracks: Vec<Track> = scn
         .particles
         .iter()
-        .map(|b| {
+        .enumerate()
+        .map(|(i, b)| {
             let kin = Kinematics::new(b.particle.mass, scn.c);
             let start = Sample {
                 t: 0.0,
                 x: b.x0,
                 p: b.p0,
             };
-            let g: Vec<f64> = events
-                .iter()
-                .map(|&e| event_value(e, &b.particle, b.x0))
-                .collect();
+            let g: Vec<f64> = events.iter().map(|&e| event_value(e, i, b.x0)).collect();
             Track {
                 traj: Trajectory {
                     outcome: Outcome::Timeout,
@@ -327,7 +346,9 @@ pub fn run_beam_observed<F: FieldSolver>(
             };
             let t_b = int.t();
             let dense = int.dense();
-            observer(dense, &members, p_ref);
+            if !observer(dense, &members, p_ref) {
+                return None;
+            }
             let pos = |k: usize, t: f64| {
                 DVec3::new(
                     dense.eval_component(6 * k, t),
@@ -359,14 +380,10 @@ pub fn run_beam_observed<F: FieldSolver>(
                 if !matches!(tracks[i].phase, Phase::Flying) {
                     continue;
                 }
-                let part = scn.particles[i].particle;
                 let x_b = BeamOde::<F>::x(int.y(), k);
-                g_next[k] = events
-                    .iter()
-                    .map(|&ev| event_value(ev, &part, x_b))
-                    .collect();
+                g_next[k] = events.iter().map(|&ev| event_value(ev, i, x_b)).collect();
                 for (e, &ev) in events.iter().enumerate() {
-                    let mut g = |t: f64| event_value(ev, &part, pos(k, t));
+                    let mut g = |t: f64| event_value(ev, i, pos(k, t));
                     let r = first_crossing(
                         &mut g,
                         t_a,
@@ -387,11 +404,10 @@ pub fn run_beam_observed<F: FieldSolver>(
             // Margins of flying particles (up to the event), depths of ghosts.
             let mut ghosts_done = false;
             for (k, &i) in members.iter().enumerate() {
-                let part = scn.particles[i].particle;
                 match tracks[i].phase.clone() {
                     Phase::Flying => {
                         for (e, &ev) in events.iter().enumerate() {
-                            let g = |t: f64| event_value(ev, &part, pos(k, t));
+                            let g = |t: f64| event_value(ev, i, pos(k, t));
                             let gb = g_next[k][e];
                             if first.is_some_and(|(_, kk, ee)| kk == k && ee == e) {
                                 // Penetration depth, followed past this step as a ghost.
@@ -422,13 +438,13 @@ pub fn run_beam_observed<F: FieldSolver>(
                         if first.is_some() {
                             let x = pos(k, t_end);
                             tracks[i].g_prev =
-                                events.iter().map(|&ev| event_value(ev, &part, x)).collect();
+                                events.iter().map(|&ev| event_value(ev, i, x)).collect();
                         } else {
                             tracks[i].g_prev.clone_from(&g_next[k]);
                         }
                     }
                     Phase::Ghost { event, depth, .. } => {
-                        let g = |t: f64| event_value(events[event], &part, pos(k, t));
+                        let g = |t: f64| event_value(events[event], i, pos(k, t));
                         let (t_min, m) = minimize_on(&g, t_a, t_b);
                         let depth = depth.min(m);
                         let unfinished = minimum_at_end(t_min, t_a, t_b);
@@ -466,7 +482,7 @@ pub fn run_beam_observed<F: FieldSolver>(
                 tracks[i].traj.outcome = events[e].outcome();
                 // Acceptance, decided at the moment of entry.
                 if tracks[i].traj.outcome == Outcome::Arrived
-                    && let Some(acc) = scn.acceptance
+                    && let Some(acc) = scn.particles[i].acceptance
                 {
                     let p = tracks[i].traj.end.p;
                     let m = acc.margin(ode.kin[k].velocity(p), ode.kin[k].kinetic_energy(p));
@@ -516,7 +532,8 @@ pub fn run_beam_observed<F: FieldSolver>(
     }
     let trajectories = tracks
         .into_iter()
-        .map(|mut t| {
+        .zip(&scn.particles)
+        .map(|(mut t, b)| {
             t.traj.stats = stats;
             if rs.margins {
                 let acceptance = t.traj.margins.as_ref().and_then(|m| m.acceptance);
@@ -530,7 +547,7 @@ pub fn run_beam_observed<F: FieldSolver>(
                     match ev {
                         Event::Obstacle(_) => m.obstacles.push(v),
                         Event::Bounds => m.bounds = Some(v),
-                        Event::Detector => m.detector = Some(v),
+                        Event::Detector => m.detector = b.detector.map(|_| v),
                     }
                 }
                 t.traj.margins = Some(m);
@@ -538,12 +555,12 @@ pub fn run_beam_observed<F: FieldSolver>(
             t.traj
         })
         .collect();
-    BeamRun {
+    Some(BeamRun {
         trajectories,
         stats,
         energy_max_rel_error: energy_err,
         restarts,
-    }
+    })
 }
 
 fn finish_ghost(t: &mut Track) {

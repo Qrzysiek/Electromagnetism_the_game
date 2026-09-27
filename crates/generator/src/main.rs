@@ -184,7 +184,60 @@ fn main() {
                 level.name,
                 level.check_placement(placement)
             );
-            for (i, v) in level.verify_flights(placement).iter().enumerate() {
+            if level.has_beams() {
+                // Beam levels: the verified transmission of every beam shot per flight.
+                for (d, v) in level.verify_beams(placement).iter().enumerate() {
+                    for (s, shot) in level.shots.iter().enumerate() {
+                        let (ok, n) = v.transmitted(s);
+                        let need = shot.beam.map_or(1.0, |b| b.transmission);
+                        #[allow(clippy::cast_precision_loss)]
+                        let enough = ok as f64 >= need * n as f64 - 1e-9;
+                        println!(
+                            "  shot {} disturbance {}: beam {ok}/{n} arrive verified (need {:.0} %): {}",
+                            s + 1,
+                            d + 1,
+                            need * 100.0,
+                            if enough {
+                                "outcome Arrived, status Verified"
+                            } else {
+                                "outcome Short, status NotVerified"
+                            }
+                        );
+                    }
+                    println!(
+                        "  beam energy drift {:.1e}, {} steps",
+                        v.verified.energy_max_rel_error, v.verified.stats.n_step
+                    );
+                    // Where each shot's particles end (for designing detectors).
+                    let shots = level.beam_shots();
+                    for s in 0..level.shots.len() {
+                        let ends: Vec<_> = v
+                            .verified
+                            .trajectories
+                            .iter()
+                            .zip(&shots)
+                            .filter(|(_, k)| **k == s)
+                            .map(|(t, _)| t.end.x)
+                            .collect();
+                        let lo = ends.iter().fold(ends[0], |a, b| a.min(*b));
+                        let hi = ends.iter().fold(ends[0], |a, b| a.max(*b));
+                        println!(
+                            "  beam {} ends within x {:.2}..{:.2}, y {:.2}..{:.2}",
+                            s + 1,
+                            lo.x,
+                            hi.x,
+                            lo.y,
+                            hi.y
+                        );
+                    }
+                }
+            }
+            for (i, v) in level
+                .verify_flights(placement)
+                .iter()
+                .enumerate()
+                .filter(|_| !level.has_beams())
+            {
                 let end = v.verified.end.x;
                 let (shot, d) = level.flight_of(i);
                 let flight = if level.disturbances.is_empty() {

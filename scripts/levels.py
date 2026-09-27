@@ -79,8 +79,18 @@ def box(b, direction=None, kinetic=None):
     return d
 
 
-def shot(q, m, node, angle_deg, ke, detector, time=0.0, moment=0.0):
-    """`moment`: magnetic moment along z (spin up > 0, spin down < 0)."""
+def beam(count, transmission, energy=0.01, angle_deg=0.5, width=0.2, length=0.2,
+         distribution="gaussian", seed=0):
+    """A shot fired as a beam (level::beam): spreads are Gaussian sigmas (truncated at
+    3 sigma) or uniform half-widths; energy relative to T0."""
+    return {"count": count, "energy_spread": energy, "angle_spread_deg": angle_deg,
+            "width": width, "length": length, "distribution": distribution,
+            "transmission": transmission, "seed": seed}
+
+
+def shot(q, m, node, angle_deg, ke, detector, time=0.0, moment=0.0, beam=None):
+    """`moment`: magnetic moment along z (spin up > 0, spin down < 0). `beam`: fire as a
+    beam (see `beam`)."""
     a = math.radians(angle_deg)
     launch = {"node": [node[0], node[1], 0], "direction": [math.cos(a), math.sin(a), 0.0],
               "kinetic_energy": ke}
@@ -89,7 +99,9 @@ def shot(q, m, node, angle_deg, ke, detector, time=0.0, moment=0.0):
     particle = {"charge": q, "mass": m, "radius": 0.0}
     if moment:
         particle["moment"] = moment
+    extra = {"beam": beam} if beam else {}
     return {
+        **extra,
         "particle": particle,
         "launch": launch,
         "detector": detector,
@@ -157,7 +169,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           magnitudes=(), signs=(True, True), max_magnets=0, strengths=(), region=None,
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
           amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=(),
-          electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=()):
+          electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
+          beam_interaction=False):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -182,7 +195,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
                     "antenna_radius": 0.3,
                     "t_max": t_max, "tolerances": {"preview": 1e-10, "verify": 1e-12},
                     **({"rf_omega": rf_omega} if rf_omega else {}),
-                    **({"radiation_reaction": True} if radiation_reaction else {})},
+                    **({"radiation_reaction": True} if radiation_reaction else {}),
+                    **({"beam_interaction": True} if beam_interaction else {})},
         "shots": list(shots), "elements": list(elements), "coils": list(coils),
         "limits": limits, "reference_solution": list(reference or []),
         **({"disturbances": list(disturbances)} if disturbances else {}),
@@ -778,6 +792,48 @@ def real_einzel_lens():
         max_charges=2, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5)], region=(20, 2, 27, 18))
 
 
+# =======================================================================================
+# Beams (PHYSICS.md 3.3): many particles at once, with spreads in position, direction and
+# energy; the goal is a verified transmission. Harder, less forgiving versions of earlier
+# levels. Interaction between the particles is exact for c = inf, so beam levels are
+# Newtonian. To make the particles' repulsion (space charge) matter, their charge is
+# scaled up by K, with mass and energy scaled alike: each particle's path in the fixed
+# fields is unchanged (same q/m and T/q), while the repulsion grows with K.
+
+K = 5e7
+
+
+def space_charge():
+    return level(
+        "Space charge",
+        "The first bend again, but now a whole beam of 16 particles, with a small spread in "
+        "position, direction and energy. The particles repel each other, so the beam spreads "
+        "out on the way (space charge). Bend it into the detector: at least 90 % of it must "
+        "arrive, verified.",
+        c=None, beam_interaction=True,
+        shots=[shot(1e-6 * K, K, (0, 10), 0.0, 0.5 * K, box((27, 15, 30, 19)),
+                    beam=beam(16, 0.9))],
+        max_charges=1, magnitudes=[1 * M, 2 * M, 4 * M],
+        reference=[charge(0, 0, 4 * M)])
+
+
+def stern_gerlach_beam():
+    return level(
+        "Stern–Gerlach beam",
+        "The experiment as it was done: a beam of both spin states at once, 12 atoms each, "
+        "with a spread in speed and direction. Each spin state must reach its own detector, "
+        "at least 90 % of it. The state pulled towards the magnet passes closer to it and "
+        "fans out more. (Neutral atoms hardly interact; in this Newtonian level, not at "
+        "all.)",
+        c=None,
+        shots=[shot(0.0, 1.0, (0, 10), 0.0, 0.5, box((27, 7, 30, 9)), moment=1e-6,
+                    beam=beam(12, 0.9, energy=0.02)),
+               shot(0.0, 1.0, (0, 10), 0.0, 0.5, box((27, 10, 30, 14)), moment=-1e-6,
+                    beam=beam(12, 0.9, energy=0.02))],
+        max_magnets=1, strengths=[m * M for m in (0.5, 1, 2)], region=(6, 3, 22, 17),
+        reference=[magnet(14, 13, M)])
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -829,6 +885,9 @@ LEVELS = [
     ("streak_camera", streak_camera),
     # Chapter 12: radiation.
     ("synchrotron_light", synchrotron_light),
+    # Chapter 13: beams.
+    ("space_charge", space_charge),
+    ("stern_gerlach_beam", stern_gerlach_beam),
 ]
 
 

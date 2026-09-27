@@ -291,6 +291,9 @@ impl Level {
         let mut cost = Cost::new(self);
         let tol = self.tolerances();
         let metal = self.has_metal(player);
+        if self.has_beams() {
+            return self.measure_beam_cost(player, cost);
+        }
         let preview = self.scenarios(player);
         if metal {
             cost.add_field(&self.field_at(player, Resolution::Display).0);
@@ -312,6 +315,30 @@ impl Level {
             let t = Instant::now();
             let traj = run(scn, &RunSettings::with_tolerance(tol.verify));
             cost.add_verification(t.elapsed().as_secs_f64(), &traj);
+        }
+        cost
+    }
+
+    /// `measure_cost` for beam levels: one flight per disturbance, all particles
+    /// together (the step counts are those of the whole system).
+    fn measure_beam_cost(&self, player: &[Element], mut cost: Cost) -> Cost {
+        let tol = self.tolerances();
+        for (resolution, rtol) in [
+            (Resolution::Preview, tol.preview),
+            (Resolution::Verify, tol.verify),
+        ] {
+            for scn in self.beam_scenarios(player, resolution) {
+                let t = Instant::now();
+                let r = physics::beam::run_beam(&scn, &RunSettings::with_tolerance(rtol));
+                let seconds = t.elapsed().as_secs_f64();
+                if let Some(traj) = r.trajectories.first() {
+                    if resolution == Resolution::Preview {
+                        cost.add_preview(seconds, traj);
+                    } else {
+                        cost.add_verification(seconds, traj);
+                    }
+                }
+            }
         }
         cost
     }

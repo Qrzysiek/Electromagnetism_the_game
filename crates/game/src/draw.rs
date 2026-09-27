@@ -561,4 +561,65 @@ pub fn draw(
             }
         }
     }
+
+    draw_beams(&mut gizmos, &game);
+}
+
+/// Position along a sampled path at time `t` (linear between samples); `None` outside it.
+fn path_at(path: &[(f64, physics::DVec3)], t: f64) -> Option<physics::DVec3> {
+    let last = path.last()?;
+    if t < path[0].0 || t > last.0 {
+        return None;
+    }
+    let k = path
+        .partition_point(|(tk, _)| *tk <= t)
+        .clamp(1, path.len() - 1);
+    let ((t0, x0), (t1, x1)) = (path[k - 1], path[k]);
+    let f = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
+    Some(x0 + (x1 - x0) * f)
+}
+
+/// Beam levels: every particle's path, coloured by its shot like single flights (white
+/// while computing, orange when lost, yellow when not verified); the selected
+/// disturbance's flight is drawn brightest, lost particles fainter. The animation moves
+/// a dot along every path.
+fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
+    if !game.editor.level.has_beams() {
+        return;
+    }
+    let d_active = game
+        .active_disturbance
+        .min(game.beams.len().saturating_sub(1));
+    for (d, view) in game.beams.iter().enumerate() {
+        let Some(p) = &view.preview else {
+            continue;
+        };
+        let primary = d == d_active;
+        for (i, path) in p.paths.iter().enumerate() {
+            let shot = p.shots[i];
+            if !(shot == game.active_shot || game.show_all_shots) {
+                continue;
+            }
+            let verdict = view.verified.as_ref().and_then(|r| r.get(i).copied());
+            let arrived = p.outcomes[i] == Outcome::Arrived;
+            let color = match verdict {
+                None => Color::srgb(0.95, 0.95, 0.95),
+                Some((Status::Verified, Outcome::Arrived)) => shot_color(shot),
+                Some((Status::Verified, _)) => Color::srgb(1.0, 0.45, 0.2),
+                Some(_) => Color::srgb(1.0, 0.9, 0.2),
+            }
+            .with_alpha(match (primary, arrived) {
+                (true, true) => 0.75,
+                (true, false) => 0.4,
+                (false, _) => 0.12,
+            });
+            gizmos.linestrip_2d(path.iter().map(|(_, x)| to_vec2(*x)), color);
+            if game.animate
+                && primary
+                && let Some(x) = path_at(path, game.anim_time)
+            {
+                gizmos.circle_2d(to_vec2(x), 0.08, Color::srgb(1.0, 1.0, 0.6));
+            }
+        }
+    }
 }

@@ -7,6 +7,7 @@
 //! with a reason.
 
 use bevy_egui::egui;
+use level::beam::{BeamSpec, Distribution};
 use level::{
     Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Electrode, Element,
     ElementKind, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2, Shot, TolerancesSpec,
@@ -22,6 +23,8 @@ const SUBDIVISION: std::ops::RangeInclusive<u32> = 1..=8;
 const MAX_POSITIVE: f64 = 1e12;
 const MIN_POSITIVE: f64 = 1e-12;
 const MAX_RADIUS: f64 = 5.0;
+/// Largest beam (particles; the interaction costs grow as N²).
+const MAX_BEAM: u32 = 200;
 const MAX_COUNT: u32 = 20;
 const TOLERANCE: std::ops::RangeInclusive<f64> = 1e-18..=1.0;
 /// Width of list text fields, so that grid rows fit the panel.
@@ -163,6 +166,7 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
         antenna_radius,
         rf_omega,
         radiation_reaction,
+        beam_interaction,
         t_max,
         tolerances,
     } = p;
@@ -203,6 +207,11 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
             .on_hover_text("Landau–Lifshitz force: the particle loses the energy it radiates");
         false
     });
+    row(ui, "Beam interaction", |ui| {
+        ui.checkbox(beam_interaction, "particles interact")
+            .on_hover_text("Exact Coulomb interaction between beam particles (needs c = ∞)");
+        false
+    });
     focus |= row(ui, "Time limit", |ui| {
         positive(ui, t_max, 1.0, MAX_POSITIVE)
     });
@@ -217,6 +226,7 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
         particle,
         launch,
         detector,
+        beam,
     } = s;
     let ParticleSpec {
         charge,
@@ -322,6 +332,81 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
         f
     });
     *acceptance = (acc != DetectorAcceptance::default()).then_some(acc);
+    focus |= edit_beam(ui, beam);
+    focus
+}
+
+/// A shot fired as a beam (`level::beam`): count, spreads, distribution, required
+/// transmission and seed.
+fn edit_beam(ui: &mut egui::Ui, beam: &mut Option<BeamSpec>) -> bool {
+    let mut on = beam.is_some();
+    row(ui, "Beam", |ui| {
+        ui.checkbox(&mut on, "fire as a beam")
+            .on_hover_text("Many particles with spreads; the goal is a verified transmission");
+        false
+    });
+    match (on, beam.is_some()) {
+        (true, false) => *beam = Some(BeamSpec::default()),
+        (false, true) => *beam = None,
+        _ => {}
+    }
+    let Some(b) = beam else {
+        return false;
+    };
+    let BeamSpec {
+        count,
+        energy_spread,
+        angle_spread_deg,
+        width,
+        length,
+        distribution,
+        transmission,
+        seed,
+    } = b;
+    let mut focus = false;
+    focus |= row(ui, "  particles, transmission", |ui| {
+        ui.add(egui::DragValue::new(count).range(1..=MAX_BEAM))
+            .has_focus()
+            | ui.add(
+                egui::DragValue::new(transmission)
+                    .speed(0.01)
+                    .range(0.01..=1.0),
+            )
+            .on_hover_text("Fraction that must arrive, verified")
+            .has_focus()
+    });
+    focus |= row(ui, "  spread: energy, angle", |ui| {
+        ui.add(
+            egui::DragValue::new(energy_spread)
+                .speed(0.001)
+                .range(0.0..=0.3),
+        )
+        .on_hover_text("Relative to T₀ (Gaussian: σ; uniform: half-width)")
+        .has_focus()
+            | ui.add(
+                egui::DragValue::new(angle_spread_deg)
+                    .speed(0.1)
+                    .range(0.0..=45.0)
+                    .suffix("°"),
+            )
+            .has_focus()
+    });
+    focus |= row(ui, "  spread: width, length", |ui| {
+        ui.add(egui::DragValue::new(width).speed(0.01).range(0.0..=5.0))
+            .on_hover_text("Across the direction, cells")
+            .has_focus()
+            | ui.add(egui::DragValue::new(length).speed(0.01).range(0.0..=5.0))
+                .on_hover_text("Along the direction (bunch length), cells")
+                .has_focus()
+    });
+    row(ui, "  distribution", |ui| {
+        ui.selectable_value(distribution, Distribution::Gaussian, "Gaussian ±3σ");
+        ui.selectable_value(distribution, Distribution::Uniform, "uniform");
+        false
+    });
+    focus |= row(ui, "  sample seed", |ui| {
+        ui.add(egui::DragValue::new(seed)).has_focus()
+    });
     focus
 }
 
@@ -954,6 +1039,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         antenna_radius,
         rf_omega,
         radiation_reaction: _,
+        // Checkbox.
+        beam_interaction: _,
         t_max,
         tolerances: TolerancesSpec { preview, verify },
     } = physics;
@@ -992,7 +1079,29 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     max,
                     acceptance,
                 },
+            beam,
         } = s;
+        let beam_ok = beam.is_none_or(|b| {
+            let BeamSpec {
+                count,
+                energy_spread,
+                angle_spread_deg,
+                width,
+                length,
+                distribution: _,
+                transmission,
+                seed: _,
+            } = b;
+            (1..=MAX_BEAM).contains(&count)
+                && (0.0..=0.3).contains(&energy_spread)
+                && (0.0..=45.0).contains(&angle_spread_deg)
+                && (0.0..=5.0).contains(&width)
+                && (0.0..=5.0).contains(&length)
+                && (0.01..=1.0).contains(&transmission)
+        });
+        if !beam_ok {
+            return Err(format!("shot {}: beam outside the editor's range", i + 1));
+        }
         if !charge.is_finite()
             || !moment.is_finite()
             || !positive(*mass)

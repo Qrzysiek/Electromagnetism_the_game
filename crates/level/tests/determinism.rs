@@ -74,9 +74,23 @@ fn level_hashes() -> BTreeMap<String, String> {
     for p in paths {
         let level = Level::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();
         let mut h = Hasher::new();
-        for v in level.verify_flights(&level.reference_solution) {
-            h.trajectory(&v.preview);
-            h.trajectory(&v.verified);
+        if level.has_beams() {
+            // Beam levels: every particle of every flight.
+            for v in level.verify_beams(&level.reference_solution) {
+                for t in v
+                    .preview
+                    .trajectories
+                    .iter()
+                    .chain(&v.verified.trajectories)
+                {
+                    h.trajectory(t);
+                }
+            }
+        } else {
+            for v in level.verify_flights(&level.reference_solution) {
+                h.trajectory(&v.preview);
+                h.trajectory(&v.verified);
+            }
         }
         let name = p.file_stem().unwrap().to_string_lossy().into_owned();
         out.insert(name, format!("{:016x}", h.0));

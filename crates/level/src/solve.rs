@@ -119,6 +119,9 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
 pub fn objective(level: &Level, placement: &[Element]) -> (f64, Outcome) {
     let mut rs = RunSettings::with_tolerance(level.physics.tolerances.preview);
     rs.record = false;
+    if level.has_beams() {
+        return beam_objective(level, placement, &rs);
+    }
     let mut score = 0.0;
     let mut outcome = Outcome::Arrived;
     for scn in level.scenarios(placement) {
@@ -148,13 +151,78 @@ pub fn objective(level: &Level, placement: &[Element]) -> (f64, Outcome) {
     (score, outcome)
 }
 
-/// Whether a placement is a verified solution: every shot arrives, verified.
+/// Beam version of `objective`: for each beam shot that falls short of its required
+/// transmission, the detector distances of the closest of its missing particles (as many
+/// as are missing). `Arrived` only if every shot reaches its transmission.
+fn beam_objective(level: &Level, placement: &[Element], rs: &RunSettings) -> (f64, Outcome) {
+    let shots = level.beam_shots();
+    let mut score = 0.0;
+    let mut outcome = Outcome::Arrived;
+    for scn in level.beam_scenarios(placement, physics::conductor::Resolution::Preview) {
+        let r = physics::beam::run_beam(&scn, rs);
+        for (s, shot) in level.shots.iter().enumerate() {
+            let mine: Vec<&physics::trajectory::Trajectory> = r
+                .trajectories
+                .iter()
+                .zip(&shots)
+                .filter(|(_, k)| **k == s)
+                .map(|(t, _)| t)
+                .collect();
+            let need = shot.beam.map_or(1.0, |b| b.transmission);
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            let required = (need * mine.len() as f64 - 1e-9).ceil() as usize;
+            let arrived = mine
+                .iter()
+                .filter(|t| t.outcome == Outcome::Arrived)
+                .count();
+            if arrived >= required {
+                continue;
+            }
+            let mut missing: Vec<f64> = mine
+                .iter()
+                .filter(|t| t.outcome != Outcome::Arrived)
+                .map(|t| {
+                    let m = t.margins.as_ref();
+                    let d = m.and_then(|m| m.detector).unwrap_or(f64::INFINITY).max(0.0);
+                    let a = if t.outcome == Outcome::Rejected {
+                        (-m.and_then(|m| m.acceptance).unwrap_or(1.0)).max(0.0) + 1e-3
+                    } else {
+                        0.0
+                    };
+                    d + a
+                })
+                .collect();
+            missing.sort_by(f64::total_cmp);
+            score += missing.iter().take(required - arrived).sum::<f64>();
+            if outcome == Outcome::Arrived {
+                outcome = mine
+                    .iter()
+                    .map(|t| t.outcome)
+                    .find(|o| *o != Outcome::Arrived)
+                    .unwrap_or(Outcome::Timeout);
+            }
+        }
+    }
+    (score, outcome)
+}
+
+/// Whether a placement is a verified solution: every shot arrives, verified (beams: every
+/// beam shot reaches its verified transmission).
 pub fn is_verified_solution(level: &Level, placement: &[Element]) -> bool {
-    level.check_placement(placement).is_ok()
-        && level
-            .verify_flights(placement)
-            .iter()
-            .all(|v| v.outcome() == Outcome::Arrived && v.status.is_verified())
+    if level.check_placement(placement).is_err() {
+        return false;
+    }
+    if level.has_beams() {
+        return level.beams_solved(&level.verify_beams(placement));
+    }
+    level
+        .verify_flights(placement)
+        .iter()
+        .all(|v| v.outcome() == Outcome::Arrived && v.status.is_verified())
 }
 
 /// All verified single-element solutions (exhaustive).

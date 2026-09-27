@@ -114,6 +114,7 @@ fn default_shot() -> Shot {
             max: [30, 12, 0],
             acceptance: None,
         },
+        beam: None,
     }
 }
 
@@ -138,6 +139,7 @@ pub fn empty_level() -> Level {
             antenna_radius: 0.3,
             rf_omega: 0.0,
             radiation_reaction: false,
+            beam_interaction: false,
             t_max: 200.0,
             tolerances: TolerancesSpec {
                 preview: 1e-10,

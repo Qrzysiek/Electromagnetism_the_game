@@ -13,6 +13,7 @@
 //! level has none). A setup solves the level when every flight arrives.
 
 pub mod analysis;
+pub mod beam;
 pub mod cost;
 pub mod model;
 pub mod solve;
@@ -167,6 +168,9 @@ pub struct Shot {
     pub particle: ParticleSpec,
     pub launch: Launch,
     pub detector: Detector,
+    /// Fired as a beam of many particles (`beam.rs`); otherwise a single particle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beam: Option<beam::BeamSpec>,
 }
 
 /// The on-disk form, accepting both format versions.
@@ -210,6 +214,7 @@ impl From<LevelFile> for Level {
                     particle,
                     launch,
                     detector,
+                    beam: None,
                 },
             );
         }
@@ -318,6 +323,10 @@ pub struct WorldPhysics {
     /// radiation is neglected and must be negligible.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub radiation_reaction: bool,
+    /// The particles of beams interact (exact Coulomb interaction; requires c = ∞,
+    /// PHYSICS.md §3.3).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub beam_interaction: bool,
     pub t_max: f64,
     pub tolerances: TolerancesSpec,
 }
@@ -1050,6 +1059,9 @@ impl Level {
     /// supported), as messages. Empty if the level is consistent.
     pub fn model_issues(&self) -> Vec<String> {
         let mut out = Vec::new();
+        if self.has_beams() {
+            self.beam_issues(&mut out);
+        }
         if self.shots.iter().any(|s| s.particle.moment != 0.0) {
             // m ∇B_z is exact for E = 0, or for c = ∞ (PHYSICS.md §3.2). At finite c an
             // electric field adds velocity-dependent (Aharonov–Casher / hidden-momentum)
@@ -1272,6 +1284,53 @@ impl Level {
             time_offset: 0.0,
         };
         (field, obstacles)
+    }
+
+    /// Beams (PHYSICS.md §3.3): what the beam runner models.
+    fn beam_issues(&self, out: &mut Vec<String>) {
+        if self.physics.beam_interaction {
+            if self.physics.c.is_some() {
+                out.push(
+                    "interacting beams need c = ∞ (at finite c the interaction needs \
+                     retarded fields, not yet modelled)"
+                        .into(),
+                );
+            }
+            if self.has_metal(&[]) || self.limits.max_plates > 0 {
+                out.push(
+                    "interacting beams with metal: the charge one particle induces would act \
+                     on the others (not modelled)"
+                        .into(),
+                );
+            }
+            let positive = self.shots.iter().any(|s| s.particle.charge > 0.0);
+            let negative = self.shots.iter().any(|s| s.particle.charge < 0.0);
+            if positive && negative {
+                out.push("opposite charges in one beam could collide (not modelled)".into());
+            }
+        }
+        if self.physics.radiation_reaction {
+            out.push("radiation reaction is not modelled for beams".into());
+        }
+        if self.shots.iter().any(|s| s.launch.time != 0.0) {
+            out.push("beam shots are launched together at t = 0".into());
+        }
+        for s in &self.shots {
+            if let Some(b) = s.beam {
+                if b.count == 0 || !(b.transmission > 0.0 && b.transmission <= 1.0) {
+                    out.push("a beam needs particles and a transmission in (0, 1]".into());
+                }
+                if b.energy_spread * b.reach() >= 1.0 || b.energy_spread < 0.0 {
+                    out.push("a beam's energy spread would give non-positive energies".into());
+                }
+                if [b.angle_spread_deg, b.width, b.length]
+                    .iter()
+                    .any(|v| *v < 0.0)
+                {
+                    out.push("a beam's spreads must not be negative".into());
+                }
+            }
+        }
     }
 
     /// The level's electrodes as physics boxes, at their own bias.
@@ -1575,6 +1634,7 @@ mod tests {
                 antenna_radius: 0.3,
                 rf_omega: 1.5,
                 radiation_reaction: true,
+                beam_interaction: false,
                 t_max: 100.0,
                 tolerances: TolerancesSpec {
                     preview: 1e-10,
@@ -1602,6 +1662,7 @@ mod tests {
                         kinetic: Some([0.1, 1.0]),
                     }),
                 },
+                beam: None,
             }],
             // 0.1 + 0.2 is not exactly representable in decimal.
             elements: vec![Element::charge([10, 5, 0], 0.1 + 0.2)],

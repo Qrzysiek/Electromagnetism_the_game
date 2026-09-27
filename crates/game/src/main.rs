@@ -32,6 +32,14 @@ pub const PANEL_WIDTH: f32 = 340.0;
 /// A field line for drawing: polyline and arrowheads (position, unit direction of E).
 pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
 
+/// A beam flight (beam levels, one per disturbance): the preview of every particle and
+/// their verdicts.
+#[derive(Clone, Debug, Default)]
+pub struct BeamView {
+    pub preview: Option<worker::BeamPreview>,
+    pub verified: Option<Vec<(Status, Outcome)>>,
+}
+
 /// Physics results of one flight (a shot under one disturbance) for the current setup.
 #[derive(Clone, Debug, Default)]
 pub struct FlightView {
@@ -50,6 +58,8 @@ pub struct Game {
     pub editor: Editor,
     /// One view per flight, shot-major (`Level::flight_of`).
     pub flights: Vec<FlightView>,
+    /// Beam levels: one view per flight (disturbance).
+    pub beams: Vec<BeamView>,
     pub active_shot: usize,
     /// Disturbance whose flight the details panel shows.
     pub active_disturbance: usize,
@@ -103,6 +113,7 @@ impl Game {
             level_index: 0,
             editor,
             flights: Vec::new(),
+            beams: Vec::new(),
             active_shot: 0,
             active_disturbance: 0,
             show_all_shots: true,
@@ -136,6 +147,7 @@ impl Game {
         self.level_index = index;
         self.editor = Editor::new(self.levels[index].clone());
         self.flights.clear();
+        self.beams.clear();
         self.active_shot = 0;
         self.active_disturbance = 0;
         self.anim_time = 0.0;
@@ -229,11 +241,42 @@ impl Game {
             .or(all.first().copied())
     }
 
-    /// Solved = every shot arrives, verified.
+    /// Solved = every shot arrives, verified (beams: every beam shot reaches its
+    /// verified transmission in every flight).
     pub fn solved(&self) -> bool {
+        let level = &self.editor.level;
+        if level.has_beams() {
+            return !self.beams.is_empty()
+                && (0..self.beams.len()).all(|d| {
+                    level.shots.iter().enumerate().all(|(s, shot)| {
+                        let need = shot.beam.map_or(1.0, |b| b.transmission);
+                        #[allow(clippy::cast_precision_loss)]
+                        let ok = self
+                            .beam_transmission(d, s)
+                            .is_some_and(|(ok, n)| ok as f64 >= need * n as f64 - 1e-9);
+                        ok
+                    })
+                });
+        }
         let n = self.shot_count();
         n > 0
             && (0..n).all(|i| matches!(self.verdict(i), Some((Status::Verified, Outcome::Arrived))))
+    }
+
+    /// Verified arrivals and particle count of beam shot `shot` in flight `d`; `None`
+    /// while it is being computed.
+    pub fn beam_transmission(&self, d: usize, shot: usize) -> Option<(usize, usize)> {
+        let v = self.beams.get(d)?;
+        let (p, r) = (v.preview.as_ref()?, v.verified.as_ref()?);
+        if r.len() != p.shots.len() {
+            return None;
+        }
+        let mine: Vec<usize> = (0..p.shots.len()).filter(|&i| p.shots[i] == shot).collect();
+        let ok = mine
+            .iter()
+            .filter(|&&i| matches!(r[i], (Status::Verified, Outcome::Arrived)))
+            .count();
+        Some((ok, mine.len()))
     }
 }
 
@@ -703,6 +746,14 @@ fn sync_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
     for s in &mut game.flights {
         s.verdict = None;
     }
+    if request_level.has_beams() {
+        game.beams.resize(per_shot, BeamView::default());
+        for b in &mut game.beams {
+            b.verified = None;
+        }
+    } else {
+        game.beams.clear();
+    }
     if game.active_shot >= n {
         game.active_shot = 0;
     }
@@ -808,6 +859,24 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
                     s.verdict = Some((status, outcome));
                 }
             }
+            Response::BeamPreview {
+                revision,
+                flight,
+                preview,
+            } if revision == current => {
+                if let Some(b) = game.beams.get_mut(flight) {
+                    b.preview = Some(preview);
+                }
+            }
+            Response::BeamVerified {
+                revision,
+                flight,
+                results,
+            } if revision == current => {
+                if let Some(b) = game.beams.get_mut(flight) {
+                    b.verified = Some(results);
+                }
+            }
             Response::Cost { revision, cost } if revision == current => {
                 game.cost = Some((revision, cost));
             }
@@ -829,6 +898,17 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
         .filter(|(i, _)| game.show_all_shots || i / per_shot == game.active_shot)
         .filter_map(|(_, s)| s.preview.as_ref().map(|p| p.flight_time))
         .fold(0.0, f64::max);
+    // Beams: the last particle's end.
+    let end = game
+        .beams
+        .iter()
+        .filter_map(|b| b.preview.as_ref())
+        .flat_map(|p| {
+            p.paths
+                .iter()
+                .filter_map(|path| path.last().map(|(t, _)| *t))
+        })
+        .fold(end, f64::max);
     if end <= 0.0 {
         return;
     }

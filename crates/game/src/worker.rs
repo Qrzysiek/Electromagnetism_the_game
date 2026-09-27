@@ -57,6 +57,17 @@ pub struct Preview {
     pub image_force_bound: f64,
 }
 
+/// Preview of a beam flight (`level::beam`): every particle's path `(t, x)`, its shot
+/// and its outcome.
+#[derive(Clone, Debug)]
+pub struct BeamPreview {
+    pub paths: Vec<Vec<(f64, DVec3)>>,
+    pub shots: Vec<usize>,
+    pub outcomes: Vec<Outcome>,
+    /// Energy drift of the whole system (between removals), relative.
+    pub energy_rel_error: f64,
+}
+
 #[derive(Clone, Debug)]
 pub enum Response {
     Preview {
@@ -71,6 +82,18 @@ pub enum Response {
         flight: usize,
         status: Status,
         outcome: Outcome,
+    },
+    /// Beam levels: the preview of flight `flight` (one per disturbance).
+    BeamPreview {
+        revision: u64,
+        flight: usize,
+        preview: BeamPreview,
+    },
+    /// Beam levels: each particle's verification verdict and outcome.
+    BeamVerified {
+        revision: u64,
+        flight: usize,
+        results: Vec<(Status, Outcome)>,
     },
     /// Measured cost so far (after every flight).
     Cost {
@@ -132,6 +155,12 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
             },
         };
         let req = latest(rx, req);
+        if req.level.has_beams() {
+            if !beam_request(&req, tx, newest) {
+                return;
+            }
+            continue 'requests;
+        }
         let metal = req.level.has_metal(&req.placement);
         let mut cost = level::cost::Cost::new(&req.level);
         let scenarios = req.level.scenarios(&req.placement);
@@ -220,6 +249,110 @@ fn worker_loop(rx: &Receiver<Request>, tx: &Sender<Response>, newest: &AtomicU64
             }
         }
     }
+}
+
+/// A beam level: per flight the preview (every particle's path), then the per-particle
+/// verification, with the measured cost. Returns `false` if the game has gone away.
+fn beam_request(req: &Request, tx: &Sender<Response>, newest: &AtomicU64) -> bool {
+    let current = || newest.load(Ordering::Acquire) == req.revision;
+    let tol = req.level.tolerances();
+    let mut cost = level::cost::Cost::new(&req.level);
+    let send_cost = |cost: &level::cost::Cost| {
+        tx.send(Response::Cost {
+            revision: req.revision,
+            cost: *cost,
+        })
+        .is_ok()
+    };
+    let shots = req.level.beam_shots();
+    let preview_scns = req
+        .level
+        .beam_scenarios(&req.placement, Resolution::Preview);
+    let mut previews = Vec::new();
+    for (flight, scn) in preview_scns.iter().enumerate() {
+        let mut paths: Vec<Vec<(f64, DVec3)>> =
+            scn.particles.iter().map(|b| vec![(0.0, b.x0)]).collect();
+        let start = Instant::now();
+        let Some(run) = physics::beam::run_beam_cancellable(
+            scn,
+            &RunSettings::with_tolerance(tol.preview),
+            |dense, members, _| {
+                let (a, b) = (dense.t_start(), dense.t_end());
+                for (k, &i) in members.iter().enumerate() {
+                    for s in 1..=4 {
+                        let t = a + (b - a) * f64::from(s) / 4.0;
+                        let x = DVec3::new(
+                            dense.eval_component(6 * k, t),
+                            dense.eval_component(6 * k + 1, t),
+                            dense.eval_component(6 * k + 2, t),
+                        );
+                        paths[i].push((t, x));
+                    }
+                }
+                current()
+            },
+        ) else {
+            return true;
+        };
+        // Up to each particle's end (ghosts are followed a little further).
+        for (path, traj) in paths.iter_mut().zip(&run.trajectories) {
+            path.retain(|(t, _)| *t < traj.end.t);
+            path.push((traj.end.t, traj.end.x));
+        }
+        if let Some(t) = run.trajectories.first() {
+            cost.add_preview(start.elapsed().as_secs_f64(), t);
+        }
+        let preview = BeamPreview {
+            paths,
+            shots: shots.clone(),
+            outcomes: run.trajectories.iter().map(|t| t.outcome).collect(),
+            energy_rel_error: run.energy_max_rel_error,
+        };
+        let msg = Response::BeamPreview {
+            revision: req.revision,
+            flight,
+            preview,
+        };
+        if !send_cost(&cost) || tx.send(msg).is_err() {
+            return false;
+        }
+        previews.push(run);
+    }
+    let fine = if req.level.has_metal(&req.placement) {
+        let fine = req.level.beam_scenarios(&req.placement, Resolution::Verify);
+        cost.add_verification_field(&fine[0].field);
+        fine
+    } else {
+        preview_scns
+    };
+    for (flight, scn) in fine.iter().enumerate() {
+        let start = Instant::now();
+        let Some(verified) = physics::beam::run_beam_cancellable(
+            scn,
+            &RunSettings::with_tolerance(tol.verify),
+            |_, _, _| current(),
+        ) else {
+            return true;
+        };
+        if let Some(t) = verified.trajectories.first() {
+            cost.add_verification(start.elapsed().as_secs_f64(), t);
+        }
+        let results = previews[flight]
+            .trajectories
+            .iter()
+            .zip(&verified.trajectories)
+            .map(|(a, b)| (classify(a, b, scn.t_max), b.outcome))
+            .collect();
+        let msg = Response::BeamVerified {
+            revision: req.revision,
+            flight,
+            results,
+        };
+        if !send_cost(&cost) || tx.send(msg).is_err() {
+            return false;
+        }
+    }
+    true
 }
 
 /// Preview flight with its dense path; `None` if `go_on` stopped it.
