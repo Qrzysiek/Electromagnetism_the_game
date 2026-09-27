@@ -10,7 +10,7 @@ use physics::beam::{BeamParticle, BeamScenario, GHOST_DEPTH, run_beam};
 use physics::dynamics::Particle;
 use physics::field::{Coulomb, FixedCharge};
 use physics::geometry::{Aabb, Region, Shape, Sphere};
-use physics::trajectory::{MARGIN_SAFE, Outcome, RunSettings, Scenario, run};
+use physics::trajectory::{Acceptance, Gate, MARGIN_SAFE, Outcome, RunSettings, Scenario, run};
 use physics::verify::classify;
 
 const TOL: f64 = 1e-12;
@@ -39,6 +39,7 @@ fn beam(
         bounds: None,
         t_max,
         interact,
+        gates: Vec::new(),
     }
 }
 
@@ -193,6 +194,7 @@ fn scene(interact: bool) -> BeamScenario<Coulomb> {
         }),
         t_max: 60.0,
         interact,
+        gates: Vec::new(),
     }
 }
 
@@ -305,4 +307,84 @@ fn b4_interacting_beam_is_deterministic_and_verified() {
         b.energy_max_rel_error, b.restarts
     );
     assert!(b.energy_max_rel_error < 1e-10);
+}
+
+/// B5: gates in beams. Without interaction every particle passes (or skips) the gates
+/// exactly as in its single flight: outcomes, including `SkippedGate` and rejection at a
+/// gate's direction condition, and all gate margins agree with the single-particle runner.
+#[test]
+fn b5_beam_gates_match_single_flights() {
+    let mut scn = scene(false);
+    scn.gates = vec![
+        Gate {
+            region: Region::Box(Aabb {
+                min: DVec3::new(4.0, 2.0, -1.0),
+                max: DVec3::new(6.0, 6.0, 1.0),
+            }),
+            acceptance: None,
+        },
+        Gate {
+            region: Region::Box(Aabb {
+                min: DVec3::new(14.0, -4.0, -1.0),
+                max: DVec3::new(16.0, 6.0, 1.0),
+            }),
+            acceptance: Some(Acceptance {
+                direction: Some((DVec3::X, 20f64.to_radians())),
+                kinetic: None,
+            }),
+        },
+    ];
+    let detector = scn.particles[0].detector;
+    scn.particles = (0..16)
+        .map(|k| BeamParticle {
+            particle: particle(0.5, 1.0),
+            x0: DVec3::new(0.0, -4.0 + 0.6 * f64::from(k), 0.0),
+            p0: DVec3::new(1.2, -0.05, 0.0),
+            detector,
+            acceptance: None,
+        })
+        .collect();
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let mut worst: f64 = 0.0;
+    for (i, (b, t)) in scn.particles.iter().zip(&r.trajectories).enumerate() {
+        let one = Scenario {
+            field: scn.field.clone(),
+            obstacles: scn.obstacles.clone(),
+            particle: b.particle,
+            c: scn.c,
+            x0: b.x0,
+            p0: b.p0,
+            detector: b.detector,
+            bounds: scn.bounds,
+            t_max: scn.t_max,
+            radiation_reaction: false,
+            acceptance: None,
+            gates: scn.gates.clone(),
+        };
+        let s = run(&one, &RunSettings::with_tolerance(TOL));
+        assert_eq!(t.outcome, s.outcome, "particle {i}");
+        let (mt, ms) = (t.margins.as_ref().unwrap(), s.margins.as_ref().unwrap());
+        assert_eq!(mt.gates.len(), 2);
+        let clamp = |m: f64| m.clamp(-GHOST_DEPTH, MARGIN_SAFE);
+        let dm = mt
+            .all()
+            .zip(ms.all())
+            .map(|(a, b)| (clamp(a) - clamp(b)).abs())
+            .fold(0.0, f64::max);
+        assert_eq!(mt.all().count(), ms.all().count(), "particle {i}");
+        println!(
+            "B5 particle {i}: {:?}; gate margins {:?}, acceptance {:?}; differ by {dm:.1e}",
+            t.outcome, mt.gates, mt.gate_acceptance
+        );
+        worst = worst.max(dm).max((t.end.t - s.end.t).abs());
+    }
+    let fates: Vec<Outcome> = r.trajectories.iter().map(|t| t.outcome).collect();
+    for want in [
+        Outcome::Arrived,
+        Outcome::SkippedGate(0),
+        Outcome::SkippedGate(1),
+    ] {
+        assert!(fates.contains(&want), "no {want:?} among {fates:?}");
+    }
+    assert!(worst < 1e-8, "{worst:.3e}");
 }

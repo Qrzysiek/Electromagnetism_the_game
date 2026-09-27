@@ -61,6 +61,7 @@ verified reference solution for every shot and negligible radiation
 | 41 | Stern–Gerlach beam | both spin states as spread beams, each to its own detector | ≤ 1 magnet |
 | 42 | Collimated beam | the collimator for a spread, interacting beam (±3°) | ≤ 4 charges |
 | 43 | Velocity selector | two speeds in one interacting beam sorted by crossed fields | ≤ 4 charges |
+| 44 | Beam preparation | two stages for a beam: collimate it through a gate (±4°), then steer it into the target | ≤ 4 charges |
 
 ## Automatic detectors
 
@@ -135,6 +136,7 @@ cost more, with 600 samples and 16 runs). Columns:
 | 41_stern_gerlach_beam | 3.2 | 3.3e-2 | 27/32 | 38 | 113 / 30 | 0.67 |
 | 42_collimated_beam | 11.1 | < 1.5e-3 | 31/32 | 95 | 107 / 667 | 0.88 |
 | 43_velocity_selector | 11.6 | < 1.5e-3 | 17/32 | 143 | 496 / 667 | 0.68 |
+| 44_beam_preparation | 11.7 | < 1.5e-3 | 9/32 | 215 | 1237 / 667 | 0.86 |
 
 Notes:
 
@@ -151,9 +153,11 @@ Notes:
   (5 and 25 settings). The analysis caches the result of every distinct placement, so
   such levels cost only their distinct placements; before the cache (and before it knew
   about supplies), analysing them did not terminate.
-- Beam levels (40–43) are harder versions of single-particle levels (1, 30, 11, 26): a
+- Beam levels (40–44) are harder versions of single-particle levels (1, 30, 11, 26, 39): a
   placement solves them only if the required share of the beam arrives, verified. Their
-  objective for the search sums the detector distances of the closest missing particles.
+  objective for the search sums the detector distances (plus gate shortfalls) of the
+  closest missing particles. Beam preparation (44) combines the collimated beam (42) with
+  a second stage; the search found its reference in 44 s and solves it in 9 of 32 runs.
 - The analysis logs its progress to stderr (`[analyze]` lines: phases with timing, distinct
   placements flown, the slowest evaluation, and every evaluation slower than 1 s with its
   placement). The log found why the velocity selector's analysis ran for hours (placements

@@ -335,19 +335,7 @@ pub fn run_cancellable<F: FieldSolver>(
         margins: None,
     };
 
-    // Gates (PHYSICS.md §6.2): the next one to pass, the time from which each gate's
-    // margin is tracked (when the previous one was passed), margins, acceptance margins.
-    let n_gates = scn.gates.len();
-    let gate_value = |k: usize, x: DVec3| scn.gates[k].region.signed_distance(x);
-    let mut next_gate = 0usize;
-    let mut gate_from = vec![0.0; n_gates];
-    let mut gate_margin = vec![f64::INFINITY; n_gates];
-    let mut gate_acc: Vec<Option<f64>> = vec![None; n_gates];
-    let mut gate_prev = if n_gates > 0 {
-        gate_value(0, scn.x0)
-    } else {
-        f64::INFINITY
-    };
+    let mut gates = GateTracker::new(&scn.gates, scn.x0);
 
     let mut g_prev: Vec<f64> = events
         .iter()
@@ -446,57 +434,7 @@ pub fn run_cancellable<F: FieldSolver>(
             }
         }
 
-        // Gates crossed in this step (up to a terminal event), in order; then the margins
-        // of the gates whose tracking has started.
-        if n_gates > 0 {
-            let mut t_from = t_a;
-            while next_gate < n_gates {
-                let k = next_gate;
-                let g_end = gate_value(k, view.state(t_end).0);
-                if gate_prev <= 0.0 {
-                    // Inside after an entry outside its conditions: wait until it leaves.
-                    gate_prev = g_end;
-                    break;
-                }
-                let mut g = |t: f64| gate_value(k, view.state(t).0);
-                match first_crossing(&mut g, t_from, t_end, gate_prev, g_end, v_max).time {
-                    Some(tc) => {
-                        let (_, p) = view.state(tc);
-                        let ok = match scn.gates[k].acceptance {
-                            Some(acc) => {
-                                let m = acc.margin(ode.kin.velocity(p), ode.kin.kinetic_energy(p));
-                                gate_acc[k] = Some(m);
-                                m >= 0.0
-                            }
-                            None => true,
-                        };
-                        if !ok {
-                            gate_prev = g_end;
-                            break;
-                        }
-                        next_gate += 1;
-                        t_from = tc;
-                        if next_gate < n_gates {
-                            gate_from[next_gate] = tc;
-                            gate_prev = gate_value(next_gate, view.state(tc).0);
-                        }
-                    }
-                    None => {
-                        gate_prev = g_end;
-                        break;
-                    }
-                }
-            }
-            if rs.margins {
-                for k in 0..n_gates.min(next_gate + 1) {
-                    let from = gate_from[k].max(t_a);
-                    if from < t_end {
-                        let g = |t: f64| gate_value(k, view.state(t).0);
-                        gate_margin[k] = gate_margin[k].min(minimize_on(&g, from, t_end).1);
-                    }
-                }
-            }
-        }
+        gates.advance(|t| view.state(t), &ode.kin, t_a, t_end, v_max, rs.margins);
 
         let (x, p) = if event.is_some() {
             view.state(t_end)
@@ -546,8 +484,10 @@ pub fn run_cancellable<F: FieldSolver>(
     traj.stats = int.stats();
     // Acceptance of the detector: decided at the moment of entry.
     let mut acceptance_margin = None;
-    if traj.outcome == Outcome::Arrived && next_gate < n_gates {
-        traj.outcome = Outcome::SkippedGate(next_gate);
+    if traj.outcome == Outcome::Arrived
+        && let Some(k) = gates.missing()
+    {
+        traj.outcome = Outcome::SkippedGate(k);
     }
     if traj.outcome == Outcome::Arrived
         && let Some(acc) = scn.acceptance
@@ -589,11 +529,118 @@ pub fn run_cancellable<F: FieldSolver>(
     traj.margins = rs.margins.then(|| {
         let mut m = collect_margins(&events, &margin);
         m.acceptance = acceptance_margin;
-        m.gates = gate_margin;
-        m.gate_acceptance = gate_acc;
+        (m.gates, m.gate_acceptance) = gates.into_margins();
         m
     });
     Some(traj)
+}
+
+/// Progress of one flight through its gates (PHYSICS.md §6.2): the next gate to pass, the
+/// time from which each gate's margin is tracked (when the previous one was passed), the
+/// margins and the acceptance margins. Shared by the single-particle and beam runners.
+pub(crate) struct GateTracker<'a> {
+    gates: &'a [Gate],
+    next: usize,
+    from: Vec<f64>,
+    margin: Vec<f64>,
+    acc: Vec<Option<f64>>,
+    /// Signed distance to the next gate at the end of the last step.
+    prev: f64,
+}
+
+impl<'a> GateTracker<'a> {
+    pub(crate) fn new(gates: &'a [Gate], x0: DVec3) -> Self {
+        let n = gates.len();
+        Self {
+            gates,
+            next: 0,
+            from: vec![0.0; n],
+            margin: vec![f64::INFINITY; n],
+            acc: vec![None; n],
+            prev: gates
+                .first()
+                .map_or(f64::INFINITY, |g| g.region.signed_distance(x0)),
+        }
+    }
+
+    fn value(&self, k: usize, x: DVec3) -> f64 {
+        self.gates[k].region.signed_distance(x)
+    }
+
+    /// Gates crossed on `[t_a, t_end]` of a step (up to a terminal event), in order; then
+    /// the margins of the gates whose tracking has started. `state(t)` is the dense
+    /// output `(x, p)`, `v_max` the step's speed bound.
+    pub(crate) fn advance(
+        &mut self,
+        state: impl Fn(f64) -> (DVec3, DVec3),
+        kin: &Kinematics,
+        t_a: f64,
+        t_end: f64,
+        v_max: f64,
+        margins: bool,
+    ) {
+        let n = self.gates.len();
+        if n == 0 {
+            return;
+        }
+        let mut t_from = t_a;
+        while self.next < n {
+            let k = self.next;
+            let g_end = self.value(k, state(t_end).0);
+            if self.prev <= 0.0 {
+                // Inside after an entry outside its conditions: wait until it leaves.
+                self.prev = g_end;
+                break;
+            }
+            let mut g = |t: f64| self.value(k, state(t).0);
+            match first_crossing(&mut g, t_from, t_end, self.prev, g_end, v_max).time {
+                Some(tc) => {
+                    let (_, p) = state(tc);
+                    let ok = match self.gates[k].acceptance {
+                        Some(acc) => {
+                            let m = acc.margin(kin.velocity(p), kin.kinetic_energy(p));
+                            self.acc[k] = Some(m);
+                            m >= 0.0
+                        }
+                        None => true,
+                    };
+                    if !ok {
+                        self.prev = g_end;
+                        break;
+                    }
+                    self.next += 1;
+                    t_from = tc;
+                    if self.next < n {
+                        self.from[self.next] = tc;
+                        self.prev = self.value(self.next, state(tc).0);
+                    }
+                }
+                None => {
+                    self.prev = g_end;
+                    break;
+                }
+            }
+        }
+        if margins {
+            for k in 0..n.min(self.next + 1) {
+                let from = self.from[k].max(t_a);
+                if from < t_end {
+                    let g = |t: f64| self.value(k, state(t).0);
+                    self.margin[k] = self.margin[k].min(minimize_on(&g, from, t_end).1);
+                }
+            }
+        }
+    }
+
+    /// The first gate not passed, if any.
+    pub(crate) fn missing(&self) -> Option<usize> {
+        (self.next < self.gates.len()).then_some(self.next)
+    }
+
+    /// Gate margins and acceptance margins (`Margins::gates`, `Margins::gate_acceptance`).
+    pub(crate) fn into_margins(self) -> (Vec<f64>, Vec<Option<f64>>) {
+        (self.margin, self.acc)
+    }
 }
 
 /// Whether a minimum found on `[a, b]` lies at the right end, i.e. the function is still

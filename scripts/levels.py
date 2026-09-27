@@ -883,6 +883,24 @@ def velocity_selector():
                    charge(11, 13, -0.2 * M), charge(19, 13, -0.2 * M)])
 
 
+def beam_preparation():
+    # The collimated beam of the previous level, now as the first stage of an
+    # experiment: collimated at the gate, then steered into the target.
+    return level(
+        "Beam preparation",
+        "Experiments need a prepared beam. Stage 1: collimate it, so that at least 90 % of "
+        "the particles cross the gate travelling parallel to the axis (within ±4°). Stage "
+        "2: steer the prepared beam down into the target. A particle counts only if it "
+        "went through both stages in order. Only charges of the particle's sign are "
+        "available.",
+        c=None, t_max=80.0, beam_interaction=True,
+        shots=[shot(1e-6 * K, K, (0, 10), 0.0, 0.5 * K, box((27, 1, 30, 6)),
+                    beam=beam(16, 0.9, angle_deg=4.0))],
+        gates=[box((16, 6, 18, 15), direction=(0.0, 4.0))],
+        max_charges=4, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], signs=(True, False),
+        region=(3, 1, 26, 19), reference=None)
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -941,6 +959,7 @@ LEVELS = [
     ("stern_gerlach_beam", stern_gerlach_beam),
     ("collimated_beam", collimated_beam),
     ("velocity_selector", velocity_selector),
+    ("beam_preparation", beam_preparation),
 ]
 
 

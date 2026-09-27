@@ -259,6 +259,7 @@ impl Level {
             bounds: base.bounds,
             t_max: base.t_max,
             interact: self.physics.beam_interaction,
+            gates: base.gates,
         }
     }
 

@@ -368,7 +368,8 @@ A level may list gates: boxes every flight must pass, in order, before its detec
 - **Passing.** Only the next gate in order counts. Its entry is located with the certified crossing search (§6), and the state there is tested against its conditions. Inside them the gate is passed; outside, it is not, and the flight may still pass it on a later entry (after leaving it). A gate entered out of order does not count.
 - **Detector.** Entering the detector with a gate still missing ends the flight as `SkippedGate(i)`.
 - **Margins.** For each gate, the smallest signed distance to it from the moment the previous gate was passed: the depth reached inside if it was entered, the closest approach if not. The flight continues through a gate, so this depth needs no follow-through. It is refined on every step (golden-section search on the dense output). Together with the acceptance margin at the last entry, it is a verification boundary like the others (§7).
-- **Rules** (`Level::model_issues`): gates must not overlap each other or contain a launch point; beams do not support gates yet.
+- **Rules** (`Level::model_issues`): gates must not overlap each other or contain a launch point.
+- **Beams.** Every particle of a beam passes the gates on its own, with the same code as a single flight (`GateTracker`, shared by both runners), up to the time its step ends (an event of any particle cuts the step short, and the next step starts there). Test B5.
 - **Solver.** A flight that did not pass every gate adds the distance to the first gate it did not pass, plus its acceptance deficit, so that the search is led through the stages in order.
 
 ## 7. Outcome verification — *validated* (`crates/physics/src/verify.rs`, margins in `trajectory.rs`)
@@ -557,6 +558,7 @@ Found while writing G1: with a fixed step of 1e-3, the finite difference itself 
 | B2 | Coulomb explosion of 12 like charges | energy, momentum, angular momentum conserved | < 1e-10, 1e-12, 1e-12 | 1.7e-13, 2.3e-17, 2.8e-15 |
 | B3 | Non-interacting beam: collision, arrival, leaving the bounds, and a grazing pass (0.02–0.2 cells) | each particle flown alone by the single-particle runner | same outcomes; event times and margins (clamped at MARGIN_SAFE) < 1e-8 | ≤ 9.3e-12; ≤ 1.6e-15 |
 | B4 | The same beam interacting | deterministic (bit-identical reruns); every particle verified (preview/verify) | verified | all verified; energy drift 3.2e-12 |
+| B5 | Non-interacting beam of 16 through two gates, the second with a ±20° direction condition: arrivals, a skipped first gate, rejection at the second gate's cone (then skipped), collisions, leaving the bounds | each particle flown alone by the single-particle runner | same outcomes; margins incl. gate and gate-acceptance margins < 1e-8 | all outcomes equal; ≤ 8.3e-13 |
 
 Found by B3 and B4 while writing them: when a particle's event cut a step short, the other particles' event values were kept from the step's end rather than the event time; and when only ghosts were left the run stopped, so the last particle's penetration depth was taken from its event step alone (preview and verification then disagreed on it). Both fixed.
 

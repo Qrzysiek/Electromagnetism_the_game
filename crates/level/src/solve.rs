@@ -178,8 +178,8 @@ fn gate_shortfall(tr: &physics::trajectory::Trajectory) -> f64 {
 }
 
 /// Beam version of `objective`: for each beam shot that falls short of its required
-/// transmission, the detector distances of the closest of its missing particles (as many
-/// as are missing). `Arrived` only if every shot reaches its transmission.
+/// transmission, the detector distances (plus gate shortfalls) of the closest of its
+/// missing particles (as many as are missing). `Arrived` only if every shot reaches its transmission.
 fn beam_objective(level: &Level, placement: &[Element], rs: &RunSettings) -> (f64, Outcome) {
     let shots = level.beam_shots();
     let mut score = 0.0;
@@ -219,7 +219,7 @@ fn beam_objective(level: &Level, placement: &[Element], rs: &RunSettings) -> (f6
                     } else {
                         0.0
                     };
-                    d + a
+                    d + a + gate_shortfall(t)
                 })
                 .collect();
             missing.sort_by(f64::total_cmp);

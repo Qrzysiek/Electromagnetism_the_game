@@ -1304,8 +1304,7 @@ impl Level {
         (field, obstacles)
     }
 
-    /// Gates: they must not overlap (each other) or contain a launch point, and beams do
-    /// not support them yet.
+    /// Gates: they must not overlap (each other) or contain a launch point.
     fn gate_issues(&self, out: &mut Vec<String>) {
         if self.gates.is_empty() {
             return;
@@ -1331,9 +1330,6 @@ impl Level {
             }) {
                 out.push("a launch point lies in a gate".into());
             }
-        }
-        if self.has_beams() {
-            out.push("gates are not yet supported for beams".into());
         }
     }
 

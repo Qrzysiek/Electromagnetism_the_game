@@ -6,14 +6,15 @@
 //! vanish. For finite `c` the interaction is not modelled here (`BeamScenario::interact`
 //! must be off, or the level must be Newtonian).
 //!
-//! Each particle has the events of a single flight (obstacles, bounds, detector). The
-//! earliest event of any particle ends the step there; that particle's outcome is
-//! recorded, and the integration restarts at that time without it as a source. It is
-//! still integrated for a while as a *ghost* (pushed by the others, pushing none) until
-//! its penetration depth into the boundary it crossed is known, exactly as the single-
-//! particle runner follows the continued trajectory (`trajectory.rs`): margins are then
-//! properties of the trajectories, not of where the steps ended, and the existing
-//! verification (`verify::classify`) applies to every particle.
+//! Each particle has the events and gates of a single flight (obstacles, bounds, detector,
+//! gates in order). The earliest event of any particle ends the step there; that
+//! particle's outcome is recorded, and the integration restarts at that time without it
+//! as a source. It is still integrated for a while as a *ghost* (pushed by the others,
+//! pushing none) until its penetration depth into the boundary it crossed is known,
+//! exactly as the single-particle runner follows the continued trajectory
+//! (`trajectory.rs`): margins are then properties of the trajectories, not of where the
+//! steps ended, and the existing verification (`verify::classify`) applies to every
+//! particle.
 
 use glam::DVec3;
 
@@ -24,8 +25,8 @@ use crate::geometry::{Aabb, Region, Shape};
 use crate::integrator::OdeSystem;
 use crate::integrator::dop853::{Dense, Dop853, Settings, Stats};
 use crate::trajectory::{
-    Acceptance, MARGIN_SAFE, Margins, Outcome, RunSettings, Sample, Trajectory, minimize_on,
-    minimum_at_end,
+    Acceptance, Gate, GateTracker, MARGIN_SAFE, Margins, Outcome, RunSettings, Sample, Trajectory,
+    minimize_on, minimum_at_end,
 };
 
 /// One particle of a beam with its launch state and its own detector (particles of
@@ -50,6 +51,9 @@ pub struct BeamScenario<F> {
     pub t_max: f64,
     /// Coulomb interaction between the particles (requires `c = ∞`).
     pub interact: bool,
+    /// Gates every particle must pass, in order, before its detector counts (as for single
+    /// flights, PHYSICS.md §6.2).
+    pub gates: Vec<Gate>,
 }
 
 /// Result of a beam flight: one trajectory per particle (in launch order; their `stats`
@@ -187,11 +191,12 @@ enum Phase {
     Done,
 }
 
-struct Track {
+struct Track<'a> {
     traj: Trajectory,
     phase: Phase,
     margin: Vec<f64>,
     g_prev: Vec<f64>,
+    gates: GateTracker<'a>,
 }
 
 /// Runs a beam flight.
@@ -279,6 +284,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 phase: Phase::Flying,
                 margin: g.clone(),
                 g_prev: g,
+                gates: GateTracker::new(&scn.gates, b.x0),
             }
         })
         .collect();
@@ -410,6 +416,20 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             }
             let t_end = first.map_or(t_b, |(t, _, _)| t);
 
+            // Gates passed by the flying particles up to `t_end`.
+            for (k, &i) in members.iter().enumerate() {
+                if matches!(tracks[i].phase, Phase::Flying) {
+                    tracks[i].gates.advance(
+                        |t| (pos(k, t), mom(k, t)),
+                        &ode.kin[k],
+                        t_a,
+                        t_end,
+                        v_max[k],
+                        rs.margins,
+                    );
+                }
+            }
+
             // Margins of flying particles (up to the event), depths of ghosts.
             let mut ghosts_done = false;
             for (k, &i) in members.iter().enumerate() {
@@ -489,6 +509,11 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             if let Some((_, k, e)) = first {
                 let i = members[k];
                 tracks[i].traj.outcome = events[e].outcome();
+                if tracks[i].traj.outcome == Outcome::Arrived
+                    && let Some(g) = tracks[i].gates.missing()
+                {
+                    tracks[i].traj.outcome = Outcome::SkippedGate(g);
+                }
                 // Acceptance, decided at the moment of entry.
                 if tracks[i].traj.outcome == Outcome::Arrived
                     && let Some(acc) = scn.particles[i].acceptance
@@ -556,6 +581,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     gates: Vec::new(),
                     gate_acceptance: Vec::new(),
                 };
+                (m.gates, m.gate_acceptance) = t.gates.into_margins();
                 for (&ev, &v) in events.iter().zip(&t.margin) {
                     match ev {
                         Event::Obstacle(_) => m.obstacles.push(v),
