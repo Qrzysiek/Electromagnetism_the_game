@@ -92,6 +92,23 @@ A single particle in the static field of fixed charges is treated **exactly**, i
   1. *Vacuum tubes* (exact classical electrodynamics): thermionic emission from a cathode, space-charge-limited current (validated against the Child–Langmuir law), the vacuum diode (rectification), the triode (a grid controls the current: amplification), later magnetron and klystron. Needs beams interacting near metal (the charges each electron induces on the electrodes) and continuous emission (particles launched over time).
   2. *Metals and resistors*, the Drude picture: classical electrons scattering off the lattice with a mean free time; Ohm's law and Joule heating emerge. Stated as a model: real conduction electrons are a quantum Fermi gas. Random collisions (fixed seed) make outcomes statistical.
   3. *Semiconductor devices*, ensemble Monte Carlo: electrons and holes as classical particles with effective masses, scattering at quantum-derived rates, in the field of a Poisson solution for the doped crystal (p–n junction, depletion layer, transistor action). Semiclassical: the band structure and scattering come from quantum theory, stated in the game. Far future.
+- **Jackson series (planned).** Levels showcasing every effect and instrument of J. D. Jackson, *Classical Electrodynamics* (3rd ed.) that the simulation and hardware can compute. Each is named distinctively (e.g. "Jackson §12.3: E×B drift") and cites its section in the description. Section numbers below are from memory and **unverified**: each is checked against the book before its level ships. A field `reference` in the level format will carry the citation.
+  - *Possible now (single particles, exact fields):*
+    - Ch. 1–2: Coulomb and Gauss; the image charge of a grounded / insulated conducting sphere (§2.2–2.3); a sphere at fixed potential; a conducting sphere in a uniform field (§2.5; needs static stray fields combined with metal).
+    - Ch. 5: fields of current loops and magnetic dipoles (§5.5–5.6); the force on a dipole in a non-uniform field (Stern–Gerlach).
+    - Ch. 9: the oscillating electric dipole's fields (§9.2) as antennas.
+    - Ch. 11–12: relativistic motion in uniform B (§12.2), E×B drift (§12.3), gradient drift in a non-uniform B_z (§12.4; in-plane).
+    - Ch. 14: Liénard–Wiechert fields (§14.1), Larmor and relativistic radiated power (§14.2), the angular distribution of radiation (§14.3), synchrotron radiation (§14.6), undulators and wigglers (§14.7, as trajectories and radiation views), Thomson scattering of a plane wave by a free charge (§14.8).
+    - Ch. 16: radiation reaction (Landau–Lifshitz).
+    - Rutherford scattering (Geiger–Marsden).
+  - *Needs a planned feature:*
+    - The electric quadrupole and magnetic dipole radiation (§9.3): new sources.
+    - Electrostatic shielding by grounded metal in static stray fields: metal with static disturbances.
+    - Inductance and Faraday induction (§5.15–5.17): the circuits stage.
+    - The Darwin interaction (§12.6) and space charge at finite c: retarded beam interaction.
+    - Dielectrics (Ch. 4) and magnetic materials (§5.10–5.12): the materials stages.
+    - Plasma oscillations: beams with neutralizing background.
+  - *Out of reach for now:* magnetic mirrors (need motion along B, i.e. 3D), waveguides and cavities (Ch. 8; FDTD), scattering and diffraction (Ch. 10), Cherenkov and transition radiation (Ch. 13; media), bremsstrahlung spectra (Ch. 15), and everything quantum.
 - **Stated limits:** the game lists, per level, what is exact and what is approximated or left out ("Physics model and its limits", `Level::model_notes`), and shows the measured size of each approximation in the flight details (neglected radiation, electrode image force, radiation-reaction ratio).
 - **Detector conditions:** a detector can also require the arrival direction (cone) and kinetic energy (window). They are verified with margins like every boundary (PHYSICS.md §6.1).
 - **Hardcore mode:** continuous values (sliders, linear or log) within the ranges of the level's lists instead of the discrete values, and any antenna orientation. A level can also be hardcore by design (`limits.continuous`).
