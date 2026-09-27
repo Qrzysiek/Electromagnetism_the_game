@@ -1,3 +1,6 @@
 /target
 **/*.rs.bk
 scripts/__pycache__/
+
+# Reference books and solutions (copyrighted; local only).
+references/
