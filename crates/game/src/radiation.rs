@@ -268,14 +268,19 @@ fn with_past(
 }
 
 /// 99th percentile of a list of magnitudes (ignoring non-finite values).
+/// 0 when the quantity vanishes everywhere (e.g. no magnetic field at all): nothing to
+/// colour. (It was 1e-300: in the shader's f32 that is 0, and 0/0 painted the whole map.)
+/// Where the field is confined to a small area the 99th percentile is 0: then the largest
+/// value is used.
 fn percentile99(mut v: Vec<f64>) -> f64 {
     v.retain(|x| x.is_finite());
     if v.is_empty() {
-        return 1.0;
+        return 0.0;
     }
     v.sort_by(f64::total_cmp);
     let i = (v.len() - 1) * 99 / 100;
-    v[i].max(1e-300)
+    let p = if v[i] > 0.0 { v[i] } else { v[v.len() - 1] };
+    if p > 1e-30 { p } else { 0.0 }
 }
 
 /// Signed compression into [−1, 1] on an asinh scale: values from `sat / range` to `sat`
@@ -288,6 +293,10 @@ fn compress(v: f64, sat: f64, range: f64) -> f64 {
 /// The colour scale: logarithmic over a range, or linear with a gain (`scale` is the
 /// range or the gain). Signed, in [−1, 1].
 pub fn colour_value(v: f64, sat: f64, linear: bool, scale: f64) -> f64 {
+    if sat <= 0.0 {
+        // The quantity vanishes everywhere.
+        return 0.0;
+    }
     if linear {
         (v * scale / sat).clamp(-1.0, 1.0)
     } else {
@@ -490,8 +499,9 @@ pub fn update(
                     sample(v, fr, mode, x, t, c).map(|(e, b)| (b.abs(), e.length()))
                 })
                 .unzip();
-            view.part_b = percentile99(bs) / view.b_sat;
-            view.part_e = percentile99(es) / view.e_sat;
+            let ratio = |p: f64, sat: f64| if sat > 0.0 { p / sat } else { 0.0 };
+            view.part_b = ratio(percentile99(bs), view.b_sat);
+            view.part_e = ratio(percentile99(es), view.e_sat);
         } else {
             view.part_b = 1.0;
             view.part_e = 1.0;

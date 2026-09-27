@@ -83,6 +83,29 @@ pub enum Fate {
     Pass,
 }
 
+/// The beam's energy budget at one time (recorded with `RunSettings::record`), in the
+/// units of the fields. Charges present are the particles still flying (also beyond the
+/// arena) and the charges of absorbed particles that stayed where they stopped.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct EnergySample {
+    pub t: f64,
+    /// Kinetic energy of the moving particles.
+    pub kinetic: f64,
+    /// Potential energy of the charges present in the level's fields (external potential,
+    /// induced charges of metal, magnetic moments).
+    pub potential: f64,
+    /// Coulomb interaction energy of the charges present with each other (for finite `c`
+    /// only the electric part: the energy of the magnetic and radiation fields between
+    /// them is not counted).
+    pub interaction: f64,
+    /// Energy given to the bodies and the detector by absorbed particles: the drop of the
+    /// energy above at each absorption (kinetic energy; for a drained particle also its
+    /// potential and interaction energy).
+    pub absorbed: f64,
+    /// Energy radiated so far (Liénard formula, all particles).
+    pub radiated: f64,
+}
+
 /// Fates at the three kinds of boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Fates {
@@ -140,6 +163,8 @@ pub struct BeamRun {
     pub energy_max_rel_error: f64,
     /// Integrator restarts (one per removal and per finished ghost).
     pub restarts: usize,
+    /// The energy budget at launch and at every accepted step (empty unless recorded).
+    pub energy: Vec<EnergySample>,
     /// Quasi-static interaction: per particle, the estimated relative error of the
     /// interaction's impulse: the time integral of the neglected fields of the others (from
     /// their jerk, `Σ_j |q_j| γ_j² |ȧ_j| / (c³ κ)` with the Doppler factor κ = 1 − n·β
@@ -752,6 +777,9 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     let mut beta_max: f64 = 0.0;
     // Where absorbed particles stopped, with their charge staying (`Fate::Stop`).
     let mut stopped: Vec<Option<DVec3>> = vec![None; n];
+    // Energy budget (recorded runs): samples, and the energy absorbed so far.
+    let mut energy: Vec<EnergySample> = Vec::new();
+    let mut absorbed = 0.0;
     let past = Past {
         segments: RefCell::new(Vec::new()),
         stays: RefCell::new(vec![false; n]),
@@ -787,6 +815,31 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 Fate::Pass => t.phase = Phase::Free,
             }
         }
+    }
+
+    if rs.record {
+        let present: Vec<Present> = scn
+            .particles
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !matches!(tracks[*i].phase, Phase::Done) || stopped[*i].is_some())
+            .map(|(i, b)| {
+                let tk = if stopped[i].is_some() {
+                    0.0
+                } else {
+                    tracks[i].traj.kinetic_initial
+                };
+                (b.particle.charge, b.particle.moment, b.x0, tk)
+            })
+            .collect();
+        let (kinetic, potential, interaction) = budget(scn, 0.0, &present);
+        energy.push(EnergySample {
+            t: 0.0,
+            kinetic,
+            potential,
+            interaction,
+            ..EnergySample::default()
+        });
     }
 
     'segments: loop {
@@ -1144,10 +1197,72 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             let e = ode.energy(&y, t_end);
             energy_err = energy_err.max((e - energy0).abs() / energy0.abs().max(1e-300));
 
+            // Energy budget at t_end (the event's particle still counted as present; its
+            // absorption is booked below).
+            let present_at = |tracks: &[Track], stopped: &[Option<DVec3>], skip: Option<usize>| {
+                let mut out: Vec<Present> = Vec::new();
+                for (k, &i) in members.iter().enumerate() {
+                    let real = matches!(
+                        tracks[i].phase,
+                        Phase::Flying | Phase::Free | Phase::Ghost { real: true, .. }
+                    ) || first.is_some_and(|(_, kk, _)| kk == k);
+                    if real && Some(i) != skip {
+                        let part = scn.particles[i].particle;
+                        let (x, p) = (BeamOde::<F>::x(&y, k), ode.p(&y, k));
+                        out.push((part.charge, part.moment, x, ode.kin[k].kinetic_energy(p)));
+                    }
+                }
+                for (i, st) in stopped.iter().enumerate() {
+                    if let Some(x) = st
+                        && Some(i) != skip
+                    {
+                        out.push((scn.particles[i].particle.charge, 0.0, *x, 0.0));
+                    }
+                }
+                out
+            };
+            if rs.record {
+                let present = present_at(&tracks, &stopped, None);
+                let (kinetic, potential, interaction) = budget(scn, t_end, &present);
+                energy.push(EnergySample {
+                    t: t_end,
+                    kinetic,
+                    potential,
+                    interaction,
+                    absorbed,
+                    radiated: tracks.iter().map(|t| t.traj.radiated_energy).sum(),
+                });
+            }
+
             if let Some((_, k, e)) = first {
                 let i = members[k];
                 tracks[i].traj.outcome = events[e].outcome();
-                match events[e].fate(&scn.fates) {
+                let fate = events[e].fate(&scn.fates);
+                if rs.record && fate != Fate::Pass {
+                    // The energy the absorption takes out: before minus after.
+                    let before = present_at(&tracks, &stopped, None);
+                    let mut after = present_at(&tracks, &stopped, Some(i));
+                    if fate == Fate::Stop {
+                        let part = scn.particles[i].particle;
+                        after.push((part.charge, 0.0, tracks[i].traj.end.x, 0.0));
+                    }
+                    let sum = |v: &[Present]| {
+                        let (a, b, c) = budget(scn, t_end, v);
+                        a + b + c
+                    };
+                    absorbed += sum(&before) - sum(&after);
+                    if let Some(last) = energy.last_mut() {
+                        let (kinetic, potential, interaction) = budget(scn, t_end, &after);
+                        *last = EnergySample {
+                            kinetic,
+                            potential,
+                            interaction,
+                            absorbed,
+                            ..*last
+                        };
+                    }
+                }
+                match fate {
                     Fate::Drain => {
                         past.t_off.borrow_mut()[i] = t_end;
                         past.x_off.borrow_mut()[i] = tracks[i].traj.end.x;
@@ -1261,7 +1376,27 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             energy_err
         },
         restarts,
+        energy,
     })
+}
+
+/// A charge present for the energy budget: charge, moment, position, kinetic energy.
+type Present = (f64, f64, DVec3, f64);
+
+/// Kinetic, potential and interaction energy of the charges present (`EnergySample`).
+fn budget<F: FieldSolver>(scn: &BeamScenario<F>, t: f64, present: &[Present]) -> (f64, f64, f64) {
+    let (mut kinetic, mut potential, mut interaction) = (0.0, 0.0, 0.0);
+    for (k, &(q, m, x, tk)) in present.iter().enumerate() {
+        let f = scn.field.sample(x, t);
+        kinetic += tk;
+        potential += q * f.phi + 0.5 * q * scn.field.self_field(x, q).1 - m * f.b.z;
+        if scn.interact {
+            for &(q2, _, x2, _) in &present[k + 1..] {
+                interaction += q * q2 / (x - x2).length();
+            }
+        }
+    }
+    (kinetic, potential, interaction)
 }
 
 /// Depth to which ghosts are followed into the boundary they crossed, and at which their

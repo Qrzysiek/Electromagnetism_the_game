@@ -395,6 +395,10 @@ fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
 
 // Signed compression into [−1, 1] on an asinh scale (radiation.rs `compress`).
 fn compress(v: f32, sat: f32, range: f32) -> f32 {
+    if (sat <= 0.0) {
+        // The quantity vanishes everywhere: nothing to colour.
+        return 0.0;
+    }
     if ((params.counts.z & 8u) != 0u) {
         // Linear, with a gain.
         return clamp(v * range / sat, -1.0, 1.0);

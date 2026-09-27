@@ -182,7 +182,11 @@ fn energy_bar(ui: &mut egui::Ui, label: &str, value: f64, color: egui::Color32) 
             ],
             egui::Stroke::new(1.0, egui::Color32::GRAY),
         );
-        ui.label(format!("{value:+.3}"));
+        if value != 0.0 && value.abs() < 1e-3 {
+            ui.label(format!("{value:+.2e}"));
+        } else {
+            ui.label(format!("{value:+.3}"));
+        }
     });
 }
 
@@ -733,8 +737,26 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         }
         ui.separator();
 
-        // Energy bars at the animated point of the active shot.
-        ui.label(egui::RichText::new("Energy along the flight (units of T₀)").strong());
+        // Energy bars at the animated point of the active shot: one particle, named.
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Energy of").strong());
+            let (shot_i, d) = level.flight_of(game.active_flight());
+            let who = if level.disturbances.is_empty() {
+                format!("shot {}", shot_i + 1)
+            } else {
+                format!("shot {}, disturbance {}", shot_i + 1, d + 1)
+            };
+            ui.label(
+                egui::RichText::new(who)
+                    .strong()
+                    .color(shot_color32(shot_i)),
+            )
+            .on_hover_text(
+                "The energy of this shot's particle along its flight, in units of its \
+                     launch energy T₀; choose the shot with the tabs above or [ ]",
+            );
+            ui.label(egui::RichText::new("(units of its T₀)").small());
+        });
         ui.horizontal(|ui| {
             ui.checkbox(&mut game.animate, "Animate (A)").on_hover_text(
                 "Play the flights in time: the particles move along their paths and the \
@@ -1049,6 +1071,7 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             .small(),
         );
     }
+    beam_energy(ui, game, level);
     ui.separator();
 }
 
@@ -1450,6 +1473,128 @@ fn percent(f: f64) -> String {
     }
 }
 
+/// The beam's energy budget at the animation time (the active disturbance's flight), in
+/// units of the beam's launch kinetic energy: where the energy went.
+fn beam_energy(ui: &mut egui::Ui, game: &Game, level: &level::Level) {
+    let d = game
+        .active_disturbance
+        .min(game.beams.len().saturating_sub(1));
+    let Some(p) = game.beams.get(d).and_then(|b| b.preview.as_ref()) else {
+        return;
+    };
+    let (Some(first), Some(last)) = (p.energy.first(), p.energy.last()) else {
+        return;
+    };
+    let t = if game.animate { game.anim_time } else { last.t };
+    // Linear interpolation between the recorded samples.
+    let k = p
+        .energy
+        .partition_point(|e| e.t <= t)
+        .clamp(1, p.energy.len().max(2) - 1);
+    let e = if p.energy.len() < 2 || t >= last.t {
+        *last
+    } else {
+        let (a, b) = (p.energy[k - 1], p.energy[k]);
+        let f = if b.t > a.t {
+            ((t - a.t) / (b.t - a.t)).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let mix = |x: f64, y: f64| x + (y - x) * f;
+        physics::beam::EnergySample {
+            t,
+            kinetic: mix(a.kinetic, b.kinetic),
+            potential: mix(a.potential, b.potential),
+            interaction: mix(a.interaction, b.interaction),
+            absorbed: mix(a.absorbed, b.absorbed),
+            radiated: mix(a.radiated, b.radiated),
+        }
+    };
+    let t0 = first.kinetic.max(1e-300);
+    ui.label(egui::RichText::new("Energy of the whole beam").strong())
+        .on_hover_text(
+            "Where the beam's energy went, in units of its kinetic energy at launch T₀ \
+         (all particles together)",
+        );
+    energy_bar(
+        ui,
+        "kinetic",
+        e.kinetic / t0,
+        egui::Color32::from_rgb(240, 200, 60),
+    );
+    energy_bar(
+        ui,
+        "potential",
+        (e.potential - first.potential) / t0,
+        egui::Color32::from_rgb(200, 90, 230),
+    );
+    if level.physics.beam_interaction {
+        energy_bar(
+            ui,
+            "mutual",
+            (e.interaction - first.interaction) / t0,
+            egui::Color32::from_rgb(230, 130, 90),
+        );
+    }
+    energy_bar(
+        ui,
+        "absorbed",
+        e.absorbed / t0,
+        egui::Color32::from_rgb(160, 160, 160),
+    );
+    let rr = level.physics.radiation_reaction;
+    if level.physics.c.is_some() {
+        energy_bar(
+            ui,
+            "radiated",
+            e.radiated / t0,
+            egui::Color32::from_rgb(90, 200, 255),
+        );
+    }
+    let mut total = e.kinetic
+        + (e.potential - first.potential)
+        + (e.interaction - first.interaction)
+        + e.absorbed
+        - first.kinetic;
+    if rr {
+        total += e.radiated;
+    }
+    energy_bar(
+        ui,
+        "total − T₀",
+        total / t0,
+        egui::Color32::from_rgb(120, 220, 120),
+    );
+    let note = match (
+        level.physics.c.is_some(),
+        rr,
+        level.physics.beam_interaction,
+    ) {
+        (false, _, _) => {
+            "Changes since launch. Absorbed: given to the bodies and the \
+             detector. The total is conserved."
+        }
+        (true, true, _) => {
+            "Changes since launch. Absorbed: given to the bodies and the \
+             detector; radiated: carried away by the field (radiation reaction included, so \
+             it is part of the total). Mutual: the Coulomb part of the particles' \
+             interaction only (their magnetic and radiation field energy is not counted)."
+        }
+        (true, false, true) => {
+            "Changes since launch. Absorbed: given to the bodies and the \
+             detector; radiated: an estimate of what the particles would radiate, neglected \
+             in the dynamics (not in the total). Mutual: the Coulomb part of the \
+             interaction only."
+        }
+        (true, false, false) => {
+            "Changes since launch. Absorbed: given to the bodies and the \
+             detector; radiated: an estimate, neglected in the dynamics (not in the total)."
+        }
+    };
+    ui.label(egui::RichText::new(note).small());
+    ui.label(format!("t = {:.2}", e.t));
+}
+
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
@@ -1470,6 +1615,16 @@ fn colour_bar(ui: &mut egui::Ui, game: &Game, radiation: &crate::radiation::Radi
     } else {
         10f64.powf(game.field_range_decades)
     };
+    if sat <= 0.0 {
+        ui.label(
+            egui::RichText::new(format!(
+                "{} = 0 everywhere: nothing to colour.",
+                if signed { "B_z" } else { "|E|" }
+            ))
+            .small(),
+        );
+        return;
+    }
     let width = ui.available_width().min(260.0);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 26.0), egui::Sense::hover());
     let painter = ui.painter_at(rect);

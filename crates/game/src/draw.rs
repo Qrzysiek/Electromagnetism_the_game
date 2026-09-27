@@ -590,6 +590,10 @@ pub fn draw(
             let dot = Color::srgb(1.0, 1.0, 0.6);
             gizmos.circle_2d(x, 0.18, dot);
             gizmos.circle_2d(x, 0.1, dot);
+            if active {
+                // The particle whose energy the panel shows: ringed in its shot's colour.
+                gizmos.circle_2d(x, 0.32, base);
+            }
             let f = to_vec2(pt.force);
             if active && f.length() > 0.0 {
                 // Force arrow, length ∝ log(1 + |F|/F₀), direction exact. F₀ = T₀ per

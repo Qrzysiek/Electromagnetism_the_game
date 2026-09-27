@@ -77,6 +77,8 @@ pub struct BeamPreview {
     /// absorbed (None if it flew to the time limit or left the arena).
     pub worldlines: Vec<Vec<(f64, DVec3, DVec3, DVec3)>>,
     pub ends: Vec<Option<(f64, DVec3)>>,
+    /// The beam's energy budget along the flight.
+    pub energy: Vec<physics::beam::EnergySample>,
 }
 
 #[derive(Clone, Debug)]
@@ -467,6 +469,7 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &AtomicU64) -> bool {
             energy_rel_error: run.energy_max_rel_error,
             worldlines: lines,
             ends,
+            energy: run.energy.clone(),
             retardation_max: run
                 .neglected_retardation
                 .iter()

@@ -864,3 +864,35 @@ fn b15_a_stopped_charge_keeps_acting() {
     );
     assert!(deflection > 0.1 && d < 1e-9, "{d:.3e}");
 }
+
+/// B16: the recorded energy budget balances. For c = ∞ (no radiation) kinetic +
+/// potential + interaction + absorbed is conserved over the whole flight, through the
+/// absorptions (one particle stops on the fixed charge, one is drained by the detector,
+/// one flies on beyond the arena), to the integration accuracy.
+#[test]
+fn b16_energy_budget_balances() {
+    let scn = scene(true);
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let total =
+        |e: &physics::beam::EnergySample| e.kinetic + e.potential + e.interaction + e.absorbed;
+    let e0 = total(&r.energy[0]);
+    let scale = r.energy[0].kinetic;
+    let worst = r
+        .energy
+        .iter()
+        .map(|e| (total(e) - e0).abs() / scale)
+        .fold(0.0, f64::max);
+    let last = r.energy.last().unwrap();
+    println!(
+        "B16: {} samples; at the end kinetic {:.4}, potential {:.4}, interaction {:.4}, \
+         absorbed {:.4} (of T = {scale:.4}); balance off by {worst:.1e}; fates {:?}",
+        r.energy.len(),
+        last.kinetic,
+        last.potential,
+        last.interaction,
+        last.absorbed,
+        r.trajectories.iter().map(|t| t.outcome).collect::<Vec<_>>()
+    );
+    assert!(last.absorbed > 0.0);
+    assert!(worst < 1e-9, "{worst:.3e}");
+}
