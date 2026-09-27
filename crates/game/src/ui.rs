@@ -941,11 +941,23 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             .filter(|o| **o != Outcome::Arrived)
             .count();
         let energy = if p.energy_rel_error.is_nan() {
-            // Retarded interaction: the particles exchange energy with the field.
-            format!(
-                "largest radiated share of a particle {:.1e} (neglected)",
-                p.radiated_max
-            )
+            // Finite c: the particles exchange energy with the field.
+            let mut s = format!(
+                "largest radiated share of a particle {:.1e} ({})",
+                p.radiated_max,
+                if level.physics.radiation_reaction {
+                    "included"
+                } else {
+                    "neglected"
+                }
+            );
+            if p.retardation_max > 0.0 {
+                s += &format!(
+                    "; neglected retardation, estimated: {:.1e} of the interaction",
+                    p.retardation_max
+                );
+            }
+            s
         } else {
             format!("energy drift of the whole beam {:.1e}", p.energy_rel_error)
         };
@@ -956,7 +968,10 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 match (level.physics.beam_interaction, level.physics.c) {
                     (false, _) => ", not interacting",
                     (true, None) => ", interacting",
-                    (true, Some(_)) => ", interacting (retarded fields)",
+                    (true, Some(_)) if level.physics.beam_retarded => {
+                        ", interacting (exact retarded fields)"
+                    }
+                    (true, Some(_)) => ", interacting (quasi-static fields)",
                 },
             ))
             .small(),

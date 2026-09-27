@@ -901,6 +901,25 @@ def beam_preparation():
         region=(3, 1, 26, 19), reference=None)
 
 
+def relativistic_beam():
+    # v = 0.8c (c = 5, gamma = 5/3, T0 = (gamma - 1) m c^2). Moving side by side, the
+    # particles attract magnetically: the net repulsion is 1/gamma^2 = 0.36 of the Coulomb
+    # force (PHYSICS.md 3.3, tests B6/B11). Quasi-static interaction (exact in the
+    # velocities; checked against the retarded fields in the level tests), with radiation
+    # reaction: the particles radiate about 1e-8 of their energy, too much to neglect.
+    return level(
+        "Relativistic beam",
+        "A beam at 0.8 c. Its particles repel each other electrically, but charges moving "
+        "side by side also attract magnetically: at this speed the net repulsion is only "
+        "36 % (1/γ²) of the Coulomb force, which is why fast beams hold together. They are "
+        "also harder to bend (momentum γmv). Bring at least 90 % of the beam into the "
+        "detector.",
+        c=5.0, t_max=20.0, beam_interaction=True, radiation_reaction=True,
+        shots=[shot(0.06, 1.0, (0, 10), 0.0, (5 / 3 - 1) * 25.0, box((27, 14, 30, 19)),
+                    beam=beam(16, 0.9))],
+        max_charges=2, magnitudes=[200.0, 400.0, 800.0, 1600.0], reference=None)
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -960,6 +979,7 @@ LEVELS = [
     ("collimated_beam", collimated_beam),
     ("velocity_selector", velocity_selector),
     ("beam_preparation", beam_preparation),
+    ("relativistic_beam", relativistic_beam),
 ]
 
 

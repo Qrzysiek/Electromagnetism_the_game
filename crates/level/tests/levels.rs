@@ -46,6 +46,46 @@ fn reference_solutions_are_verified() {
             // The model neglects each particle's radiation (PHYSICS.md §3.3): the energy it
             // radiates (Liénard, with the other particles' fields) must be below the
             // numerical accuracy, as for single flights.
+            // Quasi-static interaction at finite c (PHYSICS.md §3.3): the exact retarded
+            // interaction must give the same outcome for every particle. (Flown without
+            // radiation reaction, which moves these particles by ~1e-8 of their path, far
+            // below the difference between the models, and would multiply the cost of the
+            // exact run eightfold.)
+            if level.physics.c.is_some()
+                && level.physics.beam_interaction
+                && !level.physics.beam_retarded
+            {
+                let mut exact = level.clone();
+                exact.physics.beam_retarded = true;
+                exact.physics.radiation_reaction = false;
+                let rs = RunSettings::with_tolerance(level.physics.tolerances.preview);
+                let scns = exact.beam_scenarios(
+                    &level.reference_solution,
+                    physics::conductor::Resolution::Preview,
+                );
+                for (f, scn) in v.iter().zip(&scns) {
+                    let r = physics::beam::run_beam(scn, &rs);
+                    let mut worst: f64 = 0.0;
+                    for (i, (a, b)) in f
+                        .verified
+                        .trajectories
+                        .iter()
+                        .zip(&r.trajectories)
+                        .enumerate()
+                    {
+                        assert_eq!(a.outcome, b.outcome, "{name}: particle {i}");
+                        worst = worst.max((a.end.x - b.end.x).length());
+                    }
+                    let indicator = f
+                        .verified
+                        .neglected_retardation
+                        .iter()
+                        .fold(0.0f64, |m, &x| m.max(x));
+                    println!(
+                        "{name}: quasi-static and retarded end points differ by up to {worst:.1e} cells; indicator up to {indicator:.1e}"
+                    );
+                }
+            }
             // With radiation reaction the Landau–Lifshitz treatment must be valid instead.
             if level.physics.c.is_some() {
                 for f in &v {
@@ -121,8 +161,11 @@ fn neglected_radiation_is_below_numerical_accuracy() {
     }
 }
 
-/// Levels that include radiation reaction must need it: with radiation switched off, the
-/// reference solution must not solve them (otherwise the radiation is decoration).
+/// Levels that include radiation reaction must need it (otherwise the radiation is
+/// decoration): with radiation switched off, either the reference solution no longer
+/// solves them, or (beams) the radiation that would be neglected is above the 1e-10 of
+/// the launch energy allowed for neglected radiation, so the model needs it to be
+/// consistent.
 #[test]
 fn radiation_levels_need_radiation() {
     for (name, mut level) in shipped_levels() {
@@ -130,6 +173,23 @@ fn radiation_levels_need_radiation() {
             continue;
         }
         level.physics.radiation_reaction = false;
+        if level.has_beams() {
+            let v = level.verify_beams(&level.reference_solution);
+            let solved = level.beams_solved(&v);
+            let radiated = v
+                .iter()
+                .flat_map(|f| &f.verified.trajectories)
+                .map(|t| t.radiated_energy / t.kinetic_initial)
+                .fold(0.0f64, f64::max);
+            println!(
+                "{name}: without radiation reaction solved {solved}, radiates up to {radiated:.1e}"
+            );
+            assert!(
+                !solved || radiated >= 1e-10,
+                "{name} needs no radiation reaction"
+            );
+            continue;
+        }
         let all_arrive = level
             .verify_flights(&level.reference_solution)
             .iter()

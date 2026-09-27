@@ -62,6 +62,7 @@ verified reference solution for every shot and negligible radiation
 | 42 | Collimated beam | the collimator for a spread, interacting beam (±3°) | ≤ 4 charges |
 | 43 | Velocity selector | two speeds in one interacting beam sorted by crossed fields | ≤ 4 charges |
 | 44 | Beam preparation | two stages for a beam: collimate it through a gate (±4°), then steer it into the target | ≤ 4 charges |
+| 45 | Relativistic beam | a beam at 0.8c: magnetic attraction weakens space charge to 1/γ²; quasi-static interaction with radiation reaction | ≤ 2 charges |
 
 ## Automatic detectors
 
@@ -137,10 +138,11 @@ cost more, with 600 samples and 16 runs). Columns:
 | 42_collimated_beam | 11.1 | < 1.5e-3 | 31/32 | 95 | 107 / 667 | 0.88 |
 | 43_velocity_selector | 11.6 | < 1.5e-3 | 17/32 | 143 | 496 / 667 | 0.68 |
 | 44_beam_preparation | 11.7 | < 1.5e-3 | 9/32 | 215 | 1237 / 667 | 0.86 |
+| 45_relativistic_beam | 7.1 | 5.1e-2 | 31/32 | 28 | 41 / 19 | 0.69 |
 
 Notes:
 
-- The introduction levels (1, 10, 13, 16, 17, 20, 24, 27, 30, 31, 34, 38, 39, 40) are meant to be easy. Level 38 is a
+- The introduction levels (1, 10, 13, 16, 17, 20, 24, 27, 30, 31, 34, 38, 39, 40, 45) are meant to be easy. Level 38 is a
   concept level (8 choices); harder radiation levels are to come.
 - Under disturbances (chapter 10) a placement counts as a solution only if every flight
   arrives, verified. The distance objective sums over all flights.
@@ -156,7 +158,9 @@ Notes:
 - Beam levels (40–44) are harder versions of single-particle levels (1, 30, 11, 26, 39): a
   placement solves them only if the required share of the beam arrives, verified. Their
   objective for the search sums the detector distances (plus gate shortfalls) of the
-  closest missing particles. Beam preparation (44) combines the collimated beam (42) with
+  closest missing particles. Relativistic beam (45) includes radiation reaction because
+  its particles would otherwise neglect 5.3e-6 of their energy (above the 1e-10 allowed);
+  the test `radiation_levels_need_radiation` accepts that reason for beams. Beam preparation (44) combines the collimated beam (42) with
   a second stage; the search found its reference in 44 s and solves it in 9 of 32 runs.
 - The analysis logs its progress to stderr (`[analyze]` lines: phases with timing, distinct
   placements flown, the slowest evaluation, and every evaluation slower than 1 s with its

@@ -143,6 +143,26 @@ impl Level {
                         "Beam: all particles fly together and repel each other with the exact \
                      Coulomb force (for c = ∞ that is the whole interaction).",
                     )
+                } else if self.physics.beam_interaction && !self.physics.beam_retarded {
+                    note(
+                        false,
+                        if self.physics.radiation_reaction {
+                            "Beam: all particles fly together. Each feels the others' fields as \
+                     if they moved uniformly from where they are now (exact in the \
+                     velocities, so the magnetic attraction that weakens the repulsion of a \
+                     fast beam by 1/γ² is included); their acceleration and radiation fields \
+                     are left out (the estimated error is shown per particle; checked \
+                     against the exact retarded fields in the level tests). Each particle \
+                     feels its own radiation reaction (Landau–Lifshitz)."
+                        } else {
+                            "Beam: all particles fly together. Each feels the others' fields as \
+                     if they moved uniformly from where they are now (exact in the \
+                     velocities, so the magnetic attraction that weakens the repulsion of a \
+                     fast beam by 1/γ² is included); their acceleration and radiation fields \
+                     are left out (the estimated error is shown per particle; checked \
+                     against the exact retarded fields in the level tests)."
+                        },
+                    )
                 } else if self.physics.beam_interaction && self.physics.radiation_reaction {
                     note(
                         true,

@@ -331,10 +331,14 @@ pub struct WorldPhysics {
     /// radiation is neglected and must be negligible.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub radiation_reaction: bool,
-    /// The particles of beams interact (exact Coulomb interaction; requires c = ∞,
-    /// PHYSICS.md §3.3).
+    /// The particles of beams interact (PHYSICS.md §3.3): Coulomb for c = ∞; for finite c
+    /// quasi-static (fields of uniform motion from the present state), or the exact
+    /// retarded fields with `beam_retarded`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub beam_interaction: bool,
+    /// Exact retarded (Liénard–Wiechert) beam interaction at finite c (much slower).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub beam_retarded: bool,
     pub t_max: f64,
     pub tolerances: TolerancesSpec,
 }
@@ -1697,6 +1701,7 @@ mod tests {
                 rf_omega: 1.5,
                 radiation_reaction: true,
                 beam_interaction: false,
+                beam_retarded: false,
                 t_max: 100.0,
                 tolerances: TolerancesSpec {
                     preview: 1e-10,

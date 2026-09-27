@@ -140,6 +140,7 @@ pub fn empty_level() -> Level {
             rf_omega: 0.0,
             radiation_reaction: false,
             beam_interaction: false,
+            beam_retarded: false,
             t_max: 200.0,
             tolerances: TolerancesSpec {
                 preview: 1e-10,

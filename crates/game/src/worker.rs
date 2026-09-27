@@ -69,6 +69,9 @@ pub struct BeamPreview {
     pub energy_rel_error: f64,
     /// Largest radiated energy of a particle (Liénard), relative to its launch energy.
     pub radiated_max: f64,
+    /// Quasi-static interaction: the largest estimated relative error of a particle's
+    /// interaction impulse (`BeamRun::neglected_retardation`).
+    pub retardation_max: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -310,6 +313,10 @@ fn beam_request(req: &Request, tx: &Sender<Response>, newest: &AtomicU64) -> boo
             shots: shots.clone(),
             outcomes: run.trajectories.iter().map(|t| t.outcome).collect(),
             energy_rel_error: run.energy_max_rel_error,
+            retardation_max: run
+                .neglected_retardation
+                .iter()
+                .fold(0.0, |m: f64, &x| m.max(x)),
             radiated_max: run
                 .trajectories
                 .iter()

@@ -167,6 +167,7 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
         rf_omega,
         radiation_reaction,
         beam_interaction,
+        beam_retarded,
         t_max,
         tolerances,
     } = p;
@@ -208,8 +209,15 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
         false
     });
     row(ui, "Beam interaction", |ui| {
-        ui.checkbox(beam_interaction, "particles interact")
-            .on_hover_text("Exact Coulomb interaction between beam particles (needs c = ∞)");
+        ui.checkbox(beam_interaction, "particles interact").on_hover_text(
+            "Coulomb for c = ∞; for finite c quasi-static: the fields of uniform motion from              each particle's present state (exact in the velocities)",
+        );
+        false
+    });
+    row(ui, "Beam fields", |ui| {
+        ui.checkbox(beam_retarded, "exact retarded (slow)").on_hover_text(
+            "Finite c: the exact Liénard–Wiechert fields at the retarded times instead of              the quasi-static ones (steps shorter than the light time between particles)",
+        );
         false
     });
     focus |= row(ui, "Time limit", |ui| {
@@ -1107,8 +1115,9 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         antenna_radius,
         rf_omega,
         radiation_reaction: _,
-        // Checkbox.
+        // Checkboxes.
         beam_interaction: _,
+        beam_retarded: _,
         t_max,
         tolerances: TolerancesSpec { preview, verify },
     } = physics;

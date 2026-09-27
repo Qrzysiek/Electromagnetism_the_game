@@ -6,8 +6,15 @@
 //! - For `c = ∞` it is the pairwise Coulomb force, which is then the whole interaction:
 //!   the magnetic and retarded parts, and every interaction of magnetic moments, scale as
 //!   `1/c²` and vanish.
-//! - For finite `c` each particle feels the Liénard–Wiechert fields (`lienard.rs`) of the
-//!   others at their retarded times, taken from the recorded motion (the dense output of
+//! - For finite `c`, by default, the quasi-static interaction: each particle feels the
+//!   fields of the others as if they moved uniformly from their present position with
+//!   their present velocity (the boosted Coulomb field, `heaviside_fields`). That is
+//!   exact in the velocities, so it contains the magnetic attraction that reduces the
+//!   space charge of a relativistic beam by 1/γ², and leaves out the acceleration and
+//!   retardation terms, of relative size about `a R γ² / c²` (estimated per particle,
+//!   `BeamRun::neglected_retardation`). It costs no more than the Coulomb force.
+//! - For finite `c` with `BeamScenario::retarded`: each particle feels the Liénard–Wiechert
+//!   fields (`lienard.rs`) of the others at their retarded times, taken from the recorded motion (the dense output of
 //!   every accepted step). Every step is shorter than a third of the light travel time
 //!   between the closest pair, so that every retarded time falls into the recorded past
 //!   and the system stays an explicit ODE. Before launch the particles move uniformly
@@ -65,9 +72,13 @@ pub struct BeamScenario<F> {
     pub c: f64,
     pub bounds: Option<Aabb>,
     pub t_max: f64,
-    /// Interaction between the particles: Coulomb for `c = ∞`, retarded Liénard–Wiechert
-    /// fields for finite `c`.
+    /// Interaction between the particles: Coulomb for `c = ∞`; for finite `c` quasi-static
+    /// (the fields of uniform motion from the present state), or with `retarded` the exact
+    /// Liénard–Wiechert fields.
     pub interact: bool,
+    /// Exact retarded interaction at finite `c` (costly: steps shorter than the light
+    /// time between the closest pair); otherwise quasi-static.
+    pub retarded: bool,
     /// Gates every particle must pass, in order, before its detector counts (as for single
     /// flights, PHYSICS.md §6.2).
     pub gates: Vec<Gate>,
@@ -89,6 +100,13 @@ pub struct BeamRun {
     pub energy_max_rel_error: f64,
     /// Integrator restarts (one per removal and per finished ghost).
     pub restarts: usize,
+    /// Quasi-static interaction: per particle, the estimated relative error of the
+    /// interaction's impulse: the time integral of the neglected acceleration fields of the
+    /// others, `Σ_j |q_j| γ_j² |a_j| / (c² R_ij)`, over that of the fields kept, `Σ_j |E_j|`
+    /// (sampled at the step ends; 0 without quasi-static interaction). The trajectory
+    /// error follows the impulse error: a short plunge of a neighbour, with briefly huge
+    /// acceleration fields, matters little.
+    pub neglected_retardation: Vec<f64>,
 }
 
 /// Event functions of one particle, in priority order.
@@ -315,6 +333,11 @@ impl<F: FieldSolver> BeamOde<'_, F> {
                 let (e, b) = self.retarded_fields(k, x, t);
                 force += (e + v.cross(b)) * part.charge;
             }
+        } else if self.quasi_static() {
+            if part.charge != 0.0 {
+                let (e, b) = self.quasi_static_fields(y, t, k, x, t);
+                force += (e + v.cross(b)) * part.charge;
+            }
         } else if self.scn.interact && part.charge != 0.0 {
             for (j, &src) in self.source.iter().enumerate() {
                 if j == k || !src {
@@ -342,6 +365,39 @@ impl<F: FieldSolver> BeamOde<'_, F> {
             && self.scn.particles[self.members[k]].particle.charge != 0.0
     }
 
+    /// Whether the interaction is quasi-static (finite `c`, not retarded).
+    fn quasi_static(&self) -> bool {
+        self.scn.interact && self.scn.c.is_finite() && self.past.is_none()
+    }
+
+    /// Quasi-static fields at `x`, time `t`, of the flying members other than `k`, in the
+    /// state `y` of time `t_y` (each continued uniformly to `t`).
+    fn quasi_static_fields(
+        &self,
+        y: &[f64],
+        t_y: f64,
+        k: usize,
+        x: DVec3,
+        t: f64,
+    ) -> (DVec3, DVec3) {
+        let (mut e, mut b) = (DVec3::ZERO, DVec3::ZERO);
+        for (j, &src) in self.source.iter().enumerate() {
+            if j == k || !src {
+                continue;
+            }
+            let qj = self.scn.particles[self.members[j]].particle.charge;
+            if qj == 0.0 {
+                continue;
+            }
+            let vj = self.kin[j].velocity(self.p(y, j));
+            let rj = Self::x(y, j) + vj * (t - t_y);
+            let (ej, bj) = heaviside_fields(qj, self.scn.c, x, rj, vj);
+            e += ej;
+            b += bj;
+        }
+        (e, b)
+    }
+
     /// Sum of the retarded fields of the other particles at `x`, `t` (member `k`).
     fn retarded_fields(&self, k: usize, x: DVec3, t: f64) -> (DVec3, DVec3) {
         let (mut e, mut b) = (DVec3::ZERO, DVec3::ZERO);
@@ -362,9 +418,14 @@ impl<F: FieldSolver> BeamOde<'_, F> {
     /// particles' retarded fields.
     fn radiation_reaction_force(&self, y: &[f64], k: usize, t: f64) -> DVec3 {
         let q = self.scn.particles[self.members[k]].particle.charge;
+        let t_y = t;
         let fields = |x: DVec3, t: f64| {
             let f = self.scn.field.sample(x, t);
-            let (e, b) = self.retarded_fields(k, x, t);
+            let (e, b) = if self.quasi_static() {
+                self.quasi_static_fields(y, t_y, k, x, t)
+            } else {
+                self.retarded_fields(k, x, t)
+            };
             (f.e + e, f.b + b)
         };
         landau_lifshitz(q, &self.kin[k], self.p(y, k), fields, Self::x(y, k), t)
@@ -541,7 +602,10 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     // Current state of every particle that is flying or a ghost.
     let mut states: Vec<(DVec3, DVec3)> = scn.particles.iter().map(|b| (b.x0, b.p0)).collect();
     let mut failed: Option<crate::integrator::dop853::Error> = None;
-    let retarded = scn.interact && scn.c.is_finite();
+    let retarded = scn.interact && scn.c.is_finite() && scn.retarded;
+    let quasi_static = scn.interact && scn.c.is_finite() && !scn.retarded;
+    // Per particle: time integrals of the neglected and of the kept interaction fields.
+    let mut neglected = vec![(0.0f64, 0.0f64); n];
     // Largest speed (in units of c) of any particle so far, for pruning the record.
     let mut beta_max: f64 = 0.0;
     let past = Past {
@@ -698,6 +762,45 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     t_stop: t_end,
                     members: members.clone(),
                 });
+            }
+            // Quasi-static interaction: estimated neglected acceleration fields, relative to
+            // the total force per charge, at the step's end.
+            if quasi_static {
+                let mut y_end = vec![0.0; ode.dim()];
+                dense.eval(t_end, &mut y_end);
+                let acc: Vec<DVec3> = (0..members.len())
+                    .map(|k| {
+                        let dp = DVec3::new(
+                            dense.eval_derivative_component(6 * k + 3, t_end),
+                            dense.eval_derivative_component(6 * k + 4, t_end),
+                            dense.eval_derivative_component(6 * k + 5, t_end),
+                        ) * p_ref;
+                        ode.kin[k].acceleration(ode.p(&y_end, k), dp)
+                    })
+                    .collect();
+                for (k, &i) in members.iter().enumerate() {
+                    let qi = scn.particles[i].particle.charge;
+                    if !matches!(tracks[i].phase, Phase::Flying) || qi == 0.0 {
+                        continue;
+                    }
+                    let xi = BeamOde::<F>::x(&y_end, k);
+                    let (mut missing, mut present) = (0.0, 0.0);
+                    for (l, &j) in members.iter().enumerate() {
+                        let qj = scn.particles[j].particle.charge;
+                        if l != k && source[l] && qj != 0.0 {
+                            let (xj, pj) = (BeamOde::<F>::x(&y_end, l), ode.p(&y_end, l));
+                            let g = ode.kin[l].gamma(pj);
+                            let r = (xi - xj).length();
+                            missing += qj.abs() * g * g * acc[l].length() / (scn.c * scn.c * r);
+                            let vj = ode.kin[l].velocity(pj);
+                            present += heaviside_fields(qj, scn.c, xi, xj, vj).0.length();
+                        }
+                    }
+                    // Weighted with the step length: integrals over the flight.
+                    let dt = t_end - t_a;
+                    neglected[i].0 += missing * dt;
+                    neglected[i].1 += present * dt;
+                }
             }
             // Largest ratio of the radiation-reaction force to the rest (the Landau–Lifshitz
             // treatment needs it small), at the step's end.
@@ -918,7 +1021,14 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     Some(BeamRun {
         trajectories,
         stats,
-        energy_max_rel_error: if retarded || (scn.radiation_reaction && scn.c.is_finite()) {
+        neglected_retardation: neglected
+            .iter()
+            .map(|&(m, p)| if p > 0.0 { m / p } else { 0.0 })
+            .collect(),
+        energy_max_rel_error: if retarded
+            || quasi_static
+            || (scn.radiation_reaction && scn.c.is_finite())
+        {
             f64::NAN
         } else {
             energy_err
@@ -940,6 +1050,20 @@ fn finish_ghost(t: &mut Track) {
         t.margin[event] = t.margin[event].min(depth.max(-GHOST_DEPTH));
     }
     t.phase = Phase::Done;
+}
+
+/// Fields `(E, B)` at `x` of a charge `q` moving uniformly with velocity `v` that is now
+/// at `r` (the boosted Coulomb field; Jackson §11.10):
+/// `E = q (1 − β²) R / (R³ (1 − β² + (β·R̂)²)^{3/2})`, `B = v × E / c²`, `R = x − r`.
+pub fn heaviside_fields(q: f64, c: f64, x: DVec3, r: DVec3, v: DVec3) -> (DVec3, DVec3) {
+    let d = x - r;
+    let dist = d.length();
+    let beta = v / c;
+    let b2 = beta.length_squared();
+    let rb = beta.dot(d) / dist;
+    let s = 1.0 - b2 + rb * rb;
+    let e = d * (q * (1.0 - b2) / (dist * dist * dist * s * s.sqrt()));
+    (e, v.cross(e) / (c * c))
 }
 
 /// Liénard power `(2/3) q² γ⁶ (a² − |v×a|²/c²) / c³` of a particle with momentum `p` under

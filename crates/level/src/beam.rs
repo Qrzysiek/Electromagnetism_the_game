@@ -261,6 +261,7 @@ impl Level {
             interact: self.physics.beam_interaction,
             gates: base.gates,
             radiation_reaction: self.physics.radiation_reaction,
+            retarded: self.physics.beam_retarded,
         }
     }
 
