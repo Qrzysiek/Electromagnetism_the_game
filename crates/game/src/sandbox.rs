@@ -708,9 +708,9 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
             small(
                 ui,
                 if game.sandbox.tool == Tool::CoilCircle {
-                    "Press at the centre, release at the radius (exact radius: Coils list                      below). Right click on a wire: remove."
+                    "Press at the centre, release at the radius (exact radius: Coils list below). Right click on a wire: remove."
                 } else if game.sandbox.tool == Tool::CoilPolygon {
-                    "Click the vertices in order; right click closes the polygon (at least 3                      vertices). Right click with no pending vertices removes a coil."
+                    "Click the vertices in order; right click closes the polygon (at least 3 vertices). Right click with no pending vertices removes a coil."
                 } else {
                     "Drag the rectangle. Right click on a wire: remove. Positive κ: \
                      counter-clockwise current."

@@ -63,8 +63,22 @@ fn reference_solutions_are_verified() {
                     &level.reference_solution,
                     physics::conductor::Resolution::Preview,
                 );
-                for (f, scn) in v.iter().zip(&scns) {
+                let mut free = exact.clone();
+                free.physics.beam_interaction = false;
+                let alone = free.beam_scenarios(
+                    &level.reference_solution,
+                    physics::conductor::Resolution::Preview,
+                );
+                for ((f, scn), lone) in v.iter().zip(&scns).zip(&alone) {
                     let r = physics::beam::run_beam(scn, &rs);
+                    let lone = physics::beam::run_beam(lone, &rs);
+                    let effect = f
+                        .verified
+                        .trajectories
+                        .iter()
+                        .zip(&lone.trajectories)
+                        .map(|(a, b)| (a.end.x - b.end.x).length())
+                        .fold(0.0f64, f64::max);
                     let mut worst: f64 = 0.0;
                     for (i, (a, b)) in f
                         .verified
@@ -82,7 +96,15 @@ fn reference_solutions_are_verified() {
                         .iter()
                         .fold(0.0f64, |m, &x| m.max(x));
                     println!(
-                        "{name}: quasi-static and retarded end points differ by up to {worst:.1e} cells; indicator up to {indicator:.1e}"
+                        "{name}: quasi-static and retarded end points differ by up to {worst:.1e} \
+                         cells, {:.1e} of the interaction's effect {effect:.2}; indicator up to \
+                         {indicator:.1e}",
+                        worst / effect
+                    );
+                    // The indicator is an order-of-magnitude estimate of the relative error.
+                    assert!(
+                        worst / effect < 3.0 * indicator,
+                        "{name}: indicator too small"
                     );
                 }
             }

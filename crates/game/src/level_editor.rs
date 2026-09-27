@@ -210,13 +210,13 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
     });
     row(ui, "Beam interaction", |ui| {
         ui.checkbox(beam_interaction, "particles interact").on_hover_text(
-            "Coulomb for c = ∞; for finite c quasi-static: the fields of uniform motion from              each particle's present state (exact in the velocities)",
+            "Coulomb for c = ∞; for finite c quasi-static: the Liénard–Wiechert fields of each particle's present state continued back with constant acceleration (exact in the velocities, first order in the accelerations)",
         );
         false
     });
     row(ui, "Beam fields", |ui| {
         ui.checkbox(beam_retarded, "exact retarded (slow)").on_hover_text(
-            "Finite c: the exact Liénard–Wiechert fields at the retarded times instead of              the quasi-static ones (steps shorter than the light time between particles)",
+            "Finite c: the exact Liénard–Wiechert fields at the retarded times instead of the quasi-static ones (steps shorter than the light time between particles)",
         );
         false
     });

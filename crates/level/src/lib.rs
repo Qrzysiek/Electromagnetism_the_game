@@ -332,7 +332,7 @@ pub struct WorldPhysics {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub radiation_reaction: bool,
     /// The particles of beams interact (PHYSICS.md §3.3): Coulomb for c = ∞; for finite c
-    /// quasi-static (fields of uniform motion from the present state), or the exact
+    /// quasi-static (fields of the present state continued with constant acceleration), or the exact
     /// retarded fields with `beam_retarded`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub beam_interaction: bool,
@@ -1362,7 +1362,7 @@ impl Level {
             });
             if crowded {
                 out.push(
-                    "interacting particles launched at the same point (give the beam a                      position spread)"
+                    "interacting particles launched at the same point (give the beam a position spread)"
                         .into(),
                 );
             }

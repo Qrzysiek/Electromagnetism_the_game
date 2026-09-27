@@ -688,7 +688,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                 if p.image_force_bound > 0.0 {
                     ui.label("electrode image force (neglected)")
                         .on_hover_text(
-                            "Bound on the force of the charge the particle induces on the                              electrodes, relative to the force that matters (PHYSICS.md §2.7).                              It grows as the particle passes closer to metal.",
+                            "Bound on the force of the charge the particle induces on the electrodes, relative to the force that matters (PHYSICS.md §2.7). It grows as the particle passes closer to metal.",
                         );
                     let text = format!("≤ {:.1e}", p.image_force_bound);
                     if p.image_force_bound > level::IMAGE_FORCE_LIMIT {
@@ -953,7 +953,7 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             );
             if p.retardation_max > 0.0 {
                 s += &format!(
-                    "; neglected retardation, estimated: {:.1e} of the interaction",
+                    "; approximation of the fields (quasi-static), estimated error {:.1e} of the interaction",
                     p.retardation_max
                 );
             }

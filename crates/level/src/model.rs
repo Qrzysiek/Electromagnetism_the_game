@@ -147,20 +147,22 @@ impl Level {
                     note(
                         false,
                         if self.physics.radiation_reaction {
-                            "Beam: all particles fly together. Each feels the others' fields as \
-                     if they moved uniformly from where they are now (exact in the \
-                     velocities, so the magnetic attraction that weakens the repulsion of a \
-                     fast beam by 1/γ² is included); their acceleration and radiation fields \
-                     are left out (the estimated error is shown per particle; checked \
-                     against the exact retarded fields in the level tests). Each particle \
+                            "Beam: all particles fly together. Each feels the others' fields, \
+                     radiation included, computed from where they are now as if they had \
+                     kept their present acceleration (exact in the velocities, so the \
+                     magnetic attraction that weakens the repulsion of a fast beam by 1/γ² \
+                     is included; approximate in how the acceleration changes: the \
+                     estimated error is shown per particle, and checked against the exact \
+                     retarded fields in the level tests). Each particle \
                      feels its own radiation reaction (Landau–Lifshitz)."
                         } else {
-                            "Beam: all particles fly together. Each feels the others' fields as \
-                     if they moved uniformly from where they are now (exact in the \
-                     velocities, so the magnetic attraction that weakens the repulsion of a \
-                     fast beam by 1/γ² is included); their acceleration and radiation fields \
-                     are left out (the estimated error is shown per particle; checked \
-                     against the exact retarded fields in the level tests)."
+                            "Beam: all particles fly together. Each feels the others' fields, \
+                     radiation included, computed from where they are now as if they had \
+                     kept their present acceleration (exact in the velocities, so the \
+                     magnetic attraction that weakens the repulsion of a fast beam by 1/γ² \
+                     is included; approximate in how the acceleration changes: the \
+                     estimated error is shown per particle, and checked against the exact \
+                     retarded fields in the level tests)."
                         },
                     )
                 } else if self.physics.beam_interaction && self.physics.radiation_reaction {
