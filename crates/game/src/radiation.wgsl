@@ -10,12 +10,14 @@
 struct Params {
     // min.x, min.y, size.x, size.y of the arena.
     area: vec4<f32>,
-    // c (0: infinite), B saturation, E saturation, dynamic range (10^decades).
+    // c (0: infinite), B saturation, E saturation, dynamic range (10^decades) of the
+    // logarithmic scale or gain of the linear one.
     scales: vec4<f32>,
     // Static grid width, height, 1 if present; number of moving charges.
     grid: vec4<u32>,
     // Number of antennas, of waves; flags: 1 radiation part only, 2 only what the
-    // quasi-static beam interaction leaves out, 4 colour |E| (else B_z); unused.
+    // quasi-static beam interaction leaves out, 4 colour |E| (else B_z), 8 linear
+    // colour scale; unused.
     counts: vec4<u32>,
 };
 
@@ -393,6 +395,10 @@ fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
 
 // Signed compression into [−1, 1] on an asinh scale (radiation.rs `compress`).
 fn compress(v: f32, sat: f32, range: f32) -> f32 {
+    if ((params.counts.z & 8u) != 0u) {
+        // Linear, with a gain.
+        return clamp(v * range / sat, -1.0, 1.0);
+    }
     let r = sat / range;
     return clamp(asinh(v / r) / asinh(sat / r), -1.0, 1.0);
 }

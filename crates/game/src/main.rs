@@ -107,6 +107,11 @@ pub struct Game {
     pub field_quantity: radiation::FieldQuantity,
     /// Dynamic range of the field views, in decades.
     pub field_range_decades: f64,
+    /// Linear colour scale (else logarithmic over `field_range_decades`).
+    pub field_linear: bool,
+    /// Gain of the linear scale, in decades (full colour at 10^−gain of the full field's
+    /// scale).
+    pub field_gain_decades: f64,
     pub animate: bool,
     pub playback_speed: f64,
     pub anim_time: f64,
@@ -149,6 +154,8 @@ impl Game {
             log_omega: false,
             field_quantity: radiation::FieldQuantity::Bz,
             field_range_decades: 2.5,
+            field_linear: false,
+            field_gain_decades: 0.0,
             animate: true,
             playback_speed: 1.0,
             anim_time: 0.0,
@@ -507,6 +514,12 @@ fn dev_capture(
             }
             if let Some(d) = std::env::var("EM_RANGE").ok().and_then(|v| v.parse().ok()) {
                 game.field_range_decades = d;
+            }
+            if std::env::var("EM_LINEAR").is_ok_and(|v| v == "1") {
+                game.field_linear = true;
+            }
+            if let Some(g) = std::env::var("EM_GAIN").ok().and_then(|v| v.parse().ok()) {
+                game.field_gain_decades = g;
             }
             if let Ok(m) = std::env::var("EM_MAP") {
                 game.map = match m.as_str() {

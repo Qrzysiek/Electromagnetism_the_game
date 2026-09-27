@@ -186,7 +186,11 @@ fn energy_bar(ui: &mut egui::Ui, label: &str, value: f64, color: egui::Color32) 
     });
 }
 
-pub fn panel(mut contexts: EguiContexts, mut game: ResMut<Game>) -> Result {
+pub fn panel(
+    mut contexts: EguiContexts,
+    mut game: ResMut<Game>,
+    radiation: Res<crate::radiation::RadiationView>,
+) -> Result {
     let ctx = contexts.ctx_mut()?;
     let mut root = egui::Ui::new(
         ctx.clone(),
@@ -200,13 +204,13 @@ pub fn panel(mut contexts: EguiContexts, mut game: ResMut<Game>) -> Result {
         .exact_size(PANEL_WIDTH)
         .resizable(false)
         .show(&mut root, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| contents(ui, game));
+            egui::ScrollArea::vertical().show(ui, |ui| contents(ui, game, &radiation));
         });
     game.panel_left_px = Some(response.response.rect.left() * ctx.pixels_per_point());
     Ok(())
 }
 
-fn contents(ui: &mut egui::Ui, game: &mut Game) {
+fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::RadiationView) {
     game.text_focus = false;
     ui.horizontal(|ui| {
         ui.heading("Electromagnetism");
@@ -303,7 +307,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
                     game.select_shot(i);
                 }
             }
-            ui.checkbox(&mut game.show_all_shots, "show all (H)");
+            ui.checkbox(&mut game.show_all_shots, "show all (H)")
+                .on_hover_text(
+                    "Draw every shot's flight, not only the selected one ([ and ] select)",
+                );
         });
         ui.label(
             egui::RichText::new("One setup must deliver every shot to its own detector.").small(),
@@ -729,8 +736,12 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         // Energy bars at the animated point of the active shot.
         ui.label(egui::RichText::new("Energy along the flight (units of T₀)").strong());
         ui.horizontal(|ui| {
-            ui.checkbox(&mut game.animate, "Animate (A)");
-            ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"));
+            ui.checkbox(&mut game.animate, "Animate (A)").on_hover_text(
+                "Play the flights in time: the particles move along their paths and the \
+             time-dependent maps (waves, particle fields) follow",
+            );
+            ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"))
+                .on_hover_text("Playback speed: 1 plays 4 time units per second");
         });
         if let Some(p) = &view.preview
             && let Some(pt) = point_at(
@@ -792,22 +803,42 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
     }
     ui.label(egui::RichText::new("View").strong());
     ui.horizontal_wrapped(|ui| {
-        ui.label("Map (V):");
-        ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential");
-        ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B");
+        ui.label("Map (V):")
+            .on_hover_text("What the background shows; V cycles through the maps");
+        ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential")
+            .on_hover_text(
+                "The particle's potential energy (static fields): where it is pushed uphill \
+                 or downhill, and where energy conservation forbids it to go",
+            );
+        ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B")
+            .on_hover_text(
+                "The static magnetic field of magnets and coils (perpendicular to the plane)",
+            );
         if crate::radiation::waves_available(&level) {
-            ui.selectable_value(&mut game.map, Some(MapMode::Waves), "waves");
+            ui.selectable_value(&mut game.map, Some(MapMode::Waves), "waves")
+                .on_hover_text(
+                    "The oscillating fields of the antennas and plane waves, moving at c",
+                );
         }
         if crate::radiation::particle_field_available(&level) {
             ui.selectable_value(
                 &mut game.map,
                 Some(MapMode::ParticleField),
-                "particle field",
+                if level.has_beams() {
+                    "beam field"
+                } else {
+                    "particle field"
+                },
+            )
+            .on_hover_text(
+                "The field the moving particles themselves carry and radiate (retarded, \
+                 Liénard–Wiechert), from their computed flights",
             );
         }
         ui.selectable_value(&mut game.map, Some(MapMode::Total), "total")
-            .on_hover_text("Everything at once: level sources, antennas, waves and the particle");
-        ui.selectable_value(&mut game.map, None, "off");
+            .on_hover_text("Everything at once: level sources, antennas, waves and the particles");
+        ui.selectable_value(&mut game.map, None, "off")
+            .on_hover_text("No background map");
     });
     if matches!(game.map, Some(MapMode::ParticleField | MapMode::Total)) {
         let (shot, d) = level.flight_of(game.active_flight());
@@ -842,34 +873,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         game.map,
         Some(MapMode::Waves | MapMode::ParticleField | MapMode::Total)
     ) {
-        ui.horizontal(|ui| {
-            use crate::radiation::FieldQuantity;
-            ui.label("Colour:");
-            ui.selectable_value(&mut game.field_quantity, FieldQuantity::Bz, "B_z");
-            ui.selectable_value(&mut game.field_quantity, FieldQuantity::E, "|E|");
-        });
-        ui.add(
-            egui::Slider::new(&mut game.field_range_decades, 1.0..=14.0).text("range (decades)"),
-        )
-        .on_hover_text("How many decades below the strongest field are still visible");
-        ui.horizontal(|ui| {
-            ui.checkbox(&mut game.show_field_arrows, "E arrows");
-            if game.map == Some(MapMode::ParticleField) {
-                ui.checkbox(&mut game.radiation_only, "radiation part only")
-                    .on_hover_text("Only the acceleration term of the field (falls as 1/R)");
-            }
-        });
-        let quasi_static = level.has_beams()
-            && level.physics.beam_interaction
-            && !level.physics.beam_retarded
-            && level.physics.c.is_some();
-        ui.horizontal(|ui| {
-            if quasi_static {
-                ui.checkbox(&mut game.neglected_only, "left out by the model").on_hover_text(
-                    "The beam's full retarded field minus the fields the quasi-static interaction uses (present states continued with constant acceleration): what the dynamics leaves out (PHYSICS.md §3.3)",
-                );
-            }
-        });
+        field_view_controls(ui, game, &level, radiation);
     }
     let legend = match game.map {
         Some(MapMode::Potential) => {
@@ -891,48 +895,52 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
         }
         Some(MapMode::Waves) => {
             "Fields of the antennas and waves at the animation time (exact retarded fields). \
-             Colour: B perpendicular to the plane (orange out, blue in), on a logarithmic \
-             scale; arrows: E. Near an antenna the field is quasi-static; further out the \
+             Colour: B perpendicular to the plane (orange out, blue in), on the chosen \
+             scale (bar above); arrows: E. Near an antenna the field is quasi-static; further out the \
              radiation travels outwards at c."
         }
         Some(MapMode::Total) => {
             "The total field at the animation time: level charges, magnets and coils, \
              antennas, waves and disturbances, and the particle's own field (retarded, \
              Liénard–Wiechert). The particle's field is usually far weaker than the \
-             electrodes'; raise the range to see it. Colour: B_z or |E| on a logarithmic \
-             scale; arrows: E."
+             electrodes'; raise the range to see it. Colour: B_z or |E| on the chosen \
+             scale (bar above); arrows: E."
         }
         Some(MapMode::ParticleField) if level.has_beams() && game.neglected_only => {
             "What the quasi-static beam interaction leaves out of the dynamics: the full \
              retarded field of all particles minus the fields it uses (each particle's \
              present state continued back with constant acceleration). Mostly the change \
              of acceleration during the light travel time, and the delay with which an \
-             absorbed particle's field disappears. Same colour scale as the full field: \
-             raise the range to see how small it is."
+             absorbed particle's field disappears. Shown on the full field's colour \
+             scale (linear by default), so its true size is seen; its size is stated \
+             above."
         }
         Some(MapMode::ParticleField) if level.has_beams() => {
             "The retarded (Liénard–Wiechert, exact) field of every particle of the beam at \
              the animation time, from their computed flights. Every change of velocity \
              sends out radiation at c. Before launch each particle is taken to move with \
              its launch acceleration; an absorbed particle's field disappears as the news \
-             of its absorption spreads at c. Colour: B perpendicular to the plane, \
-             logarithmic; arrows: E."
+             of its absorption spreads at c; one absorbed by a body stays there at rest. \
+             Colour: B perpendicular to the plane, on the chosen scale; arrows: E."
         }
         Some(MapMode::ParticleField) => {
             "The field of the particle itself (Liénard–Wiechert, exact) at the animation \
              time. Every change of velocity sends out a radiation pulse at c; the energy it \
              carries is what the particle loses (radiation reaction, when included). \
-             Colour: B perpendicular to the plane, logarithmic; arrows: E. Before launch the \
-             particle is taken to move uniformly."
+             Colour: B perpendicular to the plane, on the chosen scale; arrows: E. Before \
+             launch the particle is taken to move uniformly."
         }
         None => "",
     };
     if !legend.is_empty() {
         ui.label(egui::RichText::new(legend).small());
     }
-    ui.checkbox(&mut game.show_field_lines, "Electric field lines (F)");
-    ui.add(egui::Slider::new(&mut game.field_line_spacing, 0.5..=4.0).text("spacing (cells)"));
-    ui.add(egui::Slider::new(&mut game.field_line_opacity, 0.05..=1.0).text("opacity"));
+    ui.checkbox(&mut game.show_field_lines, "Electric field lines (F)")
+        .on_hover_text("Lines along the static electric field of the level's sources");
+    ui.add(egui::Slider::new(&mut game.field_line_spacing, 0.5..=4.0).text("spacing (cells)"))
+        .on_hover_text("Smallest distance between neighbouring field lines");
+    ui.add(egui::Slider::new(&mut game.field_line_opacity, 0.05..=1.0).text("opacity"))
+        .on_hover_text("How strongly the field lines are drawn");
     ui.label(
         egui::RichText::new(
             "In this 2D slice of a 3D field, lines show direction only, not strength.",
@@ -957,8 +965,12 @@ fn contents(ui: &mut egui::Ui, game: &mut Game) {
 /// requirement, and the diagnostics of the selected flight.
 fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     ui.horizontal(|ui| {
-        ui.checkbox(&mut game.animate, "Animate (A)");
-        ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"));
+        ui.checkbox(&mut game.animate, "Animate (A)").on_hover_text(
+            "Play the flights in time: the particles move along their paths and the \
+             time-dependent maps (waves, particle fields) follow",
+        );
+        ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"))
+            .on_hover_text("Playback speed: 1 plays 4 time units per second");
     });
     ui.label(egui::RichText::new("Result").strong());
     if game.solved() {
@@ -1321,6 +1333,230 @@ pub fn disturbance_text(d: &level::Disturbance) -> String {
     } else {
         parts.join("; ")
     }
+}
+
+/// Controls of the time-dependent field views: what to show (the full field, or a part of
+/// it measured against the full field), the colour quantity and scale, a colour bar with
+/// ticks, and the size of the part shown.
+fn field_view_controls(
+    ui: &mut egui::Ui,
+    game: &mut Game,
+    level: &level::Level,
+    radiation: &crate::radiation::RadiationView,
+) {
+    use crate::radiation::FieldQuantity;
+    // What to show: the full field (baseline) or a part of it.
+    let quasi_static = level.has_beams()
+        && level.physics.beam_interaction
+        && !level.physics.beam_retarded
+        && level.physics.c.is_some();
+    if game.map == Some(MapMode::ParticleField) {
+        let before = (game.radiation_only, game.neglected_only);
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Show:")
+                .on_hover_text("The full field, or a part of it on the full field's colour scale");
+            if ui
+                .selectable_label(!game.radiation_only && !game.neglected_only, "full field")
+                .on_hover_text("The whole field of the moving charges: the baseline")
+                .clicked()
+            {
+                (game.radiation_only, game.neglected_only) = (false, false);
+            }
+            if ui
+                .selectable_label(game.radiation_only, "radiation part")
+                .on_hover_text(
+                    "Only the acceleration term of the field: what travels away at c and \
+                     falls off as 1/R (the rest is the velocity field that moves with the \
+                     charge)",
+                )
+                .clicked()
+            {
+                (game.radiation_only, game.neglected_only) = (true, false);
+            }
+            if quasi_static
+                && ui
+                    .selectable_label(game.neglected_only, "left out by the model")
+                    .on_hover_text(
+                        "The full retarded field minus the fields the quasi-static beam \
+                         interaction uses (present states continued with constant \
+                         acceleration): what the dynamics leaves out (PHYSICS.md §3.3)",
+                    )
+                    .clicked()
+            {
+                (game.radiation_only, game.neglected_only) = (false, true);
+            }
+        });
+        // A part is best seen on a linear scale: switch when the choice changes.
+        let now = (game.radiation_only, game.neglected_only);
+        if now != before {
+            game.field_linear = now != (false, false);
+        }
+    }
+    ui.horizontal(|ui| {
+        ui.label("Colour:")
+            .on_hover_text("Which quantity colours the map");
+        ui.selectable_value(&mut game.field_quantity, FieldQuantity::Bz, "B_z")
+            .on_hover_text("B, perpendicular to the plane (all of B in the plane); signed");
+        ui.selectable_value(&mut game.field_quantity, FieldQuantity::E, "|E|")
+            .on_hover_text("The magnitude of E");
+        ui.checkbox(&mut game.show_field_arrows, "E arrows")
+            .on_hover_text("Arrows of E: direction exact, length on the colour scale");
+    });
+    ui.horizontal(|ui| {
+        ui.label("Scale:").on_hover_text("How field values map to colour");
+        ui.selectable_value(&mut game.field_linear, false, "log")
+            .on_hover_text("Logarithmic: shows fields over many decades at once, but makes small ones look big");
+        ui.selectable_value(&mut game.field_linear, true, "linear")
+            .on_hover_text("Linear: brightness proportional to the field; honest sizes, small parts faint");
+    });
+    if game.field_linear {
+        ui.add(egui::Slider::new(&mut game.field_gain_decades, 0.0..=8.0).text("gain (decades)"))
+            .on_hover_text(
+                "Amplifies the colours: full colour at 10^−gain of the full field's scale. \
+                 The bar below states the values",
+            );
+    } else {
+        ui.add(
+            egui::Slider::new(&mut game.field_range_decades, 1.0..=14.0).text("range (decades)"),
+        )
+        .on_hover_text("How many decades below the full field's scale are still visible");
+    }
+    colour_bar(ui, game, radiation);
+    // How large the part shown is.
+    if game.map == Some(MapMode::ParticleField) && (game.radiation_only || game.neglected_only) {
+        let part = match game.field_quantity {
+            FieldQuantity::Bz => radiation.part_b,
+            FieldQuantity::E => radiation.part_e,
+        };
+        ui.label(
+            egui::RichText::new(format!(
+                "Largest values of this part: {} of the full field's scale.",
+                percent(part)
+            ))
+            .color(egui::Color32::from_rgb(255, 210, 120)),
+        );
+    }
+}
+
+/// A fraction as a percentage with sensible digits.
+fn percent(f: f64) -> String {
+    let p = f * 100.0;
+    if p >= 10.0 {
+        format!("{p:.0} %")
+    } else if p >= 0.1 {
+        format!("{p:.1} %")
+    } else {
+        format!("{p:.1e} %")
+    }
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::too_many_lines
+)]
+/// The colour bar of the field views, with tick marks: the value of full colour, and
+/// where tenths (linear) or decades (logarithmic) of it fall.
+fn colour_bar(ui: &mut egui::Ui, game: &Game, radiation: &crate::radiation::RadiationView) {
+    use crate::radiation::{FieldQuantity, colour_value};
+    let signed = game.field_quantity == FieldQuantity::Bz;
+    let sat = match game.field_quantity {
+        FieldQuantity::Bz => radiation.b_sat(),
+        FieldQuantity::E => radiation.e_sat(),
+    };
+    let linear = game.field_linear;
+    let scale = if linear {
+        10f64.powf(game.field_gain_decades)
+    } else {
+        10f64.powf(game.field_range_decades)
+    };
+    let width = ui.available_width().min(260.0);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 26.0), egui::Sense::hover());
+    let painter = ui.painter_at(rect);
+    let bar = egui::Rect::from_min_size(rect.min, egui::vec2(width, 10.0));
+    let colour = |s: f64| {
+        let a = (s.abs().powf(0.8) * 0.9) as f32;
+        let base = if !signed {
+            egui::Color32::from_rgb(255, 235, 140)
+        } else if s >= 0.0 {
+            egui::Color32::from_rgb(255, 150, 40)
+        } else {
+            egui::Color32::from_rgb(40, 190, 255)
+        };
+        egui::Color32::from_rgb(20, 22, 28).lerp_to_gamma(base, a)
+    };
+    let n = 64;
+    for k in 0..n {
+        let f = (f64::from(k) + 0.5) / f64::from(n);
+        let s = if signed { 2.0 * f - 1.0 } else { f };
+        let x0 = bar.left() + bar.width() * k as f32 / n as f32;
+        let x1 = bar.left() + bar.width() * (k + 1) as f32 / n as f32;
+        painter.rect_filled(
+            egui::Rect::from_min_max(egui::pos2(x0, bar.top()), egui::pos2(x1, bar.bottom())),
+            0.0,
+            colour(s),
+        );
+    }
+    // Ticks at values: position where the colour value of that field falls.
+    let at = |v: f64| {
+        let s = colour_value(v, sat, linear, scale);
+        let f = if signed { 0.5 * (s + 1.0) } else { s };
+        bar.left() + bar.width() * f as f32
+    };
+    let full = if linear { sat / scale } else { sat };
+    let mut ticks: Vec<(f64, bool)> = Vec::new();
+    if linear {
+        for k in 1..=4 {
+            ticks.push((full * f64::from(k) / 4.0, k == 4));
+        }
+    } else {
+        let decades = game.field_range_decades.floor() as i32;
+        for k in 0..=decades {
+            ticks.push((sat * 10f64.powi(-k), k == 0));
+        }
+    }
+    let text = ui.visuals().text_color();
+    for (v, label) in ticks {
+        for sign in if signed { vec![1.0, -1.0] } else { vec![1.0] } {
+            let x = at(sign * v);
+            painter.line_segment(
+                [egui::pos2(x, bar.top()), egui::pos2(x, bar.bottom() + 3.0)],
+                egui::Stroke::new(1.0, text),
+            );
+            if label && sign > 0.0 {
+                painter.text(
+                    egui::pos2(x.min(bar.right() - 30.0), bar.bottom() + 3.0),
+                    egui::Align2::LEFT_TOP,
+                    format!("{v:.1e}"),
+                    egui::FontId::proportional(10.0),
+                    text,
+                );
+            }
+        }
+    }
+    let x0 = at(0.0);
+    painter.line_segment(
+        [
+            egui::pos2(x0, bar.top()),
+            egui::pos2(x0, bar.bottom() + 3.0),
+        ],
+        egui::Stroke::new(1.0, text),
+    );
+    ui.label(
+        egui::RichText::new(if linear {
+            format!(
+                "Full colour at {} = {full:.2e} (the full field's scale ×10^−{:.1}); ticks every quarter.",
+                if signed { "±B_z" } else { "|E|" },
+                game.field_gain_decades
+            )
+        } else {
+            format!(
+                "Full colour at {} = {sat:.2e}; ticks every decade below it.",
+                if signed { "±B_z" } else { "|E|" }
+            )
+        })
+        .small(),
+    );
 }
 
 #[cfg(test)]

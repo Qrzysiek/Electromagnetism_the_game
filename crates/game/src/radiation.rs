@@ -118,12 +118,28 @@ pub struct RadiationView {
     sources: Vec<Source>,
     b_sat: f64,
     e_sat: f64,
+    /// Largest (99th percentile) B_z and |E| of the part shown (radiation part, or left
+    /// out by the model) relative to the full field's scale; 1 for the full field.
+    pub part_b: f64,
+    pub part_e: f64,
     /// Time and style (quantity, range, arrows) of the current arrows.
     time: f64,
     style: (FieldQuantity, u64, bool),
     /// Obstacles of the shown flight (the field is not drawn inside sources).
     obstacles: Vec<Shape>,
     pub arrows: Vec<(Vec2, Vec2)>,
+}
+
+impl RadiationView {
+    /// Value of full colour for B_z (the full field's 99th percentile).
+    pub fn b_sat(&self) -> f64 {
+        self.b_sat
+    }
+
+    /// Value of full colour for |E|.
+    pub fn e_sat(&self) -> f64 {
+        self.e_sat
+    }
 }
 
 /// A storage buffer must not be empty.
@@ -160,6 +176,8 @@ pub fn setup(
         sources: Vec::new(),
         b_sat: 1.0,
         e_sat: 1.0,
+        part_b: 1.0,
+        part_e: 1.0,
         time: f64::NAN,
         style: (FieldQuantity::Bz, 0, false),
         obstacles: Vec::new(),
@@ -265,6 +283,16 @@ fn percentile99(mut v: Vec<f64>) -> f64 {
 fn compress(v: f64, sat: f64, range: f64) -> f64 {
     let r = sat / range;
     ((v / r).asinh() / (sat / r).asinh()).clamp(-1.0, 1.0)
+}
+
+/// The colour scale: logarithmic over a range, or linear with a gain (`scale` is the
+/// range or the gain). Signed, in [−1, 1].
+pub fn colour_value(v: f64, sat: f64, linear: bool, scale: f64) -> f64 {
+    if linear {
+        (v * scale / sat).clamp(-1.0, 1.0)
+    } else {
+        compress(v, sat, scale)
+    }
 }
 
 #[allow(
@@ -400,9 +428,10 @@ pub fn update(
                 .into_iter()
                 .collect(),
         };
-        // Scales from the full field: the part left out by the model is shown on the same
-        // colour scale, so that its true size is seen.
+        // Scales from the full field (the baseline): the parts (radiation, left out by the
+        // model) are shown on the same colour scale, so that their true size is seen.
         view.neglected_only = false;
+        view.radiation_only = false;
         let (t0, t1) = match mode {
             MapMode::Waves => {
                 let w = field
@@ -451,6 +480,22 @@ pub fn update(
         view.b_sat = percentile99(bs);
         view.e_sat = percentile99(es);
         view.neglected_only = neglected_only;
+        view.radiation_only = game.radiation_only;
+        // The size of the part shown, relative to the baseline.
+        if view.neglected_only || view.radiation_only {
+            let v = &*view;
+            let (bs, es): (Vec<f64>, Vec<f64>) = points
+                .par_iter()
+                .filter_map(|&(t, x)| {
+                    sample(v, fr, mode, x, t, c).map(|(e, b)| (b.abs(), e.length()))
+                })
+                .unzip();
+            view.part_b = percentile99(bs) / view.b_sat;
+            view.part_e = percentile99(es) / view.e_sat;
+        } else {
+            view.part_b = 1.0;
+            view.part_e = 1.0;
+        }
         // The static part of the total field, once (it does not change in time).
         let grid = if mode == MapMode::Total {
             let (w, h) = (
@@ -503,7 +548,12 @@ pub fn update(
         MapMode::Waves => launch_time + t_anim,
         _ => t_anim,
     };
-    let range = 10f64.powf(game.field_range_decades);
+    let linear = game.field_linear;
+    let range = if linear {
+        10f64.powf(game.field_gain_decades)
+    } else {
+        10f64.powf(game.field_range_decades)
+    };
     let quantity = game.field_quantity;
 
     // GPU inputs for this frame: times relative to t, phases at t.
@@ -566,7 +616,8 @@ pub fn update(
     }
     let flags = u32::from(view.radiation_only)
         | (u32::from(view.neglected_only) << 1)
-        | (u32::from(quantity == FieldQuantity::E) << 2);
+        | (u32::from(quantity == FieldQuantity::E) << 2)
+        | (u32::from(linear) << 3);
     if let Some(mut m) = materials.get_mut(&view.material) {
         m.params.area = Vec4::new(
             bounds.min.x as f32,
@@ -593,7 +644,9 @@ pub fn update(
     // E arrows (CPU): only when the time or the style changed.
     let style = (
         game.field_quantity,
-        game.field_range_decades.to_bits(),
+        game.field_range_decades.to_bits()
+            ^ game.field_gain_decades.to_bits().rotate_left(1)
+            ^ u64::from(linear),
         game.show_field_arrows,
     );
     if t.to_bits() == view.time.to_bits() && style == view.style {
@@ -619,7 +672,8 @@ pub fn update(
             .par_iter()
             .filter_map(|&x| {
                 let (e, _) = sample(v, fr, mode, x, t, c)?;
-                let len = (compress(e.length(), v.e_sat, range) * 0.9 * ARROW_SPACING) as f32;
+                let len =
+                    (colour_value(e.length(), v.e_sat, linear, range) * 0.9 * ARROW_SPACING) as f32;
                 let d = Vec2::new(e.x as f32, e.y as f32).normalize_or_zero();
                 (len > 0.05).then_some((Vec2::new(x.x as f32, x.y as f32), d * len))
             })
