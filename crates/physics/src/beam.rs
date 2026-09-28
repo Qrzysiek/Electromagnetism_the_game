@@ -30,6 +30,15 @@
 //!   radiated energy is estimated per particle (Liénard formula) so that neglecting it
 //!   can be checked.
 //!
+//! Particles with a radius collide as rigid spheres (PHYSICS.md §3.3): when two touch,
+//! the step ends there and each gets an impulse along the line of centres that conserves
+//! momentum and kinetic energy exactly (relativistically: the positive root of the energy
+//! balance). Point particles (radius 0) never touch. The radiation of the impact itself
+//! depends on the spheres' structure and is not modelled; for finite `c` an estimate,
+//! `q² |Δv|² / (3 a c²)` for a velocity change over the light crossing time of the
+//! sphere (radius a), is added to the particle's radiated energy, so it is checked like
+//! the rest of the neglected radiation.
+//!
 //! Each particle has the events and gates of a single flight (obstacles, bounds, detector,
 //! gates in order). The earliest event of any particle ends the step there; that
 //! particle's outcome is recorded, and the integration restarts at that time without it
@@ -951,7 +960,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     break 'segments;
                 }
             };
-            let t_b = int.t();
+            let t_step = int.t();
             let dense = int.dense();
             if !observer(dense, &members, p_ref) {
                 return None;
@@ -971,6 +980,52 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 ) * p_ref
             };
 
+            // Contacts between flying particles with a radius (rigid spheres): the earliest
+            // one ends the step there. Pairs already touching or separating are skipped
+            // (just after a collision they move apart).
+            let mut contact: Option<(f64, usize, usize)> = None;
+            let speed = |k: usize, t: f64| ode.kin[k].velocity(mom(k, t)).length();
+            for (k, &i) in members.iter().enumerate() {
+                let ri = scn.particles[i].particle.radius;
+                if !matches!(tracks[i].phase, Phase::Flying) {
+                    continue;
+                }
+                for (l, &j) in members.iter().enumerate().skip(k + 1) {
+                    let rsum = ri + scn.particles[j].particle.radius;
+                    if rsum <= 0.0 || !matches!(tracks[j].phase, Phase::Flying) {
+                        continue;
+                    }
+                    let mut g = |t: f64| (pos(k, t) - pos(l, t)).length() - rsum;
+                    let (ga, gb) = (g(t_a), g(t_step));
+                    if ga <= 0.0 {
+                        continue;
+                    }
+                    let v_rel = ((0..=4)
+                        .map(|s| {
+                            let t = t_a + (t_step - t_a) * f64::from(s) * 0.25;
+                            speed(k, t) + speed(l, t)
+                        })
+                        .fold(0.0, f64::max)
+                        * 1.25)
+                        .min(2.0 * scn.c);
+                    if let Some(t) = first_crossing(&mut g, t_a, t_step, ga, gb, v_rel).time
+                        && contact.is_none_or(|(tc, _, _)| t < tc)
+                    {
+                        contact = Some((t, k, l));
+                    }
+                }
+            }
+            // The step, cut at the contact if there is one.
+            let t_b = contact.map_or(t_step, |(t, _, _)| t);
+            let reached_end = reached_end && contact.is_none();
+            let end_position = |k: usize| {
+                if contact.is_some() {
+                    pos(k, t_b)
+                } else {
+                    BeamOde::<F>::x(int.y(), k)
+                }
+            };
+
             // Event values at the step end, and the earliest event of a flying particle.
             let mut g_next: Vec<Vec<f64>> = vec![Vec::new(); members.len()];
             let mut v_max = vec![0.0; members.len()];
@@ -987,7 +1042,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 if !matches!(tracks[i].phase, Phase::Flying) {
                     continue;
                 }
-                let x_b = BeamOde::<F>::x(int.y(), k);
+                let x_b = end_position(k);
                 g_next[k] = events.iter().map(|&ev| event_value(ev, i, x_b)).collect();
                 for (e, &ev) in events.iter().enumerate() {
                     let mut g = |t: f64| event_value(ev, i, pos(k, t));
@@ -1322,6 +1377,42 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 restarts += 1;
                 continue 'segments;
             }
+            if let Some((_, k, l)) = contact {
+                let (i, j) = (members[k], members[l]);
+                let (x1, x2) = (states[i].0, states[j].0);
+                let n = (x2 - x1).normalize();
+                if let Some(jn) =
+                    elastic_impulse(&ode.kin[k], states[i].1, &ode.kin[l], states[j].1, n)
+                {
+                    for (idx, kk, sign) in [(i, k, -1.0), (j, l, 1.0)] {
+                        let p_old = states[idx].1;
+                        let p_new = p_old + n * (sign * jn);
+                        states[idx].1 = p_new;
+                        // The impact's radiation, not modelled: estimated for a velocity
+                        // change over the light crossing time of the sphere.
+                        let part = scn.particles[idx].particle;
+                        if scn.c.is_finite() && part.charge != 0.0 && part.radius > 0.0 {
+                            let dv = ode.kin[kk].velocity(p_new) - ode.kin[kk].velocity(p_old);
+                            tracks[idx].traj.radiated_energy +=
+                                part.charge * part.charge * dv.length_squared()
+                                    / (3.0 * part.radius * scn.c * scn.c);
+                        }
+                        let sample = Sample {
+                            t: t_end,
+                            x: states[idx].0,
+                            p: p_new,
+                        };
+                        if rs.record {
+                            tracks[idx].traj.samples.push(sample);
+                        }
+                        tracks[idx].traj.end = sample;
+                    }
+                }
+                t_now = t_end;
+                stats = add_stats(stats, int.stats());
+                restarts += 1;
+                continue 'segments;
+            }
             if ghosts_done {
                 t_now = t_b;
                 stats = add_stats(stats, int.stats());
@@ -1397,6 +1488,52 @@ pub fn run_beam_cancellable<F: FieldSolver>(
         restarts,
         energy,
     })
+}
+
+/// Elastic collision of two rigid spheres touching along `n` (unit, from particle 1 to
+/// particle 2): the impulse `J n` on 2 and `−J n` on 1 with `J > 0` that conserves the
+/// kinetic energy, the positive root of `T₁(p₁ − J n) + T₂(p₂ + J n) = T₁(p₁) + T₂(p₂)`
+/// (convex in J, zero at J = 0 with a negative slope while they approach). For `c = ∞`
+/// it is `2 μ (v₁ − v₂)·n`. `None` if they are not approaching.
+pub fn elastic_impulse(
+    k1: &Kinematics,
+    p1: DVec3,
+    k2: &Kinematics,
+    p2: DVec3,
+    n: DVec3,
+) -> Option<f64> {
+    let closing = (k1.velocity(p1) - k2.velocity(p2)).dot(n);
+    if closing <= 0.0 {
+        return None;
+    }
+    let before = k1.kinetic_energy(p1) + k2.kinetic_energy(p2);
+    let f = |j: f64| k1.kinetic_energy(p1 - n * j) + k2.kinetic_energy(p2 + n * j) - before;
+    // Bracket the root: the Newtonian value is exact for c = inf; relativistically the
+    // root lies within a few times it.
+    let (m1, m2) = (k1.mass, k2.mass);
+    let newtonian = 2.0 * m1 * m2 / (m1 + m2) * closing;
+    if !k1.c.is_finite() && !k2.c.is_finite() {
+        return Some(newtonian);
+    }
+    let (mut lo, mut hi) = (0.5 * newtonian, 2.0 * newtonian);
+    while f(lo) > 0.0 {
+        lo *= 0.5;
+    }
+    while f(hi) < 0.0 {
+        hi *= 2.0;
+    }
+    for _ in 0..200 {
+        let mid = 0.5 * (lo + hi);
+        if mid <= lo || mid >= hi {
+            break;
+        }
+        if f(mid) < 0.0 {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    Some(0.5 * (lo + hi))
 }
 
 /// A charge present for the energy budget: charge, moment, position, kinetic energy.

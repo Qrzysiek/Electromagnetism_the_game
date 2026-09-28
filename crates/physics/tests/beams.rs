@@ -943,3 +943,138 @@ fn b17_knock_on_energy_transfer() {
     }
     assert!(worst < 1e-3);
 }
+
+fn sphere_particle(charge: f64, mass: f64, radius: f64) -> Particle {
+    Particle {
+        charge,
+        mass,
+        radius,
+        moment: 0.0,
+    }
+}
+
+fn free(particle: Particle, x0: DVec3, p0: DVec3) -> BeamParticle {
+    BeamParticle {
+        particle,
+        x0,
+        p0,
+        detector: None,
+        acceptance: None,
+    }
+}
+
+/// B18: two equal neutral spheres (radius 0.5) collide head-on, c = ∞: they exchange
+/// velocities exactly (elastic collision along the line of centres).
+#[test]
+fn b18_equal_masses_exchange_velocities() {
+    let (va, vb) = (0.9, -0.3);
+    let scn = beam(
+        Coulomb::new(&[]),
+        vec![],
+        vec![
+            free(
+                sphere_particle(0.0, 1.0, 0.5),
+                DVec3::new(-5.0, 0.0, 0.0),
+                DVec3::new(va, 0.0, 0.0),
+            ),
+            free(
+                sphere_particle(0.0, 1.0, 0.5),
+                DVec3::new(5.0, 0.0, 0.0),
+                DVec3::new(vb, 0.0, 0.0),
+            ),
+        ],
+        true,
+        20.0,
+    );
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let (a, b) = (r.trajectories[0].end.p, r.trajectories[1].end.p);
+    let err = (a - DVec3::new(vb, 0.0, 0.0)).length() + (b - DVec3::new(va, 0.0, 0.0)).length();
+    println!(
+        "B18: after the collision p_A = {a:?}, p_B = {b:?}; |error| = {err:.1e} ({} restarts)",
+        r.restarts
+    );
+    assert!(err < 1e-12 && r.restarts >= 1);
+}
+
+/// B19: a bouncing binary: opposite charges (±1, masses 1 and 3, radius 0.3) fall together
+/// and collide again and again, c = ∞. Energy (kinetic + Coulomb) and momentum are
+/// conserved through every bounce: the collision conserves both exactly, the flight
+/// between bounces to the integrator's accuracy.
+#[test]
+fn b19_bouncing_binary_conserves_energy_and_momentum() {
+    let (pa, pb) = (DVec3::new(0.0, 0.2, 0.0), DVec3::new(0.0, -0.2, 0.0));
+    let scn = beam(
+        Coulomb::new(&[]),
+        vec![],
+        vec![
+            free(
+                sphere_particle(1.0, 1.0, 0.3),
+                DVec3::new(-2.0, 0.0, 0.0),
+                pa,
+            ),
+            free(
+                sphere_particle(-1.0, 3.0, 0.3),
+                DVec3::new(2.0, 0.0, 0.0),
+                pb,
+            ),
+        ],
+        true,
+        200.0,
+    );
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let (a, b) = (&r.trajectories[0].end, &r.trajectories[1].end);
+    let energy = |pa: DVec3, pb: DVec3, xa: DVec3, xb: DVec3| {
+        pa.length_squared() / 2.0 + pb.length_squared() / 6.0 - 1.0 / (xa - xb).length()
+    };
+    let e0 = energy(
+        pa,
+        pb,
+        DVec3::new(-2.0, 0.0, 0.0),
+        DVec3::new(2.0, 0.0, 0.0),
+    );
+    let e1 = energy(a.p, b.p, a.x, b.x);
+    let dp = (a.p + b.p - (pa + pb)).length();
+    println!(
+        "B19: {} bounces; |ΔE|/|E| = {:.1e}; |Δp| = {dp:.1e}; energy drift between bounces {:.1e}",
+        r.restarts,
+        (e1 - e0).abs() / e0.abs(),
+        r.energy_max_rel_error
+    );
+    assert!(r.restarts >= 5, "the binary bounces");
+    assert!((e1 - e0).abs() / e0.abs() < 1e-10 && dp < 1e-12);
+}
+
+/// B20: relativistic elastic collision (c = 1) of unequal neutral spheres, off-centre:
+/// total momentum and total energy (γ m c²) are conserved exactly by the impulse.
+#[test]
+fn b20_relativistic_collision_conserves_four_momentum() {
+    let c = 1.0;
+    let (pa, pb) = (DVec3::new(3.0, 0.4, 0.0), DVec3::new(-0.5, 0.0, 0.0));
+    let mut scn = beam(
+        Coulomb::new(&[]),
+        vec![],
+        vec![
+            free(
+                sphere_particle(0.0, 1.0, 0.5),
+                DVec3::new(-4.0, 0.0, 0.0),
+                pa,
+            ),
+            free(
+                sphere_particle(0.0, 2.0, 0.7),
+                DVec3::new(2.0, 0.6, 0.0),
+                pb,
+            ),
+        ],
+        true,
+        20.0,
+    );
+    scn.c = c;
+    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+    let (a, b) = (r.trajectories[0].end.p, r.trajectories[1].end.p);
+    let e = |m: f64, p: DVec3| (m * m * c.powi(4) + p.length_squared() * c * c).sqrt();
+    let de = (e(1.0, a) + e(2.0, b) - e(1.0, pa) - e(2.0, pb)).abs();
+    let dp = (a + b - pa - pb).length();
+    let deflected = (a - pa).length();
+    println!("B20: |ΔE| = {de:.1e}, |Δp| = {dp:.1e}; momentum change of A {deflected:.3}");
+    assert!(de < 1e-12 && dp < 1e-12 && deflected > 0.1);
+}
