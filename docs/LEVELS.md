@@ -104,7 +104,8 @@ verified reference solution for every shot and negligible radiation
 | 80 | Jackson §14.6: the critical frequency | 10 Introduction | the same arena and receiver as forward beaming, but only ω 80–160 counts (≥ 3e-3 per steradian): a tight bend's short flash reaches ~(3/2)γ³c/R; the previous level's moderate bend puts only 1.4e-4 there | ≤ 3 magnets | 1 |
 | 81 | Jackson §14.2: a quiet turn | 10 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
 | 82 | Jackson §14.8: Thomson scattering | 10 Intermediate | a light wave from the right (ω = 1) shakes the particle, which scatters it; the receiver at 30° counts 27–33, the Doppler-shifted line ω(1 + β cos φ)/(1 − β cos(θ − φ)) of a particle heading for it (≈ 4γ²ω head on) | ≤ 3 magnets (40, 80) | 1 |
-| 83 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
+| 83 | Jackson §15.2: braking radiation | 10 Intermediate | the target stops the particle abruptly; its flash ∝ sin²θ/(1 − β cos θ)² is zero straight ahead and largest at cos θ = β (≈ 20°): strike the target ~12–32° off the receiver's axis (band 100–200, ≥ 5e-3 per steradian) | ≤ 3 magnets (40, 80) | 1 |
+| 84 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 
 ## Automatic detectors
 
@@ -322,6 +323,11 @@ Notes:
     A first try (amplitude 8, minimum 3e-4) let 17 bends pass without the wave. Measured
     on the reference: the line peaks at 26–32, as the Doppler formula gives for headings
     near 30°.
+  - Braking radiation: flying straight into the target delivers nothing (rejected); 80
+    single-magnet solutions; without the stop's radiation (the control) no one- or
+    two-magnet placement reaches even 3e-3 (the bends offered are gentle, their critical
+    frequency far below the band). The reference delivers 6.06e-3 per steradian against
+    an analytic best of 6.3e-3 for the ideal heading.
   - Undulator: the first version (band 31–41, any exit) was solved by two magnets and by
     6 % of random placements: a pair that steered the particle close past a magnet near
     the end made a hard, broadband flash (4.7e-4 per steradian in the band against 2e-4

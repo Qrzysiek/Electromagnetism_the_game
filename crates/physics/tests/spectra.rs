@@ -63,7 +63,7 @@ fn s1_harmonics_of_circular_motion() {
             let jp = 0.5 * (bessel_j(m - 1, mf * beta) - bessel_j(m + 1, mf * beta));
             let jackson =
                 q * q * mf * mf * w0 * w0 * beta * beta / (2.0 * PI * c) * jp * jp * t_total;
-            let e = band_energy(&samples, q, c, n, (mf - 0.5) * w0, (mf + 0.5) * w0);
+            let e = band_energy(&samples, q, c, n, (mf - 0.5) * w0, (mf + 0.5) * w0, false);
             let err = e / jackson - 1.0;
             println!(
                 "S1 {turns} turns, harmonic {m}: band energy {e:.6e}, Jackson {jackson:.6e}, rel. error {err:.1e}"
@@ -104,7 +104,7 @@ fn s2_spectrum_integrates_to_the_lienard_energy() {
         // The pulse lasts ~σ(1 − n·β): its spectrum ends near a few /(σκ); 40/(σκ) is far out.
         let kappa = 1.0 - n.x * v0;
         let top = 40.0 / (sigma * kappa);
-        let total = band_energy(&samples, q, c, n, 0.0, top);
+        let total = band_energy(&samples, q, c, n, 0.0, top, false);
         let err = total / lienard - 1.0;
         println!(
             "S2 at {deg}°: ∫ d²I/dωdΩ dω = {total:.8e}, Liénard {lienard:.8e}, rel. error {err:.1e}"
@@ -113,7 +113,7 @@ fn s2_spectrum_integrates_to_the_lienard_energy() {
     }
     // A spot check that the spectrum is flat at low frequency (a net velocity change
     // radiates like a sudden kick for ω ≪ 1/σκ).
-    let s = spectrum(&samples, q, c, DVec3::Y, 1e-3, 1e-3, 2);
+    let s = spectrum(&samples, q, c, DVec3::Y, 1e-3, 1e-3, 2, false);
     assert!((s[0] / s[1] - 1.0).abs() < 1e-3);
     assert!(worst < 1e-4);
 }
@@ -142,6 +142,7 @@ fn s3_measure_along_a_computed_flight() {
             half_angle: 15f64.to_radians(),
             band,
             energy: (0.0, 1e6),
+            abrupt_stop: false,
         };
         let scn = Scenario {
             field: UniformFields {
@@ -208,4 +209,72 @@ fn s3_measure_along_a_computed_flight() {
         };
         assert!(err.abs() < bound);
     }
+}
+
+/// S4, the sudden stop (Jackson §15.2; the `abrupt_stop` option). (a) A charge at β = 0.8
+/// moving uniformly and stopped instantly at t = 0 radiates the flat spectrum
+/// `(q²/4π²c) β² sin²θ / (1 − β cos θ)²`; (b) the same charge stopped smoothly within
+/// τ = 0.002 (velocity `v₀ / (1 + e^{t/τ})`), integrated by the acceleration form alone,
+/// must converge to it at frequencies far below the inverse stopping time: quadratically
+/// in ωτ (the difference falls 16 ± 4 times when ω falls 4 times), and below 1e-5 at
+/// ωτ = 1e-3. Measured: (a) ≤ 3e-16; (b) 7e-7 … 4.6e-6 at ωτ = 1e-3, 1.8e-4 … 1.2e-3 at
+/// ωτ = 1.6e-2 (larger away from the direction of motion), ratios 16.0.
+#[test]
+fn s4_sudden_stop() {
+    let (q, c): (f64, f64) = (1.0, 1.0);
+    let beta: f64 = 0.8;
+    let v0 = beta * c;
+    let tau = 0.002;
+    // (a) uniform motion to the stop.
+    let uniform: Vec<Emission> = (0..=200)
+        .map(|i| {
+            let t = -2.0 + 0.01 * f64::from(i);
+            (
+                t,
+                DVec3::new(v0 * t, 0.0, 0.0),
+                DVec3::new(v0, 0.0, 0.0),
+                DVec3::ZERO,
+            )
+        })
+        .collect();
+    // (b) the smooth stop: s = 1/(1 + e^{t/τ}), x = v₀ (t − τ ln(1 + e^{t/τ})).
+    let n_steps = 60_000;
+    let smooth: Vec<Emission> = (0..=n_steps)
+        .map(|i| {
+            let t = -2.0 + 2.1 * f64::from(i) / f64::from(n_steps);
+            let e = (t / tau).exp();
+            let s = 1.0 / (1.0 + e);
+            let x = v0 * (t - tau * e.ln_1p());
+            let a = -v0 * s * (1.0 - s) / tau;
+            (
+                t,
+                DVec3::new(x, 0.0, 0.0),
+                DVec3::new(v0 * s, 0.0, 0.0),
+                DVec3::new(a, 0.0, 0.0),
+            )
+        })
+        .collect();
+    let mut worst_a: f64 = 0.0;
+    for deg in [10.0_f64, 36.87, 60.0, 120.0] {
+        let th = deg.to_radians();
+        let n = DVec3::new(th.cos(), th.sin(), 0.0);
+        let jackson = q * q / (4.0 * PI * PI * c) * beta * beta * th.sin().powi(2)
+            / (1.0 - beta * th.cos()).powi(2);
+        let mut diffs = Vec::new();
+        for omega in [0.5, 2.0, 8.0] {
+            let a = spectrum(&uniform, q, c, n, omega, 1.0, 1, true)[0];
+            let b = spectrum(&smooth, q, c, n, omega, 1.0, 1, false)[0];
+            let (ea, eb) = (a / jackson - 1.0, b / jackson - 1.0);
+            println!(
+                "S4 at {deg}°, ω = {omega}: abrupt {ea:.1e}, smooth stop (ωτ = {:.0e}) {eb:.1e}",
+                omega * tau
+            );
+            worst_a = worst_a.max(ea.abs());
+            diffs.push(eb.abs());
+        }
+        let (r1, r2) = (diffs[1] / diffs[0], diffs[2] / diffs[1]);
+        println!("S4 at {deg}°: ratios {r1:.1}, {r2:.1} (quadratic: 16)");
+        assert!(diffs[0] < 1e-5 && (12.0..20.0).contains(&r1) && (12.0..20.0).contains(&r2));
+    }
+    assert!(worst_a < 1e-12);
 }

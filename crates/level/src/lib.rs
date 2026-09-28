@@ -443,6 +443,10 @@ pub struct RadiationGoal {
     pub band: Option<[f64; 2]>,
     /// Energy per steradian `[min, max]`.
     pub energy: [f64; 2],
+    /// The detector is a target that stops the particle abruptly, and the stop's radiation
+    /// counts (needs a band: its spectrum is flat to infinite frequency).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub abrupt_stop: bool,
 }
 
 impl RadiationGoal {
@@ -453,6 +457,7 @@ impl RadiationGoal {
             half_angle: self.direction[1].to_radians(),
             band: self.band.map(|[lo, hi]| (lo, hi)),
             energy: (self.energy[0], self.energy[1]),
+            abrupt_stop: self.abrupt_stop,
         }
     }
 }
@@ -1308,6 +1313,17 @@ impl Level {
                         .into(),
                 );
             }
+        }
+        if self.shots.iter().any(|s| {
+            s.detector
+                .acceptance
+                .and_then(|a| a.radiation)
+                .is_some_and(|r| r.abrupt_stop && r.band.is_none())
+        }) {
+            out.push(
+                "a radiation goal with an abrupt stop needs a band (the stop's spectrum is flat                  to infinite frequency)"
+                    .into(),
+            );
         }
         if self.gates.iter().any(has) {
             out.push("gates cannot have radiation goals".into());

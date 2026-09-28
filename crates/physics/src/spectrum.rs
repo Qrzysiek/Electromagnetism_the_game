@@ -43,6 +43,9 @@ pub struct RadiationWindow {
     pub band: Option<(f64, f64)>,
     /// Allowed energy per steradian `[min, max]`.
     pub energy: (f64, f64),
+    /// The detector stops the particle abruptly (a target): the stop's radiation counts
+    /// (`spectrum`). Its spectrum is flat to infinite frequency, so this needs a band.
+    pub abrupt_stop: bool,
 }
 
 impl RadiationWindow {
@@ -98,7 +101,7 @@ impl RadiationWindow {
             .iter()
             .map(|&n| match self.band {
                 None => lienard_energy(samples, q, c, n),
-                Some((lo, hi)) => band_energy(samples, q, c, n, lo, hi),
+                Some((lo, hi)) => band_energy(samples, q, c, n, lo, hi, self.abrupt_stop),
             })
             .collect();
         if values.len() == 1 {
@@ -210,7 +213,13 @@ fn filon_weights(d: f64, e: Cx) -> (Cx, Cx) {
     (phi0, phi1)
 }
 
-/// `d²I/dω dΩ` in direction `n` at the frequencies `ω₀ + k δω` (`k < count`).
+/// `d²I/dω dΩ` in direction `n` at the frequencies `ω₀ + k δω` (`k < count`). With
+/// `abrupt_stop` the particle stops instantly at the last sample: the integrand is the
+/// derivative of `F = n × (n × β)/κ` (Jackson, before 14.66), so the jump of `F` to 0
+/// adds `−F_end e^{iω(t − n·r/c)}` at the stop to the integral (the sudden-stop
+/// radiation of Jackson §15.2, flat in frequency). Valid for frequencies far below the
+/// inverse of the real stopping time.
+#[allow(clippy::too_many_arguments)]
 pub fn spectrum(
     samples: &[Emission],
     q: f64,
@@ -219,6 +228,7 @@ pub fn spectrum(
     omega0: f64,
     d_omega: f64,
     count: usize,
+    abrupt_stop: bool,
 ) -> Vec<f64> {
     if !c.is_finite() || samples.len() < 2 || count == 0 {
         return vec![0.0; count];
@@ -260,6 +270,19 @@ pub fn spectrum(
             ed = ed.mul(step_d);
         }
     }
+    if abrupt_stop {
+        let &(t, x, v, _) = samples.last().expect("at least two samples");
+        let kappa = 1.0 - n.dot(v) / c;
+        let f_end = n.cross(n.cross(v / c)) / kappa;
+        let tau = t - n.dot(x) / c;
+        let mut e = Cx::cis(omega0 * tau);
+        let step = Cx::cis(d_omega * tau);
+        for k in 0..count {
+            re[k] -= f_end * e.re;
+            im[k] -= f_end * e.im;
+            e = e.mul(step);
+        }
+    }
     let scale = q * q / (4.0 * PI * PI * c);
     re.iter()
         .zip(&im)
@@ -277,7 +300,15 @@ pub fn resolving_step(span: f64) -> f64 {
 /// Energy per steradian in direction `n` within the band `[lo, hi]`: the spectrum on a
 /// grid that resolves the flight's lines (`resolving_step`, at most 4097 points),
 /// integrated by the trapezoidal rule.
-pub fn band_energy(samples: &[Emission], q: f64, c: f64, n: DVec3, lo: f64, hi: f64) -> f64 {
+pub fn band_energy(
+    samples: &[Emission],
+    q: f64,
+    c: f64,
+    n: DVec3,
+    lo: f64,
+    hi: f64,
+    abrupt_stop: bool,
+) -> f64 {
     if !c.is_finite() || samples.len() < 2 || hi <= lo {
         return 0.0;
     }
@@ -287,7 +318,7 @@ pub fn band_energy(samples: &[Emission], q: f64, c: f64, n: DVec3, lo: f64, hi: 
     let intervals = (((hi - lo) / resolving_step(span)).ceil() as usize).clamp(8, 4096);
     #[allow(clippy::cast_precision_loss)]
     let d_omega = (hi - lo) / intervals as f64;
-    let s = spectrum(samples, q, c, n, lo, d_omega, intervals + 1);
+    let s = spectrum(samples, q, c, n, lo, d_omega, intervals + 1, abrupt_stop);
     let inner: f64 = s[1..intervals].iter().sum();
     (inner + 0.5 * (s[0] + s[intervals])) * d_omega
 }
@@ -345,7 +376,16 @@ pub fn arc_spectrum(
     let mut total = vec![0.0; count];
     for &n in &chosen {
         // Grid points at the fine cells' centres.
-        let s = spectrum(samples, q, c, n, 0.5 * d_omega, d_omega, count);
+        let s = spectrum(
+            samples,
+            q,
+            c,
+            n,
+            0.5 * d_omega,
+            d_omega,
+            count,
+            window.abrupt_stop,
+        );
         for (t, v) in total.iter_mut().zip(s) {
             *t += v;
         }
@@ -398,6 +438,7 @@ mod tests {
             half_angle: 10f64.to_radians(),
             band: None,
             energy: (0.0, 1.0),
+            abrupt_stop: false,
         };
         let d = w.directions();
         assert_eq!(d.len(), 11);

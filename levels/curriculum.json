@@ -272,7 +272,8 @@
           "name": "Intermediate",
           "levels": [
             "jackson_quiet_turn",
-            "jackson_thomson"
+            "jackson_thomson",
+            "jackson_braking"
           ]
         },
         {

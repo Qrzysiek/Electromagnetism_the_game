@@ -53,6 +53,12 @@
   "height_ex": 2.713,
   "baseline_ex": 0.791
  },
+ "\\cos\\theta = \\beta": {
+  "file": "7a737285438e6389.svg",
+  "width_ex": 8.763,
+  "height_ex": 2.034,
+  "baseline_ex": 0.439
+ },
  "\\gamma m v": {
   "file": "d422c781211966e2.svg",
   "width_ex": 4.312,
@@ -105,6 +111,12 @@
   "file": "8a75502d7546543a.svg",
   "width_ex": 12.598,
   "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
+ "\\propto \\sin^2\\theta/(1 - \\beta\\cos\\theta)^2": {
+  "file": "a4fd482483f11be1.svg",
+  "width_ex": 21.492,
+  "height_ex": 2.527,
   "baseline_ex": 0.566
  },
  "\\sqrt{2mT}": {

@@ -2101,6 +2101,37 @@ def jackson_thomson():
         max_magnets=3, strengths=[40.0, 80.0], region=(5, 2, 34, 18))
 
 
+def jackson_braking():
+    # Jackson §15.2 (radiation in a collision; the sudden stop): the target stops the
+    # particle at once (the goal's abrupt_stop), which radiates the flat spectrum
+    # (q^2/4 pi^2 c) beta^2 sin^2 theta / (1 - beta cos theta)^2 around its final velocity:
+    # nothing straight ahead, the most at cos theta = beta (19.5 degrees here, gamma^2
+    # times the broadside value). The receiver is straight ahead (0 +- 5 degrees), the band
+    # 100-200 (where the gentle bends offered, 40 and 80, put almost nothing: their
+    # critical frequency is ~81/R): at 6.3e-3 per steradian for the best heading, the
+    # minimum 5e-3 wants the particle to strike the target ~12-32 degrees off the axis.
+    # Flying straight in delivers nothing; 80 single-magnet solutions; without the stop's
+    # radiation (the control) no one- or two-magnet placement reaches even 3e-3. The
+    # reference (80 at (28, 9)) delivers 6.06e-3, near the analytic best.
+    return level(
+        "Jackson §15.2: braking radiation",
+        "Jackson §15.2: a charge that is stopped abruptly radiates a flash of every "
+        "frequency (bremsstrahlung, braking radiation). This target stops the particle "
+        "at once. The flash goes mostly forward, but not straight ahead: seen at an angle "
+        r"$\theta$ to the particle's last velocity it is "
+        r"$\propto \sin^2\theta/(1 - \beta\cos\theta)^2$, zero along the velocity and "
+        r"largest at $\cos\theta = \beta$ (here about 20°). The receiver straight ahead "
+        "counts the band 100–200 and wants at least 0.005 per steradian: fired straight "
+        "into the target the particle lights it not at all.",
+        grid=(40, 20), c=RAD_C, t_max=100.0, radiation_reaction=True,
+        shots=[shot(RAD_Q, 1.0, (2, 10), 0.0, RAD_T0,
+                    box((38, 4, 40, 16),
+                        radiation=dict(radiation_goal(0.0, 5.0, (5e-3, 1e3), band=(100.0, 200.0)),
+                                       abrupt_stop=True)))],
+        reference=[magnet(28, 9, 80.0)],
+        max_magnets=3, strengths=[40.0, 80.0], region=(5, 2, 34, 18))
+
+
 def jackson_undulator():
     # Jackson §14.7: magnets of alternating sign every s cells wiggle the particle with
     # period lambda_u = 2s; on the axis the wiggles add up coherently at
@@ -2299,6 +2330,7 @@ ARCS = [
         ("Intermediate", [
             ("jackson_quiet_turn", jackson_quiet_turn),
             ("jackson_thomson", jackson_thomson),
+            ("jackson_braking", jackson_braking),
         ]),
         ("Master", [
             ("jackson_undulator", jackson_undulator),

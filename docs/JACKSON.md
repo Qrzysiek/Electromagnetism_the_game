@@ -125,10 +125,13 @@ Arc 10, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §
 - Jackson §14.8: Thomson scattering (intermediate). A plane wave shakes the particle; the
   scattered line is Doppler-shifted by the particle's heading (≈ 4γ²ω head on: inverse
   Compton); the band picks the heading.
+- Jackson §15.2: braking radiation (intermediate). The goal's target stops the particle
+  abruptly (the new `abrupt_stop` option, test S4); the flash is zero straight ahead, so
+  the particle must strike the target off the receiver's axis.
 - Jackson §14.7: undulator (master). The on-axis line 2γ²ω_u/(1 + K²/2) in a band.
-- Tried and set aside: §15.2 braking radiation (stopping a γ = 3 particle with charges
-  needs a large potential hill and the particle slips round the charges; the solver found
-  almost nothing even without a radiation condition).
+- Tried and set aside first: braking radiation by stopping a γ = 3 particle with charges
+  (it needs a large potential hill and the particle slips round the charges). Built
+  instead with a target that stops it abruptly.
 
 Validation tests from the book (PHYSICS.md): K5 (Pr. 2.4, golden ratio), M7 (Pr. 12.9b,
 equatorial drift), M11 (§12.5, adiabatic invariance), S1 (Pr. 14.15, harmonics of circular

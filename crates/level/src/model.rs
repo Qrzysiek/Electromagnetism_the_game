@@ -154,8 +154,20 @@ impl Level {
                 false,
                 "Radiation goal: the particle is taken to fly uniformly before its launch and \
                  after it enters the detector, so no radiation is counted from its launch or \
-                 from the detector stopping it.",
+                 from the detector stopping it (unless the goal says the target stops it).",
             ));
+            if self.shots.iter().any(|s| {
+                s.detector
+                    .acceptance
+                    .and_then(|a| a.radiation)
+                    .is_some_and(|r| r.abrupt_stop)
+            }) {
+                out.push(note(
+                    false,
+                    "Radiation goal: the target stops the particle instantly; its flash is \
+                     exact for frequencies far below the inverse of a real stopping time.",
+                ));
+            }
         }
         if !self.conductors.is_empty() {
             out.push(note(

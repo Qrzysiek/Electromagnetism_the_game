@@ -389,6 +389,7 @@ fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> b
                     direction: [0.0, 10.0],
                     band: None,
                     energy: [0.0, 1.0],
+                    abrupt_stop: false,
                 });
             }
             (false, true) => *radiation = None,
@@ -400,6 +401,7 @@ fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> b
         direction: [axis, half],
         band,
         energy: [lo, hi],
+        abrupt_stop,
     }) = radiation
     else {
         return focus;
@@ -441,6 +443,13 @@ fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> b
             si(ui, hi, 0.01)
         }
     });
+    row(ui, "  abrupt stop", |ui| {
+        ui.checkbox(abrupt_stop, "")
+            .on_hover_text(
+                "The detector is a target that stops the particle at once; the stop's                  radiation counts (needs a band)",
+            );
+        false
+    });
     focus
 }
 
@@ -460,8 +469,10 @@ fn acceptance_in_range(a: &DetectorAcceptance, radiation_allowed: bool) -> bool 
                 direction: [x, h],
                 band,
                 energy,
+                abrupt_stop,
             } = r;
             radiation_allowed
+                && (!abrupt_stop || band.is_some())
                 && x.is_finite()
                 && (0.0..=180.0).contains(&h)
                 && band.is_none_or(|b| window(b) && b[0] >= 0.0)
