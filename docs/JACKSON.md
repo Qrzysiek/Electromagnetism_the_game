@@ -114,7 +114,7 @@ bound harmonically, PHYSICS.md §2.1):
 - Jackson Ch. 16: spectroscopy (master). Two atoms, two resonances.
 
 Validation tests from the book (PHYSICS.md): K5 (Pr. 2.4, golden ratio), M7 (Pr. 12.9b,
-equatorial drift), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
+equatorial drift), M11 (§12.5, adiabatic invariance), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
 collapse), R5 (Pr. 14.5b, radiation in a head-on collision), C2 (Pr. 16.1, the
 radiating oscillator decays at Γ = ω₀²τ).
 
@@ -230,7 +230,7 @@ radiating oscillator decays at Γ = ω₀²τ).
   - A level with both regimes; a test against the exact solution.
   - NOW (with plate pairs in coils, or F:coils+).
 - **§12.4 gradient drift in the plane.** Drift along the contours of |B|. Level plus test. NOW. Curvature drift needs motion along B: 3D.
-- **§12.5 adiabatic invariance of flux.** Slowly increasing B shrinks the orbit, keeping p⊥²/B. F:ramp; a test with slowly varying placed magnets is NOW.
+- **§12.5 adiabatic invariance of flux.** Slowly increasing B shrinks the orbit, keeping p⊥²/B. Test M11 (*done*): μ conserved to 1e-3 while B rises 4×, and the guiding centre drifts inward keeping ρ²B. The Faraday level shows the orbit contracting. A dedicated level waits for coil supplies (the player sets the ramp and compresses the orbit into a detector): with a fixed ramp and placed charges steering by E×B drift, the drift is weak against the energy the charges can give directly, and the guiding centre's inward drift into weaker field (in a loop's plane) gains only ~1.9× in energy for 4× in current.
 - **Pr. 12.9 Van Allen belts, equatorial part.** A dipole "Earth" (moment along z): the gradient drift of trapped particles around it in the equatorial plane.
   - Level: guide a particle once round the Earth.
   - NOW. The bounce between mirror points is 3D.

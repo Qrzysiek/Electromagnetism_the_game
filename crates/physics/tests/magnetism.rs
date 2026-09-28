@@ -13,7 +13,9 @@ use physics::dynamics::{Kinematics, Particle};
 use physics::field::{Coulomb, FixedCharge, LevelField, UniformFields};
 use physics::geometry::{Capsule, Shape, Sphere, Torus};
 use physics::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
-use physics::trajectory::{Outcome, RunSettings, Scenario, StepView, run, run_observed};
+use physics::trajectory::{
+    Outcome, RunSettings, Scenario, StepView, Trajectory, run, run_observed,
+};
 
 const TOL: f64 = 1e-12;
 
@@ -856,4 +858,87 @@ fn m10_canonical_angular_momentum_in_a_ramped_loop() {
         tr.end.t
     );
     assert!(worst < 1e-10 && dp > 0.01);
+}
+
+/// Guiding centre `x + p×ẑ/(qB)` of a charge gyrating in a loop's plane.
+fn guiding_centre(l: &CircularLoop, q: f64, x: DVec3, p: DVec3, t: f64) -> DVec3 {
+    x + p.cross(DVec3::Z) / (q * l.field_at(x, t).z)
+}
+
+/// Time average of the magnetic moment `p²/B(guiding centre)` over `[t0, t1]`.
+fn mean_moment(tr: &Trajectory, l: &CircularLoop, q: f64, t0: f64, t1: f64) -> f64 {
+    let (mut sum, mut weight) = (0.0, 0.0);
+    for w in tr.samples.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        if a.t >= t0 && b.t <= t1 {
+            let gc = guiding_centre(l, q, a.x, a.p, a.t);
+            sum += a.p.length_squared() / l.field_at(gc, a.t).z * (b.t - a.t);
+            weight += b.t - a.t;
+        }
+    }
+    sum / weight
+}
+
+/// M11, adiabatic invariance (Jackson §12.5). In a slowly rising field the magnetic
+/// moment `p⊥²/B` (the flux through the gyro-orbit) is conserved while `p²` grows with
+/// `B`, and the guiding centre drifts inward (E×B in the induced field) keeping the flux
+/// through its own circle about the axis, `ρ² B`. A gyrating charge (gyroradius 0.5,
+/// ω_c ≈ 1) with its guiding centre 2 from the axis of a large loop (radius 20, where
+/// B is uniform to 0.8 %), while the current rises 4× over 150, 300 and 600 (at most
+/// 0.13 of the field's rise per gyroperiod). The moment, averaged over three
+/// gyroperiods at the start and at the end, changes by at most 1.2e-3 and the guiding
+/// centre ends at ρ = 1.002–1.004 (flux conservation: 2/√4 = 1, up to the field's
+/// non-uniformity).
+#[test]
+fn m11_adiabatic_invariance_of_the_magnetic_moment() {
+    let (q, m) = (1.0, 1.0);
+    let radius = 20.0;
+    // B at the centre is 2πκ/R: κ₀ gives ω_c ≈ 1.
+    let kappa0 = radius / TAU;
+    for t_ramp in [150.0, 300.0, 600.0] {
+        let l = CircularLoop {
+            center: DVec3::ZERO,
+            normal: DVec3::Z,
+            radius,
+            kappa: kappa0,
+            wire_radius: 0.05,
+            rate: 3.0 * kappa0 / t_ramp,
+        };
+        let field = LevelField {
+            loops: vec![l],
+            ..LevelField::default()
+        };
+        let b0 = l.field_at(DVec3::new(2.0, 0.0, 0.0), 0.0).z;
+        let p0 = 0.5 * q * b0;
+        let scn = Scenario {
+            field,
+            obstacles: vec![],
+            particle: Particle {
+                charge: q,
+                mass: m,
+                radius: 0.0,
+                moment: 0.0,
+            },
+            c: f64::INFINITY,
+            // Guiding centre at (2, 0): start 0.5 above it, moving so that it circles it.
+            x0: DVec3::new(2.0, 0.5, 0.0),
+            p0: DVec3::new(p0, 0.0, 0.0),
+            detector: None,
+            bounds: Some(cube(15.0)),
+            t_max: t_ramp,
+            radiation_reaction: false,
+            acceptance: None,
+            gates: Vec::new(),
+        };
+        let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+        let period = TAU / (q * b0 / m);
+        let mu0 = mean_moment(&tr, &l, q, 0.0, 3.0 * period);
+        let mu1 = mean_moment(&tr, &l, q, t_ramp - 3.0 * period, t_ramp);
+        let rho = guiding_centre(&l, q, tr.end.x, tr.end.p, tr.end.t).length();
+        println!(
+            "M11 ramp over {t_ramp}: B ×4, μ changed by {:.1e}, guiding centre at ρ = {rho:.4} (flux: 1)",
+            mu1 / mu0 - 1.0
+        );
+        assert!((mu1 / mu0 - 1.0).abs() < 2e-3 && (rho - 1.0).abs() < 0.01);
+    }
 }

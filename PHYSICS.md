@@ -84,7 +84,7 @@ So `q v × B` keeps the particle in the plane (test M5). A straight wire perpend
 
 **Energy.** B does no work, so the conserved energy `W` of §4 is unchanged. The forbidden-region map stays exact with magnets.
 
-### Ramped coils and induction — *validated* (`magnetic.rs`: `unit_vector_potential`, `induced_e`; tests M8–M10)
+### Ramped coils and induction — *validated* (`magnetic.rs`: `unit_vector_potential`, `induced_e`; tests M8–M11)
 
 A coil's current may rise linearly, `κ(t) = κ + rate·t` (lab time). Its field scales with κ(t), and it induces the electric field `E = −∂A/∂t = −rate · A_unit(x)`, constant in time for a linear ramp.
 
@@ -97,6 +97,7 @@ A coil's current may rise linearly, `κ(t) = κ + rate·t` (lab time). Its field
 | M8 | Curl of the vector potential of a loop and a polygon coil at 5 points (in and off the plane), central differences h = 1e-5 | the field | < 1e-8 | ≤ 2.4e-10 |
 | M9 | Faraday's law (Jackson §5.15): ∮E·dl of the induced field around circles inside a loop (concentric, off-centre) and a polygon coil | −dΦ/dt with Φ the field's flux by quadrature (40 Gauss–Legendre × 256) | < 1e-8 | ≤ 1.5e-14 |
 | M10 | A charge in a ramped loop's field (axially symmetric), 60 time units | canonical angular momentum x p_y − y p_x + q (x A_y − y A_x) conserved | < 1e-10 | 1.4e-13 (while \|p\| changes by 47 %) |
+| M11 | Jackson §12.5: a charge gyrating (gyroradius 0.5, ω_c ≈ 1) with its guiding centre 2 from the axis of a loop of radius 20; the current rises 4× over 150, 300, 600 | magnetic moment p²/B(guiding centre), averaged over 3 gyroperiods, conserved (adiabatic invariant); guiding centre drifts inward to ρ = 2/√4 = 1 (flux ρ²B conserved) | 2e-3; 1 % | 1.1e-3, 4.4e-4, 3.1e-4; ρ = 1.0039, 1.0028, 1.0021 (the rest: B non-uniform by 0.8 %) |
 
 ## 2.3 External fields: stray fields and plane waves — *validated* (`crates/physics/src/external.rs`)
 
