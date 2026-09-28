@@ -23,7 +23,7 @@ use physics::antenna::OscillatingDipole;
 use physics::conductor::{Bias, Conductors, Resolution, SphereConductor};
 use physics::dynamics::{Kinematics, Particle};
 use physics::external::{External, PlaneWave};
-use physics::field::{Coulomb, FixedCharge, LevelField};
+use physics::field::{ChargeCloud, Coulomb, FixedCharge, LevelField};
 use physics::geometry::{Aabb, Capsule, Region, Shape, Sphere, Torus};
 use physics::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 use physics::trajectory::Scenario;
@@ -61,6 +61,10 @@ pub struct Level {
     /// Metal spheres placed by the level (PHYSICS.md §2.6).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conductors: Vec<Conductor>,
+    /// Charge clouds placed by the level: uniformly charged spheres that particles fly
+    /// through (Thomson's atom, PHYSICS.md §2.1).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clouds: Vec<Cloud>,
     /// Box electrodes (plates, slabs, walls) placed by the level (PHYSICS.md §2.7).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub electrodes: Vec<Electrode>,
@@ -89,6 +93,18 @@ pub struct Electrode {
     /// `bias`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub tunable: bool,
+}
+
+/// A charge cloud: a sphere of uniform charge density that particles fly through. Inside,
+/// a charge of the opposite sign is bound harmonically, `ω₀² = |qQ| / (m R³)`; outside, it
+/// is a point charge.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Cloud {
+    pub center: Node,
+    /// Radius in cells.
+    pub radius: f64,
+    /// Total charge.
+    pub charge: f64,
 }
 
 /// A conducting (metal) sphere placed by the level.
@@ -206,6 +222,8 @@ struct LevelFile {
     #[serde(default)]
     conductors: Vec<Conductor>,
     #[serde(default)]
+    clouds: Vec<Cloud>,
+    #[serde(default)]
     electrodes: Vec<Electrode>,
     #[serde(default)]
     gates: Vec<Detector>,
@@ -239,6 +257,7 @@ impl From<LevelFile> for Level {
             reference_solution: f.reference_solution,
             disturbances: f.disturbances,
             conductors: f.conductors,
+            clouds: f.clouds,
             electrodes: f.electrodes,
             gates: f.gates,
         }
@@ -998,6 +1017,12 @@ impl Level {
                     self.conductors
                         .iter()
                         .map(|c| (self.grid.position(c.center), c.radius + PLATE_CLEARANCE)),
+                )
+                // Charge clouds: electrodes see them as point charges, so plates stay out.
+                .chain(
+                    self.clouds
+                        .iter()
+                        .map(|c| (self.grid.position(c.center), c.radius + CONTACT_DISTANCE)),
                 );
             let touching = points
                 .into_iter()
@@ -1179,6 +1204,23 @@ impl Level {
                 out.push("an element or launch point is inside or at an electrode".into());
             }
         }
+        for cl in &self.clouds {
+            let c = self.grid.position(cl.center);
+            if cl.radius.is_nan() || cl.radius <= 0.0 || !cl.charge.is_finite() {
+                out.push("a charge cloud needs a positive radius and a finite charge".into());
+            }
+            let touches_sphere = self.conductors.iter().any(|m| {
+                (self.grid.position(m.center) - c).length()
+                    <= m.radius + cl.radius + CONTACT_DISTANCE
+            });
+            let boxes = physics::bem::Electrodes::shapes_only(self.box_electrodes());
+            if touches_sphere || boxes.contains(c, cl.radius + CONTACT_DISTANCE) {
+                out.push(
+                    "a charge cloud must stay clear of metal (the metal sees it as a point charge)"
+                        .into(),
+                );
+            }
+        }
         if !self.conductors.is_empty() {
             let time_dependent = self.limits.max_antennas > 0
                 || self.elements.iter().any(|e| e.kind == ElementKind::Antenna)
@@ -1323,15 +1365,35 @@ impl Level {
                 radius: c.radius + CONTACT_DISTANCE,
             }));
         }
+        let clouds: Vec<ChargeCloud> = self
+            .clouds
+            .iter()
+            .map(|c| ChargeCloud {
+                position: self.grid.position(c.center),
+                charge: c.charge,
+                radius: c.radius,
+            })
+            .collect();
+        // Metal and electrodes see the clouds as point charges: the validation keeps
+        // every cloud clear of them, where its field is a point charge's.
+        let sources: Vec<FixedCharge> = charges
+            .iter()
+            .copied()
+            .chain(clouds.iter().map(|c| FixedCharge {
+                position: c.position,
+                charge: c.charge,
+                radius: 0.0,
+            }))
+            .collect();
         let field = LevelField {
-            coulomb: Coulomb::new(&charges),
+            coulomb: Coulomb::with_clouds(&charges, &clouds),
             dipoles,
             loops,
             polygons,
             antennas,
             external: Vec::new(),
-            conductors: self.conductors_for(&charges, resolution),
-            electrodes: electrodes_for(boxes, &charges, resolution),
+            conductors: self.conductors_for(&sources, resolution),
+            electrodes: electrodes_for(boxes, &sources, resolution),
             time_offset: 0.0,
         };
         (field, obstacles)
@@ -1801,6 +1863,7 @@ mod tests {
                 }],
             }],
             conductors: vec![],
+            clouds: vec![],
             electrodes: vec![],
             gates: vec![],
         }

@@ -85,6 +85,12 @@ impl Level {
                  checked to be below 1e-10 of the launch energy in the shipped levels.",
             ));
         }
+        if !self.clouds.is_empty() {
+            out.push(note(
+                true,
+                "Charge clouds: spheres of uniform charge that particles fly through, with                  their exact field inside (linear: a harmonic restoring force) and outside                  (a point charge). They are fixed: the cloud itself does not respond.",
+            ));
+        }
         if !self.disturbances.is_empty() {
             out.push(note(
                 true,

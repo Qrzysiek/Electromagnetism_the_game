@@ -117,6 +117,11 @@ def metal(x, y, r, kind="grounded", value=None):
     return {"center": [x, y, 0], "radius": r, "bias": bias}
 
 
+def cloud(x, y, r, q):
+    """A charge cloud: a uniformly charged sphere particles fly through (Thomson's atom)."""
+    return {"center": [x, y, 0], "radius": r, "charge": q}
+
+
 def plate(x, y, length, thickness=0.4, height=4.0, angle_deg=0.0, kind="grounded",
           value=None, tunable=False):
     """A box electrode (plate, slab or wall) standing on the plane; `tunable`: the player
@@ -171,7 +176,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
           amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=(),
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
-          beam_interaction=False, gates=()):
+          beam_interaction=False, gates=(), clouds=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -202,6 +207,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         "limits": limits, "reference_solution": list(reference or []),
         **({"disturbances": list(disturbances)} if disturbances else {}),
         **({"conductors": list(conductors)} if conductors else {}),
+        **({"clouds": list(clouds)} if clouds else {}),
         **({"electrodes": list(electrodes)} if electrodes else {}),
         **({"gates": list(gates)} if gates else {}),
     }
@@ -1644,6 +1650,92 @@ def jackson_three_orbits():
         reference=[charge(12, 6, 0.25), charge(21, 11, -1.0), charge(22, 12, 0.5)])
 
 
+# Jackson arc on bound charges (§16.7-16.8, Pr. 13.2): an electron bound harmonically
+# inside a charge cloud (Thomson's atom): omega_0^2 = |qQ|/(m R^3). Tests C1 (the cloud's
+# field) and C2 (Pr. 16.1: the radiating oscillator decays at Gamma = omega_0^2 tau).
+
+def cloud_omega(q, big_q, r, m=1.0):
+    return math.sqrt(abs(q * big_q) / (m * r ** 3))
+
+
+def jackson_bound_charge():
+    # Electron (q = -1e-6) at the centre of a cloud (Q = 1e6, R = 4): the restoring field
+    # grows to Q/R^2 = 6.3e4 at the edge. Pull it out with charges.
+    return level(
+        "Jackson §16.7: a bound charge",
+        "Jackson §16.7 models an atom's electron as a charge bound by a spring. Here the "
+        "spring is real electrostatics: inside a sphere of uniform positive charge (J. J. "
+        "Thomson's atom) the field grows linearly from the centre, so the electron is "
+        "pulled back in proportion to how far it strays, and oscillates harmonically. Pull "
+        "it out of the atom into the detector.",
+        shots=[shot(-1e-6, 1.0, (10, 10), 90.0, 1e-4, box((24, 8, 28, 12)))],
+        clouds=[cloud(10, 10, 4.0, 1e6)],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], c=None, t_max=300.0,
+        region=(2, 1, 28, 19))
+
+
+def jackson_resonance():
+    # Electron oscillating (amplitude 1) in a cloud with omega_0 = 0.125; antennas only on
+    # the left, far enough for a nearly uniform drive: a linear driven oscillator, whose
+    # amplitude grows only at resonance. With omega_0 removed from the frequency list no
+    # search finds a solution (even with two antennas); with it, 25 one-antenna ones.
+    w0 = cloud_omega(1e-6, 1e6, 4.0)
+    return level(
+        "Jackson §16.8: resonance",
+        "Jackson §16.8 (scattering and absorption of radiation by an oscillator). The bound "
+        "electron oscillates at its natural frequency ω₀ = 0.125. A weak field that "
+        "oscillates at ω₀ pushes it in step every cycle and its swing grows steadily; at any "
+        "other frequency the pushes cancel out. Tune an antenna (frequency, orientation, "
+        "place) so that the electron swings out of the atom into the detector.",
+        shots=[shot(-1e-6, 1.0, (15, 10), 90.0, 0.5 * w0 ** 2, box((20, 8, 22, 12)))],
+        clouds=[cloud(15, 10, 4.0, 1e6)], rf_omega=0.3, t_max=400.0,
+        max_antennas=2, amplitudes=[m * M for m in (0.1, 0.2, 0.5, 1)],
+        omegas=[round(w0 / 2, 4), round(w0, 4), round(2 * w0, 4), 0.3],
+        region=(2, 1, 7, 19))
+
+
+def jackson_bound_knock():
+    # Pr. 13.2: a passing charge transfers energy to a bound one. Unit charges, c = inf:
+    # electron (q = -1, m = 1) bound in a cloud (Q = 1, R = 4, omega_0 = 0.125); a heavy
+    # projectile (q = -1, m = 40, T0 = 4) flies past, repelling the electron (like
+    # charges: two opposite point charges in one beam could collide, which is not
+    # modelled). Both are one-particle beams so that they interact.
+    one = beam(1, 1.0, energy=0.0, angle_deg=0.0, width=0.0, length=0.0)
+    return level(
+        "Jackson Pr. 13.2: a kick for a bound charge",
+        "Jackson Problem 13.2: a charged particle flying past an atom gives its bound "
+        "electron a kick (here a heavy negative ion, which pushes the electron away). A quick pass is a sharp kick; a slow one lets the electron follow "
+        "and hand the energy back. Steer the projectile past the atom so that its kick "
+        "throws the electron out into the detector above; the projectile must still reach "
+        "the screen on the right.",
+        c=None, t_max=150.0, beam_interaction=True,
+        shots=[shot(-1.0, 40.0, (0, 6), 0.0, 4.0, box((27, 0, 30, 20)), beam=one),
+               shot(-1.0, 1.0, (15, 10), 0.0, 1e-6, box((12, 17, 18, 20)), beam=one)],
+        clouds=[cloud(15, 10, 4.0, 1.0)],
+        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0], region=(1, 1, 29, 19))
+
+
+def jackson_spectroscopy():
+    # Arc finale: two atoms of different sizes (R = 4 and 3: omega_0 = 0.125 and 0.192),
+    # an electron in each. Each must be driven out at its own resonance, without driving
+    # the other out too early or the wrong way.
+    w1, w2 = cloud_omega(1e-6, 1e6, 4.0), cloud_omega(1e-6, 1e6, 3.0)
+    return level(
+        "Jackson Ch. 16: spectroscopy",
+        "Finale of the Jackson arc on bound charges (§16.7-16.8). Two atoms of different "
+        "sizes, so two different natural frequencies: the big one rings at 0.125, the small "
+        "one at 0.192. Each electron must leave its atom into its own detector: drive each "
+        "at its own resonance, and keep each drive from upsetting the other atom.",
+        grid=(40, 20), t_max=500.0, rf_omega=0.3,
+        shots=[shot(-1e-6, 1.0, (13, 10), 90.0, 0.5 * w1 ** 2, box((18, 13, 21, 16))),
+               shot(-1e-6, 1.0, (27, 10), 90.0, 0.5 * w2 ** 2, box((19, 4, 22, 7)))],
+        clouds=[cloud(13, 10, 4.0, 1e6), cloud(27, 10, 3.0, 1e6)],
+        max_antennas=4, amplitudes=[m * M for m in (0.1, 0.2, 0.5, 1)],
+        omegas=[round(w1, 4), round(w2, 4), 0.25, 0.3],
+        max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1)],
+        region=(1, 1, 39, 19))
+
+
 def needs_elements(lvl, fewer):
     """Check that the level is not solved with only `fewer` charges anywhere (the
     solver with that cap must fail): a finale needs its modules. A heuristic check: a
@@ -1807,6 +1899,18 @@ ARCS = [
         ]),
         ("Master", [
             ("jackson_three_orbits", jackson_three_orbits),
+        ]),
+    ]),
+    ("Jackson: bound charges", [
+        ("Introduction", [
+            ("jackson_bound_charge", jackson_bound_charge),
+            ("jackson_resonance", jackson_resonance),
+        ]),
+        ("Intermediate", [
+            ("jackson_bound_knock", jackson_bound_knock),
+        ]),
+        ("Master", [
+            ("jackson_spectroscopy", jackson_spectroscopy),
         ]),
     ]),
 ]

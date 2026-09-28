@@ -45,6 +45,16 @@ E(r) = Σ_i k Q_i (r − r_i) / |r − r_i|³
 - Test particles are rigid, spherically symmetric and **non-polarizable** (a stated approximation, since a conducting microsphere would feel image forces). Under these assumptions, the force on a test particle of radius `a` equals `q E(center)` exactly, because the force between two non-overlapping spherically symmetric distributions equals the point-charge force.
 - Contact condition: `|x − r_i| ≤ R_i + a`, which means the particle is lost.
 
+### 2.1 Charge clouds (Thomson's atom) — *validated* (`field.rs::ChargeCloud`, tests C1–C2)
+
+A charge cloud is a sphere of uniform charge density (total `Q`, radius `R`) that particles fly through. Inside, Gauss's law gives exactly
+
+```
+E = Q d / R³,   φ = Q (3R² − |d|²) / (2R³)      (d = x − centre, |d| < R)
+```
+
+and outside it is a point charge. A charge `q` of the opposite sign is bound harmonically inside, with `ω₀² = |qQ| / (m R³)`: Jackson's model of a bound electron (§16.7), realised by electrostatics rather than a spring, so the potential, energy conservation, beams and the potential map need nothing new. The cloud is fixed (it does not recoil or deform), which is the model's approximation, stated in the game's model notes. Metal spheres and electrodes take a cloud as a point charge at its centre (their image systems see only its field outside itself); the level validation keeps clouds clear of metal and the placement check keeps player plates out of them, so this is exact.
+
 ## 2.2 Magnetic sources — *validated* (`crates/physics/src/magnetic.rs`, `field.rs::LevelField`)
 
 **Units.** Source strengths are given directly in field units, i.e. already multiplied by `μ₀/4π`:
@@ -581,6 +591,13 @@ History, so that the numbers above can be judged:
 | S4 | Charged particle with a moment gyrating in a coil's field, c = 5 | (γ−1)mc² − m B_z conserved (also the trajectory's own diagnostic) | < 1e-10 | 4.5e-11 |
 
 Found while writing G1: with a fixed step of 1e-3, the finite difference itself was off by 5e-5 at a point 0.03 cells from a wire (its error grows like (h/d)⁴); the exact gradient was right. The step now scales with the distance.
+
+### Charge-cloud tests (`cargo test --release -p physics --test clouds -- --nocapture`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| C1 | A cloud (Q = 2.5, R = 3) and a point charge: E against −∇φ (central differences), Gauss's law inside, continuity at the surface, the point-charge field outside | analytic | < 1e-8; < 1e-5; < 1e-10; exact | 1.6e-10; 4.1e-12; 3.5e-12; 0 |
+| C2 | Jackson Pr. 16.1: an electron oscillating in a cloud (ω₀ = 0.125, c = 2, ω₀τ = 0.010) with radiation reaction | oscillation energy decays as e^{−Γt}, Γ = ω₀²τ (fitted over five decay times) | < 2 % (Landau–Lifshitz vs Abraham–Lorentz: O(ω₀τ)) | 0.03 % |
 
 ### Beam tests (`cargo test --release -p physics --test beams -- --nocapture --test-threads=1`)
 

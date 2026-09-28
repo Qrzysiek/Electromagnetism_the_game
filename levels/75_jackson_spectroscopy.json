@@ -1,0 +1,172 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson Ch. 16: spectroscopy",
+  "description": "Finale of the Jackson arc on bound charges (§16.7-16.8). Two atoms of different sizes, so two different natural frequencies: the big one rings at 0.125, the small one at 0.192. Each electron must leave its atom into its own detector: drive each at its own resonance, and keep each drive from upsetting the other atom.",
+  "grid": {
+    "nx": 40,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "rf_omega": 0.3,
+    "t_max": 500.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": -1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          13,
+          10,
+          0
+        ],
+        "direction": [
+          6.123233995736766e-17,
+          1.0,
+          0.0
+        ],
+        "kinetic_energy": 0.0078125
+      },
+      "detector": {
+        "min": [
+          18,
+          13,
+          0
+        ],
+        "max": [
+          21,
+          16,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": -1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          27,
+          10,
+          0
+        ],
+        "direction": [
+          6.123233995736766e-17,
+          1.0,
+          0.0
+        ],
+        "kinetic_energy": 0.01851851851851852
+      },
+      "detector": {
+        "min": [
+          19,
+          4,
+          0
+        ],
+        "max": [
+          22,
+          7,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 2,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "max_antennas": 4,
+    "antenna_amplitudes": [
+      100000.0,
+      200000.0,
+      500000.0,
+      1000000.0
+    ],
+    "antenna_omegas": [
+      0.125,
+      0.1925,
+      0.25,
+      0.3
+    ],
+    "region": {
+      "min": [
+        1,
+        1,
+        0
+      ],
+      "max": [
+        39,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        5,
+        12,
+        0
+      ],
+      "kind": "antenna",
+      "value": 1000000.0,
+      "omega": 0.125
+    },
+    {
+      "node": [
+        22,
+        9,
+        0
+      ],
+      "kind": "antenna",
+      "value": -500000.0,
+      "omega": 0.1925
+    }
+  ],
+  "clouds": [
+    {
+      "center": [
+        13,
+        10,
+        0
+      ],
+      "radius": 4.0,
+      "charge": 1000000.0
+    },
+    {
+      "center": [
+        27,
+        10,
+        0
+      ],
+      "radius": 3.0,
+      "charge": 1000000.0
+    }
+  ]
+}

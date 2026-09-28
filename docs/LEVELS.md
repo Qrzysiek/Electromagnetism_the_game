@@ -93,6 +93,10 @@ verified reference solution for every shot and negligible radiation
 | 69 | Jackson Pr. 16.2: the classical atom | 8 Introduction | a radiating electron spirals into the nucleus; the detector counts only an electron slowed by its radiation | ≤ 3 charges | 1 |
 | 70 | Jackson Pr. 16.3: orbits circularize | 8 Intermediate | a circular and an elliptic orbit of the same energy; the ellipse radiates most near the nucleus | ≤ 3 charges | 1 |
 | 71 | Jackson Ch. 16: three orbits | 8 Master | three electrons on different orbits, all slowed by radiation into the detector in time | ≤ 6 charges | 3 |
+| 72 | Jackson §16.7: a bound charge | 9 Introduction | an electron bound harmonically inside a charge cloud (Thomson's atom); pull it out | ≤ 3 charges | 1 |
+| 73 | Jackson §16.8: resonance | 9 Introduction | a weak drive grows the bound electron's swing only at ω₀; tune an antenna | ≤ 2 antennas | 1 |
+| 74 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | a passing heavy particle kicks a bound electron out of its atom; the two interact | ≤ 3 charges | 1 |
+| 75 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
 
 ## Automatic detectors
 
@@ -268,6 +272,12 @@ Notes:
     ones in 2 of 24 runs. Every radiation-damping level needs radiation by construction:
     its detector accepts kinetic energy up to 0.26, and an electron that has not radiated
     arrives with at least 0.27 (test `radiation_levels_need_radiation` checks it).
+  - Jackson Ch. 16: spectroscopy: the reference drives each atom with its own antenna at
+    its own natural frequency (0.125 and 0.1925). In Jackson §16.8: resonance, with ω₀
+    removed from the frequency list, no search finds a solution even with two antennas:
+    the antennas stand far enough away for a nearly uniform drive, so the electron is a
+    linear oscillator. (Close to the atom, a strong antenna at 2ω₀ also worked, by
+    parametric resonance in its steep near field.)
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.

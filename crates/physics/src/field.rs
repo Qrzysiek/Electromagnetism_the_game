@@ -68,25 +68,58 @@ pub struct FixedCharge {
     pub radius: f64,
 }
 
-/// Exact Coulomb superposition of fixed charges, valid outside every sphere (the only
-/// region particles can reach). Summed in the order the charges are stored.
+/// A charge cloud: a sphere of uniform charge density that particles can fly through
+/// (J. J. Thomson's atom). Inside, `E = Q d / R³` and `φ = Q (3R² − |d|²) / (2R³)`, a
+/// linear restoring field: a charge q of the opposite sign oscillates harmonically with
+/// `ω₀² = |qQ| / (m R³)` (Jackson's bound charge, §16.7, Pr. 16.1). Outside it is a point
+/// charge.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChargeCloud {
+    pub position: DVec3,
+    pub charge: f64,
+    pub radius: f64,
+}
+
+/// Exact Coulomb superposition of fixed charges, valid outside every rigid sphere (the
+/// only region particles can reach), and of charge clouds, exact inside and outside.
+/// Summed in the order stored: the fixed charges, then the clouds.
 #[derive(Clone, Debug, Default)]
 pub struct Coulomb {
     positions: Vec<DVec3>,
     charges: Vec<f64>,
+    /// Radius of each source's uniform charge sphere if it is a cloud; 0 for a point
+    /// charge (a rigid sphere, whose inside is never reached).
+    radii: Vec<f64>,
 }
 
 impl Coulomb {
     pub fn new(charges: &[FixedCharge]) -> Self {
+        Self::with_clouds(charges, &[])
+    }
+
+    /// Fixed charges and charge clouds.
+    pub fn with_clouds(charges: &[FixedCharge], clouds: &[ChargeCloud]) -> Self {
         Self {
-            positions: charges.iter().map(|c| c.position).collect(),
-            charges: charges.iter().map(|c| c.charge).collect(),
+            positions: charges
+                .iter()
+                .map(|c| c.position)
+                .chain(clouds.iter().map(|c| c.position))
+                .collect(),
+            charges: charges
+                .iter()
+                .map(|c| c.charge)
+                .chain(clouds.iter().map(|c| c.charge))
+                .collect(),
+            radii: std::iter::repeat_n(0.0, charges.len())
+                .chain(clouds.iter().map(|c| c.radius))
+                .collect(),
         }
     }
 }
 
 impl Coulomb {
-    /// Positions and charges, in summation order.
+    /// Positions and charges, in summation order (clouds as point charges: their field
+    /// outside themselves, which is all that metal outside them sees).
     pub fn charges(&self) -> impl Iterator<Item = (DVec3, f64)> + '_ {
         self.positions
             .iter()
@@ -99,9 +132,17 @@ impl FieldSolver for Coulomb {
     fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
         let mut e = DVec3::ZERO;
         let mut phi = 0.0;
-        for (&r, &q) in self.positions.iter().zip(&self.charges) {
+        for ((&r, &q), &radius) in self.positions.iter().zip(&self.charges).zip(&self.radii) {
             let d = x - r;
-            let inv_r = 1.0 / d.length();
+            let dist2 = d.length_squared();
+            if dist2 < radius * radius {
+                // Inside a cloud: the uniform sphere's field.
+                let inv_r3 = 1.0 / (radius * radius * radius);
+                phi += q * (3.0 * radius * radius - dist2) * 0.5 * inv_r3;
+                e += d * (q * inv_r3);
+                continue;
+            }
+            let inv_r = 1.0 / dist2.sqrt();
             let q_inv_r = q * inv_r;
             phi += q_inv_r;
             e += d * (q_inv_r * inv_r * inv_r);

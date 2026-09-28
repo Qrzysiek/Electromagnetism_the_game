@@ -346,6 +346,38 @@ pub fn draw(
         }
     }
 
+    // Charge clouds: penetrable, so no solid fill: faint rings in the sign's colour
+    // (red positive, blue negative), and a dashed rim.
+    for c in &level.clouds {
+        let p = to_vec2(grid.position(c.center));
+        #[allow(clippy::cast_possible_truncation)]
+        let r = c.radius as f32;
+        let (red, green, blue) = if c.charge >= 0.0 {
+            (1.0, 0.45, 0.35)
+        } else {
+            (0.4, 0.65, 1.0)
+        };
+        for k in 1..=8 {
+            #[allow(clippy::cast_precision_loss)]
+            let rk = r * k as f32 / 8.0;
+            gizmos
+                .circle_2d(p, rk, Color::srgba(red, green, blue, 0.10))
+                .resolution(64);
+        }
+        for k in 0..48 {
+            if k % 2 == 1 {
+                continue;
+            }
+            #[allow(clippy::cast_precision_loss)]
+            let (a0, a1) = (TAU * k as f32 / 48.0, TAU * (k + 1) as f32 / 48.0);
+            gizmos.line_2d(
+                p + Vec2::from_angle(a0) * r,
+                p + Vec2::from_angle(a1) * r,
+                Color::srgba(red, green, blue, 0.7),
+            );
+        }
+    }
+
     // Metal spheres: a filled metallic disc, rim coloured by how it is held (grey:
     // grounded, red/blue: positive/negative charge or potential).
     for c in &level.conductors {

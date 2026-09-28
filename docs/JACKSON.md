@@ -35,7 +35,7 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 
 | Feature | What it is | Unlocks |
 |---|---|---|
-| **F:bound** (bound oscillator) | A charge on an isotropic spring `−k x` (mass m, charge e), optionally with damping. Driven by fields and by LL radiation reaction. | §16.7 line breadth; §16.8 scattering by an oscillator; Pr. 13.2/13.3 energy transfer to a bound charge; Pr. 16.1 exponential decay; Pr. 16.12 collision broadening; §4.6 polarizability model; §7.5 dispersion (Lorentz model); Thomson → Rayleigh crossover (Pr. 16.13 sum rule) |
+| **F:bound** (bound oscillator; *done* as the charge cloud) | A charge on an isotropic spring `−k x` (mass m, charge e), optionally with damping. Driven by fields and by LL radiation reaction. | §16.7 line breadth; §16.8 scattering by an oscillator; Pr. 13.2/13.3 energy transfer to a bound charge; Pr. 16.1 exponential decay; Pr. 16.12 collision broadening; §4.6 polarizability model; §7.5 dispersion (Lorentz model); Thomson → Rayleigh crossover (Pr. 16.13 sum rule) |
 | **F:prescribed** (prescribed-motion sources) | Charges moving on given paths (circle, SHM, figure-8), as radiation sources. | Pr. 9.2 rotating charges (quadrupole at 2ω); Pr. 14.4/14.12/14.14 harmonics of SHM and circular motion; Pr. 14.23/14.24 N charges on a ring (steady current doesn't radiate); Pr. 14.19/14.20 rotating/flipping moment |
 | **F:coils+** (more coil kinds) | Helmholtz pairs and solenoids with axis along z, symmetric about the plane (exact in the slice); cylindrical permanent magnets ⊥ plane. | Pr. 5.3/5.5/5.7 (solenoid, Helmholtz field uniformity), Pr. 5.19 (cylindrical magnet), uniform-B regions for §12.2–12.4 without an infinite field |
 | **F:ramp** (time-dependent coils, induction) | Coil currents ramped in time, with the induced `E = −∂A/∂t` (quasi-static, §5.15). | §5.15 Faraday's law; betatron (§5.15 + §12.5); Pr. 6.24 (E outside a changing solenoid); §12.5 adiabatic invariance of flux (slowly rising B) |
@@ -100,9 +100,21 @@ Arc 8, "Jackson: radiation damping" (Ch. 16):
   of the same energy.
 - Jackson Ch. 16: three orbits (master).
 
+Arc 9, "Jackson: bound charges" (§16.7–16.8, Pr. 13.2), built on the new charge cloud
+(F:bound, realised as Thomson's atom: an electron inside a sphere of uniform charge is
+bound harmonically, PHYSICS.md §2.1):
+
+- Jackson §16.7: a bound charge (introduction).
+- Jackson §16.8: resonance (introduction). Without the resonant frequency there is no
+  solution.
+- Jackson Pr. 13.2: a kick for a bound charge (intermediate). Unit charges, Newtonian;
+  without the interaction the reference fails.
+- Jackson Ch. 16: spectroscopy (master). Two atoms, two resonances.
+
 Validation tests from the book (PHYSICS.md): K5 (Pr. 2.4, golden ratio), M7 (Pr. 12.9b,
 equatorial drift), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
-collapse), R5 (Pr. 14.5b, radiation in a head-on collision).
+collapse), R5 (Pr. 14.5b, radiation in a head-on collision), C2 (Pr. 16.1, the
+radiating oscillator decays at Γ = ω₀²τ).
 
 ## Catalogue by chapter
 

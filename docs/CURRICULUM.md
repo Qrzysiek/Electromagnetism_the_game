@@ -61,6 +61,7 @@ and tier):
 | 6 Jackson: charges in fields and collisions (Ch. 12–13) | §12.3 E×B drift, Pr. 12.9 Van Allen equator, Pr. 13.1 knock-on | §12.4 gradient drift, Pr. 12.5 E×B runaway, §12.1 Störmer's forbidden region | **Magnetosphere**: steer the solar wind's E×B drift through two gates, then the gradient drift splits proton and electron around a dipole Earth |
 | 7 Jackson: conductors (Ch. 2–3) | §2.2 its own image, Pr. 2.6 two spheres | §3.13 field through a hole, Pr. 2.4 golden-ratio capture | **Sphere slalom**: weave between three spheres carrying the particle's charge |
 | 8 Jackson: radiation damping (Ch. 16) | Pr. 16.2 the classical atom | Pr. 16.3 orbits circularize | **Three orbits**: three radiating electrons, each shaped to collapse in time |
+| 9 Jackson: bound charges (§16.7–16.8, Pr. 13.2) | §16.7 a bound charge, §16.8 resonance | Pr. 13.2 a kick for a bound charge | **Spectroscopy**: two atoms, two natural frequencies, each driven at its own |
 
 Changes to existing levels: The wall and Injection were joined into Around the wall (the
 beam must enter the detector along the axis after going around the wall: two charges).

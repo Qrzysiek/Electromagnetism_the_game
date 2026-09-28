@@ -1,0 +1,118 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson §16.8: resonance",
+  "description": "Jackson §16.8 (scattering and absorption of radiation by an oscillator). The bound electron oscillates at its natural frequency ω₀ = 0.125. A weak field that oscillates at ω₀ pushes it in step every cycle and its swing grows steadily; at any other frequency the pushes cancel out. Tune an antenna (frequency, orientation, place) so that the electron swings out of the atom into the detector.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "rf_omega": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": -1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          15,
+          10,
+          0
+        ],
+        "direction": [
+          6.123233995736766e-17,
+          1.0,
+          0.0
+        ],
+        "kinetic_energy": 0.0078125
+      },
+      "detector": {
+        "min": [
+          20,
+          8,
+          0
+        ],
+        "max": [
+          22,
+          12,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "max_antennas": 2,
+    "antenna_amplitudes": [
+      100000.0,
+      200000.0,
+      500000.0,
+      1000000.0
+    ],
+    "antenna_omegas": [
+      0.0625,
+      0.125,
+      0.25,
+      0.3
+    ],
+    "region": {
+      "min": [
+        2,
+        1,
+        0
+      ],
+      "max": [
+        7,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        7,
+        7,
+        0
+      ],
+      "kind": "antenna",
+      "value": 1000000.0,
+      "angle_deg": 45.0,
+      "omega": 0.125
+    }
+  ],
+  "clouds": [
+    {
+      "center": [
+        15,
+        10,
+        0
+      ],
+      "radius": 4.0,
+      "charge": 1000000.0
+    }
+  ]
+}

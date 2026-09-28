@@ -170,6 +170,7 @@ pub fn empty_level() -> Level {
         reference_solution: Vec::new(),
         disturbances: Vec::new(),
         conductors: Vec::new(),
+        clouds: Vec::new(),
         electrodes: Vec::new(),
         gates: Vec::new(),
     }

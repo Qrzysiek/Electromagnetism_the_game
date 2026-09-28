@@ -9,9 +9,9 @@
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::{
-    Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Electrode, Element,
-    ElementKind, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2, Shot, TolerancesSpec,
-    Wave, WorldPhysics,
+    Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Electrode,
+    Element, ElementKind, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2, Shot,
+    TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -668,6 +668,53 @@ fn edit_conductors(ui: &mut egui::Ui, list: &mut Vec<Conductor>, grid: &Grid) ->
     focus
 }
 
+fn edit_clouds(ui: &mut egui::Ui, list: &mut Vec<Cloud>, grid: &Grid) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, c) in list.iter_mut().enumerate() {
+        let Cloud {
+            center,
+            radius,
+            charge,
+        } = c;
+        ui.push_id(("cloud", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Cloud {}", i + 1));
+                focus |= node(ui, center, grid);
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("radius");
+                focus |= positive(ui, radius, 0.05, MAX_POSITIVE);
+                ui.label("charge Q");
+                focus |= si(ui, charge, 1e4);
+            });
+        });
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize
+        && ui
+            .small_button("+ charge cloud")
+            .on_hover_text(
+                "A sphere of uniform charge that particles fly through (Thomson's atom): \
+                 inside, an opposite charge is bound harmonically.",
+            )
+            .clicked()
+    {
+        let m = grid.max_node();
+        list.push(Cloud {
+            center: [m[0] / 2, m[1] / 2, 0],
+            radius: 3.0,
+            charge: 1.0,
+        });
+    }
+    focus
+}
+
 /// Bias selector shared by metal spheres and electrodes.
 fn bias_editor(ui: &mut egui::Ui, id: (&str, usize), bias: &mut ConductorBias) -> bool {
     let kind = match bias {
@@ -995,6 +1042,7 @@ pub fn edit_level(
         reference_solution: _,
         disturbances,
         conductors,
+        clouds,
         electrodes,
         gates,
     } = level;
@@ -1042,6 +1090,8 @@ pub fn edit_level(
         .show(ui, |ui| focus |= edit_electrodes(ui, electrodes, &g));
     egui::CollapsingHeader::new(format!("Metal spheres ({})", conductors.len()))
         .show(ui, |ui| focus |= edit_conductors(ui, conductors, &g));
+    egui::CollapsingHeader::new(format!("Charge clouds ({})", clouds.len()))
+        .show(ui, |ui| focus |= edit_clouds(ui, clouds, &g));
     egui::CollapsingHeader::new(format!("Disturbances ({})", disturbances.len()))
         .show(ui, |ui| focus |= edit_disturbances(ui, disturbances));
     egui::CollapsingHeader::new(format!("Gates ({})", gates.len()))
@@ -1078,6 +1128,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         reference_solution,
         disturbances,
         conductors,
+        clouds,
         electrodes,
         gates,
     } = level;
@@ -1300,6 +1351,22 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         };
         if !on_grid(center) || !(MIN_POSITIVE..=MAX_POSITIVE).contains(radius) || !value_ok {
             return fail("metal sphere outside the editor's range");
+        }
+    }
+    if clouds.len() > MAX_COUNT as usize {
+        return fail("too many charge clouds");
+    }
+    for c in clouds {
+        let Cloud {
+            center,
+            radius,
+            charge,
+        } = c;
+        if !on_grid(center)
+            || !(MIN_POSITIVE..=MAX_POSITIVE).contains(radius)
+            || !charge.is_finite()
+        {
+            return fail("charge cloud outside the editor's range");
         }
     }
     if disturbances.len() > MAX_COUNT as usize {

@@ -230,6 +230,30 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Jackson: bound charges",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "jackson_bound_charge",
+            "jackson_resonance"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "jackson_bound_knock"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "jackson_spectroscopy"
+          ]
+        }
+      ]
     }
   ]
 }
