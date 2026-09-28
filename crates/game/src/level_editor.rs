@@ -10,8 +10,8 @@ use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Electrode,
-    Element, ElementKind, FreeParticle, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2,
-    Shot, TolerancesSpec, Wave, WorldPhysics,
+    Element, ElementKind, FreeParticle, Grid, Launch, Level, Limits, Node, ParticleSpec,
+    RadiationGoal, Region2, Shot, TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -307,18 +307,27 @@ fn edit_shot(ui: &mut egui::Ui, s: &mut Shot, grid: &Grid) -> bool {
     focus |= row(ui, "Detector corner 1", |ui| node(ui, min, grid));
     focus |= row(ui, "Detector corner 2", |ui| node(ui, max, grid));
     // Optional conditions on the arriving particle.
-    focus |= edit_acceptance(ui, acceptance);
+    focus |= edit_acceptance(ui, acceptance, true);
     focus |= edit_beam(ui, beam);
     focus
 }
 
 /// A shot fired as a beam (`level::beam`): count, spreads, distribution, required
 /// transmission and seed.
-/// Optional conditions on a particle entering a detector or gate: direction and energy.
-fn edit_acceptance(ui: &mut egui::Ui, acceptance: &mut Option<DetectorAcceptance>) -> bool {
+/// Optional conditions on a particle entering a detector or gate: direction and energy,
+/// and (shot detectors only, `radiation_allowed`) the flight's radiation.
+fn edit_acceptance(
+    ui: &mut egui::Ui,
+    acceptance: &mut Option<DetectorAcceptance>,
+    radiation_allowed: bool,
+) -> bool {
     let mut focus = false;
     let mut acc = acceptance.unwrap_or_default();
-    let DetectorAcceptance { direction, kinetic } = &mut acc;
+    let DetectorAcceptance {
+        direction,
+        kinetic,
+        radiation,
+    } = &mut acc;
     focus |= row(ui, "Accept direction", |ui| {
         let mut on = direction.is_some();
         ui.checkbox(&mut on, "");
@@ -361,8 +370,104 @@ fn edit_acceptance(ui: &mut egui::Ui, acceptance: &mut Option<DetectorAcceptance
         }
         f
     });
+    if radiation_allowed {
+        focus |= edit_radiation(ui, radiation);
+    }
     *acceptance = (acc != DetectorAcceptance::default()).then_some(acc);
     focus
+}
+
+/// A radiation goal: arc of directions, optional frequency band, energy per steradian.
+fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> bool {
+    let mut focus = row(ui, "Radiation goal", |ui| {
+        let mut on = radiation.is_some();
+        ui.checkbox(&mut on, "")
+            .on_hover_text("Energy per steradian radiated into an arc of directions (far zone)");
+        match (on, radiation.is_some()) {
+            (true, false) => {
+                *radiation = Some(RadiationGoal {
+                    direction: [0.0, 10.0],
+                    band: None,
+                    energy: [0.0, 1.0],
+                });
+            }
+            (false, true) => *radiation = None,
+            _ => {}
+        }
+        false
+    });
+    let Some(RadiationGoal {
+        direction: [axis, half],
+        band,
+        energy: [lo, hi],
+    }) = radiation
+    else {
+        return focus;
+    };
+    focus |= row(ui, "  directions", |ui| {
+        let f = ui
+            .add(egui::DragValue::new(axis).speed(1.0).suffix("°"))
+            .on_hover_text("Axis, degrees from +x")
+            .has_focus();
+        ui.label("±");
+        f | ui
+            .add(
+                egui::DragValue::new(half)
+                    .speed(0.5)
+                    .range(0.0..=180.0)
+                    .suffix("°"),
+            )
+            .has_focus()
+    });
+    focus |= row(ui, "  band ω", |ui| {
+        let mut on = band.is_some();
+        ui.checkbox(&mut on, "");
+        match (on, band.is_some()) {
+            (true, false) => *band = Some([0.5, 1.5]),
+            (false, true) => *band = None,
+            _ => {}
+        }
+        let mut f = false;
+        if let Some([a, b]) = band {
+            f |= si(ui, a, 0.01);
+            ui.label("–");
+            f |= si(ui, b, 0.01);
+        }
+        f
+    });
+    focus |= row(ui, "  energy / sr", |ui| {
+        si(ui, lo, 0.01) | {
+            ui.label("–");
+            si(ui, hi, 0.01)
+        }
+    });
+    focus
+}
+
+/// Whether an acceptance's values are in the editor's range (a radiation goal only where
+/// `radiation_allowed`: shot detectors).
+fn acceptance_in_range(a: &DetectorAcceptance, radiation_allowed: bool) -> bool {
+    let DetectorAcceptance {
+        direction,
+        kinetic,
+        radiation,
+    } = a;
+    let window = |[lo, hi]: [f64; 2]| lo.is_finite() && hi.is_finite() && lo < hi;
+    direction.is_none_or(|[x, h]| x.is_finite() && (0.0..=180.0).contains(&h))
+        && kinetic.is_none_or(window)
+        && radiation.is_none_or(|r| {
+            let RadiationGoal {
+                direction: [x, h],
+                band,
+                energy,
+            } = r;
+            radiation_allowed
+                && x.is_finite()
+                && (0.0..=180.0).contains(&h)
+                && band.is_none_or(|b| window(b) && b[0] >= 0.0)
+                && window(energy)
+                && energy[0] >= 0.0
+        })
 }
 
 fn edit_free_particles(ui: &mut egui::Ui, list: &mut Vec<FreeParticle>, grid: &Grid) -> bool {
@@ -430,7 +535,7 @@ fn edit_free_particles(ui: &mut egui::Ui, list: &mut Vec<FreeParticle>, grid: &G
             {
                 focus |= row(ui, "  corner 1", |ui| node(ui, min, grid));
                 focus |= row(ui, "  corner 2", |ui| node(ui, max, grid));
-                focus |= edit_acceptance(ui, acceptance);
+                focus |= edit_acceptance(ui, acceptance, false);
             }
         });
     }
@@ -474,7 +579,7 @@ fn edit_gates(ui: &mut egui::Ui, list: &mut Vec<Detector>, grid: &Grid) -> bool 
             });
             focus |= row(ui, "  corner 1", |ui| node(ui, min, grid));
             focus |= row(ui, "  corner 2", |ui| node(ui, max, grid));
-            focus |= edit_acceptance(ui, acceptance);
+            focus |= edit_acceptance(ui, acceptance, false);
         });
     }
     if let Some(i) = remove {
@@ -1304,11 +1409,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             max,
             acceptance,
         } = g;
-        let acc_ok = acceptance.is_none_or(|a| {
-            let DetectorAcceptance { direction, kinetic } = a;
-            direction.is_none_or(|[x, h]| x.is_finite() && (0.0..=180.0).contains(&h))
-                && kinetic.is_none_or(|[lo, hi]| lo.is_finite() && hi.is_finite() && lo < hi)
-        });
+        let acc_ok = acceptance.is_none_or(|a| acceptance_in_range(&a, false));
         if !grid.contains(*min) || !grid.contains(*max) || !acc_ok {
             return Err("gate outside the editor's range".into());
         }
@@ -1414,11 +1515,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             || !time.is_finite()
             || !on_grid(min)
             || !on_grid(max)
-            || !acceptance.is_none_or(|a| {
-                let DetectorAcceptance { direction, kinetic } = a;
-                direction.is_none_or(|[x, h]| x.is_finite() && (0.0..=180.0).contains(&h))
-                    && kinetic.is_none_or(|[lo, hi]| lo.is_finite() && hi.is_finite() && lo < hi)
-            })
+            || !acceptance.is_none_or(|a| acceptance_in_range(&a, true))
         {
             return Err(format!(
                 "shot {} has a value outside the editor's range",
@@ -1552,12 +1649,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             } = d;
             on_grid(&min)
                 && on_grid(&max)
-                && acceptance.is_none_or(|a| {
-                    let DetectorAcceptance { direction, kinetic } = a;
-                    direction.is_none_or(|[x, h]| x.is_finite() && (0.0..=180.0).contains(&h))
-                        && kinetic
-                            .is_none_or(|[lo, hi]| lo.is_finite() && hi.is_finite() && lo < hi)
-                })
+                && acceptance.is_none_or(|a| acceptance_in_range(&a, false))
         });
         if !on_grid(node)
             || !charge.is_finite()

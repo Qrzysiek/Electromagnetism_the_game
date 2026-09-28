@@ -66,15 +66,17 @@ class Auto:
         self.strip, self.axis, self.size = strip, axis, size
 
 
-def box(b, direction=None, kinetic=None):
+def box(b, direction=None, kinetic=None, radiation=None):
     """Detector box; optional acceptance: direction = (axis_deg, half_angle_deg),
-    kinetic = (min, max)."""
+    kinetic = (min, max), radiation = a radiation goal (`radiation_goal`)."""
     d = {"min": [b[0], b[1], 0], "max": [b[2], b[3], 0]}
     acc = {}
     if direction is not None:
         acc["direction"] = list(direction)
     if kinetic is not None:
         acc["kinetic"] = list(kinetic)
+    if radiation is not None:
+        acc["radiation"] = radiation
     if acc:
         d["acceptance"] = acc
     return d
@@ -87,6 +89,16 @@ def beam(count, transmission, energy=0.01, angle_deg=0.5, width=0.2, length=0.2,
     return {"count": count, "energy_spread": energy, "angle_spread_deg": angle_deg,
             "width": width, "length": length, "distribution": distribution,
             "transmission": transmission, "seed": seed}
+
+
+def radiation_goal(axis_deg, half_deg, energy, band=None):
+    """Radiation goal of a shot's detector (PHYSICS.md §3.4): the energy per steradian the
+    flight radiates into the directions axis ± half (degrees), in all frequencies or in
+    `band` = (omega_min, omega_max), must lie in `energy` = (min, max)."""
+    g = {"direction": [axis_deg, half_deg], "energy": list(energy)}
+    if band is not None:
+        g["band"] = list(band)
+    return g
 
 
 def shot(q, m, node, angle_deg, ke, detector, time=0.0, moment=0.0, beam=None):
@@ -1951,6 +1963,122 @@ FINALES = {"sorting_station": 4}
 MUST_FAIL_ALONE = {"chromatic_aberration", "real_analyzer", "crt_earth_field",
                    "calutron_space_charge", "beam_pipe", "soft_landing_current"}
 
+# --- Jackson Ch. 14: radiation goals (PHYSICS.md §3.4) -------------------------------
+# A world at c = 2 with a charge of 1/40 at gamma = 3 (T0 = 8): it radiates noticeably (a
+# few per cent of its energy in a tight bend), so radiation reaction is included
+# (Landau-Lifshitz). With a charge of 0.1 the tight bends radiated half the energy and
+# max |F_RR| / max |F_L| reached 0.19: the charge was lowered (the ratio scales as q^2 at
+# fixed q x magnet strength, the trajectories do not change) to keep it near 0.012. A
+# radiation goal is a receiver far away, covering an arc of directions in the plane; it
+# measures the energy per steradian of the whole flight (in all frequencies or in a band).
+RAD_C = 2.0
+RAD_T0 = (3.0 - 1.0) * RAD_C * RAD_C
+RAD_Q = 1.0 / 40.0
+RAD_MAGNETS = [40.0, 80.0, 160.0, 320.0]
+
+
+def jackson_beaming():
+    # Jackson §14.3: a relativistic charge radiates into a cone of ~1/gamma (19 degrees)
+    # around its velocity. Straight on (no magnet) it radiates nothing; a bend that sweeps
+    # its velocity through 30 degrees lights the receiver, one that bends it down barely
+    # does (from 0 degrees, emission at 30 degrees is ~1e4 weaker). 80 of the 3308
+    # single-magnet placements that reach the dump pass 6e-4 per steradian.
+    return level(
+        "Jackson §14.3: forward beaming",
+        "Jackson §14.3: a fast charge radiates when it is accelerated, and almost all of it "
+        "goes forward, into a narrow cone around its velocity (half-angle about 1/γ; here "
+        "γ = 3, so about 19°). A receiver far away, at 30° (the band outside the arena), "
+        "must collect at least 0.0006 per steradian from the flight. Flying straight the "
+        "particle does not radiate at all: bend it so that it heads for the receiver "
+        "while it is being bent. It may end anywhere on the right edge. (c = 2 cells per "
+        "time unit; radiation reaction is included.)",
+        grid=(40, 20), c=RAD_C, t_max=100.0, radiation_reaction=True,
+        shots=[shot(RAD_Q, 1.0, (2, 5), 0.0, RAD_T0,
+                    box((38, 0, 40, 20), radiation=radiation_goal(30.0, 5.0, (6e-4, 1e3))))],
+        max_magnets=3, strengths=RAD_MAGNETS, region=(5, 2, 34, 18))
+
+
+def jackson_critical_frequency():
+    # Jackson §14.6: a bend of radius R flashes the receiver for a time ~R/(gamma^3 c), so
+    # its spectrum reaches up to the critical frequency ~ (3/2) gamma^3 c / R (81/R here).
+    # The band [80, 160] needs R of a cell or two: a strong magnet close to the path. A
+    # gentle bend (e.g. a magnet of 40 three cells away) puts ~4e-14 per steradian there,
+    # a tight one ~2e-4 (minimum 6e-5).
+    return level(
+        "Jackson §14.6: the critical frequency",
+        "Jackson §14.6: the radiation of a bend reaches the receiver as a short flash, the "
+        "shorter the tighter the bend, and a short flash contains high frequencies: up to "
+        "about (3/2) γ³ c / R for a bend of radius R. This receiver, at −30°, only counts "
+        "angular frequencies from 80 to 160 (the shaded band of the spectrum in the "
+        "panel). Bend the particle hard enough, while it heads for the receiver, to "
+        "deliver at least 0.00006 per steradian in that band.",
+        grid=(40, 20), c=RAD_C, t_max=100.0, radiation_reaction=True,
+        shots=[shot(RAD_Q, 1.0, (2, 15), 0.0, RAD_T0,
+                    box((38, 0, 40, 20), radiation=radiation_goal(-30.0, 5.0, (6e-5, 1e3),
+                                                                  band=(80.0, 160.0))))],
+        max_magnets=3, strengths=RAD_MAGNETS, region=(5, 2, 34, 18))
+
+
+def jackson_quiet_turn():
+    # Jackson §14.2-14.3: turning from 0 to 90 degrees sweeps the velocity through 45
+    # degrees, and the receiver there gets energy per steradian ~ a^2 x (time in the
+    # cone) ~ 1/R: gentle turns are quiet. The detector wants the particle heading up
+    # (90 +- 30 degrees) and the receiver at 45 degrees at most 6e-3 per steradian. A
+    # second way: turn the other way round (clockwise, through -90 and 180 degrees), and
+    # the velocity never points at the receiver (the search's one-magnet solutions loop
+    # round a magnet: 2.7e-4 per steradian).
+    return level(
+        "Jackson §14.2: a quiet turn",
+        "Jackson §14.2–14.3: bring the particle to the detector at the top, heading up "
+        "(within 30°), without lighting the receiver at 45°: it may collect at most 0.006 "
+        "per steradian. Any turn from right to up sweeps the velocity through 45°, and "
+        "the radiation follows the velocity. The energy that reaches the receiver falls "
+        "with the radius of the turn (the power grows with the acceleration squared, the "
+        "time in the cone only with the radius). Or is there a way to turn without ever "
+        "heading for the receiver?",
+        grid=(40, 20), c=RAD_C, t_max=100.0, radiation_reaction=True,
+        shots=[shot(RAD_Q, 1.0, (2, 3), 0.0, RAD_T0,
+                    box((24, 17, 40, 20), direction=(90.0, 30.0),
+                        radiation=radiation_goal(45.0, 5.0, (0.0, 6e-3))))],
+        max_magnets=5, strengths=RAD_MAGNETS, region=(5, 2, 36, 16))
+
+
+def jackson_undulator():
+    # Jackson §14.7: magnets of alternating sign every s cells wiggle the particle with
+    # period lambda_u = 2s; on the axis the wiggles add up coherently at
+    # omega_1 = 2 gamma^2 omega_u / (1 + K^2/2), omega_u = 2 pi v / lambda_u: ~107/s here
+    # (K << 1). The band [34, 38] wants s = 3 (a line at 36; s = 2 puts it at ~50, s = 4
+    # at ~27). Ten magnets of 40 at spacing 3, two cells from the path (half strength at
+    # the ends, so that the particle leaves straight) deliver 2.0e-4 per steradian into
+    # the band; the same row at spacing 2 or 4, 1e-5 and 3e-6; the line grows as the
+    # number of periods squared. The particle must arrive on the axis heading straight
+    # (0 +- 3 degrees), as an undulator must not steer the beam: without that, a pair of
+    # magnets that steered it close past a magnet near the end made a hard flash of 4.7e-4
+    # (the best of 300 random pairs); with it, the best random pair or triple delivers
+    # 4e-5 and 6.7e-5. Minimum 1e-4. The search also finds three-magnet solutions (e.g.
+    # -40 at (5, 8), 20 at (18, 8), -40 at (32, 7)): kicks far apart whose flashes
+    # interfere, fringes ~2 pi / (delay) ~ 8 apart in omega, one in the band. That is an
+    # undulator's principle with few periods; the random solve rate is 2e-3.
+    return level(
+        "Jackson §14.7: undulator",
+        "Jackson §14.7: a row of magnets of alternating sign wiggles a fast particle, and "
+        "seen from straight ahead the wiggles' radiation adds up at one frequency, "
+        "ω₁ = 2γ²ω_u/(1 + K²/2), where ω_u = 2πv/λ_u is the wiggle frequency and K the "
+        "wiggle strength: the Doppler effect squeezes a slow wiggle into a fast wave. "
+        "Build an undulator that delivers at least 0.0001 per steradian to the receiver "
+        "straight ahead, in the band 34–38, and lets the particle go on straight along the "
+        "axis into the detector. The spacing sets the frequency, the number of periods the "
+        "strength of the line. (Half-strength magnets at the ends keep the particle on "
+        "course.)",
+        grid=(40, 20), c=RAD_C, t_max=100.0, radiation_reaction=True,
+        shots=[shot(RAD_Q, 1.0, (2, 10), 0.0, RAD_T0,
+                    box((38, 9, 40, 11), direction=(0.0, 3.0),
+                        radiation=radiation_goal(0.0, 1.0, (1e-4, 1e3), band=(34.0, 38.0))))],
+        reference=[magnet(6 + 3 * k, 8, 40.0 * (-1) ** k * (0.5 if k in (0, 9) else 1.0))
+                   for k in range(10)],
+        max_magnets=12, strengths=[10.0, 20.0, 40.0], region=(4, 6, 36, 8))
+
+
 
 # Arcs: (name, [(tier, [(slug, function)])]). The level files are numbered in this order;
 # `levels/curriculum.json` tells the game each level's arc and tier.
@@ -2103,6 +2231,18 @@ ARCS = [
         ]),
         ("Master", [
             ("jackson_spectroscopy", jackson_spectroscopy),
+        ]),
+    ]),
+    ("Jackson: radiation", [
+        ("Introduction", [
+            ("jackson_beaming", jackson_beaming),
+            ("jackson_critical_frequency", jackson_critical_frequency),
+        ]),
+        ("Intermediate", [
+            ("jackson_quiet_turn", jackson_quiet_turn),
+        ]),
+        ("Master", [
+            ("jackson_undulator", jackson_undulator),
         ]),
     ]),
 ]

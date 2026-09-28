@@ -62,6 +62,7 @@ and tier):
 | 7 Jackson: conductors (Ch. 2–3) | §2.2 its own image, Pr. 2.6 two spheres | §3.13 field through a hole, Pr. 2.4 golden-ratio capture | **Sphere slalom**: weave between three spheres carrying the particle's charge |
 | 8 Jackson: radiation damping (Ch. 16) | Pr. 16.2 the classical atom | Pr. 16.3 orbits circularize | **Three orbits**: three radiating electrons, each shaped to collapse in time |
 | 9 Jackson: bound charges (§16.7–16.8, Pr. 13.2) | §16.7 a bound charge, §16.8 resonance | Pr. 13.2 a kick for a bound charge | **Spectroscopy**: two atoms, two natural frequencies, each driven at its own |
+| 10 Jackson: radiation (Ch. 14) | §14.3 forward beaming (the radiation goal), §14.6 the critical frequency (the band) | §14.2 a quiet turn | **Undulator**: an alternating row whose Doppler-squeezed line lands in the band, without steering the beam |
 
 Changes to existing levels: The wall and Injection were joined into Around the wall (the
 beam must enter the detector along the axis after going around the wall: two charges).

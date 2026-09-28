@@ -8,7 +8,7 @@ verified reference solution for every shot and negligible radiation
 
 ## Curriculum rules
 
-- The levels form five arcs (docs/CURRICULUM.md; `ARCS` in `scripts/levels.py`, written
+- The levels form arcs (docs/CURRICULUM.md; `ARCS` in `scripts/levels.py`, written
   to `levels/curriculum.json`). Each arc has introductions (one new element or condition
   each), intermediate levels (the arc's modules interact, or an earlier design meets a
   real effect) and a master level (a multi-stage finale built from the arc's modules).
@@ -100,6 +100,10 @@ verified reference solution for every shot and negligible radiation
 | 76 | Jackson §16.8: resonance | 9 Introduction | a weak drive grows the bound electron's swing only at ω₀; tune an antenna | ≤ 2 antennas | 1 |
 | 77 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | the player throws a heavy negative ion past an atom; its field kicks the orbiting electron out into the detector | ≤ 3 free charges (mass 40) | 1 |
 | 78 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
+| 79 | Jackson §14.3: forward beaming | 10 Introduction | a radiation goal: a far receiver at 30° must collect ≥ 6e-4 per steradian; the radiation is beamed along the velocity (1/γ = 19°), so bend the particle while it heads for the receiver | ≤ 3 magnets | 1 |
+| 80 | Jackson §14.6: the critical frequency | 10 Introduction | a band goal: only ω 80–160 counts at −30°; a tight bend's short flash reaches ~(3/2)γ³c/R | ≤ 3 magnets | 1 |
+| 81 | Jackson §14.2: a quiet turn | 10 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
+| 82 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 
 ## Automatic detectors
 
@@ -294,6 +298,26 @@ Notes:
   - Bound electrons start on an orbit (radius 2, v = ω₀r), as an atom's electron does, not
     at rest at the atom's centre (the owner's review: at rest, the approaching ion set
     it moving before the kick, and the solutions used that).
+  - Radiation goals (arc 10, PHYSICS.md §3.4): a world at c = 2 with a charge of 1/40 at
+    γ = 3, radiation reaction included. With a charge of 0.1 the tight bends radiated half
+    the particle's energy and max |F_RR| / max |F_L| reached 0.19; at 1/40 (magnets ×4, the
+    same trajectories) it is 0.018–0.022 and they radiate 6–8 %. Measured (analyze
+    --fewest, 16 runs): forward beaming random solve rate 4.4e-2, fewest 1; critical
+    frequency 2.5e-2, fewest 1; quiet turn 3.0e-3, fewest 2; undulator 2.0e-3, fewest 3.
+  - Forward beaming: 80 of the 3308 single-magnet placements that reach the dump pass the
+    goal; flying straight radiates nothing.
+  - Quiet turn: besides gentle turns, one magnet can loop the particle clockwise
+    (0° → −90° → 180° → 90°), so its velocity never points at the receiver at 45°: the
+    reference does that (6.1e-4 per steradian). Radiation goes where the particle heads
+    while it is accelerated.
+  - Undulator: the first version (band 31–41, any exit) was solved by two magnets and by
+    6 % of random placements: a pair that steered the particle close past a magnet near
+    the end made a hard, broadband flash (4.7e-4 per steradian in the band against 2e-4
+    for the whole row). Now the particle must arrive on the axis heading straight
+    (0° ± 3°), as an undulator must not steer the beam, and the band is 34–38: the best
+    of 300 random pairs or triples then delivers 4e-5 and 6.7e-5 (minimum 1e-4). The
+    search still finds three-magnet solutions: kicks far apart whose flashes interfere
+    (fringes 2π/delay ≈ 8 apart in ω), an undulator of few periods.
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.

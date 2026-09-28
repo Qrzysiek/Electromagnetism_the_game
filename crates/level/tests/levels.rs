@@ -187,9 +187,10 @@ fn neglected_radiation_is_below_numerical_accuracy() {
 
 /// Levels that include radiation reaction must need it (otherwise the radiation is
 /// decoration): with radiation switched off, either the reference solution no longer
-/// solves them, or (beams) the radiation that would be neglected is above the 1e-10 of
-/// the launch energy allowed for neglected radiation, so the model needs it to be
-/// consistent.
+/// solves them, or the radiation that would be neglected is above the 1e-10 of the
+/// launch energy allowed for neglected radiation, so the model needs it to be consistent
+/// (beams; and levels whose goal is the radiation itself, where a particle that radiates
+/// enough to be measured must also feel it).
 #[test]
 fn radiation_levels_need_radiation() {
     for (name, mut level) in shipped_levels() {
@@ -214,11 +215,19 @@ fn radiation_levels_need_radiation() {
             );
             continue;
         }
-        let all_arrive = level
-            .verify_flights(&level.reference_solution)
+        let flights = level.verify_flights(&level.reference_solution);
+        let all_arrive = flights.iter().all(|v| v.outcome() == Outcome::Arrived);
+        let radiated = flights
             .iter()
-            .all(|v| v.outcome() == Outcome::Arrived);
-        assert!(!all_arrive, "{name} is solved without radiation reaction");
+            .map(|v| v.verified.radiated_energy / v.verified.kinetic_initial)
+            .fold(0.0f64, f64::max);
+        println!(
+            "{name}: without radiation reaction solved {all_arrive}, radiates up to {radiated:.1e}"
+        );
+        assert!(
+            !all_arrive || radiated >= 1e-10,
+            "{name} is solved without radiation reaction, which it does not need"
+        );
     }
 }
 

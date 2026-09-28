@@ -257,6 +257,30 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Jackson: radiation",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "jackson_beaming",
+            "jackson_critical_frequency"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "jackson_quiet_turn"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "jackson_undulator"
+          ]
+        }
+      ]
     }
   ]
 }

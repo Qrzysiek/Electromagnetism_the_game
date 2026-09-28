@@ -104,6 +104,7 @@ fn gate_direction_window() {
         acceptance: Some(Acceptance {
             direction: Some((DVec3::X, 5f64.to_radians())),
             kinetic: None,
+            radiation: None,
         }),
     };
     for (deg, expected) in [(10.0, Outcome::SkippedGate(0)), (2.0, Outcome::Arrived)] {

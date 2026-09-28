@@ -55,6 +55,11 @@ pub struct Preview {
     /// Bound on the electrodes' neglected image force along the path, relative to the
     /// force that matters (`level::electrode_image_force_bound`); 0 without electrodes.
     pub image_force_bound: f64,
+    /// With a radiation goal, on arrival: the measured energy per steradian.
+    pub radiation: Option<f64>,
+    /// With a radiation goal that has a band: the spectrum over the goal's directions,
+    /// `(ω, d²I/dω dΩ)`, from 0 to twice the band's top.
+    pub spectrum: Vec<(f64, f64)>,
 }
 
 /// Preview of a beam flight (`level::beam`): every particle's path `(t, x)`, its shot
@@ -596,6 +601,25 @@ fn preview_shot(
         radiation_loss_fraction: -traj.radiation_work / traj.kinetic_initial,
         reaction_ratio_max: traj.reaction_ratio_max,
         image_force_bound,
+        // Measured for the verdict on arrival; otherwise for display, on the flight so far.
+        radiation: traj.radiation.or_else(|| {
+            let w = scn.acceptance.and_then(|a| a.radiation)?;
+            (!traj.emission.is_empty())
+                .then(|| w.measure(&traj.emission, scn.particle.charge, scn.c))
+        }),
+        spectrum: match scn.acceptance.and_then(|a| a.radiation) {
+            Some(w) if w.band.is_some() && !traj.emission.is_empty() => {
+                physics::spectrum::arc_spectrum(
+                    &w,
+                    &traj.emission,
+                    scn.particle.charge,
+                    scn.c,
+                    2.0 * w.top_frequency(),
+                    160,
+                )
+            }
+            _ => Vec::new(),
+        },
     };
     Some((traj, preview))
 }

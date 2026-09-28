@@ -682,10 +682,15 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                             last.kinetic
                         ));
                     }
-                    ui.label(
-                        egui::RichText::new(format!("Detector accepts: {}", parts.join("; ")))
-                            .small(),
-                    );
+                    if !parts.is_empty() {
+                        ui.label(
+                            egui::RichText::new(format!("Detector accepts: {}", parts.join("; ")))
+                                .small(),
+                        );
+                    }
+                    if let Some(r) = acc.radiation {
+                        radiation_goal(ui, &r, p);
+                    }
                 }
                 match verdict {
                     None => {
@@ -1923,6 +1928,82 @@ fn colour_bar(ui: &mut egui::Ui, game: &Game, radiation: &crate::radiation::Radi
                 if signed { "±B_z" } else { "|E|" }
             )
         })
+        .small(),
+    );
+}
+
+/// A radiation goal: what is required, what the flight radiates into it, and (with a
+/// band) the spectrum over the goal's directions with the band marked.
+fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::worker::Preview) {
+    let [axis, half] = goal.direction;
+    let [lo, hi] = goal.energy;
+    let band = goal.band.map_or("all frequencies".to_string(), |[a, b]| {
+        format!("ω {a:.3}–{b:.3}")
+    });
+    let need = if lo > 0.0 {
+        format!("{} – {} per sr", fmt_si(lo), fmt_si(hi))
+    } else {
+        format!("below {} per sr", fmt_si(hi))
+    };
+    ui.label(
+        egui::RichText::new(format!(
+            "Radiation goal: into {axis:.0}° ± {half:.0}°, {band}: {need}"
+        ))
+        .small(),
+    );
+    if let Some(e) = p.radiation {
+        let ok = e >= lo && e <= hi;
+        let color = if ok {
+            egui::Color32::from_rgb(90, 240, 110)
+        } else {
+            egui::Color32::from_rgb(255, 170, 80)
+        };
+        ui.colored_label(
+            color,
+            egui::RichText::new(format!("Radiated into it: {} per sr", fmt_si(e))).small(),
+        );
+    }
+    if p.spectrum.is_empty() {
+        return;
+    }
+    // The spectrum d²I/dωdΩ from 0 to twice the band's top, the band shaded.
+    let (w, h) = (ui.available_width().min(300.0), 70.0);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover());
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 2.0, egui::Color32::from_gray(25));
+    let omega_max = 2.0 * goal.band.map_or(1.0, |b| b[1]);
+    #[allow(clippy::cast_possible_truncation)]
+    let x_of = |omega: f64| rect.left() + (omega / omega_max) as f32 * rect.width();
+    if let Some([a, b]) = goal.band {
+        painter.rect_filled(
+            egui::Rect::from_x_y_ranges(x_of(a)..=x_of(b), rect.y_range()),
+            0.0,
+            egui::Color32::from_rgba_unmultiplied(90, 240, 110, 40),
+        );
+    }
+    let peak = p.spectrum.iter().map(|s| s.1).fold(0.0, f64::max);
+    if peak > 0.0 {
+        #[allow(clippy::cast_possible_truncation)]
+        let points: Vec<egui::Pos2> = p
+            .spectrum
+            .iter()
+            .map(|&(omega, v)| {
+                egui::pos2(
+                    x_of(omega),
+                    rect.bottom() - 2.0 - (v / peak) as f32 * (h - 6.0),
+                )
+            })
+            .collect();
+        painter.add(egui::Shape::line(
+            points,
+            egui::Stroke::new(1.5, egui::Color32::from_rgb(240, 220, 120)),
+        ));
+    }
+    ui.label(
+        egui::RichText::new(format!(
+            "Spectrum into these directions, ω from 0 to {omega_max:.3} (band shaded); peak {} per sr per unit ω",
+            fmt_si(peak)
+        ))
         .small(),
     );
 }

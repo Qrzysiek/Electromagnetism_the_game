@@ -17,6 +17,7 @@ pub mod integrator;
 pub mod lienard;
 pub mod magnetic;
 pub mod panel;
+pub mod spectrum;
 pub mod trajectory;
 pub mod units;
 pub mod verify;

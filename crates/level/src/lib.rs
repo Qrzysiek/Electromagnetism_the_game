@@ -425,6 +425,36 @@ pub struct DetectorAcceptance {
     /// Kinetic energy `[min, max]`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kinetic: Option<[f64; 2]>,
+    /// Radiation of the whole flight into an arc of directions (detectors only, not
+    /// gates; needs a finite `c`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radiation: Option<RadiationGoal>,
+}
+
+/// A radiation goal (PHYSICS.md §3.4): the energy per steradian that the flight radiates
+/// into an arc of in-plane directions (averaged over the arc), in all frequencies or in a
+/// band, must lie in a window. The receiver is far away (the far zone).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct RadiationGoal {
+    /// Arc of directions: `[axis, half-width]`, in degrees (axis from +x).
+    pub direction: [f64; 2],
+    /// Angular-frequency band `[ω_min, ω_max]`; absent: all frequencies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub band: Option<[f64; 2]>,
+    /// Energy per steradian `[min, max]`.
+    pub energy: [f64; 2],
+}
+
+impl RadiationGoal {
+    pub fn to_physics(self) -> physics::spectrum::RadiationWindow {
+        let a = self.direction[0].to_radians();
+        physics::spectrum::RadiationWindow {
+            axis: DVec3::new(a.cos(), a.sin(), 0.0),
+            half_angle: self.direction[1].to_radians(),
+            band: self.band.map(|[lo, hi]| (lo, hi)),
+            energy: (self.energy[0], self.energy[1]),
+        }
+    }
 }
 
 impl DetectorAcceptance {
@@ -435,6 +465,7 @@ impl DetectorAcceptance {
                 (DVec3::new(a.cos(), a.sin(), 0.0), half.to_radians())
             }),
             kinetic: self.kinetic.map(|[lo, hi]| (lo, hi)),
+            radiation: self.radiation.map(RadiationGoal::to_physics),
         }
     }
 }
@@ -1256,11 +1287,39 @@ impl Level {
         self.field_at(player, Resolution::Preview)
     }
 
+    /// Radiation goals (PHYSICS.md §3.4) are measured on single flights at finite `c`, on
+    /// shot detectors only.
+    fn radiation_goal_issues(&self, out: &mut Vec<String>) {
+        let has = |d: &Detector| d.acceptance.is_some_and(|a| a.radiation.is_some());
+        if self.shots.iter().any(|s| has(&s.detector)) {
+            if self.physics.c.is_none() {
+                out.push("a radiation goal needs a finite speed of light".into());
+            }
+            if self.has_beams() {
+                out.push(
+                    "radiation goals are measured on single flights, not beams (the coherent sum                      over a beam is not implemented)"
+                        .into(),
+                );
+            }
+        }
+        if self.gates.iter().any(has) {
+            out.push("gates cannot have radiation goals".into());
+        }
+        if self
+            .free_particles
+            .iter()
+            .any(|f| f.detector.as_ref().is_some_and(has))
+        {
+            out.push("free particles' detectors cannot have radiation goals".into());
+        }
+    }
+
     /// Problems of the physical model of this level (combinations that are not
     /// supported), as messages. Empty if the level is consistent.
     pub fn model_issues(&self) -> Vec<String> {
         let mut out = Vec::new();
         self.gate_issues(&mut out);
+        self.radiation_goal_issues(&mut out);
         if self.has_beams() {
             self.beam_issues(&mut out);
         }
@@ -2003,6 +2062,7 @@ mod tests {
                     acceptance: Some(DetectorAcceptance {
                         direction: Some([0.0, 20.0]),
                         kinetic: Some([0.1, 1.0]),
+                        radiation: None,
                     }),
                 },
                 beam: None,

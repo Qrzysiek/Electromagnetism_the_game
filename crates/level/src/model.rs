@@ -139,6 +139,24 @@ impl Level {
                 )
             });
         }
+        if self
+            .shots
+            .iter()
+            .any(|s| s.detector.acceptance.is_some_and(|a| a.radiation.is_some()))
+        {
+            out.push(note(
+                true,
+                "Radiation goal: the energy per steradian of the particle's far-zone \
+                 radiation (Liénard; the spectrum from Jackson's radiation integral), exact for \
+                 the computed motion, averaged over the receiver's directions in the plane.",
+            ));
+            out.push(note(
+                false,
+                "Radiation goal: the particle is taken to fly uniformly before its launch and \
+                 after it enters the detector, so no radiation is counted from its launch or \
+                 from the detector stopping it.",
+            ));
+        }
         if !self.conductors.is_empty() {
             out.push(note(
                 false,

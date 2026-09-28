@@ -308,6 +308,13 @@ fn main() {
                     end.x,
                     end.y
                 );
+                if let Some(e) = v.verified.radiation {
+                    println!(
+                        "  flight {}{flight} radiation into its goal: {e:.6e} per sr (preview {:.6e})",
+                        shot + 1,
+                        v.preview.radiation.unwrap_or(f64::NAN)
+                    );
+                }
             }
             let cost = level.measure_cost(placement);
             let meters: Vec<String> = cost

@@ -42,6 +42,7 @@ fn d1_direction_window() {
         let acc = Acceptance {
             direction: Some((DVec3::X, half)),
             kinetic: None,
+            radiation: None,
         };
         let tr = run(&scenario(0.0, acc), &RunSettings::with_tolerance(1e-12));
         let m = tr.margins.unwrap().acceptance.unwrap();
@@ -63,6 +64,7 @@ fn d2_energy_window() {
         let acc = Acceptance {
             direction: None,
             kinetic: Some((lo, hi)),
+            radiation: None,
         };
         let tr = run(&scenario(e, acc), &RunSettings::with_tolerance(1e-12));
         let m = tr.margins.unwrap().acceptance.unwrap();
@@ -84,6 +86,7 @@ fn d3_edge_of_the_window_is_not_verified() {
     let acc = Acceptance {
         direction: Some((DVec3::X, angle + 1e-14)),
         kinetic: None,
+        radiation: None,
     };
     let v = verify(&scenario(0.0, acc), Tolerances::default());
     println!("D3: {:?}", v.status);

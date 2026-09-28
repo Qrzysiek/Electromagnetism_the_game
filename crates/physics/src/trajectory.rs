@@ -8,6 +8,7 @@ use crate::events::first_crossing;
 use crate::field::FieldSolver;
 use crate::geometry::{Aabb, Region, Shape};
 use crate::integrator::{self, Dense, Dop853, OdeSystem, Settings, Stats};
+use crate::spectrum::{Emission, PHASE_STEP, RadiationWindow};
 
 /// Margins at or above this value (grid units) are not refined further: they are far too
 /// large for numerical error to matter. Refinement starts below twice this value.
@@ -51,12 +52,15 @@ pub struct Gate {
 }
 
 /// Conditions on the particle when it enters the detector (PHYSICS.md §6.1).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Acceptance {
     /// Allowed direction of motion: unit axis and half-angle (radians).
     pub direction: Option<(DVec3, f64)>,
     /// Allowed kinetic energy `[min, max]`.
     pub kinetic: Option<(f64, f64)>,
+    /// Required radiation of the whole flight into an arc of directions (PHYSICS.md
+    /// §3.4), measured when the particle arrives.
+    pub radiation: Option<RadiationWindow>,
 }
 
 impl Acceptance {
@@ -176,11 +180,20 @@ pub struct Trajectory {
     /// between force-free states; 0 without radiation reaction). Integrated as part of
     /// the ODE state.
     pub radiation_work: f64,
-    /// Largest ratio |radiation-reaction force| / |Lorentz force| over the accepted steps:
-    /// the Landau–Lifshitz treatment requires it to be small.
+    /// Largest radiation-reaction force over the largest Lorentz force, both over the
+    /// accepted steps' ends (PHYSICS.md §3.1): the Landau–Lifshitz treatment requires it to
+    /// be small. (A ratio of the two at the same instant would diverge wherever the
+    /// Lorentz force passes through zero, e.g. between alternating magnets, where the
+    /// reaction force is no problem.)
     pub reaction_ratio_max: f64,
     /// Present when `RunSettings::margins` is set.
     pub margins: Option<Margins>,
+    /// Energy per steradian radiated into the acceptance's radiation window (averaged
+    /// over its arc), when it has one and the particle arrived.
+    pub radiation: Option<f64>,
+    /// With a radiation goal: the dense samples `(t, x, v, a)` of the flight it was
+    /// measured on (for displaying the spectrum).
+    pub emission: Vec<Emission>,
 }
 
 /// View of one accepted step, for observers.
@@ -333,9 +346,29 @@ pub fn run_cancellable<F: FieldSolver>(
         radiation_work: 0.0,
         reaction_ratio_max: 0.0,
         margins: None,
+        radiation: None,
+        emission: Vec::new(),
     };
 
+    // Dense samples of the flight for its radiation (only with a radiation goal).
+    let window = scn.acceptance.and_then(|a| a.radiation);
+    let emission_at = |x: DVec3, p: DVec3, t: f64| -> Emission {
+        let mut f = ode.force(x, p, t);
+        if ode.radiation_reaction {
+            f += ode.radiation_reaction_force(x, p, t);
+        }
+        let v = ode.kin.velocity(p);
+        let a = (f - v * (v.dot(f) / (scn.c * scn.c))) / (ode.kin.gamma(p) * scn.particle.mass);
+        (t, x, v, a)
+    };
+    let mut emission: Vec<Emission> = Vec::new();
+    if window.is_some() {
+        emission.push(emission_at(scn.x0, scn.p0, 0.0));
+    }
+
     let mut gates = GateTracker::new(&scn.gates, scn.x0);
+    // Largest Lorentz and radiation-reaction forces so far (`reaction_ratio_max`).
+    let (mut lorentz_max, mut rr_max) = (0.0_f64, 0.0_f64);
 
     let mut g_prev: Vec<f64> = events
         .iter()
@@ -442,6 +475,30 @@ pub fn run_cancellable<F: FieldSolver>(
             (x_b, ode.momentum(int.y()))
         };
         let sample = Sample { t: t_end, x, p };
+        if let Some(w) = window {
+            // At least 8 pieces per step, and short enough that the phase ω(t − n·r/c)
+            // advances by at most PHASE_STEP at the band's top: its rate 1 − n·v/c,
+            // largest over the arc and 5 times in the step, with a margin of 1.5 (much
+            // below 2 for directions near the motion, where the radiation is beamed). An
+            // even number, so that Simpson's pairs (`lienard_energy`) stay in a step.
+            let h = t_end - t_a;
+            let rate = (0..=4)
+                .map(|i| {
+                    let t = t_a + h * f64::from(i) * 0.25;
+                    w.phase_rate(ode.kin.velocity(view.state(t).1), scn.c)
+                })
+                .fold(0.0, f64::max)
+                * 1.5;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let pieces = ((w.top_frequency() * rate * h / PHASE_STEP).ceil() as usize).max(8);
+            let pieces = pieces + pieces % 2;
+            for i in 1..=pieces {
+                #[allow(clippy::cast_precision_loss)]
+                let t = t_a + h * (i as f64 / pieces as f64);
+                let (x, p) = view.state(t);
+                emission.push(emission_at(x, p, t));
+            }
+        }
 
         let work = if event.is_some() {
             let mut y = vec![0.0; ode.dim()];
@@ -452,10 +509,10 @@ pub fn run_cancellable<F: FieldSolver>(
         };
         traj.radiation_work = work;
         if ode.radiation_reaction {
-            let lorentz = ode.force(x, p, t_end).length();
-            let rr = ode.radiation_reaction_force(x, p, t_end).length();
-            if lorentz > 0.0 {
-                traj.reaction_ratio_max = traj.reaction_ratio_max.max(rr / lorentz);
+            lorentz_max = lorentz_max.max(ode.force(x, p, t_end).length());
+            rr_max = rr_max.max(ode.radiation_reaction_force(x, p, t_end).length());
+            if lorentz_max > 0.0 {
+                traj.reaction_ratio_max = rr_max / lorentz_max;
             }
         }
         if is_static {
@@ -493,7 +550,12 @@ pub fn run_cancellable<F: FieldSolver>(
         && let Some(acc) = scn.acceptance
     {
         let v = ode.kin.velocity(traj.end.p);
-        let m = acc.margin(v, ode.kin.kinetic_energy(traj.end.p));
+        let mut m = acc.margin(v, ode.kin.kinetic_energy(traj.end.p));
+        if let Some(w) = acc.radiation {
+            let e = w.measure(&emission, q, scn.c);
+            traj.radiation = Some(e);
+            m = m.min(w.margin(e));
+        }
         acceptance_margin = Some(m);
         if m < 0.0 {
             traj.outcome = Outcome::Rejected;
@@ -526,6 +588,7 @@ pub fn run_cancellable<F: FieldSolver>(
         }
         margin[k] = margin[k].min(depth);
     }
+    traj.emission = emission;
     traj.margins = rs.margins.then(|| {
         let mut m = collect_margins(&events, &margin);
         m.acceptance = acceptance_margin;

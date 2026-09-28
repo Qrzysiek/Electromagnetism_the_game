@@ -337,6 +337,7 @@ fn b5_beam_gates_match_single_flights() {
             acceptance: Some(Acceptance {
                 direction: Some((DVec3::X, 20f64.to_radians())),
                 kinetic: None,
+                radiation: None,
             }),
         },
     ];

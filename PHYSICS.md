@@ -240,7 +240,7 @@ f = (2q³/3mc³) γ [DE/Dt + v × DB/Dt]
   − (2q⁴/3m²c⁵) γ² v [(E + v×B)² − (E·v)²/c²]
 ```
 
-- **Why LL.** The Lorentz–Abraham–Dirac equation has runaway and pre-acceleration solutions. LL is its reduction of order, consistent to first order in `τ₀ = 2q²/(3mc³)`, with no runaways. It is valid while the reaction force is small against the Lorentz force; each trajectory reports `max |F_RR| / |F_L|`. Shipped levels require it below 0.05 (`level/tests/levels.rs`), and the game flags it.
+- **Why LL.** The Lorentz–Abraham–Dirac equation has runaway and pre-acceleration solutions. LL is its reduction of order, consistent to first order in `τ₀ = 2q²/(3mc³)`, with no runaways. It is valid while the reaction force is small against the Lorentz force; each trajectory reports `max |F_RR| / max |F_L|`, both maxima over the flight. (Until the radiation goals it was the largest ratio at one instant; that diverges wherever the Lorentz force passes through zero, e.g. between the alternating magnets of an undulator, where nothing is strained: the conditions of Landau & Lifshitz §75, that the fields change little over τ₀ and stay far below m²c⁴/q³, are about the force scales.) Shipped levels require it below 0.05 (`level/tests/levels.rs`), and the game flags it.
 - **The derivative term.** `D/Dt = ∂/∂t + v·∇` is a central difference of the field along the world line over 1e-5 cells. Its relative error (about 1e-10) is far below the O(τ₀) accuracy of LL itself. It is deterministic.
 - **Energy bookkeeping.** The work of `f` is integrated as a 7th ODE component. So `kinetic + potential + radiated = const` holds to integration accuracy, and the energy diagnostic of §4 checks exactly this.
 - **Consistency.** `c = ∞` gives no reaction. With the flag off, the dynamics are bit-identical to before (6-component state).
@@ -298,6 +298,19 @@ All particles of a beam form one ODE system (one state vector, one step size), l
 
 - **Dynamic particles.** A level's free particles and the player's free charges fly with the shots' particles as one system (the beam runner): each is a `BeamParticle` with its own species, launch state (velocity v → momentum γmv) and optional detector. A level's free particle with a detector is a goal: it must arrive, verified, like a shot. The launch speed of every free particle is below c (validation).
 - **Collisions (rigid spheres).** Particles with a radius collide when they touch: the step ends at the contact (a pair event, found like the obstacle events, bounded by the pair's closing speed) and each gets an impulse along the line of centres that conserves momentum and kinetic energy exactly (`elastic_impulse`; relativistically the positive root of the energy balance, which is convex in the impulse; for c = ∞ `2μ (v₁ − v₂)·n`). This is the consistent rule for the rigid, spherically symmetric particles of §2; point particles (radius 0, every level before this) never touch, and nothing changes for them (golden hashes unchanged). For a relativistic rigid body the instantaneous contact is a convention (rigidity is not Lorentz covariant). The radiation of the impact depends on the spheres' structure and is not modelled: for finite c the estimate `q² |Δv|² / (3 a c²)` (the velocity change over the light crossing time 2a/c of a sphere of radius a) is added to the particle's radiated energy, so the neglected-radiation checks cover it. Tests B18–B20.
+
+## 3.4 Radiation goals: the far-zone radiation of a flight — *validated* (`crates/physics/src/spectrum.rs`, tests S1–S3)
+
+A detector can also require the *radiation* of the flight (level field `acceptance.radiation`): a receiver far away covering an arc of in-plane directions `axis ± half-width`, which must collect an energy per steradian in `[min, max]`, over all frequencies or in a band `[ω_min, ω_max]` (Jackson Ch. 14).
+
+- **Model.** The far-zone (radiation) field of the particle, whose energy per unit solid angle and per unit frequency are, in our units (`k = 1`, force `q(E + v×B)`, where Jackson's Gaussian formulas hold unchanged), with `β = v/c`, `κ = 1 − n·β`:
+  - `dW/dΩ = (q²/4πc) ∫ |n × ((n − β) × β̇)|² / κ⁵ dt` (Liénard, Jackson 14.38, integrated over the emission time);
+  - `d²I/dω dΩ = (q²/4π²c) |∫ n × ((n − β) × β̇) / κ² e^{iω(t − n·r/c)} dt|²` (Jackson 14.65), with `∫₀^∞ d²I/dω dΩ dω = dW/dΩ`.
+  The measure is `dW/dΩ` (or the band's part of the spectrum) averaged over the arc's directions. Exact for the computed motion; the motion includes the particle's radiation reaction when the level has it (radiation levels need it: a particle that radiates enough to be measured must feel it, `level/tests/levels.rs`).
+- **Approximations.** *(1) The flight's ends:* the integrals run over the flight, i.e. the particle is taken to move uniformly before its launch and after it enters the detector. No radiation is attributed to the launch (the particle arrives from far away already moving) or to its absorption in the detector (which really stops it: a hard stop radiates `∝ γ⁴`; the detector is taken to brake it gently). *(2) In-plane directions:* the receiver's directions lie in the plane; the energy per steradian is exact there. *(3) The arc average:* directions at most 2° apart (odd count, Simpson's rule), fine against the beaming cone `1/γ` (19° at γ = 3). *(4) Frequency resolution:* the band is integrated by the trapezoidal rule on a grid of spacing `π / (4 T)`, `T` the span of the phase time `t − n·r/c` over the flight (8 points across the width `2π/T` of a line from a finite flight), at most 4097 points. *(5) No beams:* the coherent sum over the particles of a beam is not implemented (validation rejects radiation goals in beam levels, gates and free particles' detectors).
+- **Method.** While the particle flies, the runner records dense samples `(t, x, v, a)` from the integrator's dense output (acceleration from the Lorentz force plus the radiation reaction): at least 8 per step, and enough that the phase `ω(t − n·r/c)` advances by at most 0.5 rad per piece at the band's top (its rate `1 − n·v/c`, largest over the arc and five times in the step, with a margin of 1.5: far below 2 toward the direction of motion, where the radiation goes), an even number per step. On arrival: Liénard's integral by Simpson's rule on pairs of pieces (unequal-width form); the spectrum by integrating each piece exactly with its amplitude and phase linear (Filon's idea: `∫₀¹ (f₀ + (f₁ − f₀)s) e^{i(ψ₀ + Δ s)} ds` in closed form, by its series for `|Δ| < 0.05`), the phase factors along the frequency grid by recurrence. Cost: a few ms per arriving flight; the first version stepped the phase for the worst case `1 − n·v/c = 2` and directions 1° apart and took 10× longer.
+- **Margin.** The relative margin `min((E − min)/min, (max − E)/max)` joins the acceptance margin (§6.1): preview and verification must agree on it like on every other boundary; a flight that arrives with the radiation outside the window is `Rejected`, and the search objective grades it by its deficit.
+- **Display.** The game shows the receiver as a band outside the arena's edge in its directions, and in the flight details the measured value and (with a band) the spectrum averaged over up to 9 of the arc's directions, from 0 to twice the band's top, in 160 bins (each the mean of a grid that resolves the lines).
 
 ## 4. Conserved quantities (diagnostics only) — *validated* (`crates/physics/src/trajectory.rs`)
 
@@ -398,7 +411,8 @@ The step size is **not** otherwise limited near obstacles; the certification rep
 
 A detector can require conditions on the arriving particle, as the entrance of the next stage of an instrument does:
 - a direction of motion within a cone (axis, half-angle);
-- a kinetic energy within a band `[min, max]`.
+- a kinetic energy within a band `[min, max]`;
+- the flight's radiation into an arc of directions (§3.4), measured when the particle enters.
 
 **Decision.** The first entry into the detector box decides. The state at the located entry time (§6) is tested. Inside the acceptance the outcome is `Arrived`; outside it is `Rejected` (the particle is absorbed but not counted).
 
@@ -548,6 +562,15 @@ A1 is the strongest check. Its quadratures (Gauss–Legendre in cos θ, uniform 
 | L3 | Circular motion at v = 0.8 c, near and far points | vacuum Maxwell equations, central differences | < 1e-6 | ≤ 1.7e-7 (difference error) |
 
 Note on R2: the first version compared LL work with `∫P dt` alone. It found a difference of 1e-4 at every c, falling as 1/distance². That is the Schott energy of the finite start and end points; with it included the agreement is 5–7e-9.
+
+### Spectrum tests (`cargo test --release -p physics --test spectra -- --nocapture`, unit tests in `spectrum.rs`)
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| S1 | Jackson Pr. 14.15: a charge on a circle (β = 0.5), 40 and 160 turns, into its orbital plane | energy in a band ±ω₀/2 around each harmonic m = 1–4 against `T (q² m² ω₀² β²/2πc) J'_m(mβ)²` | 5e-3 (40 turns), 1.2e-3 (160): a finite flight's line is a sinc² whose tails outside the band carry ~2/(π² (ω₀/2) T), so the error falls as 1/T | ≤ 3.4e-3 and ≤ 9.1e-4 (falling 4× with 4× the turns, as the leakage does) |
+| S2 | Parseval (Jackson 14.60–14.65): a charge at β = 0.6 kicked by a Gaussian pulse of acceleration, 4 directions | spectrum integrated over all frequencies against Liénard's `dW/dΩ` | 1e-4 | ≤ 6.0e-5 |
+| S3 | The measure along a computed flight: a charge at β = 0.5 on a circle in uniform B entering a detector after ¾ turn, arc 45° ± 15°, all frequencies and a band | the same measure on the exact circular motion to the entry time (20 000 samples) | 1e-4 | 1.3e-5, 1.4e-5 (with the trapezoidal rule in time instead of Simpson's: 2.6e-4) |
+| — | Unit tests: the closed-form Filon weights against quadrature (1e-8, both sides of the series threshold); the arc's directions symmetric and 2° apart | | | hold |
 
 ### Acceptance tests (`cargo test -p physics --test acceptance -- --nocapture`)
 

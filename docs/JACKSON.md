@@ -47,6 +47,7 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 | **F:sphere+electrode** (spheres and electrodes together) | Conducting spheres in the field of plates and supplies. | §2.5 sphere in a uniform field (between two plates); Pr. 2.10 hemispherical boss on a plane; §2.7 hemispheres at different potentials |
 | **F:screened** (world options) | Debye-screened Coulomb `e^{−r/λ}/r`; Proca (massive photon) Yukawa static fields. | Pr. 13.5 screened Coulomb scattering; §12.8 photon mass effects (orbits precess; a "what if" level); §12.9 London screening of B (superconductor as a field option) |
 | **F:finite-c beams** (retarded interaction) | Darwin Lagrangian (§12.6), later full retardation. | §12.6 / Pr. 12.13 two-body Darwin dynamics; space charge at relativistic speed (the magnetic attraction partly cancels the electric repulsion, factor 1/γ²) |
+| **Radiation goals** (*done*, PHYSICS.md §3.4) | A far receiver over an arc of in-plane directions: energy per steradian of the flight, in all frequencies (Liénard) or in a band (Jackson's radiation integral 14.65), in a window [min, max]. Single flights (not beams yet). | §14.3 beaming, §14.6 critical frequency, §14.7 undulators, a quiet turn; next: Pr. 14.23 ring of charges (needs the coherent sum over a beam), §15.2 braking radiation, Pr. 14.10 sudden stop |
 | **Dynamic particles** (*done*) | Level free particles (targets, with optional detectors) and player free charges with a launch velocity (drag the arrow; rapidity for relativistic levels); rigid-sphere collisions. | Pr. 13.1 knock-on and Pr. 13.2 as proper two-body levels; two-body problems with reduced mass (§12.6 / Pr. 12.13 Darwin); Rutherford scattering with a recoiling target; Pr. 14.6 collision radiation with both partners moving |
 | **F:plasma** (neutralizing background) | A beam or cloud with a uniform fixed neutralizing background. | Pr. 7.12 plasma oscillations; §7.5 plasma frequency; ion channels |
 | **F:antennas+** (more antenna types) | Magnetic dipole (AC loop in plane, moment along z) and centre-fed linear antenna in the plane. | §9.3 magnetic dipole fields; Pr. 9.14; §9.4 centre-fed antenna, Pr. 9.16; §9.12 |
@@ -113,8 +114,22 @@ bound harmonically, PHYSICS.md §2.1):
   without the interaction the reference fails.
 - Jackson Ch. 16: spectroscopy (master). Two atoms, two resonances.
 
+Arc 10, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §3.4):
+
+- Jackson §14.3: forward beaming (introduction). The radiation follows the velocity
+  within 1/γ: bend the particle while it heads for the receiver.
+- Jackson §14.6: the critical frequency (introduction). A band goal at high frequency: a
+  tight bend's short flash.
+- Jackson §14.2: a quiet turn (intermediate). A maximum: gentle turns radiate less into
+  a direction the velocity sweeps; or turn the other way round.
+- Jackson §14.7: undulator (master). The on-axis line 2γ²ω_u/(1 + K²/2) in a band.
+- Tried and set aside: §15.2 braking radiation (stopping a γ = 3 particle with charges
+  needs a large potential hill and the particle slips round the charges; the solver found
+  almost nothing even without a radiation condition).
+
 Validation tests from the book (PHYSICS.md): K5 (Pr. 2.4, golden ratio), M7 (Pr. 12.9b,
-equatorial drift), M11 (§12.5, adiabatic invariance), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
+equatorial drift), M11 (§12.5, adiabatic invariance), S1 (Pr. 14.15, harmonics of circular
+motion), S2 (Parseval, 14.60–14.65), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
 collapse), R5 (Pr. 14.5b, radiation in a head-on collision), C2 (Pr. 16.1, the
 radiating oscillator decays at Γ = ω₀²τ).
 
@@ -256,19 +271,19 @@ radiating oscillator decays at Γ = ω₀²τ).
 
 - **§14.1 LW fields; Pr. 14.2 near fields of an accelerated charge.** NOW.
 - **§14.2 Larmor and Liénard power; Pr. 14.11 invariant form.** NOW (radiation diagnostics, test).
-- **§14.3 angular distribution.**
+- **§14.3 angular distribution.** *Level built (forward beaming).*
   - Forward beaming (1/γ cone) for acceleration along and across v.
   - Level: place a detector for radiation (the waves view).
   - NOW (in-plane cut of the pattern).
 - **Pr. 14.5–14.8 radiation in Coulomb collisions.** For example, the head-on nonrelativistic collision radiates ΔW = 8 z m v₀⁵ / (45 Z c³) (Pr. 14.5b). Test with LL/Larmor integration. NOW.
 - **Pr. 14.9 synchrotron energy decay.** NOW (exact test exists).
 - **Pr. 14.10 sudden stop.** Bremsstrahlung of a charge stopped by a hard wall (obstacle). NOW (a view: the radiation shell).
-- **§14.6 synchrotron spectrum; Pr. 14.15, 14.17–14.18 circular and helical motion.** The in-plane spectrum at harmonics of ω₀. NOW (spectrum diagnostic to add). Helical motion is 3D.
+- **§14.6 synchrotron spectrum; Pr. 14.15, 14.17–14.18 circular and helical motion.** *Test S1 (Pr. 14.15); level built (the critical frequency).* The in-plane spectrum at harmonics of ω₀. NOW (spectrum diagnostic to add). Helical motion is 3D.
 - **Pr. 14.12/14.14/14.22 harmonics of SHM, circular and elliptic orbits.** F:prescribed, or NOW for a Coulomb orbit (the ellipse's harmonics).
 - **Pr. 14.21 correspondence principle.** Radiation from a classical hydrogen orbit versus Bohr transition rates. A test with the §16.2 decay. NOW.
 - **Pr. 14.23 N charges on a ring.** A beam of N equally spaced charges on a circle: the radiation falls exponentially with N ("a steady current does not radiate"). A level/test with a ring beam. NOW (beams in a uniform B) / F:prescribed.
 - **Pr. 14.25–14.26 synchrotron polarization, Crab nebula.** Polarization is 3D; energetics as a text.
-- **§14.7 undulators and wigglers; Pr. 14.27 second harmonic.**
+- **§14.7 undulators and wigglers; Pr. 14.27 second harmonic.** *Level built (undulator).*
   - The trajectory and its in-plane radiation. NOW (alternating magnets).
   - K parameter: undulator for K < 1, wiggler for K ≫ 1; the level asks for a given K.
 - **§14.8 Thomson scattering.** A free charge driven by a plane wave re-radiates. NOW (plane waves + LW). Radiation pressure pushes the charge forward: the LL force. A test against σ_T.

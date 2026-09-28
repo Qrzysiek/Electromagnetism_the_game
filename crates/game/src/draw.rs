@@ -229,6 +229,59 @@ fn draw_free(gizmos: &mut Gizmos, p: Vec2, q: f64, radius: f32, tip: Vec2, handl
 }
 
 /// In-plane outline of an electrode box, closed.
+/// A radiation goal's receiver (far away): a band hugging the arena's boundary (`lo`–`hi`)
+/// over its directions as seen from the arena's centre, closed at the ends, with a wave
+/// mark on the axis.
+fn draw_radiation_goal(
+    gizmos: &mut Gizmos,
+    lo: Vec2,
+    hi: Vec2,
+    goal: level::RadiationGoal,
+    color: Color,
+) {
+    let c = (lo + hi) * 0.5;
+    let half_size = (hi - lo) * 0.5;
+    // Distance from the centre to the boundary along direction d.
+    let edge = |d: Vec2| {
+        let tx = if d.x.abs() > 1e-6 {
+            half_size.x / d.x.abs()
+        } else {
+            f32::INFINITY
+        };
+        let ty = if d.y.abs() > 1e-6 {
+            half_size.y / d.y.abs()
+        } else {
+            f32::INFINITY
+        };
+        tx.min(ty)
+    };
+    #[allow(clippy::cast_possible_truncation)]
+    let (axis, half) = (
+        goal.direction[0].to_radians() as f32,
+        goal.direction[1].to_radians() as f32,
+    );
+    let n = 32;
+    #[allow(clippy::cast_precision_loss)]
+    let at = move |i: usize, gap: f32| {
+        let d = Vec2::from_angle(axis - half + 2.0 * half * i as f32 / n as f32);
+        c + d * (edge(d) + gap)
+    };
+    gizmos.linestrip_2d((0..=n).map(|i| at(i, 0.4)), color);
+    gizmos.linestrip_2d((0..=n).map(|i| at(i, 1.2)), color);
+    gizmos.line_2d(at(0, 0.4), at(0, 1.2), color);
+    gizmos.line_2d(at(n, 0.4), at(n, 1.2), color);
+    // A short wave travelling out along the axis, inside the band.
+    let d = Vec2::from_angle(axis);
+    let side = d.perp();
+    let r0 = edge(d) + 0.45;
+    #[allow(clippy::cast_precision_loss)]
+    let wave = (0..=16).map(|i| {
+        let u = i as f32 / 16.0;
+        c + d * (r0 + 0.7 * u) + side * 0.2 * (u * std::f32::consts::TAU * 2.0).sin()
+    });
+    gizmos.linestrip_2d(wave, color);
+}
+
 fn box_outline(b: &physics::bem::BoxElectrode, grow: f32) -> [Vec2; 5] {
     let c = to_vec2(b.center);
     #[allow(clippy::cast_possible_truncation)]
@@ -558,6 +611,11 @@ pub fn draw(
                 (d1 - d0).abs() - Vec2::splat(0.15),
                 target.with_alpha(alpha * 0.5),
             );
+        }
+        // Radiation goal: a far receiver covering an arc of directions, drawn as a band
+        // just outside the arena, seen from its centre.
+        if let Some(r) = shot.detector.acceptance.and_then(|a| a.radiation) {
+            draw_radiation_goal(&mut gizmos, bmin, bmax, r, target.with_alpha(alpha));
         }
         let a = to_vec2(grid.position(shot.launch.node));
         let dir = shot.launch.direction;

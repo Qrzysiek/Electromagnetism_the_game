@@ -671,6 +671,10 @@ struct Track<'a> {
     margin: Vec<f64>,
     g_prev: Vec<f64>,
     gates: GateTracker<'a>,
+    /// Largest radiation-reaction force and largest other force so far
+    /// (`Trajectory::reaction_ratio_max`).
+    rr_max: f64,
+    rest_max: f64,
 }
 
 /// Runs a beam flight.
@@ -750,11 +754,15 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     radiation_work: 0.0,
                     reaction_ratio_max: 0.0,
                     margins: None,
+                    radiation: None,
+                    emission: Vec::new(),
                 },
                 phase: Phase::Flying,
                 margin: g.clone(),
                 g_prev: g,
                 gates: GateTracker::new(&scn.gates, b.x0),
+                rr_max: 0.0,
+                rest_max: 0.0,
             }
         })
         .collect();
@@ -1123,8 +1131,8 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     neglected[i].1 += present * dt;
                 }
             }
-            // Largest ratio of the radiation-reaction force to the rest (the Landau–Lifshitz
-            // treatment needs it small), at the step's end.
+            // Largest radiation-reaction force over the largest other force (the
+            // Landau–Lifshitz treatment needs it small), at the steps' ends.
             if scn.radiation_reaction && scn.c.is_finite() {
                 let mut y_end = vec![0.0; ode.dim()];
                 dense.eval(t_end, &mut y_end);
@@ -1132,9 +1140,11 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     if matches!(tracks[i].phase, Phase::Flying) && ode.reacts(k) {
                         let rr = ode.radiation_reaction_force(&y_end, k, t_end);
                         let rest = (ode.force(&y_end, k, t_end) - rr).length();
-                        if rest > 0.0 {
-                            let t = &mut tracks[i].traj;
-                            t.reaction_ratio_max = t.reaction_ratio_max.max(rr.length() / rest);
+                        let tr = &mut tracks[i];
+                        tr.rr_max = tr.rr_max.max(rr.length());
+                        tr.rest_max = tr.rest_max.max(rest);
+                        if tr.rest_max > 0.0 {
+                            tr.traj.reaction_ratio_max = tr.rr_max / tr.rest_max;
                         }
                     }
                 }

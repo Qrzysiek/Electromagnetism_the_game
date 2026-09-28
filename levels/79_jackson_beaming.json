@@ -1,0 +1,109 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson §14.3: forward beaming",
+  "description": "Jackson §14.3: a fast charge radiates when it is accelerated, and almost all of it goes forward, into a narrow cone around its velocity (half-angle about 1/γ; here γ = 3, so about 19°). A receiver far away, at 30° (the band outside the arena), must collect at least 0.0006 per steradian from the flight. Flying straight the particle does not radiate at all: bend it so that it heads for the receiver while it is being bent. It may end anywhere on the right edge. (c = 2 cells per time unit; radiation reaction is included.)",
+  "grid": {
+    "nx": 40,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 2.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "radiation_reaction": true,
+    "t_max": 100.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 0.025,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          2,
+          5,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 8.0
+      },
+      "detector": {
+        "min": [
+          38,
+          0,
+          0
+        ],
+        "max": [
+          40,
+          20,
+          0
+        ],
+        "acceptance": {
+          "radiation": {
+            "direction": [
+              30.0,
+              5.0
+            ],
+            "energy": [
+              0.0006,
+              1000.0
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 3,
+    "magnet_strengths": [
+      40.0,
+      80.0,
+      160.0,
+      320.0
+    ],
+    "region": {
+      "min": [
+        5,
+        2,
+        0
+      ],
+      "max": [
+        34,
+        18,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        26,
+        3,
+        0
+      ],
+      "kind": "magnet",
+      "value": -320.0
+    }
+  ]
+}
