@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 13.2: a kick for a bound charge",
-  "description": "Jackson Problem 13.2: a charged particle flying past an atom gives its bound electron a kick (here a heavy negative ion, which pushes the electron away). A quick pass is a sharp kick; a slow one lets the electron follow and hand the energy back. Steer the projectile past the atom so that its kick throws the electron out into the detector above; the projectile must still reach the screen on the right.",
+  "description": "Jackson Problem 13.2: a charged particle flying past an atom gives its bound electron a kick (here a heavy negative ion, which pushes the electron away). A quick pass is a sharp kick; a slow one lets the electron follow and hand the energy back. Steer the ion past the atom so that its kick throws the electron out into the detector above; the ion must still reach the screen on the right.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -15,7 +15,6 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
-    "beam_interaction": true,
     "t_max": 150.0,
     "tolerances": {
       "preview": 1e-10,
@@ -53,58 +52,6 @@
           20,
           0
         ]
-      },
-      "beam": {
-        "count": 1,
-        "energy_spread": 0.0,
-        "angle_spread_deg": 0.0,
-        "width": 0.0,
-        "length": 0.0,
-        "distribution": "gaussian",
-        "transmission": 1.0,
-        "seed": 0
-      }
-    },
-    {
-      "particle": {
-        "charge": -1.0,
-        "mass": 1.0,
-        "radius": 0.0
-      },
-      "launch": {
-        "node": [
-          15,
-          10,
-          0
-        ],
-        "direction": [
-          1.0,
-          0.0,
-          0.0
-        ],
-        "kinetic_energy": 1e-6
-      },
-      "detector": {
-        "min": [
-          12,
-          17,
-          0
-        ],
-        "max": [
-          18,
-          20,
-          0
-        ]
-      },
-      "beam": {
-        "count": 1,
-        "energy_spread": 0.0,
-        "angle_spread_deg": 0.0,
-        "width": 0.0,
-        "length": 0.0,
-        "distribution": "gaussian",
-        "transmission": 1.0,
-        "seed": 0
       }
     }
   ],
@@ -129,7 +76,7 @@
         0
       ],
       "max": [
-        29,
+        7,
         19,
         0
       ]
@@ -138,12 +85,12 @@
   "reference_solution": [
     {
       "node": [
-        11,
         1,
+        4,
         0
       ],
       "kind": "charge",
-      "value": 2.0
+      "value": -2.0
     }
   ],
   "clouds": [
@@ -155,6 +102,36 @@
       ],
       "radius": 4.0,
       "charge": 1.0
+    }
+  ],
+  "free_particles": [
+    {
+      "particle": {
+        "charge": -1.0,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "node": [
+        15,
+        10,
+        0
+      ],
+      "velocity": [
+        0.0,
+        0.0
+      ],
+      "detector": {
+        "min": [
+          12,
+          17,
+          0
+        ],
+        "max": [
+          18,
+          20,
+          0
+        ]
+      }
     }
   ]
 }

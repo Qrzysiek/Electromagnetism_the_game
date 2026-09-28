@@ -330,7 +330,10 @@ impl Level {
             c: base.c,
             bounds: base.bounds,
             t_max: base.t_max,
-            interact: self.physics.beam_interaction,
+            // Dynamic particles always interact with the rest (that is their purpose).
+            interact: self.physics.beam_interaction
+                || !self.free_particles.is_empty()
+                || self.limits.max_free > 0,
             gates: base.gates,
             radiation_reaction: self.physics.radiation_reaction,
             retarded: self.physics.beam_retarded,

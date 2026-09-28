@@ -122,6 +122,24 @@ def cloud(x, y, r, q):
     return {"center": [x, y, 0], "radius": r, "charge": q}
 
 
+def free_particle(q, m, node, velocity=(0.0, 0.0), radius=0.0, detector=None, moment=0.0):
+    """A dynamic particle placed by the level (it moves and interacts; with a detector it
+    is a goal that must arrive)."""
+    d = {"particle": {"charge": q, "mass": m, "radius": radius}, "node": [node[0], node[1], 0],
+         "velocity": list(velocity)}
+    if moment:
+        d["particle"]["moment"] = moment
+    if detector is not None:
+        d["detector"] = detector
+    return d
+
+
+def free_charge(x, y, q, angle_deg, speed):
+    """The player's free charge (for references)."""
+    return {"node": [x, y, 0], "kind": "free", "value": q, "angle_deg": angle_deg,
+            "speed": speed}
+
+
 def plate(x, y, length, thickness=0.4, height=4.0, angle_deg=0.0, kind="grounded",
           value=None, tunable=False):
     """A box electrode (plate, slab or wall) standing on the plane; `tunable`: the player
@@ -176,7 +194,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           reference=None, c=5.0, t_max=400.0, disturbances=(), max_antennas=0,
           amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=(),
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
-          beam_interaction=False, gates=(), clouds=()):
+          beam_interaction=False, gates=(), clouds=(), free_particles=(), max_free=0,
+          free_charges=(), free_speeds=(), free_mass=1.0, free_radius=0.3):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -194,6 +213,14 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
             limits["plate"] = dict(zip(("length", "thickness", "height"), plate_size))
     if supplies:
         limits["supply_voltages"] = list(supplies)
+    if max_free:
+        limits["max_free"] = max_free
+        limits["free_charges"] = list(free_charges)
+        limits["free_speeds"] = list(free_speeds)
+        if free_mass != 1.0:
+            limits["free_mass"] = free_mass
+        if free_radius != 0.3:
+            limits["free_radius"] = free_radius
     return {
         "format_version": 2, "engine_version": "0.1.0", "name": name, "description": desc,
         "grid": {"nx": grid[0], "ny": grid[1], "nz": 0, "subdivision": 1},
@@ -208,6 +235,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         **({"disturbances": list(disturbances)} if disturbances else {}),
         **({"conductors": list(conductors)} if conductors else {}),
         **({"clouds": list(clouds)} if clouds else {}),
+        **({"free_particles": list(free_particles)} if free_particles else {}),
         **({"electrodes": list(electrodes)} if electrodes else {}),
         **({"gates": list(gates)} if gates else {}),
     }
@@ -1393,13 +1421,30 @@ def jackson_runaway():
         region=(2, 2, 28, 18), disturbances=[stray("crossed fields", e=(0.0, 3e7), bz=1e7)])
 
 
+def jackson_collision_course():
+    # Dynamic particles, introduction: the player's free charge (radius 0.4) is launched
+    # into the shot's path and knocks it into the detector (the charges are 1e-6: their
+    # Coulomb force is negligible, the collision does it). The search finds 63 one-charge
+    # launches.
+    shots = [shot(1e-6, 1.0, (0, 5), 0.0, 0.5, box((12, 17, 17, 20)))]
+    shots[0]["particle"]["radius"] = 0.4
+    return level(
+        "Collision course",
+        "A new element: a free charge. It is not fixed: you give it a velocity (drag the "
+        "handle at the tip of its arrow) and it flies with the particle, pushing and being "
+        "pushed. Particles with a size collide like billiard balls, bouncing off along the "
+        "line between their centres with momentum and energy conserved. Knock the particle "
+        "into the detector.",
+        shots=shots, c=None, t_max=100.0,
+        max_free=3, free_charges=[1e-6], free_speeds=[0.25, 0.5, 1.0], free_radius=0.4)
+
+
 def jackson_knock_on():
     # Jackson Pr. 13.1: a heavy particle (charge 1, mass 40, T0 = 4) passes a light one
     # (charge 1, mass 1) at rest and kicks it, nearly perpendicular to its path, with the
-    # energy T(b) = T_max / (1 + (b/b_min)^2). Both are one-particle "beams" so that they
-    # interact (exact Coulomb, c = inf). Without the interaction the reference fails: the
-    # light particle falls into the placed charge.
-    one = beam(1, 1.0, energy=0.0, angle_deg=0.0, width=0.0, length=0.0)
+    # energy T(b) = T_max / (1 + (b/b_min)^2). The light one is a free particle of the
+    # level (a goal with a detector); they interact exactly (Coulomb, c = inf). Without the
+    # interaction the reference fails: the light particle falls into the placed charge.
     return level(
         "Jackson Pr. 13.1: knock-on",
         "Jackson Problem 13.1 (energy transfer in a Coulomb collision): a fast heavy "
@@ -1407,12 +1452,11 @@ def jackson_knock_on():
         "closer it passes, the harder: T(b) = T_max / (1 + (b/b_min)²). Steer the heavy "
         "particle past the light one so that the kick sends the light one into its "
         "detector (top left); the heavy one must still reach the screen on the right.",
-        c=None, t_max=100.0, beam_interaction=True,
-        shots=[shot(1.0, 40.0, (0, 10), 0.0, 4.0, box((27, 0, 30, 20)), beam=one),
-               shot(1.0, 1.0, (15, 12), 0.0, 1e-6, box((0, 17, 4, 20)), beam=one)],
+        c=None, t_max=100.0,
+        shots=[shot(1.0, 40.0, (0, 10), 0.0, 4.0, box((27, 0, 30, 20)))],
+        free_particles=[free_particle(1.0, 1.0, (15, 12), detector=box((0, 17, 4, 20)))],
         max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0],
         reference=[charge(8, 8, -2.0)])
-
 
 def jackson_stormer():
     # Jackson §12.1 (canonical momentum): in the equatorial plane of a dipole Earth
@@ -1696,24 +1740,24 @@ def jackson_resonance():
 
 def jackson_bound_knock():
     # Pr. 13.2: a passing charge transfers energy to a bound one. Unit charges, c = inf:
-    # electron (q = -1, m = 1) bound in a cloud (Q = 1, R = 4, omega_0 = 0.125); a heavy
-    # projectile (q = -1, m = 40, T0 = 4) flies past, repelling the electron (like
-    # charges: two opposite point charges in one beam could collide, which is not
-    # modelled). Both are one-particle beams so that they interact.
-    one = beam(1, 1.0, energy=0.0, angle_deg=0.0, width=0.0, length=0.0)
+    # electron (q = -1, m = 1) bound in a cloud (Q = 1, R = 4, omega_0 = 0.125), a free
+    # particle of the level with a goal detector; a heavy negative ion (q = -1, m = 40,
+    # T0 = 4) flies past and pushes it (like charges: opposite point charges could fall
+    # into each other). Charges only along the approach (x <= 7): from there a charge
+    # shifts the electron's equilibrium by at most ~2.6 cells (E R^3/Q), inside the atom,
+    # so only the kick frees it (with charges anywhere, one charge next to the atom did).
     return level(
         "Jackson Pr. 13.2: a kick for a bound charge",
         "Jackson Problem 13.2: a charged particle flying past an atom gives its bound "
-        "electron a kick (here a heavy negative ion, which pushes the electron away). A quick pass is a sharp kick; a slow one lets the electron follow "
-        "and hand the energy back. Steer the projectile past the atom so that its kick "
-        "throws the electron out into the detector above; the projectile must still reach "
-        "the screen on the right.",
-        c=None, t_max=150.0, beam_interaction=True,
-        shots=[shot(-1.0, 40.0, (0, 6), 0.0, 4.0, box((27, 0, 30, 20)), beam=one),
-               shot(-1.0, 1.0, (15, 10), 0.0, 1e-6, box((12, 17, 18, 20)), beam=one)],
+        "electron a kick (here a heavy negative ion, which pushes the electron away). A "
+        "quick pass is a sharp kick; a slow one lets the electron follow and hand the "
+        "energy back. Steer the ion past the atom so that its kick throws the electron out "
+        "into the detector above; the ion must still reach the screen on the right.",
+        c=None, t_max=150.0,
+        shots=[shot(-1.0, 40.0, (0, 6), 0.0, 4.0, box((27, 0, 30, 20)))],
+        free_particles=[free_particle(-1.0, 1.0, (15, 10), detector=box((12, 17, 18, 20)))],
         clouds=[cloud(15, 10, 4.0, 1.0)],
-        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0], region=(1, 1, 29, 19))
-
+        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0], region=(1, 1, 7, 19))
 
 def jackson_spectroscopy():
     # Arc finale: two atoms of different sizes (R = 4 and 3: omega_0 = 0.125 and 0.192),
@@ -1866,6 +1910,7 @@ ARCS = [
         ("Introduction", [
             ("jackson_exb_drift", jackson_exb_drift),
             ("jackson_van_allen", jackson_van_allen),
+            ("jackson_collision_course", jackson_collision_course),
             ("jackson_knock_on", jackson_knock_on),
         ]),
         ("Intermediate", [
@@ -2085,6 +2130,7 @@ def main():
             continue
         path = os.path.join(ROOT, "levels", f"{key}.json")
         previous = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else None
+        kept = False
         lvl = make()
         if (previous and previous["reference_solution"] and not lvl["reference_solution"]
                 and same_physics(lvl, previous)):
@@ -2092,6 +2138,7 @@ def main():
             # again below) instead of searching anew.
             lvl["reference_solution"] = previous["reference_solution"]
             print(f"{key}: reference kept from the previous build")
+            kept = True
         lvl = resolve_auto(lvl)
         if slug in MUST_FAIL_ALONE:
             alone = dict(lvl, reference_solution=[])
@@ -2116,7 +2163,16 @@ def main():
         if not lvl["reference_solution"]:
             run_generator("solve", path, "--write", "--restarts", "64", "--iterations", "400")
         report = run_generator("check", path)
-        ok = all("Arrived" in l and "Verified" in l for l in report.splitlines() if "shot " in l)
+        if "placement Ok" not in report and kept:
+            # A kept reference outside the new limits (e.g. a smaller region): solve anew.
+            print(f"{key}: kept reference no longer allowed; solving anew", flush=True)
+            lvl["reference_solution"] = []
+            with open(path, "w", newline="\n", encoding="utf-8") as f:
+                f.write(json.dumps(lvl, indent=2, ensure_ascii=False) + "\n")
+            run_generator("solve", path, "--write", "--restarts", "64", "--iterations", "400")
+            report = run_generator("check", path)
+        ok = "placement Ok" in report and all(
+            "Arrived" in l and "Verified" in l for l in report.splitlines() if "shot " in l)
         print(f"{key}: reference {'verified' if ok else 'NOT VERIFIED'}", flush=True)
         if not ok:
             print(report)

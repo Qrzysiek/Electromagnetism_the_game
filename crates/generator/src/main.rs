@@ -244,6 +244,20 @@ fn main() {
                             }
                         );
                     }
+                    // Goal particles (the level's free particles with a detector): each
+                    // must arrive, verified (printed like a shot, so tools check them too).
+                    for (k, &i) in level.goal_particles().iter().enumerate() {
+                        let t = &v.verified.trajectories[i];
+                        println!(
+                            "  shot goal-{} disturbance {}: free particle, outcome {:?}, status {:?}, ends at ({:.4}, {:.4})",
+                            k + 1,
+                            d + 1,
+                            t.outcome,
+                            v.status[i],
+                            t.end.x.x,
+                            t.end.x.y
+                        );
+                    }
                     println!(
                         "  beam energy drift {:.1e}, {} steps",
                         v.verified.energy_max_rel_error, v.verified.stats.n_step

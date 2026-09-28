@@ -164,6 +164,7 @@
           "levels": [
             "jackson_exb_drift",
             "jackson_van_allen",
+            "jackson_collision_course",
             "jackson_knock_on"
           ]
         },
