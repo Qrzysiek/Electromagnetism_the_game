@@ -47,8 +47,6 @@ E(r) = Σ_i k Q_i (r − r_i) / |r − r_i|³
 
 ### 2.1 Charge clouds (Thomson's atom) — *validated* (`field.rs::ChargeCloud`, tests C1–C2)
 
-(Display: while a particle of the opposite sign is inside a cloud, the game draws a faint spring from the cloud's centre to it: inside the uniform sphere the force is exactly `q Q d / R³`, a charge on a spring. The spring is a picture of the cloud's field, not a separate force.)
-
 A charge cloud is a sphere of uniform charge density (total `Q`, radius `R`) that particles fly through. Inside, Gauss's law gives exactly
 
 ```

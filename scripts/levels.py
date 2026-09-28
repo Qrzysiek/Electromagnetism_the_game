@@ -1763,7 +1763,9 @@ def jackson_bound_charge():
         "spring is real electrostatics: inside a sphere of uniform positive charge (J. J. "
         "Thomson's atom) the field grows linearly from the centre, so the electron is "
         "pulled back in proportion to how far it strays: it circles the centre with the "
-        "same period at any radius. Pull it out of the atom into the detector.",
+        "same period at any radius. Only inside: outside the sphere the pull is "
+        "Coulomb's 1/r², no spring at all, so an electron with more energy than the "
+        "spring can hold leaves. Pull it out of the atom into the detector.",
         shots=[shot(-1e-6, 1.0, (10, 8), 0.0, 0.5 * 0.25 ** 2, box((24, 8, 28, 12)))],
         clouds=[cloud(10, 10, 4.0, 1e6)],
         max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], c=None, t_max=300.0,
@@ -1782,7 +1784,12 @@ def jackson_resonance():
         "electron oscillates at its natural frequency ω₀ = 0.125. A weak field that "
         "oscillates at ω₀ pushes it in step every cycle and its swing grows steadily; at any "
         "other frequency the pushes cancel out. Tune an antenna (frequency, orientation, "
-        "place) so that the electron swings out of the atom into the detector.",
+        "place) so that the electron swings out of the atom into the detector. "
+        "The atom is Thomson's: a sphere of uniform positive charge. Inside it the field "
+        "grows in proportion to the distance from the centre, so an electron inside feels "
+        "the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's "
+        "bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an "
+        "electron with more energy than the spring can hold leaves.",
         shots=[shot(-1e-6, 1.0, (15, 10), 90.0, 0.5 * w0 ** 2, box((20, 8, 22, 12)))],
         clouds=[cloud(15, 10, 4.0, 1e6)], rf_omega=0.3, t_max=400.0,
         max_antennas=2, amplitudes=[m * M for m in (0.1, 0.2, 0.5, 1)],
@@ -1804,7 +1811,12 @@ def jackson_bound_knock():
         "electron a kick. Throw a heavy negative ion (pull its slingshot handle back) past "
         "the atom, whose electron circles inside it. A quick pass is a sharp kick; a slow "
         "one lets the electron follow and hand the energy back. Kick the electron out of "
-        "the atom into the detector above.",
+        "the atom into the detector above. "
+        "The atom is Thomson's: a sphere of uniform positive charge. Inside it the field "
+        "grows in proportion to the distance from the centre, so an electron inside feels "
+        "the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's "
+        "bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an "
+        "electron with more energy than the spring can hold leaves.",
         grid=(40, 20), c=None, t_max=150.0,
         shots=[shot(-1.0, 1.0, (30, 8), 0.0, 0.5 * (w0 * 2.0) ** 2, box((27, 17, 33, 20)))],
         clouds=[cloud(30, 10, 4.0, 1.0)],
@@ -1821,7 +1833,12 @@ def jackson_spectroscopy():
         "Finale of the Jackson arc on bound charges (§16.7-16.8). Two atoms of different "
         "sizes, so two different natural frequencies: the big one rings at 0.125, the small "
         "one at 0.192. Each electron must leave its atom into its own detector: drive each "
-        "at its own resonance, and keep each drive from upsetting the other atom.",
+        "at its own resonance, and keep each drive from upsetting the other atom. "
+        "Each atom is Thomson's: a sphere of uniform positive charge. Inside it the field "
+        "grows in proportion to the distance from the centre, so an electron inside feels "
+        "the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's "
+        "bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an "
+        "electron with more energy than the spring can hold leaves.",
         grid=(40, 20), t_max=500.0, rf_omega=0.3,
         shots=[shot(-1e-6, 1.0, (13, 10), 90.0, 0.5 * w1 ** 2, box((18, 13, 21, 16))),
                shot(-1e-6, 1.0, (27, 10), 90.0, 0.5 * w2 ** 2, box((19, 4, 22, 7)))],

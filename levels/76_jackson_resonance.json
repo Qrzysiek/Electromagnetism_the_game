@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §16.8: resonance",
-  "description": "Jackson §16.8 (scattering and absorption of radiation by an oscillator). The bound electron oscillates at its natural frequency ω₀ = 0.125. A weak field that oscillates at ω₀ pushes it in step every cycle and its swing grows steadily; at any other frequency the pushes cancel out. Tune an antenna (frequency, orientation, place) so that the electron swings out of the atom into the detector.",
+  "description": "Jackson §16.8 (scattering and absorption of radiation by an oscillator). The bound electron oscillates at its natural frequency ω₀ = 0.125. A weak field that oscillates at ω₀ pushes it in step every cycle and its swing grows steadily; at any other frequency the pushes cancel out. Tune an antenna (frequency, orientation, place) so that the electron swings out of the atom into the detector. The atom is Thomson's: a sphere of uniform positive charge. Inside it the field grows in proportion to the distance from the centre, so an electron inside feels the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an electron with more energy than the spring can hold leaves.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -15,17 +15,17 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
-    "rf_omega": 0.3,
     "t_max": 400.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
-    }
+    },
+    "rf_omega": 0.3
   },
   "shots": [
     {
       "particle": {
-        "charge": -1e-6,
+        "charge": -1e-06,
         "mass": 1.0,
         "radius": 0.0
       },

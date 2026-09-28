@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 13.2: a kick for a bound charge",
-  "description": "Jackson Problem 13.2: a charged particle flying past an atom gives its bound electron a kick. Throw a heavy negative ion (pull its slingshot handle back) past the atom, whose electron circles inside it. A quick pass is a sharp kick; a slow one lets the electron follow and hand the energy back. Kick the electron out of the atom into the detector above.",
+  "description": "Jackson Problem 13.2: a charged particle flying past an atom gives its bound electron a kick. Throw a heavy negative ion (pull its slingshot handle back) past the atom, whose electron circles inside it. A quick pass is a sharp kick; a slow one lets the electron follow and hand the energy back. Kick the electron out of the atom into the detector above. The atom is Thomson's: a sphere of uniform positive charge. Inside it the field grows in proportion to the distance from the centre, so an electron inside feels the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an electron with more energy than the spring can hold leaves.",
   "grid": {
     "nx": 40,
     "ny": 20,

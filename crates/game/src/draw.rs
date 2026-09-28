@@ -834,7 +834,6 @@ pub fn draw(
             && let Some(pt) = ui::point_at(p, game.anim_time)
         {
             let x = to_vec2(pt.x);
-            draw_springs(&mut gizmos, level, x, level.shots[i].particle.charge);
             let dot = Color::srgb(1.0, 1.0, 0.6);
             gizmos.circle_2d(x, 0.18, dot);
             gizmos.circle_2d(x, 0.1, dot);
@@ -925,18 +924,6 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
             gizmos.linestrip_2d(path.iter().map(|(_, x)| to_vec2(*x)), color);
             if game.animate && primary {
                 if let Some(x) = path_at(path, game.anim_time) {
-                    let level = &game.editor.level;
-                    let charge = if shot < n_shots {
-                        Some(level.shots[shot].particle.charge)
-                    } else {
-                        level
-                            .free_particles
-                            .get(shot - n_shots)
-                            .map(|f| f.particle.charge)
-                    };
-                    if let Some(q) = charge {
-                        draw_springs(gizmos, level, to_vec2(x), q);
-                    }
                     gizmos.circle_2d(to_vec2(x), 0.08, Color::srgb(1.0, 1.0, 0.6));
                 } else if matches!(p.outcomes[i], Outcome::Collided(_))
                     && let Some(&(t_end, x)) = path.last()
@@ -950,48 +937,33 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
     }
 }
 
-/// A faint spring from a charge cloud's centre to a particle inside it that the cloud
-/// binds (opposite sign): inside a uniform sphere of charge the force is exactly harmonic,
-/// `F = q Q d / R³`, a charge on a spring (Thomson's atom). A hint of what the field does,
-/// not a separate force.
-fn draw_springs(gizmos: &mut Gizmos, level: &level::Level, x: Vec2, charge: f64) {
-    for c in &level.clouds {
-        if c.charge * charge >= 0.0 {
-            continue;
-        }
-        let centre = to_vec2(level.grid.position(c.center));
-        let d = x - centre;
-        let len = d.length();
-        #[allow(clippy::cast_possible_truncation)]
-        if len < 0.15 || len > c.radius as f32 {
-            continue;
-        }
-        let (red, green, blue) = if c.charge >= 0.0 {
-            (1.0, 0.45, 0.35)
-        } else {
-            (0.4, 0.65, 1.0)
-        };
-        let color = Color::srgba(red, green, blue, 0.35);
-        let (u, side) = (d / len, d.perp() / len);
-        // Ten coils of fixed width that stretch with the displacement.
-        let n = 40;
-        #[allow(clippy::cast_precision_loss)]
-        let points = (0..=n).map(|k| {
-            let s = k as f32 / n as f32;
-            let wiggle = if k == 0 || k == n {
-                0.0
-            } else if k % 4 == 1 {
-                0.12
-            } else if k % 4 == 3 {
-                -0.12
-            } else {
-                0.0
-            };
-            centre + u * (len * s) + side * wiggle
-        });
-        gizmos.linestrip_2d(points, color);
-        gizmos.circle_2d(centre, 0.06, color);
+/// A faint spring from `anchor` to `x`: ten coils of fixed width that stretch with the
+/// distance. Kept for a future level with a mechanical spring (a particle on a real
+/// spring). It was drawn for charge clouds, but a cloud acts as a spring only on a bound
+/// particle inside it; one with more energy than any bound state is on no spring at all
+/// (the owner's review), so atoms are drawn without it.
+#[allow(dead_code)]
+fn draw_spring(gizmos: &mut Gizmos, anchor: Vec2, x: Vec2, color: Color) {
+    let d = x - anchor;
+    let len = d.length();
+    if len < 0.15 {
+        return;
     }
+    let (u, side) = (d / len, d.perp() / len);
+    let n = 40;
+    #[allow(clippy::cast_precision_loss)]
+    let points = (0..=n).map(|k| {
+        let s = k as f32 / n as f32;
+        let wiggle = match k % 4 {
+            _ if k == 0 || k == n => 0.0,
+            1 => 0.12,
+            3 => -0.12,
+            _ => 0.0,
+        };
+        anchor + u * (len * s) + side * wiggle
+    });
+    gizmos.linestrip_2d(points, color);
+    gizmos.circle_2d(anchor, 0.06, color);
 }
 
 /// Paths of a previous setup (while the new one is computed) are drawn faded.
