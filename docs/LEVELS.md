@@ -71,7 +71,7 @@ verified reference solution for every shot and negligible radiation
 | 47 | Stern–Gerlach beam | 5 Introduction | both spin states as spread beams, each to its own detector | ≤ 3 magnets | 1 |
 | 48 | Relativistic beam | 5 Introduction | a beam at 0.8c: magnetic attraction weakens space charge to 1/γ²; quasi-static interaction with radiation reaction | ≤ 3 charges | 1 |
 | 49 | Collimated beam | 5 Intermediate | the collimator for a spread, interacting beam (±3°) | ≤ 4 charges | 2 |
-| 50 | Velocity selector | 5 Intermediate | two speeds in one interacting beam sorted by crossed fields | ≤ 4 charges | 4 |
+| 50 | Velocity selector | 5 Intermediate | the Wien filter for a beam: three speeds, 8 ions each; the middle one leaves straight (±5°) | ≤ 4 charges | 2 |
 | 51 | Beam preparation | 5 Intermediate | two stages for a beam: collimate it through a gate (±4°), then steer it into the target | ≤ 5 charges | 3 |
 | 52 | Chromatic aberration | 5 Intermediate | the Einzel lens (9) built in; each ray becomes a beam with an 8 % energy spread | ≤ 3 charges | 1 |
 | 53 | Real analyser | 5 Intermediate | the hemispherical analyser (12) built in; the source emits into a cone (σ = 4°) | ≤ 3 charges | 1 |
@@ -241,7 +241,9 @@ Notes:
   Wien filter (reference 4) and the velocity selector (reference 4) were solved with one
   charge, and Build a Wien filter (reference 6) with two elements. The Wien filters now
   require a straight exit (±3°; at ±4° one placement of a single charge still passed) and
-  need 2 and 3 elements. The Reference column of the table above gives the current
+  need 2 and 3 elements. The velocity selector became the Wien filter for a beam (three
+  speeds, straight exit within ±5°): no one-charge solution, two-charge ones in 2 of 32
+  search runs; the Wien filter's own design fails there (space charge). The Reference column of the table above gives the current
   counts.
 - The search is a rough stand-in for a player. A player who understands the physics (for
   example the Wien condition v = E/B) should do much better than the search on the later

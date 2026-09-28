@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Velocity selector",
-  "description": "A beam with two groups of ions, slow and fast, mixed and repelling each other. The coil provides B; place charges for E so that crossed fields sort the beam by speed: at least 90 % of each group must reach its own detector.",
+  "description": "The Wien filter for a real beam: three groups of ions, slow, middle and fast, mixed and repelling each other. The coil provides B; place charges for E so that the middle group leaves straight along the axis (within ±5°) and the slower and faster groups reach their own detectors: at least 80 % of each.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -25,13 +25,13 @@
   "shots": [
     {
       "beam": {
-        "count": 12,
+        "count": 8,
         "energy_spread": 0.02,
         "angle_spread_deg": 0.5,
         "width": 0.2,
         "length": 0.2,
         "distribution": "gaussian",
-        "transmission": 0.9,
+        "transmission": 0.8,
         "seed": 0
       },
       "particle": {
@@ -55,25 +55,73 @@
       "detector": {
         "min": [
           26,
-          11,
+          12,
           0
         ],
         "max": [
           28,
-          14,
+          15,
           0
         ]
       }
     },
     {
       "beam": {
-        "count": 12,
+        "count": 8,
         "energy_spread": 0.02,
         "angle_spread_deg": 0.5,
         "width": 0.2,
         "length": 0.2,
         "distribution": "gaussian",
-        "transmission": 0.9,
+        "transmission": 0.8,
+        "seed": 0
+      },
+      "particle": {
+        "charge": 50.0,
+        "mass": 50000000.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          2,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 25000000.0
+      },
+      "detector": {
+        "min": [
+          26,
+          9,
+          0
+        ],
+        "max": [
+          28,
+          11,
+          0
+        ],
+        "acceptance": {
+          "direction": [
+            0.0,
+            5.0
+          ]
+        }
+      }
+    },
+    {
+      "beam": {
+        "count": 8,
+        "energy_spread": 0.02,
+        "angle_spread_deg": 0.5,
+        "width": 0.2,
+        "length": 0.2,
+        "distribution": "gaussian",
+        "transmission": 0.8,
         "seed": 0
       },
       "particle": {
@@ -97,12 +145,12 @@
       "detector": {
         "min": [
           26,
-          7,
+          5,
           0
         ],
         "max": [
           28,
-          9,
+          8,
           0
         ]
       }
@@ -166,39 +214,21 @@
   "reference_solution": [
     {
       "node": [
-        11,
-        7,
+        10,
+        6,
         0
       ],
       "kind": "charge",
-      "value": 200000.0
+      "value": 400000.0
     },
     {
       "node": [
-        19,
-        7,
+        15,
+        6,
         0
       ],
       "kind": "charge",
-      "value": 200000.0
-    },
-    {
-      "node": [
-        11,
-        13,
-        0
-      ],
-      "kind": "charge",
-      "value": -200000.0
-    },
-    {
-      "node": [
-        19,
-        13,
-        0
-      ],
-      "kind": "charge",
-      "value": -200000.0
+      "value": 400000.0
     }
   ]
 }

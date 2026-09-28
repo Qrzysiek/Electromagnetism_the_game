@@ -870,22 +870,27 @@ def collimated_beam():
 
 
 def velocity_selector():
-    # The Wien filter of chapter 7 with two speeds mixed in one beam (T0 = 0.3 and 1.0),
-    # 2 % energy spread each, repelling each other.
+    # The Wien filter of arc 3 for a beam: three speeds (T0 = 0.3, 0.5 and 1.0), 8 ions
+    # each with a 2 % energy spread, repelling each other. The middle speed must leave
+    # straight (within ±5°, wider than the single ions' ±3°: the beam spreads). With two
+    # speeds and free exits one charge sufficed (`analyze --fewest`); now the search finds
+    # no one-charge solution, and two-charge ones in 2 of 32 runs (the reference). The
+    # Wien filter's own two charges fail here: space charge blows the slow beams apart.
+    det = dict(WIEN_DETECTORS)
+    det[0.5] = box((26, 9, 28, 11), direction=(0.0, 5.0))
     return level(
         "Velocity selector",
-        "A beam with two groups of ions, slow and fast, mixed and repelling each other. The "
-        "coil provides B; place charges for E so that crossed fields sort the beam by speed: "
-        "at least 90 % of each group must reach its own detector.",
+        "The Wien filter for a real beam: three groups of ions, slow, middle and fast, "
+        "mixed and repelling each other. The coil provides B; place charges for E so that "
+        "the middle group leaves straight along the axis (within ±5°) and the slower and "
+        "faster groups reach their own detectors: at least 80 % of each.",
         c=None, t_max=80.0, beam_interaction=True,
-        shots=[shot(1e-6 * K, K, (2, 10), 0.0, e * K, box(b), beam=beam(12, 0.9, energy=0.02))
-               for e, b in ((0.3, (26, 11, 28, 14)), (1.0, (26, 7, 28, 9)))],
+        shots=[shot(1e-6 * K, K, (2, 10), 0.0, e * K, det[e], beam=beam(8, 0.8, energy=0.02))
+               for e in (0.3, 0.5, 1.0)],
         coils=[rect_coil(1, 5, 29, 15, 2.5e4)],
         max_charges=4, magnitudes=[m * M for m in (0.1, 0.15, 0.2, 0.3, 0.4)],
         region=(6, 6, 24, 14),
-        reference=[charge(11, 7, 0.2 * M), charge(19, 7, 0.2 * M),
-                   charge(11, 13, -0.2 * M), charge(19, 13, -0.2 * M)])
-
+        reference=[charge(10, 6, 0.4 * M), charge(15, 6, 0.4 * M)])
 
 def beam_preparation():
     # The collimated beam of the previous level, now as the first stage of an
