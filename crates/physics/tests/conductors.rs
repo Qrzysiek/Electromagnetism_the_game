@@ -351,3 +351,56 @@ fn k4_energy_conservation_with_image_forces() {
         assert!(rel < 1e-10, "energy error {rel:.3e}");
     }
 }
+
+// --- K5: Jackson Problem 2.4, like charges attract near an isolated sphere --------------
+
+/// A point charge q at distance d from the centre of an isolated conducting sphere
+/// (radius R) carrying the charge Q of the same sign is repelled far away and attracted
+/// close to the surface. The force vanishes where
+/// `Q/d² = q R³ (2d² − R²) / (d³ (d² − R²)²)` (the net charge at the centre against the
+/// image pair of a neutral sphere). Jackson's answers (Pr. 2.4): d/R − 1 = 0.6178 for
+/// Q = q (the golden ratio), 0.4276 for Q = 2q, 0.8823 for Q = q/2. The engine's force
+/// (the sphere's field plus the particle's own images) must change sign at the exact
+/// root, found by bisection on both, and agree with the book's rounded values.
+#[test]
+fn k5_like_charges_attract_near_an_isolated_sphere() {
+    let (r, q) = (2.0, 0.8);
+    let bisect = |f: &dyn Fn(f64) -> f64| {
+        let (mut lo, mut hi) = (r * 1.01, r * 3.0);
+        assert!(f(lo) < 0.0 && f(hi) > 0.0, "no sign change");
+        for _ in 0..200 {
+            let mid = 0.5 * (lo + hi);
+            if f(mid) < 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        0.5 * (lo + hi)
+    };
+    for (ratio, book) in [(1.0, 0.6178), (2.0, 0.4276), (0.5, 0.8823)] {
+        let big_q = ratio * q;
+        let c = Conductors::new(
+            vec![sphere(0.0, 0.0, r, Bias::Charge(big_q))],
+            &[],
+            Resolution::Verify,
+        );
+        // Radial force on the particle (positive: repelled).
+        let engine = |d: f64| {
+            let x = DVec3::new(d, 0.0, 0.0);
+            q * (c.induced.sample(x, 0.0).e.x + c.self_field(x, q).0.x)
+        };
+        let exact = |d: f64| {
+            q * big_q / (d * d)
+                - q * q * r.powi(3) * (2.0 * d * d - r * r) / (d.powi(3) * (d * d - r * r).powi(2))
+        };
+        let (d_engine, d_exact) = (bisect(&engine), bisect(&exact));
+        println!(
+            "K5 Q/q = {ratio}: d/R − 1 = {:.6} (engine), {:.6} (exact), {book} (Jackson)",
+            d_engine / r - 1.0,
+            d_exact / r - 1.0
+        );
+        assert!((d_engine - d_exact).abs() / r < 1e-10);
+        assert!((d_exact / r - 1.0 - book).abs() < 5e-4);
+    }
+}

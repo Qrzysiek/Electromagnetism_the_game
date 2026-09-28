@@ -59,6 +59,7 @@ and tier):
 | 4 Time: noise, RF and radiation | Stray field, RF kick, Synchrotron light | Mains hum, Earth's field, CRT in the Earth's field, RF separator, Tune the RF, Streak camera | **RF beam line**: steer two bunches through a gate with a stray field on and off, then separate them with RF |
 | 5 Beams | Space charge, Stern–Gerlach beam, Relativistic beam | Collimated beam, Velocity selector, Beam preparation, Chromatic aberration, Real analyser, Calutron at full current, Soft landing at full current | **Isotope separator**: collimate an interacting two-isotope beam through a gate, then separate the isotopes with magnets |
 | 6 Jackson: charges in fields (Ch. 12) | §12.3 E×B drift, Pr. 12.9 Van Allen equator | §12.4 gradient drift, Pr. 12.5 E×B runaway | **Magnetosphere**: steer the solar wind's E×B drift through two gates, then the gradient drift splits proton and electron around a dipole Earth |
+| 7 Jackson: conductors (Ch. 2–3) | §2.2 its own image, Pr. 2.6 two spheres | §3.13 field through a hole, Pr. 2.4 golden-ratio capture | **Sphere slalom**: weave between three spheres carrying the particle's charge |
 
 Changes to existing levels: The wall and Injection were joined into Around the wall (the
 beam must enter the detector along the axis after going around the wall: two charges).

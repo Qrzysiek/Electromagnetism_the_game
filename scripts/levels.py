@@ -1428,6 +1428,103 @@ def jackson_magnetosphere():
     return lvl
 
 
+# Jackson arc on conductors (Ch. 2-3). The golden-ratio levels use a particle with charge
+# 1 (Newtonian, c = inf, so nothing radiates): the image force on it is then comparable
+# to the sphere's own field, as in Problem 2.4. Test K5 checks the engine against the
+# problem's answer.
+
+def jackson_own_image():
+    # A particle with charge 1 passes a grounded sphere (R = 3): its image -q R/d at
+    # R^2/d pulls it in with the force q^2 R d / (d^2 - R^2)^2 (test K1).
+    return level(
+        "Jackson §2.2: its own image",
+        "Jackson §2.2 (a point charge near a grounded conducting sphere). The sphere "
+        "carries no charge of its own, yet it attracts every charge that passes: the "
+        "charge induces an opposite image charge inside it, −q R/d at the distance R²/d "
+        "from the centre, and the image pulls. The pull grows steeply near the surface. "
+        "Bring the particle into the detector.",
+        shots=[shot(1.0, 1.0, (0, 6), 0.0, 0.3, box((27, 12, 30, 16)))],
+        conductors=[metal(15, 11, 3, "grounded")],
+        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0], c=None, t_max=300.0)
+
+
+def jackson_two_spheres():
+    return level(
+        "Jackson Pr. 2.6: two spheres",
+        "Jackson Problem 2.6: two conducting spheres, one charged, one neutral. Each sphere's "
+        "charge induces an image in the other, which induces an image in the first, and so "
+        "on: the neutral sphere becomes a dipole facing the charged one, and both respond "
+        "to your charges and to the particle itself. Bring the beam into the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 18)))],
+        conductors=[metal(11, 5, 2.5, "charge", 3e6), metal(19, 13, 2.5, "charge", 0.0)],
+        max_charges=3, magnitudes=[m * M for m in (0.5, 1, 2, 4)], region=(2, 1, 26, 19))
+
+
+def jackson_slot():
+    # A grounded wall across the arena with a slot on the axis; a strong charge behind
+    # the wall. Jackson §3.13 treats a circular hole in a plane; in the slice the hole is
+    # a slot (the wall's plates are 4 cells high). The wall screens the charge except
+    # through the slot, where its field leaks out and falls off quickly.
+    return level(
+        "Jackson §3.13: field through a hole",
+        "Jackson §3.13 (a conducting plane with a hole): a grounded wall screens what is "
+        "behind it, except through the opening, where the field leaks through and falls "
+        "off within a few widths of the hole (in this slice the hole is a slot). The strong "
+        "charge behind the wall is screened; the beam passes the slot. Your charges on this "
+        "side are screened from the far side too. Bring the beam into the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 2, 30, 6)))],
+        electrodes=[plate(15, 4, 8, angle_deg=90.0), plate(15, 16, 8, angle_deg=90.0)],
+        elements=[charge(19, 13, 2 * M)],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], region=(2, 1, 13, 19))
+
+
+def jackson_golden_ratio():
+    # Sphere R = 3 with Q = 1, particle q = 1: the force vanishes at d = 1.618 R, the
+    # golden ratio (Pr. 2.4a). Launched at T0 = 0.3 straight at the sphere, the particle
+    # passes the repulsive maximum and is pulled onto the sphere. The search finds no
+    # one-charge solution and two-charge ones in 28 of 32 runs.
+    return level(
+        "Jackson Pr. 2.4: golden-ratio capture",
+        "Jackson Problem 2.4: a charge near an isolated conducting sphere carrying the same "
+        "charge is repelled far away, but attracted close to it: its image in the sphere "
+        "wins inside 1.618 radii from the centre, the golden ratio (for equal charges). "
+        "This particle has enough energy to get that close, and the sphere would catch "
+        "it. Bring it around the sphere into the detector behind.",
+        shots=[shot(1.0, 1.0, (0, 10), 0.0, 0.3, box((27, 8, 30, 12)))],
+        conductors=[metal(15, 10, 3, "charge", 1.0)],
+        max_charges=4, magnitudes=[0.25, 0.5, 1.0, 2.0], c=None, t_max=300.0)
+
+
+def jackson_sphere_slalom():
+    # Arc finale: three isolated spheres with the particle's charge (Q = q = 1, R = 2.5),
+    # alternately below and above the axis; the particle must weave between them without
+    # being captured (Pr. 2.4), through a gate after each of the first two spheres, then
+    # into the detector behind the third. (With two spheres and one gate the stages took
+    # 3 elements in all.)
+    gates = [box((15, 9, 17, 11)), box((24, 9, 26, 11))]
+    target = box((37, 12, 40, 16))
+    shots = [shot(1.0, 1.0, (0, 4), 0.0, 0.3, target)]
+    mags = [0.25, 0.5, 1.0, 2.0]
+    lvl = level(
+        "Jackson Ch. 2: sphere slalom",
+        "Finale of the Jackson arc on conductors (Problems 2.4 and 2.6). Three isolated "
+        "spheres carry the particle's own charge: far away they repel it, close by their "
+        "images pull it in (inside 1.618 radii for equal charges), and each polarizes the "
+        "others. Weave between them: through the two gates, then around the last sphere "
+        "into the detector.",
+        grid=(40, 20), shots=shots, gates=gates, t_max=400.0, c=None,
+        conductors=[metal(10, 5, 2.5, "charge", 1.0), metal(21, 15, 2.5, "charge", 1.0),
+                    metal(31, 5, 2.5, "charge", 1.0)],
+        max_charges=8, magnitudes=mags, region=(2, 1, 37, 19))
+    stage1 = solve_stage(lvl, [], [gates[0]], [], max_charges=3, magnitudes=mags,
+                         region=(2, 1, 14, 19))
+    stage2 = solve_stage(lvl, stage1, [gates[1]], gates[:1], max_charges=3, magnitudes=mags,
+                         region=(18, 1, 23, 19))
+    stage3 = solve_stage(lvl, stage1 + stage2, [target], gates, max_charges=3, magnitudes=mags,
+                         region=(27, 1, 37, 19))
+    lvl["reference_solution"] = stage1 + stage2 + stage3
+    return lvl
+
 def needs_elements(lvl, fewer):
     """Check that the level is not solved with only `fewer` charges anywhere (the
     solver with that cap must fail): a finale needs its modules. A heuristic check: a
@@ -1565,6 +1662,19 @@ ARCS = [
         ]),
         ("Master", [
             ("jackson_magnetosphere", jackson_magnetosphere),
+        ]),
+    ]),
+    ("Jackson: conductors", [
+        ("Introduction", [
+            ("jackson_own_image", jackson_own_image),
+            ("jackson_two_spheres", jackson_two_spheres),
+        ]),
+        ("Intermediate", [
+            ("jackson_slot", jackson_slot),
+            ("jackson_golden_ratio", jackson_golden_ratio),
+        ]),
+        ("Master", [
+            ("jackson_sphere_slalom", jackson_sphere_slalom),
         ]),
     ]),
 ]

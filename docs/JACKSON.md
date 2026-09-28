@@ -71,6 +71,21 @@ Arc 6, "Jackson: charges in fields" (Ch. 12), `scripts/levels.py`:
 - Jackson Ch. 12: magnetosphere (master). E×B steering through two gates, then gradient
   drift around a dipole Earth.
 
+Arc 7, "Jackson: conductors" (Ch. 2–3):
+
+- Jackson §2.2: its own image (introduction). A particle with charge 1 (Newtonian) passes a
+  grounded sphere and is pulled by its image.
+- Jackson Pr. 2.6: two spheres (introduction). A charged and a neutral floating sphere.
+- Jackson §3.13: field through a hole (intermediate). In the slice the hole is a slot in a
+  grounded wall of two plates.
+- Jackson Pr. 2.4: golden-ratio capture (intermediate). Test K5 checks the engine against
+  the problem's answers.
+- Jackson Ch. 2: sphere slalom (master). Three spheres with the particle's charge, two
+  gates.
+- Not built: §2.5 (sphere in a uniform field) needs metal spheres in a stray field, which
+  the validator rejects today (the sphere solver does not include external fields);
+  Pr. 2.20 (quadrupole lens) focuses a beam moving across the plane, a 3D effect.
+
 ## Catalogue by chapter
 
 ### Ch. 1: Introduction to electrostatics

@@ -180,6 +180,31 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Jackson: conductors",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "jackson_own_image",
+            "jackson_two_spheres"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "jackson_slot",
+            "jackson_golden_ratio"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "jackson_sphere_slalom"
+          ]
+        }
+      ]
     }
   ]
 }

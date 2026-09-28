@@ -83,6 +83,11 @@ verified reference solution for every shot and negligible radiation
 | 59 | Jackson §12.4: gradient drift | 6 Intermediate | drift along lines of equal \|B\|, opposite for the two signs; charges move both alike, magnets oppositely | ≤ 3 charges, ≤ 3 magnets | 2 |
 | 60 | Jackson Pr. 12.5: E×B runaway | 6 Intermediate | \|E\| > c\|B\|: no drift frame, the particle runs away; magnets make B strong enough to drift | ≤ 6 magnets | 2 |
 | 61 | Jackson Ch. 12: magnetosphere | 6 Master | the solar wind's E×B drift steered up and down through two gates, then the gradient drift splits proton and electron around a dipole Earth | ≤ 6 charges, ≤ 5 magnets | 5 |
+| 62 | Jackson §2.2: its own image | 7 Introduction | a grounded sphere attracts every passing charge through its image −qR/d | ≤ 3 charges | 1 |
+| 63 | Jackson Pr. 2.6: two spheres | 7 Introduction | a charged and a neutral sphere image each other; the neutral one becomes a dipole | ≤ 3 charges | 1 |
+| 64 | Jackson §3.13: field through a hole | 7 Intermediate | a grounded wall screens a charge except through the slot, where its field leaks out | ≤ 3 charges | 2 |
+| 65 | Jackson Pr. 2.4: golden-ratio capture | 7 Intermediate | like charges attract inside 1.618 radii of an equally charged isolated sphere; go around it | ≤ 4 charges | 2 |
+| 66 | Jackson Ch. 2: sphere slalom | 7 Master | weave between three spheres carrying the particle's charge, through two gates, without being captured | ≤ 8 charges | 4 |
 
 ## Automatic detectors
 
@@ -251,6 +256,8 @@ Notes:
     the satellites swapped (each particle three quarters around the Earth) stage 2 had no
     solution with up to 3 charges and 4 magnets, since the solar wind sweeps the
     particles off their drift shells.
+  - Jackson Ch. 2: sphere slalom: 2 charges to the first gate, one each for the second
+    gate and the detector. With two spheres and one gate the level took 3 elements.
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.

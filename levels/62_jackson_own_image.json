@@ -1,0 +1,97 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson §2.2: its own image",
+  "description": "Jackson §2.2 (a point charge near a grounded conducting sphere). The sphere carries no charge of its own, yet it attracts every charge that passes: the charge induces an opposite image charge inside it, −q R/d at the distance R²/d from the centre, and the image pulls. The pull grows steeply near the surface. Bring the particle into the detector.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 300.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1.0,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          6,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.3
+      },
+      "detector": {
+        "min": [
+          27,
+          12,
+          0
+        ],
+        "max": [
+          30,
+          16,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      0.25,
+      0.5,
+      1.0,
+      2.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": []
+  },
+  "reference_solution": [
+    {
+      "node": [
+        0,
+        0,
+        0
+      ],
+      "kind": "charge",
+      "value": -0.25
+    }
+  ],
+  "conductors": [
+    {
+      "center": [
+        15,
+        11,
+        0
+      ],
+      "radius": 3.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    }
+  ]
+}

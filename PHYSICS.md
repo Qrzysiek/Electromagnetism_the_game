@@ -556,11 +556,13 @@ Note on R2: the first version compared LL work with `∫P dt` alone. It found a 
 | K2b | Two grounded spheres: an independent reference | the full two-sphere image series (no branching, 200 generations) | < 1e-9 | 8.7e-14 |
 | K3 | Charges induced by a particle (floating and fixed-potential spheres) | boundary conditions within the stated truncation bound ρ^6 | deviation < 10 ρ^6; net charge < ρ^6 q | 4.4e-4 (ρ^6 = 1.6e-2); 1.2e-3 |
 | K4 | Strongly charged particle past a grounded and a floating sphere and a charge, `c = ∞` and 5 | `W + ½ q φ_self` conserved | < 1e-10 | 2.8e-11, 2.7e-11 |
+| K5 | Jackson Pr. 2.4: charge q near an isolated sphere carrying Q = q, 2q, q/2 of the same sign; where the radial force changes sign (bisection) | engine root against the exact image root; exact root against the book | < 1e-10 of R; < 5e-4 | 0 (to bisection accuracy); 0.618034, 0.427564, 0.882269 against the book's 0.6178, 0.4276, 0.8823 |
 
 History, so that the numbers above can be judged:
 - The first implementation used the image series alone. With three spheres it branches: every image produces images in all the other spheres, and it ran out of memory at 64 GB.
 - The MFS remainder was then tuned by measurement (a scan over K, shell radius and image depth). Accuracy rises quickly with K and the image depth, and falls as the shell moves outwards.
 - A mirror-symmetric variant of the fit (±z charge pairs) was 50–75× less accurate for unexplained reasons and was dropped.
+- K5: for Q = q the exact answer is the golden ratio minus one, 0.618034; the book prints 0.6178 (off in the fourth decimal). The other two answers agree with the book to its rounding.
 - The first K3/K4 version corrected floating spheres with the image tree's own charge totals. That broke the symmetry of the interaction (energy drift 5.6e-6). Reciprocity fixed it (2.8e-11).
 - The K2 requirement is 1e-10 relative, set before measuring, and met only at the verification resolution (preview measured 9.8e-10). That preview–verify gap is exactly what the verification sees.
 
