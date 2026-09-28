@@ -785,10 +785,11 @@ pub fn draw(
             }
             let f = to_vec2(pt.force);
             if active && f.length() > 0.0 {
-                // Force arrow, length ∝ log(1 + |F|/F₀), direction exact. F₀ = T₀ per
-                // cell: the force that changes the kinetic energy by T₀ over one cell.
+                // Force arrow, length ∝ log(1 + |F|/F₀), direction exact. F₀ = the energy
+                // unit per cell (T₀, or for a particle launched at rest the kinetic energy
+                // it reaches): the force that changes the kinetic energy by it over a cell.
                 #[allow(clippy::cast_possible_truncation)]
-                let f0 = level.shots[i].launch.kinetic_energy.max(1e-300) as f32;
+                let f0 = game.energy_unit(i).0 as f32;
                 let len = (1.0 + f.length() / f0).ln() * 1.5;
                 gizmos.arrow_2d(x, x + f.normalize() * len, Color::srgb(1.0, 0.8, 0.2));
             }

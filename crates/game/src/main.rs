@@ -92,7 +92,7 @@ pub struct Game {
     /// belongs to; kept from the previous setup until the new one is measured.
     pub cost: Option<(u64, level::cost::Cost)>,
     /// (revision, active shot, mode) the field map was computed for.
-    pub map_key: (u64, usize, bool, Option<MapMode>),
+    pub map_key: (u64, usize, bool, Option<MapMode>, bool),
     pub field_lines: Vec<DrawnFieldLine>,
     /// Distance between neighbouring field lines, in cells.
     pub field_line_spacing: f64,
@@ -159,7 +159,7 @@ impl Game {
             show_all_shots: true,
             sent_revision: 0,
             cost: None,
-            map_key: (0, 0, false, None),
+            map_key: (0, 0, false, None, false),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
             field_line_opacity: 0.2,
@@ -275,6 +275,31 @@ impl Game {
             Progress::Verifying
         } else {
             Progress::Done
+        }
+    }
+
+    /// Energy unit of the displays for `shot` (energy bars, force arrow, potential map):
+    /// its launch energy T₀, or, for a particle launched (almost) at rest, the largest
+    /// kinetic energy it reaches in the flight shown (T₀ below 1 % of that). The flag says
+    /// which.
+    pub fn energy_unit(&self, shot: usize) -> (f64, bool) {
+        let level = &self.editor.level;
+        let t0 = level
+            .shots
+            .get(shot)
+            .map_or(0.0, |s| s.launch.kinetic_energy);
+        let d = self.active_disturbance.min(level.flights_per_shot() - 1);
+        let peak = self
+            .flights
+            .get(self.flight_index(shot, d))
+            .and_then(|f| f.preview.as_ref())
+            .map_or(0.0, |p| {
+                p.path.iter().map(|q| q.kinetic).fold(0.0, f64::max)
+            });
+        if t0 < 0.01 * peak {
+            (peak, false)
+        } else {
+            (t0.max(1e-300), true)
         }
     }
 
@@ -898,11 +923,18 @@ fn update_map(
     mut materials: ResMut<Assets<potential::PotentialMaterial>>,
     mut transforms: Query<&mut Transform>,
 ) {
+    // The energy unit depends on the flight (particles launched at rest): redraw when it
+    // arrives.
+    let has_flight = game
+        .flights
+        .get(game.active_flight())
+        .is_some_and(|f| f.preview_revision == game.sent_revision && f.preview.is_some());
     let key = (
         game.sent_revision,
         game.active_shot,
         game.show_all_shots,
         game.map,
+        has_flight,
     );
     if key == game.map_key {
         return;
@@ -925,6 +957,11 @@ fn update_map(
     if !game.show_all_shots {
         limits = vec![std::mem::take(&mut limits[game.active_shot])];
     }
+    // A ramped coil's induced field does work: energy conservation forbids nothing.
+    if scenario.field.has_ramps() {
+        limits.clear();
+    }
+    let unit = game.energy_unit(game.active_shot).0;
     if let Some(mut m) = materials.get_mut(&quad.material) {
         m.params = potential::params(
             &scenario,
@@ -932,6 +969,7 @@ fn update_map(
             level.physics.charge_radius,
             level.physics.magnet_radius,
             mode,
+            unit,
         );
     }
     let bounds = level.bounds();

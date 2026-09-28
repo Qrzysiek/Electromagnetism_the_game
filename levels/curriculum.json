@@ -164,7 +164,8 @@
           "levels": [
             "jackson_exb_drift",
             "jackson_van_allen",
-            "throw_a_charge"
+            "throw_a_charge",
+            "jackson_faraday"
           ]
         },
         {

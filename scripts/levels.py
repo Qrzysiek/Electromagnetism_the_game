@@ -1453,6 +1453,28 @@ def jackson_recoil():
         free_particles=[free_particle(1.0, 1.0, (28, 9), detector=box((30, 0, 36, 2)))],
         max_magnets=3, strengths=[0.25, 0.5, 1.0, 2.0], region=(2, 1, 14, 19))
 
+def jackson_faraday():
+    # Jackson §5.15: a coil whose current rises linearly (kappa = 1e4 t) induces
+    # E = -dA/dt, which drives a charge at rest around the coil's axis; as B grows the
+    # orbit also contracts (the flux through it is an adiabatic invariant, §12.5). The
+    # detector asks for T >= 0.3, which only the induced field supplies: placed charges
+    # are at most 0.2M and at least 4 cells from the launch point, so three of them give
+    # at most 3 x 1e-6 x 2e5 / 4 = 0.15. The search finds 5 one-charge solutions.
+    coil = circle_coil(15, 10, 8.0, 0.0)
+    coil["rate"] = 1e4
+    return level(
+        "Jackson §5.15: Faraday's law",
+        "Jackson §5.15: a changing magnetic flux induces an electric field that circulates "
+        "around it, ∮E·dl = −dΦ/dt. The current in this coil rises steadily; no charge is "
+        "anywhere near the particle at rest, yet the induced field drives it around the "
+        "axis, faster and faster, while the growing field tightens its orbit. Bring it into "
+        "the detector with at least 0.3 of kinetic energy: only the induction can give it "
+        "that much.",
+        shots=[shot(1e-6, 1.0, (15, 6), 0.0, 1e-6, box((18, 11, 22, 15), kinetic=(0.3, 10.0)))],
+        coils=[coil], c=None, t_max=200.0,
+        max_charges=3, magnitudes=[m * M for m in (0.05, 0.1, 0.2)], region=(8, 10, 22, 17))
+
+
 def jackson_knock_on():
     # Jackson Pr. 13.1: a heavy particle (charge 1, mass 40, T0 = 4, v = 0.45) passes a
     # light one (charge 1, mass 1) at rest and kicks it: T(b) = T_max / (1 + (b/b_min)^2),
@@ -1977,6 +1999,7 @@ ARCS = [
             ("jackson_exb_drift", jackson_exb_drift),
             ("jackson_van_allen", jackson_van_allen),
             ("throw_a_charge", throw_a_charge),
+            ("jackson_faraday", jackson_faraday),
         ]),
         ("Intermediate", [
             ("jackson_knock_on", jackson_knock_on),

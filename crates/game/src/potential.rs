@@ -117,9 +117,12 @@ pub fn params(
     charge_radius: f64,
     magnet_radius: f64,
     mode: MapMode,
+    energy_unit: f64,
 ) -> PotentialParams {
     let kin = physics::dynamics::Kinematics::new(scn.particle.mass, scn.c);
-    let t0 = kin.kinetic_energy(scn.p0).max(1e-300);
+    // Colours in units of the shot's energy unit (its T₀, or for a particle launched at
+    // rest the kinetic energy it reaches, `Game::energy_unit`).
+    let t0 = kin.kinetic_energy(scn.p0).max(energy_unit).max(1e-300);
     let (q, m) = (scn.particle.charge, scn.particle.moment);
     let b_ref = if q != 0.0 {
         (scn.p0.length() / (q.abs() * GYRO_REFERENCE)).max(1e-300)

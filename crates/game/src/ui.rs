@@ -779,6 +779,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         ui.separator();
 
         // Energy bars at the animated point of the active shot: one particle, named.
+        let (unit, unit_is_t0) = game.energy_unit(level.flight_of(game.active_flight()).0);
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Energy of").strong());
             let (shot_i, d) = level.flight_of(game.active_flight());
@@ -796,7 +797,14 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 "The energy of this shot's particle along its flight, in units of its \
                      launch energy T₀; choose the shot with the tabs above or [ ]",
             );
-            ui.label(egui::RichText::new("(units of its T₀)").small());
+            ui.label(
+                egui::RichText::new(if unit_is_t0 {
+                    "(units of its T₀)"
+                } else {
+                    "(units of its largest kinetic energy: it starts at rest)"
+                })
+                .small(),
+            );
         });
         ui.horizontal(|ui| {
             ui.checkbox(&mut game.animate, "Animate (A)").on_hover_text(
@@ -819,26 +827,26 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             energy_bar(
                 ui,
                 "kinetic",
-                pt.kinetic / t0,
+                pt.kinetic / unit,
                 egui::Color32::from_rgb(240, 200, 60),
             );
             energy_bar(
                 ui,
                 "potential",
-                pt.potential / t0,
+                pt.potential / unit,
                 egui::Color32::from_rgb(200, 90, 230),
             );
             if p.radiation_reaction {
                 energy_bar(
                     ui,
                     "radiated",
-                    pt.radiated / t0,
+                    pt.radiated / unit,
                     egui::Color32::from_rgb(90, 200, 255),
                 );
                 energy_bar(
                     ui,
                     "total − T₀",
-                    (pt.kinetic + pt.potential + pt.radiated - t0) / t0,
+                    (pt.kinetic + pt.potential + pt.radiated - t0) / unit,
                     egui::Color32::from_rgb(120, 220, 120),
                 );
                 ui.label(
@@ -852,7 +860,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 energy_bar(
                     ui,
                     "total − T₀",
-                    (pt.kinetic + pt.potential - t0) / t0,
+                    (pt.kinetic + pt.potential - t0) / unit,
                     egui::Color32::from_rgb(120, 220, 120),
                 );
             }
@@ -938,7 +946,13 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     ) {
         field_view_controls(ui, game, &level, radiation);
     }
+    let ramped = level.coils.iter().any(level::Coil::is_ramped);
     let legend = match game.map {
+        Some(MapMode::Potential) if ramped => {
+            "Red: uphill for this shot's particle, blue: downhill (the static part). No dark \
+             region: a ramped coil's induced electric field has no potential and does work \
+             on the particle, so energy conservation forbids nothing here."
+        }
         Some(MapMode::Potential) => {
             "Red: uphill for this shot's particle, blue: downhill; contours every T₀/4. \
              Dark: forbidden by energy conservation for every particle shown (all shots \
