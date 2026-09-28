@@ -1743,16 +1743,18 @@ def cloud_omega(q, big_q, r, m=1.0):
 
 
 def jackson_bound_charge():
-    # Electron (q = -1e-6) at the centre of a cloud (Q = 1e6, R = 4): the restoring field
-    # grows to Q/R^2 = 6.3e4 at the edge. Pull it out with charges.
+    # Electron (q = -1e-6) bound in a cloud (Q = 1e6, R = 4, omega_0 = 0.125), circling at
+    # r = 2 (v = omega_0 r = 0.25): an atom's electron is not at rest at the centre (the
+    # owner's review). The restoring field grows to Q/R^2 = 6.3e4 at the edge. Pull it out
+    # with charges.
     return level(
         "Jackson §16.7: a bound charge",
         "Jackson §16.7 models an atom's electron as a charge bound by a spring. Here the "
         "spring is real electrostatics: inside a sphere of uniform positive charge (J. J. "
         "Thomson's atom) the field grows linearly from the centre, so the electron is "
-        "pulled back in proportion to how far it strays, and oscillates harmonically. Pull "
-        "it out of the atom into the detector.",
-        shots=[shot(-1e-6, 1.0, (10, 10), 90.0, 1e-4, box((24, 8, 28, 12)))],
+        "pulled back in proportion to how far it strays: it circles the centre with the "
+        "same period at any radius. Pull it out of the atom into the detector.",
+        shots=[shot(-1e-6, 1.0, (10, 8), 0.0, 0.5 * 0.25 ** 2, box((24, 8, 28, 12)))],
         clouds=[cloud(10, 10, 4.0, 1e6)],
         max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], c=None, t_max=300.0,
         region=(2, 1, 28, 19))
@@ -1783,7 +1785,11 @@ def jackson_bound_knock():
     # electron (q = -1, m = 1) bound in a cloud (Q = 1, R = 4, omega_0 = 0.125), a free
     # particle of the level with a goal detector; a heavy negative ion (q = -1, m = 40,
     # T0 = 4) flies past and pushes it (like charges: opposite point charges could fall
-    # into each other). Steered with magnets far from the atom (see jackson_knock_on).
+    # into each other). The electron circles at r = 2 (v = omega_0 r = 0.25), as a bound
+    # electron does, not at rest at the centre (the owner's review). Steered with magnets
+    # far from the atom (see jackson_knock_on). With the atom at x = 30 the magnets
+    # precessed the moving electron's orbit by 0.26 cells before the ion arrived; at
+    # x = 40 (a 50-cell arena) the build check measures the influence.
     return level(
         "Jackson Pr. 13.2: a kick for a bound charge",
         "Jackson Problem 13.2: a charged particle flying past an atom gives its bound "
@@ -1792,10 +1798,11 @@ def jackson_bound_knock():
         "energy back. Steer the ion with magnets so that its kick throws the electron out "
         "of the atom into the detector above; the ion must still reach the screen on the "
         "right.",
-        grid=(40, 20), c=None, t_max=150.0,
-        shots=[shot(-1.0, 40.0, (0, 6), 0.0, 4.0, box((37, 0, 40, 20)))],
-        free_particles=[free_particle(-1.0, 1.0, (30, 10), detector=box((27, 17, 33, 20)))],
-        clouds=[cloud(30, 10, 4.0, 1.0)],
+        grid=(50, 20), c=None, t_max=180.0,
+        shots=[shot(-1.0, 40.0, (0, 6), 0.0, 4.0, box((47, 0, 50, 20)))],
+        free_particles=[free_particle(-1.0, 1.0, (40, 8), velocity=(0.25, 0.0),
+                                      detector=box((37, 17, 43, 20)))],
+        clouds=[cloud(40, 10, 4.0, 1.0)],
         max_magnets=3, strengths=[2.0, 4.0, 8.0, 16.0], region=(2, 1, 14, 19))
 
 def jackson_spectroscopy():
@@ -1820,13 +1827,46 @@ def jackson_spectroscopy():
 
 
 def check_indirect(lvl):
-    """Levels whose goal particles must be moved indirectly (by a shot): with the shots
-    disarmed (no charge, parked in a corner), the strongest allowed element of each kind
-    and sign at the placement node closest to each goal particle must leave it where it
-    is (moved less than 0.3 cells over the flight). Returns a list of problems."""
+    """Levels whose goal particles must be moved by a shot (the free particles with a
+    detector). Two conditions, with the shots taken out of play (launched inside their
+    own detectors, so they end at once and act on nothing):
+
+    1. The solver finds no placement within the limits that brings every goal home (a
+       heuristic search, but over every placement).
+    2. No real influence: the strongest allowed element of each kind and sign at the
+       placement node closest to each goal shifts it by less than 0.1 cells, against the
+       same flight without the element, over the time the shot needs to reach it (for a
+       goal that moves on its own, e.g. an orbiting electron, the comparison removes its
+       own motion).
+
+    Returns a list of problems."""
     goals = [f for f in lvl.get("free_particles", []) if f.get("detector")]
     if not goals:
         return []
+    probe = json.loads(json.dumps(lvl))
+    for sh in probe["shots"]:
+        n = sh["launch"]["node"]
+        sh["detector"] = {"min": [n[0], n[1], 0], "max": [n[0] + 1, n[1] + 1, 0]}
+    probe["reference_solution"] = []
+
+    def run(args, level):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                         encoding="utf-8") as f:
+            json.dump(level, f)
+            path = f.name
+        try:
+            return run_generator(*args[:1], path, *args[1:])
+        finally:
+            os.unlink(path)
+
+    problems = []
+    text = run(["solve", "--restarts", "16", "--iterations", "300"], probe)
+    found = re.findall(r"verified (\d+)-charge solutions[^:]*: (\d+)", text)
+    if not found:
+        sys.exit("check_indirect: unexpected solver output")
+    problems += [f"{int(n)} element(s): {k} solutions without the shots"
+                 for n, k in found if int(k) > 0]
+
     L = lvl["limits"]
     region = L.get("region")
     lo = region["min"][:2] if region else [0, 0]
@@ -1835,36 +1875,33 @@ def check_indirect(lvl):
     if L.get("max_charges"):
         kinds += [("charge", q) for q in (max(L["magnitudes"]), -max(L["magnitudes"]))]
     if L.get("max_magnets"):
-        kinds += [("magnet", m) for m in (max(L["magnet_strengths"]), -max(L["magnet_strengths"]))]
-    problems = []
+        kinds += [("magnet", m) for m in (max(L["magnet_strengths"]),
+                                          -max(L["magnet_strengths"]))]
+    sh = lvl["shots"][0]
+    v0 = math.sqrt(2 * sh["launch"]["kinetic_energy"] / sh["particle"]["mass"])
+    x0 = sh["launch"]["node"]
+    probe["physics"]["t_max"] = max(
+        math.hypot(g["node"][0] - x0[0], g["node"][1] - x0[1]) for g in goals) / v0
+
+    def ends(placement):
+        probe["reference_solution"] = placement
+        text = run(["check"], probe)
+        out = re.findall(r"shot goal-\d+ .*ends at \(([-\d.]+), ([-\d.]+)\)", text)
+        if len(out) != len(goals):
+            sys.exit("the generator does not report goal particles: rebuild it")
+        return [(float(a), float(b)) for a, b in out]
+
+    base = ends([])
     for g in goals:
         gx, gy = g["node"][:2]
         node = [min(max(gx, lo[0]), hi[0]), min(max(gy, lo[1]), hi[1]), 0]
         for kind, value in kinds:
-            probe = json.loads(json.dumps(lvl))
-            for sh in probe["shots"]:
-                sh["particle"]["charge"] = 0.0
-                sh["launch"]["node"] = [0, 0, 0]
-                sh["launch"]["kinetic_energy"] = 1e-9
-            probe["reference_solution"] = [{"node": node, "kind": kind, "value": value}]
-            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
-                                             encoding="utf-8") as f:
-                json.dump(probe, f)
-                path = f.name
-            try:
-                text = run_generator("check", path)
-            finally:
-                os.unlink(path)
-            found = list(re.finditer(r"shot goal-(\d+) .*ends at \(([-\d.]+), ([-\d.]+)\)", text))
-            if len(found) != len(goals) * len(probe.get("disturbances", [None]) or [None]):
-                sys.exit("the generator does not report goal particles: rebuild it")
-            for m in found:
-                k = int(m.group(1)) - 1
-                start = goals[k]["node"]
-                moved = math.hypot(float(m.group(2)) - start[0], float(m.group(3)) - start[1])
-                if moved > 0.3:
-                    problems.append(f"{kind} {value:g} at {node[:2]} moves goal {k + 1} by "
-                                    f"{moved:.2f} cells without the shot")
+            for k, ((ax, ay), (bx, by)) in enumerate(
+                    zip(base, ends([{"node": node, "kind": kind, "value": value}]))):
+                shift = math.hypot(ax - bx, ay - by)
+                if shift > 0.1:
+                    problems.append(f"{kind} {value:g} at {node[:2]} shifts goal {k + 1} by "
+                                    f"{shift:.2f} cells before the shot arrives")
     return problems
 
 

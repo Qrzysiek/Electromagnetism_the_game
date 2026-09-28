@@ -284,10 +284,17 @@ Notes:
   - Indirect goals (knock-on, recoil at right angles, a kick for a bound charge): the
     player steers the projectile with magnets placed far from the target. A magnet's
     force vanishes on a charge at rest and its field falls as 1/r³, so only the
-    projectile moves the target. The build checks it (`check_indirect`): with the shots
-    disarmed, the strongest allowed element of each kind and sign at the placement node
-    closest to each goal must move it less than 0.3 cells. The first versions (charges 4
-    cells from the target) moved it by up to 16 cells (the owner's review).
+    projectile moves the target. The build checks it (`check_indirect`), with the shots
+    taken out of play: (1) the solver finds no placement that brings the goals home; (2)
+    the strongest allowed element of each kind and sign at the placement node closest to
+    each goal shifts it by less than 0.1 cells over the time the shot needs to reach it,
+    compared with the same flight without the element (so a goal moving on its own, the
+    orbiting electron, is handled). The first versions (charges 4 cells from the target)
+    shifted it by 14 cells; with the atom at x = 30 the magnets precessed the orbiting
+    electron by 0.26 cells, at x = 40 less than 0.1 (the owner's reviews).
+  - Bound electrons start on an orbit (radius 2, v = ω₀r), as an atom's electron does, not
+    at rest at the atom's centre (the owner's review: at rest, the approaching ion set
+    it moving before the kick, and the solutions used that).
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.

@@ -4,7 +4,7 @@
   "name": "Jackson Pr. 13.2: a kick for a bound charge",
   "description": "Jackson Problem 13.2: a charged particle flying past an atom gives its bound electron a kick (here a heavy negative ion, which pushes the electron away). A quick pass is a sharp kick; a slow one lets the electron follow and hand the energy back. Steer the ion with magnets so that its kick throws the electron out of the atom into the detector above; the ion must still reach the screen on the right.",
   "grid": {
-    "nx": 40,
+    "nx": 50,
     "ny": 20,
     "nz": 0,
     "subdivision": 1
@@ -15,7 +15,7 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
-    "t_max": 150.0,
+    "t_max": 180.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
@@ -43,12 +43,12 @@
       },
       "detector": {
         "min": [
-          37,
+          47,
           0,
           0
         ],
         "max": [
-          40,
+          50,
           20,
           0
         ]
@@ -85,7 +85,7 @@
   "reference_solution": [
     {
       "node": [
-        2,
+        3,
         2,
         0
       ],
@@ -96,7 +96,7 @@
   "clouds": [
     {
       "center": [
-        30,
+        40,
         10,
         0
       ],
@@ -112,22 +112,22 @@
         "radius": 0.0
       },
       "node": [
-        30,
-        10,
+        40,
+        8,
         0
       ],
       "velocity": [
-        0.0,
+        0.25,
         0.0
       ],
       "detector": {
         "min": [
-          27,
+          37,
           17,
           0
         ],
         "max": [
-          33,
+          43,
           20,
           0
         ]

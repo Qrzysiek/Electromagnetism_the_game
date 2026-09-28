@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §16.7: a bound charge",
-  "description": "Jackson §16.7 models an atom's electron as a charge bound by a spring. Here the spring is real electrostatics: inside a sphere of uniform positive charge (J. J. Thomson's atom) the field grows linearly from the centre, so the electron is pulled back in proportion to how far it strays, and oscillates harmonically. Pull it out of the atom into the detector.",
+  "description": "Jackson §16.7 models an atom's electron as a charge bound by a spring. Here the spring is real electrostatics: inside a sphere of uniform positive charge (J. J. Thomson's atom) the field grows linearly from the centre, so the electron is pulled back in proportion to how far it strays: it circles the centre with the same period at any radius. Pull it out of the atom into the detector.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -31,15 +31,15 @@
       "launch": {
         "node": [
           10,
-          10,
+          8,
           0
         ],
         "direction": [
-          6.123233995736766e-17,
           1.0,
+          0.0,
           0.0
         ],
-        "kinetic_energy": 0.0001
+        "kinetic_energy": 0.03125
       },
       "detector": {
         "min": [
@@ -85,8 +85,8 @@
   "reference_solution": [
     {
       "node": [
-        6,
-        10,
+        7,
+        8,
         0
       ],
       "kind": "charge",
