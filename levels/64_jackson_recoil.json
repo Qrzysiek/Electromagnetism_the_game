@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §13.1: recoil at right angles",
-  "description": "Jackson §13.1 (energy transfer in a Coulomb collision), with a target that is free to recoil. Two equal masses, one at rest: whatever the force between them, conservation of momentum and energy sends them off at right angles to each other. The projectile must reach the top detector and the target the bottom one: choose the impact parameter with magnets along the approach.",
+  "description": "Jackson §13.1 (energy transfer in a Coulomb collision), with a target that is free to recoil. Throw a particle of the same mass at the one at rest: whatever the force between them, conservation of momentum and energy sends them off at right angles to each other. Choose the aim so that the target recoils into its detector, fast enough to count; watch the thrown one leave at 90°.",
   "grid": {
     "nx": 40,
     "ny": 20,
@@ -30,85 +30,17 @@
       },
       "launch": {
         "node": [
-          0,
-          10,
+          28,
+          9,
           0
         ],
         "direction": [
+          6.123233995736766e-17,
           1.0,
-          0.0,
           0.0
         ],
-        "kinetic_energy": 0.5
+        "kinetic_energy": 1e-9
       },
-      "detector": {
-        "min": [
-          36,
-          16,
-          0
-        ],
-        "max": [
-          40,
-          20,
-          0
-        ]
-      }
-    }
-  ],
-  "elements": [],
-  "coils": [],
-  "limits": {
-    "max_charges": 0,
-    "magnitudes": [],
-    "allow_positive": true,
-    "allow_negative": true,
-    "max_magnets": 3,
-    "magnet_strengths": [
-      0.25,
-      0.5,
-      1.0,
-      2.0
-    ],
-    "region": {
-      "min": [
-        2,
-        1,
-        0
-      ],
-      "max": [
-        14,
-        19,
-        0
-      ]
-    }
-  },
-  "reference_solution": [
-    {
-      "node": [
-        2,
-        5,
-        0
-      ],
-      "kind": "magnet",
-      "value": 2.0
-    }
-  ],
-  "free_particles": [
-    {
-      "particle": {
-        "charge": 1.0,
-        "mass": 1.0,
-        "radius": 0.0
-      },
-      "node": [
-        28,
-        9,
-        0
-      ],
-      "velocity": [
-        0.0,
-        0.0
-      ],
       "detector": {
         "min": [
           30,
@@ -119,8 +51,58 @@
           36,
           2,
           0
-        ]
+        ],
+        "acceptance": {
+          "kinetic": [
+            0.1,
+            10.0
+          ]
+        }
       }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        1,
+        1,
+        0
+      ],
+      "max": [
+        10,
+        19,
+        0
+      ]
+    },
+    "max_free": 3,
+    "free_charges": [
+      1.0
+    ],
+    "free_speeds": [
+      0.5,
+      1.0,
+      1.5
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        1,
+        4,
+        0
+      ],
+      "kind": "free",
+      "value": 1.0,
+      "angle_deg": 15.0,
+      "speed": 1.5
     }
   ]
 }

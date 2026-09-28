@@ -69,8 +69,9 @@ Arc 6, "Jackson: charges in fields and collisions" (Ch. 12–13), `scripts/level
   (the trajectory depends only on qE and qB): with q = 1e-6 it radiated 1.0e-8 of its
   launch energy (it starts from rest, so that energy is tiny), above the 1e-10 that may be
   neglected.
-- Jackson Pr. 13.1: knock-on (introduction). A heavy and a light particle as two
-  interacting one-particle beams; without the interaction the reference fails.
+- Jackson Pr. 13.1: knock-on. The player throws a heavy ion (a free charge) past a light
+  particle at rest, which must reach its detector with enough energy to count as a kick;
+  without the interaction the reference fails.
 - Jackson §12.1: Störmer's forbidden region (intermediate). The conserved canonical
   angular momentum keeps a particle aimed at a dipole Earth beyond r = 7.2 cells; placed
   charges break the axial symmetry.

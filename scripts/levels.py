@@ -1439,19 +1439,19 @@ def throw_a_charge():
 def jackson_recoil():
     # Jackson §13.1: Coulomb scattering with a target free to recoil. Equal masses, target
     # at rest, elastic: momentum and energy conservation alone make the two leave at
-    # right angles (for any force between them). Unit charges, c = inf. The impact
-    # parameter is set with magnets far from the target (see jackson_knock_on).
+    # right angles (for any force between them). The player throws the projectile (a free
+    # charge, charge 1, mass 1); the target (the shot, at rest) must reach its detector
+    # with T >= 0.1 (a distant push gives at most ~0.05). Nothing else is placed.
     return level(
         "Jackson §13.1: recoil at right angles",
         "Jackson §13.1 (energy transfer in a Coulomb collision), with a target that is free "
-        "to recoil. Two equal masses, one at rest: whatever the force between them, "
-        "conservation of momentum and energy sends them off at right angles to each other. "
-        "The projectile must reach the top detector and the target the bottom one: choose "
-        "the impact parameter with magnets along the approach.",
+        "to recoil. Throw a particle of the same mass at the one at rest: whatever the "
+        "force between them, conservation of momentum and energy sends them off at right "
+        "angles to each other. Choose the aim so that the target recoils into its "
+        "detector, fast enough to count; watch the thrown one leave at 90°.",
         grid=(40, 20), c=None, t_max=150.0,
-        shots=[shot(1.0, 1.0, (0, 10), 0.0, 0.5, box((36, 16, 40, 20)))],
-        free_particles=[free_particle(1.0, 1.0, (28, 9), detector=box((30, 0, 36, 2)))],
-        max_magnets=3, strengths=[0.25, 0.5, 1.0, 2.0], region=(2, 1, 14, 19))
+        shots=[shot(1.0, 1.0, (28, 9), 90.0, 1e-9, box((30, 0, 36, 2), kinetic=(0.1, 10.0)))],
+        max_free=3, free_charges=[1.0], free_speeds=[0.5, 1.0, 1.5], region=(1, 1, 10, 19))
 
 def jackson_faraday():
     # Jackson §5.15: a coil whose current rises linearly (kappa = 1e4 t) induces
@@ -1476,27 +1476,25 @@ def jackson_faraday():
 
 
 def jackson_knock_on():
-    # Jackson Pr. 13.1: a heavy particle (charge 1, mass 40, T0 = 4, v = 0.45) passes a
-    # light one (charge 1, mass 1) at rest and kicks it: T(b) = T_max / (1 + (b/b_min)^2),
-    # and in the lab the light one recoils at (pi - theta)/2 from the projectile's
-    # direction (theta its scattering angle in the heavy one's frame): forward for close
-    # passes, sideways for distant ones. The player steers with magnets, far from the
-    # target (x <= 14, target at 28): a magnet's force vanishes on a charge at rest, and
-    # its field falls as 1/r^3, so only the kick moves the target (checked at build time,
-    # `check_indirect`). With charges nearby (the first version) the target was pushed
-    # directly (the owner's review).
+    # Jackson Pr. 13.1: the player throws a heavy ion (a free charge: charge 1, mass 40)
+    # past a light particle at rest (the shot: charge 1, mass 1), which takes the energy
+    # T(b) = T_max / (1 + (b/b_min)^2) and recoils at (pi - theta)/2 from the ion's
+    # direction (theta: its scattering angle in the ion's frame): forward for close
+    # passes, sideways for distant ones. Nothing else is placed, so the only interaction
+    # is the ion's field (earlier versions steered the ion with charges, then magnets,
+    # which also acted on the target: the owner's reviews). The detector asks for
+    # T >= 0.08: a distant push gives at most qQ/r ~ 0.03, a kick up to 2 m v^2 = 0.7.
     return level(
         "Jackson Pr. 13.1: knock-on",
-        "Jackson Problem 13.1 (energy transfer in a Coulomb collision): a heavy particle "
-        "passing a light one at rest kicks it, the harder the closer it passes, T(b) = "
-        "T_max / (1 + (b/b_min)²). A close pass throws the light one forward, a distant one "
-        "sideways. Steer the heavy particle with magnets (they cannot move the light one "
-        "while it rests) so that the kick sends the light one into its detector; the heavy "
-        "one must still reach the screen on the right.",
+        "Jackson Problem 13.1 (energy transfer in a Coulomb collision): throw a heavy ion "
+        "(pull its slingshot handle back) past the light particle at rest. The ion's field "
+        "kicks it, the harder the closer the ion passes, T(b) = T_max / (1 + (b/b_min)²): "
+        "a close pass throws it forward, a distant one sideways. Kick the light particle "
+        "into its detector, fast enough to count (a gentle push from afar is not a kick).",
         grid=(40, 20), c=None, t_max=120.0,
-        shots=[shot(1.0, 40.0, (0, 10), 0.0, 4.0, box((37, 0, 40, 20)))],
-        free_particles=[free_particle(1.0, 1.0, (28, 12), detector=box((32, 17, 37, 20)))],
-        max_magnets=5, strengths=[2.0, 4.0, 8.0, 16.0], region=(2, 1, 14, 19))
+        shots=[shot(1.0, 1.0, (30, 12), 90.0, 1e-9, box((32, 17, 37, 20), kinetic=(0.08, 10.0)))],
+        max_free=3, free_charges=[1.0], free_speeds=[0.3, 0.45, 0.6], free_mass=40.0,
+        region=(1, 1, 10, 19))
 
 def jackson_stormer():
     # Jackson §12.1 (canonical momentum): in the equatorial plane of a dipole Earth
@@ -1782,28 +1780,24 @@ def jackson_resonance():
 
 def jackson_bound_knock():
     # Pr. 13.2: a passing charge transfers energy to a bound one. Unit charges, c = inf:
-    # electron (q = -1, m = 1) bound in a cloud (Q = 1, R = 4, omega_0 = 0.125), a free
-    # particle of the level with a goal detector; a heavy negative ion (q = -1, m = 40,
-    # T0 = 4) flies past and pushes it (like charges: opposite point charges could fall
-    # into each other). The electron circles at r = 2 (v = omega_0 r = 0.25), as a bound
-    # electron does, not at rest at the centre (the owner's review). Steered with magnets
-    # far from the atom (see jackson_knock_on). With the atom at x = 30 the magnets
-    # precessed the moving electron's orbit by 0.26 cells before the ion arrived; at
-    # x = 40 (a 50-cell arena) the build check measures the influence.
+    # the electron (the shot: q = -1, m = 1) circles at r = 2 inside a cloud (Q = 1, R = 4,
+    # omega_0 = 0.125, v = omega_0 r = 0.25); the player throws a heavy negative ion (a
+    # free charge: q = -1, m = 40), whose field kicks the electron out. Nothing else is
+    # placed (earlier versions steered the ion with elements that also acted on the
+    # electron: the owner's reviews).
+    w0 = cloud_omega(1.0, 1.0, 4.0)
     return level(
         "Jackson Pr. 13.2: a kick for a bound charge",
         "Jackson Problem 13.2: a charged particle flying past an atom gives its bound "
-        "electron a kick (here a heavy negative ion, which pushes the electron away). A "
-        "quick pass is a sharp kick; a slow one lets the electron follow and hand the "
-        "energy back. Steer the ion with magnets so that its kick throws the electron out "
-        "of the atom into the detector above; the ion must still reach the screen on the "
-        "right.",
-        grid=(50, 20), c=None, t_max=180.0,
-        shots=[shot(-1.0, 40.0, (0, 6), 0.0, 4.0, box((47, 0, 50, 20)))],
-        free_particles=[free_particle(-1.0, 1.0, (40, 8), velocity=(0.25, 0.0),
-                                      detector=box((37, 17, 43, 20)))],
-        clouds=[cloud(40, 10, 4.0, 1.0)],
-        max_magnets=3, strengths=[2.0, 4.0, 8.0, 16.0], region=(2, 1, 14, 19))
+        "electron a kick. Throw a heavy negative ion (pull its slingshot handle back) past "
+        "the atom, whose electron circles inside it. A quick pass is a sharp kick; a slow "
+        "one lets the electron follow and hand the energy back. Kick the electron out of "
+        "the atom into the detector above.",
+        grid=(40, 20), c=None, t_max=150.0,
+        shots=[shot(-1.0, 1.0, (30, 8), 0.0, 0.5 * (w0 * 2.0) ** 2, box((27, 17, 33, 20)))],
+        clouds=[cloud(30, 10, 4.0, 1.0)],
+        max_free=3, free_charges=[-1.0], free_speeds=[0.3, 0.45, 0.6], free_mass=40.0,
+        region=(1, 1, 10, 19))
 
 def jackson_spectroscopy():
     # Arc finale: two atoms of different sizes (R = 4 and 3: omega_0 = 0.125 and 0.192),
@@ -1890,6 +1884,32 @@ def check_indirect(lvl):
         if len(out) != len(goals):
             sys.exit("the generator does not report goal particles: rebuild it")
         return [(float(a), float(b)) for a, b in out]
+
+    # After the kick: the magnets turn a moving goal (charge q, mass m) at the rate
+    # |q| B / m (non-relativistically, whatever its speed); over the flight time T it
+    # turns by at most (|q|/m) B_max T, which over the distance L to its detector moves
+    # its arrival by at most that times L. B_max: the strongest allowed magnets, all at
+    # the region's nearest nodes, anywhere in the box spanned by the goal's start and its
+    # detector (the in-plane dipole field is |mu|/r^3).
+    if L.get("max_magnets"):
+        mu = max(L["magnet_strengths"]) * L["max_magnets"]
+        t_flight = lvl["physics"]["t_max"]
+        for k, g in enumerate(goals):
+            d = g["detector"]
+            xs = [g["node"][0], d["min"][0], d["max"][0]]
+            ys = [g["node"][1], d["min"][1], d["max"][1]]
+            box_lo, box_hi = (min(xs), min(ys)), (max(xs), max(ys))
+            # Nearest distance between the placement region and that box.
+            dx = max(0, box_lo[0] - hi[0], lo[0] - box_hi[0])
+            dy = max(0, box_lo[1] - hi[1], lo[1] - box_hi[1])
+            r = max(math.hypot(dx, dy), 1e-9)
+            b_max = mu / r ** 3
+            part = g["particle"]
+            reach = math.hypot(box_hi[0] - box_lo[0], box_hi[1] - box_lo[1])
+            shift = abs(part["charge"]) / part["mass"] * b_max * t_flight * reach
+            if shift > 0.3:
+                problems.append(f"magnets could turn goal {k + 1} by up to {shift:.2f} cells "
+                                f"after the kick (nearest distance {r:.1f})")
 
     base = ends([])
     for g in goals:

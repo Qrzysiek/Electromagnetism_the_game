@@ -459,12 +459,22 @@ fn load_levels() -> (Vec<Level>, Vec<PathBuf>) {
 fn main() {
     let (levels, level_paths) = load_levels();
     assert!(!levels.is_empty(), "no levels found");
+    // A developer capture (`EM_CAPTURE`) opens its window off-screen, unfocused and
+    // without a taskbar entry, so it never covers or takes focus from a running game.
+    let capture = std::env::var_os("EM_CAPTURE").is_some();
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.06, 0.06, 0.08)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Electromagnetism – the game".into(),
                 resolution: (1400, 860).into(),
+                position: if capture {
+                    WindowPosition::At(IVec2::new(-20000, -20000))
+                } else {
+                    WindowPosition::Automatic
+                },
+                focused: !capture,
+                skip_taskbar: capture,
                 ..default()
             }),
             ..default()

@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 13.1: knock-on",
-  "description": "Jackson Problem 13.1 (energy transfer in a Coulomb collision): a heavy particle passing a light one at rest kicks it, the harder the closer it passes, T(b) = T_max / (1 + (b/b_min)²). A close pass throws the light one forward, a distant one sideways. Steer the heavy particle with magnets (they cannot move the light one while it rests) so that the kick sends the light one into its detector; the heavy one must still reach the screen on the right.",
+  "description": "Jackson Problem 13.1 (energy transfer in a Coulomb collision): throw a heavy ion (pull its slingshot handle back) past the light particle at rest. The ion's field kicks it, the harder the closer the ion passes, T(b) = T_max / (1 + (b/b_min)²): a close pass throws it forward, a distant one sideways. Kick the light particle into its detector, fast enough to count (a gentle push from afar is not a kick).",
   "grid": {
     "nx": 40,
     "ny": 20,
@@ -25,99 +25,22 @@
     {
       "particle": {
         "charge": 1.0,
-        "mass": 40.0,
+        "mass": 1.0,
         "radius": 0.0
       },
       "launch": {
         "node": [
-          0,
-          10,
+          30,
+          12,
           0
         ],
         "direction": [
+          6.123233995736766e-17,
           1.0,
-          0.0,
           0.0
         ],
-        "kinetic_energy": 4.0
+        "kinetic_energy": 1e-9
       },
-      "detector": {
-        "min": [
-          37,
-          0,
-          0
-        ],
-        "max": [
-          40,
-          20,
-          0
-        ]
-      }
-    }
-  ],
-  "elements": [],
-  "coils": [],
-  "limits": {
-    "max_charges": 0,
-    "magnitudes": [],
-    "allow_positive": true,
-    "allow_negative": true,
-    "max_magnets": 5,
-    "magnet_strengths": [
-      2.0,
-      4.0,
-      8.0,
-      16.0
-    ],
-    "region": {
-      "min": [
-        2,
-        1,
-        0
-      ],
-      "max": [
-        14,
-        19,
-        0
-      ]
-    }
-  },
-  "reference_solution": [
-    {
-      "node": [
-        2,
-        8,
-        0
-      ],
-      "kind": "magnet",
-      "value": -16.0
-    },
-    {
-      "node": [
-        14,
-        3,
-        0
-      ],
-      "kind": "magnet",
-      "value": 4.0
-    }
-  ],
-  "free_particles": [
-    {
-      "particle": {
-        "charge": 1.0,
-        "mass": 1.0,
-        "radius": 0.0
-      },
-      "node": [
-        28,
-        12,
-        0
-      ],
-      "velocity": [
-        0.0,
-        0.0
-      ],
       "detector": {
         "min": [
           32,
@@ -128,8 +51,59 @@
           37,
           20,
           0
-        ]
+        ],
+        "acceptance": {
+          "kinetic": [
+            0.08,
+            10.0
+          ]
+        }
       }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        1,
+        1,
+        0
+      ],
+      "max": [
+        10,
+        19,
+        0
+      ]
+    },
+    "max_free": 3,
+    "free_charges": [
+      1.0
+    ],
+    "free_speeds": [
+      0.3,
+      0.45,
+      0.6
+    ],
+    "free_mass": 40.0
+  },
+  "reference_solution": [
+    {
+      "node": [
+        1,
+        1,
+        0
+      ],
+      "kind": "free",
+      "value": 1.0,
+      "angle_deg": 15.0,
+      "speed": 0.6
     }
   ]
 }

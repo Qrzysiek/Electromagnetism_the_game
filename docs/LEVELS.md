@@ -82,10 +82,10 @@ verified reference solution for every shot and negligible radiation
 | 58 | Jackson Pr. 12.9: Van Allen equator | 6 Introduction | gradient drift around a dipole Earth, protons and electrons in opposite directions | ≤ 3 charges, ≤ 3 magnets | 1 |
 | 59 | Throw a charge | 6 Introduction | a new element: the free charge (pull its slingshot handle back); its field pushes the particle and recoils, momentum passing without contact | ≤ 3 free charges | 1 |
 | 60 | Jackson §5.15: Faraday's law | 6 Introduction | a ramped coil's induced field drives a charge at rest around the axis; the detector asks for energy only induction supplies | ≤ 3 charges | 1 |
-| 61 | Jackson Pr. 13.1: knock-on | 6 Intermediate | a heavy particle kicks a light one at rest (a goal): forward for close passes, sideways for distant ones; steered with magnets far from the target | ≤ 5 magnets | 2 |
+| 61 | Jackson Pr. 13.1: knock-on | 6 Intermediate | the player throws a heavy ion (a free charge) past a light particle at rest, which must reach its detector with T ≥ 0.08: forward for close passes, sideways for distant ones | ≤ 3 free charges (mass 40) | 1 |
 | 62 | Jackson §12.4: gradient drift | 6 Intermediate | drift along lines of equal \|B\|, opposite for the two signs; charges move both alike, magnets oppositely | ≤ 3 charges, ≤ 3 magnets | 2 |
 | 63 | Jackson Pr. 12.5: E×B runaway | 6 Intermediate | \|E\| > c\|B\|: no drift frame, the particle runs away; magnets make B strong enough to drift | ≤ 6 magnets | 2 |
-| 64 | Jackson §13.1: recoil at right angles | 6 Intermediate | a free target recoils; equal masses leave at right angles; the impact parameter set with magnets far from the target | ≤ 3 magnets | 1 |
+| 64 | Jackson §13.1: recoil at right angles | 6 Intermediate | the player throws a particle of equal mass at one at rest, which must reach its detector with T ≥ 0.1; the two leave at right angles | ≤ 3 free charges | 1 |
 | 65 | Jackson §12.1: Störmer's forbidden region | 6 Intermediate | canonical angular momentum in a dipole's equatorial plane keeps the particle 7 cells out; charges break the symmetry | ≤ 4 charges | 2 |
 | 66 | Jackson Ch. 12: magnetosphere | 6 Master | the solar wind's E×B drift steered up and down through two gates, then the gradient drift splits proton and electron around a dipole Earth | ≤ 6 charges, ≤ 5 magnets | 5 |
 | 67 | Jackson §2.2: its own image | 7 Introduction | a grounded sphere attracts every passing charge through its image −qR/d | ≤ 3 charges | 1 |
@@ -98,7 +98,7 @@ verified reference solution for every shot and negligible radiation
 | 74 | Jackson Ch. 16: three orbits | 8 Master | three electrons on different orbits, all slowed by radiation into the detector in time | ≤ 6 charges | 3 |
 | 75 | Jackson §16.7: a bound charge | 9 Introduction | an electron bound harmonically inside a charge cloud (Thomson's atom); pull it out | ≤ 3 charges | 1 |
 | 76 | Jackson §16.8: resonance | 9 Introduction | a weak drive grows the bound electron's swing only at ω₀; tune an antenna | ≤ 2 antennas | 1 |
-| 77 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | a passing heavy ion kicks a bound electron (a goal) out of its atom; steered with magnets far from the atom | ≤ 3 magnets | 1 |
+| 77 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | the player throws a heavy negative ion past an atom; its field kicks the orbiting electron out into the detector | ≤ 3 free charges (mass 40) | 1 |
 | 78 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
 
 ## Automatic detectors
@@ -282,16 +282,15 @@ Notes:
     linear oscillator. (Close to the atom, a strong antenna at 2ω₀ also worked, by
     parametric resonance in its steep near field.)
   - Indirect goals (knock-on, recoil at right angles, a kick for a bound charge): the
-    player steers the projectile with magnets placed far from the target. A magnet's
-    force vanishes on a charge at rest and its field falls as 1/r³, so only the
-    projectile moves the target. The build checks it (`check_indirect`), with the shots
-    taken out of play: (1) the solver finds no placement that brings the goals home; (2)
-    the strongest allowed element of each kind and sign at the placement node closest to
-    each goal shifts it by less than 0.1 cells over the time the shot needs to reach it,
-    compared with the same flight without the element (so a goal moving on its own, the
-    orbiting electron, is handled). The first versions (charges 4 cells from the target)
-    shifted it by 14 cells; with the atom at x = 30 the magnets precessed the orbiting
-    electron by 0.26 cells, at x = 40 less than 0.1 (the owner's reviews).
+    player throws the projectile as a free charge (slingshot) and places nothing else, so
+    the projectile's field is the only thing that acts on the target. Earlier versions
+    steered a level-launched projectile with charges, then with magnets far from the
+    target; both still acted on it directly (charges shifted it by 14 cells; magnets
+    turned a kicked target by several cells and precessed the orbiting electron: the
+    owner's reviews). Knock-on and recoil detectors take only T ≥ 0.08 and ≥ 0.1: a
+    distant slow push gives at most ~0.03–0.05, so a gentle nudge that drifts in does not
+    count (it cut the knock-on solutions from 1149 to 40). `check_indirect` still guards
+    levels whose goals are level free particles with elements placed by the player.
   - Bound electrons start on an orbit (radius 2, v = ω₀r), as an atom's electron does, not
     at rest at the atom's centre (the owner's review: at rest, the approaching ion set
     it moving before the kick, and the solutions used that).
