@@ -173,6 +173,7 @@
           "levels": [
             "jackson_gradient_drift",
             "jackson_runaway",
+            "jackson_recoil",
             "jackson_stormer"
           ]
         },

@@ -1439,6 +1439,26 @@ def jackson_collision_course():
         max_free=3, free_charges=[1e-6], free_speeds=[0.25, 0.5, 1.0], free_radius=0.4)
 
 
+def jackson_recoil():
+    # Jackson §13.1: Coulomb scattering with a target free to recoil. Equal masses, target
+    # at rest, elastic: momentum and energy conservation alone make the two leave at
+    # right angles (for any force between them). Unit charges, c = inf. Charges only along
+    # the approach (x <= 8): they set the impact parameter. The projectile must leave at
+    # about 30 degrees up, the target about 60 degrees down. The search finds two
+    # one-charge solutions and two-charge ones in 15 of 16 runs.
+    return level(
+        "Jackson §13.1: recoil at right angles",
+        "Jackson §13.1 (energy transfer in a Coulomb collision), with a target that is free "
+        "to recoil. Two equal masses, one at rest: whatever the force between them, "
+        "conservation of momentum and energy sends them off at right angles to each other. "
+        "The projectile must reach the top detector and the target the bottom one: choose "
+        "the impact parameter with charges along the approach.",
+        c=None, t_max=120.0,
+        shots=[shot(1.0, 1.0, (0, 10), 0.0, 0.5, box((26, 17, 30, 20)))],
+        free_particles=[free_particle(1.0, 1.0, (12, 9), detector=box((14, 0, 20, 2)))],
+        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0], region=(1, 1, 8, 19))
+
+
 def jackson_knock_on():
     # Jackson Pr. 13.1: a heavy particle (charge 1, mass 40, T0 = 4) passes a light one
     # (charge 1, mass 1) at rest and kicks it, nearly perpendicular to its path, with the
@@ -1916,6 +1936,7 @@ ARCS = [
         ("Intermediate", [
             ("jackson_gradient_drift", jackson_gradient_drift),
             ("jackson_runaway", jackson_runaway),
+            ("jackson_recoil", jackson_recoil),
             ("jackson_stormer", jackson_stormer),
         ]),
         ("Master", [

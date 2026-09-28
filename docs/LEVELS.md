@@ -84,20 +84,21 @@ verified reference solution for every shot and negligible radiation
 | 60 | Jackson Pr. 13.1: knock-on | 6 Introduction | a heavy particle kicks a light one at rest (a free particle of the level, a goal) sideways, T(b) = T_max/(1 + (b/b_min)²) | ≤ 3 charges | 1 |
 | 61 | Jackson §12.4: gradient drift | 6 Intermediate | drift along lines of equal \|B\|, opposite for the two signs; charges move both alike, magnets oppositely | ≤ 3 charges, ≤ 3 magnets | 2 |
 | 62 | Jackson Pr. 12.5: E×B runaway | 6 Intermediate | \|E\| > c\|B\|: no drift frame, the particle runs away; magnets make B strong enough to drift | ≤ 6 magnets | 2 |
-| 63 | Jackson §12.1: Störmer's forbidden region | 6 Intermediate | canonical angular momentum in a dipole's equatorial plane keeps the particle 7 cells out; charges break the symmetry | ≤ 4 charges | 2 |
-| 64 | Jackson Ch. 12: magnetosphere | 6 Master | the solar wind's E×B drift steered up and down through two gates, then the gradient drift splits proton and electron around a dipole Earth | ≤ 6 charges, ≤ 5 magnets | 5 |
-| 65 | Jackson §2.2: its own image | 7 Introduction | a grounded sphere attracts every passing charge through its image −qR/d | ≤ 3 charges | 1 |
-| 66 | Jackson Pr. 2.6: two spheres | 7 Introduction | a charged and a neutral sphere image each other; the neutral one becomes a dipole | ≤ 3 charges | 1 |
-| 67 | Jackson §3.13: field through a hole | 7 Intermediate | a grounded wall screens a charge except through the slot, where its field leaks out | ≤ 3 charges | 2 |
-| 68 | Jackson Pr. 2.4: golden-ratio capture | 7 Intermediate | like charges attract inside 1.618 radii of an equally charged isolated sphere; go around it | ≤ 4 charges | 2 |
-| 69 | Jackson Ch. 2: sphere slalom | 7 Master | weave between three spheres carrying the particle's charge, through two gates, without being captured | ≤ 8 charges | 4 |
-| 70 | Jackson Pr. 16.2: the classical atom | 8 Introduction | a radiating electron spirals into the nucleus; the detector counts only an electron slowed by its radiation | ≤ 3 charges | 1 |
-| 71 | Jackson Pr. 16.3: orbits circularize | 8 Intermediate | a circular and an elliptic orbit of the same energy; the ellipse radiates most near the nucleus | ≤ 3 charges | 1 |
-| 72 | Jackson Ch. 16: three orbits | 8 Master | three electrons on different orbits, all slowed by radiation into the detector in time | ≤ 6 charges | 3 |
-| 73 | Jackson §16.7: a bound charge | 9 Introduction | an electron bound harmonically inside a charge cloud (Thomson's atom); pull it out | ≤ 3 charges | 1 |
-| 74 | Jackson §16.8: resonance | 9 Introduction | a weak drive grows the bound electron's swing only at ω₀; tune an antenna | ≤ 2 antennas | 1 |
-| 75 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | a passing heavy ion kicks a bound electron (a goal free particle) out of its atom; charges only along the approach, so only the kick frees it | ≤ 3 charges | 1 |
-| 76 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
+| 63 | Jackson §13.1: recoil at right angles | 6 Intermediate | a free target recoils; equal masses leave at right angles, so the detectors fix the impact parameter | ≤ 3 charges | 1 |
+| 64 | Jackson §12.1: Störmer's forbidden region | 6 Intermediate | canonical angular momentum in a dipole's equatorial plane keeps the particle 7 cells out; charges break the symmetry | ≤ 4 charges | 2 |
+| 65 | Jackson Ch. 12: magnetosphere | 6 Master | the solar wind's E×B drift steered up and down through two gates, then the gradient drift splits proton and electron around a dipole Earth | ≤ 6 charges, ≤ 5 magnets | 5 |
+| 66 | Jackson §2.2: its own image | 7 Introduction | a grounded sphere attracts every passing charge through its image −qR/d | ≤ 3 charges | 1 |
+| 67 | Jackson Pr. 2.6: two spheres | 7 Introduction | a charged and a neutral sphere image each other; the neutral one becomes a dipole | ≤ 3 charges | 1 |
+| 68 | Jackson §3.13: field through a hole | 7 Intermediate | a grounded wall screens a charge except through the slot, where its field leaks out | ≤ 3 charges | 2 |
+| 69 | Jackson Pr. 2.4: golden-ratio capture | 7 Intermediate | like charges attract inside 1.618 radii of an equally charged isolated sphere; go around it | ≤ 4 charges | 2 |
+| 70 | Jackson Ch. 2: sphere slalom | 7 Master | weave between three spheres carrying the particle's charge, through two gates, without being captured | ≤ 8 charges | 4 |
+| 71 | Jackson Pr. 16.2: the classical atom | 8 Introduction | a radiating electron spirals into the nucleus; the detector counts only an electron slowed by its radiation | ≤ 3 charges | 1 |
+| 72 | Jackson Pr. 16.3: orbits circularize | 8 Intermediate | a circular and an elliptic orbit of the same energy; the ellipse radiates most near the nucleus | ≤ 3 charges | 1 |
+| 73 | Jackson Ch. 16: three orbits | 8 Master | three electrons on different orbits, all slowed by radiation into the detector in time | ≤ 6 charges | 3 |
+| 74 | Jackson §16.7: a bound charge | 9 Introduction | an electron bound harmonically inside a charge cloud (Thomson's atom); pull it out | ≤ 3 charges | 1 |
+| 75 | Jackson §16.8: resonance | 9 Introduction | a weak drive grows the bound electron's swing only at ω₀; tune an antenna | ≤ 2 antennas | 1 |
+| 76 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | a passing heavy ion kicks a bound electron (a goal free particle) out of its atom; charges only along the approach, so only the kick frees it | ≤ 3 charges | 1 |
+| 77 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
 
 ## Automatic detectors
 
