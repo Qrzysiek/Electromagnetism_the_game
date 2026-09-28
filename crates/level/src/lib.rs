@@ -1052,19 +1052,19 @@ impl Level {
                     if !self.limits.allows(&self.limits.free_charges, e.value) {
                         return Err(PlacementError::MagnitudeNotAllowed(e.value));
                     }
+                    // A free charge's launch velocity is always continuous: any speed in the
+                    // range of the level's speeds, any direction (the owner: dragging the
+                    // arrow between listed values was too clunky). The solver still searches
+                    // the listed speeds and FREE_ANGLES only.
                     let speed_ok = e.speed.is_some_and(|v| {
-                        v.is_finite() && self.limits.allows(&self.limits.free_speeds, v)
+                        v.is_finite()
+                            && value_range(&self.limits.free_speeds)
+                                .is_some_and(|(lo, hi)| (lo..=hi).contains(&v))
                     });
                     if !speed_ok {
                         return Err(PlacementError::SpeedNotAllowed(e.speed));
                     }
-                    let angle_ok = if self.limits.continuous {
-                        e.angle_deg.is_finite()
-                    } else {
-                        FREE_ANGLES
-                            .iter()
-                            .any(|a| a.to_bits() == e.angle_deg.to_bits())
-                    };
+                    let angle_ok = e.angle_deg.is_finite();
                     if !angle_ok {
                         return Err(PlacementError::AngleNotAllowed(e.angle_deg));
                     }
@@ -1285,6 +1285,13 @@ impl Level {
     /// The static field and the obstacles for a placement at preview resolution.
     pub fn field(&self, player: &[Element]) -> (LevelField, Vec<Shape>) {
         self.field_at(player, Resolution::Preview)
+    }
+
+    /// Whether a shot's detector has a radiation goal (PHYSICS.md §3.4).
+    pub fn has_radiation_goal(&self) -> bool {
+        self.shots
+            .iter()
+            .any(|s| s.detector.acceptance.is_some_and(|a| a.radiation.is_some()))
     }
 
     /// Radiation goals (PHYSICS.md §3.4) are measured on single flights at finite `c`, on

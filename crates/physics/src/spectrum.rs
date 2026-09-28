@@ -23,8 +23,10 @@
 use glam::DVec3;
 use std::f64::consts::PI;
 
-/// Largest phase advance per piece at the highest frequency of a spectrum (radians).
-pub const PHASE_STEP: f64 = 0.5;
+/// Largest phase advance per piece at the highest frequency of a spectrum (radians). The
+/// pieces are integrated exactly for a linear phase, so 1 rad is enough (test S3's high
+/// band: 8.5e-5 with 1 rad, 2.1e-4 with 0.5, 7.8e-5 with 0.25); half the cost of 0.5.
+pub const PHASE_STEP: f64 = 1.0;
 
 /// A sample of the flight: time, position, velocity, acceleration.
 pub type Emission = (f64, DVec3, DVec3, DVec3);
@@ -266,9 +268,10 @@ pub fn spectrum(
 }
 
 /// Frequency spacing that resolves the spectrum of a flight whose retarded phase time
-/// spans `span`: a line from a finite flight is `2π/span` wide; 8 points across it.
+/// spans `span`: a line from a finite flight is `2π/span` wide; 4 points across it (the
+/// trapezoidal rule on a smooth, band-limited `|A(ω)|²`; tests S1–S3 hold as with 8).
 pub fn resolving_step(span: f64) -> f64 {
-    PI / (4.0 * span.max(1e-9))
+    PI / (2.0 * span.max(1e-9))
 }
 
 /// Energy per steradian in direction `n` within the band `[lo, hi]`: the spectrum on a
@@ -287,6 +290,24 @@ pub fn band_energy(samples: &[Emission], q: f64, c: f64, n: DVec3, lo: f64, hi: 
     let s = spectrum(samples, q, c, n, lo, d_omega, intervals + 1);
     let inner: f64 = s[1..intervals].iter().sum();
     (inner + 0.5 * (s[0] + s[intervals])) * d_omega
+}
+
+/// A frequency range for displaying a flight's spectrum without a band: three times the
+/// largest critical frequency `(3/2) γ³ c |a⊥| / v²` along it (Jackson 14.85, with the
+/// bend radius `v²/|a⊥|`), where the spectrum of a bend has fallen off.
+pub fn display_range(samples: &[Emission], c: f64) -> f64 {
+    samples
+        .iter()
+        .map(|&(_, _, v, a)| {
+            let v2 = v.length_squared();
+            if v2 <= 0.0 || !c.is_finite() {
+                return 0.0;
+            }
+            let gamma = 1.0 / (1.0 - v2 / (c * c)).max(1e-300).sqrt();
+            let a_perp = (a - v * (a.dot(v) / v2)).length();
+            4.5 * gamma.powi(3) * c * a_perp / v2
+        })
+        .fold(0.0, f64::max)
 }
 
 /// Spectrum for display: `d²I/dω dΩ` averaged over (up to 9 of) the window's directions,

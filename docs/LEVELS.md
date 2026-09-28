@@ -101,7 +101,7 @@ verified reference solution for every shot and negligible radiation
 | 77 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | the player throws a heavy negative ion past an atom; its field kicks the orbiting electron out into the detector | ≤ 3 free charges (mass 40) | 1 |
 | 78 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
 | 79 | Jackson §14.3: forward beaming | 10 Introduction | a radiation goal: a far receiver at 30° must collect ≥ 6e-4 per steradian; the radiation is beamed along the velocity (1/γ = 19°), so bend the particle while it heads for the receiver | ≤ 3 magnets | 1 |
-| 80 | Jackson §14.6: the critical frequency | 10 Introduction | a band goal: only ω 80–160 counts at −30°; a tight bend's short flash reaches ~(3/2)γ³c/R | ≤ 3 magnets | 1 |
+| 80 | Jackson §14.6: the critical frequency | 10 Introduction | the same arena and receiver as forward beaming, but only ω 80–160 counts (≥ 3e-3 per steradian): a tight bend's short flash reaches ~(3/2)γ³c/R; the previous level's moderate bend puts only 1.4e-4 there | ≤ 3 magnets | 1 |
 | 81 | Jackson §14.2: a quiet turn | 10 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
 | 82 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 
@@ -303,9 +303,14 @@ Notes:
     the particle's energy and max |F_RR| / max |F_L| reached 0.19; at 1/40 (magnets ×4, the
     same trajectories) it is 0.018–0.022 and they radiate 6–8 %. Measured (analyze
     --fewest, 16 runs): forward beaming random solve rate 4.4e-2, fewest 1; critical
-    frequency 2.5e-2, fewest 1; quiet turn 3.0e-3, fewest 2; undulator 2.0e-3, fewest 3.
-  - Forward beaming: 80 of the 3308 single-magnet placements that reach the dump pass the
-    goal; flying straight radiates nothing.
+    frequency (first version) 2.5e-2, fewest 1; quiet turn 3.0e-3, fewest 2; undulator 2.0e-3, fewest 3.
+  - Forward beaming: 106 single-magnet placements pass the goal; flying straight
+    radiates nothing. Its reference is a moderate bend (160 at (22, 4)) that fails the
+    critical frequency, so the pair shows the difference.
+  - The critical frequency: the first version mirrored forward beaming and asked 6e-5 per
+    steradian in the band, which most of forward beaming's bends passed (71 of 106): it
+    taught nothing new (the owner's review). Now it has forward beaming's arena and
+    receiver and asks 3e-3 in the band: 26 single-magnet solutions, the tight bends.
   - Quiet turn: besides gentle turns, one magnet can loop the particle clockwise
     (0° → −90° → 180° → 90°), so its velocity never points at the receiver at 45°: the
     reference does that (6.1e-4 per steradian). Radiation goes where the particle heads

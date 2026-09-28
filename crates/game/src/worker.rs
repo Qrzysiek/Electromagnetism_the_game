@@ -57,9 +57,11 @@ pub struct Preview {
     pub image_force_bound: f64,
     /// With a radiation goal, on arrival: the measured energy per steradian.
     pub radiation: Option<f64>,
-    /// With a radiation goal that has a band: the spectrum over the goal's directions,
-    /// `(ω, d²I/dω dΩ)`, from 0 to twice the band's top.
+    /// With a radiation goal: the spectrum over the goal's directions, `(ω, d²I/dω dΩ)`,
+    /// from 0 to `spectrum_top` (twice the band's top; without a band, three times the
+    /// flight's largest critical frequency).
     pub spectrum: Vec<(f64, f64)>,
+    pub spectrum_top: f64,
 }
 
 /// Preview of a beam flight (`level::beam`): every particle's path `(t, x)`, its shot
@@ -590,6 +592,11 @@ fn preview_shot(
     // Charge radiation plus the magnetic moment's (estimate), both neglected.
     let moment_radiation =
         level::moment_radiation_estimate(scn, path.iter().map(|p| (p.x, p.p, p.t)));
+    let spectrum_top = match scn.acceptance.and_then(|a| a.radiation) {
+        Some(w) if w.band.is_some() => 2.0 * w.top_frequency(),
+        Some(_) => physics::spectrum::display_range(&traj.emission, scn.c),
+        None => 0.0,
+    };
     let preview = Preview {
         path,
         outcome: traj.outcome,
@@ -608,18 +615,17 @@ fn preview_shot(
                 .then(|| w.measure(&traj.emission, scn.particle.charge, scn.c))
         }),
         spectrum: match scn.acceptance.and_then(|a| a.radiation) {
-            Some(w) if w.band.is_some() && !traj.emission.is_empty() => {
-                physics::spectrum::arc_spectrum(
-                    &w,
-                    &traj.emission,
-                    scn.particle.charge,
-                    scn.c,
-                    2.0 * w.top_frequency(),
-                    160,
-                )
-            }
+            Some(w) if !traj.emission.is_empty() => physics::spectrum::arc_spectrum(
+                &w,
+                &traj.emission,
+                scn.particle.charge,
+                scn.c,
+                spectrum_top,
+                160,
+            ),
             _ => Vec::new(),
         },
+        spectrum_top,
     };
     Some((traj, preview))
 }

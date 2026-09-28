@@ -1950,6 +1950,16 @@ fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::wor
             "Radiation goal: into {axis:.0}° ± {half:.0}°, {band}: {need}"
         ))
         .small(),
+    )
+    .on_hover_text(
+        "The receiver (the band outside the arena) stands far away: it collects the          particle's radiation, not the particle. The particle itself must still end in its          detector. The radiation leaves at the speed of light whenever the particle is          accelerated, mostly in the direction it is heading, and reaches the receiver          after the flight: switch the map to 'particle field' to watch it go.",
+    );
+    ui.label(
+        egui::RichText::new(
+            "The receiver is far away and collects radiation, not the particle; the              particle must still end in its detector.",
+        )
+        .small()
+        .italics(),
     );
     if let Some(e) = p.radiation {
         let ok = e >= lo && e <= hi;
@@ -1966,12 +1976,13 @@ fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::wor
     if p.spectrum.is_empty() {
         return;
     }
-    // The spectrum d²I/dωdΩ from 0 to twice the band's top, the band shaded.
+    // The spectrum d²I/dωdΩ from 0 to twice the band's top (the band shaded), or without a
+    // band to where the flight's spectrum has fallen off.
     let (w, h) = (ui.available_width().min(300.0), 70.0);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 2.0, egui::Color32::from_gray(25));
-    let omega_max = 2.0 * goal.band.map_or(1.0, |b| b[1]);
+    let omega_max = p.spectrum_top.max(1e-300);
     #[allow(clippy::cast_possible_truncation)]
     let x_of = |omega: f64| rect.left() + (omega / omega_max) as f32 * rect.width();
     if let Some([a, b]) = goal.band {
@@ -2001,7 +2012,8 @@ fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::wor
     }
     ui.label(
         egui::RichText::new(format!(
-            "Spectrum into these directions, ω from 0 to {omega_max:.3} (band shaded); peak {} per sr per unit ω",
+            "Spectrum into these directions, ω from 0 to {omega_max:.3}{}; peak {} per sr per unit ω",
+            if goal.band.is_some() { " (band shaded)" } else { " (all of it counts)" },
             fmt_si(peak)
         ))
         .small(),

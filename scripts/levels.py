@@ -1981,8 +1981,10 @@ def jackson_beaming():
     # Jackson §14.3: a relativistic charge radiates into a cone of ~1/gamma (19 degrees)
     # around its velocity. Straight on (no magnet) it radiates nothing; a bend that sweeps
     # its velocity through 30 degrees lights the receiver, one that bends it down barely
-    # does (from 0 degrees, emission at 30 degrees is ~1e4 weaker). 80 of the 3308
-    # single-magnet placements that reach the dump pass 6e-4 per steradian.
+    # does (from 0 degrees, emission at 30 degrees is ~1e4 weaker). 106 single-magnet
+    # placements pass 6e-4 per steradian. The reference is a moderate bend (a magnet of
+    # 160 at (22, 4): 4.3e-3 per steradian) that does not pass the next level (only
+    # 1.4e-4 of it in the band 80-160), so the two show the difference.
     return level(
         "Jackson §14.3: forward beaming",
         "Jackson §14.3: a fast charge radiates when it is accelerated, and almost all of it "
@@ -1995,27 +1997,34 @@ def jackson_beaming():
         grid=(40, 20), c=RAD_C, t_max=100.0, radiation_reaction=True,
         shots=[shot(RAD_Q, 1.0, (2, 5), 0.0, RAD_T0,
                     box((38, 0, 40, 20), radiation=radiation_goal(30.0, 5.0, (6e-4, 1e3))))],
+        reference=[magnet(22, 4, 160.0)],
         max_magnets=3, strengths=RAD_MAGNETS, region=(5, 2, 34, 18))
 
 
 def jackson_critical_frequency():
     # Jackson §14.6: a bend of radius R flashes the receiver for a time ~R/(gamma^3 c), so
     # its spectrum reaches up to the critical frequency ~ (3/2) gamma^3 c / R (81/R here).
-    # The band [80, 160] needs R of a cell or two: a strong magnet close to the path. A
-    # gentle bend (e.g. a magnet of 40 three cells away) puts ~4e-14 per steradian there,
-    # a tight one ~2e-4 (minimum 6e-5).
+    # The same arena and receiver as forward beaming, but only the band 80-160 counts:
+    # of forward beaming's 106 single-magnet solutions, 26 deliver the 3e-3 per steradian
+    # asked here (tight bends: e.g. a magnet of 320 at (20, 7), 9.8e-3). Forward beaming's
+    # reference (160 at (22, 4)) puts 4.3e-3 into the receiver, but only 1.4e-4 in the
+    # band. (A first version mirrored the arena and asked 6e-5 in the band: most of the
+    # previous level's bends passed it, so it taught nothing new: the owner's review.)
     return level(
         "Jackson §14.6: the critical frequency",
-        "Jackson §14.6: the radiation of a bend reaches the receiver as a short flash, the "
-        "shorter the tighter the bend, and a short flash contains high frequencies: up to "
-        "about (3/2) γ³ c / R for a bend of radius R. This receiver, at −30°, only counts "
-        "angular frequencies from 80 to 160 (the shaded band of the spectrum in the "
-        "panel). Bend the particle hard enough, while it heads for the receiver, to "
-        "deliver at least 0.00006 per steradian in that band.",
+        "Jackson §14.6: the same receiver as before, but now it only counts angular "
+        "frequencies from 80 to 160 (the shaded band of the spectrum in the panel). A "
+        "bend's radiation reaches the receiver as a short flash, the shorter the tighter "
+        "the bend, and a short flash contains high frequencies: up to about (3/2) γ³ c / R "
+        "for a bend of radius R. A gentle bend that lit the receiver before may put almost "
+        "nothing into this band: bend the particle harder, while it heads for the "
+        "receiver, to deliver at least 0.003 per steradian in the band. Watch the spectrum "
+        "move up as the bend gets tighter.",
         grid=(40, 20), c=RAD_C, t_max=100.0, radiation_reaction=True,
-        shots=[shot(RAD_Q, 1.0, (2, 15), 0.0, RAD_T0,
-                    box((38, 0, 40, 20), radiation=radiation_goal(-30.0, 5.0, (6e-5, 1e3),
+        shots=[shot(RAD_Q, 1.0, (2, 5), 0.0, RAD_T0,
+                    box((38, 0, 40, 20), radiation=radiation_goal(30.0, 5.0, (3e-3, 1e3),
                                                                   band=(80.0, 160.0))))],
+        reference=[magnet(20, 7, 320.0)],
         max_magnets=3, strengths=RAD_MAGNETS, region=(5, 2, 34, 18))
 
 

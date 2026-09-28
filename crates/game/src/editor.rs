@@ -227,8 +227,8 @@ impl Editor {
     }
 
     /// Sets the launch velocity of free charge `i` from a drag of its arrow: direction
-    /// `angle_deg` and speed `speed`, snapped to the level's directions and speeds (hardcore:
-    /// the speed clamped to their range, any direction). Kept if allowed.
+    /// `angle_deg` and speed `speed`, continuous (the speed clamped to the range of the
+    /// level's speeds, any direction). Kept if allowed.
     pub fn set_velocity(&mut self, i: usize, angle_deg: f64, speed: f64) {
         let Some(&e) = self.placement.get(i) else {
             return;
@@ -237,15 +237,8 @@ impl Editor {
             return;
         }
         let speeds = &self.level.limits.free_speeds;
-        let (angle, v) = if self.continuous() {
-            let (lo, hi) = value_range(speeds).unwrap_or((0.0, 0.0));
-            (angle_deg.rem_euclid(360.0), speed.clamp(lo, hi))
-        } else {
-            (
-                nearest_free_angle(angle_deg),
-                nearest_linear(speeds, speed).unwrap_or(0.0),
-            )
-        };
+        let (lo, hi) = value_range(speeds).unwrap_or((0.0, 0.0));
+        let (angle, v) = (angle_deg.rem_euclid(360.0), speed.clamp(lo, hi));
         let mut new = e;
         new.angle_deg = if v == 0.0 { 0.0 } else { angle };
         new.speed = Some(v);
@@ -1054,12 +1047,7 @@ fn snap(level: &Level, e: &mut Element) {
         if e.kind == ElementKind::Plate {
             e.angle_deg = nearest_plate_angle(e.angle_deg);
         }
-        if e.kind == ElementKind::Free {
-            e.angle_deg = nearest_free_angle(e.angle_deg);
-            e.speed = e
-                .speed
-                .and_then(|v| nearest_linear(&level.limits.free_speeds, v));
-        }
+        // Free charges' velocities stay continuous in both modes.
         return;
     }
     if let Some(m) = nearest_listed(magnitudes(level, e.kind), e.value.abs()) {
@@ -1267,7 +1255,7 @@ mod tests {
     /// speed (for both measures), and `set_velocity` snaps to the listed speeds and 15°
     /// directions.
     #[test]
-    fn velocity_arrow_drag_round_trip_and_snapping() {
+    fn velocity_arrow_drag_round_trip_and_continuous_setting() {
         let l = free_level();
         for m in [ArrowMeasure::Speed, ArrowMeasure::Rapidity] {
             for v in [1.0, 4.0] {
@@ -1290,10 +1278,15 @@ mod tests {
         ed.set_cursor([10, 10, 0]);
         ed.place().unwrap();
         assert_eq!(ed.placement[0].kind, ElementKind::Free);
+        // Continuous (the owner: snapping to the listed values was too clunky): any
+        // direction, the speed clamped to the range of the level's speeds.
         ed.set_velocity(0, 37.0, 3.2);
-        assert_eq!(ed.placement[0].angle_deg.to_bits(), 30.0_f64.to_bits());
-        assert_eq!(ed.placement[0].speed, Some(4.0));
-        ed.set_velocity(0, 100.0, 0.2);
+        assert_eq!(ed.placement[0].angle_deg.to_bits(), 37.0_f64.to_bits());
+        assert_eq!(ed.placement[0].speed, Some(3.2));
+        ed.set_velocity(0, -20.0, 9.0);
+        assert_eq!(ed.placement[0].angle_deg.to_bits(), 340.0_f64.to_bits());
+        assert_eq!(ed.placement[0].speed, Some(4.0), "clamped to the fastest");
+        ed.set_velocity(0, 100.0, 0.0);
         assert_eq!(ed.placement[0].speed, Some(0.0), "at rest");
         assert_eq!(ed.placement[0].angle_deg.to_bits(), 0.0_f64.to_bits());
         // The handle of the placed charge is found where it is drawn: behind it.

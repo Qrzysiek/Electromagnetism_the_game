@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §14.6: the critical frequency",
-  "description": "Jackson §14.6: the radiation of a bend reaches the receiver as a short flash, the shorter the tighter the bend, and a short flash contains high frequencies: up to about (3/2) γ³ c / R for a bend of radius R. This receiver, at −30°, only counts angular frequencies from 80 to 160 (the shaded band of the spectrum in the panel). Bend the particle hard enough, while it heads for the receiver, to deliver at least 0.00006 per steradian in that band.",
+  "description": "Jackson §14.6: the same receiver as before, but now it only counts angular frequencies from 80 to 160 (the shaded band of the spectrum in the panel). A bend's radiation reaches the receiver as a short flash, the shorter the tighter the bend, and a short flash contains high frequencies: up to about (3/2) γ³ c / R for a bend of radius R. A gentle bend that lit the receiver before may put almost nothing into this band: bend the particle harder, while it heads for the receiver, to deliver at least 0.003 per steradian in the band. Watch the spectrum move up as the bend gets tighter.",
   "grid": {
     "nx": 40,
     "ny": 20,
@@ -15,12 +15,12 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
-    "radiation_reaction": true,
     "t_max": 100.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
-    }
+    },
+    "radiation_reaction": true
   },
   "shots": [
     {
@@ -32,7 +32,7 @@
       "launch": {
         "node": [
           2,
-          15,
+          5,
           0
         ],
         "direction": [
@@ -56,16 +56,16 @@
         "acceptance": {
           "radiation": {
             "direction": [
-              -30.0,
+              30.0,
               5.0
+            ],
+            "energy": [
+              0.003,
+              1000.0
             ],
             "band": [
               80.0,
               160.0
-            ],
-            "energy": [
-              0.00006,
-              1000.0
             ]
           }
         }
@@ -102,12 +102,12 @@
   "reference_solution": [
     {
       "node": [
-        18,
-        13,
+        20,
+        7,
         0
       ],
       "kind": "magnet",
-      "value": -320.0
+      "value": 320.0
     }
   ]
 }

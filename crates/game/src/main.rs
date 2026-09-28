@@ -1126,6 +1126,16 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
     if end <= 0.0 {
         return;
     }
+    // With a radiation goal, play on until the last radiation has crossed the arena, so
+    // that it is seen leaving towards the (far) receiver.
+    let level = &game.editor.level;
+    let end = match level.physics.c {
+        Some(c) if level.has_radiation_goal() => {
+            let b = level.bounds();
+            end + (b.max - b.min).length() / c
+        }
+        _ => end,
+    };
     // Playback in internal time units per second, with a pause at the end.
     game.anim_time += time.delta_secs_f64() * game.playback_speed * 4.0;
     if game.anim_time > end + 2.0 * game.playback_speed.max(0.25) {
@@ -1154,7 +1164,13 @@ fn fit_camera(
             .unwrap_or(win_w - PANEL_WIDTH * window.scale_factor()))
     .clamp(0.0, win_w - 50.0);
     let avail_w = win_w - panel_px;
-    let (w, h) = (size.x as f32 + 1.0, size.y as f32 + 1.0);
+    // Room for the receivers of radiation goals, drawn just outside the edge.
+    let margin = if game.editor.level.has_radiation_goal() {
+        3.5
+    } else {
+        1.0
+    };
+    let (w, h) = (size.x as f32 + margin, size.y as f32 + margin);
     // World units per physical pixel.
     let s = (w / avail_w).max(h / win_h);
     if let Projection::Orthographic(o) = &mut *proj {

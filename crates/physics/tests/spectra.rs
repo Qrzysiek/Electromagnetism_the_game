@@ -121,8 +121,9 @@ fn s2_spectrum_integrates_to_the_lienard_energy() {
 /// S3, the measure along a computed flight (`trajectory::run` with a radiation goal): a
 /// charge at β = 0.5 on a circle in a uniform field (radius 1, counter-clockwise) enters a
 /// detector after about three quarters of a turn. Its measured energy per steradian into
-/// an arc (all frequencies, and a band) must match the same measure on the exact circular
-/// motion up to the detector entry (20 000 samples).
+/// an arc (all frequencies, a low band and a high band) must match the same measure on the
+/// exact circular motion up to the detector entry (20 000 samples per turn and one at the
+/// entry time).
 #[test]
 fn s3_measure_along_a_computed_flight() {
     use physics::dynamics::Particle;
@@ -135,7 +136,7 @@ fn s3_measure_along_a_computed_flight() {
     let v: f64 = 5.0;
     let gamma = 1.0 / (1.0 - (v / c) * (v / c)).sqrt();
     let w0 = v; // radius 1
-    for band in [None, Some((2.0, 12.0))] {
+    for band in [None, Some((2.0, 12.0)), Some((20.0, 60.0))] {
         let window = RadiationWindow {
             axis: DVec3::new(1.0, 1.0, 0.0).normalize(),
             half_angle: 15f64.to_radians(),
@@ -176,16 +177,35 @@ fn s3_measure_along_a_computed_flight() {
         // Exact motion up to the entry angle (x = −0.1 on the lower half).
         let theta_end = 2.0 * PI - (-0.1f64).acos();
         let t_end = theta_end / w0;
-        let exact: Vec<Emission> = circle(1.0, w0, 1, 20_000)
+        // Ending exactly at the entry: the flight stops with the acceleration on, and that
+        // edge feeds the high frequencies (a reference ending one sample early was off by
+        // 2e-4 in the band 20–60).
+        let mut exact: Vec<Emission> = circle(1.0, w0, 1, 20_000)
             .into_iter()
-            .filter(|s| s.0 <= t_end)
+            .filter(|s| s.0 < t_end)
             .collect();
+        let (s, co) = (w0 * t_end).sin_cos();
+        exact.push((
+            t_end,
+            DVec3::new(co, s, 0.0),
+            DVec3::new(-w0 * s, w0 * co, 0.0),
+            DVec3::new(-w0 * w0 * co, -w0 * w0 * s, 0.0),
+        ));
         let reference = window.measure(&exact, q, c);
         let err = measured / reference - 1.0;
         println!(
             "S3 band {band:?}: measured {measured:.8e}, exact motion {reference:.8e}, rel. error {err:.1e} (entry at t = {:.6}, exact {t_end:.6})",
             tr.end.t
         );
-        assert!(err.abs() < 1e-4);
+        // The band 20–60 (harmonics 4–12): pieces are set by the phase step there; its
+        // error, 0.8–2.1e-4 for phase steps of 0.25–1 rad (not converging with the step: the
+        // abrupt end at the entry, seen in the high frequencies), is held to the 1e-3 the
+        // radiation goals need (their windows have factors of several to spare).
+        let bound = if band.is_some_and(|(lo, _)| lo >= 20.0) {
+            1e-3
+        } else {
+            1e-4
+        };
+        assert!(err.abs() < bound);
     }
 }
