@@ -32,14 +32,15 @@ pub fn shot_color(level: &level::Level, i: usize) -> Color {
         return base.into();
     }
     let rank = members.iter().position(|&j| j == i).unwrap_or(0);
-    // From darker (−1) through the detector's colour (0) to lighter (+1).
+    // Very slightly darker (−1) through the detector's colour (0) to slightly lighter (+1):
+    // the rays of one detector must read as its colour.
     #[allow(clippy::cast_precision_loss)]
     let t = rank as f32 / (n - 1) as f32 * 2.0 - 1.0;
     let shade = |c: f32| {
         if t < 0.0 {
-            c * (1.0 + 0.4 * t)
+            c * (1.0 + 0.12 * t)
         } else {
-            c + (1.0 - c) * 0.55 * t
+            c + (1.0 - c) * 0.15 * t
         }
     };
     Color::srgb(shade(base.red), shade(base.green), shade(base.blue))
@@ -57,15 +58,17 @@ fn detector_color(level: &level::Level, detector: &level::Detector) -> Color {
     palette_color(targets.iter().position(|d| *d == detector).unwrap_or(0))
 }
 
-/// The palette's colour number `i` (cycled).
+/// The palette's colour number `i` (cycled). No yellow, orange, white or violet: those mark
+/// unverified, lost and computing flights and gates; blue (the placement region, negative
+/// charges) comes last.
 fn palette_color(i: usize) -> Color {
     const PALETTE: [(f32, f32, f32); 6] = [
-        (0.35, 1.0, 0.45),
-        (0.35, 0.85, 1.0),
-        (1.0, 0.55, 0.95),
-        (1.0, 0.85, 0.3),
-        (1.0, 0.55, 0.3),
-        (0.7, 0.6, 1.0),
+        (0.3, 1.0, 0.4),
+        (1.0, 0.45, 0.8),
+        (0.1, 0.9, 0.95),
+        (0.75, 1.0, 0.2),
+        (1.0, 0.35, 0.45),
+        (0.45, 0.55, 1.0),
     ];
     let (r, g, b) = PALETTE[i % PALETTE.len()];
     Color::srgb(r, g, b)
