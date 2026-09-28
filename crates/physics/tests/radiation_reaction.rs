@@ -256,3 +256,52 @@ fn r4_classical_atom_orbit_decay() {
     );
     assert!((slope / jackson - 1.0).abs() < 0.01);
 }
+
+/// R5, Jackson Problem 14.5b: a nonrelativistic charge q (mass m, speed v₀ at infinity)
+/// in a head-on collision with a fixed repulsive Coulomb centre Q radiates
+/// `ΔW = (8/45) (q/Q) m v₀⁵ / c³` in all (Gaussian-like units, Coulomb's constant 1).
+/// The launch speed 0.8 at distance 400 is converted to the speed at infinity. At
+/// v₀/c = 0.04 the relativistic corrections are O((v/c)²) ≈ 0.2 % and the radiation
+/// beyond the start distance 400 is negligible: agreement within 1 %.
+#[test]
+fn r5_head_on_collision_radiates_jacksons_energy() {
+    let (q, big_q, m, v0, c) = (1.0_f64, 1.0_f64, 1.0_f64, 0.8_f64, 20.0_f64);
+    let centre = FixedCharge {
+        position: DVec3::ZERO,
+        charge: big_q,
+        radius: 0.05,
+    };
+    let scn = Scenario {
+        field: Coulomb::new(&[centre]),
+        obstacles: vec![Shape::Sphere(Sphere {
+            center: DVec3::ZERO,
+            radius: 0.05,
+        })],
+        particle: Particle {
+            charge: q,
+            mass: m,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        c,
+        x0: DVec3::new(-400.0, 0.0, 0.0),
+        p0: Kinematics::new(m, c).momentum_from_kinetic_energy(0.5 * m * v0 * v0, DVec3::X),
+        detector: None,
+        bounds: Some(cube(400.5)),
+        t_max: 5000.0,
+        radiation_reaction: true,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+    // Jackson's v₀ is the speed at infinity: the launch at distance 400 already has the
+    // potential energy qQ/400 (v₀⁵ would be 2 % low with the launch speed).
+    let v_inf = (v0 * v0 + 2.0 * q * big_q / (m * 400.0)).sqrt();
+    let jackson = 8.0 / 45.0 * (q / big_q) * m * v_inf.powi(5) / c.powi(3);
+    let ratio = tr.radiated_energy / jackson;
+    println!(
+        "R5: radiated {:.6e}, Jackson Pr. 14.5b {jackson:.6e}, ratio {ratio:.5}; outcome {:?} at t = {:.0}",
+        tr.radiated_energy, tr.outcome, tr.end.t
+    );
+    assert!((ratio - 1.0).abs() < 0.01);
+}

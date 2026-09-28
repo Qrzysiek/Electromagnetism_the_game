@@ -478,6 +478,7 @@ Run with `cargo test -p physics --test validation --test properties -- --nocaptu
 | M4 | Energy with charges, dipoles and a coil; c = ∞ and 5 | `W` constant | < 1e-10 | ≤ 2.7e-11 |
 | M5 | Plane of symmetry with dipoles and a coil (32 random configurations) | `z = p_z = 0` | exactly ±0 | holds |
 | M6 | Straight flight into a ring wire and a straight wire | known hit time | < 1e-12 | ≈ 1e-15 |
+| M7 | Jackson Pr. 12.9b: charge gyrating in a dipole's equatorial plane, a/R = 0.01, 3 rad of drift (≈ 3000 gyrations) | fitted longitude drift rate against (3/2)(a/R)² ω_B | < 2 % (corrections O(a/R)) | 0.01 % |
 
 Note on M2: the first threshold for |p| drift (1e-12) was stricter than the integration tolerance (also 1e-12). DOP853 does not preserve |p| exactly, so the criterion is the same 1e-10 as for energy in T1.
 
@@ -513,6 +514,7 @@ A1 is the strongest check. Its quadratures (Gauss–Legendre in cos θ, uniform 
 | R2 | Coulomb scattering at c = 5, 10, 20 | LL work = −∫P_Liénard dt + ΔE_Schott, `E_S = τ₀ m γ⁴ v·a`, up to O(τ₀ω) | relative difference < τ₀ω | 5.0e-9, 6.5e-9, 7.1e-9 (τ₀ω = 7e-3 … 1e-4) |
 | R3 | `c = ∞` | no reaction | bit-identical to the flag off | holds |
 | R4 | Jackson Pr. 16.2, classical atom: charge −1 around a fixed +1 from r₀ = 5 at c = 8 (v/c = 0.056), 1500 time units | least-squares slope of r³(t) against −6Zτ | < 1 % (relativistic correction O((v/c)²) ≈ 0.3 %, plus the launch's slight eccentricity) | 0.64 % |
+| R5 | Jackson Pr. 14.5b: head-on collision with a repulsive Coulomb centre at v₀/c = 0.04 | radiated energy (Landau–Lifshitz work) against (8/45)(q/Q) m v₀⁵/c³ | < 1 % (relativistic O((v/c)²) ≈ 0.2 %) | 0.24 % |
 | L1 | Uniformly moving charge, v/c = 0.05 … 0.95 | Heaviside field from the present position | < 1e-12 | 2.6e-15 |
 | L2 | Slowly oscillating charge (Aω/c = 5e-4, 5e-5), radiation zone | oscillating-dipole field `p₀ = qA` (independent code, §2.4) | < 20 Aω/c | 2.8e-5, 2.8e-6: linear in A as expected |
 | L3 | Circular motion at v = 0.8 c, near and far points | vacuum Maxwell equations, central differences | < 1e-6 | ≤ 1.7e-7 (difference error) |
@@ -563,6 +565,7 @@ History, so that the numbers above can be judged:
 - The first implementation used the image series alone. With three spheres it branches: every image produces images in all the other spheres, and it ran out of memory at 64 GB.
 - The MFS remainder was then tuned by measurement (a scan over K, shell radius and image depth). Accuracy rises quickly with K and the image depth, and falls as the shell moves outwards.
 - A mirror-symmetric variant of the fit (±z charge pairs) was 50–75× less accurate for unexplained reasons and was dropped.
+- R5 first measured 2.2 % too much radiation: the test used the launch speed (at distance 400) as Jackson's speed at infinity, which is 0.39 % higher there (2 % in v⁵). With the speed at infinity: 0.24 %.
 - K5: for Q = q the exact answer is the golden ratio minus one, 0.618034; the book prints 0.6178 (off in the fourth decimal). The other two answers agree with the book to its rounding.
 - The first K3/K4 version corrected floating spheres with the image tree's own charge totals. That broke the symmetry of the interaction (energy drift 5.6e-6). Reciprocity fixed it (2.8e-11).
 - The K2 requirement is 1e-10 relative, set before measuring, and met only at the verification resolution (preview measured 9.8e-10). That preview–verify gap is exactly what the verification sees.
@@ -598,6 +601,7 @@ Found while writing G1: with a fixed step of 1e-3, the finite difference itself 
 | B14 | Three interacting charges, one leaving the arena at t = 3 | the same scene without an edge | the others' end points < 1e-9 | 7.7e-12, 7.8e-12 |
 | B15 | A charge stopped at launch inside a body (`Fate::Stop`) and a second one flying past | the second alone, in the fixed charges plus the stopped charge at rest | < 1e-9; deflection by the stopped charge > 0.1 | 5.1e-13; deflection 1.24 |
 | B16 | The scene of B4 at c = ∞: one particle stops on the fixed charge, one is drained by the detector, one leaves the arena | energy conservation | kinetic + potential + interaction + absorbed constant < 1e-9 of T | 3.5e-12 |
+| B17 | Jackson Pr. 13.1: heavy charge (M = 10⁴) passing a light one at rest, v = 0.5, b = 0.5 … 10 | light particle's final energy against T_max/(1 + (b/b_min)²) | < 1e-3 of T_max (mass ratio 1e-4, finite distance 4000: interaction energy 6e-4) | ≤ 5.6e-4 |
 | B5 | Non-interacting beam of 16 through two gates, the second with a ±20° direction condition: arrivals, a skipped first gate, rejection at the second gate's cone (then skipped), collisions, leaving the bounds | each particle flown alone by the single-particle runner | same outcomes; margins incl. gate and gate-acceptance margins < 1e-8 | all outcomes equal; ≤ 8.3e-13 |
 
 B12 is an extreme scene: particle 0 plunges into an attracting fixed charge and is removed, particle 1 passes it. Its model differences come mostly from that plunge (a huge jerk) and from the removal (instant in the quasi-static model, at the speed of light in the exact one), so no simple indicator is reliable there: the indicator (first required below 0.05) is only printed, and it is checked on the Relativistic beam level instead, a realistic beam. B12's model criterion was first set to 5 %. The particle that plunges into the attracting fixed charge measured 5.1 %: its trajectory is the most sensitive in the scene (a small force error is amplified on the way into the charge), while its integrated indicator is 4.3e-3. The criterion was raised to 10 %, because what the quasi-static model claims for gameplay, the same verified outcomes, is checked per level against the exact model; the model difference is documented here as measured.

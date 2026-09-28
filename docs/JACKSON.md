@@ -100,6 +100,10 @@ Arc 8, "Jackson: radiation damping" (Ch. 16):
   of the same energy.
 - Jackson Ch. 16: three orbits (master).
 
+Validation tests from the book (PHYSICS.md): K5 (Pr. 2.4, golden ratio), M7 (Pr. 12.9b,
+equatorial drift), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
+collapse), R5 (Pr. 14.5b, radiation in a head-on collision).
+
 ## Catalogue by chapter
 
 ### Ch. 1: Introduction to electrostatics

@@ -896,3 +896,50 @@ fn b16_energy_budget_balances() {
     assert!(last.absorbed > 0.0);
     assert!(worst < 1e-9, "{worst:.3e}");
 }
+
+/// B17, Jackson Problem 13.1: a heavy charge (z = 1, M = 10⁴) passes a light one (q = 1,
+/// m = 1) at rest with speed v and impact parameter b. The light particle takes the energy
+/// `T(b) = T_max / (1 + (b/b_min)²)`, `T_max = 2 m v²`, `b_min = z q² / (m v²)`
+/// (Rutherford scattering in the heavy particle's frame). Corrections: the mass ratio
+/// (1e-4) and the finite start and end distance L = 4000 (the interaction energy there,
+/// q²/L, is 6e-4 of T_max at most): below 1e-3 of T_max.
+#[test]
+fn b17_knock_on_energy_transfer() {
+    let (m_heavy, v): (f64, f64) = (1e4, 0.5);
+    let b_min = 1.0 / v.powi(2);
+    let t_max_energy = 2.0 * v * v;
+    let l = 4000.0;
+    let mut worst: f64 = 0.0;
+    for b in [0.5_f64, 2.0, 4.0, 10.0] {
+        let scn = beam(
+            Coulomb::new(&[]),
+            vec![],
+            vec![
+                BeamParticle {
+                    particle: particle(1.0, m_heavy),
+                    x0: DVec3::new(-l, b, 0.0),
+                    p0: DVec3::new(m_heavy * v, 0.0, 0.0),
+                    detector: None,
+                    acceptance: None,
+                },
+                BeamParticle {
+                    particle: particle(1.0, 1.0),
+                    x0: DVec3::ZERO,
+                    p0: DVec3::ZERO,
+                    detector: None,
+                    acceptance: None,
+                },
+            ],
+            true,
+            2.0 * l / v,
+        );
+        let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+        let light = &r.trajectories[1].end;
+        let t = light.p.length_squared() / 2.0;
+        let jackson = t_max_energy / (1.0 + (b / b_min).powi(2));
+        let err = (t - jackson).abs() / t_max_energy;
+        println!("B17 b = {b}: T = {t:.6}, Jackson {jackson:.6}, |ΔT|/T_max = {err:.1e}");
+        worst = worst.max(err);
+    }
+    assert!(worst < 1e-3);
+}

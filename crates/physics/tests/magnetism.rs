@@ -563,3 +563,79 @@ fn m6_particle_hits_coil_wire() {
         assert!((tr.end.t - t_hit).abs() < 1e-12);
     }
 }
+
+// --- M7: Jackson Problem 12.9, equatorial drift around a dipole ------------------------
+
+/// A charge gyrating in the equatorial plane of a dipole (gyroradius a at the guiding
+/// centre's radius R, a ≪ R) drifts in longitude at `|dφ/dt| = (3/2) (a/R)² ω_B`
+/// (Jackson Pr. 12.9b; the gradient drift of §12.4). With a/R = 0.01 the corrections are
+/// O(a/R): the drift rate fitted over 3 rad of longitude (about 3000 gyrations) must
+/// agree within 2 %.
+#[test]
+fn m7_van_allen_equatorial_drift() {
+    let (r_gc, a) = (10.0_f64, 0.1_f64);
+    // Moment along −z: in the equatorial plane B = +|M|/r³ ẑ, 100 at R.
+    let dipole = MagneticDipole {
+        position: DVec3::ZERO,
+        moment: DVec3::new(0.0, 0.0, -1e5),
+        radius: 0.5,
+    };
+    let omega = 1e5 / r_gc.powi(3);
+    let v = a * omega;
+    let field = LevelField {
+        dipoles: vec![dipole],
+        ..LevelField::default()
+    };
+    // q = 1 moving +y at x: the force v B x̂ puts the gyration centre at x + a.
+    let scn = Scenario {
+        field,
+        obstacles: vec![],
+        particle: Particle {
+            charge: 1.0,
+            mass: 1.0,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        c: f64::INFINITY,
+        x0: DVec3::new(r_gc - a, 0.0, 0.0),
+        p0: DVec3::new(0.0, v, 0.0),
+        detector: None,
+        bounds: Some(cube(100.0)),
+        t_max: 200.0,
+        radiation_reaction: false,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+    // Unwrapped longitude against time; least-squares slope.
+    let mut pts = Vec::with_capacity(tr.samples.len());
+    let mut last = 0.0_f64;
+    let mut turns = 0.0;
+    for s in &tr.samples {
+        let phi = s.x.y.atan2(s.x.x);
+        if phi - last > PI {
+            turns -= TAU;
+        } else if last - phi > PI {
+            turns += TAU;
+        }
+        last = phi;
+        pts.push((s.t, phi + turns));
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let n = pts.len() as f64;
+    let (mt, mp) = (
+        pts.iter().map(|p| p.0).sum::<f64>() / n,
+        pts.iter().map(|p| p.1).sum::<f64>() / n,
+    );
+    let slope = pts.iter().map(|&(t, p)| (t - mt) * (p - mp)).sum::<f64>()
+        / pts.iter().map(|&(t, _)| (t - mt).powi(2)).sum::<f64>();
+    let jackson = 1.5 * (a / r_gc).powi(2) * omega;
+    println!(
+        "M7: |dφ/dt| = {:.6e}, Jackson {jackson:.6e}, ratio {:.4} over {:.2} rad ({} steps)",
+        slope.abs(),
+        slope.abs() / jackson,
+        (slope * 200.0).abs(),
+        tr.stats.n_accept
+    );
+    assert!((slope.abs() / jackson - 1.0).abs() < 0.02);
+}
