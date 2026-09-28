@@ -53,7 +53,7 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 
 ## Built levels
 
-Arc 6, "Jackson: charges in fields" (Ch. 12), `scripts/levels.py`:
+Arc 6, "Jackson: charges in fields and collisions" (Ch. 12–13), `scripts/levels.py`:
 
 - Jackson §12.3: E×B drift (introduction). Uniform crossed fields as a stray field; both
   signs drift with E×B/B² and their guiding centres follow the equipotentials.
@@ -68,6 +68,11 @@ Arc 6, "Jackson: charges in fields" (Ch. 12), `scripts/levels.py`:
   (the trajectory depends only on qE and qB): with q = 1e-6 it radiated 1.0e-8 of its
   launch energy (it starts from rest, so that energy is tiny), above the 1e-10 that may be
   neglected.
+- Jackson Pr. 13.1: knock-on (introduction). A heavy and a light particle as two
+  interacting one-particle beams; without the interaction the reference fails.
+- Jackson §12.1: Störmer's forbidden region (intermediate). The conserved canonical
+  angular momentum keeps a particle aimed at a dipole Earth beyond r = 7.2 cells; placed
+  charges break the axial symmetry.
 - Jackson Ch. 12: magnetosphere (master). E×B steering through two gates, then gradient
   drift around a dipole Earth.
 

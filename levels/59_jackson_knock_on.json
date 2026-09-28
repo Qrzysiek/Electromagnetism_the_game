@@ -1,0 +1,137 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson Pr. 13.1: knock-on",
+  "description": "Jackson Problem 13.1 (energy transfer in a Coulomb collision): a fast heavy particle passing a light one at rest kicks it almost straight sideways, and the closer it passes, the harder: T(b) = T_max / (1 + (b/b_min)²). Steer the heavy particle past the light one so that the kick sends the light one into its detector (top left); the heavy one must still reach the screen on the right.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 100.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    },
+    "beam_interaction": true
+  },
+  "shots": [
+    {
+      "beam": {
+        "count": 1,
+        "energy_spread": 0.0,
+        "angle_spread_deg": 0.0,
+        "width": 0.0,
+        "length": 0.0,
+        "distribution": "gaussian",
+        "transmission": 1.0,
+        "seed": 0
+      },
+      "particle": {
+        "charge": 1.0,
+        "mass": 40.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 4.0
+      },
+      "detector": {
+        "min": [
+          27,
+          0,
+          0
+        ],
+        "max": [
+          30,
+          20,
+          0
+        ]
+      }
+    },
+    {
+      "beam": {
+        "count": 1,
+        "energy_spread": 0.0,
+        "angle_spread_deg": 0.0,
+        "width": 0.0,
+        "length": 0.0,
+        "distribution": "gaussian",
+        "transmission": 1.0,
+        "seed": 0
+      },
+      "particle": {
+        "charge": 1.0,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          15,
+          12,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 1e-06
+      },
+      "detector": {
+        "min": [
+          0,
+          17,
+          0
+        ],
+        "max": [
+          4,
+          20,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      0.25,
+      0.5,
+      1.0,
+      2.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": []
+  },
+  "reference_solution": [
+    {
+      "node": [
+        8,
+        8,
+        0
+      ],
+      "kind": "charge",
+      "value": -2.0
+    }
+  ]
+}

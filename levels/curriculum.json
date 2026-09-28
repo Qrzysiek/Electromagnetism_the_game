@@ -157,20 +157,22 @@
       ]
     },
     {
-      "name": "Jackson: charges in fields",
+      "name": "Jackson: charges in fields and collisions",
       "tiers": [
         {
           "name": "Introduction",
           "levels": [
             "jackson_exb_drift",
-            "jackson_van_allen"
+            "jackson_van_allen",
+            "jackson_knock_on"
           ]
         },
         {
           "name": "Intermediate",
           "levels": [
             "jackson_gradient_drift",
-            "jackson_runaway"
+            "jackson_runaway",
+            "jackson_stormer"
           ]
         },
         {

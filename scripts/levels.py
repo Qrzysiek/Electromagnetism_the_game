@@ -1387,6 +1387,49 @@ def jackson_runaway():
         region=(2, 2, 28, 18), disturbances=[stray("crossed fields", e=(0.0, 3e7), bz=1e7)])
 
 
+def jackson_knock_on():
+    # Jackson Pr. 13.1: a heavy particle (charge 1, mass 40, T0 = 4) passes a light one
+    # (charge 1, mass 1) at rest and kicks it, nearly perpendicular to its path, with the
+    # energy T(b) = T_max / (1 + (b/b_min)^2). Both are one-particle "beams" so that they
+    # interact (exact Coulomb, c = inf). Without the interaction the reference fails: the
+    # light particle falls into the placed charge.
+    one = beam(1, 1.0, energy=0.0, angle_deg=0.0, width=0.0, length=0.0)
+    return level(
+        "Jackson Pr. 13.1: knock-on",
+        "Jackson Problem 13.1 (energy transfer in a Coulomb collision): a fast heavy "
+        "particle passing a light one at rest kicks it almost straight sideways, and the "
+        "closer it passes, the harder: T(b) = T_max / (1 + (b/b_min)²). Steer the heavy "
+        "particle past the light one so that the kick sends the light one into its "
+        "detector (top left); the heavy one must still reach the screen on the right.",
+        c=None, t_max=100.0, beam_interaction=True,
+        shots=[shot(1.0, 40.0, (0, 10), 0.0, 4.0, box((27, 0, 30, 20)), beam=one),
+               shot(1.0, 1.0, (15, 12), 0.0, 1e-6, box((0, 17, 4, 20)), beam=one)],
+        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0],
+        reference=[charge(8, 8, -2.0)])
+
+
+def jackson_stormer():
+    # Jackson §12.1 (canonical momentum): in the equatorial plane of a dipole Earth
+    # (magnet 100M) the field is axially symmetric, so L = r p_phi + q mu / r is
+    # conserved (A_phi = mu / r^2). Launched straight at the Earth from r = 15 with p = 1,
+    # L = q mu / 15 and the particle cannot come closer than r = 7.2 (Stormer's forbidden
+    # region). Placed charges break the symmetry. No one-charge solution; two-charge ones
+    # in 7 of 24 search runs.
+    return level(
+        "Jackson §12.1: Störmer's forbidden region",
+        "Jackson §12.1 (canonical momentum). The Earth's dipole field is symmetric about "
+        "its axis, so the particle's canonical angular momentum r p_φ + q r A_φ cannot "
+        "change: aimed straight at the Earth, it is turned away more than seven cells "
+        "out, and no aim of the launch helps (Störmer's forbidden region, which keeps "
+        "slow cosmic rays away from the equator). Your charges break the symmetry: bring "
+        "the particle down to the Earth.",
+        c=None, t_max=300.0,
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((13, 8, 17, 12)))],
+        elements=[magnet(15, 10, 100 * M)],
+        max_charges=4, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        reference=[charge(1, 11, 0.5 * M), charge(11, 10, 2 * M)])
+
+
 def jackson_magnetosphere():
     # Arc finale. A uniform "solar wind" (E = 1e5, B = 3.3e5) carries a proton and an
     # electron from rest on the left towards a dipole Earth (magnet 30M at (30, 10));
@@ -1727,14 +1770,16 @@ ARCS = [
             ("isotope_separator", isotope_separator),
         ]),
     ]),
-    ("Jackson: charges in fields", [
+    ("Jackson: charges in fields and collisions", [
         ("Introduction", [
             ("jackson_exb_drift", jackson_exb_drift),
             ("jackson_van_allen", jackson_van_allen),
+            ("jackson_knock_on", jackson_knock_on),
         ]),
         ("Intermediate", [
             ("jackson_gradient_drift", jackson_gradient_drift),
             ("jackson_runaway", jackson_runaway),
+            ("jackson_stormer", jackson_stormer),
         ]),
         ("Master", [
             ("jackson_magnetosphere", jackson_magnetosphere),
