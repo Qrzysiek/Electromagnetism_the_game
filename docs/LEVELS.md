@@ -80,7 +80,7 @@ verified reference solution for every shot and negligible radiation
 | 56 | Isotope separator | 5 Master | collimate an interacting two-isotope beam through a gate (±5°), then separate the isotopes with magnets | ≤ 5 charges, ≤ 4 magnets | 5 |
 | 57 | Jackson §12.3: E×B drift | 6 Introduction | crossed uniform fields: both signs drift with E×B/B² along the equipotentials | ≤ 3 charges | 1 |
 | 58 | Jackson Pr. 12.9: Van Allen equator | 6 Introduction | gradient drift around a dipole Earth, protons and electrons in opposite directions | ≤ 3 charges, ≤ 3 magnets | 1 |
-| 59 | Collision course | 6 Introduction | a new element: the free charge (drag its velocity arrow); rigid spheres collide elastically | ≤ 3 free charges | 1 |
+| 59 | Throw a charge | 6 Introduction | a new element: the free charge (pull its slingshot handle back); its field pushes the particle and recoils, momentum passing without contact | ≤ 3 free charges | 1 |
 | 60 | Jackson Pr. 13.1: knock-on | 6 Introduction | a heavy particle kicks a light one at rest (a free particle of the level, a goal) sideways, T(b) = T_max/(1 + (b/b_min)²) | ≤ 3 charges | 1 |
 | 61 | Jackson §12.4: gradient drift | 6 Intermediate | drift along lines of equal \|B\|, opposite for the two signs; charges move both alike, magnets oppositely | ≤ 3 charges, ≤ 3 magnets | 2 |
 | 62 | Jackson Pr. 12.5: E×B runaway | 6 Intermediate | \|E\| > c\|B\|: no drift frame, the particle runs away; magnets make B strong enough to drift | ≤ 6 magnets | 2 |

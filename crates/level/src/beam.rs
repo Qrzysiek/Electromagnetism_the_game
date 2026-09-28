@@ -274,6 +274,22 @@ impl Level {
         out
     }
 
+    /// Whether the particles of the flight interact: if the level says so, and always
+    /// with dynamic particles (that is their purpose).
+    pub fn interacts(&self) -> bool {
+        self.physics.beam_interaction || !self.free_particles.is_empty() || self.limits.max_free > 0
+    }
+
+    /// Species of every particle of the flight, in flight order: the shots' particles,
+    /// then the dynamic particles (the level's free particles, the player's free charges).
+    pub fn beam_species(&self, player: &[Element]) -> Vec<Particle> {
+        self.launches()
+            .into_iter()
+            .map(|l| l.particle)
+            .chain(self.extra_particles(player).into_iter().map(|b| b.particle))
+            .collect()
+    }
+
     /// Indices (in beam-flight order) of the level's free particles that have a
     /// detector: goals that must arrive, verified.
     pub fn goal_particles(&self) -> Vec<usize> {
@@ -330,10 +346,7 @@ impl Level {
             c: base.c,
             bounds: base.bounds,
             t_max: base.t_max,
-            // Dynamic particles always interact with the rest (that is their purpose).
-            interact: self.physics.beam_interaction
-                || !self.free_particles.is_empty()
-                || self.limits.max_free > 0,
+            interact: self.interacts(),
             gates: base.gates,
             radiation_reaction: self.physics.radiation_reaction,
             retarded: self.physics.beam_retarded,

@@ -153,6 +153,7 @@ proptest! {
                 radius: 40.0,
                 kappa,
                 wire_radius: 0.1,
+                rate: 0.0,
             }],
             polygons: vec![],
             ..LevelField::default()

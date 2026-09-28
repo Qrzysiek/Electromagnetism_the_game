@@ -75,6 +75,7 @@ fn test_loop() -> CircularLoop {
         radius: 2.0,
         kappa: 1.7,
         wire_radius: 0.05,
+        rate: 0.0,
     }
 }
 
@@ -141,6 +142,7 @@ fn m1_polygon_coil_matches_quadrature_and_converges_to_circle() {
         ],
         kappa: 0.8,
         wire_radius: 0.05,
+        rate: 0.0,
     };
     let mut worst: f64 = 0.0;
     for x in [
@@ -169,6 +171,7 @@ fn m1_polygon_coil_matches_quadrature_and_converges_to_circle() {
         radius: 3.0,
         kappa: 1.0,
         wire_radius: 0.05,
+        rate: 0.0,
     };
     let x = DVec3::new(1.1, 0.4, 0.5);
     let err = |n: u32| {
@@ -181,6 +184,7 @@ fn m1_polygon_coil_matches_quadrature_and_converges_to_circle() {
                 .collect(),
             kappa: 1.0,
             wire_radius: 0.05,
+            rate: 0.0,
         };
         rel(poly.field(x), circle.field(x))
     };
@@ -228,6 +232,7 @@ fn m1_in_plane_sources_give_exactly_perpendicular_field_in_the_plane() {
             radius: 4.0,
             kappa: 1.3,
             wire_radius: 0.05,
+            rate: 0.0,
         }],
         polygons: vec![PolygonCoil {
             vertices: vec![
@@ -237,6 +242,7 @@ fn m1_in_plane_sources_give_exactly_perpendicular_field_in_the_plane() {
             ],
             kappa: -0.7,
             wire_radius: 0.05,
+            rate: 0.0,
         }],
         ..LevelField::default()
     };
@@ -446,6 +452,7 @@ fn mixed_field(seed: u64) -> (LevelField, Vec<Shape>) {
         radius: 14.0,
         kappa: 2.0,
         wire_radius: 0.1,
+        rate: 0.0,
     };
     let mut obstacles: Vec<Shape> = charges
         .iter()
@@ -638,4 +645,215 @@ fn m7_van_allen_equatorial_drift() {
         tr.stats.n_accept
     );
     assert!((slope.abs() / jackson - 1.0).abs() < 0.02);
+}
+
+// --- M8–M10: ramped coils, vector potential and induction (Jackson §5.5, §5.15) ------
+
+fn ring(radius: f64, rate: f64) -> CircularLoop {
+    CircularLoop {
+        center: DVec3::new(1.0, -0.5, 0.0),
+        normal: DVec3::Z,
+        radius,
+        kappa: 1.0,
+        wire_radius: 0.05,
+        rate,
+    }
+}
+
+fn square(rate: f64) -> PolygonCoil {
+    PolygonCoil {
+        vertices: vec![
+            DVec3::new(-3.0, -2.0, 0.0),
+            DVec3::new(4.0, -2.0, 0.0),
+            DVec3::new(4.0, 3.0, 0.0),
+            DVec3::new(-3.0, 3.0, 0.0),
+        ],
+        kappa: 1.0,
+        wire_radius: 0.05,
+        rate,
+    }
+}
+
+/// M8: the vector potential's curl is the field (κ = 1), for a circular loop (in and off
+/// its plane, near and far) and a polygon coil, by central differences (h = 1e-5).
+#[test]
+fn m8_curl_of_the_vector_potential_is_the_field() {
+    let h = 1e-5;
+    let curl = |a: &dyn Fn(DVec3) -> DVec3, x: DVec3| {
+        let d = |axis: DVec3| (a(x + axis * h) - a(x - axis * h)) / (2.0 * h);
+        let (dx, dy, dz) = (d(DVec3::X), d(DVec3::Y), d(DVec3::Z));
+        DVec3::new(dy.z - dz.y, dz.x - dx.z, dx.y - dy.x)
+    };
+    let l = ring(3.0, 0.0);
+    let p = square(0.0);
+    let mut worst: f64 = 0.0;
+    for x in [
+        DVec3::new(1.2, -0.4, 0.0),
+        DVec3::new(2.5, 1.0, 0.0),
+        DVec3::new(6.0, 2.0, 0.0),
+        DVec3::new(0.3, 0.8, 1.1),
+        DVec3::new(5.0, -3.0, -0.7),
+    ] {
+        let e1 =
+            (curl(&|y| l.unit_vector_potential(y), x) - l.field(x)).length() / l.field(x).length();
+        let e2 =
+            (curl(&|y| p.unit_vector_potential(y), x) - p.field(x)).length() / p.field(x).length();
+        println!("M8 at {x:?}: loop {e1:.1e}, polygon {e2:.1e}");
+        worst = worst.max(e1).max(e2);
+    }
+    assert!(worst < 1e-8);
+}
+
+/// Gauss–Legendre nodes and weights on [0, 1] (n points, Newton on P_n).
+fn gauss_legendre(n: usize) -> Vec<(f64, f64)> {
+    (0..n)
+        .map(|i| {
+            #[allow(clippy::cast_precision_loss)]
+            let mut u = (PI * (i as f64 + 0.75) / (n as f64 + 0.5)).cos();
+            let mut dp = 0.0;
+            for _ in 0..100 {
+                let (mut p0, mut p1) = (1.0, u);
+                for k in 2..=n {
+                    #[allow(clippy::cast_precision_loss)]
+                    let kf = k as f64;
+                    let p2 = ((2.0 * kf - 1.0) * u * p1 - (kf - 1.0) * p0) / kf;
+                    p0 = p1;
+                    p1 = p2;
+                }
+                #[allow(clippy::cast_precision_loss)]
+                let nf = n as f64;
+                dp = nf * (u * p1 - p0) / (u * u - 1.0);
+                let du = p1 / dp;
+                u -= du;
+                if du.abs() < 1e-16 {
+                    break;
+                }
+            }
+            let w = 2.0 / ((1.0 - u * u) * dp * dp);
+            (0.5 * (u + 1.0), 0.5 * w)
+        })
+        .collect()
+}
+
+/// Flux of `b` (its z-component) through the disc of radius `r` around `c` in the plane,
+/// by Gauss–Legendre in the radius and the trapezoidal rule (periodic) in the angle.
+fn flux_through(b: &dyn Fn(DVec3) -> DVec3, c: DVec3, r: f64) -> f64 {
+    let gl = gauss_legendre(40);
+    let m = 256;
+    let mut total = 0.0;
+    for &(s, w) in &gl {
+        let rho = s * r;
+        for j in 0..m {
+            let phi = TAU * f64::from(j) / f64::from(m);
+            total += b(c + DVec3::new(rho * phi.cos(), rho * phi.sin(), 0.0)).z * rho * w * r * TAU
+                / f64::from(m);
+        }
+    }
+    total
+}
+
+/// Circulation of `a` around the circle of radius `r` around `c` (trapezoidal rule).
+fn circulation(a: &dyn Fn(DVec3) -> DVec3, c: DVec3, r: f64) -> f64 {
+    let m = 2048;
+    (0..m)
+        .map(|j| {
+            let phi = TAU * f64::from(j) / f64::from(m);
+            let t = DVec3::new(-phi.sin(), phi.cos(), 0.0);
+            a(c + DVec3::new(r * phi.cos(), r * phi.sin(), 0.0)).dot(t) * r * TAU / f64::from(m)
+        })
+        .sum()
+}
+
+/// M9, Faraday's law (Jackson §5.15): for a ramped coil `E = −rate · A_unit`, so
+/// `∮E·dl = −rate ∮A_unit·dl`, which must equal `−dΦ/dt = −rate Φ_unit`, the flux of the
+/// field computed independently by quadrature. Circles inside a loop (concentric and
+/// off-centre) and inside a polygon coil, clear of the wires.
+#[test]
+fn m9_faradays_law_for_ramped_coils() {
+    let rate = 0.37;
+    let l = ring(3.0, rate);
+    let p = square(rate);
+    let mut worst: f64 = 0.0;
+    for (name, c, r) in [
+        ("loop, concentric", l.center, 2.0),
+        (
+            "loop, off-centre",
+            l.center + DVec3::new(0.6, 0.3, 0.0),
+            1.5,
+        ),
+    ] {
+        let emf = circulation(&|x| l.induced_e(x), c, r);
+        let dphi = rate * flux_through(&|x| l.field(x), c, r);
+        let err = (emf + dphi).abs() / dphi.abs();
+        println!(
+            "M9 {name}: ∮E·dl = {emf:.12}, −dΦ/dt = {:.12}, rel. error {err:.1e}",
+            -dphi
+        );
+        worst = worst.max(err);
+    }
+    let c = DVec3::new(0.5, 0.4, 0.0);
+    let emf = circulation(&|x| p.induced_e(x), c, 1.8);
+    let dphi = rate * flux_through(&|x| p.field(x), c, 1.8);
+    let err = (emf + dphi).abs() / dphi.abs();
+    println!(
+        "M9 polygon: ∮E·dl = {emf:.12}, −dΦ/dt = {:.12}, rel. error {err:.1e}",
+        -dphi
+    );
+    worst = worst.max(err);
+    assert!(worst < 1e-8);
+}
+
+/// M10: in the field of a ramped circular loop (axially symmetric, time-dependent) the
+/// canonical angular momentum about the axis, `x p_y − y p_x + q (x A_y − y A_x)` with
+/// `A = κ(t) A_unit`, is conserved exactly along any orbit in the loop's plane.
+#[test]
+fn m10_canonical_angular_momentum_in_a_ramped_loop() {
+    let l = CircularLoop {
+        center: DVec3::ZERO,
+        ..ring(6.0, 0.02)
+    };
+    let (q, m) = (1.0, 1.0);
+    let field = LevelField {
+        loops: vec![l],
+        ..LevelField::default()
+    };
+    let scn = Scenario {
+        field,
+        obstacles: vec![],
+        particle: Particle {
+            charge: q,
+            mass: m,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        c: f64::INFINITY,
+        x0: DVec3::new(2.0, 0.5, 0.0),
+        p0: DVec3::new(0.1, 0.3, 0.0),
+        detector: None,
+        bounds: Some(cube(5.0)),
+        t_max: 60.0,
+        radiation_reaction: false,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+    let canonical = |t: f64, x: DVec3, p: DVec3| {
+        let a = l.unit_vector_potential(x) * l.kappa_at(t);
+        x.x * p.y - x.y * p.x + q * (x.x * a.y - x.y * a.x)
+    };
+    let l0 = canonical(0.0, scn.x0, scn.p0);
+    let scale = scn.x0.length() * scn.p0.length()
+        + (q * l.unit_vector_potential(scn.x0).length() * scn.x0.length());
+    let worst = tr
+        .samples
+        .iter()
+        .map(|s| (canonical(s.t, s.x, s.p) - l0).abs() / scale)
+        .fold(0.0, f64::max);
+    let dp = (tr.end.p.length() - scn.p0.length()).abs() / scn.p0.length();
+    println!(
+        "M10: {} samples to t = {:.1}; max |ΔL_can| / scale = {worst:.1e}; |p| changed by {dp:.2} (the induced field works)",
+        tr.samples.len(),
+        tr.end.t
+    );
+    assert!(worst < 1e-10 && dp > 0.01);
 }

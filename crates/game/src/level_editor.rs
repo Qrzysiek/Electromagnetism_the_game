@@ -652,6 +652,7 @@ fn edit_coils(ui: &mut egui::Ui, coils: &mut Vec<Coil>, grid: &Grid) -> bool {
                     center,
                     radius,
                     kappa,
+                    rate,
                 } => {
                     ui.horizontal(|ui| {
                         ui.label("circle, centre");
@@ -663,11 +664,24 @@ fn edit_coils(ui: &mut egui::Ui, coils: &mut Vec<Coil>, grid: &Grid) -> bool {
                         ui.label("κ");
                         focus |= si(ui, kappa, 100.0);
                     });
+                    ui.horizontal(|ui| {
+                        ui.label("ramp dκ/dt").on_hover_text(
+                            "The current changes linearly in time, κ + rate·t, inducing an \
+                             electric field −∂A/∂t (Faraday's law)",
+                        );
+                        focus |= si(ui, rate, 1.0);
+                    });
                 }
-                Coil::Polygon { vertices, kappa } => {
+                Coil::Polygon {
+                    vertices,
+                    kappa,
+                    rate,
+                } => {
                     ui.horizontal(|ui| {
                         ui.label("polygon, κ");
                         focus |= si(ui, kappa, 100.0);
+                        ui.label("ramp dκ/dt");
+                        focus |= si(ui, rate, 1.0);
                     });
                     let mut drop = None;
                     for (k, v) in vertices.iter_mut().enumerate() {
@@ -1449,13 +1463,22 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                 center,
                 radius: r,
                 kappa,
+                rate,
             } => {
-                if !on_grid(center) || !positive(*r) || !kappa.is_finite() {
+                if !on_grid(center) || !positive(*r) || !kappa.is_finite() || !rate.is_finite() {
                     return fail("circular coil outside the editor's range");
                 }
             }
-            Coil::Polygon { vertices, kappa } => {
-                if vertices.len() < 3 || !vertices.iter().all(on_grid) || !kappa.is_finite() {
+            Coil::Polygon {
+                vertices,
+                kappa,
+                rate,
+            } => {
+                if vertices.len() < 3
+                    || !vertices.iter().all(on_grid)
+                    || !kappa.is_finite()
+                    || !rate.is_finite()
+                {
                     return fail(
                         "polygon coil not reproducible (needs 3 or more vertices on the grid)",
                     );

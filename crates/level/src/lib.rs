@@ -564,6 +564,15 @@ impl Element {
     }
 }
 
+impl Coil {
+    /// Whether its current is ramped.
+    pub fn is_ramped(&self) -> bool {
+        match self {
+            Coil::Circle { rate, .. } | Coil::Polygon { rate, .. } => *rate != 0.0,
+        }
+    }
+}
+
 /// A coil placed by the level, lying in the plane, with strength `kappa = μ₀ I / 4π`
 /// (current counter-clockwise seen from +z for positive `kappa`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -574,10 +583,16 @@ pub enum Coil {
         /// Radius in cells.
         radius: f64,
         kappa: f64,
+        /// Ramp rate dκ/dt: the strength is `kappa + rate·t` (lab time), with the induced
+        /// field −∂A/∂t (quasi-static, PHYSICS.md §2.2). 0: a steady current.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        rate: f64,
     },
     Polygon {
         vertices: Vec<Node>,
         kappa: f64,
+        #[serde(default, skip_serializing_if = "is_zero")]
+        rate: f64,
     },
 }
 
@@ -1315,6 +1330,24 @@ impl Level {
                 out.push("an element or launch point is inside or at an electrode".into());
             }
         }
+        // Ramped coils: their induced field is not conservative, which the metal model
+        // (electrostatic) cannot screen; and time-dependent B is not combined with
+        // magnetic moments (like antennas and waves).
+        if self.coils.iter().any(Coil::is_ramped) {
+            if !self.conductors.is_empty()
+                || !self.electrodes.is_empty()
+                || self.limits.max_plates > 0
+            {
+                out.push(
+                    "ramped coils with metal: its electrostatic response cannot screen the \
+                     induced field"
+                        .into(),
+                );
+            }
+            if self.shots.iter().any(|s| s.particle.moment != 0.0) {
+                out.push("ramped coils with magnetic moments are not modelled".into());
+            }
+        }
         let c = self.c();
         let too_fast = self
             .free_particles
@@ -1442,6 +1475,7 @@ impl Level {
                     center,
                     radius,
                     kappa,
+                    rate,
                 } => {
                     let l = CircularLoop {
                         center: self.grid.position(*center),
@@ -1449,6 +1483,7 @@ impl Level {
                         radius: *radius,
                         kappa: *kappa,
                         wire_radius: wire,
+                        rate: *rate,
                     };
                     obstacles.push(Shape::Torus(Torus {
                         center: l.center,
@@ -1458,7 +1493,11 @@ impl Level {
                     }));
                     loops.push(l);
                 }
-                Coil::Polygon { vertices, kappa } => {
+                Coil::Polygon {
+                    vertices,
+                    kappa,
+                    rate,
+                } => {
                     let v: Vec<DVec3> = vertices.iter().map(|n| self.grid.position(*n)).collect();
                     for i in 0..v.len() {
                         obstacles.push(Shape::Capsule(Capsule {
@@ -1471,6 +1510,7 @@ impl Level {
                         vertices: v,
                         kappa: *kappa,
                         wire_radius: wire,
+                        rate: *rate,
                     });
                 }
             }
@@ -1973,6 +2013,7 @@ mod tests {
                 center: [10, 5, 0],
                 radius: 8.0,
                 kappa: 0.5,
+                rate: 0.25,
             }],
             limits: Limits {
                 max_charges: 2,

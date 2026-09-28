@@ -1134,7 +1134,7 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             egui::RichText::new(format!(
                 "{} particles{}; {lost} lost in the preview; {energy}.",
                 p.paths.len(),
-                match (level.physics.beam_interaction, level.physics.c) {
+                match (level.interacts(), level.physics.c) {
                     (false, _) => ", not interacting",
                     (true, None) => ", interacting",
                     (true, Some(_)) if level.physics.beam_retarded => {
@@ -1250,9 +1250,10 @@ fn free_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     }
     ui.label(
         egui::RichText::new(format!(
-            "Free charges move and interact with every particle (mass {}, radius {}: they \
-             collide as rigid spheres). Drag the handle at the tip of a placed one's arrow \
-             to set its direction and speed (c = {}).",
+            "Free charges move and push and pull every other particle with their fields \
+             (mass {}, radius {}; if two ever touch, they bounce as rigid spheres). To launch \
+             one, pull the handle behind it back, like a slingshot: the arrow shows where \
+             it goes and how fast (c = {}).",
             fmt_si(level.limits.free_mass),
             level.limits.free_radius,
             level.physics.c.map_or_else(|| "∞".to_string(), fmt_si)

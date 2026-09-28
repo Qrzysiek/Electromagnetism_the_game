@@ -202,18 +202,29 @@ impl LevelField {
         self.conductors.setup_cost() + self.electrodes.setup_cost()
     }
 
+    /// Magnetic field of the magnets and coils at t = 0.
     pub fn magnetic(&self, x: DVec3) -> DVec3 {
+        self.magnetic_at(x, 0.0)
+    }
+
+    /// Magnetic field of the magnets and coils at lab time `t` (ramped coils change).
+    pub fn magnetic_at(&self, x: DVec3, t: f64) -> DVec3 {
         let mut b = DVec3::ZERO;
         for d in &self.dipoles {
             b += d.field(x);
         }
         for l in &self.loops {
-            b += l.field(x);
+            b += l.field_at(x, t);
         }
         for p in &self.polygons {
-            b += p.field(x);
+            b += p.field_at(x, t);
         }
         b
+    }
+
+    /// Whether a coil's current is ramped (time-dependent B and an induced E).
+    pub fn has_ramps(&self) -> bool {
+        self.loops.iter().any(|l| l.rate != 0.0) || self.polygons.iter().any(|p| p.rate != 0.0)
     }
 }
 
@@ -230,8 +241,15 @@ impl FieldSolver for LevelField {
             s.e += c.e;
             s.phi += c.phi;
         }
-        s.b = self.magnetic(x);
         let t_lab = t + self.time_offset;
+        s.b = self.magnetic_at(x, t_lab);
+        // Induced field of ramped coils, −∂A/∂t (quasi-static, PHYSICS.md §2.2).
+        for l in &self.loops {
+            s.e += l.induced_e(x);
+        }
+        for p in &self.polygons {
+            s.e += p.induced_e(x);
+        }
         for a in &self.antennas {
             let f = a.fields(x, t_lab);
             s.e += f.e;
@@ -247,7 +265,8 @@ impl FieldSolver for LevelField {
     }
 
     fn is_static(&self) -> bool {
-        self.external.iter().all(External::is_static)
+        !self.has_ramps()
+            && self.external.iter().all(External::is_static)
             && self.antennas.iter().all(|a| a.omega == 0.0)
     }
 
@@ -258,16 +277,33 @@ impl FieldSolver for LevelField {
     /// Magnets and coils (uniform stray B has no gradient). Time-dependent magnetic
     /// fields (antennas, waves) are not included: levels do not combine them with
     /// magnetic moments (`Level::model_issues`).
-    fn grad_bz(&self, x: DVec3, _t: f64) -> DVec3 {
+    fn grad_bz(&self, x: DVec3, t: f64) -> DVec3 {
         let mut g = DVec3::ZERO;
         for d in &self.dipoles {
             g += d.grad_bz(x);
         }
+        let t_lab = t + self.time_offset;
         for l in &self.loops {
-            g += l.grad_bz_in_plane(x);
+            g += if l.rate == 0.0 {
+                l.grad_bz_in_plane(x)
+            } else {
+                CircularLoop {
+                    kappa: l.kappa_at(t_lab),
+                    ..*l
+                }
+                .grad_bz_in_plane(x)
+            };
         }
         for p in &self.polygons {
-            g += p.grad_bz_in_plane(x);
+            g += if p.rate == 0.0 {
+                p.grad_bz_in_plane(x)
+            } else {
+                PolygonCoil {
+                    kappa: p.kappa_at(t_lab),
+                    ..p.clone()
+                }
+                .grad_bz_in_plane(x)
+            };
         }
         g
     }

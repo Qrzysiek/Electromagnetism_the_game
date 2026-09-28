@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "engine_version": "0.1.0",
-  "name": "Collision course",
-  "description": "A new element: a free charge. It is not fixed: you give it a velocity (drag the handle at the tip of its arrow) and it flies with the particle, pushing and being pushed. Particles with a size collide like billiard balls, bouncing off along the line between their centres with momentum and energy conserved. Knock the particle into the detector.",
+  "name": "Throw a charge",
+  "description": "A new element: a free charge. It is not fixed: pull the handle behind it back like a slingshot to give it a velocity, and it flies off with the particle. Its field pushes the particle, and the particle's field pushes it back: momentum passes between them without any contact. Push the particle into the detector.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,9 +24,9 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-06,
+        "charge": 1.0,
         "mass": 1.0,
-        "radius": 0.4
+        "radius": 0.0
       },
       "launch": {
         "node": [
@@ -43,13 +43,13 @@
       },
       "detector": {
         "min": [
-          12,
+          14,
           17,
           0
         ],
         "max": [
           17,
-          20,
+          19,
           0
         ]
       }
@@ -66,25 +66,26 @@
     "magnet_strengths": [],
     "max_free": 3,
     "free_charges": [
-      1e-06
-    ],
-    "free_speeds": [
-      0.25,
       0.5,
       1.0
     ],
-    "free_radius": 0.4
+    "free_speeds": [
+      0.0,
+      0.25,
+      0.5,
+      1.0
+    ]
   },
   "reference_solution": [
     {
       "node": [
-        3,
+        2,
         0,
         0
       ],
       "kind": "free",
-      "value": 1e-06,
-      "angle_deg": 60.0,
+      "value": 1.0,
+      "angle_deg": 45.0,
       "speed": 1.0
     }
   ]

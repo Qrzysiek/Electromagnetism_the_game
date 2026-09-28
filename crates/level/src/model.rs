@@ -85,6 +85,32 @@ impl Level {
                  checked to be below 1e-10 of the launch energy in the shipped levels.",
             ));
         }
+        if self.coils.iter().any(crate::Coil::is_ramped) {
+            // The coils' own retardation: the light time across the arena against the time
+            // over which the current changes appreciably, κ / (dκ/dt).
+            let size = f64::from(self.grid.nx.max(self.grid.ny));
+            let ratio = self
+                .coils
+                .iter()
+                .map(|c| match c {
+                    crate::Coil::Circle { kappa, rate, .. }
+                    | crate::Coil::Polygon { kappa, rate, .. } => {
+                        let peak = kappa.abs().max((kappa + rate * self.physics.t_max).abs());
+                        if peak > 0.0 { rate.abs() / peak } else { 0.0 }
+                    }
+                })
+                .fold(0.0, f64::max)
+                * size
+                / self.c();
+            out.push(note(
+                false,
+                &format!(
+                    "Ramped coils: the current rises linearly; its induced field −∂A/∂t is \
+                     quasi-static (the coil's retardation and radiation are left out; light \
+                     time across the arena × relative ramp rate = {ratio:.1e})."
+                ),
+            ));
+        }
         if !self.clouds.is_empty() {
             out.push(note(
                 true,

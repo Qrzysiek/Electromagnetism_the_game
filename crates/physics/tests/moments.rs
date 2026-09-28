@@ -64,6 +64,7 @@ fn sources() -> Vec<(&'static str, LevelField)> {
                     radius: 3.0,
                     kappa: 0.7,
                     wire_radius: 0.1,
+                    rate: 0.0,
                 }],
                 ..Default::default()
             },
@@ -80,6 +81,7 @@ fn sources() -> Vec<(&'static str, LevelField)> {
                     ],
                     kappa: -0.4,
                     wire_radius: 0.1,
+                    rate: 0.0,
                 }],
                 ..Default::default()
             },
@@ -270,6 +272,7 @@ fn s4_charged_moment_in_coil_field() {
             radius: 6.0,
             kappa: 2.0,
             wire_radius: 0.1,
+            rate: 0.0,
         }],
         ..Default::default()
     };

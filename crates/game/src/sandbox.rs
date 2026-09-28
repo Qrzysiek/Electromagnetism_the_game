@@ -399,8 +399,13 @@ fn pointer(
                 }
                 if vertices.len() >= 3 {
                     let kappa = game.sandbox.coil_kappa;
-                    game.editor
-                        .edit_level(|l| l.coils.push(Coil::Polygon { vertices, kappa }));
+                    game.editor.edit_level(|l| {
+                        l.coils.push(Coil::Polygon {
+                            vertices,
+                            kappa,
+                            rate: 0.0,
+                        });
+                    });
                 } else if let Some(i) = coil_near(game.editor.base(), world) {
                     game.editor.edit_level(|l| {
                         l.coils.remove(i);
@@ -451,6 +456,7 @@ fn pointer(
                                     center: a,
                                     radius,
                                     kappa,
+                                    rate: 0.0,
                                 });
                             });
                         }
@@ -463,8 +469,13 @@ fn pointer(
                             [max[0], max[1], 0],
                             [min[0], max[1], 0],
                         ];
-                        game.editor
-                            .edit_level(|l| l.coils.push(Coil::Polygon { vertices, kappa }));
+                        game.editor.edit_level(|l| {
+                            l.coils.push(Coil::Polygon {
+                                vertices,
+                                kappa,
+                                rate: 0.0,
+                            });
+                        });
                     }
                     _ => {}
                 }

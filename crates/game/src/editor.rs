@@ -907,18 +907,33 @@ pub fn arrow_scale(level: &Level, m: ArrowMeasure) -> f64 {
     if longest > 0.0 { 3.0 / longest } else { 1.0 }
 }
 
-/// Velocity arrow of a free charge: its tip (the drag handle) in cell coordinates. At
-/// speed 0 the handle sits `ARROW_MIN` from the particle, in the chosen direction.
-pub fn arrow_tip(level: &Level, e: &Element, m: ArrowMeasure) -> [f64; 2] {
-    let p = level.grid.position(e.node);
-    let (sin, cos) = e.angle_deg.to_radians().sin_cos();
+/// Length of a free charge's velocity arrow in cells (`ARROW_MIN` at rest, where only
+/// the handle is drawn).
+fn arrow_cells(level: &Level, e: &Element, m: ArrowMeasure) -> f64 {
     let v = e.speed.unwrap_or(0.0);
-    let len = if v == 0.0 {
+    if v == 0.0 {
         ARROW_MIN
     } else {
         arrow_length(level, v, m) * arrow_scale(level, m)
-    };
+    }
+}
+
+/// Velocity arrow of a free charge, in cell coordinates: its tip, ahead of the particle
+/// in the direction of motion (drawn only when it moves).
+pub fn arrow_tip(level: &Level, e: &Element, m: ArrowMeasure) -> [f64; 2] {
+    let p = level.grid.position(e.node);
+    let (sin, cos) = e.angle_deg.to_radians().sin_cos();
+    let len = arrow_cells(level, e, m);
     [p.x + cos * len, p.y + sin * len]
+}
+
+/// The drag handle of a free charge: behind it, opposite to the arrow (a slingshot: pull
+/// the handle back to launch the particle forward).
+pub fn arrow_handle(level: &Level, e: &Element, m: ArrowMeasure) -> [f64; 2] {
+    let p = level.grid.position(e.node);
+    let (sin, cos) = e.angle_deg.to_radians().sin_cos();
+    let len = arrow_cells(level, e, m);
+    [p.x - cos * len, p.y - sin * len]
 }
 
 /// Where the handle of a free charge at rest sits, cells from it.
@@ -927,7 +942,7 @@ pub const ARROW_MIN: f64 = 0.8;
 /// A drag ending closer than this to the particle (cells) sets it at rest.
 pub const REST_ZONE: f64 = 0.4;
 
-/// Index of the player's free charge whose arrow handle is within `reach` cells of `x`.
+/// Index of the player's free charge whose drag handle is within `reach` cells of `x`.
 pub fn arrow_handle_at(
     level: &Level,
     placement: &[Element],
@@ -940,7 +955,7 @@ pub fn arrow_handle_at(
         .enumerate()
         .filter(|(_, e)| e.kind == ElementKind::Free)
         .map(|(i, e)| {
-            let t = arrow_tip(level, e, m);
+            let t = arrow_handle(level, e, m);
             (i, (t[0] - x[0]).hypot(t[1] - x[1]))
         })
         .filter(|&(_, d)| d <= reach)
@@ -948,10 +963,10 @@ pub fn arrow_handle_at(
         .map(|(i, _)| i)
 }
 
-/// The velocity (direction in degrees, speed) that a drag of a free charge's arrow handle
-/// from the particle at `p` to `x` asks for (before snapping).
+/// The velocity (direction in degrees, speed) that pulling a free charge's handle from
+/// the particle at `p` back to `x` asks for (before snapping): towards `p − x`, a slingshot.
 pub fn dragged_velocity(level: &Level, p: [f64; 2], x: [f64; 2], m: ArrowMeasure) -> (f64, f64) {
-    let (dx, dy) = (x[0] - p[0], x[1] - p[1]);
+    let (dx, dy) = (p[0] - x[0], p[1] - x[1]);
     let cells = dx.hypot(dy);
     // Close to the particle: at rest.
     let len = if cells < REST_ZONE {
@@ -1257,9 +1272,9 @@ mod tests {
         for m in [ArrowMeasure::Speed, ArrowMeasure::Rapidity] {
             for v in [1.0, 4.0] {
                 let e = Element::free([10, 10, 0], 1e-6, 30.0, v);
-                let tip = arrow_tip(&l, &e, m);
+                let handle = arrow_handle(&l, &e, m);
                 let p = l.grid.position(e.node);
-                let (a, back) = dragged_velocity(&l, [p.x, p.y], tip, m);
+                let (a, back) = dragged_velocity(&l, [p.x, p.y], handle, m);
                 assert!((back - v).abs() < 1e-12, "{m:?}: {back} vs {v}");
                 assert!((a - 30.0).abs() < 1e-9);
             }
@@ -1281,11 +1296,20 @@ mod tests {
         ed.set_velocity(0, 100.0, 0.2);
         assert_eq!(ed.placement[0].speed, Some(0.0), "at rest");
         assert_eq!(ed.placement[0].angle_deg.to_bits(), 0.0_f64.to_bits());
-        // The handle of the placed charge is found where it is drawn.
+        // The handle of the placed charge is found where it is drawn: behind it.
+        let handle = arrow_handle(&ed.level, &ed.placement[0], ArrowMeasure::Speed);
+        let p = ed.level.grid.position(ed.placement[0].node);
         let tip = arrow_tip(&ed.level, &ed.placement[0], ArrowMeasure::Speed);
+        assert!(
+            (handle[0] + tip[0] - 2.0 * p.x).abs() < 1e-12,
+            "opposite the arrow"
+        );
         assert_eq!(
-            arrow_handle_at(&ed.level, &ed.placement, tip, 0.35, ArrowMeasure::Speed),
+            arrow_handle_at(&ed.level, &ed.placement, handle, 0.35, ArrowMeasure::Speed),
             Some(0)
         );
+        // Pulling the handle back to the left launches it to the right.
+        let (a, _) = dragged_velocity(&ed.level, [p.x, p.y], [p.x - 2.0, p.y], ArrowMeasure::Speed);
+        assert!(a.abs() < 1e-9);
     }
 }

@@ -42,7 +42,8 @@ impl MagneticDipole {
 
 /// Circular coil (thin wire of radius `wire_radius`) of radius `radius` around `center`
 /// in the plane orthogonal to `normal`, carrying current counter-clockwise about
-/// `normal`, with strength `kappa = μ₀ I / 4π`.
+/// `normal`, with strength `kappa = μ₀ I / 4π` at t = 0 and `kappa + rate·t` later (a
+/// ramped current; its induced field is `−rate · A_unit`, quasi-static, PHYSICS.md §2.2).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CircularLoop {
     pub center: DVec3,
@@ -50,6 +51,8 @@ pub struct CircularLoop {
     pub radius: f64,
     pub kappa: f64,
     pub wire_radius: f64,
+    /// Ramp rate dκ/dt (0: a steady current).
+    pub rate: f64,
 }
 
 /// Complete elliptic integrals `(K(m), E(m))` of parameter `m = k²`, given `m` and
@@ -110,7 +113,78 @@ fn loop_bracket(m: f64, m1: f64) -> f64 {
     }
 }
 
+/// `h(m) = (1 − m/2) K(m) − E(m)`, the bracket of the loop's vector potential, which is
+/// `O(m²)` (`π m²/32` to leading order): summed as a power series for small `m`, where the
+/// direct form cancels. The coefficient of `mⁿ` is `π/2 [c_n 2n/(2n − 1) − c_(n−1)/2]`
+/// (from the series of K and E, see `loop_bracket`); it vanishes for n = 1.
+fn potential_bracket(m: f64, m1: f64) -> f64 {
+    if m < 0.05 {
+        let mut c_prev = 1.0f64; // c_0
+        let mut sum = 0.0;
+        let mut mp = 1.0;
+        for n in 1..=16u32 {
+            let nf = f64::from(n);
+            let c = c_prev * ((2.0 * nf - 1.0) / (2.0 * nf)).powi(2);
+            mp *= m;
+            if n >= 2 {
+                sum += mp * (c * 2.0 * nf / (2.0 * nf - 1.0) - 0.5 * c_prev);
+            }
+            c_prev = c;
+        }
+        std::f64::consts::FRAC_PI_2 * sum
+    } else {
+        let (k, e) = elliptic_ke(m, m1);
+        (1.0 - 0.5 * m) * k - e
+    }
+}
+
 impl CircularLoop {
+    /// Strength at time `t`.
+    pub fn kappa_at(&self, t: f64) -> f64 {
+        self.kappa + self.rate * t
+    }
+
+    /// Field at time `t` (for a steady current exactly `field`).
+    pub fn field_at(&self, x: DVec3, t: f64) -> DVec3 {
+        if self.rate == 0.0 {
+            return self.field(x);
+        }
+        Self {
+            kappa: self.kappa_at(t),
+            ..*self
+        }
+        .field(x)
+    }
+
+    /// Vector potential per unit strength (κ = 1), azimuthal: with `m = k² = 4aρ/β²`,
+    /// `A_φ = (4/k) √(a/ρ) h(m) = 2β h(m)/ρ`, `h = (1 − m/2) K − E` (e.g. Jackson §5.5,
+    /// eq. 5.37, with μ₀I/4π = κ). Its curl is `field` (test M8).
+    pub fn unit_vector_potential(&self, x: DVec3) -> DVec3 {
+        let n = self.normal;
+        let d = x - self.center;
+        let z = d.dot(n);
+        let radial = d - n * z;
+        let rho = radial.length();
+        if rho == 0.0 {
+            return DVec3::ZERO;
+        }
+        let a = self.radius;
+        let alpha2 = (a - rho) * (a - rho) + z * z;
+        let beta2 = (a + rho) * (a + rho) + z * z;
+        let m = 4.0 * a * rho / beta2;
+        let a_phi = 2.0 * beta2.sqrt() * potential_bracket(m, alpha2 / beta2) / rho;
+        n.cross(radial / rho) * a_phi
+    }
+
+    /// Induced electric field of the ramp, `−∂A/∂t = −rate · A_unit` (quasi-static).
+    pub fn induced_e(&self, x: DVec3) -> DVec3 {
+        if self.rate == 0.0 {
+            DVec3::ZERO
+        } else {
+            self.unit_vector_potential(x) * (-self.rate)
+        }
+    }
+
     /// Exact field of a circular current loop (e.g. Simpson et al., NASA/TM-2001-209961):
     /// with `α² = (a−ρ)² + z²`, `β² = (a+ρ)² + z²`, `k² = 1 − α²/β²`,
     /// `B_ρ = 2κ z / (α² β ρ) [(a² + ρ² + z²) E − α² K]`,
@@ -166,12 +240,32 @@ impl CircularLoop {
 }
 
 /// Closed polygonal coil through `vertices` (the last connects back to the first),
-/// current flowing in vertex order, strength `kappa = μ₀ I / 4π`.
+/// current flowing in vertex order, strength `kappa = μ₀ I / 4π` at t = 0 and
+/// `kappa + rate·t` later (see `CircularLoop`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PolygonCoil {
     pub vertices: Vec<DVec3>,
     pub kappa: f64,
     pub wire_radius: f64,
+    /// Ramp rate dκ/dt (0: a steady current).
+    pub rate: f64,
+}
+
+/// Vector potential of a straight segment per unit strength, `∫ dl / |x − l|` along it:
+/// `û ln((|rb| + rb·û) / (|ra| + ra·û))` with `ra = a − x`, `rb = b − x`. Behind the
+/// segment's start both terms of that ratio are tiny; the equal form
+/// `(|ra| − ra·û) / (|rb| − rb·û)` (both products are |r⊥|²) is used there.
+fn segment_potential(ra: DVec3, rb: DVec3) -> DVec3 {
+    let d = rb - ra;
+    let u = d / d.length();
+    let (la, lb) = (ra.length(), rb.length());
+    let (pa, pb) = (ra.dot(u), rb.dot(u));
+    let ratio = if pa + pb >= 0.0 {
+        (lb + pb) / (la + pa)
+    } else {
+        (la - pa) / (lb - pb)
+    };
+    u * ratio.ln()
 }
 
 /// Exact field of a straight segment from `a` to `b` (current from `a` to `b`) at the
@@ -185,6 +279,44 @@ fn segment_field(ra: DVec3, rb: DVec3, kappa: f64) -> DVec3 {
 }
 
 impl PolygonCoil {
+    /// Strength at time `t`.
+    pub fn kappa_at(&self, t: f64) -> f64 {
+        self.kappa + self.rate * t
+    }
+
+    /// Field at time `t` (for a steady current exactly `field`).
+    pub fn field_at(&self, x: DVec3, t: f64) -> DVec3 {
+        if self.rate == 0.0 {
+            return self.field(x);
+        }
+        let n = self.vertices.len();
+        let mut b = DVec3::ZERO;
+        let k = self.kappa_at(t);
+        for i in 0..n {
+            b += segment_field(self.vertices[i] - x, self.vertices[(i + 1) % n] - x, k);
+        }
+        b
+    }
+
+    /// Vector potential per unit strength (κ = 1): the sum of the segments'.
+    pub fn unit_vector_potential(&self, x: DVec3) -> DVec3 {
+        let n = self.vertices.len();
+        let mut a = DVec3::ZERO;
+        for i in 0..n {
+            a += segment_potential(self.vertices[i] - x, self.vertices[(i + 1) % n] - x);
+        }
+        a
+    }
+
+    /// Induced electric field of the ramp, `−rate · A_unit` (quasi-static).
+    pub fn induced_e(&self, x: DVec3) -> DVec3 {
+        if self.rate == 0.0 {
+            DVec3::ZERO
+        } else {
+            self.unit_vector_potential(x) * (-self.rate)
+        }
+    }
+
     pub fn field(&self, x: DVec3) -> DVec3 {
         let n = self.vertices.len();
         let mut b = DVec3::ZERO;

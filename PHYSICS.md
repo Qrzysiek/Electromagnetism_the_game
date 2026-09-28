@@ -84,6 +84,20 @@ So `q v × B` keeps the particle in the plane (test M5). A straight wire perpend
 
 **Energy.** B does no work, so the conserved energy `W` of §4 is unchanged. The forbidden-region map stays exact with magnets.
 
+### Ramped coils and induction — *validated* (`magnetic.rs`: `unit_vector_potential`, `induced_e`; tests M8–M10)
+
+A coil's current may rise linearly, `κ(t) = κ + rate·t` (lab time). Its field scales with κ(t), and it induces the electric field `E = −∂A/∂t = −rate · A_unit(x)`, constant in time for a linear ramp.
+
+- Vector potentials in closed form. Circular loop (Jackson §5.5): `A_φ = (4κ/k) √(a/ρ) [(1 − k²/2) K − E] = 2κ β h(m)/ρ` with `m = k² = 4aρ/β²`, `β² = (a + ρ)² + z²` and `h = (1 − m/2) K − E`, summed as a power series for m < 0.05 where the direct form cancels (`h = π m²/32 + …`). Straight segment: `A = κ û ln((|rb| + rb·û)/(|ra| + ra·û))`, switched to the equal form `(|ra| − ra·û)/(|rb| − rb·û)` behind the segment's start, where the first cancels.
+- **Quasi-static**, a stated approximation: the coil's own retardation and radiation are left out (valid while the light time across the setup is short against the time over which the current changes, κ/rate; the model notes give this ratio per level). The metal model cannot screen a non-conservative field, so ramped coils are not combined with metal; nor with magnetic moments (time-dependent B).
+- Coils with rate 0 take exactly the previous code path (golden hashes unchanged).
+
+| # | Test | Reference | Criterion | Measured |
+|---|---|---|---|---|
+| M8 | Curl of the vector potential of a loop and a polygon coil at 5 points (in and off the plane), central differences h = 1e-5 | the field | < 1e-8 | ≤ 2.4e-10 |
+| M9 | Faraday's law (Jackson §5.15): ∮E·dl of the induced field around circles inside a loop (concentric, off-centre) and a polygon coil | −dΦ/dt with Φ the field's flux by quadrature (40 Gauss–Legendre × 256) | < 1e-8 | ≤ 1.5e-14 |
+| M10 | A charge in a ramped loop's field (axially symmetric), 60 time units | canonical angular momentum x p_y − y p_x + q (x A_y − y A_x) conserved | < 1e-10 | 1.4e-13 (while \|p\| changes by 47 %) |
+
 ## 2.3 External fields: stray fields and plane waves — *validated* (`crates/physics/src/external.rs`)
 
 Fields whose sources are outside the arena (disturbances, SPEC §3). `LevelField::external` adds them to the level's own sources. Both kinds are exact solutions of the vacuum Maxwell equations, so they add no approximation:

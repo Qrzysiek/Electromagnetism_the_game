@@ -1421,23 +1421,20 @@ def jackson_runaway():
         region=(2, 2, 28, 18), disturbances=[stray("crossed fields", e=(0.0, 3e7), bz=1e7)])
 
 
-def jackson_collision_course():
-    # Dynamic particles, introduction: the player's free charge (radius 0.4) is launched
-    # into the shot's path and knocks it into the detector (the charges are 1e-6: their
-    # Coulomb force is negligible, the collision does it). The search finds 63 one-charge
-    # launches.
-    shots = [shot(1e-6, 1.0, (0, 5), 0.0, 0.5, box((12, 17, 17, 20)))]
-    shots[0]["particle"]["radius"] = 0.4
+def throw_a_charge():
+    # Dynamic particles, introduction: the player's free charge (like sign, 0.5 or 1)
+    # pushes the particle (charge 1, Newtonian) off course with its Coulomb field as it
+    # flies past or towards it, and recoils itself. The search finds 507 one-charge
+    # launches. (A first version with charges of 1e-6 showed only the contact collision:
+    # the owner's review.)
     return level(
-        "Collision course",
-        "A new element: a free charge. It is not fixed: you give it a velocity (drag the "
-        "handle at the tip of its arrow) and it flies with the particle, pushing and being "
-        "pushed. Particles with a size collide like billiard balls, bouncing off along the "
-        "line between their centres with momentum and energy conserved. Knock the particle "
-        "into the detector.",
-        shots=shots, c=None, t_max=100.0,
-        max_free=3, free_charges=[1e-6], free_speeds=[0.25, 0.5, 1.0], free_radius=0.4)
-
+        "Throw a charge",
+        "A new element: a free charge. It is not fixed: pull the handle behind it back like "
+        "a slingshot to give it a velocity, and it flies off with the particle. Its field "
+        "pushes the particle, and the particle's field pushes it back: momentum passes "
+        "between them without any contact. Push the particle into the detector.",
+        shots=[shot(1.0, 1.0, (0, 5), 0.0, 0.5, box((14, 17, 17, 19)))], c=None, t_max=100.0,
+        max_free=3, free_charges=[0.5, 1.0], free_speeds=[0.0, 0.25, 0.5, 1.0])
 
 def jackson_recoil():
     # Jackson §13.1: Coulomb scattering with a target free to recoil. Equal masses, target
@@ -1930,7 +1927,7 @@ ARCS = [
         ("Introduction", [
             ("jackson_exb_drift", jackson_exb_drift),
             ("jackson_van_allen", jackson_van_allen),
-            ("jackson_collision_course", jackson_collision_course),
+            ("throw_a_charge", throw_a_charge),
             ("jackson_knock_on", jackson_knock_on),
         ]),
         ("Intermediate", [

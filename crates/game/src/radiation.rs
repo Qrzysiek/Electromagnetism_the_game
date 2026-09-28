@@ -397,21 +397,22 @@ pub fn update(
         view.radiation_only = game.radiation_only;
         view.sources = match beam {
             Some(b) => {
-                let shots = level.beam_shots(&game.editor.placement);
+                // Species by position in the flight (dynamic particles follow the shots).
+                let species = level.beam_species(&game.editor.placement);
                 b.map_or_else(Vec::new, |b| {
                     b.worldlines
                         .iter()
                         .zip(&b.ends)
-                        .zip(&shots)
+                        .zip(&species)
                         .zip(&b.outcomes)
                         .filter(|(((l, _), _), _)| !l.is_empty())
-                        .map(|(((l, &end), &s), &o)| {
+                        .map(|(((l, &end), sp), &o)| {
                             let samples = with_past(l, &bounds, c);
                             Source {
                                 line: SampledWorldline::new(&samples),
                                 samples,
-                                charge: level.shots[s].particle.charge,
-                                moment: level.shots[s].particle.moment,
+                                charge: sp.charge,
+                                moment: sp.moment,
                                 end,
                                 stays: matches!(o, physics::trajectory::Outcome::Collided(_)),
                             }

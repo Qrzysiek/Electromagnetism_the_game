@@ -189,9 +189,10 @@ fn draw_element(
 }
 
 /// A dynamic particle: a hollow ring in its sign's colour (it moves; fixed charges are
-/// filled discs), its sign, and its launch velocity as an arrow ending in a handle (the
-/// player's can be dragged: direction and speed).
-fn draw_free(gizmos: &mut Gizmos, p: Vec2, q: f64, radius: f32, tip: Vec2, player: bool) {
+/// filled discs), its sign, and its launch velocity as an arrow in the direction of
+/// motion (`tip` at the particle: at rest). The player's have a handle behind them, joined
+/// by a band: pull it back to launch the particle forward (a slingshot).
+fn draw_free(gizmos: &mut Gizmos, p: Vec2, q: f64, radius: f32, tip: Vec2, handle: Option<Vec2>) {
     let color = if q > 0.0 {
         Color::srgb(1.0, 0.45, 0.4)
     } else if q < 0.0 {
@@ -216,10 +217,14 @@ fn draw_free(gizmos: &mut Gizmos, p: Vec2, q: f64, radius: f32, tip: Vec2, playe
         let start = p + d.normalize() * radius;
         gizmos.arrow_2d(start, tip, arrow);
     }
-    if player {
-        // The handle: drag it to set the velocity.
-        gizmos.circle_2d(tip, 0.18, arrow);
-        gizmos.circle_2d(tip, 0.1, arrow.with_alpha(0.6));
+    if let Some(h) = handle {
+        // The band from the particle back to the handle, and the handle.
+        let band = h - p;
+        if band.length() > radius {
+            gizmos.line_2d(p + band.normalize() * radius, h, arrow.with_alpha(0.35));
+        }
+        gizmos.circle_2d(h, 0.18, arrow);
+        gizmos.circle_2d(h, 0.1, arrow.with_alpha(0.6));
     }
 }
 
@@ -291,11 +296,24 @@ fn draw_coil(gizmos: &mut Gizmos, grid: Grid, coil: &Coil) {
             center,
             radius,
             kappa,
+            rate,
         } => {
             let c = to_vec2(grid.position(*center));
             #[allow(clippy::cast_possible_truncation)]
             let r = *radius as f32;
             gizmos.circle_2d(c, r, copper).resolution(128);
+            // A ramped coil: a second, dashed ring (its current changes).
+            if *rate != 0.0 {
+                for k in (0..64).step_by(2) {
+                    #[allow(clippy::cast_precision_loss)]
+                    let (a0, a1) = (TAU * k as f32 / 64.0, TAU * (k + 1) as f32 / 64.0);
+                    gizmos.line_2d(
+                        c + Vec2::from_angle(a0) * (r + 0.25),
+                        c + Vec2::from_angle(a1) * (r + 0.25),
+                        copper.with_alpha(0.7),
+                    );
+                }
+            }
             // Current direction: counter-clockwise for positive κ.
             let sense = if *kappa >= 0.0 { 1.0 } else { -1.0 };
             for k in 0..8 {
@@ -305,7 +323,11 @@ fn draw_coil(gizmos: &mut Gizmos, grid: Grid, coil: &Coil) {
                 arrow(gizmos, at, Vec2::from_angle(a + sense * TAU / 4.0));
             }
         }
-        Coil::Polygon { vertices, kappa } => {
+        Coil::Polygon {
+            vertices,
+            kappa,
+            rate: _,
+        } => {
             let v: Vec<Vec2> = vertices
                 .iter()
                 .map(|n| to_vec2(grid.position(*n)))
@@ -578,19 +600,19 @@ pub fn draw(
                 ElementKind::Plate | ElementKind::Supply => continue,
                 ElementKind::Free => {
                     let t = crate::editor::arrow_tip(level, e, game.arrow_measure);
+                    let h = crate::editor::arrow_handle(level, e, game.arrow_measure);
+                    let p = to_vec2(grid.position(e.node));
                     #[allow(clippy::cast_possible_truncation)]
-                    let (tip, r) = (
-                        Vec2::new(t[0] as f32, t[1] as f32),
+                    let (tip, handle, r) = (
+                        if e.speed.unwrap_or(0.0) == 0.0 {
+                            p
+                        } else {
+                            Vec2::new(t[0] as f32, t[1] as f32)
+                        },
+                        Vec2::new(h[0] as f32, h[1] as f32),
                         level.limits.free_radius.max(0.15) as f32,
                     );
-                    draw_free(
-                        gizmos,
-                        to_vec2(grid.position(e.node)),
-                        e.value,
-                        r,
-                        tip,
-                        player,
-                    );
+                    draw_free(gizmos, p, e.value, r, tip, player.then_some(handle));
                     continue;
                 }
             };
@@ -613,7 +635,7 @@ pub fn draw(
         };
         #[allow(clippy::cast_possible_truncation)]
         let r = f.particle.radius.max(0.15) as f32;
-        draw_free(&mut gizmos, p, f.particle.charge, r, p + v, false);
+        draw_free(&mut gizmos, p, f.particle.charge, r, p + v, None);
         if let Some(d) = f.detector {
             let d0 = to_vec2(grid.position(d.min));
             let d1 = to_vec2(grid.position(d.max));
