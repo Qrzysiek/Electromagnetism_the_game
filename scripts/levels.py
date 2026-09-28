@@ -1075,6 +1075,86 @@ def soft_landing_current():
         region=(12, 2, 26, 18))
 
 
+# =======================================================================================
+# Finales (docs/CURRICULUM.md): multi-stage levels that need several modules. Their
+# references are composed stage by stage, as a player would build them: each stage is
+# solved as a sub-level whose detector is the next gate, with the earlier stages fixed.
+
+def solve_stage(lvl, fixed, detectors, gates, **player):
+    """Solve one stage of `lvl`: the shots aim at `detectors` (one per shot), after
+    passing `gates`, with `fixed` elements built in and the player's elements `player`.
+    Returns the solver's elements."""
+    sub = json.loads(json.dumps(lvl))
+    sub["elements"] = sub["elements"] + fixed
+    for shot_, d in zip(sub["shots"], detectors):
+        shot_["detector"] = d
+    sub["gates"] = gates
+    sub["limits"] = level("", "", **player)["limits"]
+    sub["reference_solution"] = []
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+        json.dump(sub, f)
+        path = f.name
+    try:
+        run_generator("solve", path, "--write", "--restarts", "64", "--iterations", "600")
+        found = json.load(open(path, encoding="utf-8"))["reference_solution"]
+    finally:
+        os.unlink(path)
+    if not found:
+        sys.exit(f"{lvl['name']}: no solution for the stage with detectors {detectors[:1]}")
+    print(f"{lvl['name']}: stage solved with {len(found)} elements", flush=True)
+    return found
+
+
+def sorting_station():
+    # Arc 1 finale. Stage 1 (lens): the six rays (two energies x three angles) pass a
+    # two-cell gate. Stage 2 (deflector and lens): each energy is refocused onto its own
+    # two-cell spot. (A version asking for parallel arrival, within 6-15 degrees, was not
+    # solvable by the staged search.)
+    energies, angles = (0.4, 0.6), (-8.0, 0.0, 8.0)
+    gate = box((18, 9, 20, 11))
+    slow = box((37, 13, 40, 15))
+    fast = box((37, 5, 40, 7))
+    shots = [shot(1e-6, 1.0, (0, 10), a, e, slow if e < 0.5 else fast)
+             for e in energies for a in angles]
+    mags = [m * M for m in (0.25, 0.5, 1, 2, 4)]
+    lvl = level(
+        "Sorting station",
+        "Finale of the first arc. Six rays leave the source: two energies, each at −8°, 0° "
+        "and +8°. First bring all six through the gate (a lens). Behind it they spread "
+        "out again: sort them by energy and focus each energy onto its own small spot. "
+        "Lens, deflector, lens: everything this arc taught, in one setup.",
+        grid=(40, 20), shots=shots, gates=[gate], t_max=200.0,
+        max_charges=8, magnitudes=mags, region=(2, 1, 37, 19))
+    stage1 = solve_stage(lvl, [], [gate] * len(shots), [],
+                         max_charges=3, magnitudes=mags, region=(2, 1, 17, 19))
+    stage2 = solve_stage(lvl, stage1, [s_["detector"] for s_ in shots], [gate],
+                         max_charges=4, magnitudes=mags, region=(21, 1, 36, 19))
+    lvl["reference_solution"] = stage1 + stage2
+    return lvl
+
+
+def needs_elements(lvl, fewer):
+    """Check that the level is not solved with only `fewer` charges anywhere (the
+    solver with that cap must fail): a finale needs its modules. A heuristic check: a
+    failed search is not a proof."""
+    probe = json.loads(json.dumps(lvl))
+    probe["limits"]["max_charges"] = fewer
+    probe["reference_solution"] = []
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+        json.dump(probe, f)
+        path = f.name
+    try:
+        run_generator("solve", path, "--write", "--restarts", "64", "--iterations", "600")
+        found = json.load(open(path, encoding="utf-8"))["reference_solution"]
+    finally:
+        os.unlink(path)
+    return not found
+
+
+# Finales and the fewest charges that must not suffice.
+FINALES = {"sorting_station": 4}
+
+
 # Realistic iterations: their built-in idealised design must fail on its own.
 MUST_FAIL_ALONE = {"chromatic_aberration", "real_analyzer", "crt_earth_field",
                    "calutron_space_charge", "beam_pipe", "soft_landing_current"}
@@ -1147,6 +1227,8 @@ LEVELS = [
     ("beam_pipe", beam_pipe),
     ("calutron_space_charge", calutron_space_charge),
     ("soft_landing_current", soft_landing_current),
+    # Finales (prototype; docs/CURRICULUM.md).
+    ("sorting_station", sorting_station),
 ]
 
 
@@ -1284,6 +1366,12 @@ def main():
                 sys.exit(f"{key}: the idealised design still works on its own")
         with open(path, "w", newline="\n", encoding="utf-8") as f:
             f.write(json.dumps(lvl, indent=2, ensure_ascii=False) + "\n")
+        if slug in FINALES:
+            fewer = FINALES[slug]
+            ok_fewer = needs_elements(lvl, fewer)
+            print(f"{key}: not solved with {fewer} charges: {ok_fewer}", flush=True)
+            if not ok_fewer:
+                sys.exit(f"{key}: solvable with only {fewer} charges")
         if not lvl["reference_solution"]:
             run_generator("solve", path, "--write", "--restarts", "64", "--iterations", "400")
         report = run_generator("check", path)

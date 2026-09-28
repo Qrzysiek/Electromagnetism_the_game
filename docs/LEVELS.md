@@ -69,6 +69,7 @@ verified reference solution for every shot and negligible radiation
 | 49 | Beam pipe | level 10's injection built in; a grounded pipe wall between the beam and the steering charge screens it | ≤ 2 charges |
 | 50 | Calutron at full current | level 28's calutron built in; the isotope beams repel each other (5 ions each, a quarter of the usual charge scaling, radiation reaction) | ≤ 2 charges |
 | 51 | Soft landing, full current | level 12's soft landing built in; an interacting beam: space charge grows as the ions are braked | ≤ 2 charges |
+| 52 | Sorting station | Finale prototype (docs/CURRICULUM.md): six rays, two energies × three angles; a lens brings them through a two-cell gate, then a deflector and a lens refocus each energy onto its own two-cell spot | ≤ 8 charges (reference 6: 2 + 4) |
 
 ## Automatic detectors
 
@@ -83,7 +84,7 @@ fails.
 
 ## Difficulty measurements
 
-`cargo run --release -p generator -- analyze levels/[0-9]*.json` (2000 random samples,
+`cargo run --release -p generator -- analyze [--fewest] levels/[0-9]*.json` (2000 random samples,
 32 search runs with a budget of 400 evaluations each; the electrode levels, whose flights
 cost more, with 600 samples and 16 runs). Columns:
 
@@ -189,6 +190,23 @@ Notes:
   placement). The log found why the velocity selector's analysis ran for hours (placements
   trapping the ions for 1e6 steps, and a beam bug); searches now stay within the step
   budget of the cost meters.
+- Sorting station (52) is the first finale (docs/CURRICULUM.md). Its reference is built stage
+  by stage (`solve_stage` in `scripts/levels.py`): stage 1 (the lens, at most 3 charges left
+  of the gate) needs 2 charges; stage 2 (at most 4 charges right of the gate, with stage 1
+  fixed) needs 4. The build checks that the search finds no solution with 4 charges
+  anywhere (`FINALES`), and the whole-level search with up to 8 charges finds none either
+  (0/4 runs): the level is meant to be solved in stages, as it was built. Versions that asked
+  for parallel arrival (within ±6°, ±10° or ±15°) had no staged solution; five-cell spots
+  were solved with 3 charges in stage 2 (too easy).
+- `analyze --fewest` adds the fewest elements that solve a level: the reference solution's
+  count, unless the search finds a verified solution with fewer (exhaustive for one
+  element, annealing with 64 restarts of 600 iterations for 2 up to the reference count
+  minus one). A failed search is not a proof, so the number is an upper bound.
+  Measured 2026-09-28: 2 elements for 7, 8, 11, 18, 19, 28, 29, 32, 33 and 42; 3 for 44; 6
+  for 52; 1 for every other level. Three references use more elements than needed: the
+  Wien filter (26, reference 4) and the velocity selector (43, reference 4) are solved
+  with one charge, and Build a Wien filter (29, reference 6) with two elements. These
+  numbers are the starting point of the curriculum restructure (docs/CURRICULUM.md).
 - The search is a rough stand-in for a player. A player who understands the physics (for
   example the Wien condition v = E/B) should do much better than the search on the later
   levels, and a player who doesn't should do much worse.

@@ -1,0 +1,316 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Sorting station",
+  "description": "Finale of the first arc. Six rays leave the source: two energies, each at −8°, 0° and +8°. First bring all six through the gate (a lens). Behind it they spread out again: sort them by energy and focus each energy onto its own small spot. Lens, deflector, lens: everything this arc taught, in one setup.",
+  "grid": {
+    "nx": 40,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9902680687415704,
+          -0.13917310096006544,
+          0.0
+        ],
+        "kinetic_energy": 0.4
+      },
+      "detector": {
+        "min": [
+          37,
+          13,
+          0
+        ],
+        "max": [
+          40,
+          15,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.4
+      },
+      "detector": {
+        "min": [
+          37,
+          13,
+          0
+        ],
+        "max": [
+          40,
+          15,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9902680687415704,
+          0.13917310096006544,
+          0.0
+        ],
+        "kinetic_energy": 0.4
+      },
+      "detector": {
+        "min": [
+          37,
+          13,
+          0
+        ],
+        "max": [
+          40,
+          15,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9902680687415704,
+          -0.13917310096006544,
+          0.0
+        ],
+        "kinetic_energy": 0.6
+      },
+      "detector": {
+        "min": [
+          37,
+          5,
+          0
+        ],
+        "max": [
+          40,
+          7,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.6
+      },
+      "detector": {
+        "min": [
+          37,
+          5,
+          0
+        ],
+        "max": [
+          40,
+          7,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9902680687415704,
+          0.13917310096006544,
+          0.0
+        ],
+        "kinetic_energy": 0.6
+      },
+      "detector": {
+        "min": [
+          37,
+          5,
+          0
+        ],
+        "max": [
+          40,
+          7,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 8,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0,
+      4000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        2,
+        1,
+        0
+      ],
+      "max": [
+        37,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        2,
+        7,
+        0
+      ],
+      "kind": "charge",
+      "value": 1000000.0
+    },
+    {
+      "node": [
+        7,
+        19,
+        0
+      ],
+      "kind": "charge",
+      "value": 4000000.0
+    },
+    {
+      "node": [
+        22,
+        7,
+        0
+      ],
+      "kind": "charge",
+      "value": 500000.0
+    },
+    {
+      "node": [
+        25,
+        18,
+        0
+      ],
+      "kind": "charge",
+      "value": 1000000.0
+    },
+    {
+      "node": [
+        32,
+        10,
+        0
+      ],
+      "kind": "charge",
+      "value": 250000.0
+    },
+    {
+      "node": [
+        34,
+        3,
+        0
+      ],
+      "kind": "charge",
+      "value": 250000.0
+    }
+  ],
+  "gates": [
+    {
+      "min": [
+        18,
+        9,
+        0
+      ],
+      "max": [
+        20,
+        11,
+        0
+      ]
+    }
+  ]
+}

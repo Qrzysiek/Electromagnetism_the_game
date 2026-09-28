@@ -310,7 +310,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                         None => "…",
                     }
                 };
-                let c = crate::draw::shot_color(i).to_srgba();
+                let c = crate::draw::shot_color(&level, i).to_srgba();
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let color = egui::Color32::from_rgb(
                     (c.red * 255.0) as u8,
@@ -762,7 +762,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             ui.label(
                 egui::RichText::new(who)
                     .strong()
-                    .color(shot_color32(shot_i)),
+                    .color(shot_color32(&level, shot_i)),
             )
             .on_hover_text(
                 "The energy of this shot's particle along its flight, in units of its \
@@ -1049,7 +1049,7 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                     )
                 }
             };
-            ui.colored_label(shot_color32(s), text);
+            ui.colored_label(shot_color32(level, s), text);
         }
     }
     let d = game
@@ -1103,8 +1103,8 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
 }
 
 /// The drawing colour of a shot, for egui.
-fn shot_color32(shot: usize) -> egui::Color32 {
-    let c = crate::draw::shot_color(shot).to_srgba();
+fn shot_color32(level: &level::Level, shot: usize) -> egui::Color32 {
+    let c = crate::draw::shot_color(level, shot).to_srgba();
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u8;
     egui::Color32::from_rgb(b(c.red), b(c.green), b(c.blue))

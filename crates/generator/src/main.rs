@@ -42,6 +42,11 @@ enum Command {
         /// Objective evaluations per search run.
         #[arg(long, default_value_t = 400)]
         budget: u32,
+        /// Also report the fewest elements that solve the level: the reference solution's
+        /// count, unless a search with fewer elements succeeds (a heuristic: a failed
+        /// search is not a proof).
+        #[arg(long)]
+        fewest: bool,
     },
     /// Rewrite level files in the current format (older formats are migrated on load).
     Normalize { paths: Vec<PathBuf> },
@@ -59,6 +64,19 @@ enum Command {
 fn load(path: &PathBuf) -> Level {
     let s = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     Level::from_json(&s).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+/// The fewest player elements that solve the level: the reference solution's count, unless
+/// the search finds a verified solution with fewer (exhaustive for one element, annealing
+/// with 64 restarts of 600 iterations for more).
+fn fewest_elements(level: &Level) -> usize {
+    let reference = level.reference_solution.len();
+    if reference > 1 && !search::single_element_solutions(level).is_empty() {
+        return 1;
+    }
+    (2..reference)
+        .find(|&k| !search::anneal(level, k, 64, 600, 0x5EED + k as u64).is_empty())
+        .unwrap_or(reference)
 }
 
 fn main() {
@@ -112,11 +130,20 @@ fn main() {
             samples,
             runs,
             budget,
+            fewest,
         } => {
             println!(
-                "| level | log10 configs | random solve rate | search success | mean evals | expected effort: search / guessing | smoothness |"
+                "| level | log10 configs | random solve rate | search success | mean evals | expected effort: search / guessing | smoothness |{}",
+                if fewest {
+                    " fewest elements found |"
+                } else {
+                    ""
+                }
             );
-            println!("|---|---|---|---|---|---|---|");
+            println!(
+                "|---|---|---|---|---|---|---|{}",
+                if fewest { "---|" } else { "" }
+            );
             for path in paths {
                 let level = load(&path);
                 let a = level::analysis::analyze(&level, samples, runs, budget, 0xD1FF);
@@ -125,8 +152,13 @@ fn main() {
                 } else {
                     format!("{:.1e}", a.random_rate())
                 };
+                let fewest = if fewest {
+                    format!(" {} |", fewest_elements(&level))
+                } else {
+                    String::new()
+                };
                 println!(
-                    "| {} | {:.1} | {rate} | {}/{} | {:.0} | {:.0} / {:.0} | {:.2} |",
+                    "| {} | {:.1} | {rate} | {}/{} | {:.0} | {:.0} / {:.0} | {:.2} |{fewest}",
                     path.file_stem().unwrap().to_string_lossy(),
                     a.config_space_log10,
                     a.search_successes,

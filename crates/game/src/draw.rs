@@ -16,8 +16,49 @@ pub fn to_vec2(v: DVec3) -> Vec2 {
     Vec2::new(v.x as f32, v.y as f32)
 }
 
-/// Colour of each shot (cycled).
-pub fn shot_color(i: usize) -> Color {
+/// Colour of a shot: the colour of its destination. Shots aimed at the same detector share
+/// its hue (the palette cycles over the distinct detectors, in order of first use) and
+/// differ in lightness only, so that a ray's colour tells where it must go.
+pub fn shot_color(level: &level::Level, i: usize) -> Color {
+    let Some(shot) = level.shots.get(i) else {
+        return palette_color(i);
+    };
+    let base = detector_color(level, &shot.detector).to_srgba();
+    let members: Vec<usize> = (0..level.shots.len())
+        .filter(|&j| level.shots[j].detector == shot.detector)
+        .collect();
+    let n = members.len();
+    if n < 2 {
+        return base.into();
+    }
+    let rank = members.iter().position(|&j| j == i).unwrap_or(0);
+    // From darker (−1) through the detector's colour (0) to lighter (+1).
+    #[allow(clippy::cast_precision_loss)]
+    let t = rank as f32 / (n - 1) as f32 * 2.0 - 1.0;
+    let shade = |c: f32| {
+        if t < 0.0 {
+            c * (1.0 + 0.4 * t)
+        } else {
+            c + (1.0 - c) * 0.55 * t
+        }
+    };
+    Color::srgb(shade(base.red), shade(base.green), shade(base.blue))
+}
+
+/// Colour of a detector: the palette's colour of its number among the level's distinct
+/// detectors, in order of first use.
+fn detector_color(level: &level::Level, detector: &level::Detector) -> Color {
+    let mut targets: Vec<&level::Detector> = Vec::new();
+    for s in &level.shots {
+        if !targets.contains(&&s.detector) {
+            targets.push(&s.detector);
+        }
+    }
+    palette_color(targets.iter().position(|d| *d == detector).unwrap_or(0))
+}
+
+/// The palette's colour number `i` (cycled).
+fn palette_color(i: usize) -> Color {
     const PALETTE: [(f32, f32, f32); 6] = [
         (0.35, 1.0, 0.45),
         (0.35, 0.85, 1.0),
@@ -389,12 +430,14 @@ pub fn draw(
         if !(active || game.show_all_shots) {
             continue;
         }
-        let color = shot_color(i);
+        let color = shot_color(level, i);
+        // The detector in its own colour, the launch marker in the shot's shade of it.
+        let target = detector_color(level, &shot.detector);
         let alpha = if active { 1.0 } else { 0.45 };
         let solved = matches!(game.verdict(i), Some((Status::Verified, Outcome::Arrived)));
         let d0 = to_vec2(grid.position(shot.detector.min));
         let d1 = to_vec2(grid.position(shot.detector.max));
-        gizmos.rect_2d((d0 + d1) * 0.5, (d1 - d0).abs(), color.with_alpha(alpha));
+        gizmos.rect_2d((d0 + d1) * 0.5, (d1 - d0).abs(), target.with_alpha(alpha));
         // Accepted directions: a cone (axis and half-angle) at the detector's centre.
         if let Some([axis, half]) = shot.detector.acceptance.and_then(|a| a.direction) {
             let c = (d0 + d1) * 0.5;
@@ -403,7 +446,7 @@ pub fn draw(
             let (axis, half) = (axis.to_radians() as f32, half.to_radians() as f32);
             let dir = Vec2::from_angle(axis);
             let tail = c - dir * len * 0.5;
-            let cone = color.with_alpha(alpha * 0.8);
+            let cone = target.with_alpha(alpha * 0.8);
             gizmos.arrow_2d(tail, c + dir * len * 0.5, cone);
             for s in [-half, half] {
                 gizmos.line_2d(tail, tail + Vec2::from_angle(axis + s) * len, cone);
@@ -413,7 +456,7 @@ pub fn draw(
             gizmos.rect_2d(
                 (d0 + d1) * 0.5,
                 (d1 - d0).abs() - Vec2::splat(0.15),
-                color.with_alpha(alpha * 0.5),
+                target.with_alpha(alpha * 0.5),
             );
         }
         let a = to_vec2(grid.position(shot.launch.node));
@@ -560,7 +603,7 @@ pub fn draw(
         };
         let primary =
             f == game.flight_index(i, game.active_disturbance.min(level.flights_per_shot() - 1));
-        let base = shot_color(i);
+        let base = shot_color(level, i);
         let color = match view.verdict {
             None => Color::srgb(0.95, 0.95, 0.95),
             Some((Status::Verified, Outcome::Arrived)) => base,
@@ -648,7 +691,7 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
             let arrived = p.outcomes[i] == Outcome::Arrived;
             let color = match verdict {
                 None => Color::srgb(0.95, 0.95, 0.95),
-                Some((Status::Verified, Outcome::Arrived)) => shot_color(shot),
+                Some((Status::Verified, Outcome::Arrived)) => shot_color(&game.editor.level, shot),
                 Some((Status::Verified, _)) => Color::srgb(1.0, 0.45, 0.2),
                 Some(_) => Color::srgb(1.0, 0.9, 0.2),
             }
