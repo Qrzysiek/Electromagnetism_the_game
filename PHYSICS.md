@@ -512,6 +512,7 @@ A1 is the strongest check. Its quadratures (Gauss–Legendre in cos θ, uniform 
 | R1 | Synchrotron damping in uniform B, γ₀ = 1.05, 2, 10, 600 time units (\|p\| falls 8–40×) | LL reduces exactly to `du/dt = −(κ/m) u sqrt(1 + u²)`, `κ = 2q⁴B²/(3m²c³)`, so `u(t) = 1/sinh(asinh(1/u₀) + κt/m)` | \|Δu\|/u₀ < 1e-9; energy balance < 1e-10 | ≤ 8.5e-13; balance ≤ 3.2e-12 |
 | R2 | Coulomb scattering at c = 5, 10, 20 | LL work = −∫P_Liénard dt + ΔE_Schott, `E_S = τ₀ m γ⁴ v·a`, up to O(τ₀ω) | relative difference < τ₀ω | 5.0e-9, 6.5e-9, 7.1e-9 (τ₀ω = 7e-3 … 1e-4) |
 | R3 | `c = ∞` | no reaction | bit-identical to the flag off | holds |
+| R4 | Jackson Pr. 16.2, classical atom: charge −1 around a fixed +1 from r₀ = 5 at c = 8 (v/c = 0.056), 1500 time units | least-squares slope of r³(t) against −6Zτ | < 1 % (relativistic correction O((v/c)²) ≈ 0.3 %, plus the launch's slight eccentricity) | 0.64 % |
 | L1 | Uniformly moving charge, v/c = 0.05 … 0.95 | Heaviside field from the present position | < 1e-12 | 2.6e-15 |
 | L2 | Slowly oscillating charge (Aω/c = 5e-4, 5e-5), radiation zone | oscillating-dipole field `p₀ = qA` (independent code, §2.4) | < 20 Aω/c | 2.8e-5, 2.8e-6: linear in A as expected |
 | L3 | Circular motion at v = 0.8 c, near and far points | vacuum Maxwell equations, central differences | < 1e-6 | ≤ 1.7e-7 (difference error) |

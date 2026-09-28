@@ -192,3 +192,67 @@ fn r3_no_reaction_without_finite_c() {
     assert_eq!(a.samples, b.samples);
     assert_eq!(b.radiation_work, 0.0);
 }
+
+/// R4, Jackson Problem 16.2 (the classical atom): a charge −1 on a circular orbit around a
+/// fixed charge +Z radiates and spirals in. Nonrelativistically the radius obeys
+/// `r³ = r₀³ − 9 Z (cτ)² c t` with `τ = 2q²/(3mc³)`, i.e. `d(r³)/dt = −6 Z τ` (units with
+/// Coulomb's constant 1, q = m = 1). At c = 8 (v/c = 0.056) the fitted slope of r³ over
+/// ~12 orbits must agree within 1 %: the relativistic correction is O((v/c)²) ≈ 0.3 %, and
+/// the slight eccentricity of the launch (Newtonian circular speed) scatters the samples.
+#[test]
+fn r4_classical_atom_orbit_decay() {
+    let (z, c, r0) = (1.0_f64, 8.0_f64, 5.0_f64);
+    let tau = 2.0 / (3.0 * c.powi(3));
+    let nucleus = FixedCharge {
+        position: DVec3::ZERO,
+        charge: z,
+        radius: 0.05,
+    };
+    let v = (z / r0).sqrt();
+    let scn = Scenario {
+        field: Coulomb::new(&[nucleus]),
+        obstacles: vec![Shape::Sphere(Sphere {
+            center: DVec3::ZERO,
+            radius: 0.05,
+        })],
+        particle: Particle {
+            charge: -1.0,
+            mass: 1.0,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        c,
+        x0: DVec3::new(0.0, -r0, 0.0),
+        p0: Kinematics::new(1.0, c).momentum_from_kinetic_energy(0.5 * v * v, DVec3::X),
+        detector: None,
+        bounds: Some(cube(100.0)),
+        t_max: 1500.0,
+        radiation_reaction: true,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+    // Least-squares slope of r³ against t over every accepted step.
+    let pts: Vec<(f64, f64)> = tr
+        .samples
+        .iter()
+        .map(|s| (s.t, s.x.length().powi(3)))
+        .collect();
+    #[allow(clippy::cast_precision_loss)]
+    let n = pts.len() as f64;
+    let (mt, my) = (
+        pts.iter().map(|p| p.0).sum::<f64>() / n,
+        pts.iter().map(|p| p.1).sum::<f64>() / n,
+    );
+    let slope = pts.iter().map(|&(t, y)| (t - mt) * (y - my)).sum::<f64>()
+        / pts.iter().map(|&(t, _)| (t - mt).powi(2)).sum::<f64>();
+    let jackson = -6.0 * z * tau;
+    println!(
+        "R4 c = {c}: d(r³)/dt = {slope:.6} (fit over {} samples), Jackson {jackson:.6}, \
+         ratio {:.4}; max |F_RR|/|F_L| = {:.2e}",
+        pts.len(),
+        slope / jackson,
+        tr.reaction_ratio_max
+    );
+    assert!((slope / jackson - 1.0).abs() < 0.01);
+}

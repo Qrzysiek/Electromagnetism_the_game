@@ -1525,6 +1525,82 @@ def jackson_sphere_slalom():
     lvl["reference_solution"] = stage1 + stage2 + stage3
     return lvl
 
+# Jackson arc on radiation damping (Ch. 16). A classical atom: an electron (charge -1,
+# mass 1) around a fixed nucleus (+1), c = 2, radiation reaction (Landau-Lifshitz):
+# tau = 2q^2/(3mc^3) = 1/12. A circular orbit shrinks as r^3 = r0^3 - 6 tau t (Pr. 16.2;
+# test R4). The detector around the nucleus accepts kinetic energy up to 0.26: an electron
+# that has not radiated keeps its energy and arrives faster (at r <= 2.83 at least 0.27
+# for the orbits here), so every solution needs radiation. Its 2 x 2 box ends the flight
+# before |F_RR|/|F_L| exceeds the Landau-Lifshitz range.
+
+CLASSICAL_ATOM_DETECTOR = box((13, 8, 17, 12), kinetic=(0.0, 0.26))
+
+
+def atom_orbit(r, node, angle_deg, energy=None):
+    """An electron launched at `node` (distance r from the nucleus at (15, 10)) with the
+    circular speed for r, or the speed for the orbital `energy`."""
+    v2 = 1.0 / r if energy is None else 2.0 * (energy + 1.0 / r)
+    return shot(-1.0, 1.0, node, angle_deg, 0.5 * v2, CLASSICAL_ATOM_DETECTOR)
+
+
+def jackson_classical_atom():
+    # From r0 = 6 the circular orbit needs ~400 time units to shrink to the detector; the
+    # level allows 250. A small charge far away makes the orbit eccentric (its nearly
+    # uniform field changes the eccentricity secularly), and an eccentric orbit radiates
+    # most at the perihelion (Pr. 16.3): the electron arrives at t = 125. Without
+    # radiation the same setup is rejected (too fast).
+    return level(
+        "Jackson Pr. 16.2: the classical atom",
+        "Jackson Problem 16.2 (and §16.2): an accelerated charge radiates, so a classical "
+        "electron circling a nucleus loses energy and spirals in, r³ = r₀³ − 9Z(cτ)²ct. "
+        "This one would take too long. The detector around the nucleus only counts an "
+        "electron that has lost energy by radiating (arriving slowly). Make it radiate "
+        "faster: an orbit that dips close to the nucleus radiates most there.",
+        shots=[atom_orbit(6.0, (15, 4), 0.0)],
+        elements=[charge(15, 10, 1.0)], max_charges=3, magnitudes=[0.1, 0.25, 0.5, 1.0],
+        c=2.0, t_max=250.0, radiation_reaction=True, region=(1, 1, 29, 19),
+        reference=[charge(2, 1, 0.25)])
+
+
+def jackson_circularization():
+    # Two electrons of the same orbital energy (-1/12): circular at r = 6, and an ellipse
+    # launched at its aphelion r = 9. The ellipse reaches the detector early but too fast
+    # (it must radiate first); radiation also circularizes it (Pr. 16.3). The search
+    # finds two one-charge solutions (the reference) and two-charge ones in 12 of 24 runs.
+    return level(
+        "Jackson Pr. 16.3: orbits circularize",
+        "Jackson Problem 16.3: an electron on an elliptic orbit radiates most near the "
+        "nucleus, and its orbit becomes rounder as it decays. Two electrons with the same "
+        "energy, one circling, one on an ellipse: the ellipse swings close to the nucleus "
+        "early, but too fast to count. Bring both into the detector slowed by their "
+        "radiation, in time.",
+        shots=[atom_orbit(6.0, (15, 4), 0.0),
+               atom_orbit(9.0, (15, 19), 180.0, energy=-1.0 / 12.0)],
+        elements=[charge(15, 10, 1.0)], max_charges=3, magnitudes=[0.1, 0.25, 0.5, 1.0],
+        c=2.0, t_max=150.0, radiation_reaction=True, region=(1, 1, 29, 19),
+        reference=[charge(21, 7, -0.25)])
+
+
+def jackson_three_orbits():
+    # Arc finale: three electrons, the two of the previous level and a wide circular orbit
+    # (r = 8, ~1000 time units to collapse alone), all within 200. The search finds no
+    # solution with fewer than three charges, and three-charge ones in 2 of 24 runs (the
+    # reference).
+    return level(
+        "Jackson Ch. 16: three orbits",
+        "Finale of the Jackson arc on radiation damping (Problems 16.2 and 16.3). Three "
+        "electrons circle the nucleus: on a small circle, on an ellipse, and on a wide "
+        "circle that alone would take five times too long to collapse. Shape all three "
+        "orbits so that each radiates enough, soon enough, to arrive slowly in the "
+        "detector.",
+        shots=[atom_orbit(6.0, (15, 4), 0.0),
+               atom_orbit(9.0, (15, 19), 180.0, energy=-1.0 / 12.0),
+               atom_orbit(8.0, (7, 10), 270.0)],
+        elements=[charge(15, 10, 1.0)], max_charges=6, magnitudes=[0.1, 0.25, 0.5, 1.0],
+        c=2.0, t_max=200.0, radiation_reaction=True, region=(1, 1, 29, 19),
+        reference=[charge(12, 6, 0.25), charge(21, 11, -1.0), charge(22, 12, 0.5)])
+
+
 def needs_elements(lvl, fewer):
     """Check that the level is not solved with only `fewer` charges anywhere (the
     solver with that cap must fail): a finale needs its modules. A heuristic check: a
@@ -1675,6 +1751,17 @@ ARCS = [
         ]),
         ("Master", [
             ("jackson_sphere_slalom", jackson_sphere_slalom),
+        ]),
+    ]),
+    ("Jackson: radiation damping", [
+        ("Introduction", [
+            ("jackson_classical_atom", jackson_classical_atom),
+        ]),
+        ("Intermediate", [
+            ("jackson_circularization", jackson_circularization),
+        ]),
+        ("Master", [
+            ("jackson_three_orbits", jackson_three_orbits),
         ]),
     ]),
 ]

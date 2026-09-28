@@ -205,6 +205,29 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Jackson: radiation damping",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "jackson_classical_atom"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "jackson_circularization"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "jackson_three_orbits"
+          ]
+        }
+      ]
     }
   ]
 }

@@ -86,6 +86,15 @@ Arc 7, "Jackson: conductors" (Ch. 2–3):
   the validator rejects today (the sphere solver does not include external fields);
   Pr. 2.20 (quadrupole lens) focuses a beam moving across the plane, a 3D effect.
 
+Arc 8, "Jackson: radiation damping" (Ch. 16):
+
+- Jackson Pr. 16.2: the classical atom (introduction). Test R4 checks the r³ law (0.64 %
+  at v/c = 0.056). The level makes radiation necessary with an energy window at the
+  detector: without radiation the electron arrives too fast.
+- Jackson Pr. 16.3: orbits circularize (intermediate). A circular and an elliptic orbit
+  of the same energy.
+- Jackson Ch. 16: three orbits (master).
+
 ## Catalogue by chapter
 
 ### Ch. 1: Introduction to electrostatics

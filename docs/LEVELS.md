@@ -88,6 +88,9 @@ verified reference solution for every shot and negligible radiation
 | 64 | Jackson §3.13: field through a hole | 7 Intermediate | a grounded wall screens a charge except through the slot, where its field leaks out | ≤ 3 charges | 2 |
 | 65 | Jackson Pr. 2.4: golden-ratio capture | 7 Intermediate | like charges attract inside 1.618 radii of an equally charged isolated sphere; go around it | ≤ 4 charges | 2 |
 | 66 | Jackson Ch. 2: sphere slalom | 7 Master | weave between three spheres carrying the particle's charge, through two gates, without being captured | ≤ 8 charges | 4 |
+| 67 | Jackson Pr. 16.2: the classical atom | 8 Introduction | a radiating electron spirals into the nucleus; the detector counts only an electron slowed by its radiation | ≤ 3 charges | 1 |
+| 68 | Jackson Pr. 16.3: orbits circularize | 8 Intermediate | a circular and an elliptic orbit of the same energy; the ellipse radiates most near the nucleus | ≤ 3 charges | 1 |
+| 69 | Jackson Ch. 16: three orbits | 8 Master | three electrons on different orbits, all slowed by radiation into the detector in time | ≤ 6 charges | 3 |
 
 ## Automatic detectors
 
@@ -258,6 +261,11 @@ Notes:
     particles off their drift shells.
   - Jackson Ch. 2: sphere slalom: 2 charges to the first gate, one each for the second
     gate and the detector. With two spheres and one gate the level took 3 elements.
+  - Jackson Ch. 16: three orbits: not a staged level (the three electrons radiate at
+    the same time), but no search finds a solution with fewer than 3 charges, and 3-charge
+    ones in 2 of 24 runs. Every radiation-damping level needs radiation by construction:
+    its detector accepts kinetic energy up to 0.26, and an electron that has not radiated
+    arrives with at least 0.27 (test `radiation_levels_need_radiation` checks it).
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.

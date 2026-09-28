@@ -1,0 +1,207 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson Ch. 16: three orbits",
+  "description": "Finale of the Jackson arc on radiation damping (Problems 16.2 and 16.3). Three electrons circle the nucleus: on a small circle, on an ellipse, and on a wide circle that alone would take five times too long to collapse. Shape all three orbits so that each radiates enough, soon enough, to arrive slowly in the detector.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 2.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    },
+    "radiation_reaction": true
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": -1.0,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          15,
+          4,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.08333333333333333
+      },
+      "detector": {
+        "min": [
+          13,
+          8,
+          0
+        ],
+        "max": [
+          17,
+          12,
+          0
+        ],
+        "acceptance": {
+          "kinetic": [
+            0.0,
+            0.26
+          ]
+        }
+      }
+    },
+    {
+      "particle": {
+        "charge": -1.0,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          15,
+          19,
+          0
+        ],
+        "direction": [
+          -1.0,
+          1.2246467991473532e-16,
+          0.0
+        ],
+        "kinetic_energy": 0.027777777777777776
+      },
+      "detector": {
+        "min": [
+          13,
+          8,
+          0
+        ],
+        "max": [
+          17,
+          12,
+          0
+        ],
+        "acceptance": {
+          "kinetic": [
+            0.0,
+            0.26
+          ]
+        }
+      }
+    },
+    {
+      "particle": {
+        "charge": -1.0,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          7,
+          10,
+          0
+        ],
+        "direction": [
+          -1.8369701987210297e-16,
+          -1.0,
+          0.0
+        ],
+        "kinetic_energy": 0.0625
+      },
+      "detector": {
+        "min": [
+          13,
+          8,
+          0
+        ],
+        "max": [
+          17,
+          12,
+          0
+        ],
+        "acceptance": {
+          "kinetic": [
+            0.0,
+            0.26
+          ]
+        }
+      }
+    }
+  ],
+  "elements": [
+    {
+      "node": [
+        15,
+        10,
+        0
+      ],
+      "kind": "charge",
+      "value": 1.0
+    }
+  ],
+  "coils": [],
+  "limits": {
+    "max_charges": 6,
+    "magnitudes": [
+      0.1,
+      0.25,
+      0.5,
+      1.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        1,
+        1,
+        0
+      ],
+      "max": [
+        29,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        12,
+        6,
+        0
+      ],
+      "kind": "charge",
+      "value": 0.25
+    },
+    {
+      "node": [
+        21,
+        11,
+        0
+      ],
+      "kind": "charge",
+      "value": -1.0
+    },
+    {
+      "node": [
+        22,
+        12,
+        0
+      ],
+      "kind": "charge",
+      "value": 0.5
+    }
+  ]
+}
