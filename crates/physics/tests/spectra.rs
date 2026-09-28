@@ -213,14 +213,57 @@ fn s3_measure_along_a_computed_flight() {
 
 /// S4, the sudden stop (Jackson §15.2; the `abrupt_stop` option). (a) A charge at β = 0.8
 /// moving uniformly and stopped instantly at t = 0 radiates the flat spectrum
-/// `(q²/4π²c) β² sin²θ / (1 − β cos θ)²`; (b) the same charge stopped smoothly within
-/// τ = 0.002 (velocity `v₀ / (1 + e^{t/τ})`), integrated by the acceleration form alone,
-/// must converge to it at frequencies far below the inverse stopping time: quadratically
-/// in ωτ (the difference falls 16 ± 4 times when ω falls 4 times), and below 1e-5 at
-/// ωτ = 1e-3. Measured: (a) ≤ 3e-16; (b) 7e-7 … 4.6e-6 at ωτ = 1e-3, 1.8e-4 … 1.2e-3 at
-/// ωτ = 1.6e-2 (larger away from the direction of motion), ratios 16.0.
+/// `(q²/4π²c) β² sin²θ / (1 − β cos θ)²`. (b) The same charge stopped smoothly within
+/// τ = 0.002 (velocity `v₀ / (1 + e^{t/τ})`), integrated by the acceleration form alone:
+/// its spectrum divided by (a) is `|R|²` with `R = ∫ W e^{iωψ} dt` (W = f′/(−f₀),
+/// f = β sin θ/(1 − β cos θ), ψ = ∫₀ᵗ (1 − β cos θ) dt′), so `|R|² − 1 = −(ωτ)² V + O(ω⁴)`
+/// with V the variance of ψ/τ under W. `scripts/wolfram/s4_sudden_stop.wls` computes V
+/// and the exact `|R|² − 1` (Wolfram Engine 14.2, 40-digit quadrature), tabulated below.
+/// Criteria: (a) 1e-12; (b) `|R|² − 1` to 1e-7 absolute (set before measuring: the smallest
+/// value, 7e-7, to ~15 %, the largest to 1e-4 of itself).
 #[test]
 fn s4_sudden_stop() {
+    // (θ in degrees, V, exact |R|² − 1 at ωτ = 1e-3, 4e-3, 1.6e-2), from the Wolfram script.
+    // Wolfram's 17 digits as printed (rounded to f64 by the compiler).
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const EXACT: [(f64, f64, [f64; 3]); 4] = [
+        (
+            10.0,
+            0.69795801813479668,
+            [
+                -6.9795744079834772e-7,
+                -0.000011167180494128837,
+                -0.00017863942547117701,
+            ],
+        ),
+        (
+            36.87,
+            1.1843553491307757,
+            [
+                -1.184354188323343e-6,
+                -0.000018949388423757935,
+                -0.00030311891370784225,
+            ],
+        ),
+        (
+            60.0,
+            1.9739208802178717,
+            [
+                -1.9739183345964407e-6,
+                -0.000031582082415207885,
+                -0.00050515696251552457,
+            ],
+        ),
+        (
+            120.0,
+            4.605815387175034,
+            [
+                -4.605802174204176e-6,
+                -0.000073689663793984662,
+                -0.0011782233346276761,
+            ],
+        ),
+    ];
     let (q, c): (f64, f64) = (1.0, 1.0);
     let beta: f64 = 0.8;
     let v0 = beta * c;
@@ -254,27 +297,27 @@ fn s4_sudden_stop() {
             )
         })
         .collect();
-    let mut worst_a: f64 = 0.0;
-    for deg in [10.0_f64, 36.87, 60.0, 120.0] {
+    let (mut worst_a, mut worst_b): (f64, f64) = (0.0, 0.0);
+    for (deg, v, exact) in EXACT {
         let th = deg.to_radians();
         let n = DVec3::new(th.cos(), th.sin(), 0.0);
         let jackson = q * q / (4.0 * PI * PI * c) * beta * beta * th.sin().powi(2)
             / (1.0 - beta * th.cos()).powi(2);
-        let mut diffs = Vec::new();
-        for omega in [0.5, 2.0, 8.0] {
+        for (k, wt) in [1e-3, 4e-3, 1.6e-2].into_iter().enumerate() {
+            let omega = wt / tau;
             let a = spectrum(&uniform, q, c, n, omega, 1.0, 1, true)[0];
             let b = spectrum(&smooth, q, c, n, omega, 1.0, 1, false)[0];
             let (ea, eb) = (a / jackson - 1.0, b / jackson - 1.0);
             println!(
-                "S4 at {deg}°, ω = {omega}: abrupt {ea:.1e}, smooth stop (ωτ = {:.0e}) {eb:.1e}",
-                omega * tau
+                "S4 at {deg}°, ωτ = {wt:.0e}: abrupt {ea:.1e}; smooth |R|² − 1 = {eb:.9e}, exact {:.9e} (leading −(ωτ)²V {:.9e}), difference {:.1e}",
+                exact[k],
+                -wt * wt * v,
+                eb - exact[k]
             );
             worst_a = worst_a.max(ea.abs());
-            diffs.push(eb.abs());
+            worst_b = worst_b.max((eb - exact[k]).abs());
         }
-        let (r1, r2) = (diffs[1] / diffs[0], diffs[2] / diffs[1]);
-        println!("S4 at {deg}°: ratios {r1:.1}, {r2:.1} (quadratic: 16)");
-        assert!(diffs[0] < 1e-5 && (12.0..20.0).contains(&r1) && (12.0..20.0).contains(&r2));
     }
-    assert!(worst_a < 1e-12);
+    println!("S4: abrupt ≤ {worst_a:.1e}; smooth against Wolfram ≤ {worst_b:.1e}");
+    assert!(worst_a < 1e-12 && worst_b < 1e-7);
 }
