@@ -2525,6 +2525,19 @@ def render_math():
     if out.returncode != 0:
         sys.exit("rendering the formulas failed: " + out.stdout + out.stderr)
     print(out.stdout.strip())
+    # Formulas are not broken across lines (MathJax 3's SVG output has no line breaking);
+    # the game shrinks one wider than the panel to fit. Warn well before that: 30 ex is
+    # about 60 % of the side panel (340 points, 1 ex = 0.52 x the 12.5-point body font).
+    manifest = json.load(open(os.path.join(ROOT, "levels", "math", "manifest.json"),
+                              encoding="utf-8"))
+    for tex, m in sorted(manifest.items()):
+        if m["width_ex"] > MAX_FORMULA_EX:
+            print(f"warning: formula {m['width_ex']:.1f} ex wide (over {MAX_FORMULA_EX}): "
+                  f"${tex}$ -- split it into several $...$ at its relation signs, so that it "
+                  "can wrap between them")
+
+
+MAX_FORMULA_EX = 30.0
 
 
 if __name__ == "__main__":

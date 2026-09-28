@@ -24,7 +24,10 @@ every formula once with MathJax (`scripts/math/render.mjs`; needs Node.js and, o
 rasterizes each SVG with resvg at exactly the size it is shown (sized to the text's
 x-height and coloured like it), so formulas stay sharp at any font size or UI scale. A
 formula that has not been rendered (e.g. typed into a sandbox level) shows its LaTeX
-source until the levels are rebuilt.
+source until the levels are rebuilt. A formula is never broken across lines (it wraps
+as a whole, like a word): write a long relation as several `$...$` pieces split at its
+relation signs. The build warns about formulas over 30 ex (about 60 % of the panel), and
+the game shrinks a formula wider than the panel to fit.
 
 ## Sandbox (level editor)
 

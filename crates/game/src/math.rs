@@ -130,6 +130,11 @@ pub fn paragraph(ui: &mut egui::Ui, text: &str, style: impl Fn(egui::RichText) -
     let color = ui.visuals().text_color();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
+        // A formula wider than the whole row is shrunk to fit it (rendered afresh at that
+        // size, so still sharp): MathJax 3's SVG output does not break lines, and the row's
+        // width is only known here. Long relations are better split into several $...$ at
+        // their relation signs (levels.py warns about formulas over ~60 % of the panel).
+        let row = ui.available_width().max(1.0);
         for piece in pieces(text) {
             match piece {
                 Piece::Text(t) => {
@@ -141,7 +146,8 @@ pub fn paragraph(ui: &mut egui::Ui, text: &str, style: impl Fn(egui::RichText) -
                 }
                 Piece::Math(tex) => {
                     let rendered = manifest().get(tex).and_then(|f| {
-                        let size = egui::vec2(f.width_ex * ex, f.height_ex * ex);
+                        let full = egui::vec2(f.width_ex * ex, f.height_ex * ex);
+                        let size = full * (row / full.x).min(1.0);
                         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                         let px = [
                             (size.x * ppp).round() as usize,
