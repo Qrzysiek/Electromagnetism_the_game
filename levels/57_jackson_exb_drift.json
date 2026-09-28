@@ -1,0 +1,126 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson §12.3: E×B drift",
+  "description": "Jackson §12.3 (motion in combined, uniform, static electric and magnetic fields). In crossed fields a particle starting at rest does not follow E: it rolls along a cycloid and drifts with the velocity E×B/B², whatever its charge and mass. A positive and a negative ion start here; both drift to the right, rolling in opposite senses. Their guiding centres follow the equipotentials (see the potential map): place a charge to bend the drift of both into the detector.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 300.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          2,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.0001
+      },
+      "detector": {
+        "min": [
+          27,
+          14,
+          0
+        ],
+        "max": [
+          30,
+          18,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": -1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          2,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.0001
+      },
+      "detector": {
+        "min": [
+          27,
+          14,
+          0
+        ],
+        "max": [
+          30,
+          18,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": []
+  },
+  "reference_solution": [
+    {
+      "node": [
+        0,
+        7,
+        0
+      ],
+      "kind": "charge",
+      "value": -2000000.0
+    }
+  ],
+  "disturbances": [
+    {
+      "name": "crossed fields",
+      "e": [
+        0.0,
+        100000.0
+      ],
+      "bz": 330000.0
+    }
+  ]
+}

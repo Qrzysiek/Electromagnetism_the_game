@@ -51,6 +51,26 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 | **F:antennas+** (more antenna types) | Magnetic dipole (AC loop in plane, moment along z) and centre-fed linear antenna in the plane. | §9.3 magnetic dipole fields; Pr. 9.14; §9.4 centre-fed antenna, Pr. 9.16; §9.12 |
 | **F:image-force** (electrode image force) | The force of a particle's own induced charges on electrodes (today a bound, `IMAGE_FORCE_LIMIT`). | Pr. 1.13, Pr. 3.19–3.20 (induced charge between grounded plates, Green reciprocity); vacuum tubes (SPEC "inside components") |
 
+## Built levels
+
+Arc 6, "Jackson: charges in fields" (Ch. 12), `scripts/levels.py`:
+
+- Jackson §12.3: E×B drift (introduction). Uniform crossed fields as a stray field; both
+  signs drift with E×B/B² and their guiding centres follow the equipotentials.
+- Jackson Pr. 12.9: Van Allen equator (introduction). A dipole Earth; protons and electrons
+  drift around it in opposite directions. The drift period measured in the level (about
+  95 time units) is longer than the problem's small-gyroradius formula gives (about 70):
+  here a/R ≈ 0.4.
+- Jackson §12.4: gradient drift (intermediate). A row of magnets makes a gradient; the two
+  signs drift in opposite directions.
+- Jackson Pr. 12.5: E×B runaway (intermediate). |E| > c|B|: no drift frame; magnets make the
+  field strong enough locally. The particle's charge is 1e-8 with fields 100 times the usual
+  (the trajectory depends only on qE and qB): with q = 1e-6 it radiated 1.0e-8 of its
+  launch energy (it starts from rest, so that energy is tiny), above the 1e-10 that may be
+  neglected.
+- Jackson Ch. 12: magnetosphere (master). E×B steering through two gates, then gradient
+  drift around a dipole Earth.
+
 ## Catalogue by chapter
 
 ### Ch. 1: Introduction to electrostatics

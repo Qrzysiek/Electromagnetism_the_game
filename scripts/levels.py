@@ -1301,6 +1301,133 @@ def isotope_separator():
     return lvl
 
 
+# =======================================================================================
+# Jackson series (docs/JACKSON.md): effects from J. D. Jackson, Classical Electrodynamics
+# (3rd ed., 1999), each level citing its section or problem. Arc: charges in fields
+# (Ch. 12). Uniform fields across the arena are given as a stray field (a single
+# "disturbance"), which is exactly uniform and static, as the book assumes.
+
+def jackson_exb_drift():
+    # E = 1e5, B = 3.3e5: drift speed E/B = 0.30 cells per time unit; a particle starting
+    # at rest cycloids with an amplitude 2mE/(qB^2) = 1.8 cells. Both signs drift the same
+    # way; the guiding centres follow the equipotentials, so a charge steers both alike.
+    return level(
+        "Jackson §12.3: E×B drift",
+        "Jackson §12.3 (motion in combined, uniform, static electric and magnetic fields). "
+        "In crossed fields a particle starting at rest does not follow E: it rolls along a "
+        "cycloid and drifts with the velocity E×B/B², whatever its charge and mass. A "
+        "positive and a negative ion start here; both drift to the right, rolling in "
+        "opposite senses. Their guiding centres follow the equipotentials (see the "
+        "potential map): place a charge to bend the drift of both into the detector.",
+        shots=[shot(q, 1.0, (2, 10), 0.0, 1e-4, box((27, 14, 30, 18))) for q in (1e-6, -1e-6)],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], c=None, t_max=300.0,
+        disturbances=[stray("crossed fields", e=(0.0, 1e5), bz=3.3e5)])
+
+
+def jackson_van_allen():
+    # A dipole "Earth" (magnet 100M at the centre). At r = 6, B = 4.6e5 and a particle
+    # with v = 1 gyrates with a = 2.2 cells (a/R ~ 0.4, not << 1): its guiding centre
+    # drifts around the Earth in about 95 time units, protons one way and electrons the
+    # other (Pr. 12.9b: dphi/dt = -(3/2)(a/R)^2 omega_B for a << R, ~70 here).
+    return level(
+        "Jackson Pr. 12.9: Van Allen equator",
+        "Jackson Problem 12.9 (the Van Allen belts). In the equatorial plane of a dipole "
+        "Earth the field grows towards the Earth, and a gyrating particle drifts around it: "
+        "protons one way, electrons the other (the gradient drift of §12.4). A proton and "
+        "an electron start at the same place; the proton must reach the northern satellite, "
+        "the electron the southern one. Shift their drift shells with charges or magnets.",
+        shots=[shot(1e-6, 1.0, (15, 4), 0.0, 0.5, box((14, 17, 16, 19))),
+               shot(-1e-6, 1.0, (15, 4), 180.0, 0.5, box((14, 0, 16, 2)))],
+        elements=[magnet(15, 10, 100 * M)],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        max_magnets=3, strengths=[m * M for m in (2, 4, 8, 16)], c=None, t_max=300.0)
+
+
+def jackson_gradient_drift():
+    # A uniform B (3.3e5) plus a row of fixed magnets along the bottom edge (3M each):
+    # |B| grows towards the bottom and the gyrating ions drift along the edge, the
+    # positive one left, the negative one right, leaving the arena at y ~ 3 after ~100
+    # time units. The detectors are higher: no one-element solution (search), 27 of 32
+    # runs with two.
+    return level(
+        "Jackson §12.4: gradient drift",
+        "Jackson §12.4 (particle drifts in nonuniform, static magnetic fields). A row of "
+        "magnets makes the field stronger towards the bottom. A gyrating ion's orbit is "
+        "tighter where the field is stronger, so it drifts sideways, along the lines of "
+        "equal |B|: the positive ion to the left, the negative one to the right. Bring each "
+        "into its detector. A charge adds an E×B drift that is the same for both signs; a "
+        "magnet changes the gradient, which moves them in opposite directions.",
+        shots=[shot(1e-6, 1.0, (15, 8), 90.0, 0.5, box((0, 14, 2, 16))),
+               shot(-1e-6, 1.0, (15, 8), 90.0, 0.5, box((28, 14, 30, 16)))],
+        elements=[magnet(x, 0, 3 * M) for x in range(0, 31, 2)],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        max_magnets=3, strengths=[m * M for m in (1, 2, 3, 4)], region=(1, 3, 29, 19),
+        c=None, t_max=300.0, disturbances=[stray("uniform B", bz=3.3e5)])
+
+
+def jackson_runaway():
+    # c = 2, B0 = 1e5 (c B0 = 2e5) and E = 3e5 > c B0: there is no frame in which the
+    # electric field vanishes, and the particle runs away along E (out of the top of the
+    # arena within ~10 time units). Near a magnet |B| exceeds E/c, and there the particle
+    # drifts (E x B, to the right). The search finds no one-magnet solution and two-magnet
+    # ones in 14 of 32 runs. The particle's charge is 1e-8 and every field 100 times the
+    # usual (the trajectories depend only on qE and qB): with q = 1e-6 it radiated 1.0e-8
+    # of its (tiny, starting from rest) launch energy, above the 1e-10 that may be
+    # neglected; radiation scales as q^2.
+    return level(
+        "Jackson Pr. 12.5: E×B runaway",
+        "Jackson Problem 12.5 and §12.3. Crossed fields make a particle drift only if "
+        "|E| < c|B|: then a frame moving with E×B/B² sees no electric field. Here the "
+        "electric field is stronger than c times the magnetic one (c = 2 cells per time "
+        "unit), no such frame exists, and the particle runs away along E. Near a magnet "
+        "the field is strong enough: place magnets so that the particle drifts into the "
+        "detector instead.",
+        shots=[shot(1e-8, 1.0, (4, 10), 0.0, 1e-4, box((27, 8, 30, 12)))],
+        max_magnets=6, strengths=[m * 100 * M for m in (1, 2, 4, 8)], c=2.0, t_max=300.0,
+        region=(2, 2, 28, 18), disturbances=[stray("crossed fields", e=(0.0, 3e7), bz=1e7)])
+
+
+def jackson_magnetosphere():
+    # Arc finale. A uniform "solar wind" (E = 1e5, B = 3.3e5) carries a proton and an
+    # electron from rest on the left towards a dipole Earth (magnet 30M at (30, 10));
+    # near the Earth the gradient drift splits them, the proton around the north, the
+    # electron around the south. Stages 1 and 2 (E x B steering, charges): both pass the
+    # upper gate, then the lower one. Stage 3 (drift shells, charges and magnets): each
+    # reaches its own satellite. (With one gate it took 3 elements in all.)
+    gate = box((12, 16, 14, 18))
+    low = box((23, 5, 25, 7))
+    # Satellites behind the Earth, one cell tall. Beside the Earth (two cells tall, with
+    # the gate at y 14-16) the search needed only 3 elements in all; with the satellites
+    # swapped (each particle three quarters around) it found none with up to 3 charges
+    # and 4 magnets in stage 2: the solar wind sweeps the particles off their shells.
+    north, south = box((35, 13, 37, 14)), box((35, 6, 37, 7))
+    shots = [shot(1e-6, 1.0, (2, 10), 0.0, 1e-4, north), shot(-1e-6, 1.0, (2, 10), 0.0, 1e-4, south)]
+    mags = [m * M for m in (0.25, 0.5, 1, 2)]
+    strengths = [m * M for m in (2, 4, 8, 16)]
+    lvl = level(
+        "Jackson Ch. 12: magnetosphere",
+        "Finale of the Jackson arc on charges in fields (§12.3, §12.4, Pr. 12.9). The solar "
+        "wind's crossed fields carry a proton and an electron from rest towards the Earth, "
+        "both drifting the same way. First lift both through the upper gate, then bring "
+        "them down through the lower one: steer their E×B drift along the "
+        "equipotentials. Near the Earth the gradient drift splits them, "
+        "protons one way and electrons the other: bring the proton around to the small "
+        "northern satellite behind the Earth, and the electron to the southern one.",
+        grid=(40, 20), shots=shots, gates=[gate, low], t_max=400.0, c=None,
+        elements=[magnet(30, 10, 30 * M)],
+        max_charges=6, magnitudes=mags, max_magnets=5, strengths=strengths,
+        region=(3, 1, 37, 19), disturbances=[stray("solar wind", e=(0.0, 1e5), bz=3.3e5)])
+    stage1 = solve_stage(lvl, [], [gate] * 2, [], max_charges=3, magnitudes=mags,
+                         region=(3, 1, 11, 19))
+    stage2 = solve_stage(lvl, stage1, [low] * 2, [gate], max_charges=3, magnitudes=mags,
+                         region=(15, 1, 22, 19))
+    stage3 = solve_stage(lvl, stage1 + stage2, [north, south], [gate, low], max_charges=3,
+                         magnitudes=mags, max_magnets=4, strengths=strengths,
+                         region=(24, 1, 37, 19))
+    lvl["reference_solution"] = stage1 + stage2 + stage3
+    return lvl
+
+
 def needs_elements(lvl, fewer):
     """Check that the level is not solved with only `fewer` charges anywhere (the
     solver with that cap must fail): a finale needs its modules. A heuristic check: a
@@ -1425,6 +1552,19 @@ ARCS = [
         ]),
         ("Master", [
             ("isotope_separator", isotope_separator),
+        ]),
+    ]),
+    ("Jackson: charges in fields", [
+        ("Introduction", [
+            ("jackson_exb_drift", jackson_exb_drift),
+            ("jackson_van_allen", jackson_van_allen),
+        ]),
+        ("Intermediate", [
+            ("jackson_gradient_drift", jackson_gradient_drift),
+            ("jackson_runaway", jackson_runaway),
+        ]),
+        ("Master", [
+            ("jackson_magnetosphere", jackson_magnetosphere),
         ]),
     ]),
 ]

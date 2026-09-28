@@ -1,0 +1,131 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson Pr. 12.9: Van Allen equator",
+  "description": "Jackson Problem 12.9 (the Van Allen belts). In the equatorial plane of a dipole Earth the field grows towards the Earth, and a gyrating particle drifts around it: protons one way, electrons the other (the gradient drift of §12.4). A proton and an electron start at the same place; the proton must reach the northern satellite, the electron the southern one. Shift their drift shells with charges or magnets.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 300.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          15,
+          4,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          14,
+          17,
+          0
+        ],
+        "max": [
+          16,
+          19,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": -1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          15,
+          4,
+          0
+        ],
+        "direction": [
+          -1.0,
+          1.2246467991473532e-16,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          14,
+          0,
+          0
+        ],
+        "max": [
+          16,
+          2,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [
+    {
+      "node": [
+        15,
+        10,
+        0
+      ],
+      "kind": "magnet",
+      "value": 100000000.0
+    }
+  ],
+  "coils": [],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 3,
+    "magnet_strengths": [
+      2000000.0,
+      4000000.0,
+      8000000.0,
+      16000000.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        11,
+        2,
+        0
+      ],
+      "kind": "charge",
+      "value": -2000000.0
+    }
+  ]
+}

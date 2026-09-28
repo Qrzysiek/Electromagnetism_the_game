@@ -39,7 +39,8 @@ The existing level ideas stay; they are regrouped, improved or joined.
 
 ## Arcs as built
 
-Every arc has three tiers (`ARCS` in `scripts/levels.py`, written to
+The Jackson series (docs/JACKSON.md) continues the curriculum with arcs of the same
+shape, each citing the sections and problems of the book it follows. Every arc has three tiers (`ARCS` in `scripts/levels.py`, written to
 `levels/curriculum.json`; the game groups its level list by arc and shows each level's arc
 and tier):
 
@@ -57,6 +58,7 @@ and tier):
 | 3 Relativity and magnetism | Fast lane, First coil, First magnet, Stern–Gerlach | Beta spectrometer, Dempster, Wien filter, Calutron, Build a Wien filter | **Mass spectrometer from parts**: one electrostatic lens for three masses (only T/q matters), then a magnetic sector sorts them by momentum |
 | 4 Time: noise, RF and radiation | Stray field, RF kick, Synchrotron light | Mains hum, Earth's field, CRT in the Earth's field, RF separator, Tune the RF, Streak camera | **RF beam line**: steer two bunches through a gate with a stray field on and off, then separate them with RF |
 | 5 Beams | Space charge, Stern–Gerlach beam, Relativistic beam | Collimated beam, Velocity selector, Beam preparation, Chromatic aberration, Real analyser, Calutron at full current, Soft landing at full current | **Isotope separator**: collimate an interacting two-isotope beam through a gate, then separate the isotopes with magnets |
+| 6 Jackson: charges in fields (Ch. 12) | §12.3 E×B drift, Pr. 12.9 Van Allen equator | §12.4 gradient drift, Pr. 12.5 E×B runaway | **Magnetosphere**: steer the solar wind's E×B drift through two gates, then the gradient drift splits proton and electron around a dipole Earth |
 
 Changes to existing levels: The wall and Injection were joined into Around the wall (the
 beam must enter the detector along the axis after going around the wall: two charges).

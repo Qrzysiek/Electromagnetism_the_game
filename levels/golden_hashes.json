@@ -54,5 +54,10 @@
   "53_real_analyzer": "963ee6ca0c8c5409",
   "54_calutron_space_charge": "391625f7cf8f101d",
   "55_soft_landing_current": "aac08c467d6b751c",
-  "56_isotope_separator": "dd4bbb5ef421034e"
+  "56_isotope_separator": "dd4bbb5ef421034e",
+  "57_jackson_exb_drift": "2dc447aea751054c",
+  "58_jackson_van_allen": "4a064551bb4807c5",
+  "59_jackson_gradient_drift": "670fb08407403b53",
+  "60_jackson_runaway": "fe2c6a3f835d7e65",
+  "61_jackson_magnetosphere": "cefd9e7af017f5b9"
 }

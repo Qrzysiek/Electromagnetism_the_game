@@ -155,6 +155,31 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Jackson: charges in fields",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "jackson_exb_drift",
+            "jackson_van_allen"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "jackson_gradient_drift",
+            "jackson_runaway"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "jackson_magnetosphere"
+          ]
+        }
+      ]
     }
   ]
 }

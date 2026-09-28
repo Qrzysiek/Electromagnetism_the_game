@@ -1,0 +1,115 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson Pr. 12.5: E×B runaway",
+  "description": "Jackson Problem 12.5 and §12.3. Crossed fields make a particle drift only if |E| < c|B|: then a frame moving with E×B/B² sees no electric field. Here the electric field is stronger than c times the magnetic one (c = 2 cells per time unit), no such frame exists, and the particle runs away along E. Near a magnet the field is strong enough: place magnets so that the particle drifts into the detector instead.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 2.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 300.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-8,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          4,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.0001
+      },
+      "detector": {
+        "min": [
+          27,
+          8,
+          0
+        ],
+        "max": [
+          30,
+          12,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 6,
+    "magnet_strengths": [
+      100000000.0,
+      200000000.0,
+      400000000.0,
+      800000000.0
+    ],
+    "region": {
+      "min": [
+        2,
+        2,
+        0
+      ],
+      "max": [
+        28,
+        18,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        3,
+        15,
+        0
+      ],
+      "kind": "magnet",
+      "value": -800000000.0
+    },
+    {
+      "node": [
+        16,
+        18,
+        0
+      ],
+      "kind": "magnet",
+      "value": -800000000.0
+    }
+  ],
+  "disturbances": [
+    {
+      "name": "crossed fields",
+      "e": [
+        0.0,
+        30000000.0
+      ],
+      "bz": 10000000.0
+    }
+  ]
+}

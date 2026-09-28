@@ -1,0 +1,215 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson Ch. 12: magnetosphere",
+  "description": "Finale of the Jackson arc on charges in fields (§12.3, §12.4, Pr. 12.9). The solar wind's crossed fields carry a proton and an electron from rest towards the Earth, both drifting the same way. First lift both through the upper gate, then bring them down through the lower one: steer their E×B drift along the equipotentials. Near the Earth the gradient drift splits them, protons one way and electrons the other: bring the proton around to the small northern satellite behind the Earth, and the electron to the southern one.",
+  "grid": {
+    "nx": 40,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          2,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.0001
+      },
+      "detector": {
+        "min": [
+          35,
+          13,
+          0
+        ],
+        "max": [
+          37,
+          14,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": -1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          2,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.0001
+      },
+      "detector": {
+        "min": [
+          35,
+          6,
+          0
+        ],
+        "max": [
+          37,
+          7,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [
+    {
+      "node": [
+        30,
+        10,
+        0
+      ],
+      "kind": "magnet",
+      "value": 30000000.0
+    }
+  ],
+  "coils": [],
+  "limits": {
+    "max_charges": 6,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 5,
+    "magnet_strengths": [
+      2000000.0,
+      4000000.0,
+      8000000.0,
+      16000000.0
+    ],
+    "region": {
+      "min": [
+        3,
+        1,
+        0
+      ],
+      "max": [
+        37,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        3,
+        14,
+        0
+      ],
+      "kind": "charge",
+      "value": -2000000.0
+    },
+    {
+      "node": [
+        11,
+        14,
+        0
+      ],
+      "kind": "charge",
+      "value": 2000000.0
+    },
+    {
+      "node": [
+        20,
+        13,
+        0
+      ],
+      "kind": "charge",
+      "value": 500000.0
+    },
+    {
+      "node": [
+        22,
+        9,
+        0
+      ],
+      "kind": "charge",
+      "value": -2000000.0
+    },
+    {
+      "node": [
+        30,
+        11,
+        0
+      ],
+      "kind": "magnet",
+      "value": -8000000.0
+    }
+  ],
+  "disturbances": [
+    {
+      "name": "solar wind",
+      "e": [
+        0.0,
+        100000.0
+      ],
+      "bz": 330000.0
+    }
+  ],
+  "gates": [
+    {
+      "min": [
+        12,
+        16,
+        0
+      ],
+      "max": [
+        14,
+        18,
+        0
+      ]
+    },
+    {
+      "min": [
+        23,
+        5,
+        0
+      ],
+      "max": [
+        25,
+        7,
+        0
+      ]
+    }
+  ]
+}

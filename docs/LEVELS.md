@@ -78,6 +78,11 @@ verified reference solution for every shot and negligible radiation
 | 54 | Calutron at full current | 5 Intermediate | the calutron (33) built in; the isotope beams repel each other (5 ions each, radiation reaction) | ≤ 3 charges | 1 |
 | 55 | Soft landing, full current | 5 Intermediate | the soft landing (13) built in; space charge grows as the ions are braked | ≤ 3 charges | 1 |
 | 56 | Isotope separator | 5 Master | collimate an interacting two-isotope beam through a gate (±5°), then separate the isotopes with magnets | ≤ 5 charges, ≤ 4 magnets | 5 |
+| 57 | Jackson §12.3: E×B drift | 6 Introduction | crossed uniform fields: both signs drift with E×B/B² along the equipotentials | ≤ 3 charges | 1 |
+| 58 | Jackson Pr. 12.9: Van Allen equator | 6 Introduction | gradient drift around a dipole Earth, protons and electrons in opposite directions | ≤ 3 charges, ≤ 3 magnets | 1 |
+| 59 | Jackson §12.4: gradient drift | 6 Intermediate | drift along lines of equal \|B\|, opposite for the two signs; charges move both alike, magnets oppositely | ≤ 3 charges, ≤ 3 magnets | 2 |
+| 60 | Jackson Pr. 12.5: E×B runaway | 6 Intermediate | \|E\| > c\|B\|: no drift frame, the particle runs away; magnets make B strong enough to drift | ≤ 6 magnets | 2 |
+| 61 | Jackson Ch. 12: magnetosphere | 6 Master | the solar wind's E×B drift steered up and down through two gates, then the gradient drift splits proton and electron around a dipole Earth | ≤ 6 charges, ≤ 5 magnets | 5 |
 
 ## Automatic detectors
 
@@ -240,6 +245,12 @@ Notes:
     off) takes one charge; the RF separation onto two-cell spots takes 3 elements. Looser
     versions (a four-cell gate without direction, ±8°, half the stray field, four-cell
     spots) were solved with 3 elements in all.
+  - Jackson Ch. 12: magnetosphere: lifting both particles through the upper gate takes 2
+    charges, bringing them down through the lower one 2 more, and the drift shells to the
+    satellites behind the Earth one element. With one gate the level took 3 elements; with
+    the satellites swapped (each particle three quarters around the Earth) stage 2 had no
+    solution with up to 3 charges and 4 magnets, since the solar wind sweeps the
+    particles off their drift shells.
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.
