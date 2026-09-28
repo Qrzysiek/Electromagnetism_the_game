@@ -1439,41 +1439,42 @@ def throw_a_charge():
 def jackson_recoil():
     # Jackson §13.1: Coulomb scattering with a target free to recoil. Equal masses, target
     # at rest, elastic: momentum and energy conservation alone make the two leave at
-    # right angles (for any force between them). Unit charges, c = inf. Charges only along
-    # the approach (x <= 8): they set the impact parameter. The projectile must leave at
-    # about 30 degrees up, the target about 60 degrees down. The search finds two
-    # one-charge solutions and two-charge ones in 15 of 16 runs.
+    # right angles (for any force between them). Unit charges, c = inf. The impact
+    # parameter is set with magnets far from the target (see jackson_knock_on).
     return level(
         "Jackson §13.1: recoil at right angles",
         "Jackson §13.1 (energy transfer in a Coulomb collision), with a target that is free "
         "to recoil. Two equal masses, one at rest: whatever the force between them, "
         "conservation of momentum and energy sends them off at right angles to each other. "
         "The projectile must reach the top detector and the target the bottom one: choose "
-        "the impact parameter with charges along the approach.",
-        c=None, t_max=120.0,
-        shots=[shot(1.0, 1.0, (0, 10), 0.0, 0.5, box((26, 17, 30, 20)))],
-        free_particles=[free_particle(1.0, 1.0, (12, 9), detector=box((14, 0, 20, 2)))],
-        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0], region=(1, 1, 8, 19))
-
+        "the impact parameter with magnets along the approach.",
+        grid=(40, 20), c=None, t_max=150.0,
+        shots=[shot(1.0, 1.0, (0, 10), 0.0, 0.5, box((36, 16, 40, 20)))],
+        free_particles=[free_particle(1.0, 1.0, (28, 9), detector=box((30, 0, 36, 2)))],
+        max_magnets=3, strengths=[0.25, 0.5, 1.0, 2.0], region=(2, 1, 14, 19))
 
 def jackson_knock_on():
-    # Jackson Pr. 13.1: a heavy particle (charge 1, mass 40, T0 = 4) passes a light one
-    # (charge 1, mass 1) at rest and kicks it, nearly perpendicular to its path, with the
-    # energy T(b) = T_max / (1 + (b/b_min)^2). The light one is a free particle of the
-    # level (a goal with a detector); they interact exactly (Coulomb, c = inf). Without the
-    # interaction the reference fails: the light particle falls into the placed charge.
+    # Jackson Pr. 13.1: a heavy particle (charge 1, mass 40, T0 = 4, v = 0.45) passes a
+    # light one (charge 1, mass 1) at rest and kicks it: T(b) = T_max / (1 + (b/b_min)^2),
+    # and in the lab the light one recoils at (pi - theta)/2 from the projectile's
+    # direction (theta its scattering angle in the heavy one's frame): forward for close
+    # passes, sideways for distant ones. The player steers with magnets, far from the
+    # target (x <= 14, target at 28): a magnet's force vanishes on a charge at rest, and
+    # its field falls as 1/r^3, so only the kick moves the target (checked at build time,
+    # `check_indirect`). With charges nearby (the first version) the target was pushed
+    # directly (the owner's review).
     return level(
         "Jackson Pr. 13.1: knock-on",
-        "Jackson Problem 13.1 (energy transfer in a Coulomb collision): a fast heavy "
-        "particle passing a light one at rest kicks it almost straight sideways, and the "
-        "closer it passes, the harder: T(b) = T_max / (1 + (b/b_min)²). Steer the heavy "
-        "particle past the light one so that the kick sends the light one into its "
-        "detector (top left); the heavy one must still reach the screen on the right.",
-        c=None, t_max=100.0,
-        shots=[shot(1.0, 40.0, (0, 10), 0.0, 4.0, box((27, 0, 30, 20)))],
-        free_particles=[free_particle(1.0, 1.0, (15, 12), detector=box((0, 17, 4, 20)))],
-        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0],
-        reference=[charge(8, 8, -2.0)])
+        "Jackson Problem 13.1 (energy transfer in a Coulomb collision): a heavy particle "
+        "passing a light one at rest kicks it, the harder the closer it passes, T(b) = "
+        "T_max / (1 + (b/b_min)²). A close pass throws the light one forward, a distant one "
+        "sideways. Steer the heavy particle with magnets (they cannot move the light one "
+        "while it rests) so that the kick sends the light one into its detector; the heavy "
+        "one must still reach the screen on the right.",
+        grid=(40, 20), c=None, t_max=120.0,
+        shots=[shot(1.0, 40.0, (0, 10), 0.0, 4.0, box((37, 0, 40, 20)))],
+        free_particles=[free_particle(1.0, 1.0, (28, 12), detector=box((32, 17, 37, 20)))],
+        max_magnets=5, strengths=[2.0, 4.0, 8.0, 16.0], region=(2, 1, 14, 19))
 
 def jackson_stormer():
     # Jackson §12.1 (canonical momentum): in the equatorial plane of a dipole Earth
@@ -1760,21 +1761,20 @@ def jackson_bound_knock():
     # electron (q = -1, m = 1) bound in a cloud (Q = 1, R = 4, omega_0 = 0.125), a free
     # particle of the level with a goal detector; a heavy negative ion (q = -1, m = 40,
     # T0 = 4) flies past and pushes it (like charges: opposite point charges could fall
-    # into each other). Charges only along the approach (x <= 7): from there a charge
-    # shifts the electron's equilibrium by at most ~2.6 cells (E R^3/Q), inside the atom,
-    # so only the kick frees it (with charges anywhere, one charge next to the atom did).
+    # into each other). Steered with magnets far from the atom (see jackson_knock_on).
     return level(
         "Jackson Pr. 13.2: a kick for a bound charge",
         "Jackson Problem 13.2: a charged particle flying past an atom gives its bound "
         "electron a kick (here a heavy negative ion, which pushes the electron away). A "
         "quick pass is a sharp kick; a slow one lets the electron follow and hand the "
-        "energy back. Steer the ion past the atom so that its kick throws the electron out "
-        "into the detector above; the ion must still reach the screen on the right.",
-        c=None, t_max=150.0,
-        shots=[shot(-1.0, 40.0, (0, 6), 0.0, 4.0, box((27, 0, 30, 20)))],
-        free_particles=[free_particle(-1.0, 1.0, (15, 10), detector=box((12, 17, 18, 20)))],
-        clouds=[cloud(15, 10, 4.0, 1.0)],
-        max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0], region=(1, 1, 7, 19))
+        "energy back. Steer the ion with magnets so that its kick throws the electron out "
+        "of the atom into the detector above; the ion must still reach the screen on the "
+        "right.",
+        grid=(40, 20), c=None, t_max=150.0,
+        shots=[shot(-1.0, 40.0, (0, 6), 0.0, 4.0, box((37, 0, 40, 20)))],
+        free_particles=[free_particle(-1.0, 1.0, (30, 10), detector=box((27, 17, 33, 20)))],
+        clouds=[cloud(30, 10, 4.0, 1.0)],
+        max_magnets=3, strengths=[2.0, 4.0, 8.0, 16.0], region=(2, 1, 14, 19))
 
 def jackson_spectroscopy():
     # Arc finale: two atoms of different sizes (R = 4 and 3: omega_0 = 0.125 and 0.192),
@@ -1795,6 +1795,55 @@ def jackson_spectroscopy():
         omegas=[round(w1, 4), round(w2, 4), 0.25, 0.3],
         max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1)],
         region=(1, 1, 39, 19))
+
+
+def check_indirect(lvl):
+    """Levels whose goal particles must be moved indirectly (by a shot): with the shots
+    disarmed (no charge, parked in a corner), the strongest allowed element of each kind
+    and sign at the placement node closest to each goal particle must leave it where it
+    is (moved less than 0.3 cells over the flight). Returns a list of problems."""
+    goals = [f for f in lvl.get("free_particles", []) if f.get("detector")]
+    if not goals:
+        return []
+    L = lvl["limits"]
+    region = L.get("region")
+    lo = region["min"][:2] if region else [0, 0]
+    hi = region["max"][:2] if region else [lvl["grid"]["nx"], lvl["grid"]["ny"]]
+    kinds = []
+    if L.get("max_charges"):
+        kinds += [("charge", q) for q in (max(L["magnitudes"]), -max(L["magnitudes"]))]
+    if L.get("max_magnets"):
+        kinds += [("magnet", m) for m in (max(L["magnet_strengths"]), -max(L["magnet_strengths"]))]
+    problems = []
+    for g in goals:
+        gx, gy = g["node"][:2]
+        node = [min(max(gx, lo[0]), hi[0]), min(max(gy, lo[1]), hi[1]), 0]
+        for kind, value in kinds:
+            probe = json.loads(json.dumps(lvl))
+            for sh in probe["shots"]:
+                sh["particle"]["charge"] = 0.0
+                sh["launch"]["node"] = [0, 0, 0]
+                sh["launch"]["kinetic_energy"] = 1e-9
+            probe["reference_solution"] = [{"node": node, "kind": kind, "value": value}]
+            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                             encoding="utf-8") as f:
+                json.dump(probe, f)
+                path = f.name
+            try:
+                text = run_generator("check", path)
+            finally:
+                os.unlink(path)
+            found = list(re.finditer(r"shot goal-(\d+) .*ends at \(([-\d.]+), ([-\d.]+)\)", text))
+            if len(found) != len(goals) * len(probe.get("disturbances", [None]) or [None]):
+                sys.exit("the generator does not report goal particles: rebuild it")
+            for m in found:
+                k = int(m.group(1)) - 1
+                start = goals[k]["node"]
+                moved = math.hypot(float(m.group(2)) - start[0], float(m.group(3)) - start[1])
+                if moved > 0.3:
+                    problems.append(f"{kind} {value:g} at {node[:2]} moves goal {k + 1} by "
+                                    f"{moved:.2f} cells without the shot")
+    return problems
 
 
 def needs_elements(lvl, fewer):
@@ -1928,9 +1977,9 @@ ARCS = [
             ("jackson_exb_drift", jackson_exb_drift),
             ("jackson_van_allen", jackson_van_allen),
             ("throw_a_charge", throw_a_charge),
-            ("jackson_knock_on", jackson_knock_on),
         ]),
         ("Intermediate", [
+            ("jackson_knock_on", jackson_knock_on),
             ("jackson_gradient_drift", jackson_gradient_drift),
             ("jackson_runaway", jackson_runaway),
             ("jackson_recoil", jackson_recoil),
@@ -2172,6 +2221,9 @@ def main():
                 sys.exit(f"{key}: the idealised design still works on its own")
         with open(path, "w", newline="\n", encoding="utf-8") as f:
             f.write(json.dumps(lvl, indent=2, ensure_ascii=False) + "\n")
+        indirect = check_indirect(lvl)
+        if indirect:
+            sys.exit(f"{key}: goal particles are reached directly: " + "; ".join(indirect))
         if slug in FINALES:
             fewer = FINALES[slug]
             ok_fewer = needs_elements(lvl, fewer)

@@ -164,13 +164,13 @@
           "levels": [
             "jackson_exb_drift",
             "jackson_van_allen",
-            "throw_a_charge",
-            "jackson_knock_on"
+            "throw_a_charge"
           ]
         },
         {
           "name": "Intermediate",
           "levels": [
+            "jackson_knock_on",
             "jackson_gradient_drift",
             "jackson_runaway",
             "jackson_recoil",

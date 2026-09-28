@@ -81,10 +81,10 @@ verified reference solution for every shot and negligible radiation
 | 57 | Jackson §12.3: E×B drift | 6 Introduction | crossed uniform fields: both signs drift with E×B/B² along the equipotentials | ≤ 3 charges | 1 |
 | 58 | Jackson Pr. 12.9: Van Allen equator | 6 Introduction | gradient drift around a dipole Earth, protons and electrons in opposite directions | ≤ 3 charges, ≤ 3 magnets | 1 |
 | 59 | Throw a charge | 6 Introduction | a new element: the free charge (pull its slingshot handle back); its field pushes the particle and recoils, momentum passing without contact | ≤ 3 free charges | 1 |
-| 60 | Jackson Pr. 13.1: knock-on | 6 Introduction | a heavy particle kicks a light one at rest (a free particle of the level, a goal) sideways, T(b) = T_max/(1 + (b/b_min)²) | ≤ 3 charges | 1 |
+| 60 | Jackson Pr. 13.1: knock-on | 6 Intermediate | a heavy particle kicks a light one at rest (a goal): forward for close passes, sideways for distant ones; steered with magnets far from the target | ≤ 5 magnets | 2 |
 | 61 | Jackson §12.4: gradient drift | 6 Intermediate | drift along lines of equal \|B\|, opposite for the two signs; charges move both alike, magnets oppositely | ≤ 3 charges, ≤ 3 magnets | 2 |
 | 62 | Jackson Pr. 12.5: E×B runaway | 6 Intermediate | \|E\| > c\|B\|: no drift frame, the particle runs away; magnets make B strong enough to drift | ≤ 6 magnets | 2 |
-| 63 | Jackson §13.1: recoil at right angles | 6 Intermediate | a free target recoils; equal masses leave at right angles, so the detectors fix the impact parameter | ≤ 3 charges | 1 |
+| 63 | Jackson §13.1: recoil at right angles | 6 Intermediate | a free target recoils; equal masses leave at right angles; the impact parameter set with magnets far from the target | ≤ 3 magnets | 1 |
 | 64 | Jackson §12.1: Störmer's forbidden region | 6 Intermediate | canonical angular momentum in a dipole's equatorial plane keeps the particle 7 cells out; charges break the symmetry | ≤ 4 charges | 2 |
 | 65 | Jackson Ch. 12: magnetosphere | 6 Master | the solar wind's E×B drift steered up and down through two gates, then the gradient drift splits proton and electron around a dipole Earth | ≤ 6 charges, ≤ 5 magnets | 5 |
 | 66 | Jackson §2.2: its own image | 7 Introduction | a grounded sphere attracts every passing charge through its image −qR/d | ≤ 3 charges | 1 |
@@ -97,7 +97,7 @@ verified reference solution for every shot and negligible radiation
 | 73 | Jackson Ch. 16: three orbits | 8 Master | three electrons on different orbits, all slowed by radiation into the detector in time | ≤ 6 charges | 3 |
 | 74 | Jackson §16.7: a bound charge | 9 Introduction | an electron bound harmonically inside a charge cloud (Thomson's atom); pull it out | ≤ 3 charges | 1 |
 | 75 | Jackson §16.8: resonance | 9 Introduction | a weak drive grows the bound electron's swing only at ω₀; tune an antenna | ≤ 2 antennas | 1 |
-| 76 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | a passing heavy ion kicks a bound electron (a goal free particle) out of its atom; charges only along the approach, so only the kick frees it | ≤ 3 charges | 1 |
+| 76 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | a passing heavy ion kicks a bound electron (a goal) out of its atom; steered with magnets far from the atom | ≤ 3 magnets | 1 |
 | 77 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
 
 ## Automatic detectors
@@ -280,6 +280,13 @@ Notes:
     the antennas stand far enough away for a nearly uniform drive, so the electron is a
     linear oscillator. (Close to the atom, a strong antenna at 2ω₀ also worked, by
     parametric resonance in its steep near field.)
+  - Indirect goals (knock-on, recoil at right angles, a kick for a bound charge): the
+    player steers the projectile with magnets placed far from the target. A magnet's
+    force vanishes on a charge at rest and its field falls as 1/r³, so only the
+    projectile moves the target. The build checks it (`check_indirect`): with the shots
+    disarmed, the strongest allowed element of each kind and sign at the placement node
+    closest to each goal must move it less than 0.3 cells. The first versions (charges 4
+    cells from the target) moved it by up to 16 cells (the owner's review).
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.
