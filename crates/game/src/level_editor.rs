@@ -1395,7 +1395,7 @@ mod tests {
             };
             for e in entries {
                 let p = e.unwrap().path();
-                if p.extension().is_none_or(|x| x != "json") || p.ends_with("golden_hashes.json") {
+                if !level::is_level_file(&p) {
                     continue;
                 }
                 let level = Level::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();

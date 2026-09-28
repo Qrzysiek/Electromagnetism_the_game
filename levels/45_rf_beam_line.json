@@ -1,0 +1,204 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "RF beam line",
+  "description": "Finale of the fourth arc. Two identical bunches leave the source half an RF period apart, while a supply in the building switches a weak stray field on and off. First bring both bunches through the gate, moving along the axis (within ±6°), whether the stray field is on or off. Then send each bunch to its own detector: only a field that changes in time can tell them apart.",
+  "grid": {
+    "nx": 40,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    },
+    "rf_omega": 0.6
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          37,
+          14,
+          0
+        ],
+        "max": [
+          40,
+          16,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5,
+        "time": 5.235987755982989
+      },
+      "detector": {
+        "min": [
+          37,
+          4,
+          0
+        ],
+        "max": [
+          40,
+          6,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 5,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "max_antennas": 3,
+    "antenna_amplitudes": [
+      1000000.0,
+      2000000.0,
+      4000000.0,
+      8000000.0
+    ],
+    "region": {
+      "min": [
+        3,
+        1,
+        0
+      ],
+      "max": [
+        36,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        5,
+        3,
+        0
+      ],
+      "kind": "charge",
+      "value": 500000.0
+    },
+    {
+      "node": [
+        19,
+        19,
+        0
+      ],
+      "kind": "antenna",
+      "value": 1000000.0,
+      "angle_deg": 90.0
+    },
+    {
+      "node": [
+        34,
+        10,
+        0
+      ],
+      "kind": "antenna",
+      "value": 4000000.0,
+      "angle_deg": 90.0
+    },
+    {
+      "node": [
+        36,
+        7,
+        0
+      ],
+      "kind": "charge",
+      "value": -1000000.0
+    }
+  ],
+  "disturbances": [
+    {
+      "name": "supply off",
+      "e": [
+        0.0,
+        0.0
+      ],
+      "bz": 0.0
+    },
+    {
+      "name": "supply on",
+      "e": [
+        0.0,
+        -13000.0
+      ],
+      "bz": 0.0
+    }
+  ],
+  "gates": [
+    {
+      "min": [
+        16,
+        9,
+        0
+      ],
+      "max": [
+        18,
+        11,
+        0
+      ],
+      "acceptance": {
+        "direction": [
+          0.0,
+          6.0
+        ]
+      }
+    }
+  ]
+}

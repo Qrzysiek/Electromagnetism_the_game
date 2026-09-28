@@ -101,7 +101,7 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 ### Ch. 5: Magnetostatics, Faraday's law
 
 - **§5.2 Biot–Savart; §5.5 circular loop.** NOW (loops, polygons).
-- **§5.6 magnetic moment; §5.7 force on a moment.** NOW (Stern–Gerlach levels 36–38, 41).
+- **§5.6 magnetic moment; §5.7 force on a moment.** NOW (Stern–Gerlach and Stern–Gerlach beam).
 - **Pr. 5.3/5.5/5.7 solenoid and Helmholtz pair field uniformity.** A level asks for a uniform-field region from a coil pair. F:coils+.
 - **Pr. 5.19 cylindrical magnet.** F:coils+.
 - **§5.10–5.12 magnetized sphere, permanent magnets, magnetic shielding.** The materials stage (F:dielectric analogue for μ).
@@ -240,7 +240,7 @@ These combine several chapters; most come from the problems.
 5. **Ring of charges** (Pr. 14.23): radiation vanishing with N. NOW.
 6. **Undulator** (§14.7, Pr. 14.27): tune K for the radiation. NOW.
 7. **Knock-on** (Pr. 13.1): a heavy projectile kicks a light charge into a detector. NOW.
-8. **Quadrupole lens** (Pr. 2.20) + collimated beam (levels 42–43). NOW.
+8. **Quadrupole lens** (Pr. 2.20) + collimated beam (Collimated beam, Velocity selector). NOW.
 9. **Betatron** (§5.15, §12.5): induction acceleration with the 2:1 condition. F:ramp.
 10. **g−2 ring** (Pr. 12.11–12.12, §11.11): spin tune. F:spin.
 11. **Λ decay reconstruction** (Pr. 11.20): decay in flight in a B field. F:decay.

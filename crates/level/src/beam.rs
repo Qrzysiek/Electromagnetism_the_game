@@ -376,9 +376,7 @@ mod tests {
     }
 
     fn first_bend_beam(interact: bool) -> Level {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../levels/01_first_bend.json");
-        let mut l = Level::from_json(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let mut l = crate::shipped("first_bend");
         l.physics.c = None;
         l.physics.beam_interaction = interact;
         // Strongly charged particles (allowed for c = ∞: no radiation), so that the

@@ -1,0 +1,160 @@
+{
+  "arcs": [
+    {
+      "name": "Charges: steering and optics",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "first_bend",
+            "slingshot",
+            "geiger_marsden",
+            "twin_beams",
+            "two_stages",
+            "injection"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "thomson_crt",
+            "around_the_wall",
+            "einzel_lens",
+            "reflectron",
+            "collimator",
+            "hemispherical_analyzer",
+            "soft_landing"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "sorting_station"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Metal and electrodes",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "high_voltage_dome",
+            "polarized_sphere",
+            "image_charge",
+            "deflection_plates",
+            "power_supply",
+            "build_a_deflector",
+            "shielding"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "tune_the_lens",
+            "real_einzel_lens",
+            "beam_pipe"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "microscope_column"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Relativity and magnetism",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "fast_lane",
+            "first_coil",
+            "first_magnet",
+            "stern_gerlach"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "beta_spectrometer",
+            "dempster",
+            "wien_filter",
+            "calutron",
+            "build_wien_filter"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "mass_spectrometer"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Time: noise, radio frequency and radiation",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "stray_field",
+            "rf_kick",
+            "synchrotron_light"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "mains_hum",
+            "earths_field",
+            "crt_earth_field",
+            "rf_separator",
+            "tune_the_rf",
+            "streak_camera"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "rf_beam_line"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Beams",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "space_charge",
+            "stern_gerlach_beam",
+            "relativistic_beam"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "collimated_beam",
+            "velocity_selector",
+            "beam_preparation",
+            "chromatic_aberration",
+            "real_analyzer",
+            "calutron_space_charge",
+            "soft_landing_current"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "isotope_separator"
+          ]
+        }
+      ]
+    }
+  ]
+}

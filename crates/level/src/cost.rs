@@ -385,18 +385,11 @@ mod tests {
         assert_eq!(format_value(338.0, Unit::Count), "338");
     }
 
-    fn shipped(file: &str) -> Level {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../levels")
-            .join(file);
-        Level::from_json(&std::fs::read_to_string(path).unwrap()).unwrap()
-    }
-
     /// The measurement covers every flight; metal levels report their linear systems and
     /// the boundary residual, which matches the level test's (< 1e-10).
     #[test]
     fn measured_cost() {
-        let l = shipped("01_first_bend.json");
+        let l = crate::shipped("first_bend");
         let c = l.measure_cost(&l.reference_solution);
         assert_eq!(c.previews, l.flight_count());
         assert_eq!(c.verifications, l.flight_count());
@@ -405,7 +398,7 @@ mod tests {
         assert!(c.metal_residual.is_nan());
         assert_eq!(c.meters().len(), 3);
 
-        let l = shipped("13_high_voltage_dome.json");
+        let l = crate::shipped("high_voltage_dome");
         let c = l.measure_cost(&l.reference_solution);
         assert!(c.setup.unknowns > 0 && c.setup.bytes >= 8 * c.setup.unknowns);
         assert!(c.metal_residual < 1e-10, "{}", c.metal_residual);

@@ -1,0 +1,103 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Stray field",
+  "description": "Somewhere in the building a high-voltage supply is switched on and off, and with it a weak uniform field across your beam line. The beam must reach the detector in both cases. Compare the two flights and aim between them.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          27,
+          12,
+          0
+        ],
+        "max": [
+          30,
+          16,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0,
+      4000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": []
+  },
+  "reference_solution": [
+    {
+      "node": [
+        3,
+        0,
+        0
+      ],
+      "kind": "charge",
+      "value": 2000000.0
+    }
+  ],
+  "disturbances": [
+    {
+      "name": "supply off",
+      "e": [
+        0.0,
+        0.0
+      ],
+      "bz": 0.0
+    },
+    {
+      "name": "supply on",
+      "e": [
+        0.0,
+        -6700.0
+      ],
+      "bz": 0.0
+    }
+  ]
+}

@@ -66,9 +66,7 @@ fn level_hashes() -> BTreeMap<String, String> {
     let mut paths: Vec<_> = std::fs::read_dir(levels_dir())
         .unwrap()
         .map(|e| e.unwrap().path())
-        .filter(|p| {
-            p.extension().is_some_and(|e| e == "json") && !p.ends_with("golden_hashes.json")
-        })
+        .filter(|p| level::is_level_file(p))
         .collect();
     paths.sort();
     for p in paths {

@@ -1,0 +1,122 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Collimated beam",
+  "description": "The collimator again, for a real beam: 16 particles leave the source with a spread of directions (σ = 4°) and repel each other on the way. At least 90 % must reach the detector travelling parallel to the axis (within ±3°). Only charges of the particle's sign are available.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 80.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    },
+    "beam_interaction": true
+  },
+  "shots": [
+    {
+      "beam": {
+        "count": 16,
+        "energy_spread": 0.01,
+        "angle_spread_deg": 4.0,
+        "width": 0.2,
+        "length": 0.2,
+        "distribution": "gaussian",
+        "transmission": 0.9,
+        "seed": 0
+      },
+      "particle": {
+        "charge": 50.0,
+        "mass": 50000000.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 25000000.0
+      },
+      "detector": {
+        "min": [
+          28,
+          6,
+          0
+        ],
+        "max": [
+          30,
+          14,
+          0
+        ],
+        "acceptance": {
+          "direction": [
+            0.0,
+            3.0
+          ]
+        }
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 4,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": false,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        4,
+        1,
+        0
+      ],
+      "max": [
+        20,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        4,
+        4,
+        0
+      ],
+      "kind": "charge",
+      "value": 1000000.0
+    },
+    {
+      "node": [
+        16,
+        19,
+        0
+      ],
+      "kind": "charge",
+      "value": 1000000.0
+    }
+  ]
+}

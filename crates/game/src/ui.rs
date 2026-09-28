@@ -261,7 +261,22 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             ))
             .width(230.0)
             .show_ui(ui, |ui| {
+                // Grouped by the curriculum: a heading for every arc, the tier before
+                // its first level.
+                let mut last: Option<&crate::curriculum::Place> = None;
                 for (i, n) in names.iter().enumerate() {
+                    let place = game.places.get(i).and_then(Option::as_ref);
+                    if let Some(p) = place {
+                        if last.is_none_or(|l| l.arc != p.arc) {
+                            ui.label(egui::RichText::new(p.arc_title()).strong());
+                        }
+                        if last.is_none_or(|l| l.arc != p.arc || l.tier != p.tier) {
+                            ui.label(egui::RichText::new(format!("  {}", p.tier)).weak().small());
+                        }
+                    } else if last.is_some() {
+                        ui.label(egui::RichText::new("Custom levels").strong());
+                    }
+                    last = place;
                     ui.selectable_value(&mut selected, i, format!("{}. {n}", i + 1));
                 }
             });
@@ -275,6 +290,16 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         ui.separator();
         crate::sandbox::panel(ui, game);
         ui.separator();
+    }
+    if let Some(Some(p)) = game.places.get(game.level_index) {
+        ui.label(
+            egui::RichText::new(format!("{} — {}", p.arc_title(), p.tier))
+                .small()
+                .weak(),
+        )
+        .on_hover_text(
+            "Each arc introduces its elements one at a time, then combines them in              intermediate levels, and ends in a master level that needs everything the arc              taught.",
+        );
     }
     let level = game.editor.level.clone();
     if !level.description.is_empty() {

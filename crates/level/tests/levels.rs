@@ -10,9 +10,7 @@ fn shipped_levels() -> Vec<(String, Level)> {
     let mut out: Vec<(String, Level)> = std::fs::read_dir(dir)
         .unwrap()
         .map(|e| e.unwrap().path())
-        .filter(|p| {
-            p.extension().is_some_and(|e| e == "json") && !p.ends_with("golden_hashes.json")
-        })
+        .filter(|p| level::is_level_file(p))
         .map(|p| {
             let name = p.file_stem().unwrap().to_string_lossy().into_owned();
             (

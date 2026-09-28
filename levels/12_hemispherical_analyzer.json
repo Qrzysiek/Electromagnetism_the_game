@@ -1,0 +1,164 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Hemispherical analyzer (XPS)",
+  "description": "Photoelectron spectrometers sort particles by energy between two concentric hemispheres, where the field is exactly that of a point charge at the centre. Three energies leave the source; each must reach its own detector after bending through 180°. A circular orbit of radius R needs |qQ| = p·v·R; the others become ellipses.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          4,
+          17,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.45
+      },
+      "detector": {
+        "min": [
+          1,
+          4,
+          0
+        ],
+        "max": [
+          3,
+          5,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          4,
+          17,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          1,
+          3,
+          0
+        ],
+        "max": [
+          3,
+          4,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          4,
+          17,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.55
+      },
+      "detector": {
+        "min": [
+          1,
+          1,
+          0
+        ],
+        "max": [
+          3,
+          2,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      1000000.0,
+      2000000.0,
+      3000000.0,
+      4000000.0,
+      5000000.0,
+      6000000.0,
+      7000000.0,
+      8000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        1,
+        3,
+        0
+      ],
+      "max": [
+        12,
+        16,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        4,
+        10,
+        0
+      ],
+      "kind": "charge",
+      "value": -7000000.0
+    }
+  ]
+}

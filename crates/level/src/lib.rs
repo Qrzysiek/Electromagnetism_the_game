@@ -609,6 +609,35 @@ fn is_zero_u32(v: &u32) -> bool {
 }
 
 /// Smallest and largest value of a list (the range of hardcore mode).
+/// Whether `path` in a levels directory is a level: a `.json` file other than the
+/// directory's metadata (`golden_hashes.json`, `curriculum.json`).
+pub fn is_level_file(path: &std::path::Path) -> bool {
+    path.extension().is_some_and(|e| e == "json")
+        && !path.ends_with("golden_hashes.json")
+        && !path.ends_with("curriculum.json")
+}
+
+/// A shipped level of this workspace by its slug (`levels/NN_<slug>.json`, whatever its
+/// number in the curriculum), for tests and tools.
+///
+/// # Panics
+/// If no such level is shipped, or it does not parse.
+pub fn shipped(slug: &str) -> Level {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../levels");
+    let path = std::fs::read_dir(&dir)
+        .expect("levels directory")
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .find(|p| {
+            p.file_stem().and_then(|s| s.to_str()).is_some_and(|s| {
+                s.split_once('_')
+                    .is_some_and(|(n, rest)| rest == slug && n.chars().all(|c| c.is_ascii_digit()))
+            })
+        })
+        .unwrap_or_else(|| panic!("no shipped level '{slug}'"));
+    Level::from_json(&std::fs::read_to_string(&path).expect("level file"))
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
 pub fn value_range(list: &[f64]) -> Option<(f64, f64)> {
     let lo = list.iter().copied().fold(f64::INFINITY, f64::min);
     let hi = list.iter().copied().fold(f64::NEG_INFINITY, f64::max);
@@ -2068,7 +2097,7 @@ mod flight_tests {
 
     #[test]
     fn every_shot_flies_under_every_disturbance() {
-        let mut l = Level::from_json(include_str!("../../../levels/06_twin_beams.json")).unwrap();
+        let mut l = shipped("twin_beams");
         assert_eq!(l.flight_count(), 2);
         assert!(l.scenarios(&[]).iter().all(|s| s.field.external.is_empty()));
         l.disturbances = vec![

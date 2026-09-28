@@ -1,0 +1,169 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Calutron",
+  "description": "Lawrence's calutron separated uranium isotopes by bending ions in a magnetic field: at equal energy the radius r = √(2mT)/(qB) grows with the mass. Three isotopes leave the source together; place magnets so that each reaches its own detector.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          3,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          27,
+          15,
+          0
+        ],
+        "max": [
+          30,
+          18,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 2.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          3,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          27,
+          10,
+          0
+        ],
+        "max": [
+          30,
+          13,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 4.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          3,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          27,
+          8,
+          0
+        ],
+        "max": [
+          30,
+          10,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 4,
+    "magnet_strengths": [
+      1000000.0,
+      2000000.0,
+      3000000.0,
+      4000000.0
+    ],
+    "region": {
+      "min": [
+        6,
+        2,
+        0
+      ],
+      "max": [
+        24,
+        18,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        6,
+        6,
+        0
+      ],
+      "kind": "magnet",
+      "value": -4000000.0
+    },
+    {
+      "node": [
+        13,
+        6,
+        0
+      ],
+      "kind": "magnet",
+      "value": 3000000.0
+    }
+  ]
+}

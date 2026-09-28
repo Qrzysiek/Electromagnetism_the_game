@@ -31,20 +31,43 @@ The existing level ideas stay; they are regrouped, improved or joined.
    finale references are built stage by stage in `scripts/levels.py` (each stage solved as
    a sub-level whose detector is the next gate, with the earlier stages fixed), as a
    player would build them.
-8. Later: par scores (fewest elements, least total charge, largest margins) and
+8. **Margin.** A level's limits are never the fewest elements that solve it: they allow at
+   least two more (and a choice of magnitudes), so that players can find less-than-optimal
+   solutions, or just play around with the system (the owner, 2026-09-28).
+9. Later: par scores (fewest elements, least total charge, largest margins) and
    blueprints (SPEC Stage 8).
 
-## Arcs (existing levels regrouped; new finales)
+## Arcs as built
 
-| Arc | Introductions (modules) | Practice and combination | Finale (new) |
+Every arc has three tiers (`ARCS` in `scripts/levels.py`, written to
+`levels/curriculum.json`; the game groups its level list by arc and shows each level's arc
+and tier):
+
+- **Introduction:** one new element or condition per level, solvable with one element (the
+  limits still allow more).
+- **Intermediate:** the arc's modules interact, or an earlier design meets a real effect:
+  usually two or more elements.
+- **Master:** a multi-stage finale where all bets are off, but every stage is a module the
+  player has used before.
+
+| Arc | Introduction | Intermediate | Master |
 |---|---|---|---|
-| 1 Charges: steering and optics | First bend (deflector), Slingshot (attractor turn), Geiger–Marsden (scattering), Twin beams (several shots), Einzel lens (lens), Reflectron (mirror), Hemispherical analyser (analyser), Collimator (collimator), Two stages (gates) | The wall, Thomson CRT, Injection, Soft landing | **Sorting station**: two energies × three angles; focus through a gate, then sort the energies |
-| 2 Metal and electrodes | High-voltage dome, Polarised sphere, Image charge, Deflection plates, Power supply, Build a deflector | Shielding, Tune the lens, Real Einzel lens, Beam pipe | **Microscope column**: condenser lens, deflector and shield from plates, in stages |
-| 3 Relativity and magnetism | Fast lane, First coil, First magnet, Stern–Gerlach | Beta spectrometer, Dempster, Wien filter, Calutron, Build a Wien filter, CRT in the Earth's field | **Mass spectrometer from parts**: velocity filter, magnetic sector, collectors |
-| 4 Time: noise and RF | Stray field, RF kick | Mains hum, Earth's field, RF separator, Tune the RF, Streak camera, Synchrotron light | **RF beam line**: kick, separate and streak bunches under a stray field |
-| 5 Beams | Space charge, Stern–Gerlach beam | Collimated beam, Velocity selector, Relativistic beam, Beam preparation, Chromatic aberration, Real analyser, Calutron at full current, Soft landing at full current | **Isotope separator**: an interacting two-isotope beam through collimation, velocity selection and a sector |
+| 1 Charges: steering and optics | First bend, Slingshot, Geiger–Marsden, Twin beams, Two stages, Injection | Thomson's CRT, Around the wall (the wall joined with injection), Einzel lens, Reflectron, Collimator, Hemispherical analyser, Soft landing | **Sorting station**: lens through a gate, then sort two energies onto their own spots |
+| 2 Metal and electrodes | High-voltage dome, Polarised sphere, Image charge, Deflection plates, Power supply, Build a deflector, Shielding | Tune the lens, Real Einzel lens, Beam pipe | **Microscope column**: tune the condenser through a crossover gate, then deflector plate and projector charges onto a spot beside an ion pump, arriving along the axis |
+| 3 Relativity and magnetism | Fast lane, First coil, First magnet, Stern–Gerlach | Beta spectrometer, Dempster, Wien filter, Calutron, Build a Wien filter | **Mass spectrometer from parts**: one electrostatic lens for three masses (only T/q matters), then a magnetic sector sorts them by momentum |
+| 4 Time: noise, RF and radiation | Stray field, RF kick, Synchrotron light | Mains hum, Earth's field, CRT in the Earth's field, RF separator, Tune the RF, Streak camera | **RF beam line**: steer two bunches through a gate with a stray field on and off, then separate them with RF |
+| 5 Beams | Space charge, Stern–Gerlach beam, Relativistic beam | Collimated beam, Velocity selector, Beam preparation, Chromatic aberration, Real analyser, Calutron at full current, Soft landing at full current | **Isotope separator**: collimate an interacting two-isotope beam through a gate, then separate the isotopes with magnets |
 
-The arc 1 finale is built first as the prototype of the method: level 52 (see LEVELS.md).
+Changes to existing levels: The wall and Injection were joined into Around the wall (the
+beam must enter the detector along the axis after going around the wall: two charges).
+The Wien filters now require the selected speed to leave straight along the axis (±4°):
+before, one charge's non-uniform field could sort the three speeds; now the search needs
+a crossed-field pair. Every level's limits leave a margin of at least two elements above
+its fewest solution (rule 8). The real-instrument levels moved into the arcs of the
+effects they add (CRT in the Earth's field to arc 4, Beam pipe to arc 2, the beam ones to
+arc 5), after the levels they build on.
+
+The arc 1 finale is built first as the prototype of the method (see LEVELS.md).
 Its reference needs 2 charges in stage 1 and 4 in stage 2; the build checks that no search
 finds a solution with 4 charges or fewer. The other arcs follow after the owner's review of
 the prototype.

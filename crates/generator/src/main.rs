@@ -66,6 +66,14 @@ fn load(path: &PathBuf) -> Level {
     Level::from_json(&s).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
+/// The most elements a player may place: charges, magnets, antennas and plates within
+/// the limits, and a power supply on every tunable electrode.
+fn most_elements(level: &Level) -> usize {
+    let l = &level.limits;
+    let supplies = level.electrodes.iter().filter(|e| e.tunable).count();
+    (l.max_charges + l.max_magnets + l.max_antennas + l.max_plates) as usize + supplies
+}
+
 /// The fewest player elements that solve the level: the reference solution's count, unless
 /// the search finds a verified solution with fewer (exhaustive for one element, annealing
 /// with 64 restarts of 600 iterations for more).
@@ -105,7 +113,7 @@ fn main() {
             if let Some(c) = singles.first() {
                 best = Some(vec![*c]);
             }
-            for k in 2..=(level.limits.max_charges + level.limits.max_magnets) as usize {
+            for k in 2..=most_elements(&level) {
                 let found = search::anneal(&level, k, restarts, iterations, 0x5EED + k as u64);
                 println!(
                     "  verified {k}-charge solutions found by annealing: {}",

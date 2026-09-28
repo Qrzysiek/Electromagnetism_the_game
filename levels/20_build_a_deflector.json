@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Build a deflector",
-  "description": "Now you build the electrodes. Place one metal plate at a potential of your choice near the beam (R turns it, Q/E changes its potential). A plate at a positive potential pushes positive ions away. Plates keep a cell away from other metal and from the other elements.",
+  "description": "Now you build the electrodes. Place a metal plate at a potential of your choice near the beam (R turns it, Q/E changes its potential). A plate at a positive potential pushes positive ions away. Plates keep a cell away from other metal and from the other elements.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -76,7 +76,7 @@
         0
       ]
     },
-    "max_plates": 1,
+    "max_plates": 3,
     "plate_voltages": [
       -100000.0,
       -50000.0,

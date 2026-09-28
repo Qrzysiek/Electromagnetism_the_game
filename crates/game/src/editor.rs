@@ -873,12 +873,15 @@ mod tests {
     use super::*;
 
     fn level() -> Level {
-        Level::from_json(include_str!("../../../levels/01_first_bend.json")).unwrap()
+        level::shipped("first_bend")
     }
 
     #[test]
     fn place_edit_remove() {
-        let mut e = Editor::new(level());
+        // At most one charge, whatever the shipped level allows.
+        let mut l = level();
+        l.limits.max_charges = 1;
+        let mut e = Editor::new(l);
         e.set_cursor([5, 5, 0]);
         e.place().unwrap();
         assert_eq!(e.placement.len(), 1);
@@ -902,8 +905,7 @@ mod tests {
     /// The deflection-plates level with its first plate tunable and room for one player
     /// plate.
     fn plate_level() -> Level {
-        let mut l =
-            Level::from_json(include_str!("../../../levels/16_deflection_plates.json")).unwrap();
+        let mut l = level::shipped("deflection_plates");
         l.electrodes[0].tunable = true;
         l.limits.supply_voltages = vec![-6e4, -3e4, 0.0, 3e4, 6e4];
         l.limits.max_plates = 1;

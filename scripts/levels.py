@@ -31,7 +31,8 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GENERATOR = os.path.join(ROOT, "target", "release", "generator")
+# The generator binary; EM_GENERATOR overrides it (e.g. a build in another target dir).
+GENERATOR = os.environ.get("EM_GENERATOR") or os.path.join(ROOT, "target", "release", "generator")
 M = 1e6
 
 
@@ -212,10 +213,11 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
 def first_bend():
     return level(
         "First bend",
-        "Place one charge to bend the beam into the detector. Like charges repel, unlike "
+        "Place a charge to bend the beam into the detector (one is enough). Like charges "
+        "repel, unlike "
         "charges attract.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 16, 30, 20)))],
-        max_charges=1, magnitudes=[1 * M, 2 * M, 4 * M])
+        max_charges=3, magnitudes=[1 * M, 2 * M, 4 * M])
 
 
 def slingshot():
@@ -225,7 +227,7 @@ def slingshot():
         "negative charge is a hint, but not enough on its own.",
         shots=[shot(1e-6, 1.0, (6, 3), 90.0, 0.5, box((0, 0, 3, 4)))],
         elements=[charge(15, 12, -2 * M)],
-        max_charges=1, magnitudes=[1 * M, 2 * M, 4 * M])
+        max_charges=3, magnitudes=[1 * M, 2 * M, 4 * M])
 
 
 def geiger_marsden():
@@ -237,20 +239,23 @@ def geiger_marsden():
         "the impact parameter b decides everything.",
         shots=[shot(2e-6, 4.0, (0, 11), 0.0, 4.0, box((0, 18, 1, 20)))],
         elements=[charge(18, 10, 8 * M)],
-        max_charges=1,
+        max_charges=3,
         magnitudes=[m * M for m in (0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5)],
         region=(2, 2, 10, 18), c=20.0)
 
 
-def the_wall():
+def around_the_wall():
+    # The wall joined with injection (docs/CURRICULUM.md): one charge gets the beam
+    # around the wall, a second one straightens it into the entrance. The search finds
+    # no one-charge solution and many with two.
     return level(
-        "The wall",
-        "A wall of positive charges blocks the direct path. Several charges together can "
-        "guide the particle around it.",
-        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 8, 30, 12)))],
-        elements=[charge(15, y, 0.5 * M) for y in range(7, 14)],
-        max_charges=3, magnitudes=[1 * M, 2 * M, 4 * M])
-
+        "Around the wall",
+        "A wall of positive charges blocks the direct path, and the detector behind it is "
+        "the entrance of the next stage: the beam must enter it moving along the axis "
+        "(within ±8°). Bend the beam around the wall, then straighten it.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((28, 8, 30, 12), direction=(0.0, 8.0)))],
+        elements=[charge(15, y, 0.5 * M) for y in range(6, 15)],
+        max_charges=4, magnitudes=[0.5 * M, 1 * M, 2 * M, 4 * M])
 
 def thomson_crt():
     return level(
@@ -261,7 +266,7 @@ def thomson_crt():
         "deflection falls as 1/T, like in an oscilloscope. Build deflection plates from "
         "point charges.",
         shots=[shot(-1e-6, 1.0, (0, 10), 0.0, e, Auto((29, 0, 30, 20), "x")) for e in (0.4, 0.6)],
-        max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 0.75, 1, 1.5)],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 0.75, 1, 1.5)],
         region=(8, 3, 17, 17),
         reference=[charge(8, 4, -1 * M)])
 
@@ -276,7 +281,7 @@ def twin_beams():
         "Switch between the shots with [ and ], or show them all.",
         shots=[shot(1e-6, 1.0, (0, 13), 0.0, 0.5, box((27, 15, 30, 19))),
                shot(1e-6, 1.0, (0, 7), 0.0, 0.5, box((27, 1, 30, 5)))],
-        max_charges=2, magnitudes=[1 * M, 2 * M, 4 * M])
+        max_charges=3, magnitudes=[1 * M, 2 * M, 4 * M])
 
 
 def hemispherical_analyzer():
@@ -289,7 +294,7 @@ def hemispherical_analyzer():
         "ellipses.",
         shots=[shot(1e-6, 1.0, (4, 17), 0.0, e, Auto((1, 0, 3, 11), "x"))
                for e in (0.45, 0.5, 0.55)],
-        max_charges=2, magnitudes=[m * M for m in (1, 2, 3, 4, 5, 6, 7, 8)],
+        max_charges=3, magnitudes=[m * M for m in (1, 2, 3, 4, 5, 6, 7, 8)],
         region=(1, 3, 12, 16),
         reference=[charge(4, 10, -7 * M)])
 
@@ -301,7 +306,7 @@ def reflectron():
         "the reflectron. Two ions with different energies must both come back to the "
         "detector beside the source.",
         shots=[shot(1e-6, 1.0, (0, 13), 0.0, e, box((0, 4, 2, 7))) for e in (0.4, 0.6)],
-        max_charges=3, magnitudes=[1 * M, 2 * M, 4 * M], signs=(True, False),
+        max_charges=4, magnitudes=[1 * M, 2 * M, 4 * M], signs=(True, False),
         region=(18, 0, 29, 20))
 
 
@@ -331,7 +336,7 @@ def fast_lane():
         shots=[shot(1e-7, 1.0, (0, 4), math.degrees(math.atan2(0.2, 1.0)), 2.0,
                     box((27, 14, 30, 18)))],
         elements=[charge(12, 8, -20 * M), charge(18, 12, 20 * M), charge(20, 5, -20 * M)],
-        max_charges=2, magnitudes=[m * M for m in (20, 30, 40, 60, 80)], c=1.5)
+        max_charges=3, magnitudes=[m * M for m in (20, 30, 40, 60, 80)], c=1.5)
 
 
 def beta_spectrometer():
@@ -344,7 +349,7 @@ def beta_spectrometer():
         "fixed charges large, so that radiation stays negligible.)",
         shots=[shot(-1e-7, 1.0, (4, 17), 0.0, e, Auto((1, 0, 3, 13), "x"))
                for e in (math.sqrt(2.0), 1.0)],
-        max_charges=2, magnitudes=[m * M for m in (20, 40, 70, 100, 120, 140, 170, 200)],
+        max_charges=3, magnitudes=[m * M for m in (20, 40, 70, 100, 120, 140, 170, 200)],
         region=(1, 3, 12, 16), c=1.0,
         reference=[charge(4, 10, 140 * M)])
 
@@ -357,11 +362,11 @@ def first_coil():
         "First coil",
         "The coil's magnetic field bends moving charges into circles: the force q v × B is "
         "perpendicular to the velocity, so it changes the direction but never the speed "
-        "(watch the energy bars). Use one charge to steer the circling particle into the "
+        "(watch the energy bars). Use a charge to steer the circling particle into the "
         "detector.",
         shots=[shot(1e-6, 1.0, (8, 10), 90.0, 0.5, box((14, 8, 17, 11)))],
         coils=[circle_coil(15, 10, 9.5, 1.9e5)],
-        max_charges=1, magnitudes=[0.5 * M, 1 * M, 2 * M])
+        max_charges=3, magnitudes=[0.5 * M, 1 * M, 2 * M])
 
 
 def dempster():
@@ -375,10 +380,19 @@ def dempster():
         "after half a turn (180° focusing). One setup must bring all six ions to the "
         "detectors of their masses.",
         grid=(32, 22), shots=shots, coils=[circle_coil(16, 11, 10.5, 5e5)],
-        max_charges=2,
+        max_charges=3,
         magnitudes=[m * M for m in (0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4)],
         region=(2, 1, 15, 4),
         reference=[charge(9, 3, 2 * M)])
+
+
+# The Wien filters' detectors: the selected speed (T0 = 0.5) must leave straight along
+# the axis (within ±3°), as it does in crossed fields that balance; the slower and faster
+# ions to either side. With a free exit one charge's non-uniform field could sort the
+# three speeds (measured, `analyze --fewest`); a straight exit needs E that balances
+# qvB all along the path. (At ±4° one placement of a single charge still passed.)
+WIEN_DETECTORS = {0.3: box((26, 12, 28, 15)), 0.5: box((26, 9, 28, 11), direction=(0.0, 3.0)),
+                  1.0: box((26, 5, 28, 8))}
 
 
 def wien_filter():
@@ -386,29 +400,23 @@ def wien_filter():
         "Wien filter",
         "Crossed electric and magnetic fields pass exactly one speed straight through: qE "
         "balances qvB when v = E/B. Slower ions are pushed one way, faster ones the other. "
-        "The coil provides B; place charges to supply E so that each of the three ions "
-        "reaches its own detector.",
-        shots=[shot(1e-6, 1.0, (2, 10), 0.0, e, Auto((26, 6, 28, 14), "x"))
-               for e in (0.3, 0.5, 1.0)],
+        "The coil provides B; place charges to supply E so that the middle ion leaves "
+        "straight along the axis (within ±3°) and the slower and faster ones reach their "
+        "own detectors.",
+        shots=[shot(1e-6, 1.0, (2, 10), 0.0, e, WIEN_DETECTORS[e]) for e in (0.3, 0.5, 1.0)],
         coils=[rect_coil(1, 5, 29, 15, 2.5e4)],
         max_charges=4, magnitudes=[m * M for m in (0.1, 0.15, 0.2, 0.3, 0.4)],
-        region=(6, 6, 24, 14),
-        reference=[charge(11, 7, 0.2 * M), charge(19, 7, 0.2 * M),
-                   charge(11, 13, -0.2 * M), charge(19, 13, -0.2 * M)])
-
-
-# =======================================================================================
-# your own magnets.
+        region=(6, 6, 24, 14))
 
 def first_magnet():
     return level(
         "First magnet",
         "A magnet here is a uniformly magnetized sphere standing out of the plane (⊙) or "
         "into it (⊗). In the plane its field is perpendicular to the plane and falls as "
-        "1/r³, so it bends the particle sideways, strongly only nearby. Place one magnet to "
+        "1/r³, so it bends the particle sideways, strongly only nearby. Place a magnet to "
         "bend the beam into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 18)))],
-        max_magnets=1, strengths=[1 * M, 2 * M, 4 * M], region=(6, 2, 24, 18))
+        max_magnets=3, strengths=[1 * M, 2 * M, 4 * M], region=(6, 2, 24, 18))
 
 
 def calutron():
@@ -421,7 +429,7 @@ def calutron():
         # Separated probe strips: in the same field the lightest isotope bends most.
         shots=[shot(1e-6, m, (3, 10), 0.0, 0.5, Auto((27, y0, 30, y1), "x", 3))
                for m, (y0, y1) in ((1.0, (15, 19)), (2.0, (10, 15)), (4.0, (4, 10)))],
-        max_magnets=2, strengths=[m * M for m in (1, 2, 3, 4)], region=(6, 2, 24, 18),
+        max_magnets=4, strengths=[m * M for m in (1, 2, 3, 4)], region=(6, 2, 24, 18),
         reference=None)
 
 
@@ -429,15 +437,11 @@ def build_wien_filter():
     return level(
         "Build a Wien filter",
         "No coil this time: build the whole velocity selector yourself from charges (for "
-        "E) and magnets (for B). Three ions with different energies must each reach their "
-        "own detector.",
-        shots=[shot(1e-6, 1.0, (2, 10), 0.0, e, Auto((26, 2, 28, 18), "x"))
-               for e in (0.3, 0.5, 1.0)],
+        "E) and magnets (for B). Again the middle ion must leave straight along the axis "
+        "(within ±3°), the slower and faster ones in their own detectors.",
+        shots=[shot(1e-6, 1.0, (2, 10), 0.0, e, WIEN_DETECTORS[e]) for e in (0.3, 0.5, 1.0)],
         max_charges=4, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.4)],
-        max_magnets=2, strengths=[m * M for m in (1, 2, 3)], region=(6, 3, 24, 17),
-        reference=[magnet(15, 6, -2 * M), magnet(15, 14, -2 * M),
-                   charge(11, 7, 0.2 * M), charge(19, 7, 0.2 * M),
-                   charge(11, 13, -0.2 * M), charge(19, 13, -0.2 * M)])
+        max_magnets=2, strengths=[m * M for m in (1, 2, 3)], region=(6, 3, 24, 17))
 
 
 # =======================================================================================
@@ -457,7 +461,7 @@ def stern_gerlach():
         "away (see the magnetic map).",
         shots=[shot(0.0, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 2), moment=m)
                for m in (1e-6, -1e-6)],
-        max_magnets=1, strengths=[m * M for m in (0.5, 1, 2)], region=(6, 3, 22, 17),
+        max_magnets=3, strengths=[m * M for m in (0.5, 1, 2)], region=(6, 3, 22, 17),
         reference=[magnet(14, 13, M)])
 
 
@@ -473,7 +477,7 @@ def stray_field():
         "it a weak uniform field across your beam line. The beam must reach the detector "
         "in both cases. Compare the two flights and aim between them.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 12, 30, 16)))],
-        max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2, 4)],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2, 4)],
         disturbances=[stray("supply off"), stray("supply on", e=(0.0, -6.7e3))],
         c=None)
 
@@ -508,7 +512,7 @@ def earths_field():
         "no stray field, or a weak field in or out of the plane. Magnetic bending grows "
         "with the time spent in the field.",
         shots=[shot(-1e-6, 1.0, (0, 10), 0.0, 0.5, box((28, 9, 30, 11)))],
-        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        max_charges=4, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
         region=(4, 2, 24, 18),
         disturbances=[stray("no field"), stray("facing north", bz=b),
                       stray("facing south", bz=-b)],
@@ -530,9 +534,9 @@ def rf_kick():
         "RF kick",
         "An antenna is a dipole driven by a radio-frequency generator: its field reverses "
         "every half period. The kick it gives a passing particle depends on the moment it "
-        "passes. Orient and place one antenna to steer the beam into the detector.",
+        "passes. Orient and place an antenna to steer the beam into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 18)))],
-        max_antennas=1, amplitudes=[m * M for m in (1, 2, 4, 8)], rf_omega=RF)
+        max_antennas=3, amplitudes=[m * M for m in (1, 2, 4, 8)], rf_omega=RF)
 
 
 def rf_separator():
@@ -606,7 +610,7 @@ def tune_the_rf():
         "phase difference is ω Δt. Pick the frequency, then the orientation and place.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, d, 30, d + 3)), time=t)
                for t, d in ((0.0, 14), (4.0, 3))],
-        max_antennas=1, amplitudes=[m * M for m in (2, 4, 8)],
+        max_antennas=2, amplitudes=[m * M for m in (2, 4, 8)],
         omegas=[0.2, 0.4, 0.8, 1.2, 1.6],
         max_charges=1, magnitudes=[m * M for m in (0.5, 1, 2)],
         region=(4, 3, 24, 17), rf_omega=RF)
@@ -623,10 +627,10 @@ def high_voltage_dome():
         "A metal sphere held at high voltage, like the dome of a Van de Graaff generator. "
         "From outside it pushes like a big charge at its centre, but it is a conductor: a "
         "charge you put near it pulls the dome's charge towards itself. The dome lifts the "
-        "beam; add one charge to bring it into the detector.",
+        "beam; add a charge to bring it into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 16, 30, 19)))],
         conductors=[metal(15, 4, 2.5, "potential", 3e5)],
-        max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)])
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)])
 
 
 def image_charge():
@@ -637,7 +641,7 @@ def image_charge():
         "far away the pair acts like a dipole. Steer the beam around the sphere.",
         shots=[shot(1e-6, 1.0, (0, 6), 0.0, 0.5, box((27, 13, 30, 17)))],
         conductors=[metal(14, 10, 3.5, "grounded")],
-        max_charges=2, magnitudes=[m * M for m in (0.5, 1, 2, 4)])
+        max_charges=3, magnitudes=[m * M for m in (0.5, 1, 2, 4)])
 
 
 def polarized_sphere():
@@ -650,7 +654,7 @@ def polarized_sphere():
         shots=[shot(1e-6, 1.0, (0, 4), 0.0, 0.5, box((27, 15, 30, 18)))],
         elements=[charge(8, 16, 4 * M)],
         conductors=[metal(16, 10, 2.5, "charge", 0.0)],
-        max_charges=2, magnitudes=[m * M for m in (0.5, 1, 2, 4)], region=(4, 2, 24, 18))
+        max_charges=3, magnitudes=[m * M for m in (0.5, 1, 2, 4)], region=(4, 2, 24, 18))
 
 
 # =======================================================================================
@@ -665,7 +669,7 @@ def injection():
         "loses it. The beam already reaches the entrance, but at 20°: straighten it. The "
         "cone shows what is accepted.",
         shots=[shot(1e-6, 1.0, (0, 5), 20.0, 0.5, box((28, 12, 30, 17), direction=(0.0, 8.0)))],
-        max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)])
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)])
 
 
 def soft_landing():
@@ -681,7 +685,7 @@ def soft_landing():
         # player sets the final braking and keeps the beam on the target.
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((29, 9, 30, 11), kinetic=(0.02, 0.12)))],
         elements=[charge(28, 6, 0.6 * M), charge(28, 14, 0.6 * M)],
-        max_charges=2, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5, 0.75, 1)],
+        max_charges=3, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5, 0.75, 1)],
         region=(12, 2, 26, 18))
 
 
@@ -709,11 +713,11 @@ def deflection_plates():
         "Real deflection plates, as in a cathode-ray tube: two metal plates at +V and −V. "
         "Between them the field is nearly uniform, but it bulges out at the ends (the "
         "fringe field) and the plates' charge rearranges when you bring charges near. Add "
-        "one charge to bring the beam into the detector.",
+        "a charge to bring the beam into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 18)))],
         electrodes=[plate(11, 13, 8, kind="potential", value=-3e4),
                     plate(11, 7, 8, kind="potential", value=3e4)],
-        max_charges=1, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], region=(16, 1, 26, 19))
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], region=(16, 1, 26, 19))
 
 
 def power_supply():
@@ -752,12 +756,12 @@ def tune_the_lens():
 def build_a_deflector():
     return level(
         "Build a deflector",
-        "Now you build the electrodes. Place one metal plate at a potential of your choice "
+        "Now you build the electrodes. Place a metal plate at a potential of your choice "
         "near the beam (R turns it, Q/E changes its potential). A plate at a positive "
         "potential pushes positive ions away. Plates keep a cell away from other metal "
         "and from the other elements.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 1))],
-        max_plates=1, plate_voltages=[-1e5, -5e4, 5e4, 1e5], region=(5, 3, 22, 17),
+        max_plates=3, plate_voltages=[-1e5, -5e4, 5e4, 1e5], region=(5, 3, 22, 17),
         reference=[player_plate(10, 12, 1e5)])
 
 
@@ -766,10 +770,10 @@ def shielding():
         "Shielding",
         "A strong charge next to the beam line throws the beam out of the arena. A "
         "grounded metal plate between them screens its field: the charge it induces on the "
-        "plate cancels much of the field on the far side. Place the grounded plate.",
+        "plate cancels much of the field on the far side. Place a grounded plate.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 2))],
         elements=[charge(15, 14, 2 * M)],
-        max_plates=1, plate_voltages=[0.0], region=(5, 3, 25, 17),
+        max_plates=3, plate_voltages=[0.0], region=(5, 3, 25, 17),
         reference=[player_plate(15, 12, 0.0)])
 
 
@@ -784,13 +788,13 @@ def real_einzel_lens():
                       plate(x, 5, 6, height=3.0, angle_deg=90.0, kind=kind, value=value)]
     return level(
         "Real Einzel lens",
-        "The Einzel lens of chapter 2, as it is really built: three metal apertures, the "
+        "The Einzel lens of arc 1, as it is really built: three metal apertures, the "
         "middle one at high voltage. Its focus is not quite on the detector, and the rays "
-        "leave at ±6° now. Add up to two charges to bring all three rays into the small "
+        "leave at ±6° now. Add charges to bring all three rays into the small "
         "detector.",
         shots=[shot(1e-6, 1.0, (0, 10), a, 0.5, box((28, 9, 30, 11))) for a in (-6.0, 0.0, 6.0)],
         electrodes=apertures,
-        max_charges=2, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5)], region=(20, 2, 27, 18))
+        max_charges=4, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5)], region=(20, 2, 27, 18))
 
 
 # =======================================================================================
@@ -806,7 +810,7 @@ def two_stages():
         "passing the gate does not count.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 20)))],
         gates=[box((10, 11, 13, 14))],
-        max_charges=1, magnitudes=[1 * M, 2 * M, 4 * M])
+        max_charges=3, magnitudes=[1 * M, 2 * M, 4 * M])
 
 
 # =======================================================================================
@@ -830,7 +834,7 @@ def space_charge():
         c=None, t_max=80.0, beam_interaction=True,
         shots=[shot(1e-6 * K, K, (0, 10), 0.0, 0.5 * K, box((27, 15, 30, 19)),
                     beam=beam(16, 0.9))],
-        max_charges=1, magnitudes=[1 * M, 2 * M, 4 * M],
+        max_charges=3, magnitudes=[1 * M, 2 * M, 4 * M],
         reference=[charge(0, 0, 4 * M)])
 
 
@@ -847,7 +851,7 @@ def stern_gerlach_beam():
                     beam=beam(12, 0.9, energy=0.02)),
                shot(0.0, 1.0, (0, 10), 0.0, 0.5, box((27, 10, 30, 15)), moment=-1e-6,
                     beam=beam(12, 0.9, energy=0.02))],
-        max_magnets=1, strengths=[m * M for m in (0.5, 1, 2)], region=(6, 3, 22, 17),
+        max_magnets=3, strengths=[m * M for m in (0.5, 1, 2)], region=(6, 3, 22, 17),
         reference=[magnet(14, 13, M)])
 
 
@@ -897,7 +901,7 @@ def beam_preparation():
         shots=[shot(1e-6 * K, K, (0, 10), 0.0, 0.5 * K, box((27, 1, 30, 6)),
                     beam=beam(16, 0.9, angle_deg=4.0))],
         gates=[box((16, 6, 18, 15), direction=(0.0, 4.0))],
-        max_charges=4, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], signs=(True, False),
+        max_charges=5, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], signs=(True, False),
         region=(3, 1, 26, 19), reference=None)
 
 
@@ -917,7 +921,7 @@ def relativistic_beam():
         c=5.0, t_max=20.0, beam_interaction=True, radiation_reaction=True,
         shots=[shot(0.06, 1.0, (0, 10), 0.0, (5 / 3 - 1) * 25.0, box((27, 14, 30, 19)),
                     beam=beam(16, 0.9))],
-        max_charges=2, magnitudes=[200.0, 400.0, 800.0, 1600.0], reference=None)
+        max_charges=3, magnitudes=[200.0, 400.0, 800.0, 1600.0], reference=None)
 
 
 # =======================================================================================
@@ -962,11 +966,11 @@ def chromatic_aberration():
         lvl["physics"]["t_max"] = 80.0
     return realistic(
         "einzel_lens", "Chromatic aberration",
-        "Your Einzel lens from chapter 2 is built in. Real ion sources are not "
+        "Your Einzel lens from arc 1 (Charges) is built in. Real ion sources are not "
         "monochromatic: every ray now carries an 8 % spread in energy, and a lens focuses "
         "faster ions further away (chromatic aberration). At least 90 % of each ray must "
-        "still reach the small detector. Add up to two charges.",
-        change, max_charges=2, magnitudes=[m * M for m in (0.1, 0.25, 0.5, 1)],
+        "still reach the small detector. Add a few charges.",
+        change, max_charges=3, magnitudes=[m * M for m in (0.1, 0.25, 0.5, 1)],
         region=(4, 1, 26, 19))
 
 
@@ -978,11 +982,11 @@ def real_analyzer():
         lvl["physics"]["t_max"] = 80.0
     return realistic(
         "hemispherical_analyzer", "Real analyser",
-        "Your electron-energy analyser from chapter 2 is built in. A real source emits "
+        "Your electron-energy analyser from arc 1 (Charges) is built in. A real source emits "
         "into a cone: the rays now leave within a few degrees of the axis (σ = 4°), and "
         "each energy must still land in its own detector, 90 % of it. Half a turn in a "
-        "central field focuses directions only approximately. Add up to two charges.",
-        change, max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        "central field focuses directions only approximately. Add a few charges.",
+        change, max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
         region=(1, 3, 12, 16))
 
 
@@ -997,11 +1001,11 @@ def crt_earth_field():
         lvl["disturbances"] = [stray("facing north", bz=b)]
     return realistic(
         "thomson_crt", "CRT in the Earth's field",
-        "Your cathode-ray tube from chapter 1 is built in and installed in the lab, facing "
+        "Your cathode-ray tube from arc 1 (Charges) is built in and installed in the lab, facing "
         "north. In the Earth's magnetic field the electrons drift sideways on their way, "
-        "and both beams miss their spots. Adjust the tube where it stands: add up to two "
+        "and both beams miss their spots. Adjust the tube where it stands: add a few "
         "charges.",
-        change, max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        change, max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
         region=(4, 2, 26, 18))
 
 
@@ -1024,11 +1028,11 @@ def calutron_space_charge():
         lvl["physics"]["t_max"] = 80.0
     return realistic(
         "calutron", "Calutron at full current",
-        "Your calutron from chapter 8 is built in. The wartime calutrons ran intense "
+        "Your calutron from arc 3 (Relativity and magnetism) is built in. The wartime calutrons ran intense "
         "beams, and the ions repel each other: the isotope beams spread out and their "
         "spots grow into each other. At least 80 % of each isotope must still reach its "
-        "own collector. Add up to two charges.",
-        change, max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        "own collector. Add a few charges.",
+        change, max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
         region=(4, 2, 26, 18))
 
 
@@ -1039,11 +1043,11 @@ def beam_pipe():
         lvl["electrodes"] = [plate(15, 2, 26, height=4.0)]
     return realistic(
         "injection", "Beam pipe",
-        "Your injection setup from chapter 3 is built in, but beams run in grounded metal "
+        "Your injection setup from arc 1 (Charges) is built in, but beams run in grounded metal "
         "pipes, and the pipe wall lies between the beam and your steering charge: the "
         "charge it induces on the wall cancels much of the field. Straighten the beam into "
-        "the next stage again. Add up to two charges.",
-        change, max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        "the next stage again. Add a few charges.",
+        change, max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
         region=(4, 4, 26, 19))
 
 
@@ -1067,11 +1071,11 @@ def soft_landing_current():
         lvl["physics"]["t_max"] = 80.0
     return realistic(
         "soft_landing", "Soft landing, full current",
-        "Your soft-landing optics from chapter 3 are built in. With a real ion current the "
+        "Your soft-landing optics from arc 1 (Charges) are built in. With a real ion current the "
         "braked ions crowd together and repel each other: the slower they get, the "
         "stronger the space charge, and the beam blows up just before the target. At "
-        "least 90 % must still land gently on the target. Add up to two charges.",
-        change, max_charges=2, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5)],
+        "least 90 % must still land gently on the target. Add a few charges.",
+        change, max_charges=3, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5)],
         region=(12, 2, 26, 18))
 
 
@@ -1080,10 +1084,11 @@ def soft_landing_current():
 # references are composed stage by stage, as a player would build them: each stage is
 # solved as a sub-level whose detector is the next gate, with the earlier stages fixed.
 
-def solve_stage(lvl, fixed, detectors, gates, **player):
+def solve_stage(lvl, fixed, detectors, gates, prepare=None, **player):
     """Solve one stage of `lvl`: the shots aim at `detectors` (one per shot), after
     passing `gates`, with `fixed` elements built in and the player's elements `player`.
-    Returns the solver's elements."""
+    `prepare(sub)` may adjust the sub-level further (e.g. fix the earlier stages' power
+    supplies). Returns the solver's elements."""
     sub = json.loads(json.dumps(lvl))
     sub["elements"] = sub["elements"] + fixed
     for shot_, d in zip(sub["shots"], detectors):
@@ -1091,6 +1096,8 @@ def solve_stage(lvl, fixed, detectors, gates, **player):
     sub["gates"] = gates
     sub["limits"] = level("", "", **player)["limits"]
     sub["reference_solution"] = []
+    if prepare:
+        prepare(sub)
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
         json.dump(sub, f)
         path = f.name
@@ -1133,6 +1140,162 @@ def sorting_station():
     return lvl
 
 
+def microscope_column():
+    # Arc 2 finale. Stage 1 (condenser): a three-aperture Einzel lens, its middle
+    # aperture's halves on power supplies, images the source through a small crossover
+    # gate. Stage 2 (deflector and projector): a pair of deflection plates, the top one
+    # on a supply, pushes the re-diverging beam down towards the spot beside the ion
+    # pump, whose high voltage (a fixed charge) repels it; charges bring it there moving
+    # along the axis (within ±20°). Small, low electrodes: a column of full-size ones
+    # (8 plates, 6 x 3 cells) took 8.5 s to set up, over the sandbox budget; these take
+    # 0.75 s. The search solves stage 2 with 2 elements in 4 of 48 runs.
+    apertures = []
+    for x, tunable in ((6, False), (10, True), (14, False)):
+        apertures += [plate(x, 14, 4, height=2.0, angle_deg=90.0, tunable=tunable),
+                      plate(x, 6, 4, height=2.0, angle_deg=90.0, tunable=tunable)]
+    deflector = [plate(27, 13, 4, height=2.0, tunable=True)]
+    gate = box((19, 9, 21, 11))
+    spot = box((38, 3, 40, 5), direction=(0.0, 20.0))
+    shots = [shot(1e-6, 1.0, (0, 10), a, 0.5, spot) for a in (-6.0, 0.0, 6.0)]
+    volts = [-2e5, -1e5, 1e5, 2e5, 3e5, 4e5, 5e5]
+    mags = [m * M for m in (0.1, 0.2, 0.3, 0.5, 1)]
+    lvl = level(
+        "Microscope column",
+        "Finale of the second arc: the column of an electron microscope, in stages. The "
+        "condenser lens (three apertures, the middle one on two power supplies) must bring "
+        "all three rays through the small crossover gate. Behind it, the deflection plate "
+        "(on its own supply) must push the beam down to the small spot beside the ion "
+        "pump, whose high voltage repels it, and your charges must bring it in moving "
+        "along the axis (within ±20°).",
+        grid=(40, 20), shots=shots, gates=[gate], t_max=200.0,
+        electrodes=apertures + deflector, elements=[charge(34, 1, 1 * M)],
+        supplies=volts, max_charges=5, magnitudes=mags, region=(31, 1, 37, 19))
+
+    def condenser_only(sub):
+        # The deflector stays grounded while the condenser is tuned.
+        for e in sub["electrodes"][6:]:
+            e.pop("tunable", None)
+
+    stage1 = solve_stage(lvl, [], [gate] * len(shots), [], prepare=condenser_only,
+                         supplies=volts)
+
+    def condenser_fixed(sub):
+        # The condenser at the voltages of stage 1: fixed potentials.
+        for s_ in stage1:
+            for e in sub["electrodes"]:
+                if e.get("tunable") and e["center"][:2] == s_["node"][:2]:
+                    e.pop("tunable")
+                    e["bias"] = {"kind": "potential", "value": s_["value"]}
+
+    stage2 = solve_stage(lvl, [], [spot] * len(shots), [gate], prepare=condenser_fixed,
+                         supplies=volts, max_charges=3, magnitudes=mags,
+                         region=(31, 1, 37, 19))
+    lvl["reference_solution"] = stage1 + stage2
+    return lvl
+
+
+def mass_spectrometer():
+    # Arc 3 finale. Three masses (1, 2, 4) at the same energy, each at -5 and +5 degrees.
+    # Stage 1 (lens of charges): electrostatic optics depend only on T/q, not on the
+    # mass, so one lens focuses every mass through the gate. Stage 2 (magnetic sector of
+    # magnets): the momentum sqrt(2mT) differs, so magnets separate the masses onto their
+    # own collectors, found in probe strips and then shrunk to the landing points.
+    masses, angles = (1.0, 2.0, 4.0), (-5.0, 5.0)
+    gate = box((12, 9, 14, 11))
+    strips = {1.0: box((37, 14, 40, 20)), 2.0: box((37, 7, 40, 13)), 4.0: box((37, 0, 40, 6))}
+    shots = [shot(1e-6, m, (0, 10), a, 0.5, Auto((37, 0, 40, 20), "x", 2))
+             for m in masses for a in angles]
+    mags = [m * M for m in (0.25, 0.5, 1, 2)]
+    strengths = [m * M for m in (1, 2, 3, 4)]
+    lvl = level(
+        "Mass spectrometer from parts",
+        "Finale of the third arc. Ions of three masses (1, 2 and 4) leave the source with "
+        "the same energy, each at −5° and +5°. First focus them all through the gate: an "
+        "electrostatic lens bends every mass alike at the same energy, since only T/q "
+        "matters. Then separate them: in a magnetic field the momentum √(2mT) decides, so "
+        "each mass lands on its own collector.",
+        grid=(40, 20), shots=shots, gates=[gate], t_max=300.0,
+        max_charges=5, magnitudes=mags, max_magnets=4, strengths=strengths,
+        region=(2, 1, 36, 19))
+    probe = json.loads(json.dumps(lvl, default=lambda d: box(d.strip)))
+    stage1 = solve_stage(probe, [], [gate] * len(shots), [],
+                         max_charges=3, magnitudes=mags, region=(2, 1, 11, 19))
+    stage2 = solve_stage(probe, stage1, [strips[m] for m in masses for _ in angles], [gate],
+                         max_magnets=3, strengths=strengths, max_charges=2, magnitudes=mags,
+                         region=(15, 1, 36, 19))
+    lvl["reference_solution"] = stage1 + stage2
+    return lvl
+
+
+def rf_beam_line():
+    # Arc 4 finale. Two identical bunches half an RF period apart, while a supply in the
+    # building switches a weak stray field on and off. Stage 1 (steering that works in
+    # both cases, charges): both bunches pass the gate, with and without the stray field.
+    # Stage 2 (RF separator, antennas): each bunch reaches its own detector.
+    # The gate also asks for the direction (the injection module): with a free gate one
+    # charge sufficed for stage 1, and with ±8° and half this stray field too.
+    gate = box((16, 9, 18, 11), direction=(0.0, 6.0))
+    up, down = box((37, 14, 40, 16)), box((37, 4, 40, 6))
+    shots = [shot(1e-6, 1.0, (0, 10), 0.0, 0.5, d, time=t)
+             for t, d in ((0.0, up), (RF_PERIOD / 2, down))]
+    mags = [m * M for m in (0.25, 0.5, 1, 2)]
+    amps = [m * M for m in (1, 2, 4, 8)]
+    lvl = level(
+        "RF beam line",
+        "Finale of the fourth arc. Two identical bunches leave the source half an RF period "
+        "apart, while a supply in the building switches a weak stray field on and off. "
+        "First bring both bunches through the gate, moving along the axis (within ±6°), "
+        "whether the stray field is on or off. "
+        "Then send each bunch to its own detector: only a field that changes in time can "
+        "tell them apart.",
+        grid=(40, 20), shots=shots, gates=[gate], t_max=200.0, rf_omega=RF,
+        disturbances=[stray("supply off"), stray("supply on", e=(0.0, -1.3e4))],
+        max_charges=5, magnitudes=mags, max_antennas=3, amplitudes=amps,
+        region=(3, 1, 36, 19))
+    stage1 = solve_stage(lvl, [], [gate] * len(shots), [],
+                         max_charges=3, magnitudes=mags, region=(3, 1, 15, 19))
+    stage2 = solve_stage(lvl, stage1, [up, down], [gate],
+                         max_antennas=2, amplitudes=amps, max_charges=1, magnitudes=mags,
+                         region=(19, 1, 36, 19))
+    lvl["reference_solution"] = stage1 + stage2
+    return lvl
+
+
+def isotope_separator():
+    # Arc 5 finale. A beam of two isotopes (masses 1 and 2, same energy), 8 ions each, with
+    # a spread of directions, repelling each other (scaled charges, as in the beam arc).
+    # Stage 1 (collimation, charges of the ions' sign): 80 % of each isotope crosses the
+    # gate moving along the axis (within ±5°). Stage 2 (magnetic sector, magnets): each
+    # isotope reaches its own collector.
+    gate = box((14, 7, 16, 13), direction=(0.0, 5.0))
+    # Both collectors on the side the field bends to: a magnetic field bends both
+    # isotopes the same way, the lighter (less momentum) more. (Collectors on opposite
+    # sides of the axis had no solution.)
+    light, heavy = box((37, 13, 40, 19)), box((37, 5, 40, 11))
+    shots = [shot(1e-6 * K, m * K, (0, 10), 0.0, 0.5 * K, d,
+                  beam=beam(8, 0.8, energy=0.01, angle_deg=3.0))
+             for m, d in ((1.0, light), (2.0, heavy))]
+    mags = [m * M for m in (0.25, 0.5, 1, 2)]
+    strengths = [m * M for m in (1, 2, 3, 4)]
+    lvl = level(
+        "Isotope separator",
+        "Finale of the last arc. A beam of two isotopes, 8 ions each, leaves the source "
+        "with a spread of directions, and the ions repel each other. First collimate it: "
+        "at least 80 % of each isotope must cross the gate moving along the axis (within "
+        "±5°). Then separate the isotopes with magnets, each onto its own collector. Only "
+        "charges of the ions' sign are available.",
+        grid=(40, 20), shots=shots, gates=[gate], t_max=120.0, c=None,
+        beam_interaction=True, max_charges=5, magnitudes=mags, signs=(True, False),
+        max_magnets=4, strengths=strengths, region=(2, 1, 36, 19))
+    stage1 = solve_stage(lvl, [], [gate] * len(shots), [], max_charges=3,
+                         magnitudes=mags, signs=(True, False), region=(2, 1, 13, 19))
+    stage2 = solve_stage(lvl, stage1, [light, heavy], [gate], max_magnets=3,
+                         strengths=strengths, max_charges=2, magnitudes=mags,
+                         signs=(True, False), region=(17, 1, 36, 19))
+    lvl["reference_solution"] = stage1 + stage2
+    return lvl
+
+
 def needs_elements(lvl, fewer):
     """Check that the level is not solved with only `fewer` charges anywhere (the
     solver with that cap must fail): a finale needs its modules. A heuristic check: a
@@ -1160,76 +1323,119 @@ MUST_FAIL_ALONE = {"chromatic_aberration", "real_analyzer", "crt_earth_field",
                    "calutron_space_charge", "beam_pipe", "soft_landing_current"}
 
 
-LEVELS = [
-    # Chapter 1: charges (intro, then rising difficulty).
-    ("first_bend", first_bend),
-    ("geiger_marsden", geiger_marsden),
-    ("thomson_crt", thomson_crt),
-    ("slingshot", slingshot),
-    ("the_wall", the_wall),
-    # Chapter 2: several shots, one setup.
-    ("twin_beams", twin_beams),
-    ("reflectron", reflectron),
-    ("einzel_lens", einzel_lens),
-    ("hemispherical_analyzer", hemispherical_analyzer),
-    # Chapter 3: delivering beams (direction and energy on arrival).
-    ("injection", injection),
-    ("collimator", collimator),
-    ("soft_landing", soft_landing),
-    # Chapter 4: metals (induced charge).
-    ("high_voltage_dome", high_voltage_dome),
-    ("polarized_sphere", polarized_sphere),
-    ("image_charge", image_charge),
-    # Chapter 5: electrodes (real plates and apertures).
-    ("deflection_plates", deflection_plates),
-    ("power_supply", power_supply),
-    ("tune_the_lens", tune_the_lens),
-    ("real_einzel_lens", real_einzel_lens),
-    ("build_a_deflector", build_a_deflector),
-    ("shielding", shielding),
-    # Chapter 6: relativity.
-    ("fast_lane", fast_lane),
-    ("beta_spectrometer", beta_spectrometer),
-    # Chapter 7: magnetic fields (coils placed by the level).
-    ("first_coil", first_coil),
-    ("dempster", dempster),
-    ("wien_filter", wien_filter),
-    # Chapter 8: your own magnets.
-    ("first_magnet", first_magnet),
-    ("calutron", calutron),
-    ("build_wien_filter", build_wien_filter),
-    # Chapter 9: magnetic moments (spin).
-    ("stern_gerlach", stern_gerlach),
-    # Chapter 10: noise (outside fields; one setup for every disturbance).
-    ("stray_field", stray_field),
-    ("mains_hum", mains_hum),
-    ("earths_field", earths_field),
-    # Chapter 11: radio frequency.
-    ("rf_kick", rf_kick),
-    ("rf_separator", rf_separator),
-    ("tune_the_rf", tune_the_rf),
-    ("streak_camera", streak_camera),
-    # Chapter 12: radiation.
-    ("synchrotron_light", synchrotron_light),
-    # Chapter 13: multi-stage instruments.
-    ("two_stages", two_stages),
-    # Chapter 14: beams.
-    ("space_charge", space_charge),
-    ("stern_gerlach_beam", stern_gerlach_beam),
-    ("collimated_beam", collimated_beam),
-    ("velocity_selector", velocity_selector),
-    ("beam_preparation", beam_preparation),
-    ("relativistic_beam", relativistic_beam),
-    # Chapter 15: real instruments (idealised designs meet real effects).
-    ("chromatic_aberration", chromatic_aberration),
-    ("real_analyzer", real_analyzer),
-    ("crt_earth_field", crt_earth_field),
-    ("beam_pipe", beam_pipe),
-    ("calutron_space_charge", calutron_space_charge),
-    ("soft_landing_current", soft_landing_current),
-    # Finales (prototype; docs/CURRICULUM.md).
-    ("sorting_station", sorting_station),
+# Arcs: (name, [(tier, [(slug, function)])]). The level files are numbered in this order;
+# `levels/curriculum.json` tells the game each level's arc and tier.
+ARCS = [
+    ("Charges: steering and optics", [
+        ("Introduction", [
+            ("first_bend", first_bend),
+            ("slingshot", slingshot),
+            ("geiger_marsden", geiger_marsden),
+            ("twin_beams", twin_beams),
+            ("two_stages", two_stages),
+            ("injection", injection),
+        ]),
+        ("Intermediate", [
+            ("thomson_crt", thomson_crt),
+            ("around_the_wall", around_the_wall),
+            ("einzel_lens", einzel_lens),
+            ("reflectron", reflectron),
+            ("collimator", collimator),
+            ("hemispherical_analyzer", hemispherical_analyzer),
+            ("soft_landing", soft_landing),
+        ]),
+        ("Master", [
+            ("sorting_station", sorting_station),
+        ]),
+    ]),
+    ("Metal and electrodes", [
+        ("Introduction", [
+            ("high_voltage_dome", high_voltage_dome),
+            ("polarized_sphere", polarized_sphere),
+            ("image_charge", image_charge),
+            ("deflection_plates", deflection_plates),
+            ("power_supply", power_supply),
+            ("build_a_deflector", build_a_deflector),
+            ("shielding", shielding),
+        ]),
+        ("Intermediate", [
+            ("tune_the_lens", tune_the_lens),
+            ("real_einzel_lens", real_einzel_lens),
+            ("beam_pipe", beam_pipe),
+        ]),
+        ("Master", [
+            ("microscope_column", microscope_column),
+        ]),
+    ]),
+    ("Relativity and magnetism", [
+        ("Introduction", [
+            ("fast_lane", fast_lane),
+            ("first_coil", first_coil),
+            ("first_magnet", first_magnet),
+            ("stern_gerlach", stern_gerlach),
+        ]),
+        ("Intermediate", [
+            ("beta_spectrometer", beta_spectrometer),
+            ("dempster", dempster),
+            ("wien_filter", wien_filter),
+            ("calutron", calutron),
+            ("build_wien_filter", build_wien_filter),
+        ]),
+        ("Master", [
+            ("mass_spectrometer", mass_spectrometer),
+        ]),
+    ]),
+    ("Time: noise, radio frequency and radiation", [
+        ("Introduction", [
+            ("stray_field", stray_field),
+            ("rf_kick", rf_kick),
+            ("synchrotron_light", synchrotron_light),
+        ]),
+        ("Intermediate", [
+            ("mains_hum", mains_hum),
+            ("earths_field", earths_field),
+            ("crt_earth_field", crt_earth_field),
+            ("rf_separator", rf_separator),
+            ("tune_the_rf", tune_the_rf),
+            ("streak_camera", streak_camera),
+        ]),
+        ("Master", [
+            ("rf_beam_line", rf_beam_line),
+        ]),
+    ]),
+    ("Beams", [
+        ("Introduction", [
+            ("space_charge", space_charge),
+            ("stern_gerlach_beam", stern_gerlach_beam),
+            ("relativistic_beam", relativistic_beam),
+        ]),
+        ("Intermediate", [
+            ("collimated_beam", collimated_beam),
+            ("velocity_selector", velocity_selector),
+            ("beam_preparation", beam_preparation),
+            ("chromatic_aberration", chromatic_aberration),
+            ("real_analyzer", real_analyzer),
+            ("calutron_space_charge", calutron_space_charge),
+            ("soft_landing_current", soft_landing_current),
+        ]),
+        ("Master", [
+            ("isotope_separator", isotope_separator),
+        ]),
+    ]),
 ]
+
+LEVELS = [lv for _, tiers in ARCS for _, lvls in tiers for lv in lvls]
+
+
+def write_curriculum():
+    """`levels/curriculum.json`: every level's arc and tier, by slug, in order."""
+    arcs = [{"name": name, "tiers": [{"name": t, "levels": [slug for slug, _ in lvls]}
+                                     for t, lvls in tiers]}
+            for name, tiers in ARCS]
+    path = os.path.join(ROOT, "levels", "curriculum.json")
+    with open(path, "w", newline="\n", encoding="utf-8") as f:
+        f.write(json.dumps({"arcs": arcs}, indent=2, ensure_ascii=False) + "\n")
+
 
 
 # =======================================================================================
@@ -1344,14 +1550,58 @@ def resolve_auto(lvl):
     return lvl
 
 
+def previous_build(slug):
+    """The level file of `slug` from the previous build (whatever its number), or None."""
+    for name in os.listdir(os.path.join(ROOT, "levels")):
+        if re.fullmatch(rf"\d+_{re.escape(slug)}\.json", name):
+            return os.path.join(ROOT, "levels", name)
+    return None
+
+
+def same_physics(a, b):
+    """Whether two levels differ at most in their name, description, limits and
+    reference: then a reference of one is a solution of the other (if within limits)."""
+    automatic = any(isinstance(sh["detector"], Auto) for sh in a["shots"] + b["shots"])
+
+    def strip(l):
+        l = {k: v for k, v in l.items()
+             if k not in ("name", "description", "limits", "reference_solution")}
+        if automatic:
+            # Automatic detectors are placed from the reference: compare without them.
+            l["shots"] = [{k: v for k, v in sh.items() if k != "detector"} for sh in l["shots"]]
+        return json.dumps(l, sort_keys=True)
+    return strip(a) == strip(b)
+
+
 def main():
     only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
+    # Renumber: move each slug's previous file to its place in the curriculum first.
+    wanted = {slug: f"{i:02d}_{slug}.json" for i, (slug, _) in enumerate(LEVELS, start=1)}
+    for slug, name in wanted.items():
+        old = previous_build(slug)
+        new = os.path.join(ROOT, "levels", name)
+        if old and os.path.normcase(old) != os.path.normcase(new):
+            os.replace(old, new)
+    for name in os.listdir(os.path.join(ROOT, "levels")):
+        m = re.fullmatch(r"\d+_(\w+)\.json", name)
+        if m and m.group(1) not in wanted:
+            print(f"removing {name} (no longer in the curriculum)")
+            os.remove(os.path.join(ROOT, "levels", name))
+    write_curriculum()
     for i, (slug, make) in enumerate(LEVELS, start=1):
         key = f"{i:02d}_{slug}"
-        if only and not key.startswith(only):
+        if only and not (key.startswith(only) or slug in only.split(",")):
             continue
-        lvl = resolve_auto(make())
         path = os.path.join(ROOT, "levels", f"{key}.json")
+        previous = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else None
+        lvl = make()
+        if (previous and previous["reference_solution"] and not lvl["reference_solution"]
+                and same_physics(lvl, previous)):
+            # Only the text or the limits changed: keep the verified reference (checked
+            # again below) instead of searching anew.
+            lvl["reference_solution"] = previous["reference_solution"]
+            print(f"{key}: reference kept from the previous build")
+        lvl = resolve_auto(lvl)
         if slug in MUST_FAIL_ALONE:
             alone = dict(lvl, reference_solution=[])
             with open(path, "w", newline="\n", encoding="utf-8") as f:

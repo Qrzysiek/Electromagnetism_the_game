@@ -223,24 +223,17 @@ impl Level {
 mod tests {
     use super::*;
 
-    fn shipped(file: &str) -> Level {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../levels")
-            .join(file);
-        Level::from_json(&std::fs::read_to_string(path).unwrap()).unwrap()
-    }
-
     /// Every level states its model, and the notes follow what the level contains.
     #[test]
     fn notes_follow_the_level() {
         let has =
             |l: &Level, p: &[Element], s: &str| l.model_notes(p).iter().any(|n| n.text.contains(s));
-        let bend = shipped("01_first_bend.json");
+        let bend = crate::shipped("first_bend");
         assert!(!has(&bend, &[], "Electrodes"));
-        let plates = shipped("20_build_a_deflector.json");
+        let plates = crate::shipped("build_a_deflector");
         assert!(has(&plates, &[], "image force"));
         assert!(has(&plates, &[], "Radiation is neglected"));
-        let sync = shipped("38_synchrotron_light.json");
+        let sync = crate::shipped("synchrotron_light");
         assert!(has(&sync, &[], "Landau–Lifshitz"));
         assert!(has(&sync, &[], "Coils"));
         // Exact statements come first.

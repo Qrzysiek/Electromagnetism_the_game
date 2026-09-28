@@ -1,0 +1,210 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Isotope separator",
+  "description": "Finale of the last arc. A beam of two isotopes, 8 ions each, leaves the source with a spread of directions, and the ions repel each other. First collimate it: at least 80 % of each isotope must cross the gate moving along the axis (within ±5°). Then separate the isotopes with magnets, each onto its own collector. Only charges of the ions' sign are available.",
+  "grid": {
+    "nx": 40,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 120.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    },
+    "beam_interaction": true
+  },
+  "shots": [
+    {
+      "beam": {
+        "count": 8,
+        "energy_spread": 0.01,
+        "angle_spread_deg": 3.0,
+        "width": 0.2,
+        "length": 0.2,
+        "distribution": "gaussian",
+        "transmission": 0.8,
+        "seed": 0
+      },
+      "particle": {
+        "charge": 50.0,
+        "mass": 50000000.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 25000000.0
+      },
+      "detector": {
+        "min": [
+          37,
+          13,
+          0
+        ],
+        "max": [
+          40,
+          19,
+          0
+        ]
+      }
+    },
+    {
+      "beam": {
+        "count": 8,
+        "energy_spread": 0.01,
+        "angle_spread_deg": 3.0,
+        "width": 0.2,
+        "length": 0.2,
+        "distribution": "gaussian",
+        "transmission": 0.8,
+        "seed": 0
+      },
+      "particle": {
+        "charge": 50.0,
+        "mass": 100000000.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 25000000.0
+      },
+      "detector": {
+        "min": [
+          37,
+          5,
+          0
+        ],
+        "max": [
+          40,
+          11,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 5,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": false,
+    "max_magnets": 4,
+    "magnet_strengths": [
+      1000000.0,
+      2000000.0,
+      3000000.0,
+      4000000.0
+    ],
+    "region": {
+      "min": [
+        2,
+        1,
+        0
+      ],
+      "max": [
+        36,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        2,
+        18,
+        0
+      ],
+      "kind": "charge",
+      "value": 250000.0
+    },
+    {
+      "node": [
+        17,
+        4,
+        0
+      ],
+      "kind": "magnet",
+      "value": 4000000.0
+    },
+    {
+      "node": [
+        18,
+        15,
+        0
+      ],
+      "kind": "charge",
+      "value": 500000.0
+    },
+    {
+      "node": [
+        22,
+        1,
+        0
+      ],
+      "kind": "magnet",
+      "value": 3000000.0
+    },
+    {
+      "node": [
+        31,
+        15,
+        0
+      ],
+      "kind": "magnet",
+      "value": 3000000.0
+    }
+  ],
+  "gates": [
+    {
+      "min": [
+        14,
+        7,
+        0
+      ],
+      "max": [
+        16,
+        13,
+        0
+      ],
+      "acceptance": {
+        "direction": [
+          0.0,
+          5.0
+        ]
+      }
+    }
+  ]
+}

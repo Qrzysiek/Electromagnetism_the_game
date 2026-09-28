@@ -1,0 +1,97 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Image charge",
+  "description": "A large grounded sphere. Whatever charge you place near it, the metal answers with an opposite image charge inside: near the surface your charge is almost cancelled, far away the pair acts like a dipole. Steer the beam around the sphere.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          6,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          27,
+          13,
+          0
+        ],
+        "max": [
+          30,
+          17,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      500000.0,
+      1000000.0,
+      2000000.0,
+      4000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": []
+  },
+  "reference_solution": [
+    {
+      "node": [
+        19,
+        0,
+        0
+      ],
+      "kind": "charge",
+      "value": 1000000.0
+    }
+  ],
+  "conductors": [
+    {
+      "center": [
+        14,
+        10,
+        0
+      ],
+      "radius": 3.5,
+      "bias": {
+        "kind": "grounded"
+      }
+    }
+  ]
+}

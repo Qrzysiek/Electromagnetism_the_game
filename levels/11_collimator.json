@@ -24,7 +24,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -62,7 +62,7 @@
     },
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -100,7 +100,7 @@
     },
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },

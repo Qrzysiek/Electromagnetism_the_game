@@ -538,19 +538,12 @@ pub fn analyze(level: &Level, samples: usize, runs: usize, budget: u32, seed: u6
 mod tests {
     use super::*;
 
-    fn shipped(file: &str) -> Level {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../levels")
-            .join(file);
-        Level::from_json(&std::fs::read_to_string(path).unwrap()).unwrap()
-    }
-
     /// A level whose only choices are power supplies: its configurations are counted
     /// (off or one of 4 potentials: 5), random placements exist (this used to loop
     /// forever), and every distinct placement is flown once.
     #[test]
     fn power_supply_levels_are_analysed() {
-        let l = shipped("17_power_supply.json");
+        let l = crate::shipped("power_supply");
         let a = analyze(&l, 40, 2, 10, 1);
         assert!((a.config_space_log10 - 5f64.log10()).abs() < 1e-12);
         assert!(a.random_solutions > 0 && a.random_solutions < 40);

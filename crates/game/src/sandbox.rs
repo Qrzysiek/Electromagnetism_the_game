@@ -993,7 +993,7 @@ mod tests {
     use super::*;
 
     fn game() -> Game {
-        let level = Level::from_json(include_str!("../../../levels/01_first_bend.json")).unwrap();
+        let level = level::shipped("first_bend");
         let mut g = Game::new(vec![level], vec![PathBuf::from("01_first_bend.json")]);
         enter(&mut g);
         g.sandbox.tool = Tool::LevelElement;

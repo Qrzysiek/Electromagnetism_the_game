@@ -1,0 +1,95 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "First magnet",
+  "description": "A magnet here is a uniformly magnetized sphere standing out of the plane (⊙) or into it (⊗). In the plane its field is perpendicular to the plane and falls as 1/r³, so it bends the particle sideways, strongly only nearby. Place a magnet to bend the beam into the detector.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          27,
+          14,
+          0
+        ],
+        "max": [
+          30,
+          18,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 3,
+    "magnet_strengths": [
+      1000000.0,
+      2000000.0,
+      4000000.0
+    ],
+    "region": {
+      "min": [
+        6,
+        2,
+        0
+      ],
+      "max": [
+        24,
+        18,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        6,
+        5,
+        0
+      ],
+      "kind": "magnet",
+      "value": 4000000.0
+    }
+  ]
+}

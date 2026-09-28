@@ -1,5 +1,6 @@
 //! Electromagnetism – the game. Stage 1: 2D levels (a slice of the 3D world).
 
+mod curriculum;
 mod draw;
 mod editor;
 mod level_editor;
@@ -73,6 +74,8 @@ pub struct Game {
     pub levels: Vec<Level>,
     /// File of each level (same order as `levels`).
     pub level_paths: Vec<PathBuf>,
+    /// Arc and tier of each level (same order; `None` for custom levels).
+    pub places: Vec<Option<curriculum::Place>>,
     pub level_index: usize,
     pub editor: Editor,
     /// One view per flight, shot-major (`Level::flight_of`).
@@ -140,6 +143,7 @@ impl Game {
         let editor = Editor::new(levels[0].clone());
         Self {
             levels,
+            places: curriculum::places(&level_paths),
             level_paths,
             level_index: 0,
             editor,
@@ -212,6 +216,7 @@ impl Game {
             return;
         }
         self.levels = levels;
+        self.places = curriculum::places(&paths);
         self.level_paths = paths;
         self.level_index = select
             .and_then(|s| self.level_paths.iter().position(|p| p == s))
@@ -376,10 +381,7 @@ fn load_levels() -> (Vec<Level>, Vec<PathBuf>) {
         let mut v: Vec<PathBuf> = std::fs::read_dir(d)
             .map(|rd| {
                 rd.filter_map(|e| e.ok().map(|e| e.path()))
-                    .filter(|p| {
-                        p.extension().is_some_and(|e| e == "json")
-                            && !p.ends_with("golden_hashes.json")
-                    })
+                    .filter(|p| level::is_level_file(p))
                     .collect()
             })
             .unwrap_or_default();

@@ -1,0 +1,311 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Mass spectrometer from parts",
+  "description": "Finale of the third arc. Ions of three masses (1, 2 and 4) leave the source with the same energy, each at −5° and +5°. First focus them all through the gate: an electrostatic lens bends every mass alike at the same energy, since only T/q matters. Then separate them: in a magnetic field the momentum √(2mT) decides, so each mass lands on its own collector.",
+  "grid": {
+    "nx": 40,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 300.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9961946980917455,
+          -0.08715574274765817,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          37,
+          15,
+          0
+        ],
+        "max": [
+          40,
+          20,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9961946980917455,
+          0.08715574274765817,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          37,
+          15,
+          0
+        ],
+        "max": [
+          40,
+          20,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 2.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9961946980917455,
+          -0.08715574274765817,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          37,
+          8,
+          0
+        ],
+        "max": [
+          40,
+          13,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 2.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9961946980917455,
+          0.08715574274765817,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          37,
+          8,
+          0
+        ],
+        "max": [
+          40,
+          13,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 4.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9961946980917455,
+          -0.08715574274765817,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          37,
+          4,
+          0
+        ],
+        "max": [
+          40,
+          7,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 4.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          0.9961946980917455,
+          0.08715574274765817,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          37,
+          4,
+          0
+        ],
+        "max": [
+          40,
+          7,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 5,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 4,
+    "magnet_strengths": [
+      1000000.0,
+      2000000.0,
+      3000000.0,
+      4000000.0
+    ],
+    "region": {
+      "min": [
+        2,
+        1,
+        0
+      ],
+      "max": [
+        36,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        9,
+        10,
+        0
+      ],
+      "kind": "charge",
+      "value": -250000.0
+    },
+    {
+      "node": [
+        17,
+        9,
+        0
+      ],
+      "kind": "charge",
+      "value": -250000.0
+    },
+    {
+      "node": [
+        24,
+        19,
+        0
+      ],
+      "kind": "magnet",
+      "value": -2000000.0
+    },
+    {
+      "node": [
+        26,
+        5,
+        0
+      ],
+      "kind": "magnet",
+      "value": 1000000.0
+    },
+    {
+      "node": [
+        28,
+        19,
+        0
+      ],
+      "kind": "magnet",
+      "value": 3000000.0
+    }
+  ],
+  "gates": [
+    {
+      "min": [
+        12,
+        9,
+        0
+      ],
+      "max": [
+        14,
+        11,
+        0
+      ]
+    }
+  ]
+}
