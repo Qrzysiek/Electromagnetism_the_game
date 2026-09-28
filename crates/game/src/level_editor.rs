@@ -10,8 +10,8 @@ use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Electrode,
-    Element, ElementKind, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2, Shot,
-    TolerancesSpec, Wave, WorldPhysics,
+    Element, ElementKind, FreeParticle, Grid, Launch, Level, Limits, Node, ParticleSpec, Region2,
+    Shot, TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -39,6 +39,8 @@ pub struct EditTexts {
     pub antenna_omegas: String,
     pub plate_voltages: String,
     pub supply_voltages: String,
+    pub free_charges: String,
+    pub free_speeds: String,
 }
 
 pub fn list_to_text(m: &[f64]) -> String {
@@ -363,6 +365,95 @@ fn edit_acceptance(ui: &mut egui::Ui, acceptance: &mut Option<DetectorAcceptance
     focus
 }
 
+fn edit_free_particles(ui: &mut egui::Ui, list: &mut Vec<FreeParticle>, grid: &Grid) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, f) in list.iter_mut().enumerate() {
+        let FreeParticle {
+            particle,
+            node: at,
+            velocity,
+            detector,
+        } = f;
+        let ParticleSpec {
+            charge,
+            mass,
+            radius,
+            moment,
+        } = particle;
+        ui.push_id(("free", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Particle {}", i + 1));
+                focus |= node(ui, at, grid);
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            focus |= row(ui, "  q, m, radius", |ui| {
+                si(ui, charge, 1e-8) | positive(ui, mass, 0.01, MAX_POSITIVE) | {
+                    ui.add(
+                        egui::DragValue::new(radius)
+                            .speed(0.01)
+                            .range(0.0..=MAX_RADIUS),
+                    )
+                    .has_focus()
+                }
+            });
+            focus |= row(ui, "  moment m_z", |ui| si(ui, moment, 1e-8));
+            focus |= row(ui, "  velocity (x, y)", |ui| {
+                ui.add(egui::DragValue::new(&mut velocity[0]).speed(0.01))
+                    .has_focus()
+                    | ui.add(egui::DragValue::new(&mut velocity[1]).speed(0.01))
+                        .has_focus()
+            });
+            let mut goal = detector.is_some();
+            row(ui, "  detector", |ui| {
+                ui.checkbox(&mut goal, "must arrive");
+                false
+            });
+            match (goal, detector.is_some()) {
+                (true, false) => {
+                    *detector = Some(Detector {
+                        min: *at,
+                        max: [at[0] + 1, at[1] + 1, 0],
+                        acceptance: None,
+                    });
+                }
+                (false, true) => *detector = None,
+                _ => {}
+            }
+            if let Some(Detector {
+                min,
+                max,
+                acceptance,
+            }) = detector
+            {
+                focus |= row(ui, "  corner 1", |ui| node(ui, min, grid));
+                focus |= row(ui, "  corner 2", |ui| node(ui, max, grid));
+                focus |= edit_acceptance(ui, acceptance);
+            }
+        });
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize && ui.small_button("+ free particle").clicked() {
+        let m = grid.max_node();
+        list.push(FreeParticle {
+            particle: ParticleSpec {
+                charge: 1e-6,
+                mass: 1.0,
+                radius: 0.3,
+                moment: 0.0,
+            },
+            node: [m[0] / 2, m[1] / 2, 0],
+            velocity: [0.0, 0.0],
+            detector: None,
+        });
+    }
+    focus
+}
+
 /// The instrument's gates (stages every flight must pass, in order): corners and
 /// optional conditions.
 fn edit_gates(ui: &mut egui::Ui, list: &mut Vec<Detector>, grid: &Grid) -> bool {
@@ -479,6 +570,7 @@ fn kind_combo(ui: &mut egui::Ui, id: usize, kind: &mut ElementKind) {
         ElementKind::Antenna => "antenna p₀",
         ElementKind::Plate => "plate V",
         ElementKind::Supply => "supply V",
+        ElementKind::Free => "free q",
     };
     egui::ComboBox::from_id_salt(("element_kind", id))
         .selected_text(text(*kind))
@@ -504,6 +596,8 @@ fn edit_elements(ui: &mut egui::Ui, elements: &mut Vec<Element>, grid: &Grid) ->
             value,
             angle_deg,
             omega,
+            // Free charges are player elements (the level's are `free_particles`).
+            speed: _,
         } = e;
         ui.horizontal(|ui| {
             kind_combo(ui, i, kind);
@@ -897,6 +991,11 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         plate_voltages,
         plate,
         supply_voltages,
+        max_free,
+        free_charges,
+        free_speeds,
+        free_mass,
+        free_radius,
     } = l;
     let mut focus = false;
     focus |= row(ui, "Player charges (max)", |ui| {
@@ -985,6 +1084,45 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         r.on_hover_text("Potentials of the power supplies of tunable electrodes (signed)")
             .has_focus()
     });
+    focus |= row(ui, "Player free charges (max)", |ui| {
+        ui.add(egui::DragValue::new(max_free).range(0..=MAX_COUNT))
+            .on_hover_text(
+                "Charges that move and interact (dynamic particles), launched with a velocity",
+            )
+            .has_focus()
+    });
+    focus |= row(ui, "Free charge values q", |ui| {
+        let r =
+            ui.add(egui::TextEdit::singleline(&mut texts.free_charges).desired_width(LIST_WIDTH));
+        if r.lost_focus() {
+            *free_charges = parse_signed_list(&texts.free_charges);
+            texts.free_charges = list_to_text(free_charges);
+        }
+        r.on_hover_text("Signed charges a free charge may carry")
+            .has_focus()
+    });
+    focus |= row(ui, "Free charge speeds", |ui| {
+        let r =
+            ui.add(egui::TextEdit::singleline(&mut texts.free_speeds).desired_width(LIST_WIDTH));
+        if r.lost_focus() {
+            *free_speeds = parse_signed_list(&texts.free_speeds)
+                .into_iter()
+                .filter(|v| *v >= 0.0)
+                .collect();
+            texts.free_speeds = list_to_text(free_speeds);
+        }
+        r.on_hover_text("Launch speeds, cells per time unit (0: released at rest); below c")
+            .has_focus()
+    });
+    focus |= row(ui, "Free charge m, radius", |ui| {
+        positive(ui, free_mass, 0.01, MAX_POSITIVE)
+            | ui.add(
+                egui::DragValue::new(free_radius)
+                    .speed(0.01)
+                    .range(0.0..=MAX_RADIUS),
+            )
+            .has_focus()
+    });
     row(ui, "Continuous values", |ui| {
         ui.checkbox(continuous, "hardcore")
             .on_hover_text("Any value within the ranges of the lists above, any orientation");
@@ -1043,6 +1181,7 @@ pub fn edit_level(
         disturbances,
         conductors,
         clouds,
+        free_particles,
         electrodes,
         gates,
     } = level;
@@ -1092,6 +1231,15 @@ pub fn edit_level(
         .show(ui, |ui| focus |= edit_conductors(ui, conductors, &g));
     egui::CollapsingHeader::new(format!("Charge clouds ({})", clouds.len()))
         .show(ui, |ui| focus |= edit_clouds(ui, clouds, &g));
+    egui::CollapsingHeader::new(format!("Free particles ({})", free_particles.len()))
+        .show(ui, |ui| {
+            focus |= edit_free_particles(ui, free_particles, &g)
+        })
+        .header_response
+        .on_hover_text(
+            "Particles that move and interact with the shots (targets, partners); with a \
+             detector they must arrive too",
+        );
     egui::CollapsingHeader::new(format!("Disturbances ({})", disturbances.len()))
         .show(ui, |ui| focus |= edit_disturbances(ui, disturbances));
     egui::CollapsingHeader::new(format!("Gates ({})", gates.len()))
@@ -1129,6 +1277,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         disturbances,
         conductors,
         clouds,
+        free_particles,
         electrodes,
         gates,
     } = level;
@@ -1274,19 +1423,22 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             value,
             angle_deg,
             omega,
+            speed,
         } = e;
         match kind {
             ElementKind::Charge | ElementKind::Magnet | ElementKind::Antenna => {}
-            // Player-only kinds (the level's own electrodes are `electrodes`).
-            ElementKind::Plate | ElementKind::Supply if reference => {}
-            ElementKind::Plate | ElementKind::Supply => {
-                return fail("plates and power supplies are player elements");
+            // Player-only kinds (the level's own electrodes are `electrodes`, its dynamic
+            // particles `free_particles`).
+            ElementKind::Plate | ElementKind::Supply | ElementKind::Free if reference => {}
+            ElementKind::Plate | ElementKind::Supply | ElementKind::Free => {
+                return fail("plates, power supplies and free charges are player elements");
             }
         }
         if !on_grid(node)
             || !value.is_finite()
             || !angle_deg.is_finite()
             || omega.is_some_and(|w| !(0.0..=MAX_POSITIVE).contains(&w))
+            || speed.is_some_and(|v| !v.is_finite() || v < 0.0)
         {
             return fail("element outside the grid or with an invalid value");
         }
@@ -1353,6 +1505,48 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             return fail("metal sphere outside the editor's range");
         }
     }
+    if free_particles.len() > MAX_COUNT as usize {
+        return fail("too many free particles");
+    }
+    for f in free_particles {
+        let FreeParticle {
+            particle:
+                ParticleSpec {
+                    charge,
+                    mass,
+                    radius: r,
+                    moment,
+                },
+            node,
+            velocity,
+            detector,
+        } = f;
+        let detector_ok = detector.is_none_or(|d| {
+            let Detector {
+                min,
+                max,
+                acceptance,
+            } = d;
+            on_grid(&min)
+                && on_grid(&max)
+                && acceptance.is_none_or(|a| {
+                    let DetectorAcceptance { direction, kinetic } = a;
+                    direction.is_none_or(|[x, h]| x.is_finite() && (0.0..=180.0).contains(&h))
+                        && kinetic
+                            .is_none_or(|[lo, hi]| lo.is_finite() && hi.is_finite() && lo < hi)
+                })
+        });
+        if !on_grid(node)
+            || !charge.is_finite()
+            || !(MIN_POSITIVE..=MAX_POSITIVE).contains(mass)
+            || !(0.0..=MAX_RADIUS).contains(r)
+            || !moment.is_finite()
+            || !velocity.iter().all(|v| v.is_finite())
+            || !detector_ok
+        {
+            return fail("free particle outside the editor's range");
+        }
+    }
     if clouds.len() > MAX_COUNT as usize {
         return fail("too many charge clouds");
     }
@@ -1412,7 +1606,20 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         plate_voltages,
         plate,
         supply_voltages,
+        max_free,
+        free_charges,
+        free_speeds,
+        free_mass,
+        free_radius,
     } = limits;
+    if *max_free > MAX_COUNT
+        || !free_charges.iter().all(|v| v.is_finite())
+        || !free_speeds.iter().all(|v| v.is_finite() && *v >= 0.0)
+        || !(MIN_POSITIVE..=MAX_POSITIVE).contains(free_mass)
+        || !(0.0..=MAX_RADIUS).contains(free_radius)
+    {
+        return fail("free-charge limits outside the editor's range");
+    }
     let plate_ok = [plate.length, plate.thickness, plate.height]
         .iter()
         .all(|v| (MIN_POSITIVE..=MAX_POSITIVE).contains(v));

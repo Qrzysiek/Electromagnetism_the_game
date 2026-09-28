@@ -38,19 +38,21 @@ impl Rng {
 pub fn single_element_options(level: &Level) -> Vec<Element> {
     let m = level.grid.max_node();
     let z_range = if level.grid.is_2d() { 0..=0 } else { 0..=m[2] };
-    let mut kinds: Vec<(ElementKind, f64, f64, Option<f64>)> = Vec::new();
+    // (kind, value, angle, frequency, speed)
+    type Kind = (ElementKind, f64, f64, Option<f64>, Option<f64>);
+    let mut kinds: Vec<Kind> = Vec::new();
     for &q in &level.limits.magnitudes {
         if level.limits.allow_positive {
-            kinds.push((ElementKind::Charge, q, 0.0, None));
+            kinds.push((ElementKind::Charge, q, 0.0, None, None));
         }
         if level.limits.allow_negative {
-            kinds.push((ElementKind::Charge, -q, 0.0, None));
+            kinds.push((ElementKind::Charge, -q, 0.0, None, None));
         }
     }
     if level.limits.max_magnets > 0 {
         for &mu in &level.limits.magnet_strengths {
-            kinds.push((ElementKind::Magnet, mu, 0.0, None));
-            kinds.push((ElementKind::Magnet, -mu, 0.0, None));
+            kinds.push((ElementKind::Magnet, mu, 0.0, None, None));
+            kinds.push((ElementKind::Magnet, -mu, 0.0, None, None));
         }
     }
     if level.limits.max_antennas > 0 {
@@ -68,8 +70,8 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
         for &p in &level.limits.antenna_amplitudes {
             for a in crate::ANTENNA_ANGLES {
                 for &w in &omegas {
-                    kinds.push((ElementKind::Antenna, p, a, w));
-                    kinds.push((ElementKind::Antenna, -p, a, w));
+                    kinds.push((ElementKind::Antenna, p, a, w, None));
+                    kinds.push((ElementKind::Antenna, -p, a, w, None));
                 }
             }
         }
@@ -77,7 +79,22 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
     if level.limits.max_plates > 0 {
         for &v in &level.limits.plate_voltages {
             for a in crate::PLATE_ANGLES {
-                kinds.push((ElementKind::Plate, v, a, None));
+                kinds.push((ElementKind::Plate, v, a, None, None));
+            }
+        }
+    }
+    if level.limits.max_free > 0 {
+        for &q in &level.limits.free_charges {
+            for &v in &level.limits.free_speeds {
+                // At rest the direction does not matter: one option.
+                let angles: &[f64] = if v == 0.0 {
+                    &[0.0]
+                } else {
+                    &crate::FREE_ANGLES
+                };
+                for &a in angles {
+                    kinds.push((ElementKind::Free, q, a, None, Some(v)));
+                }
             }
         }
     }
@@ -94,13 +111,14 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
     for z in z_range {
         for y in 0..=m[1] {
             for x in 0..=m[0] {
-                for &(kind, value, angle_deg, omega) in &kinds {
+                for &(kind, value, angle_deg, omega, speed) in &kinds {
                     let e = Element {
                         node: [x, y, z],
                         kind,
                         value,
                         angle_deg,
                         omega,
+                        speed,
                     };
                     if level.check_placement(&[e]).is_ok() {
                         out.push(e);
@@ -181,11 +199,25 @@ fn gate_shortfall(tr: &physics::trajectory::Trajectory) -> f64 {
 /// transmission, the detector distances (plus gate shortfalls) of the closest of its
 /// missing particles (as many as are missing). `Arrived` only if every shot reaches its transmission.
 fn beam_objective(level: &Level, placement: &[Element], rs: &RunSettings) -> (f64, Outcome) {
-    let shots = level.beam_shots();
+    let shots = level.beam_shots(placement);
+    let goals = level.goal_particles();
     let mut score = 0.0;
     let mut outcome = Outcome::Arrived;
     for scn in level.beam_scenarios(placement, physics::conductor::Resolution::Preview) {
         let r = physics::beam::run_beam(&scn, rs);
+        // Goal particles: their distance to their detectors.
+        for &i in &goals {
+            let t = &r.trajectories[i];
+            if t.outcome != Outcome::Arrived {
+                let m = t.margins.as_ref();
+                score += m.and_then(|m| m.detector).unwrap_or(f64::INFINITY).max(0.0)
+                    + gate_shortfall(t)
+                    + 1e-3;
+                if outcome == Outcome::Arrived {
+                    outcome = t.outcome;
+                }
+            }
+        }
         for (s, shot) in level.shots.iter().enumerate() {
             let mine: Vec<&physics::trajectory::Trajectory> = r
                 .trajectories
@@ -310,19 +342,27 @@ fn anneal_once(
         }
     }
     let (mut score, _) = objective(level, &current);
-    // Allowed (value, orientation, frequency) combinations per kind.
-    let values = |kind: ElementKind| -> Vec<(f64, f64, Option<f64>)> {
-        let mut v: Vec<(f64, f64, Option<f64>)> = options
+    // Allowed (value, orientation, frequency, speed) combinations per kind.
+    type Choice = (f64, f64, Option<f64>, Option<f64>);
+    let values = |kind: ElementKind| -> Vec<Choice> {
+        let mut v: Vec<Choice> = options
             .iter()
             .filter(|c| c.kind == kind)
-            .map(|c| (c.value, c.angle_deg, c.omega))
+            .map(|c| (c.value, c.angle_deg, c.omega, c.speed))
             .collect();
-        let key =
-            |x: &(f64, f64, Option<f64>)| (x.0.to_bits(), x.1.to_bits(), x.2.map(f64::to_bits));
+        let key = |x: &Choice| {
+            (
+                x.0.to_bits(),
+                x.1.to_bits(),
+                x.2.map(f64::to_bits),
+                x.3.map(f64::to_bits),
+            )
+        };
         v.sort_by(|a, b| {
             a.0.total_cmp(&b.0)
                 .then(a.1.total_cmp(&b.1))
                 .then(key(a).2.cmp(&key(b).2))
+                .then(key(a).3.cmp(&key(b).3))
         });
         v.dedup_by(|a, b| key(a) == key(b));
         v
@@ -332,6 +372,7 @@ fn anneal_once(
     let antenna_values = values(ElementKind::Antenna);
     let plate_values = values(ElementKind::Plate);
     let supply_values = values(ElementKind::Supply);
+    let free_values = values(ElementKind::Free);
     for it in 0..iterations {
         if score == 0.0 && is_verified_solution(level, &current) {
             return Some(current);
@@ -354,8 +395,14 @@ fn anneal_once(
                     ElementKind::Antenna => &antenna_values,
                     ElementKind::Plate => &plate_values,
                     ElementKind::Supply => &supply_values,
+                    ElementKind::Free => &free_values,
                 };
-                (trial[i].value, trial[i].angle_deg, trial[i].omega) = v[rng.below(v.len())];
+                (
+                    trial[i].value,
+                    trial[i].angle_deg,
+                    trial[i].omega,
+                    trial[i].speed,
+                ) = v[rng.below(v.len())];
             }
             _ => trial[i] = options[rng.below(options.len())],
         }

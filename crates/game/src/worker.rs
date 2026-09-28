@@ -410,7 +410,7 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
         })
         .is_ok()
     };
-    let shots = req.level.beam_shots();
+    let shots = req.level.beam_shots(&req.placement);
     let Some(preview_scns) = unless_stale(newest, req.revision, || {
         req.level
             .beam_scenarios(&req.placement, Resolution::Preview)

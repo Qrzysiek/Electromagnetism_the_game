@@ -166,11 +166,17 @@ pub fn empty_level() -> Level {
             plate_voltages: vec![],
             plate: level::PlateSize::default(),
             supply_voltages: vec![],
+            max_free: 0,
+            free_charges: vec![],
+            free_speeds: vec![],
+            free_mass: 1.0,
+            free_radius: 0.3,
         },
         reference_solution: Vec::new(),
         disturbances: Vec::new(),
         conductors: Vec::new(),
         clouds: Vec::new(),
+        free_particles: Vec::new(),
         electrodes: Vec::new(),
         gates: Vec::new(),
     }
@@ -189,6 +195,8 @@ fn sync_texts(game: &mut Game) {
     game.sandbox.texts.antenna_omegas = list_to_text(&limits.antenna_omegas);
     game.sandbox.texts.plate_voltages = list_to_text(&limits.plate_voltages);
     game.sandbox.texts.supply_voltages = list_to_text(&limits.supply_voltages);
+    game.sandbox.texts.free_charges = list_to_text(&limits.free_charges);
+    game.sandbox.texts.free_speeds = list_to_text(&limits.free_speeds);
 }
 
 /// Enters sandbox mode, editing the level currently loaded.
@@ -326,7 +334,7 @@ fn pointer(
                     game.sandbox.antenna_omega,
                 ),
                 // Level electrodes are edited in the "Electrodes" section.
-                ElementKind::Plate | ElementKind::Supply => return true,
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Free => return true,
             };
             game.editor.edit_level(|l| {
                 let launch = l.shots.iter().any(|s| s.launch.node == node);
@@ -342,6 +350,7 @@ fn pointer(
                         value,
                         angle_deg,
                         omega,
+                        speed: None,
                     };
                     match existing {
                         Some(i) => l.elements[i] = e,
@@ -628,9 +637,10 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
                 let value = match game.sandbox.element_kind {
                     ElementKind::Charge => &mut game.sandbox.charge_value,
                     ElementKind::Magnet => &mut game.sandbox.magnet_value,
-                    ElementKind::Antenna | ElementKind::Plate | ElementKind::Supply => {
-                        &mut game.sandbox.antenna_value
-                    }
+                    ElementKind::Antenna
+                    | ElementKind::Plate
+                    | ElementKind::Supply
+                    | ElementKind::Free => &mut game.sandbox.antenna_value,
                 };
                 let r = ui.add(
                     egui::DragValue::new(value)

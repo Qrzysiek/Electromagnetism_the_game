@@ -228,7 +228,7 @@ fn config_space_log10(level: &Level, options: &[Element]) -> f64 {
     ) + subsets(
         count(ElementKind::Plate),
         u64::from(level.limits.max_plates),
-    );
+    ) + subsets(count(ElementKind::Free), u64::from(level.limits.max_free));
     // Each tunable electrode's supply: off or one of the listed potentials.
     #[allow(clippy::cast_precision_loss)]
     let supplies = tunable_centres(level).len() as f64
@@ -255,11 +255,12 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
     let by_kind = |k: ElementKind| -> Vec<Element> {
         options.iter().copied().filter(|e| e.kind == k).collect()
     };
-    let (charges, magnets, antennas, plates) = (
+    let (charges, magnets, antennas, plates, frees) = (
         by_kind(ElementKind::Charge),
         by_kind(ElementKind::Magnet),
         by_kind(ElementKind::Antenna),
         by_kind(ElementKind::Plate),
+        by_kind(ElementKind::Free),
     );
     let centres = tunable_centres(level);
     let volts = &level.limits.supply_voltages;
@@ -268,6 +269,7 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
         let nm = rng.below(level.limits.max_magnets as usize + 1);
         let na = rng.below(level.limits.max_antennas as usize + 1);
         let np = rng.below(level.limits.max_plates as usize + 1);
+        let nf = rng.below(level.limits.max_free as usize + 1);
         let mut p: Vec<Element> = Vec::new();
         for &c in &centres {
             let k = rng.below(volts.len() + 1);
@@ -275,7 +277,7 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
                 p.push(Element::supply(c, volts[k - 1]));
             }
         }
-        if nc + nm + na + np + p.len() == 0 {
+        if nc + nm + na + np + nf + p.len() == 0 {
             continue;
         }
         for (pool, n) in [
@@ -283,6 +285,7 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
             (&magnets, nm),
             (&antennas, na),
             (&plates, np),
+            (&frees, nf),
         ] {
             let mut tries = 0;
             while p.iter().filter(|e| pool.contains(e)).count() < n && tries < 100 {
@@ -353,6 +356,37 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
                     ElementKind::Charge => &level.limits.magnitudes,
                     ElementKind::Magnet => &level.limits.magnet_strengths,
                     ElementKind::Antenna => &level.limits.antenna_amplitudes,
+                    // A free charge: turn it by one step (or change its speed, or its
+                    // charge, to a neighbouring listed one).
+                    ElementKind::Free => {
+                        let step = |list: &[f64], x: f64, up: bool| {
+                            let mut sorted = list.to_vec();
+                            sorted.sort_by(f64::total_cmp);
+                            let k = sorted
+                                .iter()
+                                .position(|v| v.to_bits() == x.to_bits())
+                                .unwrap_or(0);
+                            let k2 = if up {
+                                (k + 1).min(sorted.len() - 1)
+                            } else {
+                                k.saturating_sub(1)
+                            };
+                            sorted[k2]
+                        };
+                        let up = rng.below(2) == 0;
+                        match rng.below(3) {
+                            0 => t[i].angle_deg = step(&crate::FREE_ANGLES, t[i].angle_deg, up),
+                            1 => {
+                                let v = t[i].speed.unwrap_or(0.0);
+                                t[i].speed = Some(step(&level.limits.free_speeds, v, up));
+                            }
+                            _ => t[i].value = step(&level.limits.free_charges, t[i].value, up),
+                        }
+                        if !t.is_empty() && t != p && level.check_placement(&t).is_ok() {
+                            return t;
+                        }
+                        continue;
+                    }
                     // Signed lists: step to a neighbouring potential, or turn a plate.
                     kind @ (ElementKind::Plate | ElementKind::Supply) => {
                         if kind == ElementKind::Plate && rng.below(2) == 0 {

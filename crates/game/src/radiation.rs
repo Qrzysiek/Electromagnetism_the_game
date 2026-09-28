@@ -397,7 +397,7 @@ pub fn update(
         view.radiation_only = game.radiation_only;
         view.sources = match beam {
             Some(b) => {
-                let shots = level.beam_shots();
+                let shots = level.beam_shots(&game.editor.placement);
                 b.map_or_else(Vec::new, |b| {
                     b.worldlines
                         .iter()

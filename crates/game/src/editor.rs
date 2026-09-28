@@ -3,23 +3,27 @@
 //! Independent of the rendering engine so it can be unit tested.
 
 use level::{
-    ANTENNA_ANGLES, ConductorBias, Element, ElementKind, Level, Node, PLATE_ANGLES, PlacementError,
-    value_range,
+    ANTENNA_ANGLES, ConductorBias, Element, ElementKind, FREE_ANGLES, Level, Node, PLATE_ANGLES,
+    PlacementError, value_range,
 };
 
 /// Kinds in palette order. Power supplies are not placed from the palette: they are
 /// operated on their electrodes.
-pub const KINDS: [ElementKind; 4] = [
+pub const KINDS: [ElementKind; 5] = [
     ElementKind::Charge,
     ElementKind::Magnet,
     ElementKind::Antenna,
     ElementKind::Plate,
+    ElementKind::Free,
 ];
 
-/// Kinds whose values are signed potentials from a list (plates, power supplies), not a
-/// magnitude with a separate sign.
+/// Kinds whose values are signed values from a list (plates, power supplies: potentials;
+/// free charges: charges), not a magnitude with a separate sign.
 pub fn is_signed(kind: ElementKind) -> bool {
-    matches!(kind, ElementKind::Plate | ElementKind::Supply)
+    matches!(
+        kind,
+        ElementKind::Plate | ElementKind::Supply | ElementKind::Free
+    )
 }
 
 pub struct Editor {
@@ -42,10 +46,16 @@ pub struct Editor {
     pub plate_angle_deg: f64,
     /// Index into the level's allowed antenna frequencies for new antennas.
     pub omega_index: usize,
-    /// Hardcore mode: magnitudes of new elements per kind (`KINDS` order) and the
-    /// frequency of new antennas, anywhere in the level's ranges.
-    pub continuous_magnitude: [f64; 4],
+    /// Launch direction of new free charges, degrees (one of `FREE_ANGLES`).
+    pub free_angle_deg: f64,
+    /// Index into the level's launch speeds for new free charges.
+    pub speed_index: usize,
+    /// Hardcore mode: magnitudes of new elements per kind (`KINDS` order), the
+    /// frequency of new antennas and the speed of new free charges, anywhere in the
+    /// level's ranges.
+    pub continuous_magnitude: [f64; 5],
     pub continuous_omega: f64,
+    pub continuous_speed: f64,
     /// Player element being moved (index) and its node when it was grabbed.
     pub grabbed: Option<(usize, Node)>,
     /// Element node minus cursor node when grabbed (a plate can be picked up anywhere).
@@ -65,6 +75,7 @@ pub fn magnitudes(level: &Level, kind: ElementKind) -> &[f64] {
         ElementKind::Antenna => &level.limits.antenna_amplitudes,
         ElementKind::Plate => &level.limits.plate_voltages,
         ElementKind::Supply => &level.limits.supply_voltages,
+        ElementKind::Free => &level.limits.free_charges,
     }
 }
 
@@ -78,6 +89,7 @@ pub fn max_of(level: &Level, kind: ElementKind) -> u32 {
         ElementKind::Supply => {
             u32::try_from(level.electrodes.iter().filter(|e| e.tunable).count()).unwrap_or(0)
         }
+        ElementKind::Free => level.limits.max_free,
     }
 }
 
@@ -106,6 +118,7 @@ impl Editor {
         let continuous_magnitude =
             KINDS.map(|k| magnitudes(&level, k).first().copied().unwrap_or(1.0));
         let continuous_omega = level.limits.antenna_omegas.first().copied().unwrap_or(1.0);
+        let continuous_speed = level.limits.free_speeds.first().copied().unwrap_or(0.0);
         Self {
             base: level.clone(),
             level,
@@ -117,8 +130,11 @@ impl Editor {
             angle_deg: ANTENNA_ANGLES[0],
             plate_angle_deg: PLATE_ANGLES[0],
             omega_index: 0,
+            free_angle_deg: 0.0,
+            speed_index: 0,
             continuous_magnitude,
             continuous_omega,
+            continuous_speed,
             grabbed: None,
             grab_offset: [0; 3],
             message: None,
@@ -176,6 +192,7 @@ impl Editor {
             if let Some(w) = self.selected_omega_discrete() {
                 self.continuous_omega = w;
             }
+            self.continuous_speed = self.selected_speed_discrete();
         } else {
             let level = self.level.clone();
             for e in &mut self.placement {
@@ -183,8 +200,56 @@ impl Editor {
             }
             self.angle_deg = nearest_angle(self.angle_deg).0;
             self.plate_angle_deg = nearest_plate_angle(self.plate_angle_deg);
+            self.free_angle_deg = nearest_free_angle(self.free_angle_deg);
         }
         self.changed();
+    }
+
+    /// Launch speed of new free charges: one of the level's speeds (hardcore: anything in
+    /// their range).
+    pub fn selected_speed(&self) -> f64 {
+        if self.continuous() && !self.level.limits.free_speeds.is_empty() {
+            return self.continuous_speed;
+        }
+        self.selected_speed_discrete()
+    }
+
+    fn selected_speed_discrete(&self) -> f64 {
+        let list = &self.level.limits.free_speeds;
+        list.get(self.speed_index.min(list.len().saturating_sub(1)))
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    /// Selects the speed of new free charges (index into the level's list).
+    pub fn set_speed_index(&mut self, i: usize) {
+        self.speed_index = i.min(self.level.limits.free_speeds.len().saturating_sub(1));
+    }
+
+    /// Sets the launch velocity of free charge `i` from a drag of its arrow: direction
+    /// `angle_deg` and speed `speed`, snapped to the level's directions and speeds (hardcore:
+    /// the speed clamped to their range, any direction). Kept if allowed.
+    pub fn set_velocity(&mut self, i: usize, angle_deg: f64, speed: f64) {
+        let Some(&e) = self.placement.get(i) else {
+            return;
+        };
+        if e.kind != ElementKind::Free {
+            return;
+        }
+        let speeds = &self.level.limits.free_speeds;
+        let (angle, v) = if self.continuous() {
+            let (lo, hi) = value_range(speeds).unwrap_or((0.0, 0.0));
+            (angle_deg.rem_euclid(360.0), speed.clamp(lo, hi))
+        } else {
+            (
+                nearest_free_angle(angle_deg),
+                nearest_linear(speeds, speed).unwrap_or(0.0),
+            )
+        };
+        let mut new = e;
+        new.angle_deg = if v == 0.0 { 0.0 } else { angle };
+        new.speed = Some(v);
+        self.set_element(i, new);
     }
 
     /// Changes the player element at index `i` (hardcore sliders); kept if allowed.
@@ -232,6 +297,25 @@ impl Editor {
     /// one step of `ANTENNA_ANGLES` (45°) or `PLATE_ANGLES` (90°).
     pub fn rotate(&mut self, step: isize) {
         let on = self.player_index_at(self.cursor);
+        if on.map_or(self.kind, |i| self.placement[i].kind) == ElementKind::Free {
+            let turn = |a: f64| {
+                let n = FREE_ANGLES.len() as isize;
+                let i = FREE_ANGLES
+                    .iter()
+                    .position(|x| x.to_bits() == nearest_free_angle(a).to_bits())
+                    .unwrap_or(0) as isize;
+                FREE_ANGLES[(i + step).rem_euclid(n) as usize]
+            };
+            match on {
+                Some(i) => {
+                    let mut e = self.placement[i];
+                    e.angle_deg = turn(e.angle_deg);
+                    self.set_element(i, e);
+                }
+                None => self.free_angle_deg = turn(self.free_angle_deg),
+            }
+            return;
+        }
         let plate = on.map_or(self.kind, |i| self.placement[i].kind) == ElementKind::Plate;
         if plate {
             let turn = |a: f64| {
@@ -499,6 +583,7 @@ impl Editor {
             angle_deg: match self.kind {
                 ElementKind::Antenna => self.angle_deg,
                 ElementKind::Plate => self.plate_angle_deg,
+                ElementKind::Free if self.selected_speed() != 0.0 => self.free_angle_deg,
                 _ => 0.0,
             },
             omega: if self.kind == ElementKind::Antenna {
@@ -506,6 +591,7 @@ impl Editor {
             } else {
                 None
             },
+            speed: (self.kind == ElementKind::Free).then(|| self.selected_speed()),
         };
         match self.player_index_at(self.cursor) {
             Some(i) => trial[i] = e,
@@ -759,6 +845,136 @@ fn nearest_linear(list: &[f64], v: f64) -> Option<f64> {
         .min_by(|a, b| (a - v).abs().total_cmp(&(b - v).abs()))
 }
 
+/// How a velocity arrow's length measures speed: in the speed itself, or in rapidity
+/// `c·artanh(v/c)` (additive under boosts along a line; equal to v for slow particles, and
+/// unbounded as v approaches c).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArrowMeasure {
+    Speed,
+    Rapidity,
+}
+
+/// The default measure: rapidity in relativistic levels (finite c and a listed speed
+/// above 0.3 c), speed otherwise.
+pub fn default_measure(level: &Level) -> ArrowMeasure {
+    let c = level.c();
+    let fast = level.limits.free_speeds.iter().any(|&v| v > 0.3 * c)
+        || level
+            .free_particles
+            .iter()
+            .any(|f| f.velocity[0].hypot(f.velocity[1]) > 0.3 * c);
+    if c.is_finite() && fast {
+        ArrowMeasure::Rapidity
+    } else {
+        ArrowMeasure::Speed
+    }
+}
+
+/// The arrow length (in speed units, before `arrow_scale`) of a speed `v`.
+pub fn arrow_length(level: &Level, v: f64, m: ArrowMeasure) -> f64 {
+    let c = level.c();
+    match m {
+        ArrowMeasure::Rapidity if c.is_finite() => c * (v / c).min(1.0 - 1e-12).atanh(),
+        _ => v,
+    }
+}
+
+/// The speed of an arrow length (inverse of `arrow_length`).
+pub fn arrow_speed(level: &Level, len: f64, m: ArrowMeasure) -> f64 {
+    let c = level.c();
+    match m {
+        ArrowMeasure::Rapidity if c.is_finite() => c * (len / c).tanh(),
+        _ => len,
+    }
+}
+
+/// Cells of arrow per unit of arrow length: the longest listed launch is drawn 3 cells
+/// long.
+pub fn arrow_scale(level: &Level, m: ArrowMeasure) -> f64 {
+    let longest = level
+        .limits
+        .free_speeds
+        .iter()
+        .copied()
+        .chain(
+            level
+                .free_particles
+                .iter()
+                .map(|f| f.velocity[0].hypot(f.velocity[1])),
+        )
+        .map(|v| arrow_length(level, v, m))
+        .fold(0.0, f64::max);
+    if longest > 0.0 { 3.0 / longest } else { 1.0 }
+}
+
+/// Velocity arrow of a free charge: its tip (the drag handle) in cell coordinates. At
+/// speed 0 the handle sits `ARROW_MIN` from the particle, in the chosen direction.
+pub fn arrow_tip(level: &Level, e: &Element, m: ArrowMeasure) -> [f64; 2] {
+    let p = level.grid.position(e.node);
+    let (sin, cos) = e.angle_deg.to_radians().sin_cos();
+    let v = e.speed.unwrap_or(0.0);
+    let len = if v == 0.0 {
+        ARROW_MIN
+    } else {
+        arrow_length(level, v, m) * arrow_scale(level, m)
+    };
+    [p.x + cos * len, p.y + sin * len]
+}
+
+/// Where the handle of a free charge at rest sits, cells from it.
+pub const ARROW_MIN: f64 = 0.8;
+
+/// A drag ending closer than this to the particle (cells) sets it at rest.
+pub const REST_ZONE: f64 = 0.4;
+
+/// Index of the player's free charge whose arrow handle is within `reach` cells of `x`.
+pub fn arrow_handle_at(
+    level: &Level,
+    placement: &[Element],
+    x: [f64; 2],
+    reach: f64,
+    m: ArrowMeasure,
+) -> Option<usize> {
+    placement
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.kind == ElementKind::Free)
+        .map(|(i, e)| {
+            let t = arrow_tip(level, e, m);
+            (i, (t[0] - x[0]).hypot(t[1] - x[1]))
+        })
+        .filter(|&(_, d)| d <= reach)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| i)
+}
+
+/// The velocity (direction in degrees, speed) that a drag of a free charge's arrow handle
+/// from the particle at `p` to `x` asks for (before snapping).
+pub fn dragged_velocity(level: &Level, p: [f64; 2], x: [f64; 2], m: ArrowMeasure) -> (f64, f64) {
+    let (dx, dy) = (x[0] - p[0], x[1] - p[1]);
+    let cells = dx.hypot(dy);
+    // Close to the particle: at rest.
+    let len = if cells < REST_ZONE {
+        0.0
+    } else {
+        cells / arrow_scale(level, m)
+    };
+    (dy.atan2(dx).to_degrees(), arrow_speed(level, len, m))
+}
+
+/// Nearest allowed launch direction of a free charge (15° steps).
+pub fn nearest_free_angle(a: f64) -> f64 {
+    let a = a.rem_euclid(360.0);
+    let dist = |x: f64| {
+        let d = (a - x).abs();
+        d.min(360.0 - d)
+    };
+    FREE_ANGLES
+        .into_iter()
+        .min_by(|x, y| dist(*x).total_cmp(&dist(*y)))
+        .expect("angles")
+}
+
 /// Nearest allowed discrete plate orientation (a plate turned by 180° is the same).
 fn nearest_plate_angle(a: f64) -> f64 {
     let a = a.rem_euclid(180.0);
@@ -823,6 +1039,12 @@ fn snap(level: &Level, e: &mut Element) {
         if e.kind == ElementKind::Plate {
             e.angle_deg = nearest_plate_angle(e.angle_deg);
         }
+        if e.kind == ElementKind::Free {
+            e.angle_deg = nearest_free_angle(e.angle_deg);
+            e.speed = e
+                .speed
+                .and_then(|v| nearest_linear(&level.limits.free_speeds, v));
+        }
         return;
     }
     if let Some(m) = nearest_listed(magnitudes(level, e.kind), e.value.abs()) {
@@ -846,6 +1068,8 @@ pub fn describe(e: &PlacementError) -> String {
         PlacementError::TooManyMagnets => "No magnets left for this level.".into(),
         PlacementError::TooManyAntennas => "No antennas left for this level.".into(),
         PlacementError::TooManyPlates => "No plates left for this level.".into(),
+        PlacementError::TooManyFree => "No free charges left for this level.".into(),
+        PlacementError::SpeedNotAllowed(_) => "The level does not offer that speed.".into(),
         PlacementError::NoTunableElectrode(_) => {
             "Power supplies belong to the level's tunable electrodes.".into()
         }
@@ -863,7 +1087,9 @@ pub fn describe(e: &PlacementError) -> String {
             "That antenna frequency is not available in this level.".into()
         }
         PlacementError::AngleNotAllowed(_) => {
-            "Antennas point along 0°, 45°, 90° or 135°; plates lie along 0° or 90°.".into()
+            "Antennas point along 0°, 45°, 90° or 135°; plates lie along 0° or 90°; free \
+             charges fly off in 15° steps."
+                .into()
         }
     }
 }
@@ -1011,5 +1237,55 @@ mod tests {
         assert_eq!(e.placement[0].node, [10, 5, 0]);
         assert!(e.grabbed.is_none());
         assert_eq!(e.placement.len(), 1);
+    }
+
+    /// A level with free charges: speeds 0, 1 and 4 at c = 5.
+    fn free_level() -> Level {
+        let mut l = level::shipped("first_bend");
+        l.limits.max_free = 2;
+        l.limits.free_charges = vec![-1e-6, 1e-6];
+        l.limits.free_speeds = vec![0.0, 1.0, 4.0];
+        l
+    }
+
+    /// Dragging the arrow's handle to where the arrow of a speed ends gives back that
+    /// speed (for both measures), and `set_velocity` snaps to the listed speeds and 15°
+    /// directions.
+    #[test]
+    fn velocity_arrow_drag_round_trip_and_snapping() {
+        let l = free_level();
+        for m in [ArrowMeasure::Speed, ArrowMeasure::Rapidity] {
+            for v in [1.0, 4.0] {
+                let e = Element::free([10, 10, 0], 1e-6, 30.0, v);
+                let tip = arrow_tip(&l, &e, m);
+                let p = l.grid.position(e.node);
+                let (a, back) = dragged_velocity(&l, [p.x, p.y], tip, m);
+                assert!((back - v).abs() < 1e-12, "{m:?}: {back} vs {v}");
+                assert!((a - 30.0).abs() < 1e-9);
+            }
+        }
+        // Rapidity: the fastest listed speed (0.8 c) gets the full 3 cells, and a speed
+        // near c lies far beyond (unbounded).
+        let r = |v: f64| arrow_length(&l, v, ArrowMeasure::Rapidity);
+        assert!(r(4.999) > 2.5 * r(4.0));
+        assert!((r(0.01) - 0.01).abs() < 1e-6, "slow: rapidity is the speed");
+
+        let mut ed = Editor::new(l);
+        ed.set_kind(ElementKind::Free);
+        ed.set_cursor([10, 10, 0]);
+        ed.place().unwrap();
+        assert_eq!(ed.placement[0].kind, ElementKind::Free);
+        ed.set_velocity(0, 37.0, 3.2);
+        assert_eq!(ed.placement[0].angle_deg.to_bits(), 30.0_f64.to_bits());
+        assert_eq!(ed.placement[0].speed, Some(4.0));
+        ed.set_velocity(0, 100.0, 0.2);
+        assert_eq!(ed.placement[0].speed, Some(0.0), "at rest");
+        assert_eq!(ed.placement[0].angle_deg.to_bits(), 0.0_f64.to_bits());
+        // The handle of the placed charge is found where it is drawn.
+        let tip = arrow_tip(&ed.level, &ed.placement[0], ArrowMeasure::Speed);
+        assert_eq!(
+            arrow_handle_at(&ed.level, &ed.placement, tip, 0.35, ArrowMeasure::Speed),
+            Some(0)
+        );
     }
 }

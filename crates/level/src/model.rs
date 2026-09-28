@@ -88,7 +88,7 @@ impl Level {
         if !self.clouds.is_empty() {
             out.push(note(
                 true,
-                "Charge clouds: spheres of uniform charge that particles fly through, with                  their exact field inside (linear: a harmonic restoring force) and outside                  (a point charge). They are fixed: the cloud itself does not respond.",
+                "Charge clouds: spheres of uniform charge that particles fly through, with their exact field inside (linear: a harmonic restoring force) and outside (a point charge). They are fixed: the cloud itself does not respond.",
             ));
         }
         if !self.disturbances.is_empty() {

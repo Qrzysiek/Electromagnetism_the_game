@@ -249,7 +249,7 @@ fn main() {
                         v.verified.energy_max_rel_error, v.verified.stats.n_step
                     );
                     // Where each shot's particles end (for designing detectors).
-                    let shots = level.beam_shots();
+                    let shots = level.beam_shots(&level.reference_solution);
                     for s in 0..level.shots.len() {
                         let ends: Vec<_> = v
                             .verified

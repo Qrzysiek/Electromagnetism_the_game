@@ -75,6 +75,15 @@ impl Kinematics {
         }
     }
 
+    /// Lorentz factor of a velocity `v` (1 for `c = ∞`); `v` must be below `c`.
+    pub fn gamma_of_velocity(&self, v: DVec3) -> f64 {
+        if self.c.is_finite() {
+            1.0 / (1.0 - v.length_squared() / (self.c * self.c)).sqrt()
+        } else {
+            1.0
+        }
+    }
+
     pub fn gamma(&self, p: DVec3) -> f64 {
         (1.0 + p.length_squared() * self.inv_mc_sq).sqrt()
     }

@@ -18,7 +18,7 @@ use physics::trajectory::{Outcome, RunSettings};
 use physics::verify::{Status, classify};
 use serde::{Deserialize, Serialize};
 
-use crate::{Element, Level};
+use crate::{Element, ElementKind, Level};
 
 /// Launch state of one particle of a level (see `Level::launches`).
 #[derive(Clone, Copy, Debug)]
@@ -209,10 +209,81 @@ impl BeamVerification {
 }
 
 impl Level {
-    /// Whether the level's shots are beams (all of them: mixing beam and single shots
-    /// is not supported, `model_issues`).
+    /// Whether the level flies as one interacting system: its shots are beams (all of
+    /// them: mixing beam and single shots is not supported, `model_issues`), or it has
+    /// dynamic particles (the level's free particles or the player's free charges), with
+    /// which every shot flies as a beam of one.
     pub fn has_beams(&self) -> bool {
         self.shots.iter().any(|s| s.beam.is_some())
+            || !self.free_particles.is_empty()
+            || self.limits.max_free > 0
+    }
+
+    /// The dynamic particles after the shots' particles: the level's free particles,
+    /// then the player's free charges, as (particle, launch, detector, acceptance).
+    fn extra_particles(&self, player: &[Element]) -> Vec<BeamParticle> {
+        let kin = |m: f64| Kinematics::new(m, self.c());
+        let momentum = |m: f64, v: DVec3| {
+            // p = γ m v (v below c; the level validation keeps speeds below c).
+            v * (m * kin(m).gamma_of_velocity(v))
+        };
+        let mut out: Vec<BeamParticle> = self
+            .free_particles
+            .iter()
+            .map(|f| {
+                let spec = f.particle;
+                let v = DVec3::new(f.velocity[0], f.velocity[1], 0.0);
+                let (detector, acceptance) = match f.detector {
+                    Some(d) => (
+                        Some(self.box_region(d)),
+                        d.acceptance.map(crate::DetectorAcceptance::to_physics),
+                    ),
+                    None => (None, None),
+                };
+                BeamParticle {
+                    particle: Particle {
+                        charge: spec.charge,
+                        mass: spec.mass,
+                        radius: spec.radius,
+                        moment: spec.moment,
+                    },
+                    x0: self.grid.position(f.node),
+                    p0: momentum(spec.mass, v),
+                    detector,
+                    acceptance,
+                }
+            })
+            .collect();
+        for e in player.iter().filter(|e| e.kind == ElementKind::Free) {
+            let (sin, cos) = e.angle_deg.to_radians().sin_cos();
+            let v = DVec3::new(cos, sin, 0.0) * e.speed.unwrap_or(0.0);
+            let m = self.limits.free_mass;
+            out.push(BeamParticle {
+                particle: Particle {
+                    charge: e.value,
+                    mass: m,
+                    radius: self.limits.free_radius,
+                    moment: 0.0,
+                },
+                x0: self.grid.position(e.node),
+                p0: momentum(m, v),
+                detector: None,
+                acceptance: None,
+            });
+        }
+        out
+    }
+
+    /// Indices (in beam-flight order) of the level's free particles that have a
+    /// detector: goals that must arrive, verified.
+    pub fn goal_particles(&self) -> Vec<usize> {
+        let first = self.launches().len();
+        self.free_particles
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.detector.is_some())
+            .map(|(e, _)| first + e)
+            .collect()
     }
 
     /// The beam flights (one per disturbance) with the field at `resolution`.
@@ -240,7 +311,7 @@ impl Level {
                 (one.detector, one.acceptance)
             })
             .collect();
-        let particles = self
+        let mut particles: Vec<BeamParticle> = self
             .launches()
             .into_iter()
             .map(|l| BeamParticle {
@@ -251,6 +322,7 @@ impl Level {
                 acceptance: targets[l.shot].1,
             })
             .collect();
+        particles.extend(self.extra_particles(player));
         BeamScenario {
             field: base.field,
             obstacles: base.obstacles,
@@ -304,12 +376,22 @@ impl Level {
         out
     }
 
-    /// Shot of each particle of the beam flights, in order.
-    pub fn beam_shots(&self) -> Vec<usize> {
+    /// Shot of each particle of the beam flights, in order; the dynamic particles after
+    /// them get `shots.len() + k` (the level's free particle k), then `usize::MAX` (the
+    /// player's free charges).
+    pub fn beam_shots(&self, player: &[Element]) -> Vec<usize> {
+        let n = self.shots.len();
         self.shots
             .iter()
             .enumerate()
             .flat_map(|(s, shot)| std::iter::repeat_n(s, shot.beam.map_or(1, |b| b.count) as usize))
+            .chain((0..self.free_particles.len()).map(|k| n + k))
+            .chain(
+                player
+                    .iter()
+                    .filter(|e| e.kind == ElementKind::Free)
+                    .map(|_| usize::MAX),
+            )
             .collect()
     }
 
@@ -324,7 +406,7 @@ impl Level {
         } else {
             preview.clone()
         };
-        let shots = self.beam_shots();
+        let shots = self.beam_shots(player);
         preview
             .iter()
             .zip(&fine)
@@ -348,8 +430,10 @@ impl Level {
     }
 
     /// Whether every beam shot reaches its required verified transmission in every
-    /// flight.
+    /// flight, and every goal particle (a free particle with a detector) arrives,
+    /// verified.
     pub fn beams_solved(&self, verifications: &[BeamVerification]) -> bool {
+        let goals = self.goal_particles();
         verifications.iter().all(|v| {
             self.shots.iter().enumerate().all(|(s, shot)| {
                 let need = shot.beam.map_or(1.0, |b| b.transmission);
@@ -357,6 +441,8 @@ impl Level {
                 #[allow(clippy::cast_precision_loss)]
                 let enough = ok as f64 >= need * n as f64 - 1e-9;
                 enough
+            }) && goals.iter().all(|&i| {
+                v.status[i].is_verified() && v.verified.trajectories[i].outcome == Outcome::Arrived
             })
         })
     }

@@ -132,6 +132,10 @@ pub struct Game {
     pub sandbox: sandbox::Sandbox,
     /// A player element is being dragged with the mouse.
     pub mouse_drag: bool,
+    /// The free charge whose velocity arrow is being dragged.
+    pub arrow_drag: Option<usize>,
+    /// What velocity arrows measure (speed, or rapidity in relativistic levels).
+    pub arrow_measure: editor::ArrowMeasure,
     /// Set by the UI while a text field has focus (game shortcuts are suspended).
     pub text_focus: bool,
     /// Left edge of the side panel in physical pixels (reported by the UI).
@@ -141,6 +145,7 @@ pub struct Game {
 impl Game {
     pub fn new(levels: Vec<Level>, level_paths: Vec<PathBuf>) -> Self {
         let editor = Editor::new(levels[0].clone());
+        let arrow_measure = editor::default_measure(&editor.level);
         Self {
             levels,
             places: curriculum::places(&level_paths),
@@ -178,6 +183,8 @@ impl Game {
             last_cursor_world: None,
             sandbox: sandbox::Sandbox::default(),
             mouse_drag: false,
+            arrow_drag: None,
+            arrow_measure,
             text_focus: false,
             panel_left_px: None,
         }
@@ -186,6 +193,8 @@ impl Game {
     fn load_level(&mut self, index: usize) {
         self.level_index = index;
         self.editor = Editor::new(self.levels[index].clone());
+        self.arrow_measure = editor::default_measure(&self.editor.level);
+        self.arrow_drag = None;
         self.flights.clear();
         self.beams.clear();
         self.active_shot = 0;
@@ -320,12 +329,28 @@ impl Game {
                             .beam_transmission(d, s)
                             .is_some_and(|(ok, n)| ok as f64 >= need * n as f64 - 1e-9);
                         ok
-                    })
+                    }) && self.goals_arrived(d)
                 });
         }
         let n = self.shot_count();
         n > 0
             && (0..n).all(|i| matches!(self.verdict(i), Some((Status::Verified, Outcome::Arrived))))
+    }
+
+    /// Whether every goal particle (a level's free particle with a detector) arrives,
+    /// verified, in flight `d`. Goal particle `k` is the beam's "shot" `shots + k`.
+    pub fn goals_arrived(&self, d: usize) -> bool {
+        let level = &self.editor.level;
+        let n = level.shots.len();
+        level
+            .free_particles
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.detector.is_some())
+            .all(|(k, _)| {
+                self.beam_transmission(d, n + k)
+                    .is_some_and(|(ok, _)| ok == 1)
+            })
     }
 
     /// Verified arrivals and particle count of beam shot `shot` in flight `d`; `None`
@@ -766,6 +791,34 @@ fn input(
         && (pressed || released || right)
         && sandbox::pointer_at(game, world, pressed, released, right)
     {
+        return;
+    }
+    // A free charge's velocity: press on the handle at the tip of its arrow and drag.
+    let here = [f64::from(world.x), f64::from(world.y)];
+    if pressed {
+        game.arrow_drag = editor::arrow_handle_at(
+            &game.editor.level,
+            &game.editor.placement,
+            here,
+            0.35,
+            game.arrow_measure,
+        );
+    }
+    if let Some(i) = game.arrow_drag {
+        if mouse.pressed(MouseButton::Left) {
+            if let Some(e) = game.editor.placement.get(i).copied() {
+                let p = game.editor.level.grid.position(e.node);
+                let (angle, speed) = editor::dragged_velocity(
+                    &game.editor.level,
+                    [p.x, p.y],
+                    here,
+                    game.arrow_measure,
+                );
+                game.editor.set_velocity(i, angle, speed);
+            }
+        } else {
+            game.arrow_drag = None;
+        }
         return;
     }
     // Left press on one of the player's elements picks it up (drag), elsewhere places.

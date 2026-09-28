@@ -58,6 +58,12 @@ fn detector_color(level: &level::Level, detector: &level::Detector) -> Color {
     palette_color(targets.iter().position(|d| *d == detector).unwrap_or(0))
 }
 
+/// Colour of goal particle `k` (a level's free particle with a detector): after the
+/// shots' detector colours.
+pub fn free_goal_color(k: usize) -> Color {
+    palette_color(4 + k)
+}
+
 /// The palette's colour number `i` (cycled). No yellow, orange, white or violet: those mark
 /// unverified, lost and computing flights and gates; blue (the placement region, negative
 /// charges) comes last.
@@ -176,8 +182,45 @@ fn draw_element(
         }
         // Drawn with the electrodes.
         ElementKind::Plate | ElementKind::Supply => return,
+        // Drawn with their velocity arrows (`draw_free`).
+        ElementKind::Free => return,
     }
     gizmos.circle_2d(p, radius * 1.15, ring);
+}
+
+/// A dynamic particle: a hollow ring in its sign's colour (it moves; fixed charges are
+/// filled discs), its sign, and its launch velocity as an arrow ending in a handle (the
+/// player's can be dragged: direction and speed).
+fn draw_free(gizmos: &mut Gizmos, p: Vec2, q: f64, radius: f32, tip: Vec2, player: bool) {
+    let color = if q > 0.0 {
+        Color::srgb(1.0, 0.45, 0.4)
+    } else if q < 0.0 {
+        Color::srgb(0.45, 0.65, 1.0)
+    } else {
+        Color::srgb(0.8, 0.8, 0.8)
+    };
+    for k in 0..3 {
+        #[allow(clippy::cast_precision_loss)]
+        gizmos.circle_2d(p, radius * (1.0 - 0.08 * k as f32), color);
+    }
+    let s = radius * 0.5;
+    if q != 0.0 {
+        seg(gizmos, p - Vec2::X * s, p + Vec2::X * s, color);
+    }
+    if q > 0.0 {
+        seg(gizmos, p - Vec2::Y * s, p + Vec2::Y * s, color);
+    }
+    let d = tip - p;
+    let arrow = Color::srgb(1.0, 0.95, 0.6);
+    if d.length() > radius {
+        let start = p + d.normalize() * radius;
+        gizmos.arrow_2d(start, tip, arrow);
+    }
+    if player {
+        // The handle: drag it to set the velocity.
+        gizmos.circle_2d(tip, 0.18, arrow);
+        gizmos.circle_2d(tip, 0.1, arrow.with_alpha(0.6));
+    }
 }
 
 /// In-plane outline of an electrode box, closed.
@@ -533,12 +576,57 @@ pub fn draw(
                 ElementKind::Magnet => (magnet_radius, m_scale),
                 ElementKind::Antenna => (antenna_radius, a_scale),
                 ElementKind::Plate | ElementKind::Supply => continue,
+                ElementKind::Free => {
+                    let t = crate::editor::arrow_tip(level, e, game.arrow_measure);
+                    #[allow(clippy::cast_possible_truncation)]
+                    let (tip, r) = (
+                        Vec2::new(t[0] as f32, t[1] as f32),
+                        level.limits.free_radius.max(0.15) as f32,
+                    );
+                    draw_free(
+                        gizmos,
+                        to_vec2(grid.position(e.node)),
+                        e.value,
+                        r,
+                        tip,
+                        player,
+                    );
+                    continue;
+                }
             };
             draw_element(gizmos, grid, e, r, s, player);
         }
     };
     draw_all(&mut gizmos, &level.elements, false);
     draw_all(&mut gizmos, &game.editor.placement, true);
+    // The level's dynamic particles, with their detectors (goals) if they have one.
+    let scale_arrow = crate::editor::arrow_scale(level, game.arrow_measure);
+    for (k, f) in level.free_particles.iter().enumerate() {
+        let p = to_vec2(grid.position(f.node));
+        let speed = f.velocity[0].hypot(f.velocity[1]);
+        let len = crate::editor::arrow_length(level, speed, game.arrow_measure) * scale_arrow;
+        #[allow(clippy::cast_possible_truncation)]
+        let v = if speed > 0.0 {
+            Vec2::new(f.velocity[0] as f32, f.velocity[1] as f32) * (len / speed) as f32
+        } else {
+            Vec2::ZERO
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        let r = f.particle.radius.max(0.15) as f32;
+        draw_free(&mut gizmos, p, f.particle.charge, r, p + v, false);
+        if let Some(d) = f.detector {
+            let d0 = to_vec2(grid.position(d.min));
+            let d1 = to_vec2(grid.position(d.max));
+            let color = free_goal_color(k);
+            gizmos.rect_2d((d0 + d1) * 0.5, (d1 - d0).abs(), color);
+            gizmos.rect_2d(
+                (d0 + d1) * 0.5,
+                (d1 - d0).abs() - Vec2::splat(0.15),
+                color.with_alpha(0.5),
+            );
+            gizmos.line_2d(p, (d0 + d1) * 0.5, color.with_alpha(0.15));
+        }
+    }
 
     // Region where player elements may be placed.
     if let Some(r) = level.limits.region {
@@ -582,6 +670,7 @@ pub fn draw(
         (ElementKind::Charge, true) => Color::srgb(1.0, 0.6, 0.5),
         (ElementKind::Charge, false) => Color::srgb(0.6, 0.8, 1.0),
         (ElementKind::Plate | ElementKind::Supply, _) => Color::srgb(0.9, 0.9, 0.7),
+        (ElementKind::Free, _) => Color::srgb(1.0, 0.95, 0.6),
     };
     gizmos.rect_2d(cur, Vec2::splat(charge_radius * 2.8), cursor_color);
     // Outline of a new plate at the cursor (not over one of the player's elements or a
@@ -719,13 +808,27 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
         let primary = d == d_active;
         for (i, path) in p.paths.iter().enumerate() {
             let shot = p.shots[i];
-            if !(shot == game.active_shot || game.show_all_shots) {
+            let n_shots = game.editor.level.shots.len();
+            // Dynamic particles (after the shots) are always shown.
+            if shot < n_shots && !(shot == game.active_shot || game.show_all_shots) {
                 continue;
             }
             let verdict = view.verified.as_ref().and_then(|r| r.get(i).copied());
             let arrived = p.outcomes[i] == Outcome::Arrived;
+            // The player's free charges (no goal): pale yellow; the level's free
+            // particles without a detector: grey.
+            let scenery = shot == usize::MAX
+                || (shot >= n_shots
+                    && game.editor.level.free_particles[shot - n_shots]
+                        .detector
+                        .is_none());
             let color = match verdict {
+                _ if shot == usize::MAX => Color::srgb(1.0, 0.95, 0.6),
+                _ if scenery => Color::srgb(0.8, 0.8, 0.8),
                 None => Color::srgb(0.95, 0.95, 0.95),
+                Some((Status::Verified, Outcome::Arrived)) if shot >= n_shots => {
+                    free_goal_color(shot - n_shots)
+                }
                 Some((Status::Verified, Outcome::Arrived)) => shot_color(&game.editor.level, shot),
                 Some((Status::Verified, _)) => Color::srgb(1.0, 0.45, 0.2),
                 Some(_) => Color::srgb(1.0, 0.9, 0.2),

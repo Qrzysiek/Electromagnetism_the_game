@@ -65,6 +65,10 @@ pub struct Level {
     /// through (Thomson's atom, PHYSICS.md §2.1).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clouds: Vec<Cloud>,
+    /// Dynamic particles placed by the level (targets, partners): they fly with the
+    /// shots as one interacting system; those with a detector must arrive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub free_particles: Vec<FreeParticle>,
     /// Box electrodes (plates, slabs, walls) placed by the level (PHYSICS.md §2.7).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub electrodes: Vec<Electrode>,
@@ -224,6 +228,8 @@ struct LevelFile {
     #[serde(default)]
     clouds: Vec<Cloud>,
     #[serde(default)]
+    free_particles: Vec<FreeParticle>,
+    #[serde(default)]
     electrodes: Vec<Electrode>,
     #[serde(default)]
     gates: Vec<Detector>,
@@ -258,6 +264,7 @@ impl From<LevelFile> for Level {
             disturbances: f.disturbances,
             conductors: f.conductors,
             clouds: f.clouds,
+            free_particles: f.free_particles,
             electrodes: f.electrodes,
             gates: f.gates,
         }
@@ -455,6 +462,11 @@ pub enum ElementKind {
     /// Power supply of a tunable level electrode: sets the potential `value` of the
     /// electrode centred on this node.
     Supply,
+    /// Free charge placed by the player (PHYSICS.md §3.3): a particle of the level's
+    /// `limits.free_mass` and `limits.free_radius` with charge `value`, launched from the
+    /// node towards `angle_deg` with the element's `speed`. It moves under every force
+    /// and interacts with the other particles (the level flies as one beam).
+    Free,
 }
 
 /// An element on a grid node.
@@ -471,6 +483,9 @@ pub struct Element {
     /// Own angular frequency (antennas only); `None`: the level's RF generator.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub omega: Option<f64>,
+    /// Launch speed, cells per time unit (free charges only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<f64>,
 }
 
 impl Element {
@@ -481,6 +496,7 @@ impl Element {
             value: q,
             angle_deg: 0.0,
             omega: None,
+            speed: None,
         }
     }
 
@@ -491,6 +507,7 @@ impl Element {
             value: mu,
             angle_deg: 0.0,
             omega: None,
+            speed: None,
         }
     }
 
@@ -501,6 +518,7 @@ impl Element {
             value: potential,
             angle_deg,
             omega: None,
+            speed: None,
         }
     }
 
@@ -511,6 +529,7 @@ impl Element {
             value: potential,
             angle_deg: 0.0,
             omega: None,
+            speed: None,
         }
     }
 
@@ -521,6 +540,19 @@ impl Element {
             value: p0,
             angle_deg,
             omega: None,
+            speed: None,
+        }
+    }
+
+    /// A free charge `q` launched towards `angle_deg` with `speed`.
+    pub fn free(node: Node, q: f64, angle_deg: f64, speed: f64) -> Self {
+        Self {
+            node,
+            kind: ElementKind::Free,
+            value: q,
+            angle_deg,
+            omega: None,
+            speed: Some(speed),
         }
     }
 
@@ -594,6 +626,57 @@ pub struct Limits {
     /// Potentials the power supply of a tunable level electrode may be set to (signed).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supply_voltages: Vec<f64>,
+    /// Maximum number of free charges the player may place (dynamic particles).
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub max_free: u32,
+    /// Charges a free charge may carry (signed).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub free_charges: Vec<f64>,
+    /// Launch speeds of a free charge (0: released at rest); directions `FREE_ANGLES`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub free_speeds: Vec<f64>,
+    /// Mass of the player's free charges.
+    #[serde(
+        default = "default_free_mass",
+        skip_serializing_if = "is_default_free_mass"
+    )]
+    pub free_mass: f64,
+    /// Radius of the player's free charges (they collide as rigid spheres).
+    #[serde(default = "default_radius", skip_serializing_if = "is_default_radius")]
+    pub free_radius: f64,
+}
+
+fn default_free_mass() -> f64 {
+    1.0
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+fn is_default_free_mass(v: &f64) -> bool {
+    v.to_bits() == default_free_mass().to_bits()
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+fn is_default_radius(v: &f64) -> bool {
+    v.to_bits() == default_radius().to_bits()
+}
+
+/// Launch directions a free charge may be given, degrees from +x (15° steps).
+pub const FREE_ANGLES: [f64; 24] = [
+    0.0, 15.0, 30.0, 45.0, 60.0, 75.0, 90.0, 105.0, 120.0, 135.0, 150.0, 165.0, 180.0, 195.0,
+    210.0, 225.0, 240.0, 255.0, 270.0, 285.0, 300.0, 315.0, 330.0, 345.0,
+];
+
+/// A dynamic particle placed by the level: it moves and interacts like every particle
+/// of the flight, and may have its own detector (a goal) or none (part of the scene).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FreeParticle {
+    pub particle: ParticleSpec,
+    pub node: Node,
+    /// Launch velocity in the plane, cells per time unit.
+    #[serde(default)]
+    pub velocity: [f64; 2],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detector: Option<Detector>,
 }
 
 /// Size of a player plate, in cells: in-plane length (along its angle), thickness across
@@ -695,6 +778,9 @@ pub enum PlacementError {
     TooManyMagnets,
     TooManyAntennas,
     TooManyPlates,
+    TooManyFree,
+    /// A free charge's launch speed that the level does not offer.
+    SpeedNotAllowed(Option<f64>),
     /// A power supply that is not on the centre of a tunable electrode.
     NoTunableElectrode(Node),
     OutsideGrid(Node),
@@ -748,7 +834,7 @@ impl Level {
     }
 
     /// A box of nodes as a region (a slab through the plane in 2D).
-    fn box_region(&self, d: Detector) -> Region {
+    pub(crate) fn box_region(&self, d: Detector) -> Region {
         let a = self.grid.position(d.min);
         let b = self.grid.position(d.max);
         let mut min = a.min(b);
@@ -822,11 +908,15 @@ impl Level {
         if count(ElementKind::Plate) > self.limits.max_plates as usize {
             return Err(PlacementError::TooManyPlates);
         }
+        if count(ElementKind::Free) > self.limits.max_free as usize {
+            return Err(PlacementError::TooManyFree);
+        }
         self.check_supplies(player)?;
         // Plates first: point elements are checked against every electrode.
         let boxes = self.check_plates(player)?;
         let mut occupied: Vec<Node> = self.elements.iter().map(|c| c.node).collect();
         occupied.extend(self.shots.iter().map(|s| s.launch.node));
+        occupied.extend(self.free_particles.iter().map(|f| f.node));
         for e in player {
             if matches!(e.kind, ElementKind::Plate | ElementKind::Supply) {
                 continue;
@@ -861,7 +951,7 @@ impl Level {
                 return Err(PlacementError::Occupied(e.node));
             }
             occupied.push(e.node);
-            if e.value == 0.0 {
+            if e.value == 0.0 && e.kind != ElementKind::Free {
                 return Err(PlacementError::SignNotAllowed(e.value));
             }
             // Magnitudes come from the level's list and are compared exactly (hardcore:
@@ -910,6 +1000,27 @@ impl Level {
                     };
                     if !omega_ok {
                         return Err(PlacementError::FrequencyNotAllowed(e.omega));
+                    }
+                }
+                ElementKind::Free => {
+                    if !self.limits.allows(&self.limits.free_charges, e.value) {
+                        return Err(PlacementError::MagnitudeNotAllowed(e.value));
+                    }
+                    let speed_ok = e.speed.is_some_and(|v| {
+                        v.is_finite() && self.limits.allows(&self.limits.free_speeds, v)
+                    });
+                    if !speed_ok {
+                        return Err(PlacementError::SpeedNotAllowed(e.speed));
+                    }
+                    let angle_ok = if self.limits.continuous {
+                        e.angle_deg.is_finite()
+                    } else {
+                        FREE_ANGLES
+                            .iter()
+                            .any(|a| a.to_bits() == e.angle_deg.to_bits())
+                    };
+                    if !angle_ok {
+                        return Err(PlacementError::AngleNotAllowed(e.angle_deg));
                     }
                 }
                 ElementKind::Plate | ElementKind::Supply => unreachable!("checked above"),
@@ -1204,6 +1315,16 @@ impl Level {
                 out.push("an element or launch point is inside or at an electrode".into());
             }
         }
+        let c = self.c();
+        let too_fast = self
+            .free_particles
+            .iter()
+            .any(|f| f.velocity[0].hypot(f.velocity[1]) >= c)
+            || (self.limits.max_free > 0
+                && self.limits.free_speeds.iter().any(|&v| v >= c || v < 0.0));
+        if too_fast {
+            out.push("free particles need speeds below c (and not negative)".into());
+        }
         for cl in &self.clouds {
             let c = self.grid.position(cl.center);
             if cl.radius.is_nan() || cl.radius <= 0.0 || !cl.charge.is_finite() {
@@ -1457,14 +1578,38 @@ impl Level {
                         .into(),
                 );
             }
-            let positive = self.shots.iter().any(|s| s.particle.charge > 0.0);
-            let negative = self.shots.iter().any(|s| s.particle.charge < 0.0);
+            // Opposite point charges fall into each other (the classical point-charge
+            // theory breaks down there); with a radius they collide as rigid spheres.
+            let point_charges: Vec<f64> = self
+                .shots
+                .iter()
+                .map(|s| s.particle)
+                .chain(self.free_particles.iter().map(|f| f.particle))
+                .filter(|p| p.radius == 0.0)
+                .map(|p| p.charge)
+                .chain(
+                    if self.limits.max_free > 0 && self.limits.free_radius == 0.0 {
+                        self.limits.free_charges.clone()
+                    } else {
+                        Vec::new()
+                    },
+                )
+                .collect();
+            let positive = point_charges.iter().any(|&q| q > 0.0);
+            let negative = point_charges.iter().any(|&q| q < 0.0);
             if positive && negative {
-                out.push("opposite charges in one beam could collide (not modelled)".into());
+                out.push(
+                    "opposite point charges in one flight could fall into each other (give \
+                     them a radius: they then collide as rigid spheres)"
+                        .into(),
+                );
             }
         }
         if self.shots.iter().any(|s| s.launch.time != 0.0) {
-            out.push("beam shots are launched together at t = 0".into());
+            out.push(
+                "shots flying together (beams, or with dynamic particles) are launched at t = 0"
+                    .into(),
+            );
         }
         for s in &self.shots {
             if let Some(b) = s.beam {
@@ -1849,6 +1994,11 @@ mod tests {
                     height: 2.0,
                 },
                 supply_voltages: vec![-1e4, 1e4],
+                max_free: 2,
+                free_charges: vec![-1e-6, 2e-6],
+                free_speeds: vec![0.0, 0.7],
+                free_mass: 3.0,
+                free_radius: 0.4,
             },
             reference_solution: vec![],
             disturbances: vec![Disturbance {
@@ -1863,7 +2013,26 @@ mod tests {
                 }],
             }],
             conductors: vec![],
-            clouds: vec![],
+            clouds: vec![Cloud {
+                center: [18, 8, 0],
+                radius: 1.0,
+                charge: 1.5,
+            }],
+            free_particles: vec![FreeParticle {
+                particle: ParticleSpec {
+                    charge: 1e-6,
+                    mass: 4.0,
+                    radius: 0.3,
+                    moment: 0.0,
+                },
+                node: [18, 1, 0],
+                velocity: [0.1, -0.2],
+                detector: Some(Detector {
+                    min: [1, 1, 0],
+                    max: [2, 3, 0],
+                    acceptance: None,
+                }),
+            }],
             electrodes: vec![],
             gates: vec![],
         }
@@ -1914,6 +2083,9 @@ mod tests {
         let mut l = sample_level();
         l.coils.clear();
         l.disturbances.clear();
+        // Single flights: no dynamic particles (with them every shot flies at t = 0).
+        l.free_particles.clear();
+        l.limits.max_free = 0;
         l.limits.max_antennas = 0;
         l.limits.max_plates = 2;
         l.limits.plate_voltages = vec![0.0, 1e4];

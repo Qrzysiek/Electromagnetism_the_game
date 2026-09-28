@@ -298,7 +298,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 .weak(),
         )
         .on_hover_text(
-            "Each arc introduces its elements one at a time, then combines them in              intermediate levels, and ends in a master level that needs everything the arc              taught.",
+            "Each arc introduces its elements one at a time, then combines them in intermediate levels, and ends in a master level that needs everything the arc taught.",
         );
     }
     let level = game.editor.level.clone();
@@ -485,6 +485,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         ElementKind::Antenna => "antennas",
         ElementKind::Plate => "plates",
         ElementKind::Supply => "power supplies",
+        ElementKind::Free => "free charges",
     };
     let allowed: Vec<ElementKind> = crate::editor::KINDS
         .into_iter()
@@ -513,6 +514,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     }
     if allowed.is_empty() {
         // Nothing to place (e.g. only power supplies to set).
+    } else if game.editor.kind == ElementKind::Free {
+        free_palette(ui, game, &level);
     } else if crate::editor::is_signed(game.editor.kind) {
         plate_palette(ui, game, &level);
     } else {
@@ -527,7 +530,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 (ElementKind::Magnet, false) => "in (−z)",
                 (ElementKind::Antenna, true) => "phase 0°",
                 (ElementKind::Antenna, false) => "phase 180°",
-                (ElementKind::Plate | ElementKind::Supply, _) => "",
+                (ElementKind::Plate | ElementKind::Supply | ElementKind::Free, _) => "",
             };
             let hover = match kind {
                 ElementKind::Charge => "Flip sign (S)",
@@ -535,13 +538,13 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     "Flip orientation (S): moment out of the plane (+z) or into it (−z)"
                 }
                 ElementKind::Antenna => "Flip phase (S): opposite phase of the RF generator",
-                ElementKind::Plate | ElementKind::Supply => "",
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Free => "",
             };
             ui.label(match kind {
                 ElementKind::Charge => "New charge:",
                 ElementKind::Magnet => "New magnet μ:",
                 ElementKind::Antenna => "New antenna p₀:",
-                ElementKind::Plate | ElementKind::Supply => "",
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Free => "",
             });
             if both_signs {
                 if ui.button(sign).on_hover_text(hover).clicked() {
@@ -1076,6 +1079,26 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             };
             ui.colored_label(shot_color32(level, s), text);
         }
+        // Goal particles: the level's free particles with a detector.
+        let n = level.shots.len();
+        for (k, f) in level.free_particles.iter().enumerate() {
+            if f.detector.is_none() {
+                continue;
+            }
+            let text = match game.beam_transmission(d, n + k) {
+                None => format!("Particle {}: computing…", k + 1),
+                Some((1, _)) => format!("Particle {}: arrives, verified ✔", k + 1),
+                Some(_) => format!("Particle {}: does not arrive (verified) ✘", k + 1),
+            };
+            let c = crate::draw::free_goal_color(k).to_srgba();
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let color = egui::Color32::from_rgb(
+                (c.red * 255.0) as u8,
+                (c.green * 255.0) as u8,
+                (c.blue * 255.0) as u8,
+            );
+            ui.colored_label(color, text);
+        }
     }
     let d = game
         .active_disturbance
@@ -1155,6 +1178,89 @@ pub fn fmt_potential(v: f64) -> String {
 }
 
 /// Palette row for new plates: potential and orientation.
+/// New free charges: their charge, launch speed and direction. A placed one's velocity
+/// is set by dragging the handle at the tip of its arrow.
+fn free_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
+    if !game.editor.continuous() {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("New free charge q:");
+            for (i, v) in level.limits.free_charges.iter().enumerate() {
+                ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_si(*v))
+                    .on_hover_text("Q/E or the wheel: next charge");
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.label("speed:");
+            let mut k = game.editor.speed_index;
+            for (i, v) in level.limits.free_speeds.iter().enumerate() {
+                ui.selectable_value(&mut k, i, fmt_si(*v));
+            }
+            game.editor.set_speed_index(k);
+            ui.label(format!("direction {:.0}°", game.editor.free_angle_deg))
+                .on_hover_text("R / Shift+R: turn by 15°");
+        });
+    }
+    // The placed ones: velocity as v/c and rapidity.
+    let c = level.c();
+    for (k, e) in game
+        .editor
+        .placement
+        .iter()
+        .filter(|e| e.kind == ElementKind::Free)
+        .enumerate()
+    {
+        let v = e.speed.unwrap_or(0.0);
+        let text = if c.is_finite() {
+            format!(
+                "Free charge {}: q = {}, v = {:.3} c, rapidity φ = {:.3}, towards {:.0}°",
+                k + 1,
+                fmt_si(e.value),
+                v / c,
+                (v / c).atanh(),
+                e.angle_deg
+            )
+        } else {
+            format!(
+                "Free charge {}: q = {}, v = {}, towards {:.0}°",
+                k + 1,
+                fmt_si(e.value),
+                fmt_si(v),
+                e.angle_deg
+            )
+        };
+        ui.label(egui::RichText::new(text).small());
+    }
+    if c.is_finite() {
+        let mut rapidity = game.arrow_measure == crate::editor::ArrowMeasure::Rapidity;
+        if ui
+            .checkbox(&mut rapidity, "arrows show rapidity")
+            .on_hover_text(
+                "Arrow length ∝ c·artanh(v/c) instead of v: rapidities add under boosts along \
+                 a line; for slow particles it is the speed itself, and it grows without \
+                 bound as v approaches c.",
+            )
+            .changed()
+        {
+            game.arrow_measure = if rapidity {
+                crate::editor::ArrowMeasure::Rapidity
+            } else {
+                crate::editor::ArrowMeasure::Speed
+            };
+        }
+    }
+    ui.label(
+        egui::RichText::new(format!(
+            "Free charges move and interact with every particle (mass {}, radius {}: they \
+             collide as rigid spheres). Drag the handle at the tip of a placed one's arrow \
+             to set its direction and speed (c = {}).",
+            fmt_si(level.limits.free_mass),
+            level.limits.free_radius,
+            level.physics.c.map_or_else(|| "∞".to_string(), fmt_si)
+        ))
+        .small(),
+    );
+}
+
 fn plate_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     ui.horizontal_wrapped(|ui| {
         ui.label("New plate:");
@@ -1252,8 +1358,13 @@ fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             node: game.editor.cursor,
             kind: game.editor.kind,
             value: game.editor.selected_value(),
-            angle_deg: game.editor.angle_deg,
+            angle_deg: if game.editor.kind == ElementKind::Free {
+                game.editor.free_angle_deg
+            } else {
+                game.editor.angle_deg
+            },
             omega: game.editor.selected_omega(),
+            speed: (game.editor.kind == ElementKind::Free).then(|| game.editor.selected_speed()),
         },
     };
     ui.label(
@@ -1269,6 +1380,7 @@ fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         ElementKind::Magnet => "|μ|",
         ElementKind::Antenna => "|p₀|",
         ElementKind::Plate | ElementKind::Supply => "V",
+        ElementKind::Free => "q",
     };
     let signed = crate::editor::is_signed(e.kind);
     if signed {
@@ -1298,6 +1410,30 @@ fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 );
                 focus |= r.has_focus();
             });
+        }
+        if e.kind == ElementKind::Free {
+            ui.horizontal(|ui| {
+                ui.label("direction");
+                let r = ui.add(
+                    egui::Slider::new(&mut e.angle_deg, 0.0..=360.0)
+                        .suffix("°")
+                        .step_by(0.5),
+                );
+                focus |= r.has_focus();
+            });
+            if let (Some((lo, hi)), Some(v)) =
+                (value_range(&level.limits.free_speeds), e.speed.as_mut())
+            {
+                ui.horizontal(|ui| {
+                    ui.label("speed");
+                    if lo < hi {
+                        let r = ui.add(egui::Slider::new(v, lo..=hi));
+                        focus |= r.has_focus();
+                    } else {
+                        ui.label(fmt_si(lo));
+                    }
+                });
+            }
         }
     } else if let Some((lo, hi)) = value_range(crate::editor::magnitudes(level, e.kind)) {
         let mut m = e.value.abs();
@@ -1357,6 +1493,14 @@ fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     game.text_focus |= focus;
     match target {
         Some(i) => game.editor.set_element(i, e),
+        None if e.kind == ElementKind::Free => {
+            let k = crate::editor::kind_index(e.kind);
+            game.editor.continuous_magnitude[k] = e.value;
+            game.editor.free_angle_deg = e.angle_deg;
+            if let Some(v) = e.speed {
+                game.editor.continuous_speed = v;
+            }
+        }
         None if signed => {
             let k = crate::editor::kind_index(e.kind);
             game.editor.continuous_magnitude[k] = e.value;
