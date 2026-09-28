@@ -103,7 +103,8 @@ verified reference solution for every shot and negligible radiation
 | 79 | Jackson §14.3: forward beaming | 10 Introduction | a radiation goal: a far receiver at 30° must collect ≥ 6e-4 per steradian; the radiation is beamed along the velocity (1/γ = 19°), so bend the particle while it heads for the receiver | ≤ 3 magnets | 1 |
 | 80 | Jackson §14.6: the critical frequency | 10 Introduction | the same arena and receiver as forward beaming, but only ω 80–160 counts (≥ 3e-3 per steradian): a tight bend's short flash reaches ~(3/2)γ³c/R; the previous level's moderate bend puts only 1.4e-4 there | ≤ 3 magnets | 1 |
 | 81 | Jackson §14.2: a quiet turn | 10 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
-| 82 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
+| 82 | Jackson §14.8: Thomson scattering | 10 Intermediate | a light wave from the right (ω = 1) shakes the particle, which scatters it; the receiver at 30° counts 27–33, the Doppler-shifted line ω(1 + β cos φ)/(1 − β cos(θ − φ)) of a particle heading for it (≈ 4γ²ω head on) | ≤ 3 magnets (40, 80) | 1 |
+| 83 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 
 ## Automatic detectors
 
@@ -315,6 +316,12 @@ Notes:
     (0° → −90° → 180° → 90°), so its velocity never points at the receiver at 45°: the
     reference does that (6.1e-4 per steradian). Radiation goes where the particle heads
     while it is accelerated.
+  - Thomson scattering: the wave's amplitude is 24 (a₀ = qE₀/(mωc) = 0.3, nearly linear;
+    the second harmonic shows at 50–70), the magnets only 40 and 80, the minimum 3e-3 per
+    steradian: 22 single-magnet solutions, none with the wave off (the bends' own flash).
+    A first try (amplitude 8, minimum 3e-4) let 17 bends pass without the wave. Measured
+    on the reference: the line peaks at 26–32, as the Doppler formula gives for headings
+    near 30°.
   - Undulator: the first version (band 31–41, any exit) was solved by two magnets and by
     6 % of random placements: a pair that steered the particle close past a magnet near
     the end made a hard, broadband flash (4.7e-4 per steradian in the band against 2e-4

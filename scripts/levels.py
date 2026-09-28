@@ -2069,6 +2069,38 @@ def jackson_quiet_turn():
         max_magnets=5, strengths=RAD_MAGNETS, region=(5, 2, 36, 16))
 
 
+def jackson_thomson():
+    # Jackson §14.8 with the Doppler shifts of §11.3: a plane wave (omega = 1, travelling
+    # towards -x, amplitude 24: a0 = qE0/(m omega c) = 0.3, nearly linear Thomson
+    # scattering) shakes the particle, which re-radiates. Heading at phi against the wave,
+    # the particle meets it at omega (1 + beta cos phi); a receiver at theta sees
+    # omega_s = omega (1 + beta cos phi) / (1 - beta cos(theta - phi)): 32 for phi = theta
+    # = 30 degrees, 34 = ~4 gamma^2 head on. The band 27-33 at 30 degrees: the particle must
+    # head for the receiver while in the wave. Measured on the reference (80 at (6, 4)):
+    # the line peaks at 26-32 (4.5e-3 per steradian in 29-32), with the second harmonic
+    # (nonlinear Thomson, a0^2 ~ 0.1) at 50-70. 22 single-magnet solutions reach 3e-3; with
+    # the wave off none do (the bends' own flash: only gentle magnets, 40 and 80, are
+    # offered; a first try with 8 as amplitude and 3e-4 let 17 bends pass without it).
+    return level(
+        "Jackson §14.8: Thomson scattering",
+        "Jackson §14.8: a light wave (coming from the right, ω = 1) shakes a charge, and the "
+        "shaken charge radiates: it scatters the light. A charge flying into the wave meets "
+        "its crests faster, and moving towards the receiver it squeezes what it sends "
+        r"there: heading at $\varphi$ against the wave, it is seen at an angle $\theta$ to "
+        r"scatter $\omega_s = \omega\,\frac{1 + \beta\cos\varphi}{1 - \beta\cos(\theta - \varphi)}$, "
+        r"up to $\omega_s \approx 4\gamma^2\omega$ head on: how laser light is turned into "
+        "X-rays (inverse Compton sources). The receiver at 30° counts only 27–33: steer the "
+        "particle so that the light it scatters towards the receiver lands in that band, at "
+        "least 0.003 per steradian.",
+        grid=(40, 20), c=RAD_C, t_max=100.0, radiation_reaction=True,
+        shots=[shot(RAD_Q, 1.0, (2, 5), 0.0, RAD_T0,
+                    box((38, 0, 40, 20), radiation=radiation_goal(30.0, 5.0, (3e-3, 1e3),
+                                                                  band=(27.0, 33.0))))],
+        reference=[magnet(6, 4, 80.0)],
+        disturbances=[stray("light wave", waves=[wave(24.0, 1.0, 0.0, 180.0)])],
+        max_magnets=3, strengths=[40.0, 80.0], region=(5, 2, 34, 18))
+
+
 def jackson_undulator():
     # Jackson §14.7: magnets of alternating sign every s cells wiggle the particle with
     # period lambda_u = 2s; on the axis the wiggles add up coherently at
@@ -2266,6 +2298,7 @@ ARCS = [
         ]),
         ("Intermediate", [
             ("jackson_quiet_turn", jackson_quiet_turn),
+            ("jackson_thomson", jackson_thomson),
         ]),
         ("Master", [
             ("jackson_undulator", jackson_undulator),

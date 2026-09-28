@@ -89,6 +89,18 @@
   "height_ex": 2.452,
   "baseline_ex": 0.566
  },
+ "\\omega_s = \\omega\\,\\frac{1 + \\beta\\cos\\varphi}{1 - \\beta\\cos(\\theta - \\varphi)}": {
+  "file": "0b4099458c176703.svg",
+  "width_ex": 17.786,
+  "height_ex": 3.484,
+  "baseline_ex": 1.238
+ },
+ "\\omega_s \\approx 4\\gamma^2\\omega": {
+  "file": "749cce3b947b1429.svg",
+  "width_ex": 10.233,
+  "height_ex": 2.375,
+  "baseline_ex": 0.489
+ },
  "\\omega_u = 2\\pi v/\\lambda_u": {
   "file": "8a75502d7546543a.svg",
   "width_ex": 12.598,
@@ -112,6 +124,18 @@
   "width_ex": 7.956,
   "height_ex": 2.736,
   "baseline_ex": 0.781
+ },
+ "\\theta": {
+  "file": "2b4af44cb17349bb.svg",
+  "width_ex": 1.061,
+  "height_ex": 1.618,
+  "baseline_ex": 0.023
+ },
+ "\\varphi": {
+  "file": "959f488598ceedf4.svg",
+  "width_ex": 1.48,
+  "height_ex": 1.493,
+  "baseline_ex": 0.493
  },
  "qE": {
   "file": "7e5246b13401e0b2.svg",

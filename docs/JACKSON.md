@@ -122,6 +122,9 @@ Arc 10, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §
   tight bend's short flash.
 - Jackson §14.2: a quiet turn (intermediate). A maximum: gentle turns radiate less into
   a direction the velocity sweeps; or turn the other way round.
+- Jackson §14.8: Thomson scattering (intermediate). A plane wave shakes the particle; the
+  scattered line is Doppler-shifted by the particle's heading (≈ 4γ²ω head on: inverse
+  Compton); the band picks the heading.
 - Jackson §14.7: undulator (master). The on-axis line 2γ²ω_u/(1 + K²/2) in a band.
 - Tried and set aside: §15.2 braking radiation (stopping a γ = 3 particle with charges
   needs a large potential hill and the particle slips round the charges; the solver found
@@ -286,7 +289,7 @@ radiating oscillator decays at Γ = ω₀²τ).
 - **§14.7 undulators and wigglers; Pr. 14.27 second harmonic.** *Level built (undulator).*
   - The trajectory and its in-plane radiation. NOW (alternating magnets).
   - K parameter: undulator for K < 1, wiggler for K ≫ 1; the level asks for a given K.
-- **§14.8 Thomson scattering.** A free charge driven by a plane wave re-radiates. NOW (plane waves + LW). Radiation pressure pushes the charge forward: the LL force. A test against σ_T.
+- **§14.8 Thomson scattering.** *Level built (Doppler-shifted Thomson scattering).* A free charge driven by a plane wave re-radiates. NOW (plane waves + LW). Radiation pressure pushes the charge forward: the LL force. A test against σ_T.
 
 ### Ch. 15: Bremsstrahlung, virtual quanta
 
