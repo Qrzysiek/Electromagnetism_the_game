@@ -92,9 +92,9 @@ fails.
 
 ## Difficulty measurements
 
-`cargo run --release -p generator -- analyze [--fewest] levels/[0-9]*.json` (2000 random samples,
-32 search runs with a budget of 400 evaluations each; the electrode levels, whose flights
-cost more, with 600 samples and 16 runs). Columns:
+`cargo run --release -p generator -- analyze [--fewest] levels/[0-9]*.json` (by default 2000 random samples,
+32 search runs with a budget of 400 evaluations each; the table below used 1000 and 16).
+Columns:
 
 - **log10 configs:** number of distinct player placements within the limits.
 - **random solve rate:** fraction of uniformly random placements that solve every shot,
@@ -107,62 +107,75 @@ cost more, with 600 samples and 16 runs). Columns:
 - **smoothness:** Spearman rank correlation of the distance objective between a placement
   and a one-move neighbour. High means that attempts carry information.
 
-Measured before the curriculum restructure of 2026-09-28 (old numbering, old limits); to be
-remeasured for the new curriculum.
+Measured 2026-09-28 after the curriculum restructure, with 1000 random samples and 16
+search runs of 400 evaluations per level:
 
 | level | log10 configs | random solve rate | search success | mean evals | expected effort: search / guessing | smoothness |
 |---|---|---|---|---|---|---|
-| 01_first_bend | 3.6 | 1.1e-1 | 32/32 | 8 | 8 / 9 | 0.61 |
-| 02_geiger_marsden | 3.4 | 2.8e-2 | 32/32 | 33 | 33 / 36 | 0.32 |
-| 03_thomson_crt | 6.1 | 1.9e-2 | 32/32 | 35 | 35 / 53 | 0.73 |
-| 04_slingshot | 3.6 | 9.5e-3 | 27/32 | 155 | 229 / 105 | 0.69 |
-| 05_the_wall | 10.0 | 3.5e-3 | 26/32 | 101 | 194 / 286 | 0.66 |
-| 06_twin_beams | 6.9 | 7.5e-3 | 29/32 | 87 | 128 / 133 | 0.86 |
-| 07_reflectron | 7.9 | 4.5e-3 | 31/32 | 88 | 101 / 222 | 0.83 |
-| 08_einzel_lens | 10.3 | 1.0e-3 | 31/32 | 98 | 111 / 1000 | 0.90 |
-| 09_hemispherical_analyzer | 6.6 | 1.5e-3 | 19/32 | 120 | 394 / 667 | 0.75 |
-| 10_injection | 3.7 | 4.8e-2 | 31/32 | 85 | 98 / 21 | 0.80 |
-| 11_collimator | 11.1 | 5.0e-4 | 32/32 | 100 | 100 / 2000 | 0.87 |
-| 12_soft_landing | 6.7 | 5.0e-4 | 9/32 | 171 | 1194 / 2000 | 0.74 |
-| 13_high_voltage_dome | 3.7 | 1.0e-1 | 32/32 | 11 | 11 / 10 | 0.65 |
-| 14_polarized_sphere | 6.6 | 1.2e-2 | 31/32 | 28 | 41 / 83 | 0.61 |
-| 15_image_charge | 7.1 | 1.8e-2 | 25/32 | 68 | 180 / 56 | 0.80 |
-| 16_deflection_plates | 3.2 | 1.7e-1 | 16/16 | 12 | 12 / 6 | 0.44 |
-| 17_power_supply | 0.7 | 2.8e-1 | 16/16 | 3 | 3 / 4 | -0.43 |
-| 18_tune_the_lens | 1.4 | 3.7e-2 | 11/16 | 23 | 205 / 27 | 0.30 |
-| 19_real_einzel_lens | 5.8 | 1.0e-2 | 16/16 | 78 | 78 / 100 | 0.80 |
-| 20_build_a_deflector | 3.2 | 1.7e-1 | 16/16 | 8 | 8 / 6 | 0.47 |
-| 21_shielding | 2.6 | 3.2e-2 | 16/16 | 36 | 36 / 32 | 0.68 |
-| 22_fast_lane | 7.3 | 1.3e-2 | 32/32 | 65 | 65 / 80 | 0.60 |
-| 23_beta_spectrometer | 6.6 | 1.5e-3 | 20/32 | 131 | 371 / 667 | 0.77 |
-| 24_first_coil | 3.6 | 3.3e-1 | 32/32 | 17 | 17 / 3 | 0.44 |
-| 25_dempster | 5.8 | 7.7e-2 | 32/32 | 21 | 21 / 13 | 0.56 |
-| 26_wien_filter | 11.6 | 1.5e-3 | 28/32 | 77 | 134 / 667 | 0.63 |
-| 27_first_magnet | 3.3 | 8.1e-2 | 32/32 | 14 | 14 / 12 | 0.40 |
-| 28_calutron | 6.5 | < 1.5e-3 | 4/32 | 124 | 2924 / 667 | 0.70 |
-| 29_build_wien_filter | 18.2 | 2.5e-3 | 14/32 | 130 | 644 / 400 | 0.85 |
-| 30_stern_gerlach | 3.2 | 8.2e-2 | 32/32 | 10 | 10 / 12 | 0.66 |
-| 31_stray_field | 3.8 | 5.0e-2 | 32/32 | 19 | 19 / 20 | 0.62 |
-| 32_mains_hum | 12.3 | < 1.5e-3 | 18/32 | 96 | 407 / 667 | 0.87 |
-| 33_earths_field | 9.6 | 5.0e-4 | 17/32 | 184 | 537 / 2000 | 0.82 |
-| 34_rf_kick | 4.3 | 4.3e-2 | 32/32 | 30 | 30 / 24 | 0.27 |
-| 35_rf_separator | 11.0 | 6.0e-3 | 29/32 | 66 | 107 / 167 | 0.76 |
-| 36_tune_the_rf | 7.9 | 1.5e-3 | 26/32 | 130 | 223 / 667 | 0.76 |
-| 37_streak_camera | 14.2 | < 1.5e-3 | 16/32 | 206 | 606 / 667 | 0.84 |
-| 38_synchrotron_light | 1.0 | 5.0e-1 | 32/32 | 2 | 2 / 2 | -0.05 |
-| 39_two_stages | 3.6 | 6.0e-2 | 32/32 | 74 | 74 / 17 | 0.70 |
-| 40_space_charge | 3.6 | 5.2e-2 | 32/32 | 40 | 40 / 19 | 0.71 |
-| 41_stern_gerlach_beam | 3.2 | 3.3e-2 | 27/32 | 38 | 113 / 30 | 0.67 |
-| 42_collimated_beam | 11.1 | < 1.5e-3 | 31/32 | 95 | 107 / 667 | 0.88 |
-| 43_velocity_selector | 11.6 | < 1.5e-3 | 17/32 | 143 | 496 / 667 | 0.68 |
-| 44_beam_preparation | 11.7 | < 1.5e-3 | 9/32 | 215 | 1237 / 667 | 0.86 |
-| 45_relativistic_beam | 7.1 | 5.1e-2 | 31/32 | 28 | 41 / 19 | 0.69 |
-| 46_chromatic_aberration | 6.8 | 9.5e-3 | 30/32 | 76 | 103 / 105 | 0.88 |
-| 47_real_analyzer | 6.0 | 1.9e-2 | 32/32 | 50 | 50 / 53 | 0.73 |
-| 48_crt_earth_field | 6.7 | 7.0e-3 | 26/32 | 72 | 164 / 143 | 0.74 |
-| 49_beam_pipe | 6.6 | 4.3e-2 | 32/32 | 44 | 44 / 23 | 0.80 |
-| 50_calutron_space_charge | 6.7 | 2.5e-3 | 15/32 | 123 | 576 / 400 | 0.82 |
-| 51_soft_landing_current | 6.3 | 1.0e-3 | 24/32 | 195 | 328 / 1000 | 0.76 |
+| 01_first_bend | 10.0 | 7.1e-2 | 16/16 | 10 | 10 / 14 | 0.77 |
+| 02_slingshot | 10.0 | 2.1e-2 | 16/16 | 57 | 57 / 48 | 0.71 |
+| 03_geiger_marsden | 9.5 | 1.7e-2 | 15/16 | 42 | 69 / 59 | 0.41 |
+| 04_twin_beams | 10.0 | 6.0e-3 | 16/16 | 56 | 56 / 167 | 0.87 |
+| 05_two_stages | 10.0 | 3.5e-2 | 16/16 | 58 | 58 / 29 | 0.79 |
+| 06_injection | 10.4 | 3.2e-2 | 16/16 | 41 | 41 / 31 | 0.80 |
+| 07_thomson_crt | 8.8 | 1.3e-2 | 15/16 | 82 | 109 / 77 | 0.75 |
+| 08_around_the_wall | 13.5 | < 3.0e-3 | 3/16 | 61 | 1794 / 333 | 0.78 |
+| 09_einzel_lens | 10.3 | < 3.0e-3 | 15/16 | 125 | 151 / 333 | 0.84 |
+| 10_reflectron | 10.1 | 2.0e-3 | 16/16 | 108 | 108 / 500 | 0.84 |
+| 11_collimator | 11.1 | < 3.0e-3 | 16/16 | 84 | 84 / 333 | 0.89 |
+| 12_hemispherical_analyzer | 9.5 | 2.0e-3 | 9/16 | 97 | 408 / 500 | 0.72 |
+| 13_soft_landing | 9.7 | 1.0e-3 | 2/16 | 174 | 2974 / 1000 | 0.81 |
+| 14_sorting_station | 26.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.93 |
+| 15_high_voltage_dome | 10.3 | 1.2e-1 | 16/16 | 12 | 12 / 8 | 0.76 |
+| 16_polarized_sphere | 9.5 | 1.4e-2 | 16/16 | 30 | 30 / 71 | 0.65 |
+| 17_image_charge | 10.3 | 2.1e-2 | 15/16 | 58 | 85 / 48 | 0.83 |
+| 18_deflection_plates | 8.9 | 1.6e-1 | 16/16 | 5 | 5 / 6 | 0.75 |
+| 19_power_supply | 0.7 | 2.7e-1 | 16/16 | 3 | 3 / 4 | -0.43 |
+| 20_build_a_deflector | 8.7 | 1.2e-1 | 16/16 | 12 | 12 / 8 | 0.65 |
+| 21_shielding | 7.1 | 3.7e-2 | 16/16 | 16 | 16 / 27 | 0.61 |
+| 22_tune_the_lens | 1.4 | 4.2e-2 | 11/16 | 23 | 205 / 24 | 0.30 |
+| 23_real_einzel_lens | 10.8 | 1.6e-2 | 16/16 | 42 | 42 / 62 | 0.84 |
+| 24_beam_pipe | 9.6 | 3.2e-2 | 16/16 | 20 | 20 / 31 | 0.81 |
+| 25_microscope_column | 16.2 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.80 |
+| 26_fast_lane | 10.7 | 1.1e-2 | 16/16 | 79 | 79 / 91 | 0.67 |
+| 27_first_coil | 10.0 | 4.3e-1 | 16/16 | 4 | 4 / 2 | 0.44 |
+| 28_first_magnet | 9.1 | 7.7e-2 | 16/16 | 18 | 18 / 13 | 0.68 |
+| 29_stern_gerlach | 8.8 | 6.8e-2 | 16/16 | 15 | 15 / 15 | 0.80 |
+| 30_beta_spectrometer | 9.5 | 2.0e-3 | 8/16 | 117 | 517 / 500 | 0.62 |
+| 31_dempster | 8.4 | 8.0e-2 | 16/16 | 12 | 12 / 12 | 0.56 |
+| 32_wien_filter | 11.6 | < 3.0e-3 | 5/16 | 188 | 1068 / 333 | 0.66 |
+| 33_calutron | 12.3 | < 3.0e-3 | 5/16 | 101 | 981 / 333 | 0.82 |
+| 34_build_wien_filter | 18.2 | < 3.0e-3 | 2/16 | 332 | 3132 / 333 | 0.82 |
+| 35_mass_spectrometer | 30.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.89 |
+| 36_stray_field | 10.7 | 5.1e-2 | 16/16 | 32 | 32 / 20 | 0.78 |
+| 37_rf_kick | 12.2 | 6.1e-2 | 16/16 | 19 | 19 / 16 | 0.65 |
+| 38_synchrotron_light | 1.0 | 5.3e-1 | 16/16 | 2 | 2 / 2 | -0.08 |
+| 39_mains_hum | 12.3 | < 3.0e-3 | 9/16 | 131 | 442 / 333 | 0.88 |
+| 40_earths_field | 12.4 | 1.0e-3 | 5/16 | 218 | 1098 / 1000 | 0.81 |
+| 41_crt_earth_field | 9.7 | 5.0e-3 | 15/16 | 68 | 95 / 200 | 0.80 |
+| 42_rf_separator | 11.0 | 4.0e-3 | 15/16 | 88 | 115 / 250 | 0.76 |
+| 43_tune_the_rf | 12.1 | 2.0e-3 | 15/16 | 63 | 89 / 500 | 0.72 |
+| 44_streak_camera | 14.2 | < 3.0e-3 | 7/16 | 194 | 708 / 333 | 0.85 |
+| 45_rf_beam_line | 28.7 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.90 |
+| 46_space_charge | 10.0 | 2.1e-2 | 15/16 | 59 | 86 / 48 | 0.80 |
+| 47_stern_gerlach_beam | 8.8 | 3.3e-2 | 14/16 | 17 | 74 / 30 | 0.82 |
+| 48_relativistic_beam | 10.4 | 2.8e-2 | 15/16 | 23 | 50 / 36 | 0.75 |
+| 49_collimated_beam | 11.1 | 1.0e-3 | 16/16 | 96 | 96 / 1000 | 0.88 |
+| 50_velocity_selector | 11.6 | < 3.0e-3 | 1/16 | 306 | 6306 / 333 | 0.68 |
+| 51_beam_preparation | 14.2 | < 3.0e-3 | 7/16 | 274 | 789 / 333 | 0.91 |
+| 52_chromatic_aberration | 9.8 | 6.0e-3 | 14/16 | 43 | 101 / 167 | 0.87 |
+| 53_real_analyzer | 8.6 | 1.3e-2 | 12/16 | 17 | 151 / 77 | 0.74 |
+| 54_calutron_space_charge | 9.7 | 1.0e-3 | 9/16 | 99 | 410 / 1000 | 0.81 |
+| 55_soft_landing_current | 9.1 | < 3.0e-3 | 12/16 | 200 | 334 / 333 | 0.74 |
+| 56_isotope_separator | 28.6 | < 3.0e-3 | 1/16 | 187 | 6187 / 333 | 0.91 |
+
+Reading the table by tier: the introductions are solved by the search in 15–16 of 16 runs
+within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
+landing 2/16, Build a Wien filter 2/16, Velocity selector 1/16). The master levels are not
+found by a search over the whole level (0/16, the Isotope separator 1/16), since they
+are meant to be built stage by stage, as their references were; random guessing of the
+whole level is hopeless (log10 configs 16–30). Their stages are each within reach of the
+modules the arc taught (see the finale notes below).
 
 Notes:
 
