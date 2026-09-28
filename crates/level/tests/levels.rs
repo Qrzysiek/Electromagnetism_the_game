@@ -47,51 +47,55 @@ fn reference_solutions_are_verified() {
             // radiates (Liénard, with the other particles' fields) must be below the
             // numerical accuracy, as for single flights.
             // Quasi-static interaction at finite c (PHYSICS.md §3.3): the exact retarded
-            // interaction must give the same outcome for every particle. (Flown without
-            // radiation reaction, which moves these particles by ~1e-8 of their path, far
-            // below the difference between the models, and would multiply the cost of the
-            // exact run eightfold.)
+            // interaction must give the same outcome for every particle, and the difference
+            // between the models must match the indicator. Both are flown without radiation
+            // reaction (it would multiply the cost of the exact run eightfold), so that the
+            // comparison measures the interaction models only: comparing the level's own
+            // flights (with radiation reaction) against an exact run without it mixed in
+            // the radiation reaction's effect (found on level 51, where it dominated).
             if level.physics.c.is_some()
                 && level.physics.beam_interaction
                 && !level.physics.beam_retarded
             {
-                let mut exact = level.clone();
-                exact.physics.beam_retarded = true;
-                exact.physics.radiation_reaction = false;
                 let rs = RunSettings::with_tolerance(level.physics.tolerances.preview);
-                let scns = exact.beam_scenarios(
-                    &level.reference_solution,
-                    physics::conductor::Resolution::Preview,
+                let flights = |retarded: bool, interact: bool| {
+                    let mut l = level.clone();
+                    l.physics.beam_retarded = retarded;
+                    l.physics.beam_interaction = interact;
+                    l.physics.radiation_reaction = false;
+                    l.beam_scenarios(
+                        &level.reference_solution,
+                        physics::conductor::Resolution::Preview,
+                    )
+                    .iter()
+                    .map(|scn| physics::beam::run_beam(scn, &rs))
+                    .collect::<Vec<_>>()
+                };
+                let (quasi, exact, alone) = (
+                    flights(false, true),
+                    flights(true, true),
+                    flights(false, false),
                 );
-                let mut free = exact.clone();
-                free.physics.beam_interaction = false;
-                let alone = free.beam_scenarios(
-                    &level.reference_solution,
-                    physics::conductor::Resolution::Preview,
-                );
-                for ((f, scn), lone) in v.iter().zip(&scns).zip(&alone) {
-                    let r = physics::beam::run_beam(scn, &rs);
-                    let lone = physics::beam::run_beam(lone, &rs);
-                    let effect = f
-                        .verified
+                for (((f, q), r), lone) in v.iter().zip(&quasi).zip(&exact).zip(&alone) {
+                    let effect = q
                         .trajectories
                         .iter()
                         .zip(&lone.trajectories)
                         .map(|(a, b)| (a.end.x - b.end.x).length())
                         .fold(0.0f64, f64::max);
                     let mut worst: f64 = 0.0;
-                    for (i, (a, b)) in f
+                    for (i, ((a, b), c)) in f
                         .verified
                         .trajectories
                         .iter()
                         .zip(&r.trajectories)
+                        .zip(&q.trajectories)
                         .enumerate()
                     {
                         assert_eq!(a.outcome, b.outcome, "{name}: particle {i}");
-                        worst = worst.max((a.end.x - b.end.x).length());
+                        worst = worst.max((c.end.x - b.end.x).length());
                     }
-                    let indicator = f
-                        .verified
+                    let indicator = q
                         .neglected_retardation
                         .iter()
                         .fold(0.0f64, |m, &x| m.max(x));
@@ -279,4 +283,40 @@ fn electrode_image_force_is_negligible() {
         println!("{name}: image force bound / max(|F|, F0) <= {worst:.1e}");
         assert!(worst < level::IMAGE_FORCE_LIMIT, "{name}: {worst:.3e}");
     }
+}
+
+/// Realistic iterations (chapter 15, SPEC §3) build an earlier level's idealised solution
+/// in and add a real effect that breaks it: on its own, without the player's elements,
+/// the built-in design must not solve the level (otherwise the effect is decoration).
+#[test]
+fn realistic_levels_break_the_idealised_design() {
+    const REALISTIC: &[&str] = &[
+        "chromatic_aberration",
+        "real_analyzer",
+        "crt_earth_field",
+        "beam_pipe",
+        "calutron_space_charge",
+        "soft_landing_current",
+    ];
+    let mut found = 0;
+    for (name, level) in shipped_levels() {
+        if !REALISTIC.iter().any(|r| name.ends_with(r)) {
+            continue;
+        }
+        found += 1;
+        let solved = if level.has_beams() {
+            level.beams_solved(&level.verify_beams(&[]))
+        } else {
+            level
+                .verify_flights(&[])
+                .iter()
+                .all(|v| v.outcome() == Outcome::Arrived && v.status.is_verified())
+        };
+        println!("{name}: idealised design alone solves it: {solved}");
+        assert!(
+            !solved,
+            "{name}: the idealised design still works on its own"
+        );
+    }
+    assert_eq!(found, REALISTIC.len(), "all realistic levels shipped");
 }

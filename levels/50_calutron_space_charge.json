@@ -1,0 +1,211 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Calutron at full current",
+  "description": "Your calutron from chapter 8 is built in. The wartime calutrons ran intense beams, and the ions repel each other: the isotope beams spread out and their spots grow into each other. At least 80 % of each isotope must still reach its own collector. Add up to two charges.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "radiation_reaction": true,
+    "beam_interaction": true,
+    "t_max": 80.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 12.5,
+        "mass": 12500000.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          3,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 6250000.0
+      },
+      "detector": {
+        "min": [
+          27,
+          15,
+          0
+        ],
+        "max": [
+          30,
+          18,
+          0
+        ]
+      },
+      "beam": {
+        "count": 5,
+        "energy_spread": 0.01,
+        "angle_spread_deg": 0.5,
+        "width": 0.2,
+        "length": 0.2,
+        "distribution": "gaussian",
+        "transmission": 0.8,
+        "seed": 0
+      }
+    },
+    {
+      "particle": {
+        "charge": 12.5,
+        "mass": 25000000.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          3,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 6250000.0
+      },
+      "detector": {
+        "min": [
+          27,
+          10,
+          0
+        ],
+        "max": [
+          30,
+          13,
+          0
+        ]
+      },
+      "beam": {
+        "count": 5,
+        "energy_spread": 0.01,
+        "angle_spread_deg": 0.5,
+        "width": 0.2,
+        "length": 0.2,
+        "distribution": "gaussian",
+        "transmission": 0.8,
+        "seed": 0
+      }
+    },
+    {
+      "particle": {
+        "charge": 12.5,
+        "mass": 50000000.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          3,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 6250000.0
+      },
+      "detector": {
+        "min": [
+          27,
+          8,
+          0
+        ],
+        "max": [
+          30,
+          10,
+          0
+        ]
+      },
+      "beam": {
+        "count": 5,
+        "energy_spread": 0.01,
+        "angle_spread_deg": 0.5,
+        "width": 0.2,
+        "length": 0.2,
+        "distribution": "gaussian",
+        "transmission": 0.8,
+        "seed": 0
+      }
+    }
+  ],
+  "elements": [
+    {
+      "node": [
+        6,
+        6,
+        0
+      ],
+      "kind": "magnet",
+      "value": -4000000.0
+    },
+    {
+      "node": [
+        13,
+        6,
+        0
+      ],
+      "kind": "magnet",
+      "value": 3000000.0
+    }
+  ],
+  "coils": [],
+  "limits": {
+    "max_charges": 2,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        4,
+        2,
+        0
+      ],
+      "max": [
+        26,
+        18,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        13,
+        13,
+        0
+      ],
+      "kind": "charge",
+      "value": 250000.0
+    }
+  ]
+}

@@ -53,6 +53,8 @@ struct Source {
     /// The samples `(t, x, v, a)` of the world line (for the GPU).
     samples: Vec<(f64, DVec3, DVec3, DVec3)>,
     charge: f64,
+    /// Magnetic moment along z (its dipole field B_z = −m/r³ in the plane).
+    moment: f64,
     end: Option<(f64, DVec3)>,
     /// Whether its charge stays where it was absorbed (a body; `Fate::Stop`) rather than
     /// being drained (the detector).
@@ -197,7 +199,11 @@ pub fn waves_available(level: &Level) -> bool {
 
 /// The particle's own field needs a finite speed of light (retardation).
 pub fn particle_field_available(level: &Level) -> bool {
-    level.c().is_finite()
+    // Retarded for finite c, instantaneous (exact) for c = ∞; charges and moments.
+    level
+        .shots
+        .iter()
+        .any(|s| s.particle.charge != 0.0 || s.particle.moment != 0.0)
 }
 
 /// Only the time-dependent sources of a level field: antennas and waves.
@@ -328,7 +334,7 @@ pub fn update(
         }
     };
     let level = &game.editor.level;
-    if level.shots.is_empty() || (!level.c().is_finite() && mode != MapMode::Total) {
+    if level.shots.is_empty() || (!level.c().is_finite() && mode == MapMode::Waves) {
         return;
     }
     let c = level.c();
@@ -405,6 +411,7 @@ pub fn update(
                                 line: SampledWorldline::new(&samples),
                                 samples,
                                 charge: level.shots[s].particle.charge,
+                                moment: level.shots[s].particle.moment,
                                 end,
                                 stays: matches!(o, physics::trajectory::Outcome::Collided(_)),
                             }
@@ -430,6 +437,7 @@ pub fn update(
                         line,
                         samples,
                         charge: level.shots[shot].particle.charge,
+                        moment: level.shots[shot].particle.moment,
                         end,
                         stays,
                     })
@@ -507,7 +515,9 @@ pub fn update(
             view.part_e = 1.0;
         }
         // The static part of the total field, once (it does not change in time).
-        let grid = if mode == MapMode::Total {
+        // The static part of the total field on a grid; for the particle field only the
+        // mask of the bodies (inside metal and other bodies nothing is drawn).
+        let grid = if matches!(mode, MapMode::Total | MapMode::ParticleField) {
             let (w, h) = (
                 (size.x * STATIC_PER_CELL).ceil().max(2.0) as u32,
                 (size.y * STATIC_PER_CELL).ceil().max(2.0) as u32,
@@ -524,6 +534,9 @@ pub fn update(
                         let x = DVec3::new(x, y, 0.0);
                         if obstacles.iter().any(|o| o.signed_distance(x) < 0.0) {
                             return [0.0, 0.0, 0.0, 1.0];
+                        }
+                        if mode != MapMode::Total {
+                            return [0.0; 4];
                         }
                         let f = still.sample(x, 0.0);
                         [f.e.x as f32, f.e.y as f32, f.b.z as f32, 0.0]
@@ -584,6 +597,7 @@ pub fn update(
             xe.y as f32,
             if s.stays { 1.0 } else { 0.0 },
         ]);
+        items.push([s.moment as f32, 0.0, 0.0, 0.0]);
         for &(ts, x, v, a) in &s.samples {
             samples.push([(ts - t) as f32, x.x as f32, x.y as f32, v.x as f32]);
             samples.push([v.y as f32, a.x as f32, a.y as f32, 0.0]);
@@ -749,6 +763,33 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
     let (mut e, mut bz) = (DVec3::ZERO, 0.0);
     for s in &view.sources {
         let w = &s.line;
+        // A magnetic moment's dipole field, B_z = −m/r³ in the plane: from the position
+        // now for c = ∞ (exact), from the retarded position otherwise (the moving
+        // dipole's velocity and radiation terms, O(v/c), are left out); where it
+        // stopped once absorbed there, none once drained. Not a radiation field.
+        if s.moment != 0.0 && !view.radiation_only {
+            let at = if !c.is_finite() {
+                match s.end {
+                    Some((te, xe)) if t >= te => s.stays.then_some(xe),
+                    _ => Some(w.state(t).0),
+                }
+            } else {
+                match s.end {
+                    Some((te, xe)) if c * (t - te) >= (x - xe).length() => s.stays.then_some(xe),
+                    _ => Some(w.state(lienard::retarded_time(w, c, x, t)).0),
+                }
+            };
+            if let Some(r0) = at {
+                let r = (x - r0).length();
+                if r <= 0.15 {
+                    return None;
+                }
+                bz -= s.moment / (r * r * r);
+            }
+        }
+        if s.charge == 0.0 {
+            continue;
+        }
         if !c.is_finite() {
             if let Some((te, xe)) = s.end
                 && t >= te

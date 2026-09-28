@@ -1,0 +1,128 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Beam pipe",
+  "description": "Your injection setup from chapter 3 is built in, but beams run in grounded metal pipes, and the pipe wall lies between the beam and your steering charge: the charge it induces on the wall cancels much of the field. Straighten the beam into the next stage again. Add up to two charges.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          5,
+          0
+        ],
+        "direction": [
+          0.9396926207859084,
+          0.3420201433256687,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          28,
+          12,
+          0
+        ],
+        "max": [
+          30,
+          17,
+          0
+        ],
+        "acceptance": {
+          "direction": [
+            0.0,
+            8.0
+          ]
+        }
+      }
+    }
+  ],
+  "elements": [
+    {
+      "node": [
+        21,
+        0,
+        0
+      ],
+      "kind": "charge",
+      "value": -2000000.0
+    }
+  ],
+  "coils": [],
+  "limits": {
+    "max_charges": 2,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        4,
+        4,
+        0
+      ],
+      "max": [
+        26,
+        19,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        15,
+        4,
+        0
+      ],
+      "kind": "charge",
+      "value": -2000000.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        15,
+        2,
+        0
+      ],
+      "length": 26.0,
+      "thickness": 0.4,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    }
+  ]
+}

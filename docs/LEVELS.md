@@ -63,6 +63,12 @@ verified reference solution for every shot and negligible radiation
 | 43 | Velocity selector | two speeds in one interacting beam sorted by crossed fields | ≤ 4 charges |
 | 44 | Beam preparation | two stages for a beam: collimate it through a gate (±4°), then steer it into the target | ≤ 4 charges |
 | 45 | Relativistic beam | a beam at 0.8c: magnetic attraction weakens space charge to 1/γ²; quasi-static interaction with radiation reaction | ≤ 2 charges |
+| 46 | Chromatic aberration | 15 Real instruments: level 8's Einzel lens built in; each ray becomes a beam with an 8 % energy spread | ≤ 2 charges |
+| 47 | Real analyser | level 9's hemispherical analyser built in; the source emits into a cone (σ = 4°) | ≤ 2 charges |
+| 48 | CRT in the Earth's field | level 3's CRT built in, installed facing north in the Earth's field (stray B_z); adjusted where it stands | ≤ 2 charges |
+| 49 | Beam pipe | level 10's injection built in; a grounded pipe wall between the beam and the steering charge screens it | ≤ 2 charges |
+| 50 | Calutron at full current | level 28's calutron built in; the isotope beams repel each other (5 ions each, a quarter of the usual charge scaling, radiation reaction) | ≤ 2 charges |
+| 51 | Soft landing, full current | level 12's soft landing built in; an interacting beam: space charge grows as the ions are braked | ≤ 2 charges |
 
 ## Automatic detectors
 
@@ -139,6 +145,12 @@ cost more, with 600 samples and 16 runs). Columns:
 | 43_velocity_selector | 11.6 | < 1.5e-3 | 17/32 | 143 | 496 / 667 | 0.68 |
 | 44_beam_preparation | 11.7 | < 1.5e-3 | 9/32 | 215 | 1237 / 667 | 0.86 |
 | 45_relativistic_beam | 7.1 | 5.1e-2 | 31/32 | 28 | 41 / 19 | 0.69 |
+| 46_chromatic_aberration | 6.8 | 9.5e-3 | 30/32 | 76 | 103 / 105 | 0.88 |
+| 47_real_analyzer | 6.0 | 1.9e-2 | 32/32 | 50 | 50 / 53 | 0.73 |
+| 48_crt_earth_field | 6.7 | 7.0e-3 | 26/32 | 72 | 164 / 143 | 0.74 |
+| 49_beam_pipe | 6.6 | 4.3e-2 | 32/32 | 44 | 44 / 23 | 0.80 |
+| 50_calutron_space_charge | 6.7 | 2.5e-3 | 15/32 | 123 | 576 / 400 | 0.82 |
+| 51_soft_landing_current | 6.3 | 1.0e-3 | 24/32 | 195 | 328 / 1000 | 0.76 |
 
 Notes:
 
@@ -155,6 +167,16 @@ Notes:
   (5 and 25 settings). The analysis caches the result of every distinct placement, so
   such levels cost only their distinct placements; before the cache (and before it knew
   about supplies), analysing them did not terminate.
+- Real instruments (46–51) build an earlier level's reference setup in as fixed elements and
+  add one real effect the ideal design ignored. `scripts/levels.py` checks at build time that
+  the built-in design alone fails, and the test `realistic_levels_break_the_idealised_design`
+  keeps checking it. Measured with the built-in design alone: level 46 one ray 7/8 arriving;
+  47 the highest energy 7/8; 48 both beams lost; 49 rejected
+  (wrong direction); 50 the light isotope 3/5; 51 0/8. Tuning for playability (no search
+  solved the first versions): 48 first had to work facing north, south and shielded with
+  one-cell spots, and at most 1 in 32 searches solved it even at 40 % of the field; a tube
+  is adjusted where it stands, so the level now has one orientation. 51 had 12 ions at the
+  full charge scaling (0/32); now 8 at half.
 - Beam levels (40–44) are harder versions of single-particle levels (1, 30, 11, 26, 39): a
   placement solves them only if the required share of the beam arrives, verified. Their
   objective for the search sums the detector distances (plus gate shortfalls) of the

@@ -170,7 +170,9 @@ pub struct BeamRun {
     /// their jerk, `Σ_j |q_j| γ_j² |ȧ_j| / (c³ κ)` with the Doppler factor κ = 1 − n·β
     /// for the longer light delay ahead of a source, plus `|q_j| γ_j² |a_j| / (c² R)` for
     /// pairs so far apart that the source's past is taken as uniform), over that of the
-    /// fields kept, `Σ_j |E_j|`
+    /// fields kept, `Σ_j |E_j|`; plus, at each drained particle's removal, the impulse
+    /// `|q| / (R c)` of its field lingering for the light time R/c (the quasi-static
+    /// interaction drops it at once)
     /// (sampled at the step ends; 0 without quasi-static interaction). The trajectory
     /// error follows the impulse error: a short plunge of a neighbour matters little.
     pub neglected_retardation: Vec<f64>,
@@ -1266,6 +1268,23 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     Fate::Drain => {
                         past.t_off.borrow_mut()[i] = t_end;
                         past.x_off.borrow_mut()[i] = tracks[i].traj.end.x;
+                        // The quasi-static interaction drops the field at once; really it
+                        // lingers at each other particle for the light time R/c: a
+                        // neglected impulse of about |q| / (R c) on each.
+                        let qi = scn.particles[i].particle.charge;
+                        if quasi_static && qi != 0.0 {
+                            let xe = tracks[i].traj.end.x;
+                            for (l, &j) in members.iter().enumerate() {
+                                let flying = matches!(
+                                    tracks[j].phase,
+                                    Phase::Flying | Phase::Free | Phase::Ghost { real: true, .. }
+                                );
+                                if j != i && flying && scn.particles[j].particle.charge != 0.0 {
+                                    let r = (BeamOde::<F>::x(&y, l) - xe).length();
+                                    neglected[j].0 += qi.abs() / (r * scn.c);
+                                }
+                            }
+                        }
                     }
                     Fate::Stop => {
                         past.t_off.borrow_mut()[i] = t_end;

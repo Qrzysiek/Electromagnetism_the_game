@@ -957,6 +957,20 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     if !legend.is_empty() {
         ui.label(egui::RichText::new(legend).small());
     }
+    if game.map == Some(MapMode::ParticleField)
+        && (!level.conductors.is_empty() || !level.electrodes.is_empty())
+    {
+        ui.label(
+            egui::RichText::new(
+                "Near metal: the charges the particle induces on it reshape its field there \
+                 (and screen it inside); that part is not drawn. (In the dynamics their \
+                 force is included for spheres and bounded for electrodes, PHYSICS.md \
+                 §2.6–2.7.)",
+            )
+            .small()
+            .color(egui::Color32::from_rgb(255, 210, 120)),
+        );
+    }
     ui.checkbox(&mut game.show_field_lines, "Electric field lines (F)")
         .on_hover_text("Lines along the static electric field of the level's sources");
     ui.add(egui::Slider::new(&mut game.field_line_spacing, 0.5..=4.0).text("spacing (cells)"))
@@ -1385,14 +1399,16 @@ fn field_view_controls(
             {
                 (game.radiation_only, game.neglected_only) = (false, false);
             }
-            if ui
-                .selectable_label(game.radiation_only, "radiation part")
-                .on_hover_text(
-                    "Only the acceleration term of the field: what travels away at c and \
+            // At c = ∞ nothing radiates.
+            if level.physics.c.is_some()
+                && ui
+                    .selectable_label(game.radiation_only, "radiation part")
+                    .on_hover_text(
+                        "Only the acceleration term of the field: what travels away at c and \
                      falls off as 1/R (the rest is the velocity field that moves with the \
                      charge)",
-                )
-                .clicked()
+                    )
+                    .clicked()
             {
                 (game.radiation_only, game.neglected_only) = (true, false);
             }

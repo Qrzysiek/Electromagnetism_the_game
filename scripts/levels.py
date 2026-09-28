@@ -920,6 +920,166 @@ def relativistic_beam():
         max_charges=2, magnitudes=[200.0, 400.0, 800.0, 1600.0], reference=None)
 
 
+# =======================================================================================
+# Real instruments (SPEC 3, harder variants): an earlier level's idealised solution is
+# built in (its reference setup becomes fixed elements), and a real effect the ideal
+# design ignored breaks it. The player adds a few elements to make it work again. The
+# build checks that the idealised design alone now fails (`MUST_FAIL_ALONE`).
+
+def idealised(slug):
+    """The shipped level `slug` with its reference setup built in as fixed elements."""
+    i = [k for k, _ in LEVELS].index(slug) + 1
+    path = os.path.join(ROOT, "levels", f"{i:02d}_{slug}.json")
+    lvl = json.load(open(path, encoding="utf-8"))
+    lvl["elements"] = lvl["elements"] + lvl["reference_solution"]
+    lvl["reference_solution"] = []
+    return lvl
+
+
+def realistic(slug, name, desc, change, **player):
+    """A realistic iteration of level `slug`: `change(lvl)` adds the real effect;
+    `player` are the player's elements (arguments of `level`)."""
+    lvl = idealised(slug)
+    lvl["name"] = name
+    lvl["description"] = desc
+    change(lvl)
+    lvl["limits"] = level("", "", **player)["limits"]
+    return lvl
+
+
+def as_beams(lvl, **spec):
+    """Every shot fired as a beam (`beam` arguments)."""
+    for s in lvl["shots"]:
+        s["beam"] = beam(**spec)
+
+
+def chromatic_aberration():
+    # The Einzel lens of level 8, whose three rays now each come with an 8 % energy
+    # spread: a lens focuses faster particles further away.
+    def change(lvl):
+        as_beams(lvl, count=8, transmission=0.9, energy=0.08, angle_deg=0.0, width=0.05,
+                 length=0.05)
+        lvl["physics"]["t_max"] = 80.0
+    return realistic(
+        "einzel_lens", "Chromatic aberration",
+        "Your Einzel lens from chapter 2 is built in. Real ion sources are not "
+        "monochromatic: every ray now carries an 8 % spread in energy, and a lens focuses "
+        "faster ions further away (chromatic aberration). At least 90 % of each ray must "
+        "still reach the small detector. Add up to two charges.",
+        change, max_charges=2, magnitudes=[m * M for m in (0.1, 0.25, 0.5, 1)],
+        region=(4, 1, 26, 19))
+
+
+def real_analyzer():
+    # The hemispherical analyzer of level 9 with a source that has an angular spread.
+    def change(lvl):
+        as_beams(lvl, count=8, transmission=0.9, energy=0.0, angle_deg=4.0, width=0.05,
+                 length=0.05)
+        lvl["physics"]["t_max"] = 80.0
+    return realistic(
+        "hemispherical_analyzer", "Real analyser",
+        "Your electron-energy analyser from chapter 2 is built in. A real source emits "
+        "into a cone: the rays now leave within a few degrees of the axis (σ = 4°), and "
+        "each energy must still land in its own detector, 90 % of it. Half a turn in a "
+        "central field focuses directions only approximately. Add up to two charges.",
+        change, max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        region=(1, 3, 12, 16))
+
+
+def crt_earth_field():
+    # The CRT of level 3 installed in the lab, facing north, in the Earth's magnetic field
+    # (as in level 33). A tube is adjusted where it stands: one orientation. (Working in
+    # every orientation, as in level 33, with the one-cell spots of level 3: at most one
+    # search in 32 solved it, even at 40 % of the field.)
+    b = 7.7e3
+
+    def change(lvl):
+        lvl["disturbances"] = [stray("facing north", bz=b)]
+    return realistic(
+        "thomson_crt", "CRT in the Earth's field",
+        "Your cathode-ray tube from chapter 1 is built in and installed in the lab, facing "
+        "north. In the Earth's magnetic field the electrons drift sideways on their way, "
+        "and both beams miss their spots. Adjust the tube where it stands: add up to two "
+        "charges.",
+        change, max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        region=(4, 2, 26, 18))
+
+
+def calutron_space_charge():
+    # The calutron of level 28 at production currents: the isotope beams repel each
+    # other (scaled charges, as in chapter 14; c = 5 with radiation reaction, since
+    # the scaled charges would radiate more than may be neglected).
+    # A quarter of the usual scaling and 5 ions per isotope: enough space charge to
+    # spoil the ideal design, still correctable, and affordable with radiation reaction.
+    def change(lvl):
+        k = K / 4
+        for s in lvl["shots"]:
+            s["particle"]["charge"] *= k
+            s["particle"]["mass"] *= k
+            s["launch"]["kinetic_energy"] *= k
+        as_beams(lvl, count=5, transmission=0.8, energy=0.01, angle_deg=0.5, width=0.2,
+                 length=0.2)
+        lvl["physics"]["beam_interaction"] = True
+        lvl["physics"]["radiation_reaction"] = True
+        lvl["physics"]["t_max"] = 80.0
+    return realistic(
+        "calutron", "Calutron at full current",
+        "Your calutron from chapter 8 is built in. The wartime calutrons ran intense "
+        "beams, and the ions repel each other: the isotope beams spread out and their "
+        "spots grow into each other. At least 80 % of each isotope must still reach its "
+        "own collector. Add up to two charges.",
+        change, max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        region=(4, 2, 26, 18))
+
+
+def beam_pipe():
+    # Level 10's injection, but the beam runs in a grounded metal pipe: the wall next to
+    # the deflecting charge screens it.
+    def change(lvl):
+        lvl["electrodes"] = [plate(15, 2, 26, height=4.0)]
+    return realistic(
+        "injection", "Beam pipe",
+        "Your injection setup from chapter 3 is built in, but beams run in grounded metal "
+        "pipes, and the pipe wall lies between the beam and your steering charge: the "
+        "charge it induces on the wall cancels much of the field. Straighten the beam into "
+        "the next stage again. Add up to two charges.",
+        change, max_charges=2, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)],
+        region=(4, 4, 26, 19))
+
+
+def soft_landing_current():
+    # The soft landing of level 12 with an intense beam: braked to low energy, the ions
+    # crowd and repel each other (space charge grows as the beam slows).
+    # 8 ions at half the usual charge scaling (12 at full scaling: no search solved it).
+    def change(lvl):
+        k = K / 2
+        for s in lvl["shots"]:
+            s["particle"]["charge"] *= k
+            s["particle"]["mass"] *= k
+            s["launch"]["kinetic_energy"] *= k
+            acc = s["detector"].get("acceptance", {})
+            if "kinetic" in acc:
+                acc["kinetic"] = [e * k for e in acc["kinetic"]]
+        as_beams(lvl, count=8, transmission=0.9, energy=0.01, angle_deg=0.5, width=0.2,
+                 length=0.2)
+        lvl["physics"]["beam_interaction"] = True
+        lvl["physics"]["radiation_reaction"] = True
+        lvl["physics"]["t_max"] = 80.0
+    return realistic(
+        "soft_landing", "Soft landing, full current",
+        "Your soft-landing optics from chapter 3 are built in. With a real ion current the "
+        "braked ions crowd together and repel each other: the slower they get, the "
+        "stronger the space charge, and the beam blows up just before the target. At "
+        "least 90 % must still land gently on the target. Add up to two charges.",
+        change, max_charges=2, magnitudes=[m * M for m in (0.1, 0.2, 0.3, 0.5)],
+        region=(12, 2, 26, 18))
+
+
+# Realistic iterations: their built-in idealised design must fail on its own.
+MUST_FAIL_ALONE = {"chromatic_aberration", "real_analyzer", "crt_earth_field",
+                   "calutron_space_charge", "beam_pipe", "soft_landing_current"}
+
+
 LEVELS = [
     # Chapter 1: charges (intro, then rising difficulty).
     ("first_bend", first_bend),
@@ -980,6 +1140,13 @@ LEVELS = [
     ("velocity_selector", velocity_selector),
     ("beam_preparation", beam_preparation),
     ("relativistic_beam", relativistic_beam),
+    # Chapter 15: real instruments (idealised designs meet real effects).
+    ("chromatic_aberration", chromatic_aberration),
+    ("real_analyzer", real_analyzer),
+    ("crt_earth_field", crt_earth_field),
+    ("beam_pipe", beam_pipe),
+    ("calutron_space_charge", calutron_space_charge),
+    ("soft_landing_current", soft_landing_current),
 ]
 
 
@@ -1103,6 +1270,18 @@ def main():
             continue
         lvl = resolve_auto(make())
         path = os.path.join(ROOT, "levels", f"{key}.json")
+        if slug in MUST_FAIL_ALONE:
+            alone = dict(lvl, reference_solution=[])
+            with open(path, "w", newline="\n", encoding="utf-8") as f:
+                f.write(json.dumps(alone, indent=2, ensure_ascii=False) + "\n")
+            report = run_generator("check", path)
+            lines = [l for l in report.splitlines() if "shot " in l]
+            works = all("Arrived" in l and "Verified" in l for l in lines)
+            print(f"{key}: idealised design alone: {'WORKS (not a real iteration)' if works else 'fails, as it should'}")
+            for l in lines:
+                print("   ", l.strip())
+            if works:
+                sys.exit(f"{key}: the idealised design still works on its own")
         with open(path, "w", newline="\n", encoding="utf-8") as f:
             f.write(json.dumps(lvl, indent=2, ensure_ascii=False) + "\n")
         if not lvl["reference_solution"]:

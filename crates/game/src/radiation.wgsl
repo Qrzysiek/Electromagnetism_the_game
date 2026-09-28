@@ -24,10 +24,10 @@ struct Params {
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
 // World-line samples, two per sample: (τ, x, y, vx), (vy, ax, ay, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> samples: array<vec4<f32>>;
-// Items, two vec4 each: charges (offset, count, q, has_end), (τ_end, x_end, y_end,
-// 1 if its charge stays where it was absorbed, 0 if drained);
-// then antennas (x, y, p0x, p0y), (ω, phase now, radius, 0); then waves (k̂x, k̂y, êx, êy),
-// (E0, ω, phase now at x = 0, 0).
+// Items: charges, three vec4 each: (offset, count, q, has_end), (τ_end, x_end, y_end,
+// 1 if its charge stays where it was absorbed, 0 if drained), (magnetic moment, 0, 0, 0);
+// then antennas, two vec4 each: (x, y, p0x, p0y), (ω, phase now, radius, 0); then waves,
+// two vec4 each: (k̂x, k̂y, êx, êy), (E0, ω, phase now at x = 0, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(2) var<storage, read> items: array<vec4<f32>>;
 // Static field on a grid of texel centres: (Ex, Ey, Bz, inside a body).
 @group(#{MATERIAL_BIND_GROUP}) @binding(3) var<storage, read> statics: array<vec4<f32>>;
@@ -236,8 +236,9 @@ fn charges(p: vec2<f32>) -> Charges {
     let neglected_only = (params.counts.z & 2u) != 0u;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.grid.w; k = k + 1u) {
-        let head = items[2u * k];
-        let end = items[2u * k + 1u];
+        let head = items[3u * k];
+        let end = items[3u * k + 1u];
+        let moment = items[3u * k + 2u].x;
         let o = u32(head.x);
         let n = u32(head.y);
         let q = head.z;
@@ -246,6 +247,37 @@ fn charges(p: vec2<f32>) -> Charges {
             continue;
         }
         let stays = end.w > 0.5;
+        // A magnetic moment's dipole field, B_z = -m/r^3 in the plane (radiation.rs
+        // `charges`): from the position now for c = inf, the retarded one otherwise.
+        if (moment != 0.0 && !radiation_only) {
+            var at = vec2<f32>(0.0);
+            var there = true;
+            if (c == 0.0) {
+                if (has_end && end.x <= 0.0) {
+                    there = stays;
+                    at = end.yz;
+                } else {
+                    at = present(o, n).x;
+                }
+            } else {
+                if (has_end && c * (-end.x) >= length(p - end.yz)) {
+                    there = stays;
+                    at = end.yz;
+                } else {
+                    at = retarded(o, n, p, c).x;
+                }
+            }
+            if (there) {
+                let r = length(p - at);
+                if (r <= 0.15) {
+                    return Charges(f, false);
+                }
+                f.bz = f.bz - moment / (r * r * r);
+            }
+        }
+        if (q == 0.0) {
+            continue;
+        }
         if (c == 0.0) {
             // c = ∞: the Coulomb field of the present position; once absorbed, of where
             // it stopped (its charge stays) or none (drained).
@@ -314,7 +346,7 @@ fn charges(p: vec2<f32>) -> Charges {
 // (antenna.rs); quasi-static for c = ∞. `ok` false inside an antenna body.
 fn antennas(p: vec2<f32>) -> Charges {
     let c = params.scales.x;
-    let base = 2u * params.grid.w;
+    let base = 3u * params.grid.w;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.counts.x; k = k + 1u) {
         let a0 = items[base + 2u * k];
@@ -351,7 +383,7 @@ fn antennas(p: vec2<f32>) -> Charges {
 // Plane waves E = E0 ê cos(ω (t − k̂·x/c) + φ), B = k̂ × E / c.
 fn waves(p: vec2<f32>) -> Field {
     let c = params.scales.x;
-    let base = 2u * params.grid.w + 2u * params.counts.x;
+    let base = 3u * params.grid.w + 2u * params.counts.x;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.counts.y; k = k + 1u) {
         let w0 = items[base + 2u * k];
