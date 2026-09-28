@@ -190,6 +190,7 @@ impl Lu {
     fn new(mut a: Vec<f64>, n: usize) -> Self {
         let mut perm: Vec<usize> = (0..n).collect();
         for k in 0..n {
+            crate::cancel::checkpoint();
             let p = (k..n)
                 .max_by(|&i, &j| a[i * n + k].abs().total_cmp(&a[j * n + k].abs()))
                 .expect("non-empty");
@@ -292,6 +293,7 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
         .collect();
     let mut a = vec![0.0; n * n];
     for (i, pi) in panels.iter().enumerate() {
+        crate::cancel::checkpoint();
         let x = pi.centroid();
         for (j, (p, m)) in pre.iter().enumerate() {
             a[i * n + j] = pair_integrals(p, m, x).0;

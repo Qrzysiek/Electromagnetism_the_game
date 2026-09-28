@@ -247,7 +247,14 @@ fn retag(r: Response, revision: u64) -> Response {
     }
 }
 
-fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &AtomicU64) {
+/// Runs a metal-field build that a newer setup (another level, an edit) abandons at its
+/// next checkpoint (`physics::cancel`); `None` then.
+fn unless_stale<T>(newest: &Arc<AtomicU64>, revision: u64, f: impl FnOnce() -> T) -> Option<T> {
+    let wanted = newest.clone();
+    physics::cancel::cancellable(move || wanted.load(Ordering::Acquire) == revision, f)
+}
+
+fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<AtomicU64>) {
     let mut next: Option<Request> = None;
     let mut cache = ResultCache {
         entries: std::collections::VecDeque::new(),
@@ -287,11 +294,19 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &AtomicU6
         }
         let metal = req.level.has_metal(&req.placement);
         let mut cost = level::cost::Cost::new(&req.level);
-        let scenarios = req.level.scenarios(&req.placement);
+        let Some(scenarios) =
+            unless_stale(newest, req.revision, || req.level.scenarios(&req.placement))
+        else {
+            continue 'requests;
+        };
         let tolerances: Tolerances = req.level.tolerances();
         if metal {
             // Also builds (and caches) the display systems off the render thread.
-            let display = req.level.field_at(&req.placement, Resolution::Display).0;
+            let Some(display) = unless_stale(newest, req.revision, || {
+                req.level.field_at(&req.placement, Resolution::Display).0
+            }) else {
+                continue 'requests;
+            };
             cost.add_field(&display);
             cost.add_field(&scenarios[0].field);
         }
@@ -336,7 +351,11 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &AtomicU6
             continue 'requests;
         }
         let fine = if metal {
-            let fine = req.level.scenarios_at(&req.placement, Resolution::Verify);
+            let Some(fine) = unless_stale(newest, req.revision, || {
+                req.level.scenarios_at(&req.placement, Resolution::Verify)
+            }) else {
+                continue 'requests;
+            };
             cost.add_verification_field(&fine[0].field);
             fine
         } else {
@@ -380,7 +399,7 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &AtomicU6
 
 /// A beam level: per flight the preview (every particle's path), then the per-particle
 /// verification, with the measured cost. Returns `false` if the game has gone away.
-fn beam_request(req: &Request, tx: &Sink<'_>, newest: &AtomicU64) -> bool {
+fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
     let current = || newest.load(Ordering::Acquire) == req.revision;
     let tol = req.level.tolerances();
     let mut cost = level::cost::Cost::new(&req.level);
@@ -392,9 +411,12 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &AtomicU64) -> bool {
         .is_ok()
     };
     let shots = req.level.beam_shots();
-    let preview_scns = req
-        .level
-        .beam_scenarios(&req.placement, Resolution::Preview);
+    let Some(preview_scns) = unless_stale(newest, req.revision, || {
+        req.level
+            .beam_scenarios(&req.placement, Resolution::Preview)
+    }) else {
+        return true;
+    };
     let mut previews = Vec::new();
     for (flight, scn) in preview_scns.iter().enumerate() {
         let mut paths: Vec<Vec<(f64, DVec3)>> =
@@ -491,7 +513,11 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &AtomicU64) -> bool {
         previews.push(run);
     }
     let fine = if req.level.has_metal(&req.placement) {
-        let fine = req.level.beam_scenarios(&req.placement, Resolution::Verify);
+        let Some(fine) = unless_stale(newest, req.revision, || {
+            req.level.beam_scenarios(&req.placement, Resolution::Verify)
+        }) else {
+            return true;
+        };
         cost.add_verification_field(&fine[0].field);
         fine
     } else {

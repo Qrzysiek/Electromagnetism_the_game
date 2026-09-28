@@ -376,11 +376,17 @@ fn pointer(
             true
         }
         Tool::CoilPolygon => {
-            if pressed {
+            // A vertex clicked twice (or closing on the first) would be a side of zero
+            // length: skipped.
+            if pressed && game.sandbox.pending_polygon.last() != Some(&node) {
                 game.sandbox.pending_polygon.push(node);
             }
             if right {
-                let vertices = std::mem::take(&mut game.sandbox.pending_polygon);
+                let mut vertices = std::mem::take(&mut game.sandbox.pending_polygon);
+                vertices.dedup();
+                if vertices.len() > 1 && vertices.first() == vertices.last() {
+                    vertices.pop();
+                }
                 if vertices.len() >= 3 {
                     let kappa = game.sandbox.coil_kappa;
                     game.editor

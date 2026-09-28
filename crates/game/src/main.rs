@@ -31,6 +31,11 @@ pub const PANEL_WIDTH: f32 = 340.0;
 
 /// A field line for drawing: polyline and arrowheads (position, unit direction of E).
 pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
+/// Field lines computed off the render thread: the setup key, and where they arrive.
+pub type FieldLinesJob = (
+    (u64, u64),
+    std::sync::Mutex<std::sync::mpsc::Receiver<Vec<DrawnFieldLine>>>,
+);
 
 /// A beam flight (beam levels, one per disturbance): the preview of every particle and
 /// their verdicts.
@@ -91,6 +96,11 @@ pub struct Game {
     pub field_line_opacity: f32,
     /// (setup revision, spacing) the current field lines were computed for.
     pub field_lines_key: (u64, u64),
+    /// Field lines being computed off the render thread (a few seconds near metal): the
+    /// setup key they belong to, and where they arrive.
+    pub field_lines_job: Option<FieldLinesJob>,
+    /// The key of the field lines wanted now (older jobs stop).
+    pub field_lines_wanted: std::sync::Arc<std::sync::atomic::AtomicU64>,
     /// Field map shown under the scene (`None`: off).
     pub map: Option<MapMode>,
     pub show_field_lines: bool,
@@ -145,6 +155,8 @@ impl Game {
             field_line_spacing: 1.5,
             field_line_opacity: 0.2,
             field_lines_key: (0, 0),
+            field_lines_job: None,
+            field_lines_wanted: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
             map: Some(MapMode::Potential),
             show_field_lines: false,
             show_field_arrows: true,
@@ -882,28 +894,54 @@ fn update_map(
 /// Recomputes the field lines (the electric field does not depend on the shot) when they
 /// are shown and the setup or spacing changed.
 fn update_field_lines(mut game: ResMut<Game>) {
+    use std::sync::atomic::Ordering;
+    // Results of a finished job for the current key.
     let key = (game.sent_revision, game.field_line_spacing.to_bits());
+    let arrived = game.field_lines_job.as_ref().and_then(|(k, rx)| {
+        (*k == key)
+            .then(|| rx.lock().ok().and_then(|r| r.try_recv().ok()))
+            .flatten()
+    });
+    if let Some(lines) = arrived {
+        game.field_lines = lines;
+        game.field_lines_job = None;
+    }
     if !game.show_field_lines || key == game.field_lines_key || game.shot_count() == 0 {
         return;
     }
     game.field_lines_key = key;
+    // Computed on a thread of its own (near metal it takes seconds); a newer key stops it.
     let scenario = game
         .editor
         .level
         .display_scenario(0, &game.editor.placement);
     let radius = game.editor.level.physics.charge_radius;
-    game.field_lines = visuals::field_lines(&scenario, radius, game.field_line_spacing)
-        .into_iter()
-        .map(|l| {
-            (
-                l.points.into_iter().map(draw::to_vec2).collect(),
-                l.arrows
-                    .into_iter()
-                    .map(|(p, d)| (draw::to_vec2(p), draw::to_vec2(d)))
-                    .collect(),
-            )
-        })
-        .collect();
+    let spacing = game.field_line_spacing;
+    let token = key.0 ^ key.1.rotate_left(17);
+    game.field_lines_wanted.store(token, Ordering::Release);
+    let wanted = game.field_lines_wanted.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let keep_going = || wanted.load(Ordering::Acquire) == token;
+        if let Some(lines) =
+            visuals::field_lines_cancellable(&scenario, radius, spacing, keep_going)
+        {
+            let drawn: Vec<DrawnFieldLine> = lines
+                .into_iter()
+                .map(|l| {
+                    (
+                        l.points.into_iter().map(draw::to_vec2).collect(),
+                        l.arrows
+                            .into_iter()
+                            .map(|(p, d)| (draw::to_vec2(p), draw::to_vec2(d)))
+                            .collect(),
+                    )
+                })
+                .collect();
+            let _ = tx.send(drawn);
+        }
+    });
+    game.field_lines_job = Some((key, std::sync::Mutex::new(rx)));
 }
 
 fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {

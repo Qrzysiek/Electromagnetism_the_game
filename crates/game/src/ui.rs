@@ -208,7 +208,22 @@ pub fn panel(
         .exact_size(PANEL_WIDTH)
         .resizable(false)
         .show(&mut root, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| contents(ui, game, &radiation));
+            let mut area = egui::ScrollArea::vertical();
+            // Screenshots (EM_CAPTURE) can scroll the panel: EM_SCROLL=<points>.
+            if let Some(y) = std::env::var("EM_SCROLL")
+                .ok()
+                .and_then(|v| v.parse::<f32>().ok())
+            {
+                area = area.vertical_scroll_offset(y);
+            }
+            let available = ui.available_width();
+            let out = area.show(ui, |ui| contents(ui, game, &radiation));
+            // A row wider than the panel makes egui draw a stray full-height line: report
+            // it in capture runs (the audit looks for it).
+            let used = out.content_size.x;
+            if std::env::var("EM_CAPTURE").is_ok() && used > available + 0.5 {
+                eprintln!("panel overflow: content {used:.1} wider than {available:.1}");
+            }
         });
     game.panel_left_px = Some(response.response.rect.left() * ctx.pixels_per_point());
     Ok(())
@@ -698,10 +713,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     ui.label("max |F_rad| / |F_Lorentz|");
                     let text = format!("{:.1e}", p.reaction_ratio_max);
                     if p.reaction_ratio_max > 0.05 {
-                        ui.colored_label(
-                            egui::Color32::YELLOW,
-                            text + "  LL approximation strained",
-                        );
+                        // Short, with the explanation on hover: a long row widens the panel.
+                        ui.colored_label(egui::Color32::YELLOW, text + " (!)")
+                            .on_hover_text("Above 0.05: the Landau–Lifshitz approximation is strained");
                     } else {
                         ui.label(text);
                     }
@@ -710,7 +724,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     ui.label("radiated / T₀ (neglected)");
                     let text = format!("{:.1e}", p.radiated_fraction);
                     if p.radiated_fraction > 1e-10 {
-                        ui.colored_label(egui::Color32::YELLOW, text + "  not negligible!");
+                        ui.colored_label(egui::Color32::YELLOW, text + " (!)")
+                            .on_hover_text("Above 1e-10: not negligible");
                     } else {
                         ui.label(text);
                     }
@@ -723,10 +738,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                         );
                     let text = format!("≤ {:.1e}", p.image_force_bound);
                     if p.image_force_bound > level::IMAGE_FORCE_LIMIT {
-                        ui.colored_label(
-                            egui::Color32::YELLOW,
-                            text + "  not negligible: keep away from the metal",
-                        );
+                        ui.colored_label(egui::Color32::YELLOW, text + " (!)")
+                            .on_hover_text("Not negligible: keep away from the metal");
                     } else {
                         ui.label(text);
                     }
@@ -979,7 +992,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         .on_hover_text("How strongly the field lines are drawn");
     ui.label(
         egui::RichText::new(
-            "In this 2D slice of a 3D field, lines show direction only, not strength.",
+            "In this 2D slice of a 3D field, lines show direction only, not strength. Screened regions (behind grounded metal) get few lines.",
         )
         .small(),
     );

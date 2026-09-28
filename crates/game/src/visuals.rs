@@ -75,7 +75,19 @@ impl Grid {
 ///
 /// In the 2D slice of a 3D field, line density does not represent field strength
 /// (SPEC §4): lines show direction.
+#[cfg(test)]
 pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64) -> Vec<FieldLine> {
+    field_lines_cancellable(scn, charge_radius, spacing, || true).unwrap_or_default()
+}
+
+/// As `field_lines`, computed off the render thread: `keep_going` is asked between lines
+/// and every few hundred steps; `None` if it said stop.
+pub fn field_lines_cancellable(
+    scn: &Scenario<LevelField>,
+    charge_radius: f64,
+    spacing: f64,
+    keep_going: impl Fn() -> bool,
+) -> Option<Vec<FieldLine>> {
     const MAX_STEPS: usize = 400_000;
     const MAX_LINES: usize = 2_000;
     let charges: Vec<DVec3> = scn.field.coulomb.charges().map(|(p, _)| p).collect();
@@ -87,8 +99,9 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
         .map(|s| (s.center, s.radius))
         .collect();
     if charges.is_empty() && metal.is_empty() && scn.field.electrodes.is_empty() {
-        return Vec::new();
+        return Some(Vec::new());
     }
+    let stopped = std::cell::Cell::new(false);
     let steps = std::cell::Cell::new(0usize);
     let b = scn.bounds.expect("bounds");
     let d_sep = spacing.max(0.2);
@@ -117,14 +130,23 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
 
     // Traces from `seed` in direction `sign` (+1 along E) until the line reaches a charge
     // or the edge (or a point where E vanishes).
-    let trace = |seed: DVec3, sign: f64| -> Vec<DVec3> {
+    // A line that needs more than LINE_STEPS steps (it crawls in tiny steps, e.g. along
+    // a metal edge or through a nearly field-free region) is abandoned: one such line
+    // used to eat the whole budget (level 49: 50 166 steps, so only a few lines were left).
+    const LINE_STEPS: usize = 4_000;
+    let trace = |seed: DVec3, sign: f64| -> Option<Vec<DVec3>> {
         let mut pts = vec![seed];
         let mut x = seed;
         let mut ds: f64 = 0.02;
         let mut length = 0.0;
-        'outer: for _ in 0..50_000 {
+        let mut finished = false;
+        'outer: for _ in 0..LINE_STEPS {
             steps.set(steps.get() + 1);
             if steps.get() > MAX_STEPS {
+                break;
+            }
+            if steps.get().is_multiple_of(256) && !keep_going() {
+                stopped.set(true);
                 break;
             }
             let Some(d0) = field_dir(x, sign) else { break };
@@ -157,10 +179,15 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
             x = xn;
             pts.push(x);
             if !inside_bounds(x) || charge_distance(x) < 0.0 || length > 2000.0 {
+                finished = true;
                 break;
             }
         }
-        pts
+        // Ended by vanishing E (a break above) is fine too; only running out of steps is not.
+        if !finished && pts.len() > LINE_STEPS {
+            return None;
+        }
+        Some(pts)
     };
 
     let mut grid = Grid::new(d_sep);
@@ -216,14 +243,18 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
         if steps.get() > MAX_STEPS || lines.len() >= MAX_LINES {
             break;
         }
+        if stopped.get() || !keep_going() {
+            return None;
+        }
         if !inside_bounds(seed) || charge_distance(seed) < 0.0 {
             continue;
         }
         if charge_distance(seed) > converge_zone && grid.near(seed, d_sep, None) {
             continue;
         }
-        let forward = trace(seed, 1.0);
-        let backward = trace(seed, -1.0);
+        let (Some(forward), Some(backward)) = (trace(seed, 1.0), trace(seed, -1.0)) else {
+            continue;
+        };
         let mut points: Vec<DVec3> = backward.into_iter().rev().collect();
         points.extend(forward.into_iter().skip(1));
 
@@ -268,7 +299,10 @@ pub fn field_lines(scn: &Scenario<LevelField>, charge_radius: f64, spacing: f64)
         let arrows = arrows_along(&points, arrow_spacing, |x| field_dir(x, 1.0));
         lines.push(FieldLine { points, arrows });
     }
-    lines
+    if stopped.get() {
+        return None;
+    }
+    Some(lines)
 }
 
 /// Arrowheads every `spacing` of arc length (the first at half the spacing), each

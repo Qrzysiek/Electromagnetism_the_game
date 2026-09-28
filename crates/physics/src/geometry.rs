@@ -48,7 +48,14 @@ pub struct Capsule {
 impl Capsule {
     pub fn signed_distance(&self, x: DVec3) -> f64 {
         let ab = self.b - self.a;
-        let t = ((x - self.a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
+        let l2 = ab.length_squared();
+        // A zero-length segment is a sphere (0/0 gave NaN, and the crossing search on a
+        // NaN event value hung the flight: a polygon coil with a repeated vertex).
+        let t = if l2 > 0.0 {
+            ((x - self.a).dot(ab) / l2).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
         (x - (self.a + ab * t)).length() - self.radius
     }
 }
@@ -172,5 +179,22 @@ mod tests {
         };
         assert!((c.signed_distance(DVec3::new(2.0, 3.0, 0.0)) - 2.9).abs() < 1e-15);
         assert!((c.signed_distance(DVec3::new(7.0, 4.0, 0.0)) - 4.9).abs() < 1e-15);
+    }
+}
+
+#[cfg(test)]
+mod capsule_tests {
+    use super::*;
+
+    /// A zero-length capsule is a sphere (regression: NaN hung the crossing search).
+    #[test]
+    fn zero_length_capsule_is_a_sphere() {
+        let c = Capsule {
+            a: DVec3::new(1.0, 2.0, 0.0),
+            b: DVec3::new(1.0, 2.0, 0.0),
+            radius: 0.1,
+        };
+        let d = c.signed_distance(DVec3::new(4.0, 6.0, 0.0));
+        assert!((d - 4.9).abs() < 1e-12, "{d}");
     }
 }

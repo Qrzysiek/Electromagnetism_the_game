@@ -393,6 +393,11 @@ A level may list gates: boxes every flight must pass, in order, before its detec
 - **Beams.** Every particle of a beam passes the gates on its own, with the same code as a single flight (`GateTracker`, shared by both runners), up to the time its step ends (an event of any particle cuts the step short, and the next step starts there). Test B5.
 - **Solver.** A flight that did not pass every gate adds the distance to the first gate it did not pass, plus its acceptance deficit, so that the search is led through the stages in order.
 
+### Robustness notes
+
+- **Zero-length wire.** A polygon coil with a repeated vertex (easy to click in the sandbox) has a side of zero length. Its field is harmless (zero), but the wire obstacle's distance divided by the squared length: NaN. On a NaN event value every comparison in the certified crossing search fails, so it subdivided down to float resolution everywhere and the flight never ended (not even a level change could stop it, since the search runs inside one step). Now: a zero-length capsule is a sphere (test in `geometry.rs`), the search gives up on a NaN interval (debug assertion), and the sandbox skips repeated vertices.
+- **Cancellation.** The game's physics thread abandons a setup when a newer one arrives: flights between steps, and the factorizations of metal and electrode systems at checkpoints (`physics::cancel`, by unwinding; a half-built system never reaches a cache). Field lines are computed off the render thread and stop when the setup changes; a line needing more than 4000 steps (crawling along metal or through a nearly field-free region) is abandoned so that it cannot use up the budget of all lines (level 49 had one of 50 166 steps).
+
 ## 7. Outcome verification — *validated* (`crates/physics/src/verify.rs`, margins in `trajectory.rs`)
 
 Every flight that matters is computed at two tolerances: preview (1e-10) and verify (1e-12).

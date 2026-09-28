@@ -45,6 +45,14 @@ fn search(
     v_max: f64,
     min_sampled: &mut f64,
 ) -> Option<f64> {
+    // A NaN event value is a bug upstream (a zero-length wire once gave one); every
+    // comparison fails on it, and the search would subdivide down to float resolution
+    // everywhere, i.e. never end. Give up on the interval instead. (Infinite values are
+    // legitimate: a particle without a detector.)
+    if ga.is_nan() || gb.is_nan() {
+        debug_assert!(false, "NaN event value");
+        return None;
+    }
     if gb > 0.0 && ga + gb - v_max * (tb - ta) > 0.0 {
         return None;
     }

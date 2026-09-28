@@ -255,6 +255,7 @@ impl Fit {
 fn householder_qr(a: &mut [f64], m: usize, n: usize) -> Vec<f64> {
     let mut tau = vec![0.0; n];
     for k in 0..n {
+        crate::cancel::checkpoint();
         let col = k * m;
         let norm = (k..m).map(|i| a[col + i] * a[col + i]).sum::<f64>().sqrt();
         if norm == 0.0 {

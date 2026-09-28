@@ -94,7 +94,17 @@ fn positive(ui: &mut egui::Ui, v: &mut f64, speed: f64, hi: f64) -> bool {
     ui.add(
         egui::DragValue::new(v)
             .speed(speed)
-            .range(MIN_POSITIVE..=hi),
+            .range(MIN_POSITIVE..=hi)
+            // Large and tiny values in scientific notation: "50000000.00" made a row wider
+            // than the panel (scaled beam particles).
+            .custom_formatter(|v, range| {
+                if v.abs() >= 1e4 || (v != 0.0 && v.abs() < 1e-3) {
+                    format!("{v:.2e}")
+                } else {
+                    egui::emath::format_with_decimals_in_range(v, range)
+                }
+            })
+            .custom_parser(|t| t.trim().parse::<f64>().ok()),
     )
     .has_focus()
 }
