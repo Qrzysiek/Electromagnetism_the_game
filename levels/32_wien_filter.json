@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Wien filter",
-  "description": "Crossed electric and magnetic fields pass exactly one speed straight through: qE balances qvB when v = E/B. Slower ions are pushed one way, faster ones the other. The coil provides B; place charges to supply E so that the middle ion leaves straight along the axis (within ±3°) and the slower and faster ones reach their own detectors.",
+  "description": "Crossed electric and magnetic fields pass exactly one speed straight through: $qE$ balances $qvB$ when $v = E/B$. Slower ions are pushed one way, faster ones the other. The coil provides B; place charges to supply E so that the middle ion leaves straight along the axis (within ±3°) and the slower and faster ones reach their own detectors.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +24,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -56,7 +56,7 @@
     },
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -94,7 +94,7 @@
     },
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },

@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Geiger–Marsden (1909)",
-  "description": "Alpha particles fired at gold foil sometimes bounced straight back: the atom has a tiny, heavy, positive nucleus. Steer the alpha near the source so that it backscatters into the detector. The deflection follows tan(θ/2) = qQ / (2 T₀ b): the impact parameter b decides everything.",
+  "description": "Alpha particles fired at gold foil sometimes bounced straight back: the atom has a tiny, heavy, positive nucleus. Steer the alpha near the source so that it backscatters into the detector. The deflection follows $\\tan(\\theta/2) = qQ/(2T_0 b)$: the impact parameter b decides everything.",
   "grid": {
     "nx": 30,
     "ny": 20,

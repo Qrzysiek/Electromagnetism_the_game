@@ -1,0 +1,176 @@
+{
+ "-\\mathbf{m}\\cdot\\mathbf{B}": {
+  "file": "2c62d75344a288cb.svg",
+  "width_ex": 7.413,
+  "height_ex": 1.738,
+  "baseline_ex": 0.186
+ },
+ "-qR/d": {
+  "file": "75e3191a305f0e2b.svg",
+  "width_ex": 6.826,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
+ "1/\\gamma": {
+  "file": "8c1e0a7feacd2fae.svg",
+  "width_ex": 3.491,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
+ "1/\\gamma^2": {
+  "file": "7675ab917c7ed140.svg",
+  "width_ex": 4.595,
+  "height_ex": 2.452,
+  "baseline_ex": 0.566
+ },
+ "1/r^2": {
+  "file": "e7e99afd23521253.svg",
+  "width_ex": 4.27,
+  "height_ex": 2.452,
+  "baseline_ex": 0.566
+ },
+ "1/r^3": {
+  "file": "85764da19131a024.svg",
+  "width_ex": 4.27,
+  "height_ex": 2.451,
+  "baseline_ex": 0.566
+ },
+ "2T_0 R": {
+  "file": "cd9787c31134bf5f.svg",
+  "width_ex": 5.157,
+  "height_ex": 1.92,
+  "baseline_ex": 0.375
+ },
+ "R^2/d": {
+  "file": "bb39ca033148ef2d.svg",
+  "width_ex": 5.013,
+  "height_ex": 2.452,
+  "baseline_ex": 0.566
+ },
+ "T(b) = T_\\text{max}/\\left(1 + (b/b_\\text{min})^2\\right)": {
+  "file": "af762e58f4049171.svg",
+  "width_ex": 27.979,
+  "height_ex": 2.713,
+  "baseline_ex": 0.791
+ },
+ "\\gamma m v": {
+  "file": "d422c781211966e2.svg",
+  "width_ex": 4.312,
+  "height_ex": 1.491,
+  "baseline_ex": 0.489
+ },
+ "\\mathbf{E}\\times\\mathbf{B}/B^2": {
+  "file": "b90442dc511bfdc4.svg",
+  "width_ex": 10.163,
+  "height_ex": 2.452,
+  "baseline_ex": 0.566
+ },
+ "\\oint \\mathbf{E}\\cdot d\\mathbf{l} = -d\\Phi/dt": {
+  "file": "e4e29b1fd4cb8373.svg",
+  "width_ex": 17.712,
+  "height_ex": 2.514,
+  "baseline_ex": 0.691
+ },
+ "\\omega\\,\\Delta t": {
+  "file": "ac8add78df66600e.svg",
+  "width_ex": 4.486,
+  "height_ex": 1.645,
+  "baseline_ex": 0.025
+ },
+ "\\omega_0^2 = |qQ|/(mR^3)": {
+  "file": "2b60573239b20385.svg",
+  "width_ex": 17.083,
+  "height_ex": 2.573,
+  "baseline_ex": 0.687
+ },
+ "\\omega_1 = 2\\gamma^2\\omega_u/(1 + K^2/2)": {
+  "file": "e45c77328f8aeae9.svg",
+  "width_ex": 23.553,
+  "height_ex": 2.452,
+  "baseline_ex": 0.566
+ },
+ "\\omega_u = 2\\pi v/\\lambda_u": {
+  "file": "8a75502d7546543a.svg",
+  "width_ex": 12.598,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
+ "\\sqrt{2mT}": {
+  "file": "78cf1c66e9401bdf.svg",
+  "width_ex": 6.64,
+  "height_ex": 2.398,
+  "baseline_ex": 0.225
+ },
+ "\\tan(\\theta/2) = qQ/(2T_0 b)": {
+  "file": "91131f1622c2b7ee.svg",
+  "width_ex": 21.503,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
+ "\\tfrac{3}{2}\\gamma^3 c/R": {
+  "file": "9973c4ab9ebd098e.svg",
+  "width_ex": 7.956,
+  "height_ex": 2.736,
+  "baseline_ex": 0.781
+ },
+ "qE": {
+  "file": "7e5246b13401e0b2.svg",
+  "width_ex": 2.769,
+  "height_ex": 1.977,
+  "baseline_ex": 0.439
+ },
+ "q\\,\\mathbf{v}\\times\\mathbf{B}": {
+  "file": "1477938a6cfb66e2.svg",
+  "width_ex": 7.408,
+  "height_ex": 1.991,
+  "baseline_ex": 0.439
+ },
+ "qvB": {
+  "file": "2447241dc58e122c.svg",
+  "width_ex": 3.855,
+  "height_ex": 1.984,
+  "baseline_ex": 0.439
+ },
+ "r = \\sqrt{2mT}/(qB)": {
+  "file": "46a423c396dca3ec.svg",
+  "width_ex": 16.327,
+  "height_ex": 2.739,
+  "baseline_ex": 0.566
+ },
+ "r p_\\varphi + q r A_\\varphi": {
+  "file": "d28adf7d214efd9d.svg",
+  "width_ex": 11.15,
+  "height_ex": 2.308,
+  "baseline_ex": 0.688
+ },
+ "r^3 = r_0^3 - 9Z(c\\tau)^2 c t": {
+  "file": "c436347c093ee9e3.svg",
+  "width_ex": 19.259,
+  "height_ex": 2.607,
+  "baseline_ex": 0.708
+ },
+ "v = E/B": {
+  "file": "043272337bd0ba9e.svg",
+  "width_ex": 8.691,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
+ "|E| < c|B|": {
+  "file": "d8eda62df43a8a5e.svg",
+  "width_ex": 9.958,
+  "height_ex": 2.26,
+  "baseline_ex": 0.564
+ },
+ "|qQ| = \\gamma m v^2 R": {
+  "file": "6f4a7e596a68a3ea.svg",
+  "width_ex": 14.122,
+  "height_ex": 2.451,
+  "baseline_ex": 0.564
+ },
+ "|qQ| = p v R": {
+  "file": "b7451c2f07a0a853.svg",
+  "width_ex": 11.058,
+  "height_ex": 2.26,
+  "baseline_ex": 0.564
+ }
+}

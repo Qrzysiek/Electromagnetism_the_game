@@ -281,7 +281,7 @@ def geiger_marsden():
         "Geiger–Marsden (1909)",
         "Alpha particles fired at gold foil sometimes bounced straight back: the atom has a "
         "tiny, heavy, positive nucleus. Steer the alpha near the source so that it "
-        "backscatters into the detector. The deflection follows tan(θ/2) = qQ / (2 T₀ b): "
+        "backscatters into the detector. The deflection follows $\\tan(\\theta/2) = qQ/(2T_0 b)$: "
         "the impact parameter b decides everything.",
         shots=[shot(2e-6, 4.0, (0, 11), 0.0, 4.0, box((0, 18, 1, 20)))],
         elements=[charge(18, 10, 8 * M)],
@@ -336,7 +336,7 @@ def hemispherical_analyzer():
         "Photoelectron spectrometers sort particles by energy between two concentric "
         "hemispheres, where the field is exactly that of a point charge at the centre. "
         "Three energies leave the source; each must reach its own detector after bending "
-        "through 180°. A circular orbit of radius R needs |qQ| = p·v·R; the others become "
+        "through 180°. A circular orbit of radius R needs $|qQ| = p v R$; the others become "
         "ellipses.",
         shots=[shot(1e-6, 1.0, (4, 17), 0.0, e, Auto((1, 0, 3, 11), "x"))
                for e in (0.45, 0.5, 0.55)],
@@ -375,7 +375,7 @@ def einzel_lens():
 def fast_lane():
     return level(
         "Fast lane",
-        "A relativistic particle (v = 0.85 c) is hard to bend: its momentum grows as γmv. "
+        "A relativistic particle (v = 0.85 c) is hard to bend: its momentum grows as $\\gamma m v$. "
         "Charges that would easily steer a slow particle barely move this one.",
         # q = 1e-7 with 10x larger fixed charges: the same trajectories as q = 1e-6, but
         # 100x less (neglected) radiation, which scales as q²/(m c² r) at fixed qQ.
@@ -390,8 +390,8 @@ def beta_spectrometer():
         "Beta-ray spectrometer",
         "Beta decay electrons are fast. Two electrons, at v = 0.91 c (γ = 2.41) and "
         "v = 0.87 c (γ = 2.0), must each reach their own detector after bending around "
-        "one charge. The circular-orbit condition is |qQ| = γ m v² R, not the Newtonian "
-        "2 T₀ R. Trust relativity, not intuition. (The electron charge is small and the "
+        "one charge. The circular-orbit condition is $|qQ| = \\gamma m v^2 R$, not the Newtonian "
+        "$2T_0 R$. Trust relativity, not intuition. (The electron charge is small and the "
         "fixed charges large, so that radiation stays negligible.)",
         shots=[shot(-1e-7, 1.0, (4, 17), 0.0, e, Auto((1, 0, 3, 13), "x"))
                for e in (math.sqrt(2.0), 1.0)],
@@ -406,7 +406,7 @@ def beta_spectrometer():
 def first_coil():
     return level(
         "First coil",
-        "The coil's magnetic field bends moving charges into circles: the force q v × B is "
+        "The coil's magnetic field bends moving charges into circles: the force $q\\,\\mathbf{v}\\times\\mathbf{B}$ is "
         "perpendicular to the velocity, so it changes the direction but never the speed "
         "(watch the energy bars). Use a charge to steer the circling particle into the "
         "detector.",
@@ -421,7 +421,7 @@ def dempster():
     return level(
         "Dempster's mass spectrometer (1918)",
         "Ions from the source are accelerated by your electrodes, then bent by the magnetic "
-        "field of the large coil. In a uniform field r = √(2mT)/(qB), so masses 1, 2 and 4 "
+        "field of the large coil. In a uniform field $r = \\sqrt{2mT}/(qB)$, so masses 1, 2 and 4 "
         "land at different places; ions leaving at slightly different angles re-converge "
         "after half a turn (180° focusing). One setup must bring all six ions to the "
         "detectors of their masses.",
@@ -444,8 +444,8 @@ WIEN_DETECTORS = {0.3: box((26, 12, 28, 15)), 0.5: box((26, 9, 28, 11), directio
 def wien_filter():
     return level(
         "Wien filter",
-        "Crossed electric and magnetic fields pass exactly one speed straight through: qE "
-        "balances qvB when v = E/B. Slower ions are pushed one way, faster ones the other. "
+        "Crossed electric and magnetic fields pass exactly one speed straight through: $qE$ "
+        "balances $qvB$ when $v = E/B$. Slower ions are pushed one way, faster ones the other. "
         "The coil provides B; place charges to supply E so that the middle ion leaves "
         "straight along the axis (within ±3°) and the slower and faster ones reach their "
         "own detectors.",
@@ -459,7 +459,7 @@ def first_magnet():
         "First magnet",
         "A magnet here is a uniformly magnetized sphere standing out of the plane (⊙) or "
         "into it (⊗). In the plane its field is perpendicular to the plane and falls as "
-        "1/r³, so it bends the particle sideways, strongly only nearby. Place a magnet to "
+        "$1/r^3$, so it bends the particle sideways, strongly only nearby. Place a magnet to "
         "bend the beam into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 18)))],
         max_magnets=3, strengths=[1 * M, 2 * M, 4 * M], region=(6, 2, 24, 18))
@@ -469,7 +469,7 @@ def calutron():
     return level(
         "Calutron",
         "Lawrence's calutron separated uranium isotopes by bending ions in a magnetic "
-        "field: at equal energy the radius r = √(2mT)/(qB) grows with the mass. Three "
+        "field: at equal energy the radius $r = \\sqrt{2mT}/(qB)$ grows with the mass. Three "
         "isotopes leave the source together; place magnets so that each reaches its own "
         "detector.",
         # Separated probe strips: in the same field the lightest isotope bends most.
@@ -500,7 +500,7 @@ def stern_gerlach():
     return level(
         "Stern–Gerlach (1922)",
         "Stern and Gerlach sent silver atoms through a strongly non-uniform magnetic field. "
-        "The atoms are neutral, but each carries a tiny magnetic moment, whose energy −m·B "
+        "The atoms are neutral, but each carries a tiny magnetic moment, whose energy $-\\mathbf{m}\\cdot\\mathbf{B}$ "
         "changes where the field changes: the beam split in two, one part for each spin "
         "state. Here the two spin states fly as two shots. Place a magnet so that each "
         "reaches its own detector: one state is pushed towards stronger field, the other "
@@ -653,7 +653,7 @@ def tune_the_rf():
         "Now you choose the frequency. Two identical bunches leave the source 4 time "
         "units apart and must reach different detectors. An antenna kicks them "
         "differently only if they meet it at different phases of its oscillation: the "
-        "phase difference is ω Δt. Pick the frequency, then the orientation and place.",
+        "phase difference is $\\omega\\,\\Delta t$. Pick the frequency, then the orientation and place.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, d, 30, d + 3)), time=t)
                for t, d in ((0.0, 14), (4.0, 3))],
         max_antennas=2, amplitudes=[m * M for m in (2, 4, 8)],
@@ -966,8 +966,8 @@ def relativistic_beam():
         "Relativistic beam",
         "A beam at 0.8 c. Its particles repel each other electrically, but charges moving "
         "side by side also attract magnetically: at this speed the net repulsion is only "
-        "36 % (1/γ²) of the Coulomb force, which is why fast beams hold together. They are "
-        "also harder to bend (momentum γmv). Bring at least 90 % of the beam into the "
+        "36 % ($1/\\gamma^2$) of the Coulomb force, which is why fast beams hold together. They are "
+        "also harder to bend (momentum $\\gamma m v$). Bring at least 90 % of the beam into the "
         "detector.",
         c=5.0, t_max=20.0, beam_interaction=True, radiation_reaction=True,
         shots=[shot(0.06, 1.0, (0, 10), 0.0, (5 / 3 - 1) * 25.0, box((27, 14, 30, 19)),
@@ -1263,7 +1263,7 @@ def mass_spectrometer():
         "Finale of the third arc. Ions of three masses (1, 2 and 4) leave the source with "
         "the same energy, each at −5° and +5°. First focus them all through the gate: an "
         "electrostatic lens bends every mass alike at the same energy, since only T/q "
-        "matters. Then separate them: in a magnetic field the momentum √(2mT) decides, so "
+        "matters. Then separate them: in a magnetic field the momentum $\\sqrt{2mT}$ decides, so "
         "each mass lands on its own collector.",
         grid=(40, 20), shots=shots, gates=[gate], t_max=300.0,
         max_charges=5, magnitudes=mags, max_magnets=4, strengths=strengths,
@@ -1361,7 +1361,7 @@ def jackson_exb_drift():
         "Jackson §12.3: E×B drift",
         "Jackson §12.3 (motion in combined, uniform, static electric and magnetic fields). "
         "In crossed fields a particle starting at rest does not follow E: it rolls along a "
-        "cycloid and drifts with the velocity E×B/B², whatever its charge and mass. A "
+        "cycloid and drifts with the velocity $\\mathbf{E}\\times\\mathbf{B}/B^2$, whatever its charge and mass. A "
         "positive and a negative ion start here; both drift to the right, rolling in "
         "opposite senses. Their guiding centres follow the equipotentials (see the "
         "potential map): place a charge to bend the drift of both into the detector.",
@@ -1423,7 +1423,7 @@ def jackson_runaway():
     return level(
         "Jackson Pr. 12.5: E×B runaway",
         "Jackson Problem 12.5 and §12.3. Crossed fields make a particle drift only if "
-        "|E| < c|B|: then a frame moving with E×B/B² sees no electric field. Here the "
+        "$|E| < c|B|$: then a frame moving with $\\mathbf{E}\\times\\mathbf{B}/B^2$ sees no electric field. Here the "
         "electric field is stronger than c times the magnetic one (c = 2 cells per time "
         "unit), no such frame exists, and the particle runs away along E. Near a magnet "
         "the field is strong enough: place magnets so that the particle drifts into the "
@@ -1477,7 +1477,7 @@ def jackson_faraday():
     return level(
         "Jackson §5.15: Faraday's law",
         "Jackson §5.15: a changing magnetic flux induces an electric field that circulates "
-        "around it, ∮E·dl = −dΦ/dt. The current in this coil rises steadily; no charge is "
+        "around it, $\\oint \\mathbf{E}\\cdot d\\mathbf{l} = -d\\Phi/dt$. The current in this coil rises steadily; no charge is "
         "anywhere near the particle at rest, yet the induced field drives it around the "
         "axis, faster and faster, while the growing field tightens its orbit. Bring it into "
         "the detector with at least 0.3 of kinetic energy: only the induction can give it "
@@ -1500,7 +1500,7 @@ def jackson_knock_on():
         "Jackson Pr. 13.1: knock-on",
         "Jackson Problem 13.1 (energy transfer in a Coulomb collision): throw a heavy ion "
         "(pull its slingshot handle back) past the light particle at rest. The ion's field "
-        "kicks it, the harder the closer the ion passes, T(b) = T_max / (1 + (b/b_min)²): "
+        "kicks it, the harder the closer the ion passes, $T(b) = T_\\text{max}/\\left(1 + (b/b_\\text{min})^2\\right)$: "
         "a close pass throws it forward, a distant one sideways. Kick the light particle "
         "into its detector, fast enough to count (a gentle push from afar is not a kick).",
         grid=(40, 20), c=None, t_max=120.0,
@@ -1518,7 +1518,7 @@ def jackson_stormer():
     return level(
         "Jackson §12.1: Störmer's forbidden region",
         "Jackson §12.1 (canonical momentum). The Earth's dipole field is symmetric about "
-        "its axis, so the particle's canonical angular momentum r p_φ + q r A_φ cannot "
+        "its axis, so the particle's canonical angular momentum $r p_\\varphi + q r A_\\varphi$ cannot "
         "change: aimed straight at the Earth, it is turned away more than seven cells "
         "out, and no aim of the launch helps (Störmer's forbidden region, which keeps "
         "slow cosmic rays away from the equator). Your charges break the symmetry: bring "
@@ -1583,7 +1583,7 @@ def jackson_own_image():
         "Jackson §2.2: its own image",
         "Jackson §2.2 (a point charge near a grounded conducting sphere). The sphere "
         "carries no charge of its own, yet it attracts every charge that passes: the "
-        "charge induces an opposite image charge inside it, −q R/d at the distance R²/d "
+        "charge induces an opposite image charge inside it, $-qR/d$ at the distance $R^2/d$ "
         "from the centre, and the image pulls. The pull grows steeply near the surface. "
         "Bring the particle into the detector.",
         shots=[shot(1.0, 1.0, (0, 6), 0.0, 0.3, box((27, 12, 30, 16)))],
@@ -1695,7 +1695,7 @@ def jackson_classical_atom():
     return level(
         "Jackson Pr. 16.2: the classical atom",
         "Jackson Problem 16.2 (and §16.2): an accelerated charge radiates, so a classical "
-        "electron circling a nucleus loses energy and spirals in, r³ = r₀³ − 9Z(cτ)²ct. "
+        "electron circling a nucleus loses energy and spirals in, $r^3 = r_0^3 - 9Z(c\\tau)^2 c t$. "
         "This one would take too long. The detector around the nucleus only counts an "
         "electron that has lost energy by radiating (arriving slowly). Make it radiate "
         "faster: an orbit that dips close to the nucleus radiates most there.",
@@ -1764,7 +1764,7 @@ def jackson_bound_charge():
         "Thomson's atom) the field grows linearly from the centre, so the electron is "
         "pulled back in proportion to how far it strays: it circles the centre with the "
         "same period at any radius. Only inside: outside the sphere the pull is "
-        "Coulomb's 1/r², no spring at all, so an electron with more energy than the "
+        "Coulomb's $1/r^2$, no spring at all, so an electron with more energy than the "
         "spring can hold leaves. Pull it out of the atom into the detector.",
         shots=[shot(-1e-6, 1.0, (10, 8), 0.0, 0.5 * 0.25 ** 2, box((24, 8, 28, 12)))],
         clouds=[cloud(10, 10, 4.0, 1e6)],
@@ -1787,8 +1787,8 @@ def jackson_resonance():
         "place) so that the electron swings out of the atom into the detector. "
         "The atom is Thomson's: a sphere of uniform positive charge. Inside it the field "
         "grows in proportion to the distance from the centre, so an electron inside feels "
-        "the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's "
-        "bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an "
+        "the pull of a spring ($\\omega_0^2 = |qQ|/(mR^3)$), the effective description of Jackson's "
+        "bound charge. Outside the sphere the pull is Coulomb's $1/r^2$, no spring at all: an "
         "electron with more energy than the spring can hold leaves.",
         shots=[shot(-1e-6, 1.0, (15, 10), 90.0, 0.5 * w0 ** 2, box((20, 8, 22, 12)))],
         clouds=[cloud(15, 10, 4.0, 1e6)], rf_omega=0.3, t_max=400.0,
@@ -1814,8 +1814,8 @@ def jackson_bound_knock():
         "the atom into the detector above. "
         "The atom is Thomson's: a sphere of uniform positive charge. Inside it the field "
         "grows in proportion to the distance from the centre, so an electron inside feels "
-        "the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's "
-        "bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an "
+        "the pull of a spring ($\\omega_0^2 = |qQ|/(mR^3)$), the effective description of Jackson's "
+        "bound charge. Outside the sphere the pull is Coulomb's $1/r^2$, no spring at all: an "
         "electron with more energy than the spring can hold leaves.",
         grid=(40, 20), c=None, t_max=150.0,
         shots=[shot(-1.0, 1.0, (30, 8), 0.0, 0.5 * (w0 * 2.0) ** 2, box((27, 17, 33, 20)))],
@@ -1836,8 +1836,8 @@ def jackson_spectroscopy():
         "at its own resonance, and keep each drive from upsetting the other atom. "
         "Each atom is Thomson's: a sphere of uniform positive charge. Inside it the field "
         "grows in proportion to the distance from the centre, so an electron inside feels "
-        "the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's "
-        "bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an "
+        "the pull of a spring ($\\omega_0^2 = |qQ|/(mR^3)$), the effective description of Jackson's "
+        "bound charge. Outside the sphere the pull is Coulomb's $1/r^2$, no spring at all: an "
         "electron with more energy than the spring can hold leaves.",
         grid=(40, 20), t_max=500.0, rf_omega=0.3,
         shots=[shot(-1e-6, 1.0, (13, 10), 90.0, 0.5 * w1 ** 2, box((18, 13, 21, 16))),
@@ -2005,7 +2005,7 @@ def jackson_beaming():
     return level(
         "Jackson §14.3: forward beaming",
         "Jackson §14.3: a fast charge radiates when it is accelerated, and almost all of it "
-        "goes forward, into a narrow cone around its velocity (half-angle about 1/γ; here "
+        "goes forward, into a narrow cone around its velocity (half-angle about $1/\\gamma$; here "
         "γ = 3, so about 19°). A receiver far away, at 30° (the band outside the arena), "
         "must collect at least 0.0006 per steradian from the flight. Flying straight the "
         "particle does not radiate at all: bend it so that it heads for the receiver "
@@ -2032,7 +2032,7 @@ def jackson_critical_frequency():
         "Jackson §14.6: the same receiver as before, but now it only counts angular "
         "frequencies from 80 to 160 (the shaded band of the spectrum in the panel). A "
         "bend's radiation reaches the receiver as a short flash, the shorter the tighter "
-        "the bend, and a short flash contains high frequencies: up to about (3/2) γ³ c / R "
+        "the bend, and a short flash contains high frequencies: up to about $\\tfrac{3}{2}\\gamma^3 c/R$ "
         "for a bend of radius R. A gentle bend that lit the receiver before may put almost "
         "nothing into this band: bend the particle harder, while it heads for the "
         "receiver, to deliver at least 0.003 per steradian in the band. Watch the spectrum "
@@ -2089,7 +2089,7 @@ def jackson_undulator():
         "Jackson §14.7: undulator",
         "Jackson §14.7: a row of magnets of alternating sign wiggles a fast particle, and "
         "seen from straight ahead the wiggles' radiation adds up at one frequency, "
-        "ω₁ = 2γ²ω_u/(1 + K²/2), where ω_u = 2πv/λ_u is the wiggle frequency and K the "
+        "$\\omega_1 = 2\\gamma^2\\omega_u/(1 + K^2/2)$, where $\\omega_u = 2\\pi v/\\lambda_u$ is the wiggle frequency and K the "
         "wiggle strength: the Doppler effect squeezes a slow wiggle into a fast wave. "
         "Build an undulator that delivers at least 0.0001 per steradian to the receiver "
         "straight ahead, in the band 34–38, and lets the particle go on straight along the "
@@ -2492,6 +2492,39 @@ def main():
         print(f"{key}: reference {'verified' if ok else 'NOT VERIFIED'}", flush=True)
         if not ok:
             print(report)
+
+    render_math()
+
+
+def render_math():
+    """Renders the LaTeX formulas ($...$) of every level's description (shipped and
+    custom) to SVG with MathJax (scripts/math/render.mjs; `npm install` in scripts/math
+    once), into levels/math/ with a manifest the game reads (crates/game/src/math.rs)."""
+    formulas = []
+    for folder in (os.path.join(ROOT, "levels"), os.path.join(ROOT, "levels", "custom")):
+        if not os.path.isdir(folder):
+            continue
+        for name in sorted(os.listdir(folder)):
+            if not name.endswith(".json") or name in ("curriculum.json", "golden_hashes.json"):
+                continue
+            text = json.load(open(os.path.join(folder, name), encoding="utf-8")).get(
+                "description", "")
+            if text.count("$") % 2:
+                sys.exit(f"{name}: unmatched $ in the description")
+            formulas += re.findall(r"\$([^$]+)\$", text)
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                     encoding="utf-8") as f:
+        json.dump(sorted(set(formulas)), f)
+        path = f.name
+    try:
+        out = subprocess.run(["node", os.path.join(ROOT, "scripts", "math", "render.mjs"), path,
+                              os.path.join(ROOT, "levels", "math")],
+                             capture_output=True, text=True, encoding="utf-8")
+    finally:
+        os.unlink(path)
+    if out.returncode != 0:
+        sys.exit("rendering the formulas failed: " + out.stdout + out.stderr)
+    print(out.stdout.strip())
 
 
 if __name__ == "__main__":

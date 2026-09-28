@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Mass spectrometer from parts",
-  "description": "Finale of the third arc. Ions of three masses (1, 2 and 4) leave the source with the same energy, each at −5° and +5°. First focus them all through the gate: an electrostatic lens bends every mass alike at the same energy, since only T/q matters. Then separate them: in a magnetic field the momentum √(2mT) decides, so each mass lands on its own collector.",
+  "description": "Finale of the third arc. Ions of three masses (1, 2 and 4) leave the source with the same energy, each at −5° and +5°. First focus them all through the gate: an electrostatic lens bends every mass alike at the same energy, since only T/q matters. Then separate them: in a magnetic field the momentum $\\sqrt{2mT}$ decides, so each mass lands on its own collector.",
   "grid": {
     "nx": 40,
     "ny": 20,

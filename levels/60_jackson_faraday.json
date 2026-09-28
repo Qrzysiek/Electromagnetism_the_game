@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §5.15: Faraday's law",
-  "description": "Jackson §5.15: a changing magnetic flux induces an electric field that circulates around it, ∮E·dl = −dΦ/dt. The current in this coil rises steadily; no charge is anywhere near the particle at rest, yet the induced field drives it around the axis, faster and faster, while the growing field tightens its orbit. Bring it into the detector with at least 0.3 of kinetic energy: only the induction can give it that much.",
+  "description": "Jackson §5.15: a changing magnetic flux induces an electric field that circulates around it, $\\oint \\mathbf{E}\\cdot d\\mathbf{l} = -d\\Phi/dt$. The current in this coil rises steadily; no charge is anywhere near the particle at rest, yet the induced field drives it around the axis, faster and faster, while the growing field tightens its orbit. Bring it into the detector with at least 0.3 of kinetic energy: only the induction can give it that much.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +24,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -39,7 +39,7 @@
           0.0,
           0.0
         ],
-        "kinetic_energy": 1e-6
+        "kinetic_energy": 1e-06
       },
       "detector": {
         "min": [

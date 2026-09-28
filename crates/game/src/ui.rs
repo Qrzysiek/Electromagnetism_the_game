@@ -303,7 +303,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     }
     let level = game.editor.level.clone();
     if !level.description.is_empty() {
-        ui.label(egui::RichText::new(&level.description).italics());
+        crate::math::paragraph(ui, &level.description, egui::RichText::italics);
     }
 
     // Shots.

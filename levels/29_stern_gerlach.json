@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Stern–Gerlach (1922)",
-  "description": "Stern and Gerlach sent silver atoms through a strongly non-uniform magnetic field. The atoms are neutral, but each carries a tiny magnetic moment, whose energy −m·B changes where the field changes: the beam split in two, one part for each spin state. Here the two spin states fly as two shots. Place a magnet so that each reaches its own detector: one state is pushed towards stronger field, the other away (see the magnetic map).",
+  "description": "Stern and Gerlach sent silver atoms through a strongly non-uniform magnetic field. The atoms are neutral, but each carries a tiny magnetic moment, whose energy $-\\mathbf{m}\\cdot\\mathbf{B}$ changes where the field changes: the beam split in two, one part for each spin state. Here the two spin states fly as two shots. Place a magnet so that each reaches its own detector: one state is pushed towards stronger field, the other away (see the magnetic map).",
   "grid": {
     "nx": 30,
     "ny": 20,

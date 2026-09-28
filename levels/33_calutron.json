@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Calutron",
-  "description": "Lawrence's calutron separated uranium isotopes by bending ions in a magnetic field: at equal energy the radius r = √(2mT)/(qB) grows with the mass. Three isotopes leave the source together; place magnets so that each reaches its own detector.",
+  "description": "Lawrence's calutron separated uranium isotopes by bending ions in a magnetic field: at equal energy the radius $r = \\sqrt{2mT}/(qB)$ grows with the mass. Three isotopes leave the source together; place magnets so that each reaches its own detector.",
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -1,0 +1,9 @@
+{
+  "name": "em-math",
+  "private": true,
+  "description": "Renders the LaTeX formulas of level descriptions to SVG with MathJax (run by scripts/levels.py).",
+  "type": "module",
+  "dependencies": {
+    "mathjax-full": "3.2.2"
+  }
+}

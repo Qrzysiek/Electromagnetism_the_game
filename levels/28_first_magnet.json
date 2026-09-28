@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "First magnet",
-  "description": "A magnet here is a uniformly magnetized sphere standing out of the plane (⊙) or into it (⊗). In the plane its field is perpendicular to the plane and falls as 1/r³, so it bends the particle sideways, strongly only nearby. Place a magnet to bend the beam into the detector.",
+  "description": "A magnet here is a uniformly magnetized sphere standing out of the plane (⊙) or into it (⊗). In the plane its field is perpendicular to the plane and falls as $1/r^3$, so it bends the particle sideways, strongly only nearby. Place a magnet to bend the beam into the detector.",
   "grid": {
     "nx": 30,
     "ny": 20,

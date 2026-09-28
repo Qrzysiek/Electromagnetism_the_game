@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §14.3: forward beaming",
-  "description": "Jackson §14.3: a fast charge radiates when it is accelerated, and almost all of it goes forward, into a narrow cone around its velocity (half-angle about 1/γ; here γ = 3, so about 19°). A receiver far away, at 30° (the band outside the arena), must collect at least 0.0006 per steradian from the flight. Flying straight the particle does not radiate at all: bend it so that it heads for the receiver while it is being bent. It may end anywhere on the right edge. (c = 2 cells per time unit; radiation reaction is included.)",
+  "description": "Jackson §14.3: a fast charge radiates when it is accelerated, and almost all of it goes forward, into a narrow cone around its velocity (half-angle about $1/\\gamma$; here γ = 3, so about 19°). A receiver far away, at 30° (the band outside the arena), must collect at least 0.0006 per steradian from the flight. Flying straight the particle does not radiate at all: bend it so that it heads for the receiver while it is being bent. It may end anywhere on the right edge. (c = 2 cells per time unit; radiation reaction is included.)",
   "grid": {
     "nx": 40,
     "ny": 20,

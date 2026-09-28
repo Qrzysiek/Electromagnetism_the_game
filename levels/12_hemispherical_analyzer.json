@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Hemispherical analyzer (XPS)",
-  "description": "Photoelectron spectrometers sort particles by energy between two concentric hemispheres, where the field is exactly that of a point charge at the centre. Three energies leave the source; each must reach its own detector after bending through 180°. A circular orbit of radius R needs |qQ| = p·v·R; the others become ellipses.",
+  "description": "Photoelectron spectrometers sort particles by energy between two concentric hemispheres, where the field is exactly that of a point charge at the centre. Three energies leave the source; each must reach its own detector after bending through 180°. A circular orbit of radius R needs $|qQ| = p v R$; the others become ellipses.",
   "grid": {
     "nx": 30,
     "ny": 20,

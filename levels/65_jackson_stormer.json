@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §12.1: Störmer's forbidden region",
-  "description": "Jackson §12.1 (canonical momentum). The Earth's dipole field is symmetric about its axis, so the particle's canonical angular momentum r p_φ + q r A_φ cannot change: aimed straight at the Earth, it is turned away more than seven cells out, and no aim of the launch helps (Störmer's forbidden region, which keeps slow cosmic rays away from the equator). Your charges break the symmetry: bring the particle down to the Earth.",
+  "description": "Jackson §12.1 (canonical momentum). The Earth's dipole field is symmetric about its axis, so the particle's canonical angular momentum $r p_\\varphi + q r A_\\varphi$ cannot change: aimed straight at the Earth, it is turned away more than seven cells out, and no aim of the launch helps (Störmer's forbidden region, which keeps slow cosmic rays away from the equator). Your charges break the symmetry: bring the particle down to the Earth.",
   "grid": {
     "nx": 30,
     "ny": 20,

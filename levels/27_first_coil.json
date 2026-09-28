@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "First coil",
-  "description": "The coil's magnetic field bends moving charges into circles: the force q v × B is perpendicular to the velocity, so it changes the direction but never the speed (watch the energy bars). Use a charge to steer the circling particle into the detector.",
+  "description": "The coil's magnetic field bends moving charges into circles: the force $q\\,\\mathbf{v}\\times\\mathbf{B}$ is perpendicular to the velocity, so it changes the direction but never the speed (watch the energy bars). Use a charge to steer the circling particle into the detector.",
   "grid": {
     "nx": 30,
     "ny": 20,

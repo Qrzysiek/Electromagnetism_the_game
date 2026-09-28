@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §12.3: E×B drift",
-  "description": "Jackson §12.3 (motion in combined, uniform, static electric and magnetic fields). In crossed fields a particle starting at rest does not follow E: it rolls along a cycloid and drifts with the velocity E×B/B², whatever its charge and mass. A positive and a negative ion start here; both drift to the right, rolling in opposite senses. Their guiding centres follow the equipotentials (see the potential map): place a charge to bend the drift of both into the detector.",
+  "description": "Jackson §12.3 (motion in combined, uniform, static electric and magnetic fields). In crossed fields a particle starting at rest does not follow E: it rolls along a cycloid and drifts with the velocity $\\mathbf{E}\\times\\mathbf{B}/B^2$, whatever its charge and mass. A positive and a negative ion start here; both drift to the right, rolling in opposite senses. Their guiding centres follow the equipotentials (see the potential map): place a charge to bend the drift of both into the detector.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +24,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -56,7 +56,7 @@
     },
     {
       "particle": {
-        "charge": -1e-6,
+        "charge": -1e-06,
         "mass": 1.0,
         "radius": 0.0
       },

@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Tune the RF",
-  "description": "Now you choose the frequency. Two identical bunches leave the source 4 time units apart and must reach different detectors. An antenna kicks them differently only if they meet it at different phases of its oscillation: the phase difference is ω Δt. Pick the frequency, then the orientation and place.",
+  "description": "Now you choose the frequency. Two identical bunches leave the source 4 time units apart and must reach different detectors. An antenna kicks them differently only if they meet it at different phases of its oscillation: the phase difference is $\\omega\\,\\Delta t$. Pick the frequency, then the orientation and place.",
   "grid": {
     "nx": 30,
     "ny": 20,

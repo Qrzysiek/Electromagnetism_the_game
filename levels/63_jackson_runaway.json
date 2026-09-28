@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 12.5: E×B runaway",
-  "description": "Jackson Problem 12.5 and §12.3. Crossed fields make a particle drift only if |E| < c|B|: then a frame moving with E×B/B² sees no electric field. Here the electric field is stronger than c times the magnetic one (c = 2 cells per time unit), no such frame exists, and the particle runs away along E. Near a magnet the field is strong enough: place magnets so that the particle drifts into the detector instead.",
+  "description": "Jackson Problem 12.5 and §12.3. Crossed fields make a particle drift only if $|E| < c|B|$: then a frame moving with $\\mathbf{E}\\times\\mathbf{B}/B^2$ sees no electric field. Here the electric field is stronger than c times the magnetic one (c = 2 cells per time unit), no such frame exists, and the particle runs away along E. Near a magnet the field is strong enough: place magnets so that the particle drifts into the detector instead.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +24,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-8,
+        "charge": 1e-08,
         "mass": 1.0,
         "radius": 0.0
       },

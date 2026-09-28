@@ -4,6 +4,7 @@ mod curriculum;
 mod draw;
 mod editor;
 mod level_editor;
+mod math;
 mod potential;
 mod radiation;
 mod sandbox;

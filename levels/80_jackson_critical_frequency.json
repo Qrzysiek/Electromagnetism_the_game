@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson §14.6: the critical frequency",
-  "description": "Jackson §14.6: the same receiver as before, but now it only counts angular frequencies from 80 to 160 (the shaded band of the spectrum in the panel). A bend's radiation reaches the receiver as a short flash, the shorter the tighter the bend, and a short flash contains high frequencies: up to about (3/2) γ³ c / R for a bend of radius R. A gentle bend that lit the receiver before may put almost nothing into this band: bend the particle harder, while it heads for the receiver, to deliver at least 0.003 per steradian in the band. Watch the spectrum move up as the bend gets tighter.",
+  "description": "Jackson §14.6: the same receiver as before, but now it only counts angular frequencies from 80 to 160 (the shaded band of the spectrum in the panel). A bend's radiation reaches the receiver as a short flash, the shorter the tighter the bend, and a short flash contains high frequencies: up to about $\\tfrac{3}{2}\\gamma^3 c/R$ for a bend of radius R. A gentle bend that lit the receiver before may put almost nothing into this band: bend the particle harder, while it heads for the receiver, to deliver at least 0.003 per steradian in the band. Watch the spectrum move up as the bend gets tighter.",
   "grid": {
     "nx": 40,
     "ny": 20,

@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Dempster's mass spectrometer (1918)",
-  "description": "Ions from the source are accelerated by your electrodes, then bent by the magnetic field of the large coil. In a uniform field r = √(2mT)/(qB), so masses 1, 2 and 4 land at different places; ions leaving at slightly different angles re-converge after half a turn (180° focusing). One setup must bring all six ions to the detectors of their masses.",
+  "description": "Ions from the source are accelerated by your electrodes, then bent by the magnetic field of the large coil. In a uniform field $r = \\sqrt{2mT}/(qB)$, so masses 1, 2 and 4 land at different places; ions leaving at slightly different angles re-converge after half a turn (180° focusing). One setup must bring all six ions to the detectors of their masses.",
   "grid": {
     "nx": 32,
     "ny": 22,

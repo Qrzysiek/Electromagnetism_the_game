@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Relativistic beam",
-  "description": "A beam at 0.8 c. Its particles repel each other electrically, but charges moving side by side also attract magnetically: at this speed the net repulsion is only 36 % (1/γ²) of the Coulomb force, which is why fast beams hold together. They are also harder to bend (momentum γmv). Bring at least 90 % of the beam into the detector.",
+  "description": "A beam at 0.8 c. Its particles repel each other electrically, but charges moving side by side also attract magnetically: at this speed the net repulsion is only 36 % ($1/\\gamma^2$) of the Coulomb force, which is why fast beams hold together. They are also harder to bend (momentum $\\gamma m v$). Bring at least 90 % of the beam into the detector.",
   "grid": {
     "nx": 30,
     "ny": 20,

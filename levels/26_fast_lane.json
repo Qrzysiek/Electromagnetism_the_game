@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Fast lane",
-  "description": "A relativistic particle (v = 0.85 c) is hard to bend: its momentum grows as γmv. Charges that would easily steer a slow particle barely move this one.",
+  "description": "A relativistic particle (v = 0.85 c) is hard to bend: its momentum grows as $\\gamma m v$. Charges that would easily steer a slow particle barely move this one.",
   "grid": {
     "nx": 30,
     "ny": 20,

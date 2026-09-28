@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 13.1: knock-on",
-  "description": "Jackson Problem 13.1 (energy transfer in a Coulomb collision): throw a heavy ion (pull its slingshot handle back) past the light particle at rest. The ion's field kicks it, the harder the closer the ion passes, T(b) = T_max / (1 + (b/b_min)²): a close pass throws it forward, a distant one sideways. Kick the light particle into its detector, fast enough to count (a gentle push from afar is not a kick).",
+  "description": "Jackson Problem 13.1 (energy transfer in a Coulomb collision): throw a heavy ion (pull its slingshot handle back) past the light particle at rest. The ion's field kicks it, the harder the closer the ion passes, $T(b) = T_\\text{max}/\\left(1 + (b/b_\\text{min})^2\\right)$: a close pass throws it forward, a distant one sideways. Kick the light particle into its detector, fast enough to count (a gentle push from afar is not a kick).",
   "grid": {
     "nx": 40,
     "ny": 20,
@@ -39,7 +39,7 @@
           1.0,
           0.0
         ],
-        "kinetic_energy": 1e-9
+        "kinetic_energy": 1e-09
       },
       "detector": {
         "min": [

@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Beta-ray spectrometer",
-  "description": "Beta decay electrons are fast. Two electrons, at v = 0.91 c (γ = 2.41) and v = 0.87 c (γ = 2.0), must each reach their own detector after bending around one charge. The circular-orbit condition is |qQ| = γ m v² R, not the Newtonian 2 T₀ R. Trust relativity, not intuition. (The electron charge is small and the fixed charges large, so that radiation stays negligible.)",
+  "description": "Beta decay electrons are fast. Two electrons, at v = 0.91 c (γ = 2.41) and v = 0.87 c (γ = 2.0), must each reach their own detector after bending around one charge. The circular-orbit condition is $|qQ| = \\gamma m v^2 R$, not the Newtonian $2T_0 R$. Trust relativity, not intuition. (The electron charge is small and the fixed charges large, so that radiation stays negligible.)",
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 16.2: the classical atom",
-  "description": "Jackson Problem 16.2 (and §16.2): an accelerated charge radiates, so a classical electron circling a nucleus loses energy and spirals in, r³ = r₀³ − 9Z(cτ)²ct. This one would take too long. The detector around the nucleus only counts an electron that has lost energy by radiating (arriving slowly). Make it radiate faster: an orbit that dips close to the nucleus radiates most there.",
+  "description": "Jackson Problem 16.2 (and §16.2): an accelerated charge radiates, so a classical electron circling a nucleus loses energy and spirals in, $r^3 = r_0^3 - 9Z(c\\tau)^2 c t$. This one would take too long. The detector around the nucleus only counts an electron that has lost energy by radiating (arriving slowly). Make it radiate faster: an orbit that dips close to the nucleus radiates most there.",
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -16,6 +16,16 @@ cargo run --release -p generator -- check levels/01_first_bend.json
 cargo run --release -p generator -- solve levels/08_around_the_wall.json
 ```
 
+## Math in level texts
+
+Level descriptions may contain LaTeX between `$...$`. `python scripts/levels.py` renders
+every formula once with MathJax (`scripts/math/render.mjs`; needs Node.js and, once,
+`npm install` in `scripts/math`) to SVGs in `levels/math/`, which are committed. The game
+rasterizes each SVG with resvg at exactly the size it is shown (sized to the text's
+x-height and coloured like it), so formulas stay sharp at any font size or UI scale. A
+formula that has not been rendered (e.g. typed into a sandbox level) shows its LaTeX
+source until the levels are rebuilt.
+
 ## Sandbox (level editor)
 
 Switch to **Sandbox** at the top of the panel.

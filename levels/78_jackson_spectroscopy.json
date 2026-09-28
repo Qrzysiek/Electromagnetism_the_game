@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Jackson Ch. 16: spectroscopy",
-  "description": "Finale of the Jackson arc on bound charges (§16.7-16.8). Two atoms of different sizes, so two different natural frequencies: the big one rings at 0.125, the small one at 0.192. Each electron must leave its atom into its own detector: drive each at its own resonance, and keep each drive from upsetting the other atom. Each atom is Thomson's: a sphere of uniform positive charge. Inside it the field grows in proportion to the distance from the centre, so an electron inside feels the pull of a spring (ω₀² = |qQ|/(mR³)), the effective description of Jackson's bound charge. Outside the sphere the pull is Coulomb's 1/r², no spring at all: an electron with more energy than the spring can hold leaves.",
+  "description": "Finale of the Jackson arc on bound charges (§16.7-16.8). Two atoms of different sizes, so two different natural frequencies: the big one rings at 0.125, the small one at 0.192. Each electron must leave its atom into its own detector: drive each at its own resonance, and keep each drive from upsetting the other atom. Each atom is Thomson's: a sphere of uniform positive charge. Inside it the field grows in proportion to the distance from the centre, so an electron inside feels the pull of a spring ($\\omega_0^2 = |qQ|/(mR^3)$), the effective description of Jackson's bound charge. Outside the sphere the pull is Coulomb's $1/r^2$, no spring at all: an electron with more energy than the spring can hold leaves.",
   "grid": {
     "nx": 40,
     "ny": 20,
