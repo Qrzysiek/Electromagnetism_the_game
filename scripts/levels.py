@@ -1571,7 +1571,7 @@ def jackson_magnetosphere():
     return lvl
 
 
-# Jackson arc on conductors (Ch. 2-3). The golden-ratio levels use a particle with charge
+# Jackson arc on electrostatics (Ch. 2-4). The golden-ratio levels use a particle with charge
 # 1 (Newtonian, c = inf, so nothing radiates): the image force on it is then comparable
 # to the sphere's own field, as in Problem 2.4. Test K5 checks the engine against the
 # problem's answer.
@@ -1636,6 +1636,36 @@ def jackson_golden_ratio():
         shots=[shot(1.0, 1.0, (0, 10), 0.0, 0.3, box((27, 8, 30, 12)))],
         conductors=[metal(15, 10, 3, "charge", 1.0)],
         max_charges=4, magnitudes=[0.25, 0.5, 1.0, 2.0], c=None, t_max=300.0)
+
+
+def jackson_multipoles():
+    # Jackson §4.1 (the multipole expansion). Seen from a beam passing at distance b, a
+    # group of charges kicks it, to first order, by (2q/(m v^2)) sum_i Q_i/(b - y_i) (y_i
+    # across the beam): ~Q/b for a net charge, ~p/b^2 for a dipole, ~Qd^2/b^3 for a
+    # quadrupole. Two far beams (A along x, 11-16 cells above the region; C along y, 15-21
+    # cells to its right) must arrive within 0.05 degrees of straight; the near beam B, one
+    # cell below the region, must be bent down about 10 degrees into its detector. A net
+    # charge or a dipole strong enough to bend B turns A by 0.2 degrees or more; a compact
+    # quadrupole (+q, -2q, +q, 1 cell apart) by 0.01-0.03. C catches what A cannot see (a
+    # structure along x). The region is centred on both far flights, where the part of a
+    # charge's field that a flight sees is stationary: a first version with the region near
+    # the far beams' launch points let the search hide a net charge of -0.25 M by putting
+    # the positive charges further along the flight.
+    return level(
+        "Jackson §4.1: multipoles",
+        "Jackson §4.1 (the multipole expansion): far from a group of charges, only its "
+        "lowest nonvanishing moment counts. A beam passing at a distance b is turned by a "
+        "net charge Q by an angle $\\propto Q/b$, by a dipole p (charges ±q a distance d "
+        "apart, p = qd) only $\\propto p/b^2$, by a quadrupole (such as +q, −2q, +q in a "
+        "row) only $\\propto qd^2/b^3$. Bend the lower beam down into its detector, but "
+        "leave the two far beams untouched: they must arrive within 0.05° of straight.",
+        grid=(40, 30),
+        shots=[shot(1e-6, 1.0, (0, 28), 0.0, 0.5, box((38, 26, 40, 30), direction=(0.0, 0.05))),
+               shot(1e-6, 1.0, (37, 0), 90.0, 0.5, box((36, 29, 38, 30), direction=(90.0, 0.05))),
+               shot(1e-6, 1.0, (0, 11), 0.0, 0.5, Auto((38, 0, 40, 30), "x", 2))],
+        reference=[charge(19, 12, 0.25 * M), charge(19, 13, -0.5 * M),
+                   charge(19, 14, 0.25 * M)],
+        max_charges=5, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)], region=(16, 12, 22, 17))
 
 
 def jackson_sphere_slalom():
@@ -2379,7 +2409,7 @@ ARCS = [
             ("jackson_magnetosphere", jackson_magnetosphere),
         ]),
     ]),
-    ("Jackson: conductors", [
+    ("Jackson: electrostatics", [
         ("Introduction", [
             ("jackson_own_image", jackson_own_image),
             ("jackson_two_spheres", jackson_two_spheres),
@@ -2387,6 +2417,7 @@ ARCS = [
         ("Intermediate", [
             ("jackson_slot", jackson_slot),
             ("jackson_golden_ratio", jackson_golden_ratio),
+            ("jackson_multipoles", jackson_multipoles),
         ]),
         ("Master", [
             ("jackson_sphere_slalom", jackson_sphere_slalom),

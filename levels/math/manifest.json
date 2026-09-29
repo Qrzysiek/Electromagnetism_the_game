@@ -143,10 +143,28 @@
   "height_ex": 2.262,
   "baseline_ex": 0.566
  },
+ "\\propto Q/b": {
+  "file": "11b9fb548d2ca399.svg",
+  "width_ex": 6.28,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
  "\\propto \\sin^2\\theta/(1 - \\beta\\cos\\theta)^2": {
   "file": "a4fd482483f11be1.svg",
   "width_ex": 21.492,
   "height_ex": 2.527,
+  "baseline_ex": 0.566
+ },
+ "\\propto p/b^2": {
+  "file": "4ad56e38acc07f04.svg",
+  "width_ex": 6.616,
+  "height_ex": 2.452,
+  "baseline_ex": 0.566
+ },
+ "\\propto qd^2/b^3": {
+  "file": "aa082f60376033ac.svg",
+  "width_ex": 8.683,
+  "height_ex": 2.452,
   "baseline_ex": 0.566
  },
  "\\sqrt{2mT}": {

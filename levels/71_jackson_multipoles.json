@@ -1,0 +1,190 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson §4.1: multipoles",
+  "description": "Jackson §4.1 (the multipole expansion): far from a group of charges, only its lowest nonvanishing moment counts. A beam passing at a distance b is turned by a net charge Q by an angle $\\propto Q/b$, by a dipole p (charges ±q a distance d apart, p = qd) only $\\propto p/b^2$, by a quadrupole (such as +q, −2q, +q in a row) only $\\propto qd^2/b^3$. Bend the lower beam down into its detector, but leave the two far beams untouched: they must arrive within 0.05° of straight.",
+  "grid": {
+    "nx": 40,
+    "ny": 30,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          28,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          38,
+          26,
+          0
+        ],
+        "max": [
+          40,
+          30,
+          0
+        ],
+        "acceptance": {
+          "direction": [
+            0.0,
+            0.05
+          ]
+        }
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          37,
+          0,
+          0
+        ],
+        "direction": [
+          6.123233995736766e-17,
+          1.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          36,
+          29,
+          0
+        ],
+        "max": [
+          38,
+          30,
+          0
+        ],
+        "acceptance": {
+          "direction": [
+            90.0,
+            0.05
+          ]
+        }
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          11,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          38,
+          6,
+          0
+        ],
+        "max": [
+          40,
+          8,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 5,
+    "magnitudes": [
+      250000.0,
+      500000.0,
+      1000000.0,
+      2000000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        16,
+        12,
+        0
+      ],
+      "max": [
+        22,
+        17,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        19,
+        12,
+        0
+      ],
+      "kind": "charge",
+      "value": 250000.0
+    },
+    {
+      "node": [
+        19,
+        13,
+        0
+      ],
+      "kind": "charge",
+      "value": -500000.0
+    },
+    {
+      "node": [
+        19,
+        14,
+        0
+      ],
+      "kind": "charge",
+      "value": 250000.0
+    }
+  ]
+}

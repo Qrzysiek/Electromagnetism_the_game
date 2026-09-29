@@ -137,6 +137,18 @@ fn truncate(s: &str, n: usize) -> String {
     }
 }
 
+/// Decimals that resolve a direction tolerance of `half` degrees, for it and the arrival
+/// angle: one from 1° up, one more per decade below (0.05° shows as 0.050°).
+fn angle_decimals(half: f64) -> usize {
+    // At most 6: finer tolerances are not met by any flight anyway.
+    let (mut digits, mut step) = (1, 1.0);
+    while half > 0.0 && half < step && digits < 6 {
+        step /= 10.0;
+        digits += 1;
+    }
+    digits
+}
+
 fn outcome_text(game: &Game, o: Outcome) -> String {
     match o {
         Outcome::Arrived => "reached the detector".into(),
@@ -676,8 +688,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     let dir = v.y.atan2(v.x).to_degrees();
                     let mut parts = Vec::new();
                     if let Some([axis, half]) = acc.direction {
+                        let digits = angle_decimals(half);
                         parts.push(format!(
-                            "direction {axis:.0}° ± {half:.1}° (arrives at {dir:.1}°)"
+                            "direction {axis:.0}° ± {half:.digits$}° (arrives at {dir:.digits$}°)"
                         ));
                     }
                     if let Some([lo, hi]) = acc.kinetic {

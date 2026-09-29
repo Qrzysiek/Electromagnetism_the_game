@@ -79,7 +79,7 @@ Arc 6, "Jackson: charges in fields and collisions" (Ch. 12–13), `scripts/level
 - Jackson Ch. 12: magnetosphere (master). E×B steering through two gates, then gradient
   drift around a dipole Earth.
 
-Arc 7, "Jackson: conductors" (Ch. 2–3):
+Arc 7, "Jackson: electrostatics" (Ch. 2–4):
 
 - Jackson §2.2: its own image (introduction). A particle with charge 1 (Newtonian) passes a
   grounded sphere and is pulled by its image.
@@ -88,6 +88,10 @@ Arc 7, "Jackson: conductors" (Ch. 2–3):
   grounded wall of two plates.
 - Jackson Pr. 2.4: golden-ratio capture (intermediate). Test K5 checks the engine against
   the problem's answers.
+- Jackson §4.1: multipoles (intermediate). A near beam must be bent into its detector while
+  two far beams, along x and along y, arrive within 0.05° of straight: seen from afar a net
+  charge turns a beam as Q/b, a dipole as p/b², a quadrupole as Qd²/b³, so the charges must
+  form a quadrupole (every dipole in the region fails; 71 compact quadrupoles solve it).
 - Jackson Ch. 2: sphere slalom (master). Three spheres with the particle's charge, two
   gates.
 - Not built: §2.5 (sphere in a uniform field) needs metal spheres in a stray field, which
@@ -201,7 +205,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 ### Ch. 4: Multipoles, dielectrics
 
 - **§4.1–4.2 multipoles.**
-  - Levels that build a dipole and a quadrupole from charges and fly through their fields. NOW.
+  - *Level built (multipoles):* bend a near beam with a quadrupole that two far beams cannot see.
   - The energy of a dipole in a field needs polar particles: F:polar.
 - **Pr. 4.5 force and torque on a dipole.** Deflection of polar/polarizable neutral molecules (Stark deflector). F:polar.
 - **§4.4 dielectric sphere; Pr. 4.9 charge near a dielectric sphere.** F:dielectric.
