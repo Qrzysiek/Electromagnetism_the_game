@@ -639,7 +639,7 @@ Found while writing G1: with a fixed step of 1e-3, the finite difference itself 
 | # | Test | Reference | Criterion | Measured |
 |---|---|---|---|---|
 | C1 | A cloud (Q = 2.5, R = 3) and a point charge: E against −∇φ (central differences), Gauss's law inside, continuity at the surface, the point-charge field outside | analytic | < 1e-8; < 1e-5; < 1e-10; exact | 1.6e-10; 4.1e-12; 3.5e-12; 0 |
-| C2 | Jackson Pr. 16.1: an electron oscillating in a cloud (ω₀ = 0.125, c = 2, ω₀τ = 0.010) with radiation reaction | oscillation energy decays as e^{−Γt}, Γ = ω₀²τ (fitted over five decay times) | < 2 % (Landau–Lifshitz vs Abraham–Lorentz: O(ω₀τ)) | 0.03 % |
+| C2 | Jackson Pr. 16.1: an electron oscillating in a cloud (ω₀ = 0.125, c = 2, ω₀τ = 0.010) with radiation reaction, five decay times (~600 oscillations) | (a) oscillation energy decays as e^{−Γt}, Γ = ω₀²τ (fitted over five decay times); (b) the end state against an independent integration of the full relativistic Landau–Lifshitz equation written from Landau & Lifshitz §76 (`scripts/wolfram/c2_radiating_oscillator.wls`, Wolfram Engine 14.2, NDSolve at 30 digits; unchanged to 17 digits with a tighter goal) | (a) < 2 % (Landau–Lifshitz vs Abraham–Lorentz: O(ω₀τ)); (b) position and momentum within 1e-6 of the end amplitudes | (a) 0.03 %; (b) 2.9e-10, 2.8e-10 |
 
 ### Beam tests (`cargo test --release -p physics --test beams -- --nocapture --test-threads=1`)
 

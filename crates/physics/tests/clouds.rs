@@ -89,7 +89,12 @@ fn c1_cloud_field_potential_gauss_and_continuity() {
 /// charge cloud, ω₀² = |qQ|/(mR³)) radiates, and its oscillation energy decays as
 /// `e^{−Γt}` with `Γ = ω₀² τ`, `τ = 2q²/(3mc³)`. Landau–Lifshitz agrees with the
 /// Abraham–Lorentz result to O(ω₀τ) (here 0.01): the fitted decay rate over five decay
-/// times must agree within 2 %.
+/// times must agree within 2 %. And exactly: the end state after the five decay times
+/// (~600 oscillations) against an independent integration of the full relativistic
+/// Landau–Lifshitz equation written from Landau & Lifshitz §76
+/// (`scripts/wolfram/c2_radiating_oscillator.wls`, Wolfram Engine 14.2, NDSolve at 30
+/// digits; the same to 17 digits with a tighter goal): position and momentum within
+/// 1e-6 of the end amplitudes (set before measuring).
 #[test]
 fn c2_radiating_oscillator_decays_at_gamma() {
     let (q, m, big_q, r, c) = (-1.0_f64, 1.0_f64, 1.0_f64, 4.0_f64, 2.0_f64);
@@ -124,6 +129,23 @@ fn c2_radiating_oscillator_decays_at_gamma() {
         gates: Vec::new(),
     };
     let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+    // End state (t = 5/Γ = 3840) from the Wolfram script: x, y, px, py.
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const END: [f64; 4] = [
+        -0.059818079583771145,
+        0.032384524846739647,
+        -0.0069765044047088572,
+        -0.0046503164591507392,
+    ];
+    let x_ref = DVec3::new(END[0], END[1], 0.0);
+    let p_ref = DVec3::new(END[2], END[3], 0.0);
+    let ex = (tr.end.x - x_ref).length() / x_ref.length();
+    let ep = (tr.end.p - p_ref).length() / p_ref.length();
+    println!(
+        "C2 end state at t = {:.1}: position {ex:.1e}, momentum {ep:.1e} from the independent LL integration",
+        tr.end.t
+    );
+    assert!((tr.end.t - 3840.0).abs() < 1e-9 && ex < 1e-6 && ep < 1e-6);
     let kin = Kinematics::new(m, c);
     let phi0 = scn.field.sample(DVec3::ZERO, 0.0).phi;
     // ln(oscillation energy) against t: least-squares slope.
