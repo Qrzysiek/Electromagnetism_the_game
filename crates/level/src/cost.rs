@@ -320,19 +320,26 @@ impl Level {
     }
 
     /// `measure_cost` for beam levels: one flight per disturbance, all particles
-    /// together (the step counts are those of the whole system).
+    /// together (the step counts are those of the whole system); the verification is the
+    /// verdict's (`verification_beam_scenarios`: exact retarded for interacting beams at
+    /// finite c).
     fn measure_beam_cost(&self, player: &[Element], mut cost: Cost) -> Cost {
         let tol = self.tolerances();
-        for (resolution, rtol) in [
-            (Resolution::Preview, tol.preview),
-            (Resolution::Verify, tol.verify),
-        ] {
-            for scn in self.beam_scenarios(player, resolution) {
+        let passes = [
+            (
+                true,
+                self.beam_scenarios(player, Resolution::Preview),
+                tol.preview,
+            ),
+            (false, self.verification_beam_scenarios(player), tol.verify),
+        ];
+        for (preview, scenarios, rtol) in passes {
+            for scn in scenarios {
                 let t = Instant::now();
                 let r = physics::beam::run_beam(&scn, &RunSettings::with_tolerance(rtol));
                 let seconds = t.elapsed().as_secs_f64();
                 if let Some(traj) = r.trajectories.first() {
-                    if resolution == Resolution::Preview {
+                    if preview {
                         cost.add_preview(seconds, traj);
                     } else {
                         cost.add_verification(seconds, traj);

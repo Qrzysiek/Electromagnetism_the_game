@@ -240,7 +240,8 @@ pub struct BeamRun {
     /// interaction's impulse: the time integral of the neglected fields of the others (from
     /// their jerk, `Σ_j |q_j| γ_j² |ȧ_j| / (c³ κ)` with the Doppler factor κ = 1 − n·β
     /// for the longer light delay ahead of a source, plus `|q_j| γ_j² |a_j| / (c² R)` for
-    /// pairs so far apart that the source's past is taken as uniform), over that of the
+    /// pairs so far apart that the source's continued past has left its constant
+    /// acceleration, `|a_j| R / (c κ) > 0.07 c`, see `tapered`), over that of the
     /// fields kept, `Σ_j |E_j|`; plus, at each drained particle's removal, the impulse
     /// `|q| / (R c)` of its field lingering for the light time R/c (the quasi-static
     /// interaction drops it at once)
@@ -428,23 +429,13 @@ impl ViewGuards<'_> {
 
 impl View<'_> {
     /// Before launch each particle moves with its launch acceleration (it was already
-    /// flying in the fields): `x0 + v0 t + a0 t²/2`, `v0 + a0 t`. A sudden start from
-    /// uniform motion would send a kink in every acceleration field to every other
-    /// particle, each forcing tiny steps when it arrives. Continued uniformly where
-    /// |a0 t| would exceed 0.1c (reached only while bracketing).
+    /// flying in the fields), tapered smoothly so that its velocity changes by less than
+    /// 0.1c (`tapered`). A sudden start from uniform motion would send a kink in every
+    /// acceleration field to every other particle, each forcing tiny steps when it arrives.
     fn before_launch<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
         let b = &scn.particles[j];
         let v0 = self.past.kin[j].velocity(b.p0);
-        let a0 = self.past.a0[j];
-        let t_lim = 0.1 * scn.c / a0.length().max(1e-300);
-        let tt = t.max(-t_lim);
-        let x = b.x0 + v0 * tt + a0 * (0.5 * tt * tt);
-        let v = v0 + a0 * tt;
-        if t < tt {
-            (x + v * (t - tt), v, DVec3::ZERO)
-        } else {
-            (x, v, a0)
-        }
+        tapered(b.x0, v0, self.past.a0[j], t, scn.c)
     }
 
     /// Position, velocity and acceleration of particle `j` at time `t`: `before_launch`,
@@ -1299,7 +1290,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             } else {
                 f64::INFINITY
             };
-            if log && retarded {
+            if log {
                 log_steps += 1;
                 if log_steps.is_multiple_of(50) {
                     let n_s = past.solves.load(Relaxed).max(1);
@@ -1474,10 +1465,11 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             let delay = r / (scn.c * kappa);
                             missing +=
                                 qj.abs() * g * g * jerk[l].length() / (scn.c.powi(3) * kappa);
-                            // Beyond the constant-acceleration range (|a τ| > 0.1 c) the
-                            // past is continued uniformly: first-order error there.
+                            // Beyond the constant-acceleration range of the continued
+                            // past (`tapered`: |a τ| > 0.07 c) its acceleration fades:
+                            // first-order error there.
                             let a_now = accel(l, t_end).length();
-                            if a_now * delay > 0.1 * scn.c {
+                            if a_now * delay > TAPER_START * 0.1 * scn.c {
                                 missing += qj.abs() * g * g * a_now / (scn.c * scn.c * r);
                             }
                             present += heaviside_fields(qj, scn.c, xi, xj, vj).0.length();
@@ -2017,13 +2009,48 @@ fn launch_accelerations<F: FieldSolver>(scn: &BeamScenario<F>) -> Vec<DVec3> {
 /// come from this extrapolation, the standard treatment of delays shorter than a step.
 const EXTRAPOLATION: f64 = 2.0;
 
+/// Where the continued past (`tapered`) stops having exactly the constant acceleration: at
+/// `|a τ| = TAPER_START · 0.1c`; beyond, the acceleration fades as `sech²` over the rest.
+const TAPER_START: f64 = 0.7;
+
+/// Motion continued from position `r`, velocity `v` and acceleration `a` by `τ` (the
+/// quasi-static interaction's and the pre-launch past). With `T = 0.1c/|a|` and `u = τ/T`:
+/// the constant acceleration while `|u| ≤ u₁ = TAPER_START`; beyond, the acceleration
+/// `a sech²(s/w)`, `s = |u| − u₁`, `w = 1 − u₁`, so that the velocity changes by at most
+/// 0.1c and the acceleration and its derivative stay continuous. The first versions
+/// switched to uniform motion at `|u| = 1`: a jump of the acceleration, whose field
+/// arriving at the neighbours made the steps collapse to 1e-8 for a beam launched beside
+/// strong charges (the preview took 50 s, the exact verification did not finish). A taper
+/// `a sech²(u)` from the start cured that but departed from the constant acceleration
+/// early and made the relativistic beam's quasi-static flight 1e-3 cells worse; with
+/// `u₁ = 0.7` its difference from the exact one is 1.79e-3 cells (kinked: 1.72e-3).
+fn tapered(r: DVec3, v: DVec3, a: DVec3, tau: f64, c: f64) -> (DVec3, DVec3, DVec3) {
+    let t_scale = 0.1 * c / a.length().max(1e-300);
+    let u1 = TAPER_START;
+    let w = 1.0 - u1;
+    let u = tau / t_scale;
+    if u.abs() <= u1 {
+        return (r + v * tau + a * (0.5 * tau * tau), v + a * tau, a);
+    }
+    let s = (u.abs() - u1) / w;
+    let ln_cosh = s + (-2.0 * s).exp().ln_1p() - std::f64::consts::LN_2;
+    let th = s.tanh();
+    let sign = u.signum();
+    (
+        r + v * tau + a * (t_scale * t_scale * (0.5 * u1 * u1 + u1 * w * s + w * w * ln_cosh)),
+        v + a * (t_scale * sign * (u1 + w * th)),
+        a * (1.0 - th * th),
+    )
+}
+
 /// Liénard–Wiechert fields `(E, B)` at `x`, a time `dt` after the present, of a charge
 /// `q` now at `r` with velocity `v` and acceleration `a`, whose past is taken as
-/// `r + v τ + a τ²/2` (velocity `v + a τ`, acceleration `a`) while `|a τ| ≤ 0.1 c`, and
-/// uniform motion before that (so that the past never becomes superluminal: far points
-/// in a strong field see the source's older past, which constant acceleration would not
-/// describe anyway). The retarded time is solved on this curve by Newton's method. The
-/// error is of the order of the jerk, `|ȧ| τ³` in position with τ = R/c.
+/// `r + v τ + a τ²/2` (velocity `v + a τ`, acceleration `a`) while `|a τ| ≤ 0.07 c`, its
+/// acceleration fading smoothly before that (`tapered`: the velocity changes by at most
+/// 0.1c, so the past never becomes superluminal; far points in a strong field see the
+/// source's older past, which constant acceleration would not describe anyway). The
+/// retarded time is solved on this curve by Newton's method. The error is of the order of
+/// the jerk, `|ȧ| τ³` in position with τ = R/c.
 pub fn accelerated_fields(
     q: f64,
     c: f64,
@@ -2033,11 +2060,9 @@ pub fn accelerated_fields(
     v: DVec3,
     a: DVec3,
 ) -> (DVec3, DVec3) {
-    let tau_lim = 0.1 * c / a.length().max(1e-300);
     let at = |tau: f64| {
-        let tc = tau.max(-tau_lim);
-        let (rc, vc) = (r + v * tc + a * (0.5 * tc * tc), v + a * tc);
-        (rc + vc * (tau - tc), vc)
+        let (rc, vc, _) = tapered(r, v, a, tau, c);
+        (rc, vc)
     };
     // Retarded τ: the root of g(τ) = c (dt − τ) − |x − r(τ)|, from the uniform-motion guess.
     let mut tau = dt - (x - r).length() / c;
@@ -2054,8 +2079,7 @@ pub fn accelerated_fields(
             break;
         }
     }
-    let (rp, vp) = at(tau);
-    let ap = if tau >= -tau_lim { a } else { DVec3::ZERO };
+    let (rp, vp, ap) = tapered(r, v, a, tau, c);
     let f = fields_from(q, c, x, tau, rp, vp, ap);
     (f.e(), f.b)
 }

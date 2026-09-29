@@ -783,32 +783,53 @@ fn b12_quasi_static_against_retarded() {
     );
 }
 
-/// B13: `accelerated_fields` (the quasi-static interaction's field of a source continued
-/// back with constant acceleration) equals the general Liénard–Wiechert computation
-/// (`lienard::fields`, bisection-free Newton on a sampled world line) for the same
-/// world line (`r + v τ + a τ²/2`, `v + a τ` while `|a τ| ≤ 0.1 c`, uniform before), at
-/// points near and far, ahead and behind (the far ones see the uniform part).
+/// B13: `accelerated_fields` (the quasi-static interaction's field of a source whose past
+/// is continued from its present state: the constant acceleration while `|u| ≤ 0.7`,
+/// `u = τ/T`, `T = 0.1c/|a|`, then fading as `a sech²((|u| − 0.7)/0.3)`, so that the
+/// velocity changes by at most 0.1c) equals the general Liénard–Wiechert computation
+/// (`lienard::fields`, bracketed Newton on a world line) for the same curve, written here
+/// independently (by integrating the acceleration in closed form), at points near and far,
+/// ahead and behind (the far ones see the fading part, |τ| ≫ T).
 #[test]
 fn b13_accelerated_fields_match_lienard_wiechert() {
-    use physics::lienard::{SampledWorldline, fields};
+    use physics::lienard::{Worldline, fields};
+    struct Tapered {
+        r: DVec3,
+        v: DVec3,
+        a: DVec3,
+        c: f64,
+    }
+    impl Worldline for Tapered {
+        fn state(&self, tau: f64) -> (DVec3, DVec3, DVec3) {
+            let (u1, w) = (0.7, 0.3);
+            let t = 0.1 * self.c / self.a.length();
+            let u = tau / t;
+            if u.abs() <= u1 {
+                return (
+                    self.r + self.v * tau + self.a * (0.5 * tau * tau),
+                    self.v + self.a * tau,
+                    self.a,
+                );
+            }
+            // Beyond u₁: velocity factor u₁ + w tanh(s/w), its integral
+            // u₁²/2 + u₁ s + w² ln cosh(s/w), s = |u| − u₁ (even in u).
+            let s = u.abs() - u1;
+            (
+                self.r
+                    + self.v * tau
+                    + self.a * (t * t * (0.5 * u1 * u1 + u1 * s + w * w * (s / w).cosh().ln())),
+                self.v + self.a * (t * u.signum() * (u1 + w * (s / w).tanh())),
+                self.a / ((s / w).cosh() * (s / w).cosh()),
+            )
+        }
+    }
     let (q, c) = (0.7, 5.0);
-    let (r, v, a) = (
-        DVec3::new(1.0, 2.0, 0.0),
-        DVec3::new(3.0, 1.0, 0.0),
-        DVec3::new(-0.4, 0.9, 0.0),
-    );
-    // Dense samples of the same curve (the sampled world line interpolates them).
-    let samples: Vec<_> = (0..=20000)
-        .map(|k| {
-            let tau = -20.0 + 20.0 * f64::from(k) / 20000.0;
-            let lim = 0.1 * c / a.length();
-            let tc = tau.max(-lim);
-            let (rc, vc) = (r + v * tc + a * (0.5 * tc * tc), v + a * tc);
-            let acc = if tau >= -lim { a } else { DVec3::ZERO };
-            (tau, rc + vc * (tau - tc), vc, acc)
-        })
-        .collect();
-    let w = SampledWorldline::new(&samples);
+    let w = Tapered {
+        r: DVec3::new(1.0, 2.0, 0.0),
+        v: DVec3::new(3.0, 1.0, 0.0),
+        a: DVec3::new(-0.4, 0.9, 0.0),
+        c,
+    };
     let mut worst: f64 = 0.0;
     for x in [
         DVec3::new(1.5, 2.2, 0.0),
@@ -816,12 +837,14 @@ fn b13_accelerated_fields_match_lienard_wiechert() {
         DVec3::new(20.0, -5.0, 0.0),
         DVec3::new(-30.0, -12.0, 0.0),
     ] {
-        let (e, b) = physics::beam::accelerated_fields(q, c, x, 0.0, r, v, a);
+        let (e, b) = physics::beam::accelerated_fields(q, c, x, 0.0, w.r, w.v, w.a);
         let f = fields(&w, q, c, x, 0.0);
         let rel = ((e - f.e()).length() / f.e().length()).max((b - f.b).length() / f.b.length());
         println!(
-            "B13 at {x}: |E| {:.4e}, relative difference {rel:.1e}",
-            f.e().length()
+            "B13 at {x}: |E| {:.4e}, retarded τ {:.3} (T = {:.3}), relative difference {rel:.1e}",
+            f.e().length(),
+            f.retarded_time,
+            0.1 * c / w.a.length()
         );
         assert!(rel.is_finite(), "at {x}");
         worst = worst.max(rel);

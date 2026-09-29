@@ -257,6 +257,17 @@ fn main() {
                                 t.end.t
                             );
                         }
+                        for (i, t) in v.preview.trajectories.iter().enumerate() {
+                            println!(
+                                "  preview end {} disturbance {}: {:?} {:.12} {:.12} t {:.9}",
+                                i,
+                                d + 1,
+                                t.outcome,
+                                t.end.x.x,
+                                t.end.x.y,
+                                t.end.t
+                            );
+                        }
                     }
                     // Goal particles (the level's free particles with a detector): each
                     // must arrive, verified (printed like a shot, so tools check them too).
