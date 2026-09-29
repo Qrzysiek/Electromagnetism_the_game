@@ -174,7 +174,8 @@ pub struct Trajectory {
     pub kinetic_initial: f64,
     /// Largest `|W(t) − W(0)|` over the accepted steps (static fields only).
     pub energy_max_abs_error: f64,
-    /// Energy radiated according to the Liénard formula (trapezoidal rule over steps).
+    /// Energy radiated according to the Liénard formula (three-point Gauss–Legendre on
+    /// each step, from the dense output).
     pub radiated_energy: f64,
     /// Work done on the particle by the radiation-reaction force (≤ 0 over a flight
     /// between force-free states; 0 without radiation reaction). Integrated as part of
@@ -389,7 +390,6 @@ pub fn run_cancellable<F: FieldSolver>(
         ..Settings::default()
     };
     let mut int = Dop853::new(&ode, 0.0, &ode.pack(scn.x0, scn.p0), settings);
-    let mut p_prev = power(scn.x0, scn.p0, 0.0);
     let mut g_next = vec![0.0; events.len()];
     // Triggered event whose penetration depth must be followed past the event step:
     // (event index, depth so far, minimum not yet reached).
@@ -510,9 +510,22 @@ pub fn run_cancellable<F: FieldSolver>(
             let dw = (energy(x, p, t_end) - energy_initial - work).abs();
             traj.energy_max_abs_error = traj.energy_max_abs_error.max(dw);
         }
-        let p_now = power(x, p, t_end);
-        traj.radiated_energy += 0.5 * (p_prev + p_now) * (t_end - t_a);
-        p_prev = p_now;
+        // Three-point Gauss–Legendre on the step, from the dense output (sixth order; the
+        // trapezoidal rule over steps was 0.24 % off for a head-on Coulomb collision,
+        // where the power ∝ 1/r⁴ peaks within a few steps, Simpson's rule 2.9e-6: test R5).
+        if scn.c.is_finite() {
+            let h = t_end - t_a;
+            let r = 0.5 * (0.6f64).sqrt();
+            for (u, w) in [
+                (0.5 - r, 5.0 / 18.0),
+                (0.5, 8.0 / 18.0),
+                (0.5 + r, 5.0 / 18.0),
+            ] {
+                let t = t_a + u * h;
+                let (xg, pg) = view.state(t);
+                traj.radiated_energy += w * power(xg, pg, t) * h;
+            }
+        }
         if rs.record {
             traj.samples.push(sample);
         }

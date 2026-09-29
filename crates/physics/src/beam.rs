@@ -1149,8 +1149,10 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     }
                 }
             }
-            // Radiated energy of the flying particles (Liénard power, trapezoidal rule),
-            // from the force given by the derivative of the dense output.
+            // Radiated energy of the flying particles (Liénard power, three-point
+            // Gauss–Legendre on the step), from the force given by the derivative of the
+            // dense output (the single-particle runner's trapezoidal rule was 0.24 % off
+            // on a peaked flight: test R5).
             if scn.c.is_finite() {
                 for (k, &i) in members.iter().enumerate() {
                     if matches!(tracks[i].phase, Phase::Flying) {
@@ -1163,8 +1165,12 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             ) * p_ref;
                             larmor_power(&ode.kin[k], q, mom(k, t), dp)
                         };
-                        tracks[i].traj.radiated_energy +=
-                            0.5 * (power(t_a) + power(t_end)) * (t_end - t_a);
+                        let h = t_end - t_a;
+                        let r = 0.5 * (0.6f64).sqrt();
+                        tracks[i].traj.radiated_energy += h
+                            * (5.0 / 18.0 * power(t_a + (0.5 - r) * h)
+                                + 8.0 / 18.0 * power(t_a + 0.5 * h)
+                                + 5.0 / 18.0 * power(t_a + (0.5 + r) * h));
                     }
                 }
             }
