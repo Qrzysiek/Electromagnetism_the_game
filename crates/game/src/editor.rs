@@ -423,6 +423,12 @@ impl Editor {
         self.message = None;
     }
 
+    /// Replaces the player's elements (nodes on the current, possibly refined, grid).
+    pub fn set_placement(&mut self, placement: Vec<Element>) {
+        self.placement = placement;
+        self.changed();
+    }
+
     /// The player element at a node: one on it, else a plate covering it, else the power
     /// supply of the tunable electrode under it.
     fn player_index_at(&self, node: Node) -> Option<usize> {

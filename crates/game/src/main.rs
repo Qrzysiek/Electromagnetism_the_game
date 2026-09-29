@@ -543,7 +543,8 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
 /// Developer capture for testing without input: with `EM_CAPTURE=<file.png>` the game
 /// opens level `EM_LEVEL` (1-based), enters the sandbox if `EM_SANDBOX=1`, selects the map
 /// `EM_MAP` (potential, magnetic, waves, particle, off), places `EM_PLACE` (JSON list of
-/// elements, or "reference"), holds the animation at `EM_TIME`, lets the
+/// elements, or "reference"; in units of 1/`EM_GRID` cell with the grid refined 1-4×), holds
+/// the animation at `EM_TIME`, lets the
 /// physics settle, saves a screenshot of its own window and exits. With `EM_WAIT=1` the
 /// screenshot waits until the verdicts are in. No clicks or keys are sent to the desktop.
 fn dev_capture(
@@ -620,6 +621,15 @@ fn dev_capture(
                     _ => Some(MapMode::Potential),
                 };
             }
+            // The grid refinement (1-4, as the Grid buttons): EM_PLACE's nodes are then in
+            // units of 1/n cell.
+            if let Some(n) = std::env::var("EM_GRID")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+                .filter(|n| (1..=4).contains(n))
+            {
+                game.editor.set_refinement(n);
+            }
             if let Ok(p) = std::env::var("EM_PLACE") {
                 // Player elements as JSON, e.g. the level's reference solution: "reference".
                 let placement = if p == "reference" {
@@ -627,8 +637,7 @@ fn dev_capture(
                 } else {
                     serde_json::from_str(&p).unwrap_or_default()
                 };
-                game.editor.placement = placement;
-                game.editor.edit_level(|_| {});
+                game.editor.set_placement(placement);
             }
         }
         10 if std::env::var("EM_SPHERE_TEST").is_ok() => {
