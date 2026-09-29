@@ -4975,6 +4975,7 @@ dependencies = [
  "glam 0.33.10",
  "ode_solvers",
  "proptest",
+ "rayon",
 ]
 
 [[package]]
