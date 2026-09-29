@@ -19,12 +19,25 @@
 //! in τ over each pair of pieces between dense samples of the flight, each pair is
 //! integrated exactly against `e^{iωτ}` (Filon's rule), so the samples need to resolve the
 //! motion but not the phase, however high the frequency.
+//!
+//! Several particles (a *system*: `system_*`): their far fields add. The field received
+//! at the time `T` after the light time `R/c` from the origin comes from each particle at
+//! its own phase time `τ = T − R/c`, so the amplitudes add at equal `τ` (and the spectral
+//! amplitudes at equal ω) before squaring (Jackson Pr. 14.23):
+//!
+//! ```text
+//! dW/dΩ      = (1/4πc) ∫ |Σⱼ qⱼ gⱼ(τ)|² dτ,   gⱼ = n × ((n − βⱼ) × β̇ⱼ)/κⱼ³
+//! d²I/dω dΩ  = (1/4π²c) |Σⱼ qⱼ ∫ gⱼ e^{iωτ} dτ|²
+//! ```
 
 use glam::DVec3;
 use std::f64::consts::PI;
 
 /// A sample of the flight: time, position, velocity, acceleration.
 pub type Emission = (f64, DVec3, DVec3, DVec3);
+
+/// A particle of a system: its charge and the samples of its flight.
+pub type Source<'a> = (f64, &'a [Emission]);
 
 /// A radiation goal: the energy per steradian radiated into an arc of in-plane directions
 /// (averaged over the arc), in all frequencies or in a band, must lie in a window.
@@ -88,28 +101,47 @@ impl RadiationWindow {
                 Some((lo, hi)) => band_energy(samples, q, c, n, lo, hi, self.abrupt_stop),
             })
             .collect();
-        if values.len() == 1 {
-            return values[0];
-        }
-        let m = values.len() - 1;
-        let sum: f64 = values
-            .iter()
-            .enumerate()
-            .map(|(i, v)| {
-                let w = if i == 0 || i == m {
-                    1.0
-                } else if i % 2 == 1 {
-                    4.0
-                } else {
-                    2.0
-                };
-                w * v
-            })
-            .sum();
-        #[allow(clippy::cast_precision_loss)]
-        let mean = sum / (3.0 * m as f64);
-        mean
+        arc_mean(&values)
     }
+
+    /// The same measure for a system of particles, whose far fields add (coherently). An
+    /// abrupt stop is not supported here (it is ignored).
+    pub fn measure_system(&self, sources: &[Source<'_>], c: f64) -> f64 {
+        let dirs = self.directions();
+        let values: Vec<f64> = dirs
+            .iter()
+            .map(|&n| match self.band {
+                None => system_lienard_energy(sources, c, n),
+                Some((lo, hi)) => system_band_energy(sources, c, n, lo, hi),
+            })
+            .collect();
+        arc_mean(&values)
+    }
+}
+
+/// The mean over the arc of values at `directions()`: Simpson's rule in angle.
+fn arc_mean(values: &[f64]) -> f64 {
+    if values.len() == 1 {
+        return values[0];
+    }
+    let m = values.len() - 1;
+    let sum: f64 = values
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let w = if i == 0 || i == m {
+                1.0
+            } else if i % 2 == 1 {
+                4.0
+            } else {
+                2.0
+            };
+            w * v
+        })
+        .sum();
+    #[allow(clippy::cast_precision_loss)]
+    let mean = sum / (3.0 * m as f64);
+    mean
 }
 
 /// `n × ((n − β) × β̇)` for velocity `v` and acceleration `a`.
@@ -238,11 +270,50 @@ pub fn spectrum(
     if !c.is_finite() || samples.len() < 2 || count == 0 {
         return vec![0.0; count];
     }
-    // In the phase time τ = t − n·r/c (dτ = κ dt, κ > 0) the phase is exactly linear:
-    // ∫ f e^{iωτ} dt = ∫ g e^{iωτ} dτ with g = n × ((n − β) × β̇)/κ³. g is taken quadratic
-    // in τ over each pair of pieces (Filon's rule, on the pieces' unequal widths) and
-    // integrated exactly against e^{iωτ}; a last odd piece is taken linear.
-    let pts: Vec<(f64, DVec3)> = samples
+    let (re, im) = amplitude(samples, c, n, omega0, d_omega, count, abrupt_stop);
+    let scale = q * q / (4.0 * PI * PI * c);
+    re.iter()
+        .zip(&im)
+        .map(|(r, i)| scale * (r.length_squared() + i.length_squared()))
+        .collect()
+}
+
+/// `d²I/dω dΩ` of a system in direction `n` at the frequencies `ω₀ + k δω`: the particles'
+/// amplitudes `qⱼ ∫ gⱼ e^{iωτ} dτ` added before squaring.
+pub fn system_spectrum(
+    sources: &[Source<'_>],
+    c: f64,
+    n: DVec3,
+    omega0: f64,
+    d_omega: f64,
+    count: usize,
+) -> Vec<f64> {
+    let mut re = vec![DVec3::ZERO; count];
+    let mut im = vec![DVec3::ZERO; count];
+    if !c.is_finite() || count == 0 {
+        return vec![0.0; count];
+    }
+    for &(q, samples) in sources {
+        if q == 0.0 || samples.len() < 2 {
+            continue;
+        }
+        let (r, i) = amplitude(samples, c, n, omega0, d_omega, count, false);
+        for k in 0..count {
+            re[k] += r[k] * q;
+            im[k] += i[k] * q;
+        }
+    }
+    let scale = 1.0 / (4.0 * PI * PI * c);
+    re.iter()
+        .zip(&im)
+        .map(|(r, i)| scale * (r.length_squared() + i.length_squared()))
+        .collect()
+}
+
+/// The phase times and amplitudes `(τ, g)` of the samples in direction `n`:
+/// `τ = t − n·r/c`, `g = n × ((n − β) × β̇)/κ³`.
+fn phase_points(samples: &[Emission], c: f64, n: DVec3) -> Vec<(f64, DVec3)> {
+    samples
         .iter()
         .map(|&(t, x, v, a)| {
             let kappa = 1.0 - n.dot(v) / c;
@@ -251,7 +322,58 @@ pub fn spectrum(
                 radiation_vector(n, v, a, c) / (kappa * kappa * kappa),
             )
         })
-        .collect();
+        .collect()
+}
+
+/// A piece of the amplitude's model in the phase time (`pieces`).
+type Piece = (f64, f64, [DVec3; 3]);
+
+/// The pieces of the amplitude's model in the phase time: `(τ₀, H, [c₀, c₁, c₂])` with
+/// `g = c₀ + c₁ u + c₂ u²`, `u = (τ − τ₀)/H`, quadratic over each pair of pieces between
+/// samples (Lagrange basis on the pair's unequal widths), linear on a last odd piece (and
+/// on a degenerate pair).
+fn pieces(pts: &[(f64, DVec3)]) -> Vec<Piece> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i + 2 < pts.len() {
+        let ((t0, g0), (t1, g1), (t2, g2)) = (pts[i], pts[i + 1], pts[i + 2]);
+        let h = t2 - t0;
+        let u = (t1 - t0) / h;
+        if h > 0.0 && u > 0.0 && u < 1.0 {
+            // Lagrange basis on u = 0, u₁, 1, as powers of u.
+            let c0 = g0;
+            let c1 = -g0 * ((u + 1.0) / u) - g1 / (u * (u - 1.0)) - g2 * (u / (1.0 - u));
+            let c2 = g0 / u + g1 / (u * (u - 1.0)) + g2 / (1.0 - u);
+            out.push((t0, h, [c0, c1, c2]));
+        } else {
+            out.push((t0, t1 - t0, [g0, g1 - g0, DVec3::ZERO]));
+            out.push((t1, t2 - t1, [g1, g2 - g1, DVec3::ZERO]));
+        }
+        i += 2;
+    }
+    if i + 1 < pts.len() {
+        let ((t0, g0), (t1, g1)) = (pts[i], pts[i + 1]);
+        out.push((t0, t1 - t0, [g0, g1 - g0, DVec3::ZERO]));
+    }
+    out
+}
+
+/// The spectral amplitude `∫ g e^{iωτ} dτ` (real and imaginary parts) at the frequencies
+/// `ω₀ + k δω` (`spectrum`).
+fn amplitude(
+    samples: &[Emission],
+    c: f64,
+    n: DVec3,
+    omega0: f64,
+    d_omega: f64,
+    count: usize,
+    abrupt_stop: bool,
+) -> (Vec<DVec3>, Vec<DVec3>) {
+    // In the phase time τ = t − n·r/c (dτ = κ dt, κ > 0) the phase is exactly linear:
+    // ∫ f e^{iωτ} dt = ∫ g e^{iωτ} dτ with g = n × ((n − β) × β̇)/κ³. g is taken quadratic
+    // in τ over each pair of pieces (Filon's rule, on the pieces' unequal widths) and
+    // integrated exactly against e^{iωτ}; a last odd piece is taken linear.
+    let pts = phase_points(samples, c, n);
     let mut re = vec![DVec3::ZERO; count];
     let mut im = vec![DVec3::ZERO; count];
     // Adds H e^{iωτ₀} Σₖ cₖ φₖ(ωH) over the frequency grid.
@@ -277,26 +399,9 @@ pub fn spectrum(
             ed = ed.mul(step_d);
         }
     };
-    let mut i = 0;
-    while i + 2 < pts.len() {
-        let ((t0, g0), (t1, g1), (t2, g2)) = (pts[i], pts[i + 1], pts[i + 2]);
-        let h = t2 - t0;
-        let u = (t1 - t0) / h;
-        if h > 0.0 && u > 0.0 && u < 1.0 {
-            // Lagrange basis on u = 0, u₁, 1, as powers of u.
-            let c0 = g0;
-            let c1 = -g0 * ((u + 1.0) / u) - g1 / (u * (u - 1.0)) - g2 * (u / (1.0 - u));
-            let c2 = g0 / u + g1 / (u * (u - 1.0)) + g2 / (1.0 - u);
-            add(t0, h, [c0, c1, c2], 2);
-        } else {
-            add(t0, t1 - t0, [g0, g1 - g0, DVec3::ZERO], 1);
-            add(t1, t2 - t1, [g1, g2 - g1, DVec3::ZERO], 1);
-        }
-        i += 2;
-    }
-    if i + 1 < pts.len() {
-        let ((t0, g0), (t1, g1)) = (pts[i], pts[i + 1]);
-        add(t0, t1 - t0, [g0, g1 - g0, DVec3::ZERO], 1);
+    for (t0, h, coeffs) in pieces(&pts) {
+        let order = if coeffs[2] == DVec3::ZERO { 1 } else { 2 };
+        add(t0, h, coeffs, order);
     }
     if abrupt_stop {
         let &(t, x, v, _) = samples.last().expect("at least two samples");
@@ -311,11 +416,73 @@ pub fn spectrum(
             e = e.mul(step);
         }
     }
-    let scale = q * q / (4.0 * PI * PI * c);
-    re.iter()
-        .zip(&im)
-        .map(|(r, i)| scale * (r.length_squared() + i.length_squared()))
-        .collect()
+    (re, im)
+}
+
+/// Energy radiated per steradian in direction `n` by a system: `(1/4πc) ∫ |Σⱼ qⱼ gⱼ|² dτ`
+/// over the phase time, each `gⱼ` in its piecewise quadratic model (`pieces`, as in the
+/// spectrum; 0 outside its flight, where it moves uniformly). On every interval between
+/// the pieces' ends of all particles the integrand is a polynomial of degree 4:
+/// three-point Gauss–Legendre integrates it exactly.
+pub fn system_lienard_energy(sources: &[Source<'_>], c: f64, n: DVec3) -> f64 {
+    if !c.is_finite() {
+        return 0.0;
+    }
+    let models: Vec<(f64, Vec<Piece>)> = sources
+        .iter()
+        .filter(|(q, s)| *q != 0.0 && s.len() >= 2)
+        .map(|&(q, s)| (q, pieces(&phase_points(s, c, n))))
+        .filter(|(_, p)| !p.is_empty())
+        .collect();
+    let mut cuts: Vec<f64> = models
+        .iter()
+        .flat_map(|(_, p)| p.iter().flat_map(|&(t0, h, _)| [t0, t0 + h]))
+        .collect();
+    cuts.sort_by(f64::total_cmp);
+    cuts.dedup();
+    // Per particle, the index of the piece at the current interval (they only advance).
+    let mut at = vec![0usize; models.len()];
+    let r = 0.5 * (0.6f64).sqrt();
+    let gauss = [
+        (0.5 - r, 5.0 / 18.0),
+        (0.5, 8.0 / 18.0),
+        (0.5 + r, 5.0 / 18.0),
+    ];
+    let mut sum = 0.0;
+    for w in cuts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        if b <= a {
+            continue;
+        }
+        let mid = 0.5 * (a + b);
+        // The piece of each particle containing the interval, if any.
+        let active: Vec<(f64, f64, f64, [DVec3; 3])> = models
+            .iter()
+            .zip(at.iter_mut())
+            .filter_map(|((q, p), k)| {
+                while *k < p.len() && p[*k].0 + p[*k].1 <= mid {
+                    *k += 1;
+                }
+                let (t0, h, co) = *p.get(*k)?;
+                (t0 <= mid).then_some((*q, t0, h, co))
+            })
+            .collect();
+        if active.is_empty() {
+            continue;
+        }
+        for (u, weight) in gauss {
+            let tau = a + u * (b - a);
+            let total: DVec3 = active
+                .iter()
+                .map(|&(q, t0, h, co)| {
+                    let s = (tau - t0) / h;
+                    (co[0] + co[1] * s + co[2] * (s * s)) * q
+                })
+                .sum();
+            sum += weight * total.length_squared() * (b - a);
+        }
+    }
+    sum / (4.0 * PI * c)
 }
 
 /// Frequency spacing that resolves the spectrum of a flight whose retarded phase time
@@ -347,6 +514,35 @@ pub fn band_energy(
     #[allow(clippy::cast_precision_loss)]
     let d_omega = (hi - lo) / intervals as f64;
     let s = spectrum(samples, q, c, n, lo, d_omega, intervals + 1, abrupt_stop);
+    let inner: f64 = s[1..intervals].iter().sum();
+    (inner + 0.5 * (s[0] + s[intervals])) * d_omega
+}
+
+/// The phase-time span of a system's flight in direction `n` (for the frequency grid).
+fn system_span(sources: &[Source<'_>], c: f64, n: DVec3) -> f64 {
+    let tau = |s: &Emission| s.0 - n.dot(s.1) / c;
+    let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+    for (_, s) in sources {
+        if let (Some(first), Some(last)) = (s.first(), s.last()) {
+            lo = lo.min(tau(first));
+            hi = hi.max(tau(last));
+        }
+    }
+    if hi > lo { hi - lo } else { 0.0 }
+}
+
+/// Energy per steradian of a system in direction `n` within the band `[lo, hi]`
+/// (`band_energy` for the system's spectrum).
+pub fn system_band_energy(sources: &[Source<'_>], c: f64, n: DVec3, lo: f64, hi: f64) -> f64 {
+    if !c.is_finite() || hi <= lo {
+        return 0.0;
+    }
+    let span = system_span(sources, c, n);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let intervals = (((hi - lo) / resolving_step(span)).ceil() as usize).clamp(8, 4096);
+    #[allow(clippy::cast_precision_loss)]
+    let d_omega = (hi - lo) / intervals as f64;
+    let s = system_spectrum(sources, c, n, lo, d_omega, intervals + 1);
     let inner: f64 = s[1..intervals].iter().sum();
     (inner + 0.5 * (s[0] + s[intervals])) * d_omega
 }
@@ -384,13 +580,46 @@ pub fn arc_spectrum(
     if !c.is_finite() || samples.len() < 2 || bins == 0 || omega_max <= 0.0 {
         return Vec::new();
     }
-    let dirs = window.directions();
-    let stride = dirs.len().div_ceil(9);
-    let chosen: Vec<DVec3> = dirs.iter().step_by(stride).copied().collect();
     let tau_span = |n: DVec3| {
         let tau = |s: &Emission| s.0 - n.dot(s.1) / c;
         (tau(&samples[samples.len() - 1]) - tau(&samples[0])).abs()
     };
+    arc_spectrum_of(window, tau_span, omega_max, bins, |n, w0, dw, count| {
+        spectrum(samples, q, c, n, w0, dw, count, window.abrupt_stop)
+    })
+}
+
+/// `arc_spectrum` for a system of particles (their far fields add).
+pub fn system_arc_spectrum(
+    window: &RadiationWindow,
+    sources: &[Source<'_>],
+    c: f64,
+    omega_max: f64,
+    bins: usize,
+) -> Vec<(f64, f64)> {
+    if !c.is_finite() || bins == 0 || omega_max <= 0.0 {
+        return Vec::new();
+    }
+    arc_spectrum_of(
+        window,
+        |n| system_span(sources, c, n),
+        omega_max,
+        bins,
+        |n, w0, dw, count| system_spectrum(sources, c, n, w0, dw, count),
+    )
+}
+
+/// The display spectrum from a spectrum function of direction and frequency grid.
+fn arc_spectrum_of(
+    window: &RadiationWindow,
+    tau_span: impl Fn(DVec3) -> f64,
+    omega_max: f64,
+    bins: usize,
+    spectrum_at: impl Fn(DVec3, f64, f64, usize) -> Vec<f64>,
+) -> Vec<(f64, f64)> {
+    let dirs = window.directions();
+    let stride = dirs.len().div_ceil(9);
+    let chosen: Vec<DVec3> = dirs.iter().step_by(stride).copied().collect();
     let span = chosen.iter().map(|&n| tau_span(n)).fold(0.0, f64::max);
     #[allow(
         clippy::cast_possible_truncation,
@@ -404,16 +633,7 @@ pub fn arc_spectrum(
     let mut total = vec![0.0; count];
     for &n in &chosen {
         // Grid points at the fine cells' centres.
-        let s = spectrum(
-            samples,
-            q,
-            c,
-            n,
-            0.5 * d_omega,
-            d_omega,
-            count,
-            window.abrupt_stop,
-        );
+        let s = spectrum_at(n, 0.5 * d_omega, d_omega, count);
         for (t, v) in total.iter_mut().zip(s) {
             *t += v;
         }

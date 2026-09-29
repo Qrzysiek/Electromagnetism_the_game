@@ -1,0 +1,131 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson Pr. 14.23: a quiet ring",
+  "description": "Jackson Pr. 14.23: the same drifting circle, but now the receiver must stay quiet: at most 0.000007 per steradian in the band 0.6–1.0, about a seventh of what the charge sends alone. Two charges on opposite sides of one circle, circling together, form a dipole that never turns: their radiation at $\\omega_0$ cancels. Put a second charge on the far side of the circle, circling about the same drifting centre: in the lab it moves at the drift plus its circling velocity.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 4.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    },
+    "radiation_reaction": true,
+    "beam_interaction": true
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 0.025,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          6,
+          8,
+          0
+        ],
+        "direction": [
+          -1.0,
+          1.2246467991473532e-16,
+          0.0
+        ],
+        "kinetic_energy": 1.0803364058759612
+      },
+      "detector": {
+        "min": [
+          25,
+          5,
+          0
+        ],
+        "max": [
+          27,
+          15,
+          0
+        ],
+        "acceptance": {
+          "radiation": {
+            "direction": [
+              90.0,
+              10.0
+            ],
+            "energy": [
+              0.0,
+              7e-06
+            ],
+            "band": [
+              0.6,
+              1.0
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        2,
+        2,
+        0
+      ],
+      "max": [
+        28,
+        18,
+        0
+      ]
+    },
+    "max_free": 3,
+    "free_charges": [
+      0.025
+    ],
+    "free_speeds": [
+      1.0,
+      1.4,
+      1.8,
+      2.2
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        6,
+        12,
+        0
+      ],
+      "kind": "free",
+      "value": 0.025,
+      "angle_deg": 0.0,
+      "speed": 1.7383132530120482
+    }
+  ],
+  "disturbances": [
+    {
+      "name": "crossed fields",
+      "e": [
+        0.0,
+        6.982972487551756
+      ],
+      "bz": 34.91486243775878
+    }
+  ]
+}

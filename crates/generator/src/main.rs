@@ -283,6 +283,16 @@ fn main() {
                             t.end.x.y
                         );
                     }
+                    // Radiation goals: every charge's radiation together (PHYSICS.md §3.4).
+                    for (i, t) in v.verified.trajectories.iter().enumerate() {
+                        if let Some(e) = t.radiation {
+                            println!(
+                                "  particle {i} disturbance {}: radiation into its goal {e:.6e} per sr (preview {:.6e})",
+                                d + 1,
+                                v.preview.trajectories[i].radiation.unwrap_or(f64::NAN)
+                            );
+                        }
+                    }
                     println!(
                         "  beam energy drift {:.1e}, {} steps",
                         v.verified.energy_max_rel_error, v.verified.stats.n_step

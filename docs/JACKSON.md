@@ -47,7 +47,7 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 | **F:sphere+electrode** (spheres and electrodes together) | Conducting spheres in the field of plates and supplies. | §2.5 sphere in a uniform field (between two plates); Pr. 2.10 hemispherical boss on a plane; §2.7 hemispheres at different potentials |
 | **F:screened** (world options) | Debye-screened Coulomb `e^{−r/λ}/r`; Proca (massive photon) Yukawa static fields. | Pr. 13.5 screened Coulomb scattering; §12.8 photon mass effects (orbits precess; a "what if" level); §12.9 London screening of B (superconductor as a field option) |
 | **F:finite-c beams** (retarded interaction) | Darwin Lagrangian (§12.6), later full retardation. | §12.6 / Pr. 12.13 two-body Darwin dynamics; space charge at relativistic speed (the magnetic attraction partly cancels the electric repulsion, factor 1/γ²) |
-| **Radiation goals** (*done*, PHYSICS.md §3.4) | A far receiver over an arc of in-plane directions: energy per steradian of the flight, in all frequencies (Liénard) or in a band (Jackson's radiation integral 14.65), in a window [min, max]. Single flights (not beams yet). | §14.3 beaming, §14.6 critical frequency, §14.7 undulators, a quiet turn; next: Pr. 14.23 ring of charges (needs the coherent sum over a beam), §15.2 braking radiation, Pr. 14.10 sudden stop |
+| **Radiation goals** (*done*, PHYSICS.md §3.4) | A far receiver over an arc of in-plane directions: energy per steradian of the flight, in all frequencies (Liénard) or in a band (Jackson's radiation integral 14.65), in a window [min, max]. With other particles flying (free particles, free charges) it sees them all: their far fields add (*done*). | §14.3 beaming, §14.6 critical frequency, §14.7 undulators, a quiet turn, §15.2 braking radiation (a target's sudden stop, Pr. 14.10), Pr. 14.23 ring of charges; next: Pr. 14.6 collision radiation with both partners moving (two identical charges: no dipole radiation), Pr. 9.2 rotating charges |
 | **Dynamic particles** (*done*) | Level free particles (targets, with optional detectors) and player free charges with a launch velocity (drag the arrow; rapidity for relativistic levels); rigid-sphere collisions. | Pr. 13.1 knock-on and Pr. 13.2 as proper two-body levels; two-body problems with reduced mass (§12.6 / Pr. 12.13 Darwin); Rutherford scattering with a recoiling target; Pr. 14.6 collision radiation with both partners moving |
 | **F:plasma** (neutralizing background) | A beam or cloud with a uniform fixed neutralizing background. | Pr. 7.12 plasma oscillations; §7.5 plasma frequency; ion channels |
 | **F:antennas+** (more antenna types) | Magnetic dipole (AC loop in plane, moment along z) and centre-fed linear antenna in the plane. | §9.3 magnetic dipole fields; Pr. 9.14; §9.4 centre-fed antenna, Pr. 9.16; §9.12 |
@@ -128,6 +128,16 @@ Arc 10, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §
 - Jackson §15.2: braking radiation (intermediate). The goal's target stops the particle
   abruptly (the new `abrupt_stop` option, test S4); the flash is zero straight ahead, so
   the particle must strike the target off the receiver's axis.
+- Jackson Pr. 14.23: in step (introduction). A charge circles in crossed fields (ω₀ = 0.8)
+  while its circle drifts into the detector; a second charge circling in step doubles the
+  field at the receiver: four times the energy (the first level where the receiver sees
+  several particles, their far fields added).
+- Jackson Pr. 14.23: a quiet ring (intermediate). A partner on the far side of the circle,
+  in antiphase, silences the fundamental (0.0035 of one charge at the exact relativistic
+  mirror speed, 0.107 at the Galilean one; the goal allows 0.14).
+- Jackson Pr. 14.23: a ring of four (intermediate). The band holds ω₀, 2ω₀ and 3ω₀: an
+  opposite pair leaves 2ω₀ (3.85 times one charge), three at 120° leave 3ω₀ (9 times);
+  four evenly spaced leave only 4ω₀, outside the band (15.1 times one charge there).
 - Jackson §14.7: undulator (master). The on-axis line 2γ²ω_u/(1 + K²/2) in a band.
 - Tried and set aside first: braking radiation by stopping a γ = 3 particle with charges
   (it needs a large potential hill and the particle slips round the charges). Built
@@ -135,7 +145,7 @@ Arc 10, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §
 
 Validation tests from the book (PHYSICS.md): K5 (Pr. 2.4, golden ratio), M7 (Pr. 12.9b,
 equatorial drift), M11 (§12.5, adiabatic invariance), S1 (Pr. 14.15, harmonics of circular
-motion), S2 (Parseval, 14.60–14.65), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
+motion), S2 (Parseval, 14.60–14.65), S5 (Pr. 14.23, the form factor of charges on a ring), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
 collapse), R5 (Pr. 14.5b, radiation in a head-on collision), C2 (Pr. 16.1, the
 radiating oscillator decays at Γ = ω₀²τ).
 
@@ -287,7 +297,7 @@ radiating oscillator decays at Γ = ω₀²τ).
 - **§14.6 synchrotron spectrum; Pr. 14.15, 14.17–14.18 circular and helical motion.** *Test S1 (Pr. 14.15); level built (the critical frequency).* The in-plane spectrum at harmonics of ω₀. NOW (spectrum diagnostic to add). Helical motion is 3D.
 - **Pr. 14.12/14.14/14.22 harmonics of SHM, circular and elliptic orbits.** F:prescribed, or NOW for a Coulomb orbit (the ellipse's harmonics).
 - **Pr. 14.21 correspondence principle.** Radiation from a classical hydrogen orbit versus Bohr transition rates. A test with the §16.2 decay. NOW.
-- **Pr. 14.23 N charges on a ring.** A beam of N equally spaced charges on a circle: the radiation falls exponentially with N ("a steady current does not radiate"). A level/test with a ring beam. NOW (beams in a uniform B) / F:prescribed.
+- **Pr. 14.23 N charges on a ring.** A beam of N equally spaced charges on a circle: the radiation falls exponentially with N ("a steady current does not radiate"). *Levels built (in step, a quiet ring, a ring of four); test S5 (the form factor).* The player's free charges circle in crossed fields with the shot, whose circle drifts into its detector; the receiver sees them all.
 - **Pr. 14.25–14.26 synchrotron polarization, Crab nebula.** Polarization is 3D; energetics as a text.
 - **§14.7 undulators and wigglers; Pr. 14.27 second harmonic.** *Level built (undulator).*
   - The trajectory and its in-plane radiation. NOW (alternating magnets).

@@ -432,7 +432,7 @@ impl Level {
             Resolution::Preview
         };
         let mut scenarios = self.beam_scenarios(player, resolution);
-        if self.physics.beam_interaction && self.physics.c.is_some() {
+        if self.interacts() && self.physics.c.is_some() {
             for s in &mut scenarios {
                 s.retarded = true;
             }

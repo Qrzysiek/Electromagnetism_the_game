@@ -1,0 +1,153 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson Pr. 14.23: a ring of four",
+  "description": "Jackson Pr. 14.23: N equal charges spaced evenly around one circle radiate only at the multiples of $N\\omega_0$ (N² times as strongly as one charge there), and a ring of many radiates almost nothing: a steady current does not radiate. The receiver now counts the band 0.6–2.6, which holds the first three harmonics ($\\omega_0$, $2\\omega_0$, $3\\omega_0$); keep it below 0.000013 per steradian. An opposite pair cancels $\\omega_0$, but its fields add at $2\\omega_0$. Space charges around the circle so that only a harmonic outside the band survives.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 4.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    },
+    "radiation_reaction": true,
+    "beam_interaction": true
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 0.025,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          6,
+          8,
+          0
+        ],
+        "direction": [
+          -1.0,
+          1.2246467991473532e-16,
+          0.0
+        ],
+        "kinetic_energy": 1.0803364058759612
+      },
+      "detector": {
+        "min": [
+          25,
+          5,
+          0
+        ],
+        "max": [
+          27,
+          15,
+          0
+        ],
+        "acceptance": {
+          "radiation": {
+            "direction": [
+              90.0,
+              10.0
+            ],
+            "energy": [
+              0.0,
+              1.3e-05
+            ],
+            "band": [
+              0.6,
+              2.6
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        2,
+        2,
+        0
+      ],
+      "max": [
+        28,
+        18,
+        0
+      ]
+    },
+    "max_free": 5,
+    "free_charges": [
+      0.025
+    ],
+    "free_speeds": [
+      1.0,
+      1.4,
+      1.8,
+      2.2
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        8,
+        10,
+        0
+      ],
+      "kind": "free",
+      "value": 0.025,
+      "angle_deg": -82.74262997545108,
+      "speed": 1.5831982030228033
+    },
+    {
+      "node": [
+        6,
+        12,
+        0
+      ],
+      "kind": "free",
+      "value": 0.025,
+      "angle_deg": 0.0,
+      "speed": 1.7383132530120482
+    },
+    {
+      "node": [
+        4,
+        10,
+        0
+      ],
+      "kind": "free",
+      "value": 0.025,
+      "angle_deg": 82.74262997545108,
+      "speed": 1.5831982030228033
+    }
+  ],
+  "disturbances": [
+    {
+      "name": "crossed fields",
+      "e": [
+        0.0,
+        6.982972487551756
+      ],
+      "bz": 34.91486243775878
+    }
+  ]
+}

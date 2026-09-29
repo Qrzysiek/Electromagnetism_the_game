@@ -156,6 +156,15 @@ impl Level {
                  after it enters the detector, so no radiation is counted from its launch or \
                  from the detector stopping it (unless the goal says the target stops it).",
             ));
+            if self.has_beams() {
+                out.push(note(
+                    true,
+                    "Radiation goal with other particles flying: the receiver sees them all, so \
+                     it measures every charge's radiation until the particle arrives, their \
+                     far fields added (they interfere: in phase they reinforce, in antiphase \
+                     they cancel). Each flies uniformly before its launch and after its end.",
+                ));
+            }
             if self.shots.iter().any(|s| {
                 s.detector
                     .acceptance
@@ -199,13 +208,13 @@ impl Level {
         if self.has_beams() {
             let charged = self.shots.iter().any(|s| s.particle.charge != 0.0);
             out.push(
-                if self.physics.beam_interaction && self.physics.c.is_none() {
+                if self.interacts() && self.physics.c.is_none() {
                     note(
                         true,
                         "Beam: all particles fly together and repel each other with the exact \
                      Coulomb force (for c = ∞ that is the whole interaction).",
                     )
-                } else if self.physics.beam_interaction && !self.physics.beam_retarded {
+                } else if self.interacts() && !self.physics.beam_retarded {
                     note(
                         false,
                         if self.physics.radiation_reaction {
@@ -227,7 +236,7 @@ impl Level {
                      retarded fields in the level tests)."
                         },
                     )
-                } else if self.physics.beam_interaction && self.physics.radiation_reaction {
+                } else if self.interacts() && self.physics.radiation_reaction {
                     note(
                         true,
                         "Beam: all particles fly together and act on each other with their exact \
@@ -235,7 +244,7 @@ impl Level {
                      included, and each feels its own radiation reaction (Landau–Lifshitz). \
                      Before launch they are taken to keep their launch acceleration.",
                     )
-                } else if self.physics.beam_interaction {
+                } else if self.interacts() {
                     note(
                         true,
                         "Beam: all particles fly together and act on each other with their exact \
@@ -257,7 +266,7 @@ impl Level {
                     )
                 },
             );
-            if self.physics.beam_interaction {
+            if self.interacts() {
                 out.push(note(
                     false,
                     "Absorbed particles: one that hits a body stops there and its charge stays, at rest, still acting on the others; one that leaves the arena flies on and keeps acting (it only counts as lost).",

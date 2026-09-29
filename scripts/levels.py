@@ -2169,6 +2169,99 @@ def jackson_undulator():
 
 
 
+# --- Jackson Pr. 14.23: coherent radiation of several charges --------------------------
+# Crossed fields make a charge circle (radius 2, speed 1.6 = 0.4 c in the frame drifting
+# with E x B / B^2 = 0.2 along x; omega_0 = qB / (gamma m) = 0.8) while its circle drifts
+# into the detector (about 11 turns). The receiver at 90 degrees sees every particle's
+# field: a radiation goal in a level with free charges measures them all, their far
+# fields added (PHYSICS.md §3.4). Measured (the charge alone: 4.84e-5 per sr in the band
+# 0.6-1.0, 8.94e-5 in 0.6-2.6): a second charge in step one cell below: 3.96 times; an
+# antiphase partner on the far side at the exact (relativistic) mirror speed 1.738: 0.0035
+# times (at the Galilean 1.8: 0.107; at 1.7: 0.045); four charges evenly spaced: 0.0036
+# times in 0.6-2.6 (only 4 omega_0 = 3.2 survives, at 15.1 times), 0.083 with Galilean
+# velocities, while the pair gives 1.24 there (its 2 omega_0 line, 3.85 times).
+RING_C = 4.0
+RING_VG, RING_VD, RING_RHO = 1.6, 0.2, 2.0
+
+
+def ring_gamma(v):
+    return 1.0 / math.sqrt(1.0 - (v / RING_C) ** 2)
+
+
+RING_B = ring_gamma(RING_VG) * RING_VG / (RAD_Q * RING_RHO)
+RING_E = RING_VD * RING_B
+RING_T0 = (ring_gamma(RING_VG - RING_VD) - 1.0) * RING_C * RING_C
+# The shot's speed in the drifting frame (it starts at the bottom of its circle, moving
+# along -x in the lab at 1.4).
+RING_U = (RING_VG - RING_VD + RING_VD) / (1.0 + (RING_VG - RING_VD) * RING_VD / RING_C ** 2)
+
+
+def ring_partner(x, y, ux, uy):
+    """A free charge at (x, y) circling with velocity (ux, uy) in the drifting frame: the
+    drift added relativistically."""
+    den = 1.0 + ux * RING_VD / RING_C ** 2
+    vx = (ux + RING_VD) / den
+    vy = uy / (ring_gamma(RING_VD) * den)
+    return free_charge(x, y, RAD_Q, math.degrees(math.atan2(vy, vx)), math.hypot(vx, vy))
+
+
+def ring_level(name, desc, band, energy, reference, max_free):
+    return level(
+        name, desc,
+        grid=(30, 20), c=RING_C, t_max=200.0, radiation_reaction=True, beam_interaction=True,
+        shots=[shot(RAD_Q, 1.0, (6, 8), 180.0, RING_T0,
+                    box((25, 5, 27, 15),
+                        radiation=radiation_goal(90.0, 10.0, energy, band=band)))],
+        reference=reference,
+        disturbances=[stray("crossed fields", e=(0.0, RING_E), bz=RING_B)],
+        max_free=max_free, free_charges=[RAD_Q], free_speeds=[1.0, 1.4, 1.8, 2.2],
+        region=(2, 2, 28, 18))
+
+
+def jackson_in_step():
+    return ring_level(
+        "Jackson Pr. 14.23: in step",
+        "Jackson Pr. 14.23: in crossed fields a charge circles (its cyclotron motion, "
+        "$\\omega_0 = 0.8$) while its circle drifts to the right into the detector (the E×B "
+        "drift). Circling, it radiates at $\\omega_0$. The receiver far away at 90° counts "
+        "the band 0.6–1.0, and it sees every particle: their fields add. Two charges "
+        "circling in step send twice the field, so four times the energy. Add a charge "
+        "that circles in step with this one, so that the receiver collects at least "
+        "0.00014 per steradian, about three times what the charge sends alone. (c = 4; "
+        "radiation reaction is included.)",
+        (0.6, 1.0), (1.4e-4, 1e3),
+        [free_charge(6, 7, RAD_Q, 180.0, RING_VG - RING_VD)], 3)
+
+
+def jackson_quiet_ring():
+    return ring_level(
+        "Jackson Pr. 14.23: a quiet ring",
+        "Jackson Pr. 14.23: the same drifting circle, but now the receiver must stay "
+        "quiet: at most 0.000007 per steradian in the band 0.6–1.0, about a seventh of "
+        "what the charge sends alone. Two charges on opposite sides of one circle, "
+        "circling together, form a dipole that never turns: their radiation at "
+        "$\\omega_0$ cancels. Put a second charge on the far side of the circle, circling "
+        "about the same drifting centre: in the lab it moves at the drift plus its "
+        "circling velocity.",
+        (0.6, 1.0), (0.0, 7e-6),
+        [ring_partner(6, 12, RING_U, 0.0)], 3)
+
+
+def jackson_ring_of_four():
+    return ring_level(
+        "Jackson Pr. 14.23: a ring of four",
+        "Jackson Pr. 14.23: N equal charges spaced evenly around one circle radiate only "
+        "at the multiples of $N\\omega_0$ (N² times as strongly as one charge there), and a "
+        "ring of many radiates almost nothing: a steady current does not radiate. The "
+        "receiver now counts the band 0.6–2.6, which holds the first three harmonics "
+        "($\\omega_0$, $2\\omega_0$, $3\\omega_0$); keep it below 0.000013 per steradian. An "
+        "opposite pair cancels $\\omega_0$, but its fields add at $2\\omega_0$. Space "
+        "charges around the circle so that only a harmonic outside the band survives.",
+        (0.6, 2.6), (0.0, 1.3e-5),
+        [ring_partner(8, 10, 0.0, -RING_U), ring_partner(6, 12, RING_U, 0.0),
+         ring_partner(4, 10, 0.0, RING_U)], 5)
+
+
 # Arcs: (name, [(tier, [(slug, function)])]). The level files are numbered in this order;
 # `levels/curriculum.json` tells the game each level's arc and tier.
 ARCS = [
@@ -2326,11 +2419,14 @@ ARCS = [
         ("Introduction", [
             ("jackson_beaming", jackson_beaming),
             ("jackson_critical_frequency", jackson_critical_frequency),
+            ("jackson_in_step", jackson_in_step),
         ]),
         ("Intermediate", [
             ("jackson_quiet_turn", jackson_quiet_turn),
             ("jackson_thomson", jackson_thomson),
             ("jackson_braking", jackson_braking),
+            ("jackson_quiet_ring", jackson_quiet_ring),
+            ("jackson_ring_of_four", jackson_ring_of_four),
         ]),
         ("Master", [
             ("jackson_undulator", jackson_undulator),

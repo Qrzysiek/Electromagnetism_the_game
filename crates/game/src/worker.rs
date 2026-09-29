@@ -91,6 +91,22 @@ pub struct BeamPreview {
     pub energy: Vec<physics::beam::EnergySample>,
     /// Flown with the exact retarded interaction.
     pub retarded: bool,
+    /// The radiation goals of the flight's particles (PHYSICS.md §3.4): every charge's
+    /// radiation together, their far fields added.
+    pub radiation: Vec<BeamRadiation>,
+}
+
+/// A radiation goal in a beam flight: measured on the particle's arrival (or, for display,
+/// over its flight so far), with every charge's radiation up to then, coherently.
+#[derive(Clone, Debug)]
+pub struct BeamRadiation {
+    /// The shot whose detector has the goal.
+    pub shot: usize,
+    /// Energy per steradian into the goal.
+    pub value: f64,
+    /// The spectrum over the goal's directions, `(ω, d²I/dω dΩ)`, from 0 to `spectrum_top`.
+    pub spectrum: Vec<(f64, f64)>,
+    pub spectrum_top: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -459,7 +475,7 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
     // The verdict: metal at verification resolution, and at finite c the exact retarded
     // interaction (the preview above is quasi-static). Its flight is then recorded for
     // the views too (they show it once it arrives).
-    let exact = req.level.physics.beam_interaction && req.level.physics.c.is_some();
+    let exact = req.level.interacts() && req.level.physics.c.is_some();
     let distinct = req.level.has_metal(&req.placement) || exact;
     let fine = if distinct {
         let Some(fine) = unless_stale(newest, req.revision, || {
@@ -591,6 +607,7 @@ fn fly_beam(
                 .then_some((t.end.t, t.end.x))
         })
         .collect();
+    let radiation = beam_radiation(scn, &run, shots);
     let preview = BeamPreview {
         paths,
         shots: shots.to_vec(),
@@ -610,8 +627,58 @@ fn fly_beam(
             .map(|t| t.radiated_energy / t.kinetic_initial)
             .fold(0.0, f64::max),
         retarded: scn.retarded && scn.c.is_finite(),
+        radiation,
     };
     Some((run, preview))
+}
+
+/// The radiation goals of a beam flight for display: each measured with every charge's
+/// samples up to the goal's particle's end (on arrival the runner's own measure), and the
+/// spectrum of them all over the goal's directions.
+fn beam_radiation(
+    scn: &physics::beam::BeamScenario<LevelField>,
+    run: &physics::beam::BeamRun,
+    shots: &[usize],
+) -> Vec<BeamRadiation> {
+    scn.particles
+        .iter()
+        .enumerate()
+        .filter_map(|(i, b)| {
+            let w = b.acceptance.and_then(|a| a.radiation)?;
+            let t_end = run.trajectories[i].end.t;
+            let sources: Vec<(f64, &[physics::spectrum::Emission])> = scn
+                .particles
+                .iter()
+                .zip(&run.trajectories)
+                .map(|(p, t)| {
+                    let k = t.emission.partition_point(|e| e.0 <= t_end);
+                    (p.particle.charge, &t.emission[..k])
+                })
+                .collect();
+            let value = run.trajectories[i]
+                .radiation
+                .unwrap_or_else(|| w.measure_system(&sources, scn.c));
+            let spectrum_top = match w.band {
+                Some(_) => 2.0 * w.top_frequency(),
+                None => sources
+                    .iter()
+                    .map(|s| physics::spectrum::display_range(s.1, scn.c))
+                    .fold(0.0, f64::max),
+            };
+            Some(BeamRadiation {
+                shot: shots.get(i).copied().unwrap_or(usize::MAX),
+                value,
+                spectrum: physics::spectrum::system_arc_spectrum(
+                    &w,
+                    &sources,
+                    scn.c,
+                    spectrum_top,
+                    160,
+                ),
+                spectrum_top,
+            })
+        })
+        .collect()
 }
 
 /// Preview flight with its dense path; `None` if `go_on` stopped it.

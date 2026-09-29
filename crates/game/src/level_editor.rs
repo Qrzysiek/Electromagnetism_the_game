@@ -453,7 +453,7 @@ fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> b
     row(ui, "  abrupt stop", |ui| {
         ui.checkbox(abrupt_stop, "")
             .on_hover_text(
-                "The detector is a target that stops the particle at once; the stop's                  radiation counts (needs a band)",
+                "The detector is a target that stops the particle at once; the stop's radiation counts (needs a band)",
             );
         false
     });

@@ -1300,3 +1300,116 @@ fn b21_screening_cup() {
     assert!(jumps[0] < 1e-8 && jumps[1] > 0.5 && worst_law < 1e-7);
     assert!(gap_cup < 0.2 * gap_drain);
 }
+
+/// B22, radiation goals on a system (PHYSICS.md §3.4): a receiver sees every particle's
+/// field, so a radiation goal in a beam flight measures all charges together (their far
+/// fields added). A charge gyrates (β = 0.1, radius 1) in crossed fields and drifts
+/// (v = 0.2) into its detector; the goal is the band 0.7–1.3 ω₀ around its line at the
+/// receiver 90° from the drift. (a) The beam runner's measure of the charge alone equals
+/// the single-particle runner's (independent samples and accelerations; required 1e-6).
+/// (b) A second charge launched with it doubles the amplitude: 4 times. (Required first
+/// 1e-12, expecting the same steps as for the charge alone; but the integrator's initial
+/// step, Hairer's HINIT, sums over the components without dividing by their number, so a
+/// system of two starts with another step and its samples differ at the tolerance, 1e-12:
+/// now required 1e-10, as independent flights agree in (a); measured 2.3e-12.) (c) A partner on the far side of the circle, gyrating in antiphase about the
+/// same guiding centre, cancels the line (Jackson Pr. 14.23, N = 2: the dipole moment
+/// stays fixed); required below 1e-2 of one charge (the relativistic asymmetry of the pair
+/// in the drifting frame and the second harmonic's tail are left). Non-interacting.
+#[test]
+fn b22_radiation_goal_of_a_system() {
+    use physics::field::UniformFields;
+    use physics::spectrum::RadiationWindow;
+    let (q, m, c) = (1.0, 1.0, 10.0);
+    let (v_g, v_d) = (1.0, 0.2);
+    let kin = physics::dynamics::Kinematics::new(m, c);
+    let gamma = |v: f64| 1.0 / (1.0 - (v / c) * (v / c)).sqrt();
+    // B for radius 1 at the gyration speed; E for the drift E × B / B² along +x.
+    let b0 = gamma(v_g) * m * v_g / q;
+    let field = UniformFields {
+        e: DVec3::new(0.0, v_d * b0, 0.0),
+        b: DVec3::new(0.0, 0.0, b0),
+    };
+    let window = RadiationWindow {
+        axis: DVec3::Y,
+        half_angle: 10f64.to_radians(),
+        band: Some((0.7, 1.3)),
+        energy: (0.0, 1e9),
+        abrupt_stop: false,
+    };
+    let detector = Region::Box(Aabb {
+        min: DVec3::new(8.0, -3.0, -1.0),
+        max: DVec3::new(9.0, 3.0, 1.0),
+    });
+    let acceptance = Some(Acceptance {
+        radiation: Some(window),
+        ..Acceptance::default()
+    });
+    // A positive charge in B along +z turns clockwise: at the bottom of its circle it moves
+    // along −x, at the top along +x (plus the drift).
+    let momentum = |v: DVec3| v * (gamma(v.length()) * m);
+    let shot = BeamParticle {
+        particle: particle(q, m),
+        x0: DVec3::new(0.0, -1.0, 0.0),
+        p0: momentum(DVec3::new(v_d - v_g, 0.0, 0.0)),
+        detector: Some(detector),
+        acceptance,
+    };
+    let other = |x0: DVec3, v: DVec3| BeamParticle {
+        particle: particle(q, m),
+        x0,
+        p0: momentum(v),
+        detector: None,
+        acceptance: None,
+    };
+    let flight = |particles: Vec<BeamParticle>| {
+        let scn = BeamScenario {
+            field,
+            obstacles: Vec::new(),
+            particles,
+            c,
+            bounds: None,
+            t_max: 200.0,
+            interact: false,
+            gates: Vec::new(),
+            radiation_reaction: false,
+            retarded: false,
+            fates: Fates::default(),
+        };
+        let run = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+        assert_eq!(run.trajectories[0].outcome, Outcome::Arrived);
+        run.trajectories[0].radiation.expect("measured on arrival")
+    };
+    let alone = flight(vec![shot]);
+    // (a) The single-particle runner.
+    let single = run(
+        &Scenario {
+            field,
+            obstacles: vec![],
+            particle: particle(q, m),
+            c,
+            x0: shot.x0,
+            p0: shot.p0,
+            detector: Some(detector),
+            bounds: None,
+            t_max: 200.0,
+            radiation_reaction: false,
+            acceptance,
+            gates: Vec::new(),
+        },
+        &RunSettings::with_tolerance(TOL),
+    );
+    let reference = single.radiation.expect("measured on arrival");
+    let err_a = alone / reference - 1.0;
+    // (b) Two charges launched together.
+    let twin = flight(vec![shot, other(shot.x0, kin.velocity(shot.p0))]) / alone;
+    // (c) The antiphase partner at the top, velocity mirrored about the drift.
+    let partner = other(DVec3::new(0.0, 1.0, 0.0), DVec3::new(v_d + v_g, 0.0, 0.0));
+    let pair = flight(vec![shot, partner]) / alone;
+    println!(
+        "B22: one charge {alone:.10e} (single runner {reference:.10e}, rel. difference \
+         {err_a:.1e}); two launched together {twin:.15} of one; antiphase pair {pair:.3e} of one"
+    );
+    assert!(err_a.abs() < 1e-6, "{err_a:.2e}");
+    assert!((twin / 4.0 - 1.0).abs() < 1e-10, "{twin}");
+    assert!(pair < 1e-2, "{pair:.3e}");
+}

@@ -265,7 +265,8 @@
           "name": "Introduction",
           "levels": [
             "jackson_beaming",
-            "jackson_critical_frequency"
+            "jackson_critical_frequency",
+            "jackson_in_step"
           ]
         },
         {
@@ -273,7 +274,9 @@
           "levels": [
             "jackson_quiet_turn",
             "jackson_thomson",
-            "jackson_braking"
+            "jackson_braking",
+            "jackson_quiet_ring",
+            "jackson_ring_of_four"
           ]
         },
         {

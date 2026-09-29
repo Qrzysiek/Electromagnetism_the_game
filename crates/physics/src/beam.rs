@@ -61,6 +61,7 @@ use crate::geometry::{Aabb, Region, Shape};
 use crate::integrator::OdeSystem;
 use crate::integrator::dop853::{Dense, Dop853, Settings, Stats};
 use crate::lienard::fields_from;
+use crate::spectrum::Emission;
 use crate::trajectory::{
     Acceptance, Gate, GateTracker, MARGIN_SAFE, Margins, Outcome, RunSettings, Sample, Trajectory,
     minimize_on, minimum_at_end,
@@ -1118,6 +1119,14 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     let mut beta_max: f64 = 0.0;
     // Where absorbed particles stopped, with their charge staying (`Fate::Stop`).
     let mut stopped: Vec<Option<DVec3>> = vec![None; n];
+    // Dense samples of every charge for radiation goals (PHYSICS.md §3.4): a receiver sees
+    // the fields of all particles together, so a goal measures them all, coherently.
+    let record_emission = scn.c.is_finite()
+        && scn
+            .particles
+            .iter()
+            .any(|b| b.acceptance.is_some_and(|a| a.radiation.is_some()));
+    let mut emission: Vec<Vec<Emission>> = vec![Vec::new(); n];
     let mut fades: Vec<Option<Fade>> = vec![None; n];
     // Energy budget (recorded runs): samples, and the energy absorbed so far.
     let mut energy: Vec<EnergySample> = Vec::new();
@@ -1539,6 +1548,40 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 }
             }
 
+            // Emission samples of the charges in flight (also beyond the arena), up to
+            // `t_end`: 8 pieces per step, an even number, as in the single-particle runner;
+            // the acceleration from the derivative of the dense output.
+            if record_emission {
+                let h = t_end - t_a;
+                for (k, &i) in members.iter().enumerate() {
+                    let flies = matches!(
+                        tracks[i].phase,
+                        Phase::Flying | Phase::Free | Phase::Ghost { real: true, .. }
+                    );
+                    if !flies || scn.particles[i].particle.charge == 0.0 {
+                        continue;
+                    }
+                    for piece in 0..=8 {
+                        let t = t_a + h * (f64::from(piece) / 8.0);
+                        if emission[i].last().is_some_and(|e| t <= e.0) {
+                            continue;
+                        }
+                        let p = mom(k, t);
+                        let dp = DVec3::new(
+                            dense.eval_derivative_component(6 * k + 3, t),
+                            dense.eval_derivative_component(6 * k + 4, t),
+                            dense.eval_derivative_component(6 * k + 5, t),
+                        ) * p_ref;
+                        emission[i].push((
+                            t,
+                            pos(k, t),
+                            ode.kin[k].velocity(p),
+                            ode.kin[k].acceleration(p, dp),
+                        ));
+                    }
+                }
+            }
+
             // Gates passed by the flying particles up to `t_end`.
             for (k, &i) in members.iter().enumerate() {
                 if matches!(tracks[i].phase, Phase::Flying) {
@@ -1754,7 +1797,20 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     && let Some(acc) = scn.particles[i].acceptance
                 {
                     let p = tracks[i].traj.end.p;
-                    let m = acc.margin(ode.kin[k].velocity(p), ode.kin[k].kinetic_energy(p));
+                    let mut m = acc.margin(ode.kin[k].velocity(p), ode.kin[k].kinetic_energy(p));
+                    // A radiation goal: every charge's radiation up to now, their far
+                    // fields added (the receiver cannot tell them apart).
+                    if let Some(w) = acc.radiation {
+                        let sources: Vec<(f64, &[Emission])> = scn
+                            .particles
+                            .iter()
+                            .zip(&emission)
+                            .map(|(b, e)| (b.particle.charge, e.as_slice()))
+                            .collect();
+                        let e = w.measure_system(&sources, scn.c);
+                        tracks[i].traj.radiation = Some(e);
+                        m = m.min(w.margin(e));
+                    }
                     if m < 0.0 {
                         tracks[i].traj.outcome = Outcome::Rejected;
                     }
@@ -1837,7 +1893,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             }
         }
     }
-    let trajectories = tracks
+    let mut trajectories: Vec<Trajectory> = tracks
         .into_iter()
         .zip(&scn.particles)
         .map(|(mut t, b)| {
@@ -1865,6 +1921,9 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             t.traj
         })
         .collect();
+    for (traj, e) in trajectories.iter_mut().zip(emission) {
+        traj.emission = e;
+    }
     Some(BeamRun {
         trajectories,
         stats,

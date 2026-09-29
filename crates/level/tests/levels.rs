@@ -23,6 +23,10 @@ fn shipped_levels() -> Vec<(String, Level)> {
     out
 }
 
+/// End-point shifts (cells) that no view shows and no margin of the shipped levels comes
+/// near: below it the interaction's effect is too small to compare the beam models by.
+const NEGLIGIBLE_EFFECT: f64 = 1e-2;
+
 #[test]
 fn reference_solutions_are_verified() {
     for (name, level) in shipped_levels() {
@@ -51,22 +55,25 @@ fn reference_solutions_are_verified() {
             // comparison measures the interaction models only: comparing the level's own
             // flights (with radiation reaction) against an exact run without it mixed in
             // the radiation reaction's effect (found on level 51, where it dominated).
-            if level.physics.c.is_some()
-                && level.physics.beam_interaction
-                && !level.physics.beam_retarded
-            {
+            if level.physics.c.is_some() && level.interacts() && !level.physics.beam_retarded {
                 let rs = RunSettings::with_tolerance(level.physics.tolerances.preview);
+                // The interaction is switched on the flights themselves: a level with free
+                // particles or free charges always interacts (`Level::interacts`), whatever
+                // its `beam_interaction` says (the first version switched that flag and
+                // compared such a level with itself).
                 let flights = |retarded: bool, interact: bool| {
                     let mut l = level.clone();
                     l.physics.beam_retarded = retarded;
-                    l.physics.beam_interaction = interact;
                     l.physics.radiation_reaction = false;
                     l.beam_scenarios(
                         &level.reference_solution,
                         physics::conductor::Resolution::Preview,
                     )
-                    .iter()
-                    .map(|scn| physics::beam::run_beam(scn, &rs))
+                    .into_iter()
+                    .map(|mut scn| {
+                        scn.interact = interact;
+                        physics::beam::run_beam(&scn, &rs)
+                    })
                     .collect::<Vec<_>>()
                 };
                 let (quasi, exact, alone) = (
@@ -99,15 +106,23 @@ fn reference_solutions_are_verified() {
                         .fold(0.0f64, |m, &x| m.max(x));
                     println!(
                         "{name}: quasi-static and retarded end points differ by up to {worst:.1e} \
-                         cells, {:.1e} of the interaction's effect {effect:.2}; indicator up to \
+                         cells, {:.1e} of the interaction's effect {effect:.1e}; indicator up to \
                          {indicator:.1e}",
                         worst / effect
                     );
-                    // The indicator is an order-of-magnitude estimate of the relative error.
-                    assert!(
-                        worst / effect < 3.0 * indicator,
-                        "{name}: indicator too small"
-                    );
+                    if effect < NEGLIGIBLE_EFFECT {
+                        // The interaction hardly moves the end points (a pair repelling
+                        // symmetrically, as in a quiet ring): the ratio says nothing about
+                        // the indicator, and the difference itself must be negligible.
+                        assert!(worst < NEGLIGIBLE_EFFECT, "{name}: {worst:.2e} cells");
+                    } else {
+                        // The indicator is an order-of-magnitude estimate of the relative
+                        // error.
+                        assert!(
+                            worst / effect < 3.0 * indicator,
+                            "{name}: indicator too small"
+                        );
+                    }
                 }
             }
             // With radiation reaction the Landau–Lifshitz treatment must be valid instead.

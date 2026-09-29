@@ -693,7 +693,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                         );
                     }
                     if let Some(r) = acc.radiation {
-                        radiation_goal(ui, &r, p);
+                        radiation_goal(ui, &r, p.radiation, &p.spectrum, p.spectrum_top, false);
                     }
                 }
                 match verdict {
@@ -1129,10 +1129,22 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         .min(game.beams.len().saturating_sub(1));
     let view = game.beams.get(d);
     if let Some(p) = view.and_then(crate::BeamView::shown) {
+        // Lost: particles with a goal (the shots' and the level's free particles with a
+        // detector) that do not arrive; the player's free charges have none.
+        let n_shots = level.shots.len();
+        let has_goal = |s: usize| {
+            s < n_shots
+                || (s != usize::MAX
+                    && level
+                        .free_particles
+                        .get(s - n_shots)
+                        .is_some_and(|f| f.detector.is_some()))
+        };
         let lost = p
             .outcomes
             .iter()
-            .filter(|o| **o != Outcome::Arrived)
+            .zip(&p.shots)
+            .filter(|(o, s)| has_goal(**s) && **o != Outcome::Arrived)
             .count();
         // Which flight the views show: the quick preview, or the verdict's own flight
         // once it has arrived (exact at finite c).
@@ -1158,6 +1170,17 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         } else {
             format!("energy drift of the whole beam {:.1e}", p.energy_rel_error)
         };
+        // Radiation goals: every charge's radiation together.
+        for r in &p.radiation {
+            if let Some(goal) = level
+                .shots
+                .get(r.shot)
+                .and_then(|s| s.detector.acceptance)
+                .and_then(|a| a.radiation)
+            {
+                radiation_goal(ui, &goal, Some(r.value), &r.spectrum, r.spectrum_top, true);
+            }
+        }
         ui.label(
             egui::RichText::new(format!(
                 "{} particles{}; {lost} lost{}; {energy}.",
@@ -1218,7 +1241,7 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
 /// preview is quasi-static (`Level::verification_beam_scenarios`).
 fn exact_verdict(level: &level::Level) -> bool {
     level.has_beams()
-        && level.physics.beam_interaction
+        && level.interacts()
         && level.physics.c.is_some()
         && !level.physics.beam_retarded
 }
@@ -1658,7 +1681,7 @@ fn field_view_controls(
     use crate::radiation::FieldQuantity;
     // What to show: the full field (baseline) or a part of it.
     let quasi_static = level.has_beams()
-        && level.physics.beam_interaction
+        && level.interacts()
         && !level.physics.beam_retarded
         && level.physics.c.is_some();
     if game.map == Some(MapMode::ParticleField) {
@@ -1818,7 +1841,7 @@ fn beam_energy(ui: &mut egui::Ui, game: &Game, level: &level::Level) {
         (e.potential - first.potential) / t0,
         egui::Color32::from_rgb(200, 90, 230),
     );
-    if level.physics.beam_interaction {
+    if level.interacts() {
         energy_bar(
             ui,
             "mutual",
@@ -1855,11 +1878,7 @@ fn beam_energy(ui: &mut egui::Ui, game: &Game, level: &level::Level) {
         total / t0,
         egui::Color32::from_rgb(120, 220, 120),
     );
-    let note = match (
-        level.physics.c.is_some(),
-        rr,
-        level.physics.beam_interaction,
-    ) {
+    let note = match (level.physics.c.is_some(), rr, level.interacts()) {
         (false, _, _) => {
             "Changes since launch. Absorbed: given to the bodies and the \
              detector. The total is conserved."
@@ -2005,8 +2024,16 @@ fn colour_bar(ui: &mut egui::Ui, game: &Game, radiation: &crate::radiation::Radi
 }
 
 /// A radiation goal: what is required, what the flight radiates into it, and (with a
-/// band) the spectrum over the goal's directions with the band marked.
-fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::worker::Preview) {
+/// band) the spectrum over the goal's directions with the band marked. `system`: other
+/// particles fly too, and the receiver sees all of them.
+fn radiation_goal(
+    ui: &mut egui::Ui,
+    goal: &level::RadiationGoal,
+    radiation: Option<f64>,
+    spectrum: &[(f64, f64)],
+    spectrum_top: f64,
+    system: bool,
+) {
     let [axis, half] = goal.direction;
     let [lo, hi] = goal.energy;
     let band = goal.band.map_or("all frequencies".to_string(), |[a, b]| {
@@ -2024,16 +2051,18 @@ fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::wor
         .small(),
     )
     .on_hover_text(
-        "The receiver (the band outside the arena) stands far away: it collects the          particle's radiation, not the particle. The particle itself must still end in its          detector. The radiation leaves at the speed of light whenever the particle is          accelerated, mostly in the direction it is heading, and reaches the receiver          after the flight: switch the map to 'particle field' to watch it go.",
+        "The receiver (the band outside the arena) stands far away: it collects the particle's radiation, not the particle. The particle itself must still end in its detector. The radiation leaves at the speed of light whenever the particle is accelerated, mostly in the direction it is heading, and reaches the receiver after the flight: switch the map to 'particle field' to watch it go.",
     );
     ui.label(
-        egui::RichText::new(
-            "The receiver is far away and collects radiation, not the particle; the              particle must still end in its detector.",
-        )
+        egui::RichText::new(if system {
+            "The receiver is far away and collects radiation, not the particle; the particle must still end in its detector. It sees every particle: their fields add, in phase they reinforce, in antiphase they cancel."
+        } else {
+            "The receiver is far away and collects radiation, not the particle; the particle must still end in its detector."
+        })
         .small()
         .italics(),
     );
-    if let Some(e) = p.radiation {
+    if let Some(e) = radiation {
         let ok = e >= lo && e <= hi;
         let color = if ok {
             egui::Color32::from_rgb(90, 240, 110)
@@ -2045,7 +2074,7 @@ fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::wor
             egui::RichText::new(format!("Radiated into it: {} per sr", fmt_si(e))).small(),
         );
     }
-    if p.spectrum.is_empty() {
+    if spectrum.is_empty() {
         return;
     }
     // The spectrum d²I/dωdΩ from 0 to twice the band's top (the band shaded), or without a
@@ -2054,7 +2083,7 @@ fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::wor
     let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 2.0, egui::Color32::from_gray(25));
-    let omega_max = p.spectrum_top.max(1e-300);
+    let omega_max = spectrum_top.max(1e-300);
     #[allow(clippy::cast_possible_truncation)]
     let x_of = |omega: f64| rect.left() + (omega / omega_max) as f32 * rect.width();
     if let Some([a, b]) = goal.band {
@@ -2064,11 +2093,10 @@ fn radiation_goal(ui: &mut egui::Ui, goal: &level::RadiationGoal, p: &crate::wor
             egui::Color32::from_rgba_unmultiplied(90, 240, 110, 40),
         );
     }
-    let peak = p.spectrum.iter().map(|s| s.1).fold(0.0, f64::max);
+    let peak = spectrum.iter().map(|s| s.1).fold(0.0, f64::max);
     if peak > 0.0 {
         #[allow(clippy::cast_possible_truncation)]
-        let points: Vec<egui::Pos2> = p
-            .spectrum
+        let points: Vec<egui::Pos2> = spectrum
             .iter()
             .map(|&(omega, v)| {
                 egui::pos2(

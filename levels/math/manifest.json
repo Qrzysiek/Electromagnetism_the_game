@@ -41,6 +41,24 @@
   "height_ex": 1.92,
   "baseline_ex": 0.375
  },
+ "2\\omega_0": {
+  "file": "20d8889ac787f07b.svg",
+  "width_ex": 3.526,
+  "height_ex": 1.881,
+  "baseline_ex": 0.375
+ },
+ "3\\omega_0": {
+  "file": "16c66d51c9601d9c.svg",
+  "width_ex": 3.526,
+  "height_ex": 1.879,
+  "baseline_ex": 0.375
+ },
+ "N\\omega_0": {
+  "file": "a8d640d1d02d85c0.svg",
+  "width_ex": 4.404,
+  "height_ex": 1.92,
+  "baseline_ex": 0.375
+ },
  "R^2/d": {
   "file": "bb39ca033148ef2d.svg",
   "width_ex": 5.013,
@@ -82,6 +100,18 @@
   "width_ex": 4.486,
   "height_ex": 1.645,
   "baseline_ex": 0.025
+ },
+ "\\omega_0": {
+  "file": "c21a9164798ae206.svg",
+  "width_ex": 2.395,
+  "height_ex": 1.377,
+  "baseline_ex": 0.375
+ },
+ "\\omega_0 = 0.8": {
+  "file": "df23777b9d760643.svg",
+  "width_ex": 8.303,
+  "height_ex": 1.881,
+  "baseline_ex": 0.375
  },
  "\\omega_0^2 = |qQ|/(mR^3)": {
   "file": "2b60573239b20385.svg",

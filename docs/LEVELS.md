@@ -102,10 +102,13 @@ verified reference solution for every shot and negligible radiation
 | 78 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
 | 79 | Jackson §14.3: forward beaming | 10 Introduction | a radiation goal: a far receiver at 30° must collect ≥ 6e-4 per steradian; the radiation is beamed along the velocity (1/γ = 19°), so bend the particle while it heads for the receiver | ≤ 3 magnets | 1 |
 | 80 | Jackson §14.6: the critical frequency | 10 Introduction | the same arena and receiver as forward beaming, but only ω 80–160 counts (≥ 3e-3 per steradian): a tight bend's short flash reaches ~(3/2)γ³c/R; the previous level's moderate bend puts only 1.4e-4 there | ≤ 3 magnets | 1 |
-| 81 | Jackson §14.2: a quiet turn | 10 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
-| 82 | Jackson §14.8: Thomson scattering | 10 Intermediate | a light wave from the right (ω = 1) shakes the particle, which scatters it; the receiver at 30° counts 27–33, the Doppler-shifted line ω(1 + β cos φ)/(1 − β cos(θ − φ)) of a particle heading for it (≈ 4γ²ω head on) | ≤ 3 magnets (40, 80) | 1 |
-| 83 | Jackson §15.2: braking radiation | 10 Intermediate | the target stops the particle abruptly; its flash ∝ sin²θ/(1 − β cos θ)² is zero straight ahead and largest at cos θ = β (≈ 20°): strike the target ~12–32° off the receiver's axis (band 100–200, ≥ 5e-3 per steradian) | ≤ 3 magnets (40, 80) | 1 |
-| 84 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
+| 81 | Jackson Pr. 14.23: in step | 10 Introduction | a charge circles in crossed fields (ω₀ = 0.8) while its circle drifts into the detector; the receiver at 90° sees every particle: add a charge circling in step, whose field adds (four times the energy; ≥ 1.4e-4 per steradian in 0.6–1.0, the charge alone sends 4.84e-5) | ≤ 3 free charges | 1 |
+| 82 | Jackson §14.2: a quiet turn | 10 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
+| 83 | Jackson §14.8: Thomson scattering | 10 Intermediate | a light wave from the right (ω = 1) shakes the particle, which scatters it; the receiver at 30° counts 27–33, the Doppler-shifted line ω(1 + β cos φ)/(1 − β cos(θ − φ)) of a particle heading for it (≈ 4γ²ω head on) | ≤ 3 magnets (40, 80) | 1 |
+| 84 | Jackson §15.2: braking radiation | 10 Intermediate | the target stops the particle abruptly; its flash ∝ sin²θ/(1 − β cos θ)² is zero straight ahead and largest at cos θ = β (≈ 20°): strike the target ~12–32° off the receiver's axis (band 100–200, ≥ 5e-3 per steradian) | ≤ 3 magnets (40, 80) | 1 |
+| 85 | Jackson Pr. 14.23: a quiet ring | 10 Intermediate | the same drifting circle, and the receiver must stay below 7e-6 per steradian in 0.6–1.0: a partner on the far side of the circle, circling in antiphase about the same drifting centre, cancels the fundamental | ≤ 3 free charges | 1 |
+| 86 | Jackson Pr. 14.23: a ring of four | 10 Intermediate | the band 0.6–2.6 holds ω₀, 2ω₀, 3ω₀ (below 1.3e-5 per steradian): a pair leaves 2ω₀, three at 120° leave 3ω₀; four evenly spaced radiate only at 4ω₀, outside the band | ≤ 5 free charges | 3 |
+| 87 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 
 ## Automatic detectors
 
@@ -336,6 +339,18 @@ Notes:
     of 300 random pairs or triples then delivers 4e-5 and 6.7e-5 (minimum 1e-4). The
     search still finds three-magnet solutions: kicks far apart whose flashes interfere
     (fringes 2π/delay ≈ 8 apart in ω), an undulator of few periods.
+  - Rings of charges (Pr. 14.23; PHYSICS.md §3.4, the system measure): c = 4, a charge
+    of 1/40 circling at 0.4c (radius 2, ω₀ = 0.8) in the frame drifting with E×B at 0.2,
+    about 11 turns before it drifts into its detector; the player's free charges circle
+    with it. Measured (the charge alone: 4.84e-5 per steradian in 0.6–1.0, 8.94e-5 in
+    0.6–2.6): a second charge in step one cell below, 3.96 times; an antiphase partner on
+    the far side at the exact (relativistic) mirror speed 1.738, 0.0035 times, at the
+    Galilean 1.8, 0.107 (the drift frame's speeds then differ: its circle turns 0.8 %
+    slower and drifts out of antiphase over the flight), at 1.7, 0.045; four evenly
+    spaced, 0.0036 times in 0.6–2.6 (Galilean velocities: 0.083), only 4ω₀ left at 15.1
+    times, while the pair leaves 1.24 times there (its 2ω₀ line, 3.85 times). The goals
+    (in step ≥ 1.4e-4, quiet ring ≤ 7e-6, ring of four ≤ 1.3e-5) pass the Galilean
+    placements; the charge alone fails each.
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.

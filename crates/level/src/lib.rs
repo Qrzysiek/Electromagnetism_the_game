@@ -1304,17 +1304,37 @@ impl Level {
             .any(|s| s.detector.acceptance.is_some_and(|a| a.radiation.is_some()))
     }
 
-    /// Radiation goals (PHYSICS.md §3.4) are measured on single flights at finite `c`, on
-    /// shot detectors only.
+    /// Radiation goals (PHYSICS.md §3.4) need a finite `c` and sit on shot detectors only.
+    /// Where several particles fly (free particles, free charges), a goal measures all of
+    /// them together, their far fields added; a beam shot's particles arrive one by one, so
+    /// a beam shot has none.
     fn radiation_goal_issues(&self, out: &mut Vec<String>) {
         let has = |d: &Detector| d.acceptance.is_some_and(|a| a.radiation.is_some());
         if self.shots.iter().any(|s| has(&s.detector)) {
             if self.physics.c.is_none() {
                 out.push("a radiation goal needs a finite speed of light".into());
             }
-            if self.has_beams() {
+            if self
+                .shots
+                .iter()
+                .any(|s| s.beam.is_some() && has(&s.detector))
+            {
                 out.push(
-                    "radiation goals are measured on single flights, not beams (the coherent sum                      over a beam is not implemented)"
+                    "a beam shot cannot have a radiation goal (its particles arrive one by one)"
+                        .into(),
+                );
+            }
+            if self.has_beams()
+                && self.shots.iter().any(|s| {
+                    s.detector
+                        .acceptance
+                        .and_then(|a| a.radiation)
+                        .is_some_and(|r| r.abrupt_stop)
+                })
+            {
+                out.push(
+                    "an abrupt stop is measured on single flights only (not with other particles \
+                     flying)"
                         .into(),
                 );
             }
@@ -1326,7 +1346,7 @@ impl Level {
                 .is_some_and(|r| r.abrupt_stop && r.band.is_none())
         }) {
             out.push(
-                "a radiation goal with an abrupt stop needs a band (the stop's spectrum is flat                  to infinite frequency)"
+                "a radiation goal with an abrupt stop needs a band (the stop's spectrum is flat to infinite frequency)"
                     .into(),
             );
         }
@@ -1678,7 +1698,7 @@ impl Level {
 
     /// Beams (PHYSICS.md §3.3): what the beam runner models.
     fn beam_issues(&self, out: &mut Vec<String>) {
-        if self.physics.beam_interaction {
+        if self.interacts() {
             if self.has_metal(&[]) || self.limits.max_plates > 0 {
                 out.push(
                     "interacting beams with metal: the charge one particle induces would act \

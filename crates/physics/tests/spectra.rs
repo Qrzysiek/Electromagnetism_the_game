@@ -4,7 +4,10 @@
 use std::f64::consts::PI;
 
 use physics::DVec3;
-use physics::spectrum::{Emission, band_energy, lienard_energy, spectrum};
+use physics::spectrum::{
+    Emission, band_energy, lienard_energy, spectrum, system_band_energy, system_lienard_energy,
+    system_spectrum,
+};
 
 /// Bessel function `J_m(x)` by its power series (moderate `x`).
 fn bessel_j(m: i32, x: f64) -> f64 {
@@ -26,11 +29,16 @@ fn bessel_j(m: i32, x: f64) -> f64 {
 /// Uniform circular motion (radius `rho`, angular frequency `w0`) sampled `per_turn`
 /// times per turn over `turns` turns.
 fn circle(rho: f64, w0: f64, turns: u32, per_turn: u32) -> Vec<Emission> {
+    circle_from(rho, w0, 0.0, turns, per_turn)
+}
+
+/// `circle`, with the charge ahead by the phase `theta` at t = 0.
+fn circle_from(rho: f64, w0: f64, theta: f64, turns: u32, per_turn: u32) -> Vec<Emission> {
     let n = turns * per_turn;
     (0..=n)
         .map(|i| {
             let t = f64::from(i) / f64::from(per_turn) * 2.0 * PI / w0;
-            let (s, c) = (w0 * t).sin_cos();
+            let (s, c) = (w0 * t + theta).sin_cos();
             (
                 t,
                 DVec3::new(rho * c, rho * s, 0.0),
@@ -137,6 +145,143 @@ fn s2_spectrum_integrates_to_the_lienard_energy() {
     let s = spectrum(&samples, q, c, DVec3::Y, 1e-3, 1e-3, 2, false);
     assert!((s[0] / s[1] - 1.0).abs() < 1e-3);
     assert!(worst < 1e-8);
+}
+
+/// S5, Jackson Pr. 14.23: charges `qⱼ` on one circle at fixed phases `θⱼ` radiate into
+/// the harmonic `mω₀` as a single unit charge times the form factor `|Σⱼ qⱼ e^{imθⱼ}|²`:
+/// N equal, equally spaced charges radiate only at multiples of `Nω₀`, with N² times one
+/// charge's intensity. Checked at the harmonics of a flight of whole turns (where each
+/// charge's amplitude is the first one's times `e^{−imθⱼ}` exactly, by periodicity) in two
+/// in-plane directions. With the phases on the sampling grid (360 samples per turn) the
+/// charges' samples are shifted copies and the identity holds to rounding: required 1e-10
+/// of the single charge's value (set before measuring). Off the grid (θ = 0.3, 1.1 rad)
+/// the sampling differs between the charges: required 1e-6 (S1's samples are accurate to
+/// 1e-5 of the exact value at 400 per turn; the difference of two samplings is smaller).
+#[test]
+fn s5_ring_of_charges_form_factor() {
+    let c = 10.0;
+    let (rho, w0) = (1.0, 5.0);
+    let (turns, per_turn) = (20, 360);
+    let one = circle(rho, w0, turns, per_turn);
+    let mut worst: [f64; 2] = [0.0; 2];
+    // (name, charges and phases, 0 on the sampling grid / 1 off it)
+    type Ring = Vec<(f64, f64)>;
+    let cases: [(&str, Ring, usize); 5] = [
+        ("N = 2", vec![(1.0, 0.0), (1.0, PI)], 0),
+        (
+            "N = 3",
+            (0..3)
+                .map(|j| (1.0, 2.0 * PI * f64::from(j) / 3.0))
+                .collect(),
+            0,
+        ),
+        (
+            "N = 4",
+            (0..4)
+                .map(|j| (1.0, 2.0 * PI * f64::from(j) / 4.0))
+                .collect(),
+            0,
+        ),
+        (
+            "unequal, on the grid",
+            vec![
+                (1.0, 0.0),
+                (-0.5, 40f64.to_radians()),
+                (2.0, 200f64.to_radians()),
+            ],
+            0,
+        ),
+        (
+            "unequal, off the grid",
+            vec![(1.0, 0.0), (-0.5, 0.3), (2.0, 1.1)],
+            1,
+        ),
+    ];
+    for (name, charges, grid) in &cases {
+        let flights: Vec<Vec<Emission>> = charges
+            .iter()
+            .map(|&(_, th)| circle_from(rho, w0, th, turns, per_turn))
+            .collect();
+        let sources: Vec<(f64, &[Emission])> = charges
+            .iter()
+            .zip(&flights)
+            .map(|(&(q, _), f)| (q, f.as_slice()))
+            .collect();
+        for deg in [0.0_f64, 35.0] {
+            let n = DVec3::new(deg.to_radians().cos(), deg.to_radians().sin(), 0.0);
+            let sys = system_spectrum(&sources, c, n, w0, w0, 6);
+            let single = spectrum(&one, 1.0, c, n, w0, w0, 6, false);
+            for m in 1..=6 {
+                let (re, im) = charges.iter().fold((0.0, 0.0), |(re, im), &(q, th)| {
+                    let ph = f64::from(m) * th;
+                    (re + q * ph.cos(), im + q * ph.sin())
+                });
+                let factor = re * re + im * im;
+                let k = usize::try_from(m - 1).unwrap();
+                let err = (sys[k] - factor * single[k]).abs() / single[k];
+                println!(
+                    "S5 {name} at {deg}°, m = {m}: system {:.10e}, |F|² × single {:.10e} \
+                     (|F|² = {factor:.6}), difference {err:.1e} of one charge",
+                    sys[k],
+                    factor * single[k]
+                );
+                worst[*grid] = worst[*grid].max(err);
+            }
+        }
+    }
+    assert!(worst[0] < 1e-10, "on the grid: {:.2e}", worst[0]);
+    assert!(worst[1] < 1e-6, "off the grid: {:.2e}", worst[1]);
+}
+
+/// S6, Parseval for a system (Jackson 14.60–14.65 with the fields added): the system's
+/// spectrum integrated over all frequencies equals its energy per steradian from the
+/// time domain, `(1/4πc) ∫ |Σⱼ qⱼ gⱼ|² dτ`, for two charges kicked by pulses at different
+/// times and places (their radiation overlapping in the phase time in some directions,
+/// not in others), charges +1 and −0.7. Required 1e-8, as S2 (set before measuring). And
+/// the time-domain system measure of one charge equals Liénard's (`lienard_energy`, a
+/// different quadrature of the same integral): required 1e-8.
+#[test]
+fn s6_system_spectrum_integrates_to_the_system_energy() {
+    let c = 1.0;
+    let (a0, sigma) = (0.05, 2.0);
+    // A charge at β = 0.6 along x from `x0`, kicked along y around `t_k`.
+    let flight = |x0: DVec3, t_k: f64| -> Vec<Emission> {
+        let v0 = 0.6;
+        let n_steps = 20_000;
+        (0..=n_steps)
+            .map(|i| {
+                let t = -20.0 + 40.0 * f64::from(i) / f64::from(n_steps);
+                let u = t - t_k;
+                let (th, ch) = ((u / sigma).tanh(), (u / sigma).cosh());
+                let x = x0 + DVec3::new(v0 * t, a0 * sigma * (u + sigma * ch.ln()), 0.0);
+                let v = DVec3::new(v0, a0 * sigma * (1.0 + th), 0.0);
+                let a = DVec3::new(0.0, a0 * (1.0 - th * th), 0.0);
+                (t, x, v, a)
+            })
+            .collect()
+    };
+    let first = flight(DVec3::ZERO, 0.0);
+    let second = flight(DVec3::new(0.5, 1.5, 0.0), 1.5);
+    let sources: [(f64, &[Emission]); 2] = [(1.0, &first), (-0.7, &second)];
+    let (mut worst, mut worst_one) = (0.0_f64, 0.0_f64);
+    for deg in [0.0_f64, 20.0, 60.0, 135.0] {
+        let n = DVec3::new(deg.to_radians().cos(), deg.to_radians().sin(), 0.0);
+        let time_domain = system_lienard_energy(&sources, c, n);
+        let kappa = 1.0 - n.x * 0.6;
+        let top = 40.0 / (sigma * kappa);
+        let spectral = system_band_energy(&sources, c, n, 0.0, top);
+        let err = spectral / time_domain - 1.0;
+        let one =
+            system_lienard_energy(&sources[..1], c, n) / lienard_energy(&first, 1.0, c, n) - 1.0;
+        println!(
+            "S6 at {deg}°: ∫ spectrum {spectral:.12e}, time domain {time_domain:.12e}, \
+             rel. error {err:.1e}; one charge against Liénard {one:.1e}"
+        );
+        worst = worst.max(err.abs());
+        worst_one = worst_one.max(one.abs());
+    }
+    assert!(worst < 1e-8, "{worst:.2e}");
+    assert!(worst_one < 1e-8, "{worst_one:.2e}");
 }
 
 /// S3, the measure along a computed flight (`trajectory::run` with a radiation goal): a

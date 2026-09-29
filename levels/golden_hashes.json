@@ -79,8 +79,11 @@
   "78_jackson_spectroscopy": "12481fd4e3e99e99",
   "79_jackson_beaming": "89a4e203316900d4",
   "80_jackson_critical_frequency": "03898b5d1f2e5bde",
-  "81_jackson_quiet_turn": "55365e4c170b6aa8",
-  "82_jackson_thomson": "19a09887473fd0a1",
-  "83_jackson_braking": "af59c6c4922b087e",
-  "84_jackson_undulator": "1d10947073c3f59f"
+  "81_jackson_in_step": "4a32e2fa74d5cccc",
+  "82_jackson_quiet_turn": "55365e4c170b6aa8",
+  "83_jackson_thomson": "19a09887473fd0a1",
+  "84_jackson_braking": "af59c6c4922b087e",
+  "85_jackson_quiet_ring": "5fd053ab075e2b49",
+  "86_jackson_ring_of_four": "0117a08715772541",
+  "87_jackson_undulator": "1d10947073c3f59f"
 }
