@@ -474,6 +474,16 @@ fn comoving_pair(retarded: bool) {
 /// B7: slow particles at finite c approach the Coulomb interaction of c = ∞. The
 /// leading difference is the Darwin interaction (Jackson §12.6), of order v²/c²: the
 /// deviation of the end points from the c = ∞ flight must fall by 4 when c doubles.
+/// And the O(1/c²) content itself: the Darwin dynamics (the charges in each other's
+/// Darwin fields, `scripts/wolfram/b7_darwin.wls`, Wolfram Engine 14.2) must reproduce
+/// the retarded flights up to O(1/c³), the mutual radiation fields: the difference below
+/// a tenth of the Coulomb deviation at c = 50 and falling 6–10× per doubling of c
+/// (targets set before measuring). Measured at tolerance 1e-14: 1.9e-6, 2.4e-7, 3.0e-8
+/// (0.1 % of the Coulomb deviation), ratios 8.2, 8.0. At the usual 1e-12 the ratios were
+/// 4.5 and 1.5: the retarded scheme's integration error (the extrapolated short delays
+/// follow the tolerance), ~2.5e-7 over this flight, hid the O(1/c³) at c = 200 (1e-13:
+/// ratios 6.7, 5.2), so these flights run at 1e-14. The c = ∞ flight agrees with the
+/// script's Coulomb run to 1e-11.
 #[test]
 fn b7_retarded_interaction_tends_to_coulomb_as_one_over_c_squared() {
     let launch = |y: f64, vy: f64| BeamParticle {
@@ -493,7 +503,7 @@ fn b7_retarded_interaction_tends_to_coulomb_as_one_over_c_squared() {
         );
         scn.c = c;
         scn.retarded = true;
-        let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+        let r = run_beam(&scn, &RunSettings::with_tolerance(1e-14));
         r.trajectories.iter().map(|t| t.end.x).collect::<Vec<_>>()
     };
     let exact = at(f64::INFINITY);
@@ -505,6 +515,65 @@ fn b7_retarded_interaction_tends_to_coulomb_as_one_over_c_squared() {
             .fold(0.0, f64::max)
     };
     let (d1, d2, d3) = (dev(50.0), dev(100.0), dev(200.0));
+    // Darwin end points (x1, y1, x2, y2, x3, y3) at t = 10, from the Wolfram script.
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const DARWIN: [(f64, [f64; 6]); 3] = [
+        (
+            50.0,
+            [
+                9.997943585237538,
+                6.220140509624697,
+                9.998140822722954,
+                -7.350071315472089,
+                9.997637258989144,
+                -0.7695212035962626,
+            ],
+        ),
+        (
+            100.0,
+            [
+                9.999485799758135,
+                6.221360560283242,
+                9.999535164088403,
+                -7.351664721468525,
+                9.999409140357102,
+                -0.7695588271067629,
+            ],
+        ),
+        (
+            200.0,
+            [
+                9.999871443903842,
+                6.221665682337906,
+                9.99988378842374,
+                -7.352063200949995,
+                9.999852274185448,
+                -0.7695682275822732,
+            ],
+        ),
+    ];
+    let darwin_dev: Vec<f64> = DARWIN
+        .iter()
+        .map(|(c, d)| {
+            at(*c)
+                .iter()
+                .enumerate()
+                .map(|(k, x)| (*x - DVec3::new(d[2 * k], d[2 * k + 1], 0.0)).length())
+                .fold(0.0, f64::max)
+        })
+        .collect();
+    println!(
+        "B7: retarded − Darwin at c = 50, 100, 200: {:.3e}, {:.3e}, {:.3e} ({:.3} of the Coulomb deviation at 50); ratios {:.3}, {:.3} (1/c³: 8)",
+        darwin_dev[0],
+        darwin_dev[1],
+        darwin_dev[2],
+        darwin_dev[0] / d1,
+        darwin_dev[0] / darwin_dev[1],
+        darwin_dev[1] / darwin_dev[2]
+    );
+    assert!(darwin_dev[0] < 0.1 * d1);
+    assert!((6.0..10.0).contains(&(darwin_dev[0] / darwin_dev[1])));
+    assert!((6.0..10.0).contains(&(darwin_dev[1] / darwin_dev[2])));
     println!(
         "B7: deviation from c = ∞ at c = 50, 100, 200: {d1:.3e}, {d2:.3e}, {d3:.3e}; ratios \
          {:.3}, {:.3}",
