@@ -1413,3 +1413,126 @@ fn b22_radiation_goal_of_a_system() {
     assert!((twin / 4.0 - 1.0).abs() < 1e-10, "{twin}");
     assert!(pair < 1e-2, "{pair:.3e}");
 }
+
+/// B23: the quasi-static interaction's continued past for a charge in fields
+/// (`field_motion`: the exact relativistic motion in uniform in-plane fields, in closed
+/// form) gives the same Liénard–Wiechert fields as the general computation
+/// (`lienard::fields`, bracketed Newton on a world line) on that motion obtained
+/// independently, by integrating the Lorentz force back in coordinate time (fourth-order
+/// Runge–Kutta, steps ≤ 1e-4, from a table every 0.01). Magnetic-dominated (a ring
+/// level's charge: q = 1/40 at 0.35c in crossed fields, B = 34.9, E = 6.98) and
+/// electric-dominated (E > cB) fields, points near and far, ahead and behind. Required:
+/// 1e-9 relative (set before measuring).
+#[test]
+fn b23_field_motion_matches_lienard_wiechert() {
+    use physics::field_motion::{FieldMotion, field_motion_fields};
+    use physics::lienard::{Worldline, fields};
+    struct Integrated {
+        q: f64,
+        m: f64,
+        c: f64,
+        e: DVec3,
+        b: DVec3,
+        /// (t, x, p) every 0.01 from 0 back to −60.
+        table: Vec<(f64, DVec3, DVec3)>,
+    }
+    impl Integrated {
+        fn step(&self, (x, p): (DVec3, DVec3), h: f64) -> (DVec3, DVec3) {
+            let f = |(_, p): (DVec3, DVec3)| {
+                let v =
+                    p / (self.m * (1.0 + p.length_squared() / (self.m * self.c).powi(2)).sqrt());
+                (v, (self.e + v.cross(self.b)) * self.q)
+            };
+            let y = (x, p);
+            let k1 = f(y);
+            let k2 = f((y.0 + k1.0 * (0.5 * h), y.1 + k1.1 * (0.5 * h)));
+            let k3 = f((y.0 + k2.0 * (0.5 * h), y.1 + k2.1 * (0.5 * h)));
+            let k4 = f((y.0 + k3.0 * h, y.1 + k3.1 * h));
+            (
+                y.0 + (k1.0 + (k2.0 + k3.0) * 2.0 + k4.0) * (h / 6.0),
+                y.1 + (k1.1 + (k2.1 + k3.1) * 2.0 + k4.1) * (h / 6.0),
+            )
+        }
+        fn new(q: f64, m: f64, c: f64, e: DVec3, b: DVec3, x0: DVec3, v0: DVec3) -> Self {
+            let gamma = 1.0 / (1.0 - v0.length_squared() / (c * c)).sqrt();
+            let mut w = Self {
+                q,
+                m,
+                c,
+                e,
+                b,
+                table: Vec::new(),
+            };
+            let mut y = (x0, v0 * (gamma * m));
+            for i in 0..=6000 {
+                w.table.push((-0.01 * f64::from(i), y.0, y.1));
+                for _ in 0..100 {
+                    y = w.step(y, -1e-4);
+                }
+            }
+            w
+        }
+    }
+    impl Worldline for Integrated {
+        fn state(&self, t: f64) -> (DVec3, DVec3, DVec3) {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let i = ((-t / 0.01).floor().max(0.0) as usize).min(self.table.len() - 1);
+            let (t0, x, p) = self.table[i];
+            let n = ((t - t0).abs() / 1e-4).ceil().max(1.0);
+            let h = (t - t0) / n;
+            let mut y = (x, p);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            for _ in 0..n as usize {
+                y = self.step(y, h);
+            }
+            let kin = physics::dynamics::Kinematics::new(self.m, self.c);
+            let v = kin.velocity(y.1);
+            let a = kin.acceleration(y.1, (self.e + v.cross(self.b)) * self.q);
+            (y.0, v, a)
+        }
+    }
+    let mut worst: f64 = 0.0;
+    for (name, q, m, c, e, bz, v0) in [
+        (
+            "magnetic",
+            1.0 / 40.0,
+            1.0,
+            4.0,
+            DVec3::new(0.0, 6.983, 0.0),
+            34.915,
+            DVec3::new(-1.4, 0.0, 0.0),
+        ),
+        (
+            "electric",
+            1.0,
+            1.0,
+            5.0,
+            DVec3::new(0.6, 0.3, 0.0),
+            0.05,
+            DVec3::new(2.0, 1.5, 0.0),
+        ),
+    ] {
+        let b = DVec3::new(0.0, 0.0, bz);
+        let x0 = DVec3::new(6.0, 8.0, 0.0);
+        let motion = FieldMotion::new(q, m, c, 0.0, x0, v0, e, b).expect("in the plane");
+        let world = Integrated::new(q, m, c, e, b, x0, v0);
+        for x in [
+            DVec3::new(6.0, 12.0, 0.0),
+            DVec3::new(7.0, 8.5, 0.0),
+            DVec3::new(-2.0, 3.0, 0.0),
+            DVec3::new(16.0, 10.0, 0.0),
+        ] {
+            let (ef, bf) = field_motion_fields(q, x, 0.0, &motion).expect("a retarded point");
+            let f = fields(&world, q, c, x, 0.0);
+            let rel =
+                ((ef - f.e()).length() / f.e().length()).max((bf - f.b).length() / f.b.length());
+            println!(
+                "B23 {name} at {x}: |E| {:.4e}, retarded t {:.3}, relative difference {rel:.1e}",
+                f.e().length(),
+                f.retarded_time
+            );
+            worst = worst.max(rel);
+        }
+    }
+    assert!(worst < 1e-9, "{worst:.3e}");
+}

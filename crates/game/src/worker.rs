@@ -530,10 +530,17 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
     true
 }
 
-/// A beam flight recorded for the views: every particle's path, world line (position,
-/// velocity, and acceleration from the derivative of the dense output, at `per_step + 1`
-/// points of every step), outcome, end and fade, and the beam's energy budget. `None` if
-/// `go_on` stopped it.
+/// World-line points per step of a beam flight: the field views interpolate between them
+/// (the velocity and acceleration linearly), and the part of the field the quasi-static
+/// interaction leaves out, now small, must not drown in that interpolation's error (with
+/// 2 per step of the verdict's flight, ripples of it showed around a quiet ring; with 8
+/// they are gone).
+const LINE_POINTS: u32 = 8;
+
+/// A beam flight recorded for the views: every particle's path (`per_step` points of every
+/// step), world line (position, velocity, and acceleration from the derivative of the
+/// dense output, at `LINE_POINTS + 1` points of every step), outcome, end and fade, and
+/// the beam's energy budget. `None` if `go_on` stopped it.
 fn fly_beam(
     scn: &physics::beam::BeamScenario<LevelField>,
     tol: f64,
@@ -555,9 +562,10 @@ fn fly_beam(
         |dense, members, p_ref| {
             let (a, b) = (dense.t_start(), dense.t_end());
             let at = |s: u32| a + (b - a) * f64::from(s) / f64::from(per_step);
+            let line_at = |s: u32| a + (b - a) * f64::from(s) / f64::from(LINE_POINTS);
             for (k, &i) in members.iter().enumerate() {
-                for s in 0..=per_step {
-                    let t = at(s);
+                for s in 0..=LINE_POINTS {
+                    let t = line_at(s);
                     if lines[i].last().is_some_and(|l| t <= l.0) {
                         continue;
                     }

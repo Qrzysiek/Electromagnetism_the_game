@@ -994,11 +994,12 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         }
         Some(MapMode::ParticleField) if level.has_beams() && game.neglected_only => {
             "What the quasi-static beam interaction leaves out of the dynamics: the full \
-             retarded field of all particles minus the fields it uses (each particle's \
-             present state continued back with constant acceleration). Mostly the change \
-             of acceleration during the light travel time, and the delay with which the \
-             news of an absorption spreads. Shown on the full field's colour scale \
-             (linear by default), so its true size is seen; its size is stated above."
+             retarded field of all particles minus the fields it uses (each particle's past \
+             continued along the motion it would have in the fields it feels now). Mostly \
+             how those fields change along its path during the light travel time, and the \
+             delay with which the news of an absorption spreads. Shown on the full field's \
+             colour scale (linear by default), so its true size is seen; its size is stated \
+             above."
         }
         Some(MapMode::ParticleField) if level.has_beams() => {
             "The retarded (Liénard–Wiechert, exact) field of every particle of the beam at \

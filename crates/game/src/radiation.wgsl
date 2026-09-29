@@ -24,9 +24,11 @@ struct Params {
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
 // World-line samples, two per sample: (τ, x, y, vx), (vy, ax, ay, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> samples: array<vec4<f32>>;
-// Items: charges, three vec4 each: (offset, count, q, has_end), (τ_end, x_end, y_end,
+// Items: charges, six vec4 each: (offset, count, q, has_end), (τ_end, x_end, y_end,
 // 1 if its charge stays where it was absorbed, 0 if drained), (magnetic moment, fade rate
-// in a screening cup (0: none), 0, 0);
+// in a screening cup (0: none), 0, 0), and the quasi-static interaction's continued past
+// (its motion in the fields it feels now, field_motion.rs): (U₀, ω²), (Λ U₀, 1 if valid),
+// (Λ² U₀, 0);
 // then antennas, two vec4 each: (x, y, p0x, p0y), (ω, phase now, radius, 0); then waves,
 // two vec4 each: (k̂x, k̂y, êx, êy), (E0, ω, phase now at x = 0, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(2) var<storage, read> items: array<vec4<f32>>;
@@ -235,6 +237,99 @@ fn accelerated(q: f32, c: f32, p: vec2<f32>, s: State) -> Field {
     return lienard(q, c, p, tapered(s, tau, c), false);
 }
 
+// (C₀, S₁, C₁, S₂) of the motion in uniform fields at proper time s (field_motion.rs): the
+// series where ω²s² is small (here below 0.5: f32 would lose the closed forms' small
+// differences), the closed forms otherwise.
+fn fm_functions(w2: f32, s: f32) -> vec4<f32> {
+    let z = w2 * s * s;
+    if (abs(z) < 0.5) {
+        let s1 = s * (1.0 - z / 6.0 * (1.0 - z / 20.0 * (1.0 - z / 42.0 * (1.0 - z / 72.0))));
+        let c1 = s * s * 0.5 * (1.0 - z / 12.0 * (1.0 - z / 30.0 * (1.0 - z / 56.0 * (1.0 - z / 90.0))));
+        let s2 = s * s * s / 6.0 * (1.0 - z / 20.0 * (1.0 - z / 42.0 * (1.0 - z / 72.0 * (1.0 - z / 110.0))));
+        return vec4<f32>(1.0 - w2 * c1, s1, c1, s2);
+    }
+    if (w2 > 0.0) {
+        let w = sqrt(w2);
+        let h = sin(0.5 * w * s);
+        return vec4<f32>(cos(w * s), sin(w * s) / w, 2.0 * h * h / w2, (s - sin(w * s) / w) / w2);
+    }
+    let k = sqrt(-w2);
+    let h = sinh(0.5 * k * s);
+    return vec4<f32>(cosh(k * s), sinh(k * s) / k, 2.0 * h * h / (-w2), (sinh(k * s) / k - s) / (-w2));
+}
+
+struct FmPoint {
+    st: State,
+    // c t(s) relative to now, and the excursion |U(s) − U₀|/c.
+    ct: f32,
+    excursion: f32,
+    slope_u: vec3<f32>,
+};
+
+// The continued past of charge k (now in state `now`) at proper time s.
+fn fm_at(k: u32, now: State, s: f32, c: f32) -> FmPoint {
+    let p0 = items[6u * k + 3u];
+    let p1 = items[6u * k + 4u];
+    let p2 = items[6u * k + 5u];
+    let f = fm_functions(p0.w, s);
+    let u = p0.xyz + f.y * p1.xyz + f.z * p2.xyz;
+    let du = f.x * p1.xyz + f.y * p2.xyz;
+    let dx = s * p0.xyz + f.z * p1.xyz + f.w * p2.xyz;
+    let v = u.yz * (c / u.x);
+    let a = (du.yz * u.x - u.yz * du.x) * (c * c / (u.x * u.x * u.x));
+    return FmPoint(State(now.x + dx.yz, v, a), dx.x, length(u - p0.xyz) / c, u);
+}
+
+// The quasi-static interaction's field at p of charge k, now in state `now`: its past
+// continued along its motion in the fields it feels now, blending into `accelerated` where
+// that swings far (excursion 0.5 to 1, quintic smoothstep; beam::continued_fields), or
+// `accelerated` alone where no motion was given or its retarded point is not found.
+fn continued(q: f32, c: f32, p: vec2<f32>, now: State, k: u32) -> Field {
+    if (items[6u * k + 4u].w < 0.5) {
+        return accelerated(q, c, p, now);
+    }
+    // Newton on G(s) = −c t(s) − |p − x(s)| from the uniform-motion guess.
+    let u0 = items[6u * k + 3u].xyz;
+    let gamma0 = u0.x / c;
+    let v0 = u0.yz / gamma0;
+    let r = p - now.x;
+    let rv = dot(r, v0);
+    let v2 = dot(v0, v0);
+    var s = -(rv + sqrt(rv * rv + (c * c - v2) * dot(r, r))) / (c * c - v2) / gamma0;
+    var pt = fm_at(k, now, s, c);
+    var converged = false;
+    for (var i = 0; i < 12; i = i + 1) {
+        let d = p - pt.st.x;
+        let dist = max(length(d), 1e-6);
+        let g = -pt.ct - dist;
+        let slope = -pt.slope_u.x + dot(d, pt.slope_u.yz) / dist;
+        let next = s - g / slope;
+        if (abs(next - s) <= 1e-6 * (abs(s) + 1e-3)) {
+            converged = true;
+        }
+        s = next;
+        pt = fm_at(k, now, s, c);
+        if (converged) {
+            break;
+        }
+    }
+    var w = 0.0;
+    if (converged) {
+        let u = clamp((pt.excursion - 0.5) / 0.5, 0.0, 1.0);
+        w = 1.0 - u * u * u * (10.0 - 15.0 * u + 6.0 * u * u);
+    }
+    var f = Field(vec2<f32>(0.0), 0.0);
+    if (w > 0.0) {
+        let l = lienard(q, c, p, pt.st, false);
+        f = Field(l.e * w, l.bz * w);
+    }
+    if (w < 1.0) {
+        let a = accelerated(q, c, p, now);
+        f = Field(f.e + a.e * (1.0 - w), f.bz + a.bz * (1.0 - w));
+    }
+    return f;
+}
+
 // The quasi-static interaction's field of a charge fading in a screening cup, now in the
 // uniform state `s` (beam::Fade::quasi_static_fields): the field of its uniform motion
 // (Heaviside, Jackson §11.10; B = v × E / c²) with the charge at the retarded time of
@@ -268,10 +363,10 @@ fn charges(p: vec2<f32>) -> Charges {
     let neglected_only = (params.counts.z & 2u) != 0u;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.grid.w; k = k + 1u) {
-        let head = items[3u * k];
-        let end = items[3u * k + 1u];
-        let moment = items[3u * k + 2u].x;
-        let fade = items[3u * k + 2u].y;
+        let head = items[6u * k];
+        let end = items[6u * k + 1u];
+        let moment = items[6u * k + 2u].x;
+        let fade = items[6u * k + 2u].y;
         let o = u32(head.x);
         let n = u32(head.y);
         let q = head.z;
@@ -393,7 +488,7 @@ fn charges(p: vec2<f32>) -> Charges {
             if (length(p - s.x) <= 0.15) {
                 return Charges(f, false);
             }
-            let a = accelerated(q, c, p, s);
+            let a = continued(q, c, p, s, k);
             f.e = f.e - a.e;
             f.bz = f.bz - a.bz;
         }
@@ -405,7 +500,7 @@ fn charges(p: vec2<f32>) -> Charges {
 // (antenna.rs); quasi-static for c = ∞. `ok` false inside an antenna body.
 fn antennas(p: vec2<f32>) -> Charges {
     let c = params.scales.x;
-    let base = 3u * params.grid.w;
+    let base = 6u * params.grid.w;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.counts.x; k = k + 1u) {
         let a0 = items[base + 2u * k];
@@ -442,7 +537,7 @@ fn antennas(p: vec2<f32>) -> Charges {
 // Plane waves E = E0 ê cos(ω (t − k̂·x/c) + φ), B = k̂ × E / c.
 fn waves(p: vec2<f32>) -> Field {
     let c = params.scales.x;
-    let base = 3u * params.grid.w + 2u * params.counts.x;
+    let base = 6u * params.grid.w + 2u * params.counts.x;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.counts.y; k = k + 1u) {
         let w0 = items[base + 2u * k];

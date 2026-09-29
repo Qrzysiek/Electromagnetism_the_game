@@ -53,6 +53,7 @@ struct Source {
     /// The samples `(t, x, v, a)` of the world line (for the GPU).
     samples: Vec<(f64, DVec3, DVec3, DVec3)>,
     charge: f64,
+    mass: f64,
     /// Magnetic moment along z (its dipole field B_z = −m/r³ in the plane).
     moment: f64,
     end: Option<(f64, DVec3)>,
@@ -132,6 +133,9 @@ pub struct RadiationView {
     style: (FieldQuantity, u64, bool),
     /// Obstacles of the shown flight (the field is not drawn inside sources).
     obstacles: Vec<Shape>,
+    /// The flight's whole field (what the particles feel: for the quasi-static
+    /// interaction's continued pasts, `source_fields`).
+    source_field: LevelField,
     pub arrows: Vec<(Vec2, Vec2)>,
 }
 
@@ -186,6 +190,7 @@ pub fn setup(
         time: f64::NAN,
         style: (FieldQuantity::Bz, 0, false),
         obstacles: Vec::new(),
+        source_field: LevelField::default(),
         arrows: Vec::new(),
     });
 }
@@ -385,6 +390,7 @@ pub fn update(
         );
         let scn = scn.swap_remove(flight);
         view.obstacles = scn.obstacles;
+        view.source_field = scn.field.clone();
         match mode {
             // The full field; its time offset is the shot's launch time, so it is
             // sampled at the flight time.
@@ -423,6 +429,7 @@ pub fn update(
                                 line: SampledWorldline::new(&samples),
                                 samples,
                                 charge: sp.charge,
+                                mass: sp.mass,
                                 moment: sp.moment,
                                 end,
                                 stays: matches!(o, physics::trajectory::Outcome::Collided(_)),
@@ -450,6 +457,7 @@ pub fn update(
                         line,
                         samples,
                         charge: level.shots[shot].particle.charge,
+                        mass: level.shots[shot].particle.mass,
                         moment: level.shots[shot].particle.moment,
                         end,
                         stays,
@@ -597,7 +605,7 @@ pub fn update(
     let started = std::time::Instant::now();
     let mut samples: Vec<[f32; 4]> = Vec::new();
     let mut items: Vec<[f32; 4]> = Vec::new();
-    for s in &view.sources {
+    for (i, s) in view.sources.iter().enumerate() {
         items.push([
             (samples.len() / 2) as f32,
             s.samples.len() as f32,
@@ -617,6 +625,22 @@ pub fn update(
             0.0,
             0.0,
         ]);
+        // The quasi-static interaction's continued past (`beam::continued_fields`): its
+        // motion in the fields it feels now, `(U₀, ω²)`, `(Λ U₀, valid)`, `(Λ² U₀, 0)`.
+        let motion = (view.neglected_only && s.moment == 0.0)
+            .then(|| source_fields(&view, i, t, c))
+            .flatten()
+            .and_then(|(r, v, _, e, b)| {
+                physics::field_motion::FieldMotion::new(s.charge, s.mass, c, 0.0, r, v, e, b)
+            });
+        match motion.map(|m| m.parameters()) {
+            Some((u0, v1, v2, w2)) => {
+                items.push([u0[0] as f32, u0[1] as f32, u0[2] as f32, w2 as f32]);
+                items.push([v1[0] as f32, v1[1] as f32, v1[2] as f32, 1.0]);
+                items.push([v2[0] as f32, v2[1] as f32, v2[2] as f32, 0.0]);
+            }
+            None => items.extend([[0.0; 4]; 3]),
+        }
         for &(ts, x, v, a) in &s.samples {
             samples.push([(ts - t) as f32, x.x as f32, x.y as f32, v.x as f32]);
             samples.push([v.y as f32, a.x as f32, a.y as f32, 0.0]);
@@ -780,7 +804,7 @@ fn sample(
 fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64)> {
     use physics::lienard::Worldline;
     let (mut e, mut bz) = (DVec3::ZERO, 0.0);
-    for s in &view.sources {
+    for (i, s) in view.sources.iter().enumerate() {
         let w = &s.line;
         // A magnetic moment's dipole field, B_z = −m/r³ in the plane: from the position
         // now for c = ∞ (exact), from the retarded position otherwise (the moving
@@ -888,12 +912,65 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
             if (x - r).length() <= 0.15 {
                 return None;
             }
-            let (eq, bq) = physics::beam::accelerated_fields(s.charge, c, x, 0.0, r, v, a);
+            let (eq, bq) = match (s.moment == 0.0)
+                .then(|| source_fields(view, i, t, c))
+                .flatten()
+            {
+                Some((_, _, _, es, bs)) => {
+                    physics::beam::continued_fields(s.charge, s.mass, c, x, r, v, a, (es, bs))
+                }
+                None => physics::beam::accelerated_fields(s.charge, c, x, 0.0, r, v, a),
+            };
             e -= eq;
             bz -= bq.z;
         }
     }
     Some((e, bz))
+}
+
+/// Source `i` at time `t` while it flies: position, velocity, acceleration, and the fields
+/// it feels as the quasi-static interaction takes them (its continued past moves in them):
+/// the flight's own field and the other particles' (those flying by their uniform motion,
+/// those stopped by a body at rest where they stopped, those in a screening cup fading).
+#[allow(clippy::type_complexity)]
+fn source_fields(
+    view: &RadiationView,
+    i: usize,
+    t: f64,
+    c: f64,
+) -> Option<(DVec3, DVec3, DVec3, DVec3, DVec3)> {
+    use physics::lienard::Worldline;
+    let s = &view.sources[i];
+    if s.end.is_some_and(|(te, _)| t >= te) {
+        return None;
+    }
+    let (r, v, a) = s.line.state(t);
+    let f = view.source_field.sample(r, t);
+    let (mut e, mut b) = (f.e, f.b);
+    for (j, o) in view.sources.iter().enumerate() {
+        if j == i || o.charge == 0.0 {
+            continue;
+        }
+        match o.end {
+            Some((te, xe)) if t >= te => {
+                if o.stays {
+                    let d = r - xe;
+                    e += d * (o.charge / d.length().max(1e-6).powi(3));
+                } else if let Some(fd) = o.fade {
+                    let (ef, bf) = fd.quasi_static_fields(o.charge, c, r, t);
+                    e += ef;
+                    b += bf;
+                }
+            }
+            _ => {
+                let (ro, vo, _) = o.line.state(t);
+                let (eh, bh) = physics::beam::heaviside_fields(o.charge, c, r, ro, vo);
+                e += eh;
+                b += bh;
+            }
+        }
+    }
+    Some((r, v, a, e, b))
 }
 
 /// Draws the E arrows (called from `draw::draw`).

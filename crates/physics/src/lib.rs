@@ -12,6 +12,7 @@ pub mod dynamics;
 pub mod events;
 pub mod external;
 pub mod field;
+pub mod field_motion;
 pub mod geometry;
 pub mod integrator;
 pub mod lienard;
