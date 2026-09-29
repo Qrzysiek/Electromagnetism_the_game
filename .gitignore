@@ -5,3 +5,7 @@ scripts/__pycache__/
 # Reference books and solutions (copyrighted; local only).
 references/
 scripts/math/node_modules/
+
+# Typeset physics documentation (generated from PHYSICS.md by scripts/physics_pdf.py)
+/PHYSICS.pdf
+/docs/physics/PHYSICS.tex

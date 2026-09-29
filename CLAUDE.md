@@ -3,7 +3,7 @@
 A puzzle game on accurate classical electrodynamics. `SPEC.md` describes the game, `PHYSICS.md` the implemented physics and its validation, `README.md` how to run it.
 
 ## Physics accuracy
-- Any change to physics or numerics updates `PHYSICS.md` in the same commit: the model, the method, and the measured test results.
+- Any change to physics or numerics updates `PHYSICS.md` in the same commit: the model, the method, and the measured test results. `PHYSICS.md` is the source; `python scripts/physics_pdf.py` typesets it into `PHYSICS.pdf` (pandoc with `docs/physics/filter.lua`, LuaLaTeX with `docs/physics/main.tex`; generated, not committed): run it after editing. New formulas may be written as LaTeX math between `$…$` (GitHub and the PDF render it); backtick spans are set as code (paths, identifiers) or as Unicode formulas.
 - Validation tests compare against analytic or independent results. Set their thresholds from the target accuracy before measuring. If a threshold must change, document why in `PHYSICS.md`; never loosen one just to make a test pass.
 - Open problems (questions the literature does not answer and that could not be derived in reasonable time) go into `docs/OPEN_PROBLEMS.md`, with what was searched and tried and the workaround in use (the `open-problems` skill).
 - The authoritative trajectory path is f64 on the CPU and deterministic: no fused multiply-add, and a fixed summation order. The GPU is for visuals only.

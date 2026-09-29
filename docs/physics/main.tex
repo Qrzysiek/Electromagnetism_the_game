@@ -1,0 +1,59 @@
+% The typeset PHYSICS.pdf: this preamble around the body that pandoc converts from
+% PHYSICS.md (the source; edit that). Build: python scripts/physics_pdf.py (LuaLaTeX).
+\documentclass[10.5pt,a4paper]{article}
+\usepackage[margin=2.1cm,top=2.2cm,bottom=2.4cm]{geometry}
+\usepackage{fontspec}
+% Glyphs the text fonts lack (arrows, operators, sub- and superscripts) come from these.
+\directlua{luaotfload.add_fallback("physicsfallback", {
+  "STIXTwoMath-Regular:mode=harf;", "DejaVuSans:mode=harf;"})}
+\setmainfont{Libertinus Serif}[RawFeature={fallback=physicsfallback}]
+\setsansfont{Libertinus Sans}[RawFeature={fallback=physicsfallback}]
+\setmonofont{DejaVu Sans Mono}[Scale=0.82,RawFeature={fallback=physicsfallback}]
+\usepackage{unicode-math}
+\setmathfont{Libertinus Math}
+\usepackage{xcolor}
+\definecolor{formula}{HTML}{1F3F74}
+\definecolor{link}{HTML}{2A5DB0}
+\usepackage{longtable,booktabs,array,calc}
+\newcounter{none} % pandoc's tables without a caption
+\setlength{\LTleft}{0pt}
+\setlength{\LTpre}{6pt}
+\setlength{\LTpost}{6pt}
+\renewcommand{\arraystretch}{1.12}
+\usepackage[hyphens]{url}
+\usepackage[colorlinks,linkcolor=link,urlcolor=link,citecolor=link,
+  pdftitle={Physics: model, numerics, validation}]{hyperref}
+\usepackage{bookmark}
+\usepackage{titlesec}
+\titleformat{\section}{\Large\bfseries\color{formula!70!black}}{}{0pt}{}
+\titleformat{\subsection}{\large\bfseries}{}{0pt}{}
+\titlespacing*{\section}{0pt}{16pt}{6pt}
+\titlespacing*{\subsection}{0pt}{12pt}{4pt}
+\setcounter{secnumdepth}{-\maxdimen}
+\setcounter{tocdepth}{2}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt plus 2pt minus 1pt}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=1pt,parsep=1pt}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\emergencystretch=3em
+\sloppy
+% Formulas written as Unicode text in PHYSICS.md (backticks): upright, in the text font.
+\newcommand{\formula}[1]{{\color{formula}#1}}
+% Code: paths and identifiers, breakable after / : _ .
+\newcommand{\code}[1]{\texttt{#1}}
+% Displayed formulas (fenced blocks of PHYSICS.md).
+\newenvironment{formulablock}
+  {\par\smallskip\begingroup\color{formula}\leftskip=1.5em\obeylines\noindent}
+  {\par\endgroup\smallskip}
+
+\title{Physics: model, numerics, validation}
+\author{Electromagnetism -- the game}
+\date{Typeset from \texttt{PHYSICS.md} on \today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\bigskip
+\input{PHYSICS.tex}
+\end{document}
