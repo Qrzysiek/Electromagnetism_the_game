@@ -576,10 +576,15 @@ fn m6_particle_hits_coil_wire() {
 // --- M7: Jackson Problem 12.9, equatorial drift around a dipole ------------------------
 
 /// A charge gyrating in the equatorial plane of a dipole (gyroradius a at the guiding
-/// centre's radius R, a ≪ R) drifts in longitude at `|dφ/dt| = (3/2) (a/R)² ω_B`
-/// (Jackson Pr. 12.9b; the gradient drift of §12.4). With a/R = 0.01 the corrections are
-/// O(a/R): the drift rate fitted over 3 rad of longitude (about 3000 gyrations) must
-/// agree within 2 %.
+/// centre's radius R, a ≪ R) drifts in longitude at `|dφ/dt| = (3/2) (a/R)² ω_B` to
+/// leading order (Jackson Pr. 12.9b; the gradient drift of §12.4). Exact: the speed and
+/// the canonical angular momentum `r v_φ − μ/r` are conserved, so the drift is the
+/// azimuth gained per radial period over the period, two quadratures between the turning
+/// points (`scripts/wolfram/m7_equatorial_drift.wls`, Wolfram Engine 14.2):
+/// 0.014998859788779292, 7.6e-5 below Jackson's leading term at a/R = 0.01. The drift
+/// rate fitted over 3 rad of longitude (about 3000 gyrations, the longitude wobbling by
+/// ±a/R within each) must agree within 1e-5 (set before measuring), and Jackson's term
+/// within 2e-4 of it. (The first version compared with Jackson's term alone, within 2 %.)
 #[test]
 fn m7_van_allen_equatorial_drift() {
     let (r_gc, a) = (10.0_f64, 0.1_f64);
@@ -639,14 +644,17 @@ fn m7_van_allen_equatorial_drift() {
     let slope = pts.iter().map(|&(t, p)| (t - mt) * (p - mp)).sum::<f64>()
         / pts.iter().map(|&(t, _)| (t - mt).powi(2)).sum::<f64>();
     let jackson = 1.5 * (a / r_gc).powi(2) * omega;
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const EXACT: f64 = 0.014998859788779292;
+    let err = slope.abs() / EXACT - 1.0;
     println!(
-        "M7: |dφ/dt| = {:.6e}, Jackson {jackson:.6e}, ratio {:.4} over {:.2} rad ({} steps)",
+        "M7: |dφ/dt| = {:.12e}, exact {EXACT:.12e}: {err:.1e}; Jackson's leading term {:.1e} from exact; over {:.2} rad ({} steps)",
         slope.abs(),
-        slope.abs() / jackson,
+        jackson / EXACT - 1.0,
         (slope * 200.0).abs(),
         tr.stats.n_accept
     );
-    assert!((slope.abs() / jackson - 1.0).abs() < 0.02);
+    assert!(err.abs() < 1e-5 && (jackson / EXACT - 1.0).abs() < 2e-4);
 }
 
 // --- M8–M10: ramped coils, vector potential and induction (Jackson §5.5, §5.15) ------

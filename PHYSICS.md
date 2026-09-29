@@ -520,7 +520,7 @@ Run with `cargo test -p physics --test validation --test properties -- --nocaptu
 | M4 | Energy with charges, dipoles and a coil; c = ∞ and 5 | `W` constant | < 1e-10 | ≤ 2.7e-11 |
 | M5 | Plane of symmetry with dipoles and a coil (32 random configurations) | `z = p_z = 0` | exactly ±0 | holds |
 | M6 | Straight flight into a ring wire and a straight wire | known hit time | < 1e-12 | ≈ 1e-15 |
-| M7 | Jackson Pr. 12.9b: charge gyrating in a dipole's equatorial plane, a/R = 0.01, 3 rad of drift (≈ 3000 gyrations) | fitted longitude drift rate against (3/2)(a/R)² ω_B | < 2 % (corrections O(a/R)) | 0.01 % |
+| M7 | Jackson Pr. 12.9b: charge gyrating in a dipole's equatorial plane, a/R = 0.01, 3 rad of drift (≈ 3000 gyrations) | exact drift: the speed and the canonical angular momentum `r v_φ − μ/r` are conserved, so the drift is the azimuth gained per radial period over the period, two quadratures between the turning points: 0.014998859788779292 (`scripts/wolfram/m7_equatorial_drift.wls`, Wolfram Engine 14.2); Jackson's leading term (3/2)(a/R)² ω_B is 7.6e-5 higher | fitted longitude drift rate within 1e-5 of the exact rate; Jackson's term within 2e-4 of it | −1.9e-6. (The first version compared with Jackson's leading term within 2 %: 0.01 %.) |
 
 Note on M2: the first threshold for |p| drift (1e-12) was stricter than the integration tolerance (also 1e-12). DOP853 does not preserve |p| exactly, so the criterion is the same 1e-10 as for energy in T1.
 
