@@ -25,7 +25,8 @@ struct Params {
 // World-line samples, two per sample: (τ, x, y, vx), (vy, ax, ay, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> samples: array<vec4<f32>>;
 // Items: charges, three vec4 each: (offset, count, q, has_end), (τ_end, x_end, y_end,
-// 1 if its charge stays where it was absorbed, 0 if drained), (magnetic moment, 0, 0, 0);
+// 1 if its charge stays where it was absorbed, 0 if drained), (magnetic moment, fade rate
+// in a screening cup (0: none), 0, 0);
 // then antennas, two vec4 each: (x, y, p0x, p0y), (ω, phase now, radius, 0); then waves,
 // two vec4 each: (k̂x, k̂y, êx, êy), (E0, ω, phase now at x = 0, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(2) var<storage, read> items: array<vec4<f32>>;
@@ -199,29 +200,60 @@ fn lienard(q: f32, c: f32, p: vec2<f32>, s: State, radiation_only: bool) -> Fiel
     return Field(e, cross_z(n, e) / c);
 }
 
-// The quasi-static beam interaction's field of a charge now in state `s`: its past taken
-// as constant acceleration while |a τ| ≤ 0.1 c, uniform before (beam::accelerated_fields).
+// The past of a charge now in state `s` continued back by τ (beam::tapered): constant
+// acceleration while |a τ| ≤ 0.07 c, then fading as sech², so that the velocity changes
+// by at most 0.1 c.
+fn tapered(s: State, tau: f32, c: f32) -> State {
+    let t_scale = 0.1 * c / max(length(s.a), 1e-20);
+    let u = tau / t_scale;
+    if (abs(u) <= 0.7) {
+        return State(s.x + s.v * tau + s.a * (0.5 * tau * tau), s.v + s.a * tau, s.a);
+    }
+    let w = 0.3;
+    let z = (abs(u) - 0.7) / w;
+    let ln_cosh = z + log(1.0 + exp(-2.0 * z)) - 0.6931472;
+    let th = tanh(z);
+    return State(
+        s.x + s.v * tau + s.a * (t_scale * t_scale * (0.245 + 0.7 * w * z + w * w * ln_cosh)),
+        s.v + s.a * (t_scale * sign(u) * (0.7 + w * th)),
+        s.a * (1.0 - th * th),
+    );
+}
+
+// The quasi-static beam interaction's field of a charge now in state `s`: its past
+// continued back with `tapered` (beam::accelerated_fields).
 fn accelerated(q: f32, c: f32, p: vec2<f32>, s: State) -> Field {
-    let tau_lim = 0.1 * c / max(length(s.a), 1e-20);
     var tau = -length(p - s.x) / c;
     for (var k = 0; k < 20; k = k + 1) {
-        let tc = max(tau, -tau_lim);
-        let vc = s.v + s.a * tc;
-        let xc = s.x + s.v * tc + s.a * (0.5 * tc * tc) + vc * (tau - tc);
-        let d = p - xc;
+        let st = tapered(s, tau, c);
+        let d = p - st.x;
         let dist = max(length(d), 1e-6);
         let g = -c * tau - dist;
-        let slope = -c + dot(d, vc) / dist;
+        let slope = -c + dot(d, st.v) / dist;
         tau = tau - g / slope;
     }
-    let tc = max(tau, -tau_lim);
-    let vc = s.v + s.a * tc;
-    let xc = s.x + s.v * tc + s.a * (0.5 * tc * tc) + vc * (tau - tc);
-    var ac = s.a;
-    if (tau < -tau_lim) {
-        ac = vec2<f32>(0.0);
+    return lienard(q, c, p, tapered(s, tau, c), false);
+}
+
+// The quasi-static interaction's field of a charge fading in a screening cup, now in the
+// uniform state `s` (beam::Fade::quasi_static_fields): the field of its uniform motion
+// (Heaviside, Jackson §11.10; B = v × E / c²) with the charge at the retarded time of
+// that motion, faded since it entered the cup at τ_end.
+fn fading_quasi_static(q: f32, rate: f32, tau_end: f32, c: f32, p: vec2<f32>, s: State) -> Field {
+    let d = p - s.x;
+    let dv = dot(d, s.v);
+    let v2 = dot(s.v, s.v);
+    let tau = (dv + sqrt(dv * dv + (c * c - v2) * dot(d, d))) / (c * c - v2);
+    var qe = q;
+    if (-tau > tau_end) {
+        qe = q * exp(-rate * (-tau - tau_end));
     }
-    return lienard(q, c, p, State(xc, vc, ac), false);
+    let dist = max(length(d), 1e-6);
+    let beta = s.v / c;
+    let b2 = dot(beta, beta);
+    let bn = dot(beta, d / dist);
+    let e = d * (qe * (1.0 - b2) / (dist * dist * dist * pow(1.0 - b2 + bn * bn, 1.5)));
+    return Field(e, cross_z(s.v, e) / (c * c));
 }
 
 // Field of the moving charges at `p`; `ok` false right at one.
@@ -239,6 +271,7 @@ fn charges(p: vec2<f32>) -> Charges {
         let head = items[3u * k];
         let end = items[3u * k + 1u];
         let moment = items[3u * k + 2u].x;
+        let fade = items[3u * k + 2u].y;
         let o = u32(head.x);
         let n = u32(head.y);
         let q = head.z;
@@ -247,6 +280,8 @@ fn charges(p: vec2<f32>) -> Charges {
             continue;
         }
         let stays = end.w > 0.5;
+        // Flying on into a screening cup, its charge fading (radiation.rs `charges`).
+        let fades = has_end && !stays && fade > 0.0;
         // A magnetic moment's dipole field, B_z = -m/r^3 in the plane (radiation.rs
         // `charges`): from the position now for c = inf, the retarded one otherwise.
         if (moment != 0.0 && !radiation_only) {
@@ -280,7 +315,9 @@ fn charges(p: vec2<f32>) -> Charges {
         }
         if (c == 0.0) {
             // c = ∞: the Coulomb field of the present position; once absorbed, of where
-            // it stopped (its charge stays) or none (drained).
+            // it stopped (its charge stays), of its fading charge flying on into a
+            // screening cup (factor e^{−rate (t − t_end)}, τ_end = end.x ≤ 0), or none
+            // (drained).
             if (has_end && end.x <= 0.0) {
                 if (stays) {
                     let d = p - end.yz;
@@ -289,6 +326,11 @@ fn charges(p: vec2<f32>) -> Charges {
                         return Charges(f, false);
                     }
                     f.e = f.e + d * (q / (r * r * r));
+                } else if (fades) {
+                    // Screened inside the cup: not masked like a free charge.
+                    let d = p - present(o, n).x;
+                    let r = max(length(d), 1e-6);
+                    f.e = f.e + d * (q * exp(fade * end.x) / (r * r * r));
                 }
                 continue;
             }
@@ -302,8 +344,9 @@ fn charges(p: vec2<f32>) -> Charges {
             continue;
         }
         // Once the light cone of its absorption has passed: at rest where it stopped
-        // (its charge stays), or gone (drained).
-        let absorbed = has_end && c * (-end.x) >= length(p - end.yz);
+        // (its charge stays), or gone (drained). Flying on into a screening cup it keeps
+        // its world line, its charge fading at the retarded time.
+        let absorbed = has_end && !fades && c * (-end.x) >= length(p - end.yz);
         if (absorbed) {
             if (stays && !radiation_only) {
                 let d = p - end.yz;
@@ -315,19 +358,35 @@ fn charges(p: vec2<f32>) -> Charges {
             }
         } else {
             let s = retarded(o, n, p, c);
-            if (length(p - s.x) <= 0.15) {
+            var qk = q;
+            // Seen inside the cup (screened): not masked like a free charge.
+            var in_cup = false;
+            if (fades) {
+                // The retarded time, relative to now: |p − x(τ)| = −c τ.
+                let tau_r = -length(p - s.x) / c;
+                if (tau_r > end.x) {
+                    qk = q * exp(-fade * (tau_r - end.x));
+                    in_cup = true;
+                }
+            }
+            if (length(p - s.x) <= 0.15 && !in_cup) {
                 return Charges(f, false);
             }
-            let l = lienard(q, c, p, s, radiation_only);
+            let l = lienard(qk, c, p, s, radiation_only);
             f.e = f.e + l.e;
             f.bz = f.bz + l.bz;
         }
         if (neglected_only && has_end && end.x <= 0.0) {
-            // The dynamics has the absorbed charge at rest at once (or drained).
+            // The dynamics has the absorbed charge at rest at once, fading in its cup as it
+            // moves on uniformly, or drained.
             if (stays) {
                 let d = p - end.yz;
                 let r = max(length(d), 1e-6);
                 f.e = f.e - d * (q / (r * r * r));
+            } else if (fades) {
+                let a = fading_quasi_static(q, fade, end.x, c, p, present(o, n));
+                f.e = f.e - a.e;
+                f.bz = f.bz - a.bz;
             }
         } else if (neglected_only) {
             let s = present(o, n);

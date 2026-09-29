@@ -46,8 +46,8 @@ pub enum FieldQuantity {
 }
 
 /// A moving charge of the field views: its world line, its charge, and when and where it
-/// was absorbed (its field then disappears where the light cone of that moment passes,
-/// as in the beam dynamics).
+/// was absorbed (as in the beam dynamics: its field then disappears where the light cone
+/// of that moment passes, or, in a screening cup, fades as it flies on).
 struct Source {
     line: SampledWorldline,
     /// The samples `(t, x, v, a)` of the world line (for the GPU).
@@ -59,6 +59,9 @@ struct Source {
     /// Whether its charge stays where it was absorbed (a body; `Fate::Stop`) rather than
     /// being drained (the detector).
     stays: bool,
+    /// Its fade in a screening cup (`Fate::Cup`): the world line goes on uniformly into
+    /// the cup and the charge seen from outside fades, at the retarded time.
+    fade: Option<physics::beam::Fade>,
 }
 
 #[derive(ShaderType, Debug, Clone, Copy, Default)]
@@ -111,8 +114,8 @@ pub struct RadiationView {
     material: Handle<FieldMaterial>,
     entity: Entity,
     /// (revision, flight, mode, flight time of the preview, radiation only, neglected
-    /// only) the scales and world lines were computed for.
-    key: Option<(u64, usize, MapMode, u64, bool, bool)>,
+    /// only, the verdict's own flight shown) the scales and world lines were computed for.
+    key: Option<(u64, usize, MapMode, u64, bool, bool, bool)>,
     radiation_only: bool,
     /// Show only the part of the beam's field the quasi-static interaction leaves out.
     neglected_only: bool,
@@ -244,8 +247,9 @@ fn worldline(
 }
 
 /// A beam particle's world line with its motion before launch prepended: its launch
-/// acceleration continued back (as the exact retarded beam dynamics assumes, PHYSICS.md
-/// §3.3) over the light time across the arena, so that no switch-on shell appears.
+/// acceleration continued back as the beam dynamics does (`physics::beam::tapered`:
+/// constant, then fading so that the velocity changes by at most 0.1c; PHYSICS.md §3.3)
+/// over the light time across the arena, so that no switch-on shell appears.
 fn with_past(
     line: &[(f64, DVec3, DVec3, DVec3)],
     bounds: &physics::geometry::Aabb,
@@ -255,18 +259,18 @@ fn with_past(
         return Vec::new();
     };
     let span = (bounds.max - bounds.min).length() / c * 1.2;
-    // Constant acceleration while its velocity change stays below 0.1c.
-    let span = span.min(0.1 * c / a0.length().max(1e-300));
-    let mut out: Vec<_> = (1..=32)
+    // Beyond 3.7 of the taper's time scale the acceleration has faded (sech² < 1e-8):
+    // uniform motion, the world line's own continuation before its first sample.
+    let span = span.min(3.7 * 0.1 * c / a0.length().max(1e-300));
+    if !(span > 0.0 && span.is_finite()) {
+        return line.to_vec();
+    }
+    let mut out: Vec<_> = (1..=64)
         .rev()
         .map(|k| {
-            let dt = -span * f64::from(k) / 32.0;
-            (
-                t0 + dt,
-                x0 + v0 * dt + a0 * (0.5 * dt * dt),
-                v0 + a0 * dt,
-                a0,
-            )
+            let dt = -span * f64::from(k) / 64.0;
+            let (x, v, a) = physics::beam::tapered(x0, v0, a0, dt, c);
+            (t0 + dt, x, v, a)
         })
         .collect();
     out.extend_from_slice(line);
@@ -341,13 +345,18 @@ pub fn update(
     let flight = game.active_flight();
     let (shot, _) = level.flight_of(flight);
     let preview = game.flights.get(flight).and_then(|f| f.preview.as_ref());
-    // A beam: every particle's world line, from the active disturbance's flight.
-    let beam = level.has_beams().then(|| {
-        let d = game
-            .active_disturbance
-            .min(game.beams.len().saturating_sub(1));
-        game.beams.get(d).and_then(|b| b.preview.as_ref())
-    });
+    // A beam: every particle's world line, from the active disturbance's flight (the
+    // verdict's own flight once it has arrived: exact at finite c).
+    let d_beam = game
+        .active_disturbance
+        .min(game.beams.len().saturating_sub(1));
+    let beam = level
+        .has_beams()
+        .then(|| game.beams.get(d_beam).and_then(crate::BeamView::shown));
+    let verdict_shown = game
+        .beams
+        .get(d_beam)
+        .is_some_and(|b| b.verdict_flight.is_some());
     let t_final = match beam {
         Some(b) => b.map_or(0.0, |b| {
             b.worldlines
@@ -365,6 +374,7 @@ pub fn update(
         t_final.to_bits(),
         game.radiation_only,
         neglected_only,
+        verdict_shown,
     );
     let bounds = level.bounds();
     let size = bounds.max - bounds.min;
@@ -405,8 +415,9 @@ pub fn update(
                         .zip(&b.ends)
                         .zip(&species)
                         .zip(&b.outcomes)
-                        .filter(|(((l, _), _), _)| !l.is_empty())
-                        .map(|(((l, &end), sp), &o)| {
+                        .zip(&b.fades)
+                        .filter(|((((l, _), _), _), _)| !l.is_empty())
+                        .map(|((((l, &end), sp), &o), &fade)| {
                             let samples = with_past(l, &bounds, c);
                             Source {
                                 line: SampledWorldline::new(&samples),
@@ -415,6 +426,7 @@ pub fn update(
                                 moment: sp.moment,
                                 end,
                                 stays: matches!(o, physics::trajectory::Outcome::Collided(_)),
+                                fade,
                             }
                         })
                         .collect()
@@ -441,6 +453,7 @@ pub fn update(
                         moment: level.shots[shot].particle.moment,
                         end,
                         stays,
+                        fade: None,
                     })
                 })
                 .into_iter()
@@ -598,7 +611,12 @@ pub fn update(
             xe.y as f32,
             if s.stays { 1.0 } else { 0.0 },
         ]);
-        items.push([s.moment as f32, 0.0, 0.0, 0.0]);
+        items.push([
+            s.moment as f32,
+            s.fade.map_or(0.0, |f| f.rate as f32),
+            0.0,
+            0.0,
+        ]);
         for &(ts, x, v, a) in &s.samples {
             samples.push([(ts - t) as f32, x.x as f32, x.y as f32, v.x as f32]);
             samples.push([v.y as f32, a.x as f32, a.y as f32, 0.0]);
@@ -795,13 +813,18 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
             if let Some((te, xe)) = s.end
                 && t >= te
             {
-                // Absorbed: its charge at rest where it stopped, or drained.
+                // Absorbed: its charge at rest where it stopped, fading as it flies on
+                // into a screening cup, or drained.
                 if s.stays {
                     let d = x - xe;
                     if d.length() <= 0.15 {
                         return None;
                     }
                     e += d * (s.charge / d.length().powi(3));
+                } else if let Some(fd) = s.fade {
+                    // Screened inside the cup: not masked like a free charge.
+                    let d = x - fd.position(t);
+                    e += d * (s.charge * fd.factor(t) / d.length().max(1e-6).powi(3));
                 }
                 continue;
             }
@@ -813,8 +836,11 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
             continue;
         }
         // Once the light cone of its absorption has passed (as in the dynamics): a charge
-        // at rest where it stopped, or nothing if it was drained.
-        let absorbed = s.end.filter(|&(te, xe)| c * (t - te) >= (x - xe).length());
+        // at rest where it stopped, or nothing if it was drained. One flying on into a
+        // screening cup keeps its world line, its charge fading at the retarded time.
+        let absorbed = s
+            .end
+            .filter(|&(te, xe)| s.fade.is_none() && c * (t - te) >= (x - xe).length());
         if let Some((_, xe)) = absorbed {
             if s.stays && !view.radiation_only {
                 let d = x - xe;
@@ -826,16 +852,19 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
         } else {
             let f = lienard::fields(w, s.charge, c, x, t);
             let r = x - w.state(f.retarded_time).0;
-            if r.length() <= 0.15 {
+            // Seen inside the cup (screened): not masked like a free charge.
+            let in_cup = s.fade.is_some_and(|fd| f.retarded_time > fd.t_off);
+            if r.length() <= 0.15 && !in_cup {
                 return None;
             }
+            let k = s.fade.map_or(1.0, |fd| fd.factor(f.retarded_time));
             if view.radiation_only {
                 // B = n × E / c holds for each part separately.
-                e += f.e_radiation;
-                bz += r.normalize().cross(f.e_radiation).z / c;
+                e += f.e_radiation * k;
+                bz += r.normalize().cross(f.e_radiation).z / c * k;
             } else {
-                e += f.e();
-                bz += f.b.z;
+                e += f.e() * k;
+                bz += f.b.z * k;
             }
         }
         // What the quasi-static interaction uses instead: the fields of the present
@@ -844,10 +873,15 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
             && let Some((te, xe)) = s.end
             && t >= te
         {
-            // The dynamics has the absorbed charge at rest at once (or drained).
+            // The dynamics has the absorbed charge at rest at once, fading in its cup as
+            // it moves on uniformly, or drained.
             if s.stays {
                 let d = x - xe;
                 e -= d * (s.charge / d.length().powi(3));
+            } else if let Some(fd) = s.fade {
+                let (eq, bq) = fd.quasi_static_fields(s.charge, c, x, t);
+                e -= eq;
+                bz -= bq.z;
             }
         } else if view.neglected_only {
             let (r, v, a) = w.state(t);

@@ -883,7 +883,8 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
         .active_disturbance
         .min(game.beams.len().saturating_sub(1));
     for (d, view) in game.beams.iter().enumerate() {
-        let Some(p) = &view.preview else {
+        // The verdict's own flight once it has arrived (exact at finite c).
+        let Some(p) = view.shown() else {
             continue;
         };
         let primary = d == d_active;

@@ -84,8 +84,13 @@ pub struct BeamPreview {
     /// absorbed (None if it flew to the time limit or left the arena).
     pub worldlines: Vec<Vec<(f64, DVec3, DVec3, DVec3)>>,
     pub ends: Vec<Option<(f64, DVec3)>>,
+    /// Per particle: its fade in a screening cup, if it entered one (its world line then
+    /// goes on uniformly into the cup).
+    pub fades: Vec<Option<physics::beam::Fade>>,
     /// The beam's energy budget along the flight.
     pub energy: Vec<physics::beam::EnergySample>,
+    /// Flown with the exact retarded interaction.
+    pub retarded: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -109,11 +114,15 @@ pub enum Response {
         flight: usize,
         preview: BeamPreview,
     },
-    /// Beam levels: each particle's verification verdict and outcome.
+    /// Beam levels: each particle's verification verdict and outcome, and the verdict's
+    /// own flight when its model differs from the preview's (the exact retarded
+    /// interaction at finite c, metal at verification resolution): the views show it
+    /// once it arrives.
     BeamVerified {
         revision: u64,
         flight: usize,
         results: Vec<(Status, Outcome)>,
+        run: Option<BeamPreview>,
     },
     /// Measured cost so far (after every flight).
     Cost {
@@ -244,11 +253,15 @@ fn retag(r: Response, revision: u64) -> Response {
             preview,
         },
         Response::BeamVerified {
-            flight, results, ..
+            flight,
+            results,
+            run,
+            ..
         } => Response::BeamVerified {
             revision,
             flight,
             results,
+            run,
         },
         Response::Cost { cost, .. } => Response::Cost { revision, cost },
     }
@@ -426,89 +439,13 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
     };
     let mut previews = Vec::new();
     for (flight, scn) in preview_scns.iter().enumerate() {
-        let mut paths: Vec<Vec<(f64, DVec3)>> =
-            scn.particles.iter().map(|b| vec![(0.0, b.x0)]).collect();
-        let kins: Vec<physics::dynamics::Kinematics> = scn
-            .particles
-            .iter()
-            .map(|b| physics::dynamics::Kinematics::new(b.particle.mass, scn.c))
-            .collect();
-        let mut lines: Vec<Vec<(f64, DVec3, DVec3, DVec3)>> = vec![Vec::new(); scn.particles.len()];
         let start = Instant::now();
-        let Some(run) = physics::beam::run_beam_cancellable(
-            scn,
-            &RunSettings::with_tolerance(tol.preview),
-            |dense, members, p_ref| {
-                let (a, b) = (dense.t_start(), dense.t_end());
-                for (k, &i) in members.iter().enumerate() {
-                    // World line: position, velocity, acceleration (from the derivative
-                    // of the dense output) at 5 points of the step.
-                    for s in 0..=4 {
-                        let t = a + (b - a) * f64::from(s) / 4.0;
-                        if lines[i].last().is_some_and(|l| t <= l.0) {
-                            continue;
-                        }
-                        let comp = |c: usize| dense.eval_component(6 * k + c, t);
-                        let der = |c: usize| dense.eval_derivative_component(6 * k + c, t);
-                        let x = DVec3::new(comp(0), comp(1), comp(2));
-                        let p = DVec3::new(comp(3), comp(4), comp(5)) * p_ref;
-                        let dp = DVec3::new(der(3), der(4), der(5)) * p_ref;
-                        lines[i].push((t, x, kins[i].velocity(p), kins[i].acceleration(p, dp)));
-                    }
-                    for s in 1..=4 {
-                        let t = a + (b - a) * f64::from(s) / 4.0;
-                        let x = DVec3::new(
-                            dense.eval_component(6 * k, t),
-                            dense.eval_component(6 * k + 1, t),
-                            dense.eval_component(6 * k + 2, t),
-                        );
-                        paths[i].push((t, x));
-                    }
-                }
-                current()
-            },
-        ) else {
+        let Some((run, preview)) = fly_beam(scn, tol.preview, 4, &shots, current) else {
             return true;
         };
-        // Up to each particle's end (ghosts are followed a little further).
-        for (path, traj) in paths.iter_mut().zip(&run.trajectories) {
-            path.retain(|(t, _)| *t < traj.end.t);
-            path.push((traj.end.t, traj.end.x));
-        }
-        for (line, traj) in lines.iter_mut().zip(&run.trajectories) {
-            if traj.outcome != Outcome::LeftBounds {
-                line.retain(|l| l.0 <= traj.end.t);
-            }
-        }
-        let ends = run
-            .trajectories
-            .iter()
-            .map(|t| {
-                (!matches!(t.outcome, Outcome::Timeout | Outcome::LeftBounds))
-                    .then_some((t.end.t, t.end.x))
-            })
-            .collect();
         if let Some(t) = run.trajectories.first() {
             cost.add_preview(start.elapsed().as_secs_f64(), t);
         }
-        let preview = BeamPreview {
-            paths,
-            shots: shots.clone(),
-            outcomes: run.trajectories.iter().map(|t| t.outcome).collect(),
-            energy_rel_error: run.energy_max_rel_error,
-            worldlines: lines,
-            ends,
-            energy: run.energy.clone(),
-            retardation_max: run
-                .neglected_retardation
-                .iter()
-                .fold(0.0, |m: f64, &x| m.max(x)),
-            radiated_max: run
-                .trajectories
-                .iter()
-                .map(|t| t.radiated_energy / t.kinetic_initial)
-                .fold(0.0, f64::max),
-        };
         let msg = Response::BeamPreview {
             revision: req.revision,
             flight,
@@ -520,9 +457,11 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
         previews.push(run);
     }
     // The verdict: metal at verification resolution, and at finite c the exact retarded
-    // interaction (the preview above is quasi-static).
+    // interaction (the preview above is quasi-static). Its flight is then recorded for
+    // the views too (they show it once it arrives).
     let exact = req.level.physics.beam_interaction && req.level.physics.c.is_some();
-    let fine = if req.level.has_metal(&req.placement) || exact {
+    let distinct = req.level.has_metal(&req.placement) || exact;
+    let fine = if distinct {
         let Some(fine) = unless_stale(newest, req.revision, || {
             req.level.verification_beam_scenarios(&req.placement)
         }) else {
@@ -537,12 +476,21 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
     };
     for (flight, scn) in fine.iter().enumerate() {
         let start = Instant::now();
-        let Some(verified) = physics::beam::run_beam_cancellable(
-            scn,
-            &RunSettings::with_tolerance(tol.verify),
-            |_, _, _| current(),
-        ) else {
-            return true;
+        let (verified, run) = if distinct {
+            // The verification's steps are shorter: fewer points per step.
+            let Some((verified, view)) = fly_beam(scn, tol.verify, 2, &shots, current) else {
+                return true;
+            };
+            (verified, Some(view))
+        } else {
+            let Some(verified) = physics::beam::run_beam_cancellable(
+                scn,
+                &RunSettings::with_tolerance(tol.verify),
+                |_, _, _| current(),
+            ) else {
+                return true;
+            };
+            (verified, None)
         };
         if let Some(t) = verified.trajectories.first() {
             cost.add_verification(start.elapsed().as_secs_f64(), t);
@@ -557,12 +505,113 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
             revision: req.revision,
             flight,
             results,
+            run,
         };
         if !send_cost(&cost) || tx.send(msg).is_err() {
             return false;
         }
     }
     true
+}
+
+/// A beam flight recorded for the views: every particle's path, world line (position,
+/// velocity, and acceleration from the derivative of the dense output, at `per_step + 1`
+/// points of every step), outcome, end and fade, and the beam's energy budget. `None` if
+/// `go_on` stopped it.
+fn fly_beam(
+    scn: &physics::beam::BeamScenario<LevelField>,
+    tol: f64,
+    per_step: u32,
+    shots: &[usize],
+    go_on: impl Fn() -> bool,
+) -> Option<(physics::beam::BeamRun, BeamPreview)> {
+    let mut paths: Vec<Vec<(f64, DVec3)>> =
+        scn.particles.iter().map(|b| vec![(0.0, b.x0)]).collect();
+    let kins: Vec<physics::dynamics::Kinematics> = scn
+        .particles
+        .iter()
+        .map(|b| physics::dynamics::Kinematics::new(b.particle.mass, scn.c))
+        .collect();
+    let mut lines: Vec<Vec<(f64, DVec3, DVec3, DVec3)>> = vec![Vec::new(); scn.particles.len()];
+    let run = physics::beam::run_beam_cancellable(
+        scn,
+        &RunSettings::with_tolerance(tol),
+        |dense, members, p_ref| {
+            let (a, b) = (dense.t_start(), dense.t_end());
+            let at = |s: u32| a + (b - a) * f64::from(s) / f64::from(per_step);
+            for (k, &i) in members.iter().enumerate() {
+                for s in 0..=per_step {
+                    let t = at(s);
+                    if lines[i].last().is_some_and(|l| t <= l.0) {
+                        continue;
+                    }
+                    let comp = |c: usize| dense.eval_component(6 * k + c, t);
+                    let der = |c: usize| dense.eval_derivative_component(6 * k + c, t);
+                    let x = DVec3::new(comp(0), comp(1), comp(2));
+                    let p = DVec3::new(comp(3), comp(4), comp(5)) * p_ref;
+                    let dp = DVec3::new(der(3), der(4), der(5)) * p_ref;
+                    lines[i].push((t, x, kins[i].velocity(p), kins[i].acceleration(p, dp)));
+                }
+                for s in 1..=per_step {
+                    let t = at(s);
+                    let x = DVec3::new(
+                        dense.eval_component(6 * k, t),
+                        dense.eval_component(6 * k + 1, t),
+                        dense.eval_component(6 * k + 2, t),
+                    );
+                    paths[i].push((t, x));
+                }
+            }
+            go_on()
+        },
+    )?;
+    // Up to each particle's end (ghosts are followed a little further).
+    for (path, traj) in paths.iter_mut().zip(&run.trajectories) {
+        path.retain(|(t, _)| *t < traj.end.t);
+        path.push((traj.end.t, traj.end.x));
+    }
+    for ((line, traj), fade) in lines.iter_mut().zip(&run.trajectories).zip(&run.fades) {
+        if traj.outcome != Outcome::LeftBounds {
+            line.retain(|l| l.0 <= traj.end.t);
+        }
+        // Into a screening cup it flies on uniformly from where it entered (the world
+        // line's continuation after its last sample).
+        if let Some(f) = fade
+            && line.last().is_some_and(|l| l.0 < f.t_off)
+        {
+            let a = line.last().map_or(DVec3::ZERO, |l| l.3);
+            line.push((f.t_off, f.x_off, f.v, a));
+        }
+    }
+    let ends = run
+        .trajectories
+        .iter()
+        .map(|t| {
+            (!matches!(t.outcome, Outcome::Timeout | Outcome::LeftBounds))
+                .then_some((t.end.t, t.end.x))
+        })
+        .collect();
+    let preview = BeamPreview {
+        paths,
+        shots: shots.to_vec(),
+        outcomes: run.trajectories.iter().map(|t| t.outcome).collect(),
+        energy_rel_error: run.energy_max_rel_error,
+        worldlines: lines,
+        ends,
+        fades: run.fades.clone(),
+        energy: run.energy.clone(),
+        retardation_max: run
+            .neglected_retardation
+            .iter()
+            .fold(0.0, |m: f64, &x| m.max(x)),
+        radiated_max: run
+            .trajectories
+            .iter()
+            .map(|t| t.radiated_energy / t.kinetic_initial)
+            .fold(0.0, f64::max),
+        retarded: scn.retarded && scn.c.is_finite(),
+    };
+    Some((run, preview))
 }
 
 /// Preview flight with its dense path; `None` if `go_on` stopped it.
@@ -684,6 +733,57 @@ mod tests {
             revision,
             flight: 0,
             results: Vec::new(),
+            run: None,
+        }
+    }
+
+    /// At finite c the verdict of an interacting beam flies the exact retarded
+    /// interaction, and the worker sends that flight for the views: flown retarded (the
+    /// preview quasi-static), with the verdict's outcomes, a world line for every particle
+    /// and a screening cup's fade for every one that entered its detector.
+    #[test]
+    fn the_verdicts_exact_flight_is_sent_for_the_views() {
+        let path = crate::levels_dir().join("55_soft_landing_current.json");
+        let text = std::fs::read_to_string(path).expect("level 55");
+        let level = level::Level::from_json(&text).expect("valid level");
+        let (tx, rx) = channel();
+        let sink = Sink {
+            tx: &tx,
+            record: std::cell::RefCell::new(Vec::new()),
+        };
+        let newest = Arc::new(AtomicU64::new(1));
+        let req = Request {
+            revision: 1,
+            placement: level.reference_solution.clone(),
+            level,
+        };
+        assert!(beam_request(&req, &sink, &newest));
+        let responses: Vec<Response> = rx.try_iter().collect();
+        let preview = responses
+            .iter()
+            .find_map(|r| match r {
+                Response::BeamPreview { preview, .. } => Some(preview),
+                _ => None,
+            })
+            .expect("a preview");
+        let (results, run) = responses
+            .iter()
+            .find_map(|r| match r {
+                Response::BeamVerified { results, run, .. } => Some((results, run)),
+                _ => None,
+            })
+            .expect("a verdict");
+        let run = run.as_ref().expect("the verdict's flight");
+        assert!(run.retarded && !preview.retarded);
+        assert_eq!(run.outcomes.len(), results.len());
+        for (i, (_, outcome)) in results.iter().enumerate() {
+            assert_eq!(run.outcomes[i], *outcome, "particle {i}");
+            assert!(!run.worldlines[i].is_empty(), "particle {i}");
+            assert_eq!(
+                run.fades[i].is_some(),
+                *outcome == Outcome::Arrived,
+                "particle {i}"
+            );
         }
     }
 

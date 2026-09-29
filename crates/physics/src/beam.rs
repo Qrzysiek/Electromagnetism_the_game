@@ -170,20 +170,40 @@ pub struct BeamScenario<F> {
 /// A particle absorbed by a screening cup (`Fate::Cup`): it flies on into the cup at its
 /// entry velocity, and seen from outside its charge fades as `e^{−k v_n (t − t_off)}`
 /// (`k = π/w`, `v_n` its speed into the cup), at the retarded time.
-#[derive(Clone, Copy, Debug)]
-struct Fade {
-    t_off: f64,
-    x_off: DVec3,
-    v: DVec3,
-    rate: f64,
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Fade {
+    /// When and where it entered the cup.
+    pub t_off: f64,
+    pub x_off: DVec3,
+    /// Its velocity from then on.
+    pub v: DVec3,
+    /// `k v_n`: the charge's decay rate.
+    pub rate: f64,
 }
 
 impl Fade {
-    fn position(&self, t: f64) -> DVec3 {
+    /// Its position inside the cup at `t` (after `t_off`).
+    pub fn position(&self, t: f64) -> DVec3 {
         self.x_off + self.v * (t - self.t_off)
     }
 
-    fn factor(&self, t_r: f64) -> f64 {
+    /// The quasi-static interaction's field `(E, B)` of the fading charge `q` at `x`, `t`:
+    /// the field of its uniform motion (`heaviside_fields`), with the charge at the
+    /// retarded time of that motion (closed form).
+    pub fn quasi_static_fields(&self, q: f64, c: f64, x: DVec3, t: f64) -> (DVec3, DVec3) {
+        let r_now = self.position(t);
+        let d = x - r_now;
+        let (dv, v2) = (d.dot(self.v), self.v.length_squared());
+        let tau = (dv + (dv * dv + (c * c - v2) * d.length_squared()).sqrt()) / (c * c - v2);
+        let q_eff = q * self.factor(t - tau);
+        if q_eff == 0.0 {
+            return (DVec3::ZERO, DVec3::ZERO);
+        }
+        heaviside_fields(q_eff, c, x, r_now, self.v)
+    }
+
+    /// The factor of its charge seen by the field emitted at the retarded time `t_r`.
+    pub fn factor(&self, t_r: f64) -> f64 {
         if t_r <= self.t_off {
             1.0
         } else {
@@ -248,6 +268,8 @@ pub struct BeamRun {
     /// (sampled at the step ends; 0 without quasi-static interaction). The trajectory
     /// error follows the impulse error: a short plunge of a neighbour matters little.
     pub neglected_retardation: Vec<f64>,
+    /// Per particle: its fade in a screening cup, if it entered one (`Fate::Cup`).
+    pub fades: Vec<Option<Fade>>,
 }
 
 /// Event functions of one particle, in priority order.
@@ -806,17 +828,9 @@ impl<F: FieldSolver> BeamOde<'_, F> {
             if j == self.members[k] {
                 continue;
             }
-            let c = self.scn.c;
-            let r_now = fd.position(t);
-            let d = x - r_now;
-            let (dv, v2) = (d.dot(fd.v), fd.v.length_squared());
-            let tau = (dv + (dv * dv + (c * c - v2) * d.length_squared()).sqrt()) / (c * c - v2);
-            let q_eff = qf * fd.factor(t - tau);
-            if q_eff != 0.0 {
-                let (ej, bj) = heaviside_fields(q_eff, c, x, r_now, fd.v);
-                e += ej;
-                b += bj;
-            }
+            let (ej, bj) = fd.quasi_static_fields(qf, self.scn.c, x, t);
+            e += ej;
+            b += bj;
         }
         // Charges at rest where absorbed particles stopped: their Coulomb fields.
         for &(j, qs, xs) in &self.stopped {
@@ -1868,6 +1882,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
         },
         restarts,
         energy,
+        fades,
     })
 }
 
@@ -2014,7 +2029,8 @@ const EXTRAPOLATION: f64 = 2.0;
 const TAPER_START: f64 = 0.7;
 
 /// Motion continued from position `r`, velocity `v` and acceleration `a` by `τ` (the
-/// quasi-static interaction's and the pre-launch past). With `T = 0.1c/|a|` and `u = τ/T`:
+/// quasi-static interaction's and the pre-launch past; the game's field views continue
+/// the world lines before launch with it too). With `T = 0.1c/|a|` and `u = τ/T`:
 /// the constant acceleration while `|u| ≤ u₁ = TAPER_START`; beyond, the acceleration
 /// `a sech²(s/w)`, `s = |u| − u₁`, `w = 1 − u₁`, so that the velocity changes by at most
 /// 0.1c and the acceleration and its derivative stay continuous. The first versions
@@ -2024,7 +2040,7 @@ const TAPER_START: f64 = 0.7;
 /// `a sech²(u)` from the start cured that but departed from the constant acceleration
 /// early and made the relativistic beam's quasi-static flight 1e-3 cells worse; with
 /// `u₁ = 0.7` its difference from the exact one is 1.79e-3 cells (kinked: 1.72e-3).
-fn tapered(r: DVec3, v: DVec3, a: DVec3, tau: f64, c: f64) -> (DVec3, DVec3, DVec3) {
+pub fn tapered(r: DVec3, v: DVec3, a: DVec3, tau: f64, c: f64) -> (DVec3, DVec3, DVec3) {
     let t_scale = 0.1 * c / a.length().max(1e-300);
     let u1 = TAPER_START;
     let w = 1.0 - u1;

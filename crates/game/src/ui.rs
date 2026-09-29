@@ -623,7 +623,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         crate::Progress::Verifying => {
             ui.horizontal(|ui| {
                 ui.add(egui::Spinner::new());
-                ui.label("Verifying…");
+                ui.label(if exact_verdict(&level) {
+                    "Verifying with the exact retarded fields…"
+                } else {
+                    "Verifying…"
+                });
             });
         }
         crate::Progress::Done => {}
@@ -992,18 +996,19 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             "What the quasi-static beam interaction leaves out of the dynamics: the full \
              retarded field of all particles minus the fields it uses (each particle's \
              present state continued back with constant acceleration). Mostly the change \
-             of acceleration during the light travel time, and the delay with which an \
-             absorbed particle's field disappears. Shown on the full field's colour \
-             scale (linear by default), so its true size is seen; its size is stated \
-             above."
+             of acceleration during the light travel time, and the delay with which the \
+             news of an absorption spreads. Shown on the full field's colour scale \
+             (linear by default), so its true size is seen; its size is stated above."
         }
         Some(MapMode::ParticleField) if level.has_beams() => {
             "The retarded (Liénard–Wiechert, exact) field of every particle of the beam at \
-             the animation time, from their computed flights. Every change of velocity \
-             sends out radiation at c. Before launch each particle is taken to move with \
-             its launch acceleration; an absorbed particle's field disappears as the news \
-             of its absorption spreads at c; one absorbed by a body stays there at rest. \
-             Colour: B perpendicular to the plane, on the chosen scale; arrows: E."
+             the animation time, from the flight shown (the exact one once the verdict is \
+             in). Every change of velocity sends out radiation at c. Before launch each \
+             particle is taken to move with its launch acceleration. One entering its \
+             detector flies on into the screening cup, its charge fading as seen from \
+             outside (with the instant drain its field disappears as the news of its \
+             absorption spreads at c); one absorbed by a body stays there at rest. Colour: \
+             B perpendicular to the plane, on the chosen scale; arrows: E."
         }
         Some(MapMode::ParticleField) => {
             "The field of the particle itself (Liénard–Wiechert, exact) at the animation \
@@ -1092,7 +1097,7 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                         "Shot {}: {ok} of {n} arrive, verified (need {:.0} %) {}",
                         s + 1,
                         need * 100.0,
-                        if enough { "✔" } else { "✘" }
+                        if enough { "✔" } else { "✖" }
                     )
                 }
             };
@@ -1107,7 +1112,7 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             let text = match game.beam_transmission(d, n + k) {
                 None => format!("Particle {}: computing…", k + 1),
                 Some((1, _)) => format!("Particle {}: arrives, verified ✔", k + 1),
-                Some(_) => format!("Particle {}: does not arrive (verified) ✘", k + 1),
+                Some(_) => format!("Particle {}: does not arrive (verified) ✖", k + 1),
             };
             let c = crate::draw::free_goal_color(k).to_srgba();
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -1122,12 +1127,16 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     let d = game
         .active_disturbance
         .min(game.beams.len().saturating_sub(1));
-    if let Some(p) = game.beams.get(d).and_then(|b| b.preview.as_ref()) {
+    let view = game.beams.get(d);
+    if let Some(p) = view.and_then(crate::BeamView::shown) {
         let lost = p
             .outcomes
             .iter()
             .filter(|o| **o != Outcome::Arrived)
             .count();
+        // Which flight the views show: the quick preview, or the verdict's own flight
+        // once it has arrived (exact at finite c).
+        let verdict_shown = view.is_some_and(|v| v.verdict_flight.is_some());
         let energy = if p.energy_rel_error.is_nan() {
             // Finite c: the particles exchange energy with the field.
             let mut s = format!(
@@ -1151,22 +1160,85 @@ fn beam_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         };
         ui.label(
             egui::RichText::new(format!(
-                "{} particles{}; {lost} lost in the preview; {energy}.",
+                "{} particles{}; {lost} lost{}; {energy}.",
                 p.paths.len(),
                 match (level.interacts(), level.physics.c) {
                     (false, _) => ", not interacting",
                     (true, None) => ", interacting",
-                    (true, Some(_)) if level.physics.beam_retarded => {
-                        ", interacting (exact retarded fields)"
-                    }
+                    (true, Some(_)) if p.retarded => ", interacting (exact retarded fields)",
                     (true, Some(_)) => ", interacting (quasi-static fields)",
                 },
+                if verdict_shown { "" } else { " in the preview" },
             ))
             .small(),
         );
+        let shown_text = match view {
+            Some(v) if verdict_shown => v.preview.as_ref().map(|quick| {
+                let (worst, differ) = quick_vs_verdict(quick, p);
+                let mut s = String::from(if p.retarded {
+                    "Shown in every view: the verdict's own flight (exact retarded fields). "
+                } else {
+                    "Shown in every view: the verdict's own flight (metal at its verification \
+                     resolution). "
+                });
+                // The sandbox's exact option flies the preview retarded too.
+                s += if p.retarded && !quick.retarded {
+                    "The quick preview (quasi-static)"
+                } else {
+                    "The preview (looser tolerance)"
+                };
+                s += &format!(" ended within {worst:.1e} cells of it");
+                if quick.retardation_max > 0.0 {
+                    s += &format!(
+                        " (its estimated error: {:.1e} of the interaction)",
+                        quick.retardation_max
+                    );
+                }
+                if differ > 0 {
+                    s += &format!("; {differ} particles ended differently");
+                }
+                s + "."
+            }),
+            Some(v) if v.verified.is_none() && exact_verdict(level) => Some(
+                "Shown: the quick preview (quasi-static fields). The exact flight, the \
+                 verdict's, replaces it in every view when it is ready."
+                    .to_string(),
+            ),
+            _ => None,
+        };
+        if let Some(text) = shown_text {
+            ui.label(egui::RichText::new(text).small());
+        }
     }
     beam_energy(ui, game, level);
     ui.separator();
+}
+
+/// Whether the verdict of a beam level flies the exact retarded interaction while the
+/// preview is quasi-static (`Level::verification_beam_scenarios`).
+fn exact_verdict(level: &level::Level) -> bool {
+    level.has_beams()
+        && level.physics.beam_interaction
+        && level.physics.c.is_some()
+        && !level.physics.beam_retarded
+}
+
+/// How far the quick preview's end points are from the verdict flight's (particles with
+/// the same outcome), and how many particles ended differently.
+fn quick_vs_verdict(
+    quick: &crate::worker::BeamPreview,
+    verdict: &crate::worker::BeamPreview,
+) -> (f64, usize) {
+    let mut worst: f64 = 0.0;
+    let mut differ = 0;
+    for (i, (a, b)) in quick.paths.iter().zip(&verdict.paths).enumerate() {
+        if quick.outcomes.get(i) != verdict.outcomes.get(i) {
+            differ += 1;
+        } else if let (Some(x), Some(y)) = (a.last(), b.last()) {
+            worst = worst.max((x.1 - y.1).length());
+        }
+    }
+    (worst, differ)
 }
 
 /// The drawing colour of a shot, for egui.
@@ -1697,7 +1769,7 @@ fn beam_energy(ui: &mut egui::Ui, game: &Game, level: &level::Level) {
     let d = game
         .active_disturbance
         .min(game.beams.len().saturating_sub(1));
-    let Some(p) = game.beams.get(d).and_then(|b| b.preview.as_ref()) else {
+    let Some(p) = game.beams.get(d).and_then(crate::BeamView::shown) else {
         return;
     };
     let (Some(first), Some(last)) = (p.energy.first(), p.energy.last()) else {

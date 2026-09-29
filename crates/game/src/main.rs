@@ -47,6 +47,17 @@ pub struct BeamView {
     /// Setup revision the preview belongs to (older while a new one is computed).
     pub preview_revision: u64,
     pub verified: Option<Vec<(Status, Outcome)>>,
+    /// The verdict's own flight, when its model differs from the preview's (the exact
+    /// retarded interaction at finite c, metal at verification resolution).
+    pub verdict_flight: Option<worker::BeamPreview>,
+}
+
+impl BeamView {
+    /// The flight every view shows (paths, animation, energy budget, field views, counts):
+    /// the verdict's own flight once it has arrived, the preview until then.
+    pub fn shown(&self) -> Option<&worker::BeamPreview> {
+        self.verdict_flight.as_ref().or(self.preview.as_ref())
+    }
 }
 
 /// State of the computation for the current setup.
@@ -383,7 +394,7 @@ impl Game {
     /// while it is being computed.
     pub fn beam_transmission(&self, d: usize, shot: usize) -> Option<(usize, usize)> {
         let v = self.beams.get(d)?;
-        let (p, r) = (v.preview.as_ref()?, v.verified.as_ref()?);
+        let (p, r) = (v.shown()?, v.verified.as_ref()?);
         if r.len() != p.shots.len() {
             return None;
         }
@@ -533,12 +544,13 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
 /// opens level `EM_LEVEL` (1-based), enters the sandbox if `EM_SANDBOX=1`, selects the map
 /// `EM_MAP` (potential, magnetic, waves, particle, off), places `EM_PLACE` (JSON list of
 /// elements, or "reference"), holds the animation at `EM_TIME`, lets the
-/// physics settle, saves a screenshot of its own window and exits. No clicks or keys are
-/// sent to the desktop.
+/// physics settle, saves a screenshot of its own window and exits. With `EM_WAIT=1` the
+/// screenshot waits until the verdicts are in. No clicks or keys are sent to the desktop.
 fn dev_capture(
     mut commands: Commands,
     mut game: ResMut<Game>,
     mut frame: Local<u32>,
+    mut shot_at: Local<Option<u32>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let Ok(path) = std::env::var("EM_CAPTURE") else {
@@ -550,12 +562,14 @@ fn dev_capture(
         .ok()
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(120);
-    if *frame == shot {
+    let wait = std::env::var("EM_WAIT").is_ok_and(|v| v == "1");
+    if shot_at.is_none() && *frame >= shot && (!wait || game.progress() == Progress::Done) {
+        *shot_at = Some(*frame);
         commands
             .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
             .observe(bevy::render::view::screenshot::save_to_disk(path.clone()));
     }
-    if *frame == shot + 60 {
+    if shot_at.is_some_and(|f| *frame == f + 60) {
         exit.write(AppExit::Success);
     }
     if let Some(t) = std::env::var("EM_TIME")
@@ -909,6 +923,11 @@ fn sync_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
         game.beams.resize(per_shot, BeamView::default());
         for b in &mut game.beams {
             b.verified = None;
+            // The old setup's best flight stays on screen (faded) until the new preview
+            // arrives.
+            if let Some(f) = b.verdict_flight.take() {
+                b.preview = Some(f);
+            }
         }
     } else {
         game.beams.clear();
@@ -1081,15 +1100,18 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
                 if let Some(b) = game.beams.get_mut(flight) {
                     b.preview = Some(preview);
                     b.preview_revision = revision;
+                    b.verdict_flight = None;
                 }
             }
             Response::BeamVerified {
                 revision,
                 flight,
                 results,
+                run,
             } if revision == current => {
                 if let Some(b) = game.beams.get_mut(flight) {
                     b.verified = Some(results);
+                    b.verdict_flight = run;
                 }
             }
             Response::Cost { revision, cost } if revision == current => {
@@ -1117,7 +1139,7 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
     let end = game
         .beams
         .iter()
-        .filter_map(|b| b.preview.as_ref())
+        .filter_map(BeamView::shown)
         .flat_map(|p| {
             p.paths
                 .iter()
