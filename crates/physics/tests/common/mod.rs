@@ -60,6 +60,58 @@ pub fn angle_between(a: DVec3, b: DVec3) -> f64 {
     a.cross(b).length().atan2(a.dot(b))
 }
 
+/// Gauss–Legendre nodes and weights on [−1, 1] (Newton iteration on P_n).
+pub fn gauss_legendre(n: usize) -> Vec<(f64, f64)> {
+    let mut out = Vec::with_capacity(n);
+    #[allow(clippy::cast_precision_loss)]
+    let nf = n as f64;
+    for i in 0..n {
+        #[allow(clippy::cast_precision_loss)]
+        let mut x = (std::f64::consts::PI * (i as f64 + 0.75) / (nf + 0.5)).cos();
+        let mut dp = 0.0;
+        for _ in 0..100 {
+            // P_n(x) and P_n'(x) by the three-term recurrence.
+            let (mut p0, mut p1) = (1.0, x);
+            for k in 2..=n {
+                #[allow(clippy::cast_precision_loss)]
+                let kf = k as f64;
+                let p2 = ((2.0 * kf - 1.0) * x * p1 - (kf - 1.0) * p0) / kf;
+                p0 = p1;
+                p1 = p2;
+            }
+            dp = nf * (x * p1 - p0) / (x * x - 1.0);
+            let dx = p1 / dp;
+            x -= dx;
+            if dx.abs() < 1e-16 {
+                break;
+            }
+        }
+        out.push((x, 2.0 / ((1.0 - x * x) * dp * dp)));
+    }
+    out
+}
+
+/// Quadrature over the unit sphere, polar axis along `axis`: Gauss–Legendre in cos θ
+/// (`n_mu` nodes) times the trapezoid rule in φ (`n_phi`). Directions and weights (their
+/// sum is 4π); exponentially convergent for integrands analytic on the sphere.
+pub fn sphere_quadrature(axis: DVec3, n_mu: usize, n_phi: usize) -> Vec<(DVec3, f64)> {
+    let e3 = axis.normalize();
+    let e1 = e3.any_orthonormal_vector();
+    let e2 = e3.cross(e1);
+    #[allow(clippy::cast_precision_loss)]
+    let dphi = std::f64::consts::TAU / n_phi as f64;
+    let mut out = Vec::with_capacity(n_mu * n_phi);
+    for (mu, w) in gauss_legendre(n_mu) {
+        let s = (1.0 - mu * mu).sqrt();
+        for k in 0..n_phi {
+            #[allow(clippy::cast_precision_loss)]
+            let (sp, cp) = (k as f64 * dphi).sin_cos();
+            out.push((e1 * (s * cp) + e2 * (s * sp) + e3 * mu, w * dphi));
+        }
+    }
+    out
+}
+
 /// Deterministic pseudo-random numbers (SplitMix64) for reproducible configurations.
 pub struct Rng(u64);
 

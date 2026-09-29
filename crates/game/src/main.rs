@@ -130,6 +130,11 @@ pub struct Game {
     pub log_omega: bool,
     /// Colour quantity of the field views.
     pub field_quantity: radiation::FieldQuantity,
+    /// Energy-flow view: the part shown, tracers, and the average over a period of the
+    /// antennas and waves.
+    pub flow_part: radiation::FlowPart,
+    pub flow_tracers: bool,
+    pub flow_average: bool,
     /// Dynamic range of the field views, in decades.
     pub field_range_decades: f64,
     /// Linear colour scale (else logarithmic over `field_range_decades`).
@@ -186,6 +191,9 @@ impl Game {
             log_magnitude: true,
             log_omega: false,
             field_quantity: radiation::FieldQuantity::Bz,
+            flow_part: radiation::FlowPart::Total,
+            flow_tracers: false,
+            flow_average: true,
             field_range_decades: 2.5,
             field_linear: false,
             field_gain_decades: 0.0,
@@ -599,8 +607,24 @@ fn dev_capture(
             if std::env::var("EM_HARDCORE").is_ok_and(|v| v == "1") {
                 game.editor.set_continuous(true);
             }
-            if std::env::var("EM_QUANTITY").is_ok_and(|v| v == "E") {
-                game.field_quantity = radiation::FieldQuantity::E;
+            match std::env::var("EM_QUANTITY").as_deref() {
+                Ok("E") => game.field_quantity = radiation::FieldQuantity::E,
+                Ok("S") => game.field_quantity = radiation::FieldQuantity::S,
+                _ => {}
+            }
+            if let Ok(p) = std::env::var("EM_PART") {
+                game.flow_part = match p.as_str() {
+                    "own" => radiation::FlowPart::Own,
+                    "exchange" => radiation::FlowPart::Exchange,
+                    "external" => radiation::FlowPart::External,
+                    _ => radiation::FlowPart::Total,
+                };
+            }
+            if std::env::var("EM_TRACERS").is_ok_and(|v| v == "1") {
+                game.flow_tracers = true;
+            }
+            if std::env::var("EM_AVERAGE").is_ok_and(|v| v == "0") {
+                game.flow_average = false;
             }
             if let Some(d) = std::env::var("EM_RANGE").ok().and_then(|v| v.parse().ok()) {
                 game.field_range_decades = d;

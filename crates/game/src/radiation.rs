@@ -43,7 +43,58 @@ pub enum FieldQuantity {
     Bz,
     /// Magnitude of E.
     E,
+    /// The flow of field energy, the Poynting vector `S = (c²/4π) E × B` (Jackson §6.7):
+    /// in the plane `(c²/4π) B_z (E_y, −E_x)`. Its magnitude colours the map; arrows and
+    /// tracers show its direction. Finite c only.
+    S,
 }
+
+/// Which part of the energy flow the map shows. The view's field is split into the moving
+/// charges' field and the rest (static sources, antennas, waves: what the view shows
+/// besides the charges); the flow into each part's own terms and the exchange terms
+/// (`physics::poynting`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum FlowPart {
+    #[default]
+    Total,
+    /// The charges' field alone.
+    Own,
+    /// The cross terms of the charges' field with the rest: they carry the work the rest
+    /// does on the charges.
+    Exchange,
+    /// The rest alone.
+    External,
+}
+
+impl FlowPart {
+    pub const ALL: [FlowPart; 4] = [
+        FlowPart::Total,
+        FlowPart::Own,
+        FlowPart::Exchange,
+        FlowPart::External,
+    ];
+
+    fn index(self) -> usize {
+        match self {
+            FlowPart::Total => 0,
+            FlowPart::Own => 1,
+            FlowPart::Exchange => 2,
+            FlowPart::External => 3,
+        }
+    }
+}
+
+/// An energy tracer: a dot drifting with the energy's velocity `S/u`.
+#[derive(Clone, Copy, Debug)]
+struct Tracer {
+    x: DVec3,
+    /// Seconds (real time) since it appeared.
+    age: f32,
+}
+
+/// Number of energy tracers, and how long each lives (s, real time).
+const TRACERS: usize = 400;
+const TRACER_LIFE: f32 = 4.0;
 
 /// A moving charge of the field views: its world line, its charge, and when and where it
 /// was absorbed (as in the beam dynamics: its field then disappears where the light cone
@@ -73,8 +124,12 @@ pub struct FieldParams {
     pub scales: Vec4,
     /// Static grid width, height, 1 if present; number of charges.
     pub grid: UVec4,
-    /// Antennas, waves, flags (1 radiation only, 2 left out by the model, 4 colour |E|).
+    /// Antennas, waves, flags (1 radiation only, 2 left out by the model, 4 colour |E|,
+    /// 8 linear, 16 colour |S|), energy flow: part (bits 0–1: total, own, exchange,
+    /// external), 4 averaged over a period, number of frequency groups (bits 8–15).
     pub counts: UVec4,
+    /// Energy flow: saturation of the part shown, 0, 0, 0.
+    pub flow: Vec4,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -110,13 +165,16 @@ impl Plugin for FieldViewPlugin {
     }
 }
 
+/// (revision, flight, mode, flight time of the preview, radiation only, neglected only,
+/// the verdict's own flight shown, energy flow shown, flow averaged): what the view's
+/// scales and world lines were computed for.
+type ViewKey = (u64, usize, MapMode, u64, bool, bool, bool, bool, bool);
+
 #[derive(Resource)]
 pub struct RadiationView {
     material: Handle<FieldMaterial>,
     entity: Entity,
-    /// (revision, flight, mode, flight time of the preview, radiation only, neglected
-    /// only, the verdict's own flight shown) the scales and world lines were computed for.
-    key: Option<(u64, usize, MapMode, u64, bool, bool, bool)>,
+    key: Option<ViewKey>,
     radiation_only: bool,
     /// Show only the part of the beam's field the quasi-static interaction leaves out.
     neglected_only: bool,
@@ -124,13 +182,28 @@ pub struct RadiationView {
     sources: Vec<Source>,
     b_sat: f64,
     e_sat: f64,
+    /// Saturation (99th percentile) of each part of the energy flow |S| (`FlowPart`
+    /// order), for the averaging chosen.
+    s_sat: [f64; 4],
     /// Largest (99th percentile) B_z and |E| of the part shown (radiation part, or left
     /// out by the model) relative to the full field's scale; 1 for the full field.
     pub part_b: f64,
     pub part_e: f64,
-    /// Time and style (quantity, range, arrows) of the current arrows.
+    /// The static part of the view's field, and its oscillating sources by frequency
+    /// (antennas and plane waves of the same ω together): for the energy flow averaged
+    /// over a period.
+    still: LevelField,
+    groups: Vec<(f64, LevelField)>,
+    /// The energy flow averaged over a period of the oscillating sources.
+    average: bool,
+    /// Time and style (quantity, range, arrows, flow part) of the current arrows.
     time: f64,
-    style: (FieldQuantity, u64, bool),
+    style: (FieldQuantity, u64, bool, FlowPart),
+    tracers: Vec<Tracer>,
+    /// State of the tracers' random placement (SplitMix64).
+    tracer_seed: u64,
+    /// The level's speed of light (for the tracers of the exchange flow).
+    c: f64,
     /// Obstacles of the shown flight (the field is not drawn inside sources).
     obstacles: Vec<Shape>,
     /// The flight's whole field (what the particles feel: for the quasi-static
@@ -148,6 +221,17 @@ impl RadiationView {
     /// Value of full colour for |E|.
     pub fn e_sat(&self) -> f64 {
         self.e_sat
+    }
+
+    /// Value of full colour for |S| of a part of the energy flow.
+    pub fn s_sat(&self, part: FlowPart) -> f64 {
+        self.s_sat[part.index()]
+    }
+
+    /// Whether the view's field has oscillating sources (antennas, plane waves), whose
+    /// energy flow can be averaged over a period.
+    pub fn oscillates(&self) -> bool {
+        !self.groups.is_empty()
     }
 }
 
@@ -185,10 +269,17 @@ pub fn setup(
         sources: Vec::new(),
         b_sat: 1.0,
         e_sat: 1.0,
+        s_sat: [1.0; 4],
         part_b: 1.0,
         part_e: 1.0,
+        still: LevelField::default(),
+        groups: Vec::new(),
+        average: true,
         time: f64::NAN,
-        style: (FieldQuantity::Bz, 0, false),
+        style: (FieldQuantity::Bz, 0, false, FlowPart::Total),
+        tracers: Vec::new(),
+        tracer_seed: 0x5EED,
+        c: f64::INFINITY,
         obstacles: Vec::new(),
         source_field: LevelField::default(),
         arrows: Vec::new(),
@@ -327,6 +418,7 @@ pub fn colour_value(v: f64, sat: f64, linear: bool, scale: f64) -> f64 {
 )]
 pub fn update(
     game: Res<Game>,
+    time: Res<Time>,
     mut view: ResMut<RadiationView>,
     mut materials: ResMut<Assets<FieldMaterial>>,
     mut buffers: ResMut<Assets<ShaderBuffer>>,
@@ -339,6 +431,7 @@ pub fn update(
                 *v = Visibility::Hidden;
             }
             view.arrows.clear();
+            view.tracers.clear();
             return;
         }
     };
@@ -380,6 +473,8 @@ pub fn update(
         game.radiation_only,
         neglected_only,
         verdict_shown,
+        game.field_quantity == FieldQuantity::S,
+        game.flow_average,
     );
     let bounds = level.bounds();
     let size = bounds.max - bounds.min;
@@ -536,6 +631,33 @@ pub fn update(
             view.part_b = 1.0;
             view.part_e = 1.0;
         }
+        // The energy flow: the static part of the rest (with antennas that do not
+        // oscillate) and its oscillating sources by frequency, for the average over a
+        // period; the scale of each part, for the flow shown (finite c only).
+        view.still = static_part(&field);
+        view.still.antennas = field
+            .antennas
+            .iter()
+            .filter(|a| a.omega == 0.0)
+            .copied()
+            .collect();
+        view.groups = frequency_groups(&field);
+        view.average = game.flow_average;
+        view.c = c;
+        view.tracers.clear();
+        if game.field_quantity == FieldQuantity::S && c.is_finite() {
+            let v = &*view;
+            let per_point: Vec<[f64; 4]> = points
+                .par_iter()
+                .filter_map(|&(t, x)| {
+                    flows_at(v, fr, mode, x, t, c).map(|f| f.map(|(s, _)| s.length()))
+                })
+                .collect();
+            for part in FlowPart::ALL {
+                view.s_sat[part.index()] =
+                    percentile99(per_point.iter().map(|p| p[part.index()]).collect());
+            }
+        }
         // The static part of the total field, once (it does not change in time).
         // The static part of the total field on a grid; for the particle field only the
         // mask of the bodies (inside metal and other bodies nothing is drawn).
@@ -657,7 +779,13 @@ pub fn update(
             a.amplitude.x as f32,
             a.amplitude.y as f32,
         ]);
-        items.push([a.omega as f32, ph as f32, a.radius as f32, 0.0]);
+        // Its frequency group, for the flow averaged over a period (static: 255).
+        let group = if a.omega == 0.0 {
+            STATIC_GROUP
+        } else {
+            group_index(&view.groups, a.omega)
+        };
+        items.push([a.omega as f32, ph as f32, a.radius as f32, group as f32]);
     }
     let mut n_waves = 0u32;
     for e in &field.external {
@@ -671,7 +799,12 @@ pub fn update(
                 w.polarization.x as f32,
                 w.polarization.y as f32,
             ]);
-            items.push([w.amplitude as f32, w.omega as f32, ph as f32, 0.0]);
+            items.push([
+                w.amplitude as f32,
+                w.omega as f32,
+                ph as f32,
+                group_index(&view.groups, w.omega) as f32,
+            ]);
             n_waves += 1;
         }
     }
@@ -681,10 +814,17 @@ pub fn update(
     if let Some(mut b) = buffers.get_mut(&items_h) {
         *b = buffer(items);
     }
+    let flow = quantity == FieldQuantity::S && c.is_finite();
     let flags = u32::from(view.radiation_only)
         | (u32::from(view.neglected_only) << 1)
         | (u32::from(quantity == FieldQuantity::E) << 2)
-        | (u32::from(linear) << 3);
+        | (u32::from(linear) << 3)
+        | (u32::from(flow) << 4);
+    let part = game.flow_part;
+    let averaged = view.average && !view.groups.is_empty();
+    let flow_bits = part.index() as u32
+        | (u32::from(averaged) << 2)
+        | ((view.groups.len().min(254) as u32) << 8);
     if let Some(mut m) = materials.get_mut(&view.material) {
         m.params.area = Vec4::new(
             bounds.min.x as f32,
@@ -699,7 +839,14 @@ pub fn update(
             range as f32,
         );
         m.params.grid.w = view.sources.len() as u32;
-        m.params.counts = UVec4::new(field.antennas.len() as u32, n_waves, flags, 0);
+        m.params.counts = UVec4::new(field.antennas.len() as u32, n_waves, flags, flow_bits);
+        // The flow's saturation, with the constant c²/4π (the GPU forms E × B_z).
+        m.params.flow = Vec4::new(
+            (view.s_sat[part.index()] * 4.0 * std::f64::consts::PI / (c * c)) as f32,
+            0.0,
+            0.0,
+            0.0,
+        );
     }
     if let Ok((mut vis, mut tr)) = quads.get_mut(view.entity) {
         *vis = Visibility::Visible;
@@ -708,13 +855,32 @@ pub fn update(
         tr.scale = Vec3::new(size.x as f32, size.y as f32, 1.0);
     }
 
-    // E arrows (CPU): only when the time or the style changed.
+    // Energy tracers: every frame, with the field at the time shown, at the animation's
+    // pace (4 time units per second at speed 1, as `animate`).
+    let real_dt = time.delta_secs();
+    advance_tracers(
+        &mut view,
+        &field,
+        mode,
+        &bounds,
+        t,
+        part,
+        flow && game.flow_tracers,
+        f64::from(real_dt) * 4.0 * game.playback_speed,
+        real_dt,
+        linear,
+        range,
+    );
+
+    // E arrows, or S arrows for the energy flow (CPU): only when the time or the style
+    // changed.
     let style = (
         game.field_quantity,
         game.field_range_decades.to_bits()
             ^ game.field_gain_decades.to_bits().rotate_left(1)
             ^ u64::from(linear),
         game.show_field_arrows,
+        part,
     );
     if t.to_bits() == view.time.to_bits() && style == view.style {
         return;
@@ -738,10 +904,17 @@ pub fn update(
         arrows = points
             .par_iter()
             .filter_map(|&x| {
-                let (e, _) = sample(v, fr, mode, x, t, c)?;
+                let (a, sat) = if flow {
+                    (
+                        flow_at(v, fr, mode, x, t, c, part)?.0,
+                        v.s_sat[part.index()],
+                    )
+                } else {
+                    (sample(v, fr, mode, x, t, c)?.0, v.e_sat)
+                };
                 let len =
-                    (colour_value(e.length(), v.e_sat, linear, range) * 0.9 * ARROW_SPACING) as f32;
-                let d = Vec2::new(e.x as f32, e.y as f32).normalize_or_zero();
+                    (colour_value(a.length(), sat, linear, range) * 0.9 * ARROW_SPACING) as f32;
+                let d = Vec2::new(a.x as f32, a.y as f32).normalize_or_zero();
                 (len > 0.05).then_some((Vec2::new(x.x as f32, x.y as f32), d * len))
             })
             .collect();
@@ -762,6 +935,163 @@ fn static_part(field: &LevelField) -> LevelField {
     f.external
         .retain(|e| !matches!(e, External::Wave(w) if w.omega != 0.0));
     f
+}
+
+/// Frequency group index of the GPU's antennas that do not oscillate (ω = 0): static.
+const STATIC_GROUP: u32 = 255;
+
+/// The oscillating sources of a level field by frequency: antennas and plane waves of the
+/// same ω together, each group a field of its own (for the flow averaged over a period:
+/// the cross terms of different frequencies and of the static part average out).
+fn frequency_groups(field: &LevelField) -> Vec<(f64, LevelField)> {
+    let mut groups: Vec<(f64, LevelField)> = Vec::new();
+    let group = |groups: &mut Vec<(f64, LevelField)>, w: f64| -> usize {
+        if let Some(k) = groups.iter().position(|g| g.0.to_bits() == w.to_bits()) {
+            k
+        } else {
+            groups.push((
+                w,
+                LevelField {
+                    time_offset: field.time_offset,
+                    ..LevelField::default()
+                },
+            ));
+            groups.len() - 1
+        }
+    };
+    for a in field.antennas.iter().filter(|a| a.omega != 0.0) {
+        let k = group(&mut groups, a.omega);
+        groups[k].1.antennas.push(*a);
+    }
+    for e in &field.external {
+        if let External::Wave(w) = e
+            && w.omega != 0.0
+        {
+            let k = group(&mut groups, w.omega);
+            groups[k].1.external.push(*e);
+        }
+    }
+    groups
+}
+
+/// The index of an oscillating source's frequency group (as `frequency_groups` orders
+/// them), for the GPU.
+fn group_index(groups: &[(f64, LevelField)], omega: f64) -> u32 {
+    #[allow(clippy::cast_possible_truncation)]
+    let k = groups
+        .iter()
+        .position(|g| g.0.to_bits() == omega.to_bits())
+        .unwrap_or(0) as u32;
+    k
+}
+
+/// The view's field at a point, split into the moving charges' field and the rest (what
+/// the view shows besides them: static sources in the total view, antennas and waves).
+#[derive(Clone, Copy, Debug)]
+struct Split {
+    e_rest: DVec3,
+    b_rest: DVec3,
+    e_charges: DVec3,
+    b_charges: DVec3,
+}
+
+/// `Split` at `x`, time `t`; `None` inside a source (as `sample`).
+fn sample_split(
+    view: &RadiationView,
+    field: &LevelField,
+    mode: MapMode,
+    x: DVec3,
+    t: f64,
+    c: f64,
+) -> Option<Split> {
+    if field
+        .antennas
+        .iter()
+        .any(|a| (x - a.position).length() < a.radius)
+    {
+        return None;
+    }
+    let f = field.sample(x, t);
+    let (e, bz) = match mode {
+        MapMode::Waves => (DVec3::ZERO, 0.0),
+        _ => {
+            // Inside bodies nothing is drawn (the GPU's mask of the static grid).
+            if view.obstacles.iter().any(|o| o.signed_distance(x) < 0.0) {
+                return None;
+            }
+            charges(view, x, t, c)?
+        }
+    };
+    Some(Split {
+        e_rest: f.e,
+        b_rest: DVec3::Z * f.b.z,
+        e_charges: e,
+        b_charges: DVec3::Z * bz,
+    })
+}
+
+/// The energy flow `S` and energy density `u` of every part (`physics::poynting`, in
+/// `FlowPart` order), at `x` and time `t`: all, the charges' own terms, the exchange terms,
+/// the rest's own terms. Averaged over a period of the oscillating sources (the charges
+/// held at time `t`): the rest's flow and energy are its static part's plus, for each
+/// frequency, `½ (S(t) + S(t + T/4))` (exact for one frequency); the cross terms of
+/// different frequencies, of the oscillating and the static fields, and of the charges
+/// with the oscillating fields average out.
+fn flows_at(
+    view: &RadiationView,
+    field: &LevelField,
+    mode: MapMode,
+    x: DVec3,
+    t: f64,
+    c: f64,
+) -> Option<[(DVec3, f64); 4]> {
+    use physics::poynting::{energy_density, exchange, poynting};
+    let s = sample_split(view, field, mode, x, t, c)?;
+    let own = (
+        poynting(s.e_charges, s.b_charges, c),
+        energy_density(s.e_charges, s.b_charges, c),
+    );
+    let (rest, (ux, sx)) = if view.average && !view.groups.is_empty() {
+        let st = view.still.sample(x, t);
+        let (es, bs) = (st.e, DVec3::Z * st.b.z);
+        let mut rest = (poynting(es, bs, c), energy_density(es, bs, c));
+        for (w, g) in &view.groups {
+            for dt in [0.0, std::f64::consts::FRAC_PI_2 / w] {
+                let f = g.sample(x, t + dt);
+                let (e, b) = (f.e, DVec3::Z * f.b.z);
+                rest.0 += poynting(e, b, c) * 0.5;
+                rest.1 += energy_density(e, b, c) * 0.5;
+            }
+        }
+        (rest, exchange(s.e_charges, s.b_charges, es, bs, c))
+    } else {
+        (
+            (
+                poynting(s.e_rest, s.b_rest, c),
+                energy_density(s.e_rest, s.b_rest, c),
+            ),
+            exchange(s.e_charges, s.b_charges, s.e_rest, s.b_rest, c),
+        )
+    };
+    Some([
+        (own.0 + sx + rest.0, own.1 + ux + rest.1),
+        own,
+        (sx, ux),
+        rest,
+    ])
+}
+
+/// `flows_at` for one part.
+fn flow_at(
+    view: &RadiationView,
+    field: &LevelField,
+    mode: MapMode,
+    x: DVec3,
+    t: f64,
+    c: f64,
+    part: FlowPart,
+) -> Option<(DVec3, f64)> {
+    flows_at(view, field, mode, x, t, c).map(|f| f[part.index()])
 }
 
 /// `(E, B_z)` of the shown sources at `x`, time `t`; `None` inside a source.
@@ -971,6 +1301,137 @@ fn source_fields(
         }
     }
     Some((r, v, a, e, b))
+}
+
+/// The velocity a tracer moves with: the energy's velocity `S/u` of the part shown (at most
+/// c; exactly c in a radiation field). The exchange terms have no energy velocity of their
+/// own (their density can vanish or be negative): there, along S at a display speed, c at
+/// full colour. `None` inside a body or where the flow is below the colour scale.
+#[allow(clippy::too_many_arguments)]
+fn tracer_velocity(
+    view: &RadiationView,
+    field: &LevelField,
+    mode: MapMode,
+    x: DVec3,
+    t: f64,
+    part: FlowPart,
+    linear: bool,
+    range: f64,
+) -> Option<DVec3> {
+    let c = view.c;
+    let (s, u) = flow_at(view, field, mode, x, t, c, part)?;
+    let shown = colour_value(s.length(), view.s_sat[part.index()], linear, range);
+    if shown < 0.05 {
+        return None;
+    }
+    Some(match part {
+        FlowPart::Exchange => s.normalize_or_zero() * (c * shown),
+        _ if u > 0.0 => s / u,
+        _ => DVec3::ZERO,
+    })
+}
+
+/// Moves the energy tracers (midpoint rule) with `tracer_velocity` over `dt` (time units)
+/// at time `t`. A tracer is placed anew, at random where the flow shows, when it has lived
+/// `TRACER_LIFE` seconds, left the arena, met a body or reached a place where the flow is
+/// below the colour scale. `on`: tracers shown (else removed).
+#[allow(clippy::too_many_arguments)]
+fn advance_tracers(
+    view: &mut RadiationView,
+    field: &LevelField,
+    mode: MapMode,
+    bounds: &physics::geometry::Aabb,
+    t: f64,
+    part: FlowPart,
+    on: bool,
+    dt: f64,
+    real_dt: f32,
+    linear: bool,
+    range: f64,
+) {
+    if !on || !view.c.is_finite() {
+        view.tracers.clear();
+        return;
+    }
+    let mut tracers = std::mem::take(&mut view.tracers);
+    let mut seed = view.tracer_seed;
+    let mut random = || {
+        // SplitMix64.
+        seed = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = seed;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^= z >> 31;
+        #[allow(clippy::cast_precision_loss)]
+        let r = (z >> 11) as f64 / (1u64 << 53) as f64;
+        r
+    };
+    let size = bounds.max - bounds.min;
+    let place = |random: &mut dyn FnMut() -> f64| {
+        bounds.min + DVec3::new(random() * size.x, random() * size.y, 0.0)
+    };
+    // New tracers start at random ages, so that they do not all renew at once.
+    while tracers.len() < TRACERS {
+        #[allow(clippy::cast_possible_truncation)]
+        let age = (random() * f64::from(TRACER_LIFE)) as f32;
+        tracers.push(Tracer {
+            x: place(&mut random),
+            age,
+        });
+    }
+    let v = &*view;
+    let inside = |x: DVec3| {
+        x.x >= bounds.min.x && x.x <= bounds.max.x && x.y >= bounds.min.y && x.y <= bounds.max.y
+    };
+    // Move every tracer (in parallel); those to renew come back as `None`.
+    let moved: Vec<Option<Tracer>> = tracers
+        .par_iter()
+        .map(|tr| {
+            if tr.age + real_dt > TRACER_LIFE {
+                return None;
+            }
+            let v0 = tracer_velocity(v, field, mode, tr.x, t, part, linear, range)?;
+            let mid = tr.x + v0 * (0.5 * dt);
+            let v1 = tracer_velocity(v, field, mode, mid, t + 0.5 * dt, part, linear, range)?;
+            let x = tr.x + v1 * dt;
+            inside(x).then_some(Tracer {
+                x,
+                age: tr.age + real_dt,
+            })
+        })
+        .collect();
+    let mut out = Vec::with_capacity(TRACERS);
+    for m in moved {
+        match m {
+            Some(tr) => out.push(tr),
+            None => {
+                // Anew where the flow shows (a few tries), else anywhere.
+                let mut x = place(&mut random);
+                for _ in 0..8 {
+                    if tracer_velocity(v, field, mode, x, t, part, linear, range).is_some() {
+                        break;
+                    }
+                    x = place(&mut random);
+                }
+                out.push(Tracer { x, age: 0.0 });
+            }
+        }
+    }
+    view.tracers = out;
+    view.tracer_seed = seed;
+}
+
+/// Draws the energy tracers (called from `draw::draw`): dots fading in and out.
+pub fn draw_tracers(gizmos: &mut Gizmos, view: &RadiationView) {
+    for tr in &view.tracers {
+        let a = (tr.age / 0.5)
+            .min((TRACER_LIFE - tr.age) / 0.5)
+            .clamp(0.0, 1.0)
+            * 0.85;
+        #[allow(clippy::cast_possible_truncation)]
+        let p = Vec2::new(tr.x.x as f32, tr.x.y as f32);
+        gizmos.circle_2d(p, 0.07, Color::srgba(0.85, 1.0, 0.85, a));
+    }
 }
 
 /// Draws the E arrows (called from `draw::draw`).

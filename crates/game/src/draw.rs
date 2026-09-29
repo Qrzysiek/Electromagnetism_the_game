@@ -404,6 +404,7 @@ pub fn draw(
     mut vis: Query<&mut Visibility>,
 ) {
     crate::radiation::draw_arrows(&mut gizmos, &radiation);
+    crate::radiation::draw_tracers(&mut gizmos, &radiation);
     if let Ok(mut v) = vis.get_mut(quad.entity) {
         *v = if matches!(
             game.map,

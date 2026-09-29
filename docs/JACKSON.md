@@ -18,8 +18,8 @@ ratio", and the description cites the section or problem (planned level field `r
 - **Feasible, not yet built:** §13.6 multiple scattering (a beam through a foil of random
   charges; the Gaussian angular spread), the harmonics of an elliptic orbit
   (Pr. 14.12/14.14/14.22, with the radiation goals; the orbit must still end in a
-  detector, e.g. carried by a drift or decaying by radiation), and §6.7 a Poynting-vector
-  view (a visual, not a level). Everything else needs a feature from the table below or 3D.
+  detector, e.g. carried by a drift or decaying by radiation). Everything else needs a
+  feature from the table below or 3D. (§6.7, the energy-flow view, was built on 2026-09-29.)
 
 ## How to read this list
 
@@ -239,7 +239,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 ### Ch. 6: Maxwell equations, conservation laws
 
 - **§6.4–6.5 retarded solutions (Jefimenko).** NOW (Liénard–Wiechert fields). *Test L4 (Pr. 6.2):* Feynman's E and Heaviside's B, derivatives of the retarded direction and distance, against the LW fields.
-- **§6.7 Poynting theorem.** A view: energy flow around a charge in a field. NOW (visual).
+- **§6.7 Poynting theorem.** *View built (energy flow, PHYSICS.md §10; tests P1–P3):* the Poynting vector in the field views, split into the charges' own flow, their exchange with the rest (where a particle's energy comes from) and the rest's, with arrows, energy-velocity tracers and the average over a period of antennas and waves.
 - **Pr. 6.15 Hall effect.** The Drude stage (SPEC "inside components").
 - **Pr. 6.24 changing solenoid.** E outside, where B = 0 (induction without B). F:ramp.
 - **§6.11 monopoles.** A charge–monopole system has out-of-plane forces. 3D.

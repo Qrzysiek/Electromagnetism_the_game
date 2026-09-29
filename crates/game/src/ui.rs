@@ -1742,16 +1742,40 @@ fn field_view_controls(
             game.field_linear = now != (false, false);
         }
     }
-    ui.horizontal(|ui| {
+    // The energy flow needs a finite speed of light (the magnetic energy of a finite B is
+    // infinite at c = ∞ in these units).
+    if level.physics.c.is_none() && game.field_quantity == FieldQuantity::S {
+        game.field_quantity = FieldQuantity::E;
+    }
+    let flow = game.field_quantity == FieldQuantity::S;
+    ui.horizontal_wrapped(|ui| {
         ui.label("Colour:")
             .on_hover_text("Which quantity colours the map");
         ui.selectable_value(&mut game.field_quantity, FieldQuantity::Bz, "B_z")
             .on_hover_text("B, perpendicular to the plane (all of B in the plane); signed");
         ui.selectable_value(&mut game.field_quantity, FieldQuantity::E, "|E|")
             .on_hover_text("The magnitude of E");
-        ui.checkbox(&mut game.show_field_arrows, "E arrows")
-            .on_hover_text("Arrows of E: direction exact, length on the colour scale");
+        if level.physics.c.is_some() {
+            ui.selectable_value(&mut game.field_quantity, FieldQuantity::S, "S")
+                .on_hover_text(
+                    "The flow of field energy, the Poynting vector S = (c²/4π) E × B \
+                     (Jackson §6.7): its magnitude colours the map, arrows and tracers show \
+                     where it goes",
+                );
+        }
+        ui.checkbox(
+            &mut game.show_field_arrows,
+            if flow { "S arrows" } else { "E arrows" },
+        )
+        .on_hover_text(if flow {
+            "Arrows of the energy flow S: direction exact, length on the colour scale"
+        } else {
+            "Arrows of E: direction exact, length on the colour scale"
+        });
     });
+    if flow {
+        flow_controls(ui, game, radiation);
+    }
     ui.horizontal(|ui| {
         ui.label("Scale:").on_hover_text("How field values map to colour");
         ui.selectable_value(&mut game.field_linear, false, "log")
@@ -1772,11 +1796,14 @@ fn field_view_controls(
         .on_hover_text("How many decades below the full field's scale are still visible");
     }
     colour_bar(ui, game, radiation);
-    // How large the part shown is.
-    if game.map == Some(MapMode::ParticleField) && (game.radiation_only || game.neglected_only) {
+    // How large the part shown is (for the energy flow, each part has its own scale).
+    if game.map == Some(MapMode::ParticleField)
+        && (game.radiation_only || game.neglected_only)
+        && !flow
+    {
         let part = match game.field_quantity {
             FieldQuantity::Bz => radiation.part_b,
-            FieldQuantity::E => radiation.part_e,
+            FieldQuantity::E | FieldQuantity::S => radiation.part_e,
         };
         ui.label(
             egui::RichText::new(format!(
@@ -1786,6 +1813,73 @@ fn field_view_controls(
             .color(egui::Color32::from_rgb(255, 210, 120)),
         );
     }
+}
+
+/// Controls of the energy-flow view: the part shown, tracers, the average over a period,
+/// and what the view means (with its caveats).
+fn flow_controls(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::RadiationView) {
+    use crate::radiation::FlowPart;
+    ui.horizontal_wrapped(|ui| {
+        ui.label("Flow:")
+            .on_hover_text("Which part of the energy flow: the view's field is the moving charges' field plus the rest");
+        for (part, name, hint) in [
+            (
+                FlowPart::Total,
+                "total",
+                "All of it: the flow of the whole field shown",
+            ),
+            (
+                FlowPart::Own,
+                "own",
+                "The moving charges' field alone: the energy moving with them, and their \
+                 radiation leaving at c",
+            ),
+            (
+                FlowPart::Exchange,
+                "exchange",
+                "The cross terms of the charges' field with the rest, (c²/4π)(E₁ × B₂ + \
+                 E₂ × B₁): they carry the work the rest does on the charges, so they show \
+                 where a particle's energy comes from",
+            ),
+            (
+                FlowPart::External,
+                "external",
+                "The rest alone: the static sources (in the total view), antennas and waves",
+            ),
+        ] {
+            ui.selectable_value(&mut game.flow_part, part, name)
+                .on_hover_text(hint);
+        }
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.checkbox(&mut game.flow_tracers, "tracers")
+            .on_hover_text(
+                "Dots drifting with the energy's velocity S/u (u the energy density): never \
+             faster than c, exactly c in a radiation field. The exchange terms have no \
+             velocity of their own: there the dots move along S, at c at full colour",
+            );
+        if radiation.oscillates() {
+            ui.checkbox(&mut game.flow_average, "average over a period")
+                .on_hover_text(
+                    "The antennas' and waves' flow averaged over their period (for several \
+                     frequencies, each exactly), the charges held still: the energy that \
+                     sloshes back and forth near an antenna drops out and the net outflow \
+                     remains. Off: the flow at the moment shown",
+                );
+        }
+    });
+    ui.label(
+        egui::RichText::new(
+            "S = (c²/4π) E × B, the flow of field energy (Jackson §6.7). Only its flux \
+             through closed surfaces is unique: where the energy goes in between is \
+             Poynting's convention. The map is a slice of a 3D flow; energy also leaves \
+             the plane. Charges beside magnets keep a steady circulation (field momentum) \
+             that carries energy nowhere. Near a particle part of the work done on it comes \
+             from the exchange energy stored around it (a third at low speed), the rest \
+             flows in.",
+        )
+        .small(),
+    );
 }
 
 /// A fraction as a percentage with sensible digits.
@@ -1931,6 +2025,12 @@ fn colour_bar(ui: &mut egui::Ui, game: &Game, radiation: &crate::radiation::Radi
     let sat = match game.field_quantity {
         FieldQuantity::Bz => radiation.b_sat(),
         FieldQuantity::E => radiation.e_sat(),
+        FieldQuantity::S => radiation.s_sat(game.flow_part),
+    };
+    let name = match game.field_quantity {
+        FieldQuantity::Bz => "±B_z",
+        FieldQuantity::E => "|E|",
+        FieldQuantity::S => "|S|",
     };
     let linear = game.field_linear;
     let scale = if linear {
@@ -1942,7 +2042,7 @@ fn colour_bar(ui: &mut egui::Ui, game: &Game, radiation: &crate::radiation::Radi
         ui.label(
             egui::RichText::new(format!(
                 "{} = 0 everywhere: nothing to colour.",
-                if signed { "B_z" } else { "|E|" }
+                name.trim_start_matches('±')
             ))
             .small(),
         );
@@ -1954,7 +2054,9 @@ fn colour_bar(ui: &mut egui::Ui, game: &Game, radiation: &crate::radiation::Radi
     let bar = egui::Rect::from_min_size(rect.min, egui::vec2(width, 10.0));
     let colour = |s: f64| {
         let a = (s.abs().powf(0.8) * 0.9) as f32;
-        let base = if !signed {
+        let base = if game.field_quantity == FieldQuantity::S {
+            egui::Color32::from_rgb(140, 255, 158)
+        } else if !signed {
             egui::Color32::from_rgb(255, 235, 140)
         } else if s >= 0.0 {
             egui::Color32::from_rgb(255, 150, 40)
@@ -2024,13 +2126,13 @@ fn colour_bar(ui: &mut egui::Ui, game: &Game, radiation: &crate::radiation::Radi
         egui::RichText::new(if linear {
             format!(
                 "Full colour at {} = {full:.2e} (the full field's scale ×10^−{:.1}); ticks every quarter.",
-                if signed { "±B_z" } else { "|E|" },
+                name,
                 game.field_gain_decades
             )
         } else {
             format!(
                 "Full colour at {} = {sat:.2e}; ticks every decade below it.",
-                if signed { "±B_z" } else { "|E|" }
+                name
             )
         })
         .small(),

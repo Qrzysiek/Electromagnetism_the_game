@@ -17,8 +17,12 @@ struct Params {
     grid: vec4<u32>,
     // Number of antennas, of waves; flags: 1 radiation part only, 2 only what the
     // quasi-static beam interaction leaves out, 4 colour |E| (else B_z), 8 linear
-    // colour scale; unused.
+    // colour scale, 16 colour |S| (the energy flow); energy flow: part (bits 0-1: total,
+    // the charges' own, exchange, the rest's own), 4 averaged over a period, number of
+    // frequency groups (bits 8-15).
     counts: vec4<u32>,
+    // Energy flow: saturation of |E x B_z| (the flow without its constant c^2/4 pi), 0, 0, 0.
+    flow: vec4<f32>,
 };
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
@@ -29,8 +33,9 @@ struct Params {
 // in a screening cup (0: none), 0, 0), and the quasi-static interaction's continued past
 // (its motion in the fields it feels now, field_motion.rs): (U₀, ω²), (Λ U₀, 1 if valid),
 // (Λ² U₀, 0);
-// then antennas, two vec4 each: (x, y, p0x, p0y), (ω, phase now, radius, 0); then waves,
-// two vec4 each: (k̂x, k̂y, êx, êy), (E0, ω, phase now at x = 0, 0).
+// then antennas, two vec4 each: (x, y, p0x, p0y), (ω, phase now, radius, frequency group
+// (255: static)); then waves, two vec4 each: (k̂x, k̂y, êx, êy), (E0, ω, phase now at x = 0,
+// frequency group).
 @group(#{MATERIAL_BIND_GROUP}) @binding(2) var<storage, read> items: array<vec4<f32>>;
 // Static field on a grid of texel centres: (Ex, Ey, Bz, inside a body).
 @group(#{MATERIAL_BIND_GROUP}) @binding(3) var<storage, read> statics: array<vec4<f32>>;
@@ -499,6 +504,12 @@ fn charges(p: vec2<f32>) -> Charges {
 // Antennas: oscillating dipoles p(t) = p0 cos(ωt + φ), exact retarded fields
 // (antenna.rs); quasi-static for c = ∞. `ok` false inside an antenna body.
 fn antennas(p: vec2<f32>) -> Charges {
+    return antennas_at(p, 0.0, -1);
+}
+
+// The antennas of frequency group `group` (all for −1), their phases advanced by `dph`
+// (π/2: a quarter period later, for the average over a period).
+fn antennas_at(p: vec2<f32>, dph: f32, group: i32) -> Charges {
     let c = params.scales.x;
     let base = 6u * params.grid.w;
     var f = Field(vec2<f32>(0.0), 0.0);
@@ -510,9 +521,12 @@ fn antennas(p: vec2<f32>) -> Charges {
         if (r < a1.z) {
             return Charges(f, false);
         }
+        if (group >= 0 && i32(a1.w + 0.5) != group) {
+            continue;
+        }
         let n = d / r;
         let w = a1.x;
-        var ph = a1.y;
+        var ph = a1.y + dph;
         if (c > 0.0) {
             ph = ph - w * r / c;
         }
@@ -536,13 +550,21 @@ fn antennas(p: vec2<f32>) -> Charges {
 
 // Plane waves E = E0 ê cos(ω (t − k̂·x/c) + φ), B = k̂ × E / c.
 fn waves(p: vec2<f32>) -> Field {
+    return waves_at(p, 0.0, -1);
+}
+
+// The waves of frequency group `group` (all for −1), their phases advanced by `dph`.
+fn waves_at(p: vec2<f32>, dph: f32, group: i32) -> Field {
     let c = params.scales.x;
     let base = 6u * params.grid.w + 2u * params.counts.x;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.counts.y; k = k + 1u) {
         let w0 = items[base + 2u * k];
         let w1 = items[base + 2u * k + 1u];
-        var ph = w1.z;
+        if (group >= 0 && i32(w1.w + 0.5) != group) {
+            continue;
+        }
+        var ph = w1.z + dph;
         if (c > 0.0) {
             ph = ph - w1.y * dot(w0.xy, p) / c;
         }
@@ -575,6 +597,27 @@ fn static_field(p: vec2<f32>) -> Charges {
     return Charges(Field(s.xy, s.z), s.w < 0.5);
 }
 
+// E × (b ẑ) in the plane: the energy flow without its constant c²/4π.
+fn flow_of(e: vec2<f32>, b: f32) -> vec2<f32> {
+    return vec2<f32>(e.y * b, -e.x * b);
+}
+
+// The energy flow of the antennas and waves averaged over a period (without c²/4π): per
+// frequency group ½ (S + S⊥), S⊥ a quarter period later (exact for one frequency; the cross
+// terms of different frequencies average out); static antennas (group 255) as they are.
+fn averaged_oscillators(p: vec2<f32>) -> vec2<f32> {
+    let n_groups = (params.counts.w >> 8u) & 255u;
+    var s = vec2<f32>(0.0);
+    for (var g = 0u; g < n_groups; g = g + 1u) {
+        let a0 = antennas_at(p, 0.0, i32(g)).f;
+        let w0 = waves_at(p, 0.0, i32(g));
+        let a1 = antennas_at(p, 1.5707963, i32(g)).f;
+        let w1 = waves_at(p, 1.5707963, i32(g));
+        s = s + 0.5 * (flow_of(a0.e + w0.e, a0.bz + w0.bz) + flow_of(a1.e + w1.e, a1.bz + w1.bz));
+    }
+    return s;
+}
+
 fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
     return pow(c, vec3<f32>(2.2));
 }
@@ -598,8 +641,10 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let p = in.world_position.xy;
     var f = Field(vec2<f32>(0.0), 0.0);
     var ok = true;
+    var st = Field(vec2<f32>(0.0), 0.0);
     if (params.grid.z == 1u) {
         let s = static_field(p);
+        st = s.f;
         f = s.f;
         ok = ok && s.ok;
     }
@@ -610,6 +655,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let wv = waves(p);
     f.e = f.e + wv.e;
     f.bz = f.bz + wv.bz;
+    // What the view shows besides the moving charges.
+    let rest = f;
     let ch = charges(p);
     f.e = f.e + ch.f.e;
     f.bz = f.bz + ch.f.bz;
@@ -620,7 +667,39 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let range = params.scales.w;
     var col: vec3<f32>;
     var s: f32;
-    if ((params.counts.z & 4u) != 0u) {
+    if ((params.counts.z & 16u) != 0u) {
+        // The energy flow of the part chosen (radiation.rs `flows_at`), without c²/4π:
+        // the charges' own terms, the exchange terms, the rest's own terms, or all.
+        let part = params.counts.w & 3u;
+        var s_rest = flow_of(rest.e, rest.bz);
+        var s_x = flow_of(rest.e, ch.f.bz) + flow_of(ch.f.e, rest.bz);
+        if ((params.counts.w & 4u) != 0u) {
+            // Averaged over a period, the charges held still: the rest's static part plus
+            // each frequency's average; the charges exchange with the static part only.
+            var still = st;
+            for (var k = 0u; k < params.counts.x; k = k + 1u) {
+                if (items[6u * params.grid.w + 2u * k + 1u].w > 254.5) {
+                    let sa = antennas_at(p, 0.0, 255).f;
+                    still.e = still.e + sa.e;
+                    still.bz = still.bz + sa.bz;
+                    break;
+                }
+            }
+            s_rest = flow_of(still.e, still.bz) + averaged_oscillators(p);
+            s_x = flow_of(still.e, ch.f.bz) + flow_of(ch.f.e, still.bz);
+        }
+        let s_own = flow_of(ch.f.e, ch.f.bz);
+        var flow = s_own + s_x + s_rest;
+        if (part == 1u) {
+            flow = s_own;
+        } else if (part == 2u) {
+            flow = s_x;
+        } else if (part == 3u) {
+            flow = s_rest;
+        }
+        s = compress(length(flow), params.flow.x, range);
+        col = vec3<f32>(0.55, 1.0, 0.62);
+    } else if ((params.counts.z & 4u) != 0u) {
         s = compress(length(f.e), params.scales.z, range);
         col = vec3<f32>(1.0, 0.92, 0.55);
     } else {
