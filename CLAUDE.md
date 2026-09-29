@@ -5,6 +5,7 @@ A puzzle game on accurate classical electrodynamics. `SPEC.md` describes the gam
 ## Physics accuracy
 - Any change to physics or numerics updates `PHYSICS.md` in the same commit: the model, the method, and the measured test results.
 - Validation tests compare against analytic or independent results. Set their thresholds from the target accuracy before measuring. If a threshold must change, document why in `PHYSICS.md`; never loosen one just to make a test pass.
+- Open problems (questions the literature does not answer and that could not be derived in reasonable time) go into `docs/OPEN_PROBLEMS.md`, with what was searched and tried and the workaround in use (the `open-problems` skill).
 - The authoritative trajectory path is f64 on the CPU and deterministic: no fused multiply-add, and a fixed summation order. The GPU is for visuals only.
 - Every shipped level must have a verified reference solution for every shot, and neglected radiation below 1e-10 of the launch energy (`crates/level/tests/levels.rs`).
 - Golden hashes (`levels/golden_hashes.json`) change only when the physics or the levels change intentionally.

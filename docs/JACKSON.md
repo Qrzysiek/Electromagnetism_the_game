@@ -95,6 +95,13 @@ Arc 7, "Jackson: conductors" (Ch. 2–3):
   Pr. 2.20 (quadrupole lens) focuses a beam moving along its four line charges, across
   the plane: a 3D effect (in the plane, point charges in its arrangement make a saddle
   that pushes a particle out along one axis and onto the charges along the other).
+- Tried and set aside (2026-09-29): Pr. 1.1b, a Faraday cage of plates. Plates stand on
+  the plane and are open at z = ±h/2, so four walls screen their midplane only when they
+  are tall against the cage's width a (the slowest mode of a square pipe decays as
+  e^{−π√2 z/a}). A 6 × 6 cell cage with walls 4 high (setup 1.3 s, 49 MB) lets about 23 %
+  of an outside field reach the midplane: no Faraday cage. Walls 8 and 12 high would let
+  1.2 % and 0.1 % through, but their linear systems take 7.7 s and 27 s (budget 5 s) and
+  168 and 360 MB. The slot level shows the screening that plates can do.
 
 Arc 8, "Jackson: radiation damping" (Ch. 16):
 
@@ -163,7 +170,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - Test: capacitance of a cube, Pr. 1.20b. The book's value is 0.655(4) (variational); the modern value is C = 0.66068 × 4πε₀a. NOW (BEM).
   - Test: the square plate C = 0.3667874 (see Pr. 3.21).
 - **§1.13 relaxation method.** Background for our BEM. Test only (compare with Pr. 1.22–1.24 examples).
-- **Pr. 1.1b shielding.** No field inside a closed conductor. Level: a Faraday cage of plates around a detector region. NOW (plates), or F:sphere+electrode.
+- **Pr. 1.1b shielding.** No field inside a closed conductor. A Faraday cage of plates was tried and set aside (Arc 7 above: walls open at the top and bottom screen only when tall, beyond the setup budget); it needs electrodes that close in z.
 - **Pr. 1.13, induced charge between plates (Green reciprocity).** A charge between grounded plates. F:image-force for a level; a test is NOW with BEM.
 
 ### Ch. 2: Boundary-value problems I
