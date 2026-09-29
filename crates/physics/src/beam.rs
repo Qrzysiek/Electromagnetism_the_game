@@ -85,6 +85,13 @@ pub enum Fate {
     /// charge's field from outside): its field disappears, at once for `c = ∞`, where the
     /// light cone of the absorption passes otherwise.
     Drain,
+    /// Absorbed by a detector that is the mouth of a deep grounded Faraday cup (the
+    /// default of levels, PHYSICS.md §3.3): the particle flies on into the cup at its
+    /// entry velocity while the cup screens its charge, seen from outside, as
+    /// `q e^{−k depth}` (`k = π/w`, w the mouth's width across the entry direction: the
+    /// pipe's lowest evanescent mode), at the retarded time; its field fades instead of
+    /// vanishing at once. Other boundaries treat it as `Drain`.
+    Cup,
     /// Absorbed where it hits, its charge staying there at rest (an insulating body): it
     /// keeps acting as a charge at rest.
     Stop,
@@ -160,6 +167,60 @@ pub struct BeamScenario<F> {
     pub fates: Fates,
 }
 
+/// A particle absorbed by a screening cup (`Fate::Cup`): it flies on into the cup at its
+/// entry velocity, and seen from outside its charge fades as `e^{−k v_n (t − t_off)}`
+/// (`k = π/w`, `v_n` its speed into the cup), at the retarded time.
+#[derive(Clone, Copy, Debug)]
+struct Fade {
+    t_off: f64,
+    x_off: DVec3,
+    v: DVec3,
+    rate: f64,
+}
+
+impl Fade {
+    fn position(&self, t: f64) -> DVec3 {
+        self.x_off + self.v * (t - self.t_off)
+    }
+
+    fn factor(&self, t_r: f64) -> f64 {
+        if t_r <= self.t_off {
+            1.0
+        } else {
+            (-self.rate * (t_r - self.t_off)).exp()
+        }
+    }
+
+    /// The fade of a particle entering `region` at `x` with velocity `v` at `t_off`.
+    fn at_entry(region: &Region, x: DVec3, v: DVec3, t_off: f64) -> Fade {
+        let (width, normal) = match region {
+            Region::Box(b) => {
+                // The entry face: the one nearest to x; the width: the box's in-plane extent
+                // along the other in-plane axis.
+                let faces = [
+                    ((x.x - b.min.x).abs(), DVec3::X, b.max.y - b.min.y),
+                    ((b.max.x - x.x).abs(), -DVec3::X, b.max.y - b.min.y),
+                    ((x.y - b.min.y).abs(), DVec3::Y, b.max.x - b.min.x),
+                    ((b.max.y - x.y).abs(), -DVec3::Y, b.max.x - b.min.x),
+                ];
+                let f = faces
+                    .iter()
+                    .min_by(|a, b| a.0.total_cmp(&b.0))
+                    .expect("four faces");
+                (f.2, f.1)
+            }
+            Region::Sphere(sph) => (2.0 * sph.radius, -(x - sph.center).normalize_or_zero()),
+        };
+        let vn = v.dot(normal).max(1e-3 * v.length());
+        Fade {
+            t_off,
+            x_off: x,
+            v,
+            rate: std::f64::consts::PI / width.max(1e-9) * vn,
+        }
+    }
+}
+
 /// Result of a beam flight: one trajectory per particle (in launch order; their `stats`
 /// are those of the whole system), and diagnostics of the whole system.
 #[derive(Clone, Debug)]
@@ -229,6 +290,8 @@ struct BeamOde<'a, F> {
     /// static sources (in the Coulomb and quasi-static interactions; the retarded one
     /// has them in its record).
     stopped: Vec<(usize, f64, DVec3)>,
+    /// Drained charges fading in their cups (`Fade`, experimental).
+    fading: Vec<(usize, f64, Fade)>,
 }
 
 /// Recorded motion of the beam for the retarded interaction: the dense output of every
@@ -244,6 +307,8 @@ struct Past {
     /// Whether a removed particle stayed where it stopped (at rest from then on) rather
     /// than being drained.
     stays: RwLock<Vec<bool>>,
+    /// Drained particles fading in their cups (`Fade`, experimental).
+    fades: RwLock<Vec<Option<Fade>>>,
     kin: Vec<Kinematics>,
     p_ref: f64,
     /// Acceleration of each particle at launch (external fields and the others'
@@ -278,6 +343,7 @@ struct View<'a> {
     t_off: &'a [f64],
     x_off: &'a [DVec3],
     stays: &'a [bool],
+    fades: &'a [Option<Fade>],
 }
 
 struct Segment {
@@ -297,6 +363,7 @@ impl Past {
             t_off: self.t_off.read().expect("not poisoned"),
             x_off: self.x_off.read().expect("not poisoned"),
             stays: self.stays.read().expect("not poisoned"),
+            fades: self.fades.read().expect("not poisoned"),
         }
     }
 
@@ -343,6 +410,7 @@ struct ViewGuards<'a> {
     t_off: std::sync::RwLockReadGuard<'a, Vec<f64>>,
     x_off: std::sync::RwLockReadGuard<'a, Vec<DVec3>>,
     stays: std::sync::RwLockReadGuard<'a, Vec<bool>>,
+    fades: std::sync::RwLockReadGuard<'a, Vec<Option<Fade>>>,
 }
 
 impl ViewGuards<'_> {
@@ -353,6 +421,7 @@ impl ViewGuards<'_> {
             t_off: &self.t_off,
             x_off: &self.x_off,
             stays: &self.stays,
+            fades: &self.fades,
         }
     }
 }
@@ -381,6 +450,12 @@ impl View<'_> {
     /// Position, velocity and acceleration of particle `j` at time `t`: `before_launch`,
     /// then the recorded motion, extrapolated a little past its end (see `EXTRAPOLATION`).
     fn state<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
+        // Flying on into its cup.
+        if let Some(f) = self.fades[j]
+            && t >= f.t_off
+        {
+            return (f.position(t), f.v, DVec3::ZERO);
+        }
         // At rest where it stopped.
         if self.stays[j] && t >= self.t_off[j] {
             return (self.x_off[j], DVec3::ZERO, DVec3::ZERO);
@@ -452,7 +527,12 @@ impl View<'_> {
         // The retarded time is the root of g, which decreases strictly (|v| < c). The
         // field of a removed particle is gone once the light cone has passed its removal
         // (decided from the exact removal point).
-        let t_off = self.t_off[j];
+        let fade = self.fades[j];
+        let t_off = if fade.is_some() {
+            f64::INFINITY
+        } else {
+            self.t_off[j]
+        };
         let stays = self.stays[j];
         if !stays && t_off.is_finite() && c * (t - t_off) >= (x - self.x_off[j]).length() {
             return (DVec3::ZERO, DVec3::ZERO);
@@ -488,7 +568,8 @@ impl View<'_> {
                 if (next - tr).abs() <= tol.max(1e-8 * t.abs().max(1.0)) {
                     guess_row[j] = next;
                     let (r, vr, ar) = self.state(scn, j, next);
-                    let f = fields_from(qj, c, x, next, r, vr, ar);
+                    let q_eff = qj * fade.map_or(1.0, |fd| fd.factor(next));
+                    let f = fields_from(q_eff, c, x, next, r, vr, ar);
                     return (f.e(), f.b);
                 }
                 tr = next;
@@ -535,7 +616,8 @@ impl View<'_> {
         }
         guess_row[j] = tr;
         let (r, vr, ar) = self.state(scn, j, tr);
-        let f = fields_from(qj, c, x, tr, r, vr, ar);
+        let q_eff = qj * fade.map_or(1.0, |fd| fd.factor(tr));
+        let f = fields_from(q_eff, c, x, tr, r, vr, ar);
         (f.e(), f.b)
     }
 
@@ -547,6 +629,11 @@ impl View<'_> {
     /// Position and velocity of particle `j` at time `t` (as `state`, without the
     /// acceleration, which needs the polynomial's derivative).
     fn position_velocity<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3) {
+        if let Some(f) = self.fades[j]
+            && t >= f.t_off
+        {
+            return (f.position(t), f.v);
+        }
         if self.stays[j] && t >= self.t_off[j] {
             return (self.x_off[j], DVec3::ZERO);
         }
@@ -646,6 +733,13 @@ impl<F: FieldSolver> BeamOde<'_, F> {
                     force += d * (part.charge * qs / (r2 * r2.sqrt()));
                 }
             }
+            for &(j, qf, fd) in &self.fading {
+                if j != self.members[k] {
+                    let d = x - fd.position(t);
+                    let r2 = d.length_squared();
+                    force += d * (part.charge * qf * fd.factor(t) / (r2 * r2.sqrt()));
+                }
+            }
             for (j, &src) in self.source.iter().enumerate() {
                 if j == k || !src {
                     continue;
@@ -714,6 +808,24 @@ impl<F: FieldSolver> BeamOde<'_, F> {
             };
             e += ej;
             b += bj;
+        }
+        // Drained charges fading in their cups: the field of their uniform motion, with the
+        // charge at its retarded time on that motion.
+        for &(j, qf, fd) in &self.fading {
+            if j == self.members[k] {
+                continue;
+            }
+            let c = self.scn.c;
+            let r_now = fd.position(t);
+            let d = x - r_now;
+            let (dv, v2) = (d.dot(fd.v), fd.v.length_squared());
+            let tau = (dv + (dv * dv + (c * c - v2) * d.length_squared()).sqrt()) / (c * c - v2);
+            let q_eff = qf * fd.factor(t - tau);
+            if q_eff != 0.0 {
+                let (ej, bj) = heaviside_fields(q_eff, c, x, r_now, fd.v);
+                e += ej;
+                b += bj;
+            }
         }
         // Charges at rest where absorbed particles stopped: their Coulomb fields.
         for &(j, qs, xs) in &self.stopped {
@@ -1001,12 +1113,14 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     let mut beta_max: f64 = 0.0;
     // Where absorbed particles stopped, with their charge staying (`Fate::Stop`).
     let mut stopped: Vec<Option<DVec3>> = vec![None; n];
+    let mut fades: Vec<Option<Fade>> = vec![None; n];
     // Energy budget (recorded runs): samples, and the energy absorbed so far.
     let mut energy: Vec<EnergySample> = Vec::new();
     let mut absorbed = 0.0;
     let past = Past {
         segments: RwLock::new(Vec::new()),
         stays: RwLock::new(vec![false; n]),
+        fades: RwLock::new(vec![None; n]),
         t_off: RwLock::new(vec![f64::INFINITY; n]),
         x_off: RwLock::new(scn.particles.iter().map(|b| b.x0).collect()),
         kin: scn
@@ -1039,7 +1153,8 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 .position(|&g| g <= 0.0)
                 .expect("ended at launch");
             match events[k].fate(&scn.fates) {
-                Fate::Drain => past.t_off.write().expect("not poisoned")[i] = 0.0,
+                // At launch inside its detector: the charge is gone at once.
+                Fate::Drain | Fate::Cup => past.t_off.write().expect("not poisoned")[i] = 0.0,
                 Fate::Stop => {
                     past.t_off.write().expect("not poisoned")[i] = 0.0;
                     past.stays.write().expect("not poisoned")[i] = true;
@@ -1114,6 +1229,14 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     s.filter(|_| q != 0.0).map(|x| (i, q, x))
                 })
                 .collect(),
+            fading: fades
+                .iter()
+                .enumerate()
+                .filter_map(|(i, f)| {
+                    let q = scn.particles[i].particle.charge;
+                    f.filter(|_| q != 0.0).map(|fd| (i, q, fd))
+                })
+                .collect(),
         };
         let mut y0 = Vec::with_capacity(6 * members.len());
         for &i in &members {
@@ -1121,7 +1244,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             let s = p / p_ref;
             y0.extend_from_slice(&[x.x, x.y, x.z, s.x, s.y, s.z]);
         }
-        let energy0 = ode.energy(&y0, t_now);
+        let mut energy0 = ode.energy(&y0, t_now);
         // One step budget for the whole flight, over all segments.
         if stats.n_step >= rs.max_steps {
             failed = Some(crate::integrator::dop853::Error::MaxStepsReached);
@@ -1503,7 +1626,14 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 }
             }
             let e = ode.energy(&y, t_end);
-            energy_err = energy_err.max((e - energy0).abs() / energy0.abs().max(1e-300));
+            // While a drained charge fades in its cup the flying particles' energy is not
+            // conserved (the fading charge's field does work, and energy goes into the cup):
+            // the drift is measured only from where the fades have become negligible.
+            if ode.fading.iter().any(|(_, _, fd)| fd.factor(t_end) > 1e-15) {
+                energy0 = e;
+            } else {
+                energy_err = energy_err.max((e - energy0).abs() / energy0.abs().max(1e-300));
+            }
 
             // Energy budget at t_end (the event's particle still counted as present; its
             // absorption is booked below).
@@ -1571,9 +1701,17 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     }
                 }
                 match fate {
-                    Fate::Drain => {
+                    Fate::Drain | Fate::Cup => {
                         past.t_off.write().expect("not poisoned")[i] = t_end;
                         past.x_off.write().expect("not poisoned")[i] = tracks[i].traj.end.x;
+                        let cup = fate == Fate::Cup;
+                        if cup && let Some(region) = scn.particles[i].detector.as_ref() {
+                            let kin = Kinematics::new(scn.particles[i].particle.mass, scn.c);
+                            let v_end = kin.velocity(tracks[i].traj.end.p);
+                            let fd = Fade::at_entry(region, tracks[i].traj.end.x, v_end, t_end);
+                            fades[i] = Some(fd);
+                            past.fades.write().expect("not poisoned")[i] = Some(fd);
+                        }
                         // The quasi-static interaction drops the field at once; really it
                         // lingers at each other particle for the light time R/c: a
                         // neglected impulse of about |q| / (R c) on each.

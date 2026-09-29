@@ -1148,3 +1148,132 @@ fn b20_relativistic_collision_conserves_four_momentum() {
     println!("B20: |ΔE| = {de:.1e}, |Δp| = {dp:.1e}; momentum change of A {deflected:.3}");
     assert!(de < 1e-12 && dp < 1e-12 && deflected > 0.1);
 }
+
+/// B21, the screening cup (`Fate::Cup`, PHYSICS.md §3.3): particle A (q = 1) flies into a
+/// detector (entry face x = 5, mouth width 2, so k = π/2) while B (q = 1) flies past.
+/// (a) c = ∞: after A's absorption B's force is A's charge `e^{−k v_n (t − t_off)}` at its
+/// continued position, to the integrator's accuracy, and it is continuous at the
+/// absorption (with the instant drain it jumps by A's whole Coulomb force). (b) c = 5: the
+/// quick quasi-static interaction agrees with the exact retarded one on B's end point far
+/// better with the cup than with the instant drain (whose field of A vanishes at once in
+/// the quasi-static model but where the light cone passes in the exact one).
+#[test]
+fn b21_screening_cup() {
+    use physics::beam::{Fate, run_beam_observed};
+    let make = |c: f64, fate: Fate, retarded: bool| {
+        let detector = Region::Box(Aabb {
+            min: DVec3::new(5.0, -1.0, -1.0),
+            max: DVec3::new(7.0, 1.0, 1.0),
+        });
+        let mut scn = beam(
+            Coulomb::new(&[]),
+            vec![],
+            vec![
+                BeamParticle {
+                    particle: particle(1.0, 1.0),
+                    x0: DVec3::ZERO,
+                    p0: DVec3::new(1.0, 0.0, 0.0),
+                    detector: Some(detector),
+                    acceptance: None,
+                },
+                BeamParticle {
+                    particle: particle(1.0, 1.0),
+                    x0: DVec3::new(2.0, 3.0, 0.0),
+                    p0: DVec3::new(0.3, 0.1, 0.0),
+                    detector: None,
+                    acceptance: None,
+                },
+            ],
+            true,
+            12.0,
+        );
+        scn.c = c;
+        scn.retarded = retarded;
+        scn.fates = Fates {
+            detector: fate,
+            ..Fates::default()
+        };
+        scn
+    };
+    // (a) c = ∞: B's force from the dense output, before and after A's absorption.
+    let mut worst_law: f64 = 0.0;
+    let mut jumps = Vec::new();
+    for fate in [Fate::Cup, Fate::Drain] {
+        let scn = make(f64::INFINITY, fate, false);
+        let a_end = run_beam(&scn, &RunSettings::with_tolerance(TOL)).trajectories[0].end;
+        let t_off = a_end.t;
+        let (mut before, mut after) = (DVec3::NAN, DVec3::NAN);
+        let mut checks: Vec<(f64, DVec3, DVec3)> = Vec::new();
+        let _ = run_beam_observed(
+            &scn,
+            &RunSettings::with_tolerance(TOL),
+            |dense, members, p_ref| {
+                let Some(k) = members.iter().position(|&i| i == 1) else {
+                    return;
+                };
+                let force = |t: f64| {
+                    DVec3::new(
+                        dense.eval_derivative_component(6 * k + 3, t),
+                        dense.eval_derivative_component(6 * k + 4, t),
+                        dense.eval_derivative_component(6 * k + 5, t),
+                    ) * p_ref
+                };
+                let pos = |t: f64| {
+                    DVec3::new(
+                        dense.eval_component(6 * k, t),
+                        dense.eval_component(6 * k + 1, t),
+                        0.0,
+                    )
+                };
+                let (a, b) = (dense.t_start(), dense.t_end());
+                // The step that contains the absorption (valid up to it), and the one that
+                // restarts there.
+                if a < t_off && t_off <= b && before.is_nan() {
+                    before = force(t_off);
+                }
+                if (a - t_off).abs() < 1e-12 {
+                    after = force(a);
+                }
+                if a > t_off && checks.len() < 5 {
+                    let t = 0.5 * (a + b);
+                    checks.push((t, force(t), pos(t)));
+                }
+            },
+        );
+        let jump = (after - before).length() / before.length();
+        jumps.push(jump);
+        if fate == Fate::Cup {
+            // A continues from its entry point at its entry velocity (c = ∞, m = 1); the
+            // entry face is x = 5 (inward normal +x), the mouth 2 wide: k = π/2.
+            let va = a_end.p;
+            let rate = std::f64::consts::PI / 2.0 * va.x;
+            for (t, f, xb) in checks {
+                let xa = a_end.x + va * (t - t_off);
+                let d = xb - xa;
+                let expected = d * ((-rate * (t - t_off)).exp() / d.length().powi(3));
+                worst_law = worst_law.max((f - expected).length() / expected.length());
+            }
+        }
+    }
+    println!(
+        "B21 (a): B's force jumps at A's absorption by {:.1e} (cup) and {:.1e} (instant drain); fade law {worst_law:.1e}",
+        jumps[0], jumps[1]
+    );
+    // (b) c = 5: quick against exact, cup and instant drain.
+    let end_b = |fate: Fate, retarded: bool| {
+        run_beam(
+            &make(5.0, fate, retarded),
+            &RunSettings::with_tolerance(TOL),
+        )
+        .trajectories[1]
+            .end
+            .x
+    };
+    let gap_cup = (end_b(Fate::Cup, false) - end_b(Fate::Cup, true)).length();
+    let gap_drain = (end_b(Fate::Drain, false) - end_b(Fate::Drain, true)).length();
+    println!(
+        "B21 (b): quasi-static vs exact at c = 5: cup {gap_cup:.2e}, instant drain {gap_drain:.2e}"
+    );
+    assert!(jumps[0] < 1e-8 && jumps[1] > 0.5 && worst_law < 1e-7);
+    assert!(gap_cup < 0.2 * gap_drain);
+}

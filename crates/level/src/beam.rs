@@ -350,7 +350,14 @@ impl Level {
             gates: base.gates,
             radiation_reaction: self.physics.radiation_reaction,
             retarded: self.physics.beam_retarded,
-            fates: physics::beam::Fates::default(),
+            fates: physics::beam::Fates {
+                detector: if self.physics.instant_drain {
+                    physics::beam::Fate::Drain
+                } else {
+                    physics::beam::Fate::Cup
+                },
+                ..physics::beam::Fates::default()
+            },
         }
     }
 
@@ -414,14 +421,29 @@ impl Level {
     /// Verifies the beam in every flight: preview at preview resolution and tolerance,
     /// the tighter run with the field at verification resolution; each particle is
     /// classified as a single flight is (PHYSICS.md §7).
+    /// The scenarios of the verification runs: metal at verification resolution, and for
+    /// interacting beams at finite c the exact retarded interaction (PHYSICS.md §3.3): the
+    /// quick quasi-static model gives the preview, the exact one the verdict (a particle is
+    /// verified only if both agree it clears its boundaries).
+    pub fn verification_beam_scenarios(&self, player: &[Element]) -> Vec<BeamScenario<LevelField>> {
+        let resolution = if self.has_metal(player) {
+            Resolution::Verify
+        } else {
+            Resolution::Preview
+        };
+        let mut scenarios = self.beam_scenarios(player, resolution);
+        if self.physics.beam_interaction && self.physics.c.is_some() {
+            for s in &mut scenarios {
+                s.retarded = true;
+            }
+        }
+        scenarios
+    }
+
     pub fn verify_beams(&self, player: &[Element]) -> Vec<BeamVerification> {
         let tol = self.tolerances();
         let preview = self.beam_scenarios(player, Resolution::Preview);
-        let fine = if self.has_metal(player) {
-            self.beam_scenarios(player, Resolution::Verify)
-        } else {
-            preview.clone()
-        };
+        let fine = self.verification_beam_scenarios(player);
         let shots = self.beam_shots(player);
         preview
             .iter()

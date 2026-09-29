@@ -244,6 +244,20 @@ fn main() {
                             }
                         );
                     }
+                    // Every particle's end (EM_BEAM_ENDS=1, for comparing models).
+                    if std::env::var_os("EM_BEAM_ENDS").is_some() {
+                        for (i, t) in v.verified.trajectories.iter().enumerate() {
+                            println!(
+                                "  end {} disturbance {}: {:?} {:.12} {:.12} t {:.9}",
+                                i,
+                                d + 1,
+                                t.outcome,
+                                t.end.x.x,
+                                t.end.x.y,
+                                t.end.t
+                            );
+                        }
+                    }
                     // Goal particles (the level's free particles with a detector): each
                     // must arrive, verified (printed like a shot, so tools check them too).
                     for (k, &i) in level.goal_particles().iter().enumerate() {

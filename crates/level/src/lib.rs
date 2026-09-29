@@ -365,6 +365,11 @@ pub struct WorldPhysics {
     /// Exact retarded (Liénard–Wiechert) beam interaction at finite c (much slower).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub beam_retarded: bool,
+    /// Beam particles absorbed by their detector vanish at once (the charge drained
+    /// instantly) instead of fading as they fly into the screening cup behind the
+    /// detector's mouth (the default, PHYSICS.md §3.3).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub instant_drain: bool,
     pub t_max: f64,
     pub tolerances: TolerancesSpec,
 }
@@ -2060,6 +2065,7 @@ mod tests {
                 radiation_reaction: true,
                 beam_interaction: false,
                 beam_retarded: false,
+                instant_drain: false,
                 t_max: 100.0,
                 tolerances: TolerancesSpec {
                     preview: 1e-10,

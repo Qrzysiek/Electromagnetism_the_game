@@ -180,6 +180,7 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
         radiation_reaction,
         beam_interaction,
         beam_retarded,
+        instant_drain,
         t_max,
         tolerances,
     } = p;
@@ -229,6 +230,12 @@ fn edit_physics(ui: &mut egui::Ui, p: &mut WorldPhysics) -> bool {
     row(ui, "Beam fields", |ui| {
         ui.checkbox(beam_retarded, "exact retarded (slow)").on_hover_text(
             "Finite c: the exact Liénard–Wiechert fields at the retarded times instead of the quasi-static ones (steps shorter than the light time between particles)",
+        );
+        false
+    });
+    row(ui, "Beam detectors", |ui| {
+        ui.checkbox(instant_drain, "instant drain").on_hover_text(
+            "Off (default): a detector is the mouth of a deep grounded cup; an absorbed particle flies on into it while the cup screens its charge (it fades over the entry time). On: its charge vanishes at once",
         );
         false
     });
@@ -1454,6 +1461,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         // Checkboxes.
         beam_interaction: _,
         beam_retarded: _,
+        instant_drain: _,
         t_max,
         tolerances: TolerancesSpec { preview, verify },
     } = physics;

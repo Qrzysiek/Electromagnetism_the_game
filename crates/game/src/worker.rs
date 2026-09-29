@@ -519,13 +519,18 @@ fn beam_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
         }
         previews.push(run);
     }
-    let fine = if req.level.has_metal(&req.placement) {
+    // The verdict: metal at verification resolution, and at finite c the exact retarded
+    // interaction (the preview above is quasi-static).
+    let exact = req.level.physics.beam_interaction && req.level.physics.c.is_some();
+    let fine = if req.level.has_metal(&req.placement) || exact {
         let Some(fine) = unless_stale(newest, req.revision, || {
-            req.level.beam_scenarios(&req.placement, Resolution::Verify)
+            req.level.verification_beam_scenarios(&req.placement)
         }) else {
             return true;
         };
-        cost.add_verification_field(&fine[0].field);
+        if req.level.has_metal(&req.placement) {
+            cost.add_verification_field(&fine[0].field);
+        }
         fine
     } else {
         preview_scns

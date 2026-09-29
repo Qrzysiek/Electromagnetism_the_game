@@ -233,16 +233,14 @@ impl Level {
                         "Beam: all particles fly together and act on each other with their exact \
                      retarded (Liénard–Wiechert) fields, magnetic attraction and radiation \
                      included, and each feels its own radiation reaction (Landau–Lifshitz). \
-                     Before launch they are taken to move uniformly; a particle that is \
-                     absorbed stops acting once the news has travelled at c.",
+                     Before launch they are taken to keep their launch acceleration.",
                     )
                 } else if self.physics.beam_interaction {
                     note(
                         true,
                         "Beam: all particles fly together and act on each other with their exact \
                      retarded (Liénard–Wiechert) fields, magnetic attraction and radiation \
-                     included. Before launch they are taken to move uniformly; a particle \
-                     that is absorbed stops acting once the news has travelled at c. Each \
+                     included. Before launch they are taken to keep their launch acceleration. Each \
                      particle's own radiation reaction is left out (its radiated energy is \
                      checked to be negligible).",
                     )
@@ -262,7 +260,15 @@ impl Level {
             if self.physics.beam_interaction {
                 out.push(note(
                     false,
-                    "Absorbed particles: one that hits a body stops there and its charge stays, at rest, still acting on the others; one that enters the detector (a grounded Faraday cup) is carried away; one that leaves the arena flies on and keeps acting (it only counts as lost).",
+                    "Absorbed particles: one that hits a body stops there and its charge stays, at rest, still acting on the others; one that leaves the arena flies on and keeps acting (it only counts as lost).",
+                ));
+                out.push(note(
+                    false,
+                    if self.physics.instant_drain {
+                        "Detectors (instant drain): a particle entering its detector is carried away at once; its field vanishes where the news of its absorption, travelling at c, has arrived (at once for c = ∞)."
+                    } else {
+                        "Detectors: each is the mouth of a deep grounded Faraday cup. A particle entering it flies on into the cup while the cup screens its charge, seen from outside, as e^(−k·depth) (k = π/width of the mouth: the slowest-decaying mode of a grounded pipe), so its field fades over the entry time instead of vanishing at once. Approximations: the faster-decaying modes and the charge induced on the rim are left out (they matter near the mouth only), and so are the fields of the currents carrying the charge away."
+                    },
                 ));
             }
             out.push(note(
