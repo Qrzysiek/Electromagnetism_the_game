@@ -41,73 +41,94 @@ fn circle(rho: f64, w0: f64, turns: u32, per_turn: u32) -> Vec<Emission> {
         .collect()
 }
 
-/// S1, Jackson Pr. 14.15: a charge on a circle radiates into its orbital plane (θ = π/2)
-/// at the harmonics `mω₀`, with power per steradian
-/// `dP_m/dΩ = (q² m² ω₀² β²/2πc) J'_m(mβ)²`. Over `T` the energy in a band ±ω₀/2 around
-/// each harmonic must be `T dP_m/dΩ`, up to the finite flight's leakage: each line is a
-/// sinc² of width 2π/T whose tails outside the band carry a fraction ~2/(π² (ω₀/2) T)
-/// (and they are shared with the neighbours), so the error falls as 1/T. β = 0.5, 40 and
-/// 160 turns: at most 3.4e-3 and 9.1e-4.
+/// S1, Jackson Pr. 14.15: a charge on a circle (β = 0.5) radiates into its orbital plane
+/// at the harmonics `mω₀`, with power per steradian `(q² m² ω₀² β²/2πc) J'_m(mβ)²`. For a
+/// flight of exactly N turns the energy in a band ±ω₀/2 around each harmonic is known
+/// exactly: the integrand of Jackson 14.65 is periodic but for `e^{iωt}`, so the amplitude
+/// is a sum over harmonics with finite-time factors (`scripts/wolfram/s1_circular_harmonics.wls`,
+/// Wolfram Engine 14.2: Fourier coefficients by an exponentially accurate DFT, the band by
+/// quadrature). Required: the measure to 1e-5 of the exact value (set before measuring:
+/// 400 samples per turn), and the exact values within the finite flight's leakage of
+/// Jackson's infinite-time power (a line is a sinc² of width 2π/T, whose tails outside
+/// the band carry ~2/(π² (ω₀/2) T): 5e-3 at 40 turns, 1.2e-3 at 160).
 #[test]
 fn s1_harmonics_of_circular_motion() {
+    // (turns, harmonic, exact band energy, infinite-time Jackson), from the Wolfram script.
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const EXACT: [(u32, i32, f64, f64); 8] = [
+        (40, 1, 1.027697010635241, 1.0302753517029275),
+        (40, 2, 0.8810862284884798, 0.8840475603754644),
+        (40, 3, 0.5460370542835826, 0.5460828703215562),
+        (40, 4, 0.29820585780936115, 0.2972098500096013),
+        (160, 1, 4.118522708010444, 4.12110140681171),
+        (160, 2, 3.5332287356623806, 3.5361902415018576),
+        (160, 3, 2.184285704684461, 2.184331481286225),
+        (160, 4, 1.1898354770073927, 1.1888394000384053),
+    ];
     let (q, c) = (1.0, 10.0);
     let (rho, w0) = (1.0, 5.0);
     let beta = rho * w0 / c;
     let n = DVec3::X;
-    for (turns, bound) in [(40, 5e-3), (160, 1.2e-3)] {
+    let (mut worst, mut worst_jackson) = (0.0_f64, [0.0_f64; 2]);
+    for (turns, m, exact, jackson_ref) in EXACT {
         let samples = circle(rho, w0, turns, 400);
+        let mf = f64::from(m);
+        // The infinite-time power, computed here too (checks the pasted column).
         let t_total = f64::from(turns) * 2.0 * PI / w0;
-        let mut worst: f64 = 0.0;
-        for m in 1..=4 {
-            let mf = f64::from(m);
-            let jp = 0.5 * (bessel_j(m - 1, mf * beta) - bessel_j(m + 1, mf * beta));
-            let jackson =
-                q * q * mf * mf * w0 * w0 * beta * beta / (2.0 * PI * c) * jp * jp * t_total;
-            let e = band_energy(&samples, q, c, n, (mf - 0.5) * w0, (mf + 0.5) * w0, false);
-            let err = e / jackson - 1.0;
-            println!(
-                "S1 {turns} turns, harmonic {m}: band energy {e:.6e}, Jackson {jackson:.6e}, rel. error {err:.1e}"
-            );
-            worst = worst.max(err.abs());
-        }
-        assert!(worst < bound);
+        let jp = 0.5 * (bessel_j(m - 1, mf * beta) - bessel_j(m + 1, mf * beta));
+        let jackson = q * q * mf * mf * w0 * w0 * beta * beta / (2.0 * PI * c) * jp * jp * t_total;
+        assert!((jackson / jackson_ref - 1.0).abs() < 1e-12);
+        let e = band_energy(&samples, q, c, n, (mf - 0.5) * w0, (mf + 0.5) * w0, false);
+        let (err, leak) = (e / exact - 1.0, exact / jackson - 1.0);
+        println!(
+            "S1 {turns} turns, harmonic {m}: measure {e:.12e}, exact {exact:.12e}, rel. error {err:.1e}; exact vs infinite-time {leak:.1e}"
+        );
+        worst = worst.max(err.abs());
+        let slot = usize::from(turns == 160);
+        worst_jackson[slot] = worst_jackson[slot].max(leak.abs());
     }
+    println!(
+        "S1: worst {worst:.1e}; leakage {:.1e} (40 turns), {:.1e} (160)",
+        worst_jackson[0], worst_jackson[1]
+    );
+    assert!(worst < 1e-5 && worst_jackson[0] < 5e-3 && worst_jackson[1] < 1.2e-3);
 }
 
 /// S2, Parseval (Jackson 14.60–14.65): the spectrum integrated over all frequencies equals
 /// Liénard's energy per steradian, for a relativistic transient: a charge at β = 0.6
-/// kicked sideways by a Gaussian pulse of acceleration, seen from several directions.
+/// kicked sideways by a pulse of acceleration `a₀ sech²(t/σ)`, seen from several
+/// directions. The world line is exact (`v_y = a₀σ(1 + tanh(t/σ))`,
+/// `y = a₀σ(t + σ ln cosh(t/σ))`): the first version stepped the position by Euler, which
+/// is inconsistent with the velocities off the axis and limited the agreement to 6e-5.
+/// Required: 1e-8 (set before measuring).
 #[test]
 fn s2_spectrum_integrates_to_the_lienard_energy() {
     let (q, c) = (1.0, 1.0);
     let v0 = 0.6;
     let (a0, sigma) = (0.05, 2.0);
-    let dt = 0.002;
-    // Velocity: v0 along x, v_y = ∫ a dt (the kick, ≪ c).
     let n_steps = 20_000;
-    let mut samples: Vec<Emission> = Vec::with_capacity(n_steps + 1);
-    let (mut x, mut vy) = (DVec3::new(-20.0 * v0, 0.0, 0.0), 0.0);
-    for i in 0..=n_steps {
-        #[allow(clippy::cast_precision_loss)]
-        let t = -20.0 + i as f64 * dt;
-        let ay = a0 * (-(t * t) / (2.0 * sigma * sigma)).exp();
-        let v = DVec3::new(v0, vy, 0.0);
-        samples.push((t, x, v, DVec3::new(0.0, ay, 0.0)));
-        // Exact enough for the test: the same samples feed both sides.
-        x += v * dt;
-        vy += ay * dt;
-    }
+    let samples: Vec<Emission> = (0..=n_steps)
+        .map(|i| {
+            let t = -20.0 + 40.0 * f64::from(i) / f64::from(n_steps);
+            let (th, ch) = ((t / sigma).tanh(), (t / sigma).cosh());
+            let x = DVec3::new(v0 * t, a0 * sigma * (t + sigma * ch.ln()), 0.0);
+            let v = DVec3::new(v0, a0 * sigma * (1.0 + th), 0.0);
+            let a = DVec3::new(0.0, a0 * (1.0 - th * th), 0.0);
+            (t, x, v, a)
+        })
+        .collect();
     let mut worst: f64 = 0.0;
     for deg in [0.0_f64, 20.0, 60.0, 135.0] {
         let n = DVec3::new(deg.to_radians().cos(), deg.to_radians().sin(), 0.0);
         let lienard = lienard_energy(&samples, q, c, n);
-        // The pulse lasts ~σ(1 − n·β): its spectrum ends near a few /(σκ); 40/(σκ) is far out.
+        // The pulse lasts ~σκ as received: its spectrum falls as e^{−πωσκ/2}; 40/(σκ) is
+        // far out (κ ≥ 0.4 for these directions).
         let kappa = 1.0 - n.x * v0;
         let top = 40.0 / (sigma * kappa);
         let total = band_energy(&samples, q, c, n, 0.0, top, false);
         let err = total / lienard - 1.0;
         println!(
-            "S2 at {deg}°: ∫ d²I/dωdΩ dω = {total:.8e}, Liénard {lienard:.8e}, rel. error {err:.1e}"
+            "S2 at {deg}°: ∫ d²I/dωdΩ dω = {total:.12e}, Liénard {lienard:.12e}, rel. error {err:.1e}"
         );
         worst = worst.max(err.abs());
     }
@@ -115,7 +136,7 @@ fn s2_spectrum_integrates_to_the_lienard_energy() {
     // radiates like a sudden kick for ω ≪ 1/σκ).
     let s = spectrum(&samples, q, c, DVec3::Y, 1e-3, 1e-3, 2, false);
     assert!((s[0] / s[1] - 1.0).abs() < 1e-3);
-    assert!(worst < 1e-4);
+    assert!(worst < 1e-8);
 }
 
 /// S3, the measure along a computed flight (`trajectory::run` with a radiation goal): a
@@ -221,6 +242,7 @@ fn s3_measure_along_a_computed_flight() {
 /// and the exact `|R|² − 1` (Wolfram Engine 14.2, 40-digit quadrature), tabulated below.
 /// Criteria: (a) 1e-12; (b) `|R|² − 1` to 1e-7 absolute (set before measuring: the smallest
 /// value, 7e-7, to ~15 %, the largest to 1e-4 of itself).
+/// Measured: (a) ≤ 3e-16; (b) ≤ 2.1e-10 (the first, linear Filon rule: 1.8e-8).
 #[test]
 fn s4_sudden_stop() {
     // (θ in degrees, V, exact |R|² − 1 at ωτ = 1e-3, 4e-3, 1.6e-2), from the Wolfram script.

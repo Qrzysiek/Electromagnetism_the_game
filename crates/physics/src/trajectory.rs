@@ -8,7 +8,7 @@ use crate::events::first_crossing;
 use crate::field::FieldSolver;
 use crate::geometry::{Aabb, Region, Shape};
 use crate::integrator::{self, Dense, Dop853, OdeSystem, Settings, Stats};
-use crate::spectrum::{Emission, PHASE_STEP, RadiationWindow};
+use crate::spectrum::{Emission, RadiationWindow};
 
 /// Margins at or above this value (grid units) are not refined further: they are far too
 /// large for numerical error to matter. Refinement starts below twice this value.
@@ -475,23 +475,13 @@ pub fn run_cancellable<F: FieldSolver>(
             (x_b, ode.momentum(int.y()))
         };
         let sample = Sample { t: t_end, x, p };
-        if let Some(w) = window {
-            // At least 8 pieces per step, and short enough that the phase ω(t − n·r/c)
-            // advances by at most PHASE_STEP at the band's top: its rate 1 − n·v/c,
-            // largest over the arc and 5 times in the step, with a margin of 1.5 (much
-            // below 2 for directions near the motion, where the radiation is beamed). An
-            // even number, so that Simpson's pairs (`lienard_energy`) stay in a step.
+        if window.is_some() {
+            // Pieces resolve the motion (the integrator's steps follow it): 8 per step,
+            // an even number, so that the pairs of Simpson's and Filon's rules stay in a
+            // step. The phase needs no resolution: the spectrum integrates in the phase
+            // time, where it is exactly linear (`spectrum.rs`).
             let h = t_end - t_a;
-            let rate = (0..=4)
-                .map(|i| {
-                    let t = t_a + h * f64::from(i) * 0.25;
-                    w.phase_rate(ode.kin.velocity(view.state(t).1), scn.c)
-                })
-                .fold(0.0, f64::max)
-                * 1.5;
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let pieces = ((w.top_frequency() * rate * h / PHASE_STEP).ceil() as usize).max(8);
-            let pieces = pieces + pieces % 2;
+            let pieces = 8;
             for i in 1..=pieces {
                 #[allow(clippy::cast_precision_loss)]
                 let t = t_a + h * (i as f64 / pieces as f64);

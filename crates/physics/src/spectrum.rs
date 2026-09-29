@@ -14,19 +14,14 @@
 //! then needs no boundary terms, and no radiation is attributed to the launch or to
 //! the detector absorbing it). In the plane `z = 0` the directions `n` are in-plane.
 //!
-//! The time integral of 14.65 is done piecewise between dense samples of the flight, with
-//! the amplitude and the phase `ω(t − n·r/c)` linear on each piece and integrated exactly
-//! (Filon's idea): the pieces are short enough that the phase advances by at most
-//! `PHASE_STEP` at the top frequency, so the result does not depend on the phase being
-//! resolved by the samples themselves.
+//! The integral of 14.65 is taken in the phase time `τ = t − n·r/c` (`dτ = κ dt`), where
+//! the phase `ωτ` is exactly linear: with the amplitude `n × ((n − β) × β̇)/κ³` quadratic
+//! in τ over each pair of pieces between dense samples of the flight, each pair is
+//! integrated exactly against `e^{iωτ}` (Filon's rule), so the samples need to resolve the
+//! motion but not the phase, however high the frequency.
 
 use glam::DVec3;
 use std::f64::consts::PI;
-
-/// Largest phase advance per piece at the highest frequency of a spectrum (radians). The
-/// pieces are integrated exactly for a linear phase, so 1 rad is enough (test S3's high
-/// band: 8.5e-5 with 1 rad, 2.1e-4 with 0.5, 7.8e-5 with 0.25); half the cost of 0.5.
-pub const PHASE_STEP: f64 = 1.0;
 
 /// A sample of the flight: time, position, velocity, acceleration.
 pub type Emission = (f64, DVec3, DVec3, DVec3);
@@ -78,20 +73,9 @@ impl RadiationWindow {
         m
     }
 
-    /// Highest frequency the measurement needs resolved (for the sampling of the flight):
-    /// the band's top, or 0 without a band.
+    /// The band's top, or 0 without a band.
     pub fn top_frequency(&self) -> f64 {
         self.band.map_or(0.0, |(_, hi)| hi)
-    }
-
-    /// Largest rate `d(t − n·r/c)/dt = 1 − n·v/c` over the arc's directions at velocity
-    /// `v` (the smallest `n·v` is at an end of the arc, or on the axis for a point).
-    pub fn phase_rate(&self, v: DVec3, c: f64) -> f64 {
-        let base = self.axis.y.atan2(self.axis.x);
-        [-self.half_angle, self.half_angle]
-            .iter()
-            .map(|d| 1.0 - DVec3::new((base + d).cos(), (base + d).sin(), 0.0).dot(v) / c)
-            .fold(0.0, f64::max)
     }
 
     /// Measured energy per steradian, averaged over the arc (Simpson's rule in angle).
@@ -187,30 +171,51 @@ impl Cx {
     }
 }
 
-/// `φ₀(D) = ∫₀¹ e^{iDs} ds` and `φ₁(D) = ∫₀¹ s e^{iDs} ds`, given `e^{iD}`.
-fn filon_weights(d: f64, e: Cx) -> (Cx, Cx) {
-    if d.abs() < 0.05 {
-        let d2 = d * d;
-        let phi0 = Cx {
-            re: 1.0 - d2 / 6.0 + d2 * d2 / 120.0,
-            im: d / 2.0 - d * d2 / 24.0,
-        };
-        let phi1 = Cx {
-            re: 0.5 - d2 / 8.0 + d2 * d2 / 144.0,
-            im: d / 3.0 - d * d2 / 30.0,
-        };
-        return (phi0, phi1);
+/// The moments `φₖ(D) = ∫₀¹ uᵏ e^{iDu} du`, k = 0, 1, 2, given `e^{iD}`: by their series
+/// `Σⱼ (iD)ʲ/(j! (j + k + 1))` for |D| < 0.25 (ten terms, error < 1e-14), otherwise in
+/// closed form, `φ₀ = (e − 1)/(iD)`, `φₖ = e/(iD) − k φₖ₋₁/(iD)`.
+fn filon_moments(d: f64, e: Cx) -> [Cx; 3] {
+    if d.abs() < 0.25 {
+        let mut out = [Cx::default(); 3];
+        for (k, phi) in out.iter_mut().enumerate() {
+            // term_j = (iD)^j / j!
+            let mut term = Cx { re: 1.0, im: 0.0 };
+            for j in 0..10 {
+                #[allow(clippy::cast_precision_loss)]
+                let w = 1.0 / (j + k + 1) as f64;
+                phi.re += term.re * w;
+                phi.im += term.im * w;
+                #[allow(clippy::cast_precision_loss)]
+                let next = term.mul(Cx {
+                    re: 0.0,
+                    im: d / (j + 1) as f64,
+                });
+                term = next;
+            }
+        }
+        return out;
     }
-    // φ₀ = (e − 1)/(iD); φ₁ = e/(iD) + (e − 1)/D².
-    let phi0 = Cx {
-        re: e.im / d,
-        im: (1.0 - e.re) / d,
+    // x/(iD) = (x.im/D, −x.re/D)
+    let over_id = |x: Cx| Cx {
+        re: x.im / d,
+        im: -x.re / d,
     };
+    let phi0 = over_id(Cx {
+        re: e.re - 1.0,
+        im: e.im,
+    });
+    let e_id = over_id(e);
+    let p0 = over_id(phi0);
     let phi1 = Cx {
-        re: e.im / d + (e.re - 1.0) / (d * d),
-        im: -e.re / d + e.im / (d * d),
+        re: e_id.re - p0.re,
+        im: e_id.im - p0.im,
     };
-    (phi0, phi1)
+    let p1 = over_id(phi1);
+    let phi2 = Cx {
+        re: e_id.re - 2.0 * p1.re,
+        im: e_id.im - 2.0 * p1.im,
+    };
+    [phi0, phi1, phi2]
 }
 
 /// `d²I/dω dΩ` in direction `n` at the frequencies `ω₀ + k δω` (`k < count`). With
@@ -233,42 +238,65 @@ pub fn spectrum(
     if !c.is_finite() || samples.len() < 2 || count == 0 {
         return vec![0.0; count];
     }
-    // Amplitude f = n × ((n − β) × β̇)/κ² and retarded phase time τ = t − n·r/c.
-    let pts: Vec<(f64, f64, DVec3)> = samples
+    // In the phase time τ = t − n·r/c (dτ = κ dt, κ > 0) the phase is exactly linear:
+    // ∫ f e^{iωτ} dt = ∫ g e^{iωτ} dτ with g = n × ((n − β) × β̇)/κ³. g is taken quadratic
+    // in τ over each pair of pieces (Filon's rule, on the pieces' unequal widths) and
+    // integrated exactly against e^{iωτ}; a last odd piece is taken linear.
+    let pts: Vec<(f64, DVec3)> = samples
         .iter()
         .map(|&(t, x, v, a)| {
             let kappa = 1.0 - n.dot(v) / c;
             (
-                t,
                 t - n.dot(x) / c,
-                radiation_vector(n, v, a, c) / (kappa * kappa),
+                radiation_vector(n, v, a, c) / (kappa * kappa * kappa),
             )
         })
         .collect();
     let mut re = vec![DVec3::ZERO; count];
     let mut im = vec![DVec3::ZERO; count];
-    for w in pts.windows(2) {
-        let ((ta, tau_a, fa), (tb, tau_b, fb)) = (w[0], w[1]);
-        let h = tb - ta;
-        let dtau = tau_b - tau_a;
-        let df = fb - fa;
-        // e^{iωτ_a} and e^{iωΔτ} along the frequency grid, by recurrence.
-        let mut ea = Cx::cis(omega0 * tau_a);
-        let step_a = Cx::cis(d_omega * tau_a);
-        let mut ed = Cx::cis(omega0 * dtau);
-        let step_d = Cx::cis(d_omega * dtau);
+    // Adds H e^{iωτ₀} Σₖ cₖ φₖ(ωH) over the frequency grid.
+    let mut add = |tau0: f64, h: f64, coeffs: [DVec3; 3], order: usize| {
+        if h <= 0.0 {
+            return;
+        }
+        // e^{iωτ₀} and e^{iωH} along the frequency grid, by recurrence.
+        let mut ea = Cx::cis(omega0 * tau0);
+        let step_a = Cx::cis(d_omega * tau0);
+        let mut ed = Cx::cis(omega0 * h);
+        let step_d = Cx::cis(d_omega * h);
         #[allow(clippy::cast_precision_loss)]
         for k in 0..count {
-            let d = (omega0 + k as f64 * d_omega) * dtau;
-            let (p0, p1) = filon_weights(d, ed);
-            // h e^{iωτ_a} [f_a φ₀ + (f_b − f_a) φ₁]
-            let w0 = ea.mul(p0);
-            let w1 = ea.mul(p1);
-            re[k] += (fa * w0.re + df * w1.re) * h;
-            im[k] += (fa * w0.im + df * w1.im) * h;
+            let d = (omega0 + k as f64 * d_omega) * h;
+            let phi = filon_moments(d, ed);
+            for (c_k, p) in coeffs.iter().zip(phi).take(order + 1) {
+                let w = ea.mul(p);
+                re[k] += *c_k * (w.re * h);
+                im[k] += *c_k * (w.im * h);
+            }
             ea = ea.mul(step_a);
             ed = ed.mul(step_d);
         }
+    };
+    let mut i = 0;
+    while i + 2 < pts.len() {
+        let ((t0, g0), (t1, g1), (t2, g2)) = (pts[i], pts[i + 1], pts[i + 2]);
+        let h = t2 - t0;
+        let u = (t1 - t0) / h;
+        if h > 0.0 && u > 0.0 && u < 1.0 {
+            // Lagrange basis on u = 0, u₁, 1, as powers of u.
+            let c0 = g0;
+            let c1 = -g0 * ((u + 1.0) / u) - g1 / (u * (u - 1.0)) - g2 * (u / (1.0 - u));
+            let c2 = g0 / u + g1 / (u * (u - 1.0)) + g2 / (1.0 - u);
+            add(t0, h, [c0, c1, c2], 2);
+        } else {
+            add(t0, t1 - t0, [g0, g1 - g0, DVec3::ZERO], 1);
+            add(t1, t2 - t1, [g1, g2 - g1, DVec3::ZERO], 1);
+        }
+        i += 2;
+    }
+    if i + 1 < pts.len() {
+        let ((t0, g0), (t1, g1)) = (pts[i], pts[i + 1]);
+        add(t0, t1 - t0, [g0, g1 - g0, DVec3::ZERO], 1);
     }
     if abrupt_stop {
         let &(t, x, v, _) = samples.last().expect("at least two samples");
@@ -407,25 +435,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn filon_weights_match_their_series() {
-        for d in [0.049_999, 0.050_001, 0.3, -0.7] {
-            let e = Cx::cis(d);
-            let (a0, a1) = filon_weights(d, e);
-            // Direct quadrature of ∫₀¹ e^{iDs} and ∫₀¹ s e^{iDs}.
-            let m = 20_000;
-            let (mut b0, mut b1) = (Cx::default(), Cx::default());
+    fn filon_moments_match_quadrature() {
+        for d in [0.249_999, 0.250_001, 0.03, 1.7, -3.2, 40.0] {
+            let got = filon_moments(d, Cx::cis(d));
+            // Midpoint quadrature of ∫₀¹ uᵏ e^{iDu} du (error ~ D²/(24 m²)).
+            let m = 200_000;
+            let mut want = [Cx::default(); 3];
             for j in 0..m {
-                let s = (f64::from(j) + 0.5) / f64::from(m);
-                let z = Cx::cis(d * s);
-                b0.re += z.re / f64::from(m);
-                b0.im += z.im / f64::from(m);
-                b1.re += s * z.re / f64::from(m);
-                b1.im += s * z.im / f64::from(m);
+                let u = (f64::from(j) + 0.5) / f64::from(m);
+                let z = Cx::cis(d * u);
+                for (k, w) in want.iter_mut().enumerate() {
+                    let uk = u.powi(i32::try_from(k).unwrap());
+                    w.re += uk * z.re / f64::from(m);
+                    w.im += uk * z.im / f64::from(m);
+                }
             }
-            for (x, y) in [(a0, b0), (a1, b1)] {
+            for k in 0..3 {
+                let (a, b) = (got[k], want[k]);
                 assert!(
-                    (x.re - y.re).abs() < 1e-8 && (x.im - y.im).abs() < 1e-8,
-                    "{d}"
+                    (a.re - b.re).abs() < 1e-9 && (a.im - b.im).abs() < 1e-9,
+                    "D = {d}, k = {k}: {a:?} vs {b:?}"
                 );
             }
         }
