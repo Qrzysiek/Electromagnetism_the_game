@@ -1,4 +1,4 @@
-//! Validation tests L1–L3 for the Liénard–Wiechert fields (PHYSICS.md §2.5). Run with
+//! Validation tests L1–L4 for the Liénard–Wiechert fields (PHYSICS.md §2.5). Run with
 //! `cargo test -p physics --test lienard -- --nocapture --test-threads=1`.
 
 use physics::DVec3;
@@ -29,6 +29,22 @@ impl Worldline for Circle {
             DVec3::new(c, s, 0.0) * self.r,
             DVec3::new(-s, c, 0.0) * (self.r * self.w),
             DVec3::new(c, s, 0.0) * (-self.r * self.w * self.w),
+        )
+    }
+}
+
+/// A charge circling at radius 1 (ω = 1.2) while oscillating across the plane
+/// (`z = 0.3 sin 2.1t`): accelerated in three dimensions, with a varying jerk.
+struct Bobbing;
+
+impl Worldline for Bobbing {
+    fn state(&self, t: f64) -> (DVec3, DVec3, DVec3) {
+        let (s, c) = (1.2 * t).sin_cos();
+        let (sz, cz) = (2.1 * t).sin_cos();
+        (
+            DVec3::new(c, s, 0.3 * sz),
+            DVec3::new(-1.2 * s, 1.2 * c, 0.63 * cz),
+            DVec3::new(-1.44 * c, -1.44 * s, -1.323 * sz),
         )
     }
 }
@@ -176,4 +192,122 @@ fn l3_circular_motion_satisfies_maxwell_equations() {
         worst = res.iter().copied().fold(worst, f64::max);
     }
     assert!(worst < 1e-6, "L3 {worst:.3e}");
+}
+
+// --- L4: the forms of Heaviside and Feynman (Jackson Pr. 6.2) ----------------------------
+
+/// L4, Jackson Pr. 6.2: the fields of a point charge as observation-time derivatives of its
+/// retarded direction and distance, Feynman's electric field
+/// `E = q {R̂/R² + (R/c) d/dt(R̂/R²) + (1/c²) d²R̂/dt²}` and Heaviside's magnetic field
+/// `B = (q/c²) {v × R̂/(κ²R²) + d/dt(v × R̂/κ)/(cR)}` (k = 1, μ₀/4π = 1/c²), against the
+/// Liénard–Wiechert fields, for a charge circling while oscillating across the plane
+/// (`Bobbing`: β up to 0.68 at c = 2), at six points 1.6 to 50 from its retarded
+/// position. Reference:
+/// `scripts/wolfram/l4_heaviside_feynman.wls` (Wolfram Engine 14.2), the derivatives
+/// symbolic (`d/dt = κ⁻¹ d/dt′`), the retarded time to 50 digits; there the forms of
+/// Pr. 6.2(b), from Jefimenko's equations, and the Liénard–Wiechert form agree with these to
+/// 40 digits. Required: 1e-12 relative (set before measuring: the retarded time in f64,
+/// amplified by up to κ⁻³ ≈ 30).
+#[test]
+fn l4_heaviside_feynman_forms() {
+    // (x, t, E (Feynman), B (Heaviside)).
+    type Point = ([f64; 3], f64, [f64; 3], [f64; 3]);
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const REF: [Point; 6] = [
+        (
+            [3.0, 0.5, 0.2],
+            1.1,
+            [
+                0.14745743814834396,
+                0.04357638188038207,
+                0.044988831044971223,
+            ],
+            [
+                0.0028772786907419333,
+                -0.016461347517220598,
+                0.0065138349740077087,
+            ],
+        ),
+        (
+            [-6.0, 4.0, -2.0],
+            1.1,
+            [
+                -0.022131009254042458,
+                -0.0060199289005101254,
+                0.019981998676926141,
+            ],
+            [
+                0.0051182479123875595,
+                0.010823709762259083,
+                0.0089295349282616275,
+            ],
+        ),
+        (
+            [30.0, -25.0, 10.0],
+            1.1,
+            [
+                0.0023259568342506655,
+                0.0029839932753845958,
+                0.0013718562928862832,
+            ],
+            [
+                -0.00079678737796664984,
+                -0.00022149152407970998,
+                0.0018327154809670343,
+            ],
+        ),
+        (
+            [0.5, -1.5, 1.0],
+            2.3333333333333333,
+            [
+                0.084270609608741477,
+                -0.019619516406187891,
+                0.10697179985364153,
+            ],
+            [
+                -0.048073825509557495,
+                0.0084346771519695532,
+                0.039418752179994262,
+            ],
+        ),
+        (
+            [0.0, 0.0, 50.0],
+            2.3333333333333333,
+            [
+                -0.0013201835457572312,
+                -0.0041641204682224627,
+                0.0002198159438535444,
+            ],
+            [
+                0.0020836376379434267,
+                -0.00066089143744298233,
+                -5.6749159048446928e-6,
+            ],
+        ),
+        (
+            [-2.0, -1.0, 0.0],
+            3.25,
+            [
+                -1.9432697816406398,
+                -0.069585123673196793,
+                -0.82267404341025855,
+            ],
+            [
+                0.31461063726615247,
+                -0.42815288066893755,
+                -0.70693888775047621,
+            ],
+        ),
+    ];
+    let (q, c) = (1.0, 2.0);
+    let mut worst: f64 = 0.0;
+    for (x, t, e, b) in REF {
+        let f = fields(&Bobbing, q, c, DVec3::from_array(x), t);
+        let (e, b) = (DVec3::from_array(e), DVec3::from_array(b));
+        let de = (f.e() - e).length() / e.length();
+        let db = (f.b - b).length() / b.length();
+        println!("L4 at {x:?}, t = {t}: E {de:.1e}, B {db:.1e}");
+        worst = worst.max(de).max(db);
+    }
+    assert!(worst < 1e-12, "L4 {worst:.3e}");
 }

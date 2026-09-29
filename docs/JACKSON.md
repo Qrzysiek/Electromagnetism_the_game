@@ -92,7 +92,9 @@ Arc 7, "Jackson: conductors" (Ch. 2–3):
   gates.
 - Not built: §2.5 (sphere in a uniform field) needs metal spheres in a stray field, which
   the validator rejects today (the sphere solver does not include external fields);
-  Pr. 2.20 (quadrupole lens) focuses a beam moving across the plane, a 3D effect.
+  Pr. 2.20 (quadrupole lens) focuses a beam moving along its four line charges, across
+  the plane: a 3D effect (in the plane, point charges in its arrangement make a saddle
+  that pushes a particle out along one axis and onto the charges along the other).
 
 Arc 8, "Jackson: radiation damping" (Ch. 16):
 
@@ -148,8 +150,9 @@ equatorial drift), M11 (§12.5, adiabatic invariance), S1 (Pr. 14.15, harmonics 
 motion), S2 (Parseval, 14.60–14.65), S5 (Pr. 14.23, the form factor of charges on a ring),
 S7 (Pr. 15.10, the spectrum of Coulomb bremsstrahlung on the hyperbola), B17 (Pr. 13.1,
 knock-on energy transfer), R4 (Pr. 16.2, classical atom collapse), R5 (Pr. 14.5b,
-radiation in a head-on collision), C2 (Pr. 16.1, the radiating oscillator decays at
-Γ = ω₀²τ).
+radiation in a head-on collision), R6 (Pr. 16.10–16.11, a gap with radiation damping:
+Landau–Lifshitz against the exact solution), C2 (Pr. 16.1, the radiating oscillator decays
+at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 
 ## Catalogue by chapter
 
@@ -176,7 +179,7 @@ radiation in a head-on collision), C2 (Pr. 16.1, the radiating oscillator decays
 - **§2.7 hemispheres at different potentials.** The split is ⊥ to the plane, so it is consistent with the slice. F:sphere+electrode (split spheres).
 - **Pr. 2.10, hemispherical boss on a plane.** Field enhancement 3× at the top. F:sphere+electrode.
 - **§2.10–2.11 2D problems, corners.** The field near a wedge/corner scales as ρ^{π/β−1}. Test with BEM plates forming a wedge; a level about field concentration at a sharp edge (§3.4 too). NOW (plates).
-- **Pr. 2.20 electric quadrupole lens.** Four line charges give a quadrupole focusing field. As a slice: four point charges or four plates. The level "Jackson Pr. 2.20: quadrupole" focuses a beam in the plane. NOW; alternating-gradient focusing in both planes is 3D.
+- **Pr. 2.20 electric quadrupole lens.** Four line charges give a quadrupole focusing field for a beam moving along them, across the plane: 3D (checked against the problem, 2026-09-29: in the slice, point charges in that arrangement make a saddle, not a lens for particles moving in the plane). Alternating-gradient focusing in both planes is 3D as well.
 
 ### Ch. 3: Boundary-value problems II
 
@@ -211,7 +214,7 @@ radiation in a head-on collision), C2 (Pr. 16.1, the radiating oscillator decays
 
 ### Ch. 6: Maxwell equations, conservation laws
 
-- **§6.4–6.5 retarded solutions (Jefimenko).** NOW (Liénard–Wiechert fields). Test: Pr. 6.2 Heaviside–Feynman field formula against LW.
+- **§6.4–6.5 retarded solutions (Jefimenko).** NOW (Liénard–Wiechert fields). *Test L4 (Pr. 6.2):* Feynman's E and Heaviside's B, derivatives of the retarded direction and distance, against the LW fields.
 - **§6.7 Poynting theorem.** A view: energy flow around a charge in a field. NOW (visual).
 - **Pr. 6.15 Hall effect.** The Drude stage (SPEC "inside components").
 - **Pr. 6.24 changing solenoid.** E outside, where B = 0 (induction without B). F:ramp.
@@ -324,7 +327,7 @@ radiation in a head-on collision), C2 (Pr. 16.1, the radiating oscillator decays
 - **Pr. 16.2 circular orbit collapse; Pr. 16.3 elliptic orbits circularize.** Eccentricity ∝ (L/L₀)^{3/2}. Tests plus a "classical atom" level. NOW.
 - **§16.3–16.6 Abraham–Lorentz, runaways, preacceleration, classical electron models.**
   - Text only (LL avoids them).
-  - Pr. 16.10–16.11 (gap acceleration with damping) as a test of LL against the integro-differential solution: NOW.
+  - Pr. 16.10–16.11 (gap acceleration with damping): *test R6*, LL against the integro-differential (exact non-runaway) solution, which in one dimension is exact for Lorentz–Dirac in the rapidity (Pr. 16.8); and the book's first-order results.
 - **Pr. 16.1, §16.7 radiating oscillator.** Level breadth: energy decays as e^{−Γt}, and the line width is Γ. F:bound.
 - **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. F:bound + plane waves.
 - **Pr. 16.12 collision broadening.** F:bound + random interruptions.

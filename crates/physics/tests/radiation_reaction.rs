@@ -1,4 +1,4 @@
-//! Validation tests R1–R3 for radiation reaction (PHYSICS.md §3.1, §9). Run with
+//! Validation tests R1–R6 for radiation reaction (PHYSICS.md §3.1, §9). Run with
 //! `cargo test -p physics --test radiation_reaction -- --nocapture --test-threads=1`.
 
 mod common;
@@ -6,7 +6,7 @@ mod common;
 use common::{UNIT_PARTICLE, cube};
 use physics::DVec3;
 use physics::dynamics::{Kinematics, Particle, ParticleOde};
-use physics::field::{Coulomb, FixedCharge, UniformFields};
+use physics::field::{Coulomb, FieldSample, FieldSolver, FixedCharge, UniformFields};
 use physics::geometry::{Shape, Sphere};
 use physics::trajectory::{RunSettings, Scenario, run, run_observed};
 
@@ -339,4 +339,192 @@ fn r5_head_on_collision_radiates_jacksons_energy() {
         boundary / W_EXACT
     );
     assert!(e1.abs() < 1e-6 && e2.abs() < 1e-6 && e3.abs() < 1e-4 && e4.abs() < 1e-3);
+}
+
+// --- R6: a gap with radiation damping (Jackson Pr. 16.10–16.11) --------------------------
+
+/// A gap of uniform field `E₀` between two charged grids at x = 0 and x = d, smeared over a
+/// width w: `E_x = E₀ (tanh(x/w) − tanh((x − d)/w))/2`, with its potential.
+struct Gap {
+    e0: f64,
+    d: f64,
+    w: f64,
+}
+
+impl FieldSolver for Gap {
+    fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
+        let (u, v) = (x.x / self.w, (x.x - self.d) / self.w);
+        let ln_cosh = |z: f64| z.abs() + (-2.0 * z.abs()).exp().ln_1p() - std::f64::consts::LN_2;
+        FieldSample {
+            e: DVec3::new(0.5 * self.e0 * (u.tanh() - v.tanh()), 0.0, 0.0),
+            b: DVec3::ZERO,
+            phi: -0.5 * self.e0 * self.w * (ln_cosh(u) - ln_cosh(v)),
+        }
+    }
+}
+
+/// R6, Jackson Pr. 16.10–16.11: a charge crosses a gap of uniform field (`Gap`) from
+/// x = −20w to beyond d + 20w (where the field is below 5e-18 of the gap's). In one
+/// dimension the Lorentz–Dirac equation, in the rapidity y (p = mc sinh y) and the proper
+/// time s, is exactly the Abraham–Lorentz equation `mc (y′ − τ y″) = f`, `f = qE(x(s))`
+/// (Pr. 16.8), whose physical (non-runaway) solution is the integro-differential form of
+/// Pr. 16.10(a), `mc y′(s) = ∫₀^∞ e^{−u} f(s + τu) du`: the series `f + τ f′ + τ² f″ + …` of
+/// Pr. 16.10(b), whose first two terms are exactly Landau–Lifshitz here. References
+/// (`scripts/wolfram/r6_gap_damping.wls`, Wolfram Engine 14.2, 32 digits): the exact
+/// solution (integrated backward in s from beyond the gap, where the runaway mode decays,
+/// shooting on the exit rapidity; two methods agree), the Landau–Lifshitz flight and the
+/// flight without radiation reaction, as the arrival time at x = d + 20w and the momentum
+/// there. From them the effects of the damping: on the transit time T (from x = 0 to d,
+/// the uniform motions outside the gap extrapolated to its edges) and on the exit velocity.
+/// Cases: (A) nonrelativistic (c = 20, v 1/4 → 1/2 over d = 10) with sharp edges
+/// (w = 0.01); (B) relativistic (c = 5, β 0.2 → 0.42 over d = 1) with steep edges
+/// (w = 0.2, 0.1, 0.05), where Landau–Lifshitz's error is measurable. Required (set before
+/// measuring):
+/// (1) the flight without the reaction within 1e-10 of its reference;
+/// (2) the effects of the reaction within 1e-4 (A) and 1e-7 (B) of the Landau–Lifshitz
+///     reference's (the integrator's error, ~1e-11 of the flight, against effects of 1.5e-6
+///     and 1e-3 of it);
+/// (3) the Landau–Lifshitz effects within the reaction ratio shown in the flight details
+///     (largest reaction force over the largest Lorentz force) of the exact ones: the model
+///     note's claim that the force is valid while that ratio is small;
+/// (4) in A, Jackson's first-order formulas of Pr. 16.11(b), `T′ = T − τ(1 − v₀/v₁)` and
+///     `v₁′ = v₁ − (a²τ/v₁) T`, within 5e-3 (their corrections: the smooth edges, w/d = 1e-3,
+///     and relativity, β² = 6e-4);
+/// (5) in A, Pr. 16.11(c): the radiated (Liénard) energy plus the change of kinetic energy
+///     equals the field's work, within 1e-5 of the radiated energy (Landau–Lifshitz's own
+///     violation, of relative order τ² ∫Ḟ² dt / ∫F² dt, is 1e-8 here).
+#[test]
+fn r6_gap_with_radiation_damping() {
+    // (c, E₀, d, w, v₀, [t, p] without reaction, [t, p] Landau–Lifshitz, [t, p] exact):
+    // arrival time at x = d + 20w (t = 0 at x = −20w) and the momentum there.
+    type Case = (f64, f64, f64, f64, f64, [f64; 2], [f64; 2], [f64; 2]);
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const REF: [Case; 4] = [
+        (
+            20.0,
+            0.009375,
+            10.0,
+            0.01,
+            0.25,
+            [27.869597464329432, 0.50004638780987578],
+            [27.869556084565951, 0.50004599749692859],
+            [27.869556084498039, 0.50004599749695609],
+        ),
+        (
+            5.0,
+            2.0,
+            1.0,
+            0.2,
+            1.0,
+            [6.5340664296895947, 2.2987278158375551],
+            [6.5344411256767111, 2.2936159769216889],
+            [6.5344271975677316, 2.293619210186051],
+        ),
+        (
+            5.0,
+            2.0,
+            1.0,
+            0.1,
+            1.0,
+            [3.590821355683222, 2.2987278158375551],
+            [3.589787367228894, 2.2929414230177335],
+            [3.5897716776893105, 2.2929466760068178],
+        ),
+        (
+            5.0,
+            2.0,
+            1.0,
+            0.05,
+            1.0,
+            [2.116261248019058, 2.2987278158375551],
+            [2.1143762296548531, 2.2925898407025205],
+            [2.1143591587773803, 2.2925985112027798],
+        ),
+    ];
+    let (q, m) = (1.0_f64, 1.0_f64);
+    for (case, &(c, e0, d, w, v0, free_ref, ll_ref, exact_ref)) in REF.iter().enumerate() {
+        let (l, tau) = (20.0 * w, 2.0 * q * q / (3.0 * m * c.powi(3)));
+        let kin = Kinematics::new(m, c);
+        let gap = Gap { e0, d, w };
+        let fly = |radiation_reaction: bool| {
+            let scn = Scenario {
+                field: Gap { e0, d, w },
+                obstacles: vec![],
+                particle: Particle {
+                    charge: q,
+                    mass: m,
+                    radius: 0.0,
+                    moment: 0.0,
+                },
+                c,
+                x0: DVec3::new(-l, 0.0, 0.0),
+                p0: DVec3::new(kin.gamma_of_velocity(DVec3::X * v0) * m * v0, 0.0, 0.0),
+                detector: None,
+                bounds: None,
+                t_max: free_ref[0] + 1.0,
+                radiation_reaction,
+                acceptance: None,
+                gates: Vec::new(),
+            };
+            let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+            // The arrival at x = d + l, from the uniform motion beyond it.
+            let v = kin.velocity(tr.end.p).x;
+            ([tr.end.t - (tr.end.x.x - (d + l)) / v, tr.end.p.x], tr)
+        };
+        // Transit time (from x = 0 to x = d) and exit velocity of an arrival [t, p].
+        let transit = |[t, p]: [f64; 2]| {
+            let v1 = kin.velocity(DVec3::X * p).x;
+            (t - l / v1 - l / v0, v1)
+        };
+        let effect = |with: [f64; 2], without: [f64; 2]| {
+            let ((t1, v1), (t0, v0)) = (transit(with), transit(without));
+            (t1 - t0, v1 - v0)
+        };
+        let (free, _) = fly(false);
+        let (ll, tr) = fly(true);
+        let e1 = ((free[0] / free_ref[0] - 1.0).abs()).max((free[1] / free_ref[1] - 1.0).abs());
+        let ours = effect(ll, free);
+        let reference = effect(ll_ref, free_ref);
+        let exact = effect(exact_ref, free_ref);
+        let rel = |a: (f64, f64), b: (f64, f64)| ((a.0 / b.0 - 1.0).abs(), (a.1 / b.1 - 1.0).abs());
+        let e2 = rel(ours, reference);
+        let e3 = rel(ours, exact);
+        let ratio = tr.reaction_ratio_max;
+        println!(
+            "R6 c = {c}, w = {w}: without reaction {e1:.1e} from its reference; effects \
+             ΔT = {:.6e}, Δv₁ = {:.6e}: {:.1e}, {:.1e} from the Landau–Lifshitz reference; \
+             {:.1e}, {:.1e} from the exact (reaction ratio {ratio:.1e})",
+            ours.0, ours.1, e2.0, e2.1, e3.0, e3.1
+        );
+        let e2_max = if case == 0 { 1e-4 } else { 1e-7 };
+        assert!(
+            e1 < 1e-10,
+            "R6 case {case}: flight without reaction {e1:.3e}"
+        );
+        assert!(e2.0 < e2_max && e2.1 < e2_max, "R6 case {case}: {e2:?}");
+        assert!(
+            e3.0 < ratio && e3.1 < ratio,
+            "R6 case {case}: {e3:?} against {ratio:.3e}"
+        );
+        if case == 0 {
+            // (4) Jackson's formulas, with T, v₀, v₁ of the flight without reaction.
+            let (t_free, v1) = transit(free);
+            let a = q * e0 / m;
+            let dt_jackson = -tau * (1.0 - v0 / v1);
+            let dv_jackson = -(a * a * tau / v1) * t_free;
+            let j = (ours.0 / dt_jackson - 1.0, ours.1 / dv_jackson - 1.0);
+            // (5) Energy balance: kinetic energy gained plus radiated equals the work.
+            let work =
+                q * (gap.sample(DVec3::new(-l, 0.0, 0.0), 0.0).phi - gap.sample(tr.end.x, 0.0).phi);
+            let gained = kin.kinetic_energy(tr.end.p) - tr.kinetic_initial;
+            let balance = (gained + tr.radiated_energy - work) / tr.radiated_energy;
+            println!(
+                "R6 (A): T′ − T = {:.6e} (Jackson {dt_jackson:.6e}: {:.1e}), v₁′ − v₁ = {:.6e} \
+                 (Jackson {dv_jackson:.6e}: {:.1e}); radiated {:.6e}, balance {balance:.1e}",
+                ours.0, j.0, ours.1, j.1, tr.radiated_energy
+            );
+            assert!(j.0.abs() < 5e-3 && j.1.abs() < 5e-3, "R6 Jackson {j:?}");
+            assert!(balance.abs() < 1e-5, "R6 energy balance {balance:.3e}");
+        }
+    }
 }
