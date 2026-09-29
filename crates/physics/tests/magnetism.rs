@@ -882,20 +882,30 @@ fn mean_moment(tr: &Trajectory, l: &CircularLoop, q: f64, t0: f64, t1: f64) -> f
 /// M11, adiabatic invariance (Jackson §12.5). In a slowly rising field the magnetic
 /// moment `p⊥²/B` (the flux through the gyro-orbit) is conserved while `p²` grows with
 /// `B`, and the guiding centre drifts inward (E×B in the induced field) keeping the flux
-/// through its own circle about the axis, `ρ² B`. A gyrating charge (gyroradius 0.5,
-/// ω_c ≈ 1) with its guiding centre 2 from the axis of a large loop (radius 20, where
-/// B is uniform to 0.8 %), while the current rises 4× over 150, 300 and 600 (at most
-/// 0.13 of the field's rise per gyroperiod). The moment, averaged over three
-/// gyroperiods at the start and at the end, changes by at most 1.2e-3 and the guiding
-/// centre ends at ρ = 1.002–1.004 (flux conservation: 2/√4 = 1, up to the field's
-/// non-uniformity).
+/// through its own circle about the axis. A gyrating charge (gyroradius 0.5, ω_c ≈ 1)
+/// with its guiding centre 2 from the axis of a large loop (radius 20, B uniform to
+/// 0.8 %), while the current rises 4× over 150, 300, 600 and 1200 (at most 0.13 of the
+/// field's rise per gyroperiod). The moment, averaged over three gyroperiods at the start
+/// and at the end, must change by less than 2e-3. The guiding centre: the canonical
+/// angular momentum about the axis is conserved exactly (M10), and averaged over a
+/// gyration it is `(q/2π) Φ(ρ_gc) − (q/2) B r_g²`, with `B r_g²` the adiabatic
+/// invariant; so `κ(t) Φ(ρ_gc)` is kept, Φ the loop's exact flux (elliptic integrals).
+/// `scripts/wolfram/m11_adiabatic_flux.wls` (Wolfram Engine 14.2) gives the adiabatic end
+/// radius 1.0014136664697759 (the uniform-field 2/√4 = 1 plus the non-uniformity). The
+/// measured radius must approach it as the first-order non-adiabatic correction does,
+/// ∝ 1/T: halving (ratio 1.7–2.3) when the ramp doubles, and within 5e-4 at 1200.
+/// Measured: residuals 2.45e-3, 1.36e-3, 6.7e-4, 3.3e-4 (ratios 1.80, 2.03, 2.04).
+/// (The first version asked ρ within 1 % of the uniform-field 1.)
 #[test]
 fn m11_adiabatic_invariance_of_the_magnetic_moment() {
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const RHO_ADIABATIC: f64 = 1.0014136664697759;
     let (q, m) = (1.0, 1.0);
+    let mut residuals = Vec::new();
     let radius = 20.0;
     // B at the centre is 2πκ/R: κ₀ gives ω_c ≈ 1.
     let kappa0 = radius / TAU;
-    for t_ramp in [150.0, 300.0, 600.0] {
+    for t_ramp in [150.0, 300.0, 600.0, 1200.0] {
         let l = CircularLoop {
             center: DVec3::ZERO,
             normal: DVec3::Z,
@@ -936,9 +946,17 @@ fn m11_adiabatic_invariance_of_the_magnetic_moment() {
         let mu1 = mean_moment(&tr, &l, q, t_ramp - 3.0 * period, t_ramp);
         let rho = guiding_centre(&l, q, tr.end.x, tr.end.p, tr.end.t).length();
         println!(
-            "M11 ramp over {t_ramp}: B ×4, μ changed by {:.1e}, guiding centre at ρ = {rho:.4} (flux: 1)",
-            mu1 / mu0 - 1.0
+            "M11 ramp over {t_ramp}: B ×4, μ changed by {:.1e}, guiding centre at ρ = {rho:.8}, {:.2e} from the adiabatic {RHO_ADIABATIC:.8}",
+            mu1 / mu0 - 1.0,
+            rho - RHO_ADIABATIC
         );
-        assert!((mu1 / mu0 - 1.0).abs() < 2e-3 && (rho - 1.0).abs() < 0.01);
+        assert!((mu1 / mu0 - 1.0).abs() < 2e-3);
+        residuals.push(rho - RHO_ADIABATIC);
     }
+    for w in residuals.windows(2) {
+        let ratio = w[0] / w[1];
+        println!("M11: residual ratio for a doubled ramp {ratio:.3} (1/T: 2)");
+        assert!((1.7..2.3).contains(&ratio));
+    }
+    assert!(residuals[3].abs() < 5e-4);
 }
