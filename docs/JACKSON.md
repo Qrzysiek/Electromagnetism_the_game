@@ -8,6 +8,19 @@ manual will be consulted for reference outcomes when a level or test is built.
 Level names follow the pattern "Jackson §12.3: E×B drift" or "Jackson Pr. 2.4: The golden
 ratio", and the description cites the section or problem (planned level field `reference`).
 
+## Status (2026-09-29)
+
+- **Built:** five arcs, 32 levels (arcs 6–10, below), and the book's validation tests listed
+  after them (the latest: S7 Pr. 15.10, R6 Pr. 16.10–16.11, L4 Pr. 6.2).
+- **Set aside, with the reasons in the entries:** Pr. 1.1b (a Faraday cage of plates),
+  Pr. 2.20 (the quadrupole lens is 3D), §2.10–2.11 and §3.4 (corners and edges), Pr. 15.8
+  (collisions of like particles), Pr. 11.13 (line charges).
+- **Feasible, not yet built:** §13.6 multiple scattering (a beam through a foil of random
+  charges; the Gaussian angular spread), the harmonics of an elliptic orbit
+  (Pr. 14.12/14.14/14.22, with the radiation goals; the orbit must still end in a
+  detector, e.g. carried by a drift or decaying by radiation), and §6.7 a Poynting-vector
+  view (a visual, not a level). Everything else needs a feature from the table below or 3D.
+
 ## How to read this list
 
 Each item is tagged with what it needs:
@@ -185,16 +198,16 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - Level: a like-signed particle is captured by the sphere only inside the golden-ratio zone.
   - Test: the force changes sign at exactly this distance.
   - NOW (floating spheres).
-- **§2.5 sphere in a uniform field.** A dipole image; the field enhancement is 3E₀ at the poles. F:sphere+electrode (uniform field from a plate pair); a test with an external uniform field is NOW.
+- **§2.5 sphere in a uniform field.** A dipole image; the field enhancement is 3E₀ at the poles. F:sphere+electrode (uniform field from a plate pair); a test with an external uniform field needs the sphere solver to include external fields first (it does not today).
 - **Pr. 2.6 two spheres.** Image series and capacitance coefficients. Test exists (K2b); a level "Jackson Pr. 2.6: two spheres" is NOW.
 - **§2.7 hemispheres at different potentials.** The split is ⊥ to the plane, so it is consistent with the slice. F:sphere+electrode (split spheres).
 - **Pr. 2.10, hemispherical boss on a plane.** Field enhancement 3× at the top. F:sphere+electrode.
-- **§2.10–2.11 2D problems, corners.** The field near a wedge/corner scales as ρ^{π/β−1}. Test with BEM plates forming a wedge; a level about field concentration at a sharp edge (§3.4 too). NOW (plates).
+- **§2.10–2.11 2D problems, corners.** The field near a wedge/corner scales as ρ^{π/β−1}. Considered and set aside (2026-09-29). A level: the potential barrier near a charged electrode is qV whatever the corner's shape, so the weak field in a concave corner does not make a puzzle. A test of the exponent near a box edge (−1/3 along the exterior bisector): the next term there is relatively O((ρ/L)^{4/3}), which for boxes small enough to solve densely (L ≈ 0.5) shifts the local slope by up to ~18 % at ρ = 0.05, so it would be a fitted convergence study at distances comparable to the finest panels rather than a check of the book's result; E1 and E2 test the solver's convergence.
 - **Pr. 2.20 electric quadrupole lens.** Four line charges give a quadrupole focusing field for a beam moving along them, across the plane: 3D (checked against the problem, 2026-09-29: in the slice, point charges in that arrangement make a saddle, not a lens for particles moving in the plane). Alternating-gradient focusing in both planes is 3D as well.
 
 ### Ch. 3: Boundary-value problems II
 
-- **§3.4 conical hole or sharp point.** Field enhancement at a tip (lightning rod). The test is a sharp plate edge; the level is an electron emitted from a tip. NOW / F:image-force.
+- **§3.4 conical hole or sharp point.** Field enhancement at a tip (lightning rod). The edge test was set aside with §2.10–2.11; the level (an electron emitted from a tip) needs F:image-force.
 - **Pr. 3.3, Pr. 3.21: charged disc capacitance.**
   - Disc: C = 8ε₀a.
   - Square plate: C = 0.3667874 × 4πε₀ × side.
@@ -263,7 +276,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 
 - **§11.2 experiments; Pr. 11.19–11.21: decays in flight.** Lifetime dilation; Λ → pπ kinematics (Pr. 11.20) (reconstruct the parent from the two tracks in B). F:decay.
 - **§11.3–11.5 kinematics.** NOW (every relativistic level).
-- **Pr. 11.13 moving line charge.** E and B transform. With LW fields: NOW.
+- **Pr. 11.13 moving line charge.** E and B transform. Needs line charges, which the game does not have (a moving point charge's field is shown by the particle field view).
 - **Pr. 11.17–11.18 fields of a fast charge.** The flattened "pancake" field (γ). A view, NOW (particle field map).
 - **§11.8 Thomas precession; §11.11 BMT.** F:spin.
 - **§11.10 field transformations.** A level: in the frame moving with v = E×B/B² the electric field vanishes (the §12.3 drift explained). NOW (a text plus a drift level).
@@ -355,7 +368,7 @@ These combine several chapters; most come from the problems.
 5. **Ring of charges** (Pr. 14.23): radiation vanishing with N. NOW.
 6. **Undulator** (§14.7, Pr. 14.27): tune K for the radiation. NOW.
 7. **Knock-on** (Pr. 13.1): a heavy projectile kicks a light charge into a detector. NOW.
-8. **Quadrupole lens** (Pr. 2.20) + collimated beam (Collimated beam, Velocity selector). NOW.
+8. **Quadrupole lens** (Pr. 2.20) + collimated beam (Collimated beam, Velocity selector). 3D (see Arc 7): in the plane its charges make a saddle, not a lens.
 9. **Betatron** (§5.15, §12.5): induction acceleration with the 2:1 condition. F:ramp.
 10. **g−2 ring** (Pr. 12.11–12.12, §11.11): spin tune. F:spin.
 11. **Λ decay reconstruction** (Pr. 11.20): decay in flight in a B field. F:decay.
