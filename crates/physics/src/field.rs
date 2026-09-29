@@ -18,7 +18,7 @@ pub struct FieldSample {
 }
 
 /// Source of external fields acting on test particles.
-pub trait FieldSolver {
+pub trait FieldSolver: Sync {
     fn sample(&self, x: DVec3, t: f64) -> FieldSample;
 
     /// True if the fields do not depend on time. Only then is `phi` a potential of `E`

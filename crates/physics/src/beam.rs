@@ -49,7 +49,8 @@
 //! steps ended, and the existing verification (`verify::classify`) applies to every
 //! particle.
 
-use std::cell::RefCell;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::sync::{Mutex, RwLock};
 
 use glam::DVec3;
 
@@ -236,18 +237,47 @@ struct BeamOde<'a, F> {
 struct Past {
     /// Recorded steps, oldest first; steps that no retarded time can reach any more are
     /// dropped (`prune`).
-    segments: RefCell<Vec<Segment>>,
+    segments: RwLock<Vec<Segment>>,
     /// Removal time and position of each particle (infinite time while it flies).
-    t_off: RefCell<Vec<f64>>,
-    x_off: RefCell<Vec<DVec3>>,
+    t_off: RwLock<Vec<f64>>,
+    x_off: RwLock<Vec<DVec3>>,
     /// Whether a removed particle stayed where it stopped (at rest from then on) rather
     /// than being drained.
-    stays: RefCell<Vec<bool>>,
+    stays: RwLock<Vec<bool>>,
     kin: Vec<Kinematics>,
     p_ref: f64,
     /// Acceleration of each particle at launch (external fields and the others'
     /// quasi-static fields): the motion before launch continues it.
     a0: Vec<DVec3>,
+    /// The last retarded time found for each (receiver, source) pair: row `i` for
+    /// receiver `i` (NaN: none yet). Retarded times move smoothly, so it starts the next
+    /// search. One row per receiver: the receivers' forces are computed in parallel, each
+    /// touching only its own row (deterministic).
+    guess: Vec<Mutex<Vec<f64>>>,
+    /// Diagnostics (`EM_BEAM_LOG`): retarded-time solves, position evaluations in them,
+    /// Newton iterations, and solves that fell back to bracketing by doubling.
+    solves: AtomicU64,
+    /// Nanoseconds spent in the right-hand sides (the parallel part).
+    rhs_nanos: AtomicU64,
+    evals: AtomicU64,
+    newton: AtomicU64,
+    fallbacks: AtomicU64,
+}
+
+/// Seconds from a nanosecond counter (diagnostics).
+#[allow(clippy::cast_precision_loss)]
+fn rhs_seconds(nanos: &AtomicU64) -> f64 {
+    nanos.load(Relaxed) as f64 * 1e-9
+}
+
+/// A read-only view of the recorded motion (taken once per field evaluation, shared by
+/// the threads computing the receivers' forces).
+struct View<'a> {
+    past: &'a Past,
+    segments: &'a [Segment],
+    t_off: &'a [f64],
+    x_off: &'a [DVec3],
+    stays: &'a [bool],
 }
 
 struct Segment {
@@ -259,78 +289,15 @@ struct Segment {
 }
 
 impl Past {
-    /// Before launch each particle moves with its launch acceleration (it was already
-    /// flying in the fields): `x0 + v0 t + a0 t²/2`, `v0 + a0 t`. A sudden start from
-    /// uniform motion would send a kink in every acceleration field to every other
-    /// particle, each forcing tiny steps when it arrives. Continued uniformly where
-    /// |a0 t| would exceed 0.1c (reached only while bracketing).
-    fn before_launch<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
-        let b = &scn.particles[j];
-        let v0 = self.kin[j].velocity(b.p0);
-        let a0 = self.a0[j];
-        let t_lim = 0.1 * scn.c / a0.length().max(1e-300);
-        let tt = t.max(-t_lim);
-        let x = b.x0 + v0 * tt + a0 * (0.5 * tt * tt);
-        let v = v0 + a0 * tt;
-        if t < tt {
-            (x + v * (t - tt), v, DVec3::ZERO)
-        } else {
-            (x, v, a0)
+    /// A read-only view of the record.
+    fn view(&self) -> ViewGuards<'_> {
+        ViewGuards {
+            past: self,
+            segments: self.segments.read().expect("not poisoned"),
+            t_off: self.t_off.read().expect("not poisoned"),
+            x_off: self.x_off.read().expect("not poisoned"),
+            stays: self.stays.read().expect("not poisoned"),
         }
-    }
-
-    /// Position, velocity and acceleration of particle `j` at time `t`: `before_launch`,
-    /// then the recorded motion, extrapolated a little past its end (see `EXTRAPOLATION`).
-    fn state<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
-        // At rest where it stopped.
-        if self.stays.borrow()[j] && t >= self.t_off.borrow()[j] {
-            return (self.x_off.borrow()[j], DVec3::ZERO, DVec3::ZERO);
-        }
-        let kin = &self.kin[j];
-        // Last segment starting before t that contains j.
-        let segments = self.segments.borrow();
-        let upto = segments.partition_point(|s| s.t_start < t);
-        let found = segments[..upto]
-            .iter()
-            .rev()
-            .find_map(|s| s.members.binary_search(&j).ok().map(|k| (s, k)));
-        let Some((seg, k)) = found else {
-            // Before the record: the motion before launch, or, where old steps were
-            // dropped, uniform motion continued back from the oldest step kept. (Only
-            // reached while bracketing a retarded time: every retarded time needed lies
-            // in the kept record, and the continuation keeps g monotonic.)
-            if t > 0.0
-                && let Some((s0, k0)) = segments
-                    .iter()
-                    .find_map(|s| s.members.binary_search(&j).ok().map(|k| (s, k)))
-            {
-                let d = &s0.dense;
-                let comp = |i: usize| d.eval_component(6 * k0 + i, s0.t_start);
-                let x = DVec3::new(comp(0), comp(1), comp(2));
-                let v = kin.velocity(DVec3::new(comp(3), comp(4), comp(5)) * self.p_ref);
-                return (x + v * (t - s0.t_start), v, DVec3::ZERO);
-            }
-            return self.before_launch(scn, j, t);
-        };
-        let d = &seg.dense;
-        // Past the end of the record (only while bracketing a retarded time, or for the
-        // tiny offsets of the radiation reaction's field derivative): the step's own
-        // polynomial for up to one step length, uniform motion beyond.
-        let reach = seg.t_stop + EXTRAPOLATION * (seg.t_stop - seg.t_start);
-        let tt = t.min(reach);
-        let comp = |i: usize| d.eval_component(6 * k + i, tt);
-        let x = DVec3::new(comp(0), comp(1), comp(2));
-        let p = DVec3::new(comp(3), comp(4), comp(5)) * self.p_ref;
-        let v = kin.velocity(p);
-        if t > reach {
-            return (x + v * (t - reach), v, DVec3::ZERO);
-        }
-        let dp = DVec3::new(
-            d.eval_derivative_component(6 * k + 3, tt),
-            d.eval_derivative_component(6 * k + 4, tt),
-            d.eval_derivative_component(6 * k + 5, tt),
-        ) * self.p_ref;
-        (x, v, kin.acceleration(p, dp))
     }
 
     /// Drops the recorded steps that no retarded time can reach any more. A retarded time
@@ -353,41 +320,187 @@ impl Past {
             (lo, hi) = (lo.min(x), hi.max(x));
             *beta_max = beta_max.max(ode.kin[k].velocity(ode.p(y, k)).length() / c);
         }
-        for (j, &x) in self.x_off.borrow().iter().enumerate() {
+        for (j, &x) in self.x_off.read().expect("not poisoned").iter().enumerate() {
             if !members.contains(&j) {
                 (lo, hi) = (lo.min(x), hi.max(x));
             }
         }
         let extent = (hi - lo).length();
         let cutoff = t - 2.0 * extent / (c * (1.0 - beta_max.min(0.999_999))) - 1e-3;
-        let mut segments = self.segments.borrow_mut();
+        let mut segments = self.segments.write().expect("not poisoned");
         let old = segments.partition_point(|s| s.t_stop < cutoff);
         // Drop in batches (and always keep the newest step).
         if old >= 256 && old < segments.len() {
             segments.drain(..old);
         }
     }
+}
 
-    /// Retarded fields `(E, B)` of particle `j` at `x` and time `t`; zero once the field
-    /// of its removal has arrived.
-    fn fields_of<F>(&self, scn: &BeamScenario<F>, j: usize, x: DVec3, t: f64) -> (DVec3, DVec3) {
+/// The read guards behind a `View`.
+struct ViewGuards<'a> {
+    past: &'a Past,
+    segments: std::sync::RwLockReadGuard<'a, Vec<Segment>>,
+    t_off: std::sync::RwLockReadGuard<'a, Vec<f64>>,
+    x_off: std::sync::RwLockReadGuard<'a, Vec<DVec3>>,
+    stays: std::sync::RwLockReadGuard<'a, Vec<bool>>,
+}
+
+impl ViewGuards<'_> {
+    fn view(&self) -> View<'_> {
+        View {
+            past: self.past,
+            segments: &self.segments,
+            t_off: &self.t_off,
+            x_off: &self.x_off,
+            stays: &self.stays,
+        }
+    }
+}
+
+impl View<'_> {
+    /// Before launch each particle moves with its launch acceleration (it was already
+    /// flying in the fields): `x0 + v0 t + a0 t²/2`, `v0 + a0 t`. A sudden start from
+    /// uniform motion would send a kink in every acceleration field to every other
+    /// particle, each forcing tiny steps when it arrives. Continued uniformly where
+    /// |a0 t| would exceed 0.1c (reached only while bracketing).
+    fn before_launch<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
+        let b = &scn.particles[j];
+        let v0 = self.past.kin[j].velocity(b.p0);
+        let a0 = self.past.a0[j];
+        let t_lim = 0.1 * scn.c / a0.length().max(1e-300);
+        let tt = t.max(-t_lim);
+        let x = b.x0 + v0 * tt + a0 * (0.5 * tt * tt);
+        let v = v0 + a0 * tt;
+        if t < tt {
+            (x + v * (t - tt), v, DVec3::ZERO)
+        } else {
+            (x, v, a0)
+        }
+    }
+
+    /// Position, velocity and acceleration of particle `j` at time `t`: `before_launch`,
+    /// then the recorded motion, extrapolated a little past its end (see `EXTRAPOLATION`).
+    fn state<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
+        // At rest where it stopped.
+        if self.stays[j] && t >= self.t_off[j] {
+            return (self.x_off[j], DVec3::ZERO, DVec3::ZERO);
+        }
+        let kin = &self.past.kin[j];
+        // Last segment starting before t that contains j.
+        let segments = self.segments;
+        let upto = segments.partition_point(|s| s.t_start < t);
+        let found = segments[..upto]
+            .iter()
+            .rev()
+            .find_map(|s| s.members.binary_search(&j).ok().map(|k| (s, k)));
+        let Some((seg, k)) = found else {
+            // Before the record: the motion before launch, or, where old steps were
+            // dropped, uniform motion continued back from the oldest step kept. (Only
+            // reached while bracketing a retarded time: every retarded time needed lies
+            // in the kept record, and the continuation keeps g monotonic.)
+            if t > 0.0
+                && let Some((s0, k0)) = segments
+                    .iter()
+                    .find_map(|s| s.members.binary_search(&j).ok().map(|k| (s, k)))
+            {
+                let d = &s0.dense;
+                let comp = |i: usize| d.eval_component(6 * k0 + i, s0.t_start);
+                let x = DVec3::new(comp(0), comp(1), comp(2));
+                let v = kin.velocity(DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref);
+                return (x + v * (t - s0.t_start), v, DVec3::ZERO);
+            }
+            return self.before_launch(scn, j, t);
+        };
+        let d = &seg.dense;
+        // Past the end of the record (only while bracketing a retarded time, or for the
+        // tiny offsets of the radiation reaction's field derivative): the step's own
+        // polynomial for up to one step length, uniform motion beyond.
+        let reach = seg.t_stop + EXTRAPOLATION * (seg.t_stop - seg.t_start);
+        let tt = t.min(reach);
+        let comp = |i: usize| d.eval_component(6 * k + i, tt);
+        let x = DVec3::new(comp(0), comp(1), comp(2));
+        let p = DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref;
+        let v = kin.velocity(p);
+        if t > reach {
+            return (x + v * (t - reach), v, DVec3::ZERO);
+        }
+        let dp = DVec3::new(
+            d.eval_derivative_component(6 * k + 3, tt),
+            d.eval_derivative_component(6 * k + 4, tt),
+            d.eval_derivative_component(6 * k + 5, tt),
+        ) * self.past.p_ref;
+        (x, v, kin.acceleration(p, dp))
+    }
+
+    /// Retarded fields `(E, B)` of particle `j` at `x` and time `t` (`guess_row`: the
+    /// receiver's last retarded times); zero once the field of its removal has arrived.
+    fn fields_of<F>(
+        &self,
+        scn: &BeamScenario<F>,
+        guess_row: &mut [f64],
+        j: usize,
+        x: DVec3,
+        t: f64,
+    ) -> (DVec3, DVec3) {
         let c = scn.c;
         let qj = scn.particles[j].particle.charge;
-        let g = |tr: f64| c * (t - tr) - (x - self.state(scn, j, tr).0).length();
+        let g = |tr: f64| {
+            self.past.evals.fetch_add(1, Relaxed);
+            c * (t - tr) - (x - self.position(scn, j, tr)).length()
+        };
+        self.past.solves.fetch_add(1, Relaxed);
         // The retarded time is the root of g, which decreases strictly (|v| < c). The
         // field of a removed particle is gone once the light cone has passed its removal
         // (decided from the exact removal point).
-        let t_off = self.t_off.borrow()[j];
-        let stays = self.stays.borrow()[j];
-        if !stays && t_off.is_finite() && c * (t - t_off) >= (x - self.x_off.borrow()[j]).length() {
+        let t_off = self.t_off[j];
+        let stays = self.stays[j];
+        if !stays && t_off.is_finite() && c * (t - t_off) >= (x - self.x_off[j]).length() {
             return (DVec3::ZERO, DVec3::ZERO);
         }
         let mut hi = if stays { t } else { t.min(t_off) };
-        let mut g_hi = g(hi);
+        // While the source flies, g(t) = −|x − r(t)| < 0: the retarded time exists and
+        // needs no check; after its removal it may not (the light cone has not reached x).
+        let removed = !stays && t_off.is_finite();
+        let mut g_hi = if removed { g(hi) } else { f64::NAN };
         if g_hi >= 0.0 {
             return (DVec3::ZERO, DVec3::ZERO);
         }
-        let mut step = -g_hi / c;
+        let guess = guess_row[j];
+        let tol = 4.0 * f64::EPSILON * t.abs().max(1.0);
+        // Newton's method from the last retarded time of this pair (retarded times move
+        // smoothly: it is close, and Newton converges in a few iterations), kept below
+        // `hi`; if it does not converge, the bracketed search below.
+        if guess.is_finite() && guess < hi {
+            let mut tr = guess;
+            for _ in 0..8 {
+                self.past.newton.fetch_add(1, Relaxed);
+                let (r, vr) = self.position_velocity(scn, j, tr);
+                let d = x - r;
+                let dist = d.length();
+                let gv = c * (t - tr) - dist;
+                let slope = -c + d.dot(vr) / dist.max(1e-300);
+                let mut next = tr - gv / slope;
+                if next >= hi {
+                    next = 0.5 * (tr + hi);
+                }
+                // Quadratic convergence: after a step below 1e-8 (relative) the error is
+                // at rounding, so that step is the last one.
+                if (next - tr).abs() <= tol.max(1e-8 * t.abs().max(1.0)) {
+                    guess_row[j] = next;
+                    let (r, vr, ar) = self.state(scn, j, next);
+                    let f = fields_from(qj, c, x, next, r, vr, ar);
+                    return (f.e(), f.b);
+                }
+                tr = next;
+            }
+        }
+        // A bracket [lo, hi] with g(lo) > 0 ≥ g(hi), by doubling steps back from `hi`.
+        if g_hi.is_nan() {
+            g_hi = g(hi);
+        }
+        self.past.fallbacks.fetch_add(1, Relaxed);
+        // Never a zero step (g_hi < 0 here, but keep the doubling alive regardless).
+        let mut step = (-g_hi / c).max(4.0 * f64::EPSILON * t.abs().max(1.0));
         let mut lo = hi - step;
         let mut g_lo = g(lo);
         while g_lo <= 0.0 {
@@ -399,7 +512,8 @@ impl Past {
         // Newton's method, kept inside the bracket (bisection when it would leave it).
         let mut tr = lo + (hi - lo) * g_lo / (g_lo - g_hi);
         for _ in 0..100 {
-            let (r, vr, _) = self.state(scn, j, tr);
+            self.past.newton.fetch_add(1, Relaxed);
+            let (r, vr) = self.position_velocity(scn, j, tr);
             let d = x - r;
             let dist = d.length();
             let gv = c * (t - tr) - dist;
@@ -413,16 +527,49 @@ impl Past {
             if !(next > lo && next < hi) {
                 next = 0.5 * (lo + hi);
             }
-            let tol = 4.0 * f64::EPSILON * t.abs().max(1.0);
             let done = (next - tr).abs() <= tol || hi - lo <= tol;
             tr = next;
             if done {
                 break;
             }
         }
+        guess_row[j] = tr;
         let (r, vr, ar) = self.state(scn, j, tr);
         let f = fields_from(qj, c, x, tr, r, vr, ar);
         (f.e(), f.b)
+    }
+
+    /// Position of particle `j` at time `t` (as `state`, without the rest).
+    fn position<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> DVec3 {
+        self.position_velocity(scn, j, t).0
+    }
+
+    /// Position and velocity of particle `j` at time `t` (as `state`, without the
+    /// acceleration, which needs the polynomial's derivative).
+    fn position_velocity<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3) {
+        if self.stays[j] && t >= self.t_off[j] {
+            return (self.x_off[j], DVec3::ZERO);
+        }
+        let segments = self.segments;
+        let upto = segments.partition_point(|s| s.t_start < t);
+        let found = segments[..upto]
+            .iter()
+            .rev()
+            .find_map(|s| s.members.binary_search(&j).ok().map(|k| (s, k)));
+        let Some((seg, k)) = found else {
+            let (x, v, _) = self.state(scn, j, t);
+            return (x, v);
+        };
+        let d = &seg.dense;
+        let reach = seg.t_stop + EXTRAPOLATION * (seg.t_stop - seg.t_start);
+        let tt = t.min(reach);
+        let comp = |i: usize| d.eval_component(6 * k + i, tt);
+        let x = DVec3::new(comp(0), comp(1), comp(2));
+        let v = self.past.kin[j].velocity(DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref);
+        if t > reach {
+            return (x + v * (t - reach), v);
+        }
+        (x, v)
     }
 }
 
@@ -457,6 +604,20 @@ impl<F: FieldSolver> BeamOde<'_, F> {
     /// Force on member `k`; for the quasi-static interaction `acc` are the members'
     /// accelerations (None: fields of uniform motion), `rr` adds radiation reaction.
     fn force_with(&self, y: &[f64], k: usize, t: f64, acc: Option<&[DVec3]>, rr: bool) -> DVec3 {
+        self.force_in(y, k, t, acc, rr, None)
+    }
+
+    /// `force_with`, reading the recorded motion through `view` when given (taken once per
+    /// right-hand side and shared by the threads, so that they take no locks).
+    fn force_in(
+        &self,
+        y: &[f64],
+        k: usize,
+        t: f64,
+        acc: Option<&[DVec3]>,
+        rr: bool,
+        view: Option<&View<'_>>,
+    ) -> DVec3 {
         let part = self.scn.particles[self.members[k]].particle;
         let x = Self::x(y, k);
         let v = self.kin[k].velocity(self.p(y, k));
@@ -468,7 +629,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         }
         if self.past.is_some() {
             if part.charge != 0.0 {
-                let (e, b) = self.retarded_fields(k, x, t);
+                let (e, b) = self.retarded_fields(k, x, t, view);
                 force += (e + v.cross(b)) * part.charge;
             }
         } else if self.quasi_static() {
@@ -499,7 +660,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
             }
         }
         if rr && self.reacts(k) {
-            force += self.radiation_reaction_force(y, k, t);
+            force += self.radiation_reaction_force(y, k, t, view);
         }
         force
     }
@@ -566,13 +727,29 @@ impl<F: FieldSolver> BeamOde<'_, F> {
     }
 
     /// Sum of the retarded fields of the other particles at `x`, `t` (member `k`).
-    fn retarded_fields(&self, k: usize, x: DVec3, t: f64) -> (DVec3, DVec3) {
+    fn retarded_fields(
+        &self,
+        k: usize,
+        x: DVec3,
+        t: f64,
+        view: Option<&View<'_>>,
+    ) -> (DVec3, DVec3) {
         let (mut e, mut b) = (DVec3::ZERO, DVec3::ZERO);
         if let Some(past) = self.past {
             let i = self.members[k];
+            let guards;
+            let own;
+            let view = if let Some(v) = view {
+                v
+            } else {
+                guards = past.view();
+                own = guards.view();
+                &own
+            };
+            let mut row = past.guess[i].lock().expect("not poisoned");
             for j in 0..self.scn.particles.len() {
                 if j != i && self.scn.particles[j].particle.charge != 0.0 {
-                    let (ej, bj) = past.fields_of(self.scn, j, x, t);
+                    let (ej, bj) = view.fields_of(self.scn, &mut row, j, x, t);
                     e += ej;
                     b += bj;
                 }
@@ -583,7 +760,13 @@ impl<F: FieldSolver> BeamOde<'_, F> {
 
     /// Landau–Lifshitz force on member `k` in the total field: external plus the other
     /// particles' retarded fields.
-    fn radiation_reaction_force(&self, y: &[f64], k: usize, t: f64) -> DVec3 {
+    fn radiation_reaction_force(
+        &self,
+        y: &[f64],
+        k: usize,
+        t: f64,
+        view: Option<&View<'_>>,
+    ) -> DVec3 {
         let q = self.scn.particles[self.members[k]].particle.charge;
         let t_y = t;
         let fields = |x: DVec3, t: f64| {
@@ -591,7 +774,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
             let (e, b) = if self.quasi_static() {
                 self.quasi_static_fields(y, t_y, k, x, t, None)
             } else {
-                self.retarded_fields(k, x, t)
+                self.retarded_fields(k, x, t, view)
             };
             (f.e + e, f.b + b)
         };
@@ -638,9 +821,31 @@ impl<F: FieldSolver> OdeSystem for BeamOde<'_, F> {
 
     fn rhs(&self, t: f64, y: &[f64], dy: &mut [f64]) {
         let acc = self.accelerations(y, t);
-        for k in 0..self.members.len() {
+        let n = self.members.len();
+        // With the retarded interaction every receiver's force is a sum of retarded
+        // fields (the expensive part): computed in parallel, each receiver's own sum in a
+        // fixed order and with its own guess row, so the result is deterministic.
+        let forces: Vec<DVec3> = if let (Some(past), true) = (self.past, n > 1) {
+            use rayon::prelude::*;
+            let start = std::time::Instant::now();
+            let guards = past.view();
+            let view = guards.view();
+            let f: Vec<DVec3> = (0..n)
+                .into_par_iter()
+                .map(|k| self.force_in(y, k, t, acc.as_deref(), true, Some(&view)))
+                .collect();
+            #[allow(clippy::cast_possible_truncation)]
+            past.rhs_nanos
+                .fetch_add(start.elapsed().as_nanos() as u64, Relaxed);
+            f
+        } else {
+            (0..n)
+                .map(|k| self.force_with(y, k, t, acc.as_deref(), true))
+                .collect()
+        };
+        for (k, f) in forces.into_iter().enumerate() {
             let v = self.kin[k].velocity(self.p(y, k));
-            let dp = self.force_with(y, k, t, acc.as_deref(), true) / self.p_ref;
+            let dp = f / self.p_ref;
             dy[6 * k..6 * k + 6].copy_from_slice(&[v.x, v.y, v.z, dp.x, dp.y, dp.z]);
         }
     }
@@ -800,10 +1005,10 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     let mut energy: Vec<EnergySample> = Vec::new();
     let mut absorbed = 0.0;
     let past = Past {
-        segments: RefCell::new(Vec::new()),
-        stays: RefCell::new(vec![false; n]),
-        t_off: RefCell::new(vec![f64::INFINITY; n]),
-        x_off: RefCell::new(scn.particles.iter().map(|b| b.x0).collect()),
+        segments: RwLock::new(Vec::new()),
+        stays: RwLock::new(vec![false; n]),
+        t_off: RwLock::new(vec![f64::INFINITY; n]),
+        x_off: RwLock::new(scn.particles.iter().map(|b| b.x0).collect()),
         kin: scn
             .particles
             .iter()
@@ -815,7 +1020,16 @@ pub fn run_beam_cancellable<F: FieldSolver>(
         } else {
             Vec::new()
         },
+        guess: (0..n).map(|_| Mutex::new(vec![f64::NAN; n])).collect(),
+        solves: AtomicU64::new(0),
+        rhs_nanos: AtomicU64::new(0),
+        evals: AtomicU64::new(0),
+        newton: AtomicU64::new(0),
+        fallbacks: AtomicU64::new(0),
     };
+    let log = std::env::var_os("EM_BEAM_LOG").is_some();
+    let log_start = std::time::Instant::now();
+    let mut log_steps = 0u64;
     // Particles that end at launch: drained, stopped there, or flying on.
     for (i, t) in tracks.iter_mut().enumerate() {
         if matches!(t.phase, Phase::Done) {
@@ -825,10 +1039,10 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 .position(|&g| g <= 0.0)
                 .expect("ended at launch");
             match events[k].fate(&scn.fates) {
-                Fate::Drain => past.t_off.borrow_mut()[i] = 0.0,
+                Fate::Drain => past.t_off.write().expect("not poisoned")[i] = 0.0,
                 Fate::Stop => {
-                    past.t_off.borrow_mut()[i] = 0.0;
-                    past.stays.borrow_mut()[i] = true;
+                    past.t_off.write().expect("not poisoned")[i] = 0.0;
+                    past.stays.write().expect("not poisoned")[i] = true;
                     stopped[i] = Some(scn.particles[i].x0);
                 }
                 Fate::Pass => t.phase = Phase::Free,
@@ -953,7 +1167,8 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 // step (no record yet) keeps every retarded time in the past.
                 let previous = past
                     .segments
-                    .borrow()
+                    .read()
+                    .expect("not poisoned")
                     .last()
                     .map_or(0.0, |s| s.t_stop - s.t_start);
                 let w = (2.0 * v_close).min(2.0 * scn.c);
@@ -961,6 +1176,26 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             } else {
                 f64::INFINITY
             };
+            if log && retarded {
+                log_steps += 1;
+                if log_steps.is_multiple_of(50) {
+                    let n_s = past.solves.load(Relaxed).max(1);
+                    #[allow(clippy::cast_precision_loss)]
+                    let per = |c: &AtomicU64| c.load(Relaxed) as f64 / n_s as f64;
+                    eprintln!(
+                        "beam log: step {log_steps}, wall {:.3} s of which right-hand sides {:.3} s, t = {:.6}, last h = {:.3e}, cap {h_cap:.3e}, flying {}, solves {n_s}, per solve: {:.2} evals + {:.2} Newton, fallbacks {:.3}, record {} steps",
+                        log_start.elapsed().as_secs_f64(),
+                        rhs_seconds(&past.rhs_nanos),
+                        int.t(),
+                        int.h_next(),
+                        members.len(),
+                        per(&past.evals),
+                        per(&past.newton),
+                        per(&past.fallbacks),
+                        past.segments.read().expect("not poisoned").len()
+                    );
+                }
+            }
             let reached_end = match int.step(&ode, scn.t_max, h_cap) {
                 Ok(done) => done,
                 Err(e) => {
@@ -1071,7 +1306,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             }
             let t_end = first.map_or(t_b, |(t, _, _)| t);
             if retarded {
-                past.segments.borrow_mut().push(Segment {
+                past.segments.write().expect("not poisoned").push(Segment {
                     dense: dense.clone(),
                     t_start: t_a,
                     t_stop: t_end,
@@ -1138,7 +1373,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 dense.eval(t_end, &mut y_end);
                 for (k, &i) in members.iter().enumerate() {
                     if matches!(tracks[i].phase, Phase::Flying) && ode.reacts(k) {
-                        let rr = ode.radiation_reaction_force(&y_end, k, t_end);
+                        let rr = ode.radiation_reaction_force(&y_end, k, t_end, None);
                         let rest = (ode.force(&y_end, k, t_end) - rr).length();
                         let tr = &mut tracks[i];
                         tr.rr_max = tr.rr_max.max(rr.length());
@@ -1337,8 +1572,8 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 }
                 match fate {
                     Fate::Drain => {
-                        past.t_off.borrow_mut()[i] = t_end;
-                        past.x_off.borrow_mut()[i] = tracks[i].traj.end.x;
+                        past.t_off.write().expect("not poisoned")[i] = t_end;
+                        past.x_off.write().expect("not poisoned")[i] = tracks[i].traj.end.x;
                         // The quasi-static interaction drops the field at once; really it
                         // lingers at each other particle for the light time R/c: a
                         // neglected impulse of about |q| / (R c) on each.
@@ -1358,9 +1593,9 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                         }
                     }
                     Fate::Stop => {
-                        past.t_off.borrow_mut()[i] = t_end;
-                        past.x_off.borrow_mut()[i] = tracks[i].traj.end.x;
-                        past.stays.borrow_mut()[i] = true;
+                        past.t_off.write().expect("not poisoned")[i] = t_end;
+                        past.x_off.write().expect("not poisoned")[i] = tracks[i].traj.end.x;
+                        past.stays.write().expect("not poisoned")[i] = true;
                         stopped[i] = Some(tracks[i].traj.end.x);
                     }
                     Fate::Pass => {}
