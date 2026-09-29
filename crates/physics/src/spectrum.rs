@@ -31,6 +31,7 @@
 //! ```
 
 use glam::DVec3;
+use rayon::prelude::*;
 use std::f64::consts::PI;
 
 /// A sample of the flight: time, position, velocity, acceleration.
@@ -92,10 +93,11 @@ impl RadiationWindow {
     }
 
     /// Measured energy per steradian, averaged over the arc (Simpson's rule in angle).
+    /// The directions are computed in parallel and summed in order (deterministic).
     pub fn measure(&self, samples: &[Emission], q: f64, c: f64) -> f64 {
         let dirs = self.directions();
         let values: Vec<f64> = dirs
-            .iter()
+            .par_iter()
             .map(|&n| match self.band {
                 None => lienard_energy(samples, q, c, n),
                 Some((lo, hi)) => band_energy(samples, q, c, n, lo, hi, self.abrupt_stop),
@@ -109,7 +111,7 @@ impl RadiationWindow {
     pub fn measure_system(&self, sources: &[Source<'_>], c: f64) -> f64 {
         let dirs = self.directions();
         let values: Vec<f64> = dirs
-            .iter()
+            .par_iter()
             .map(|&n| match self.band {
                 None => system_lienard_energy(sources, c, n),
                 Some((lo, hi)) => system_band_energy(sources, c, n, lo, hi),
@@ -615,7 +617,7 @@ fn arc_spectrum_of(
     tau_span: impl Fn(DVec3) -> f64,
     omega_max: f64,
     bins: usize,
-    spectrum_at: impl Fn(DVec3, f64, f64, usize) -> Vec<f64>,
+    spectrum_at: impl Fn(DVec3, f64, f64, usize) -> Vec<f64> + Sync,
 ) -> Vec<(f64, f64)> {
     let dirs = window.directions();
     let stride = dirs.len().div_ceil(9);
@@ -630,10 +632,13 @@ fn arc_spectrum_of(
     let count = bins * per_bin;
     #[allow(clippy::cast_precision_loss)]
     let d_omega = omega_max / count as f64;
+    // Grid points at the fine cells' centres; the directions in parallel, summed in order.
+    let per_direction: Vec<Vec<f64>> = chosen
+        .par_iter()
+        .map(|&n| spectrum_at(n, 0.5 * d_omega, d_omega, count))
+        .collect();
     let mut total = vec![0.0; count];
-    for &n in &chosen {
-        // Grid points at the fine cells' centres.
-        let s = spectrum_at(n, 0.5 * d_omega, d_omega, count);
+    for s in per_direction {
         for (t, v) in total.iter_mut().zip(s) {
             *t += v;
         }
