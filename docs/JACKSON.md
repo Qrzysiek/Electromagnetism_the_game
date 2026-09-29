@@ -10,16 +10,16 @@ ratio", and the description cites the section or problem (planned level field `r
 
 ## Status (2026-09-29)
 
-- **Built:** five arcs, 32 levels (arcs 6–10, below), and the book's validation tests listed
-  after them (the latest: S7 Pr. 15.10, R6 Pr. 16.10–16.11, L4 Pr. 6.2).
+- **Built:** five arcs, 32 levels (arcs 6–10, below), the book's validation tests listed
+  after them (the latest: S8 Pr. 14.22, MS1 §13.6, S7 Pr. 15.10, R6 Pr. 16.10–16.11,
+  L4 Pr. 6.2), and the energy-flow view (§6.7).
 - **Set aside, with the reasons in the entries:** Pr. 1.1b (a Faraday cage of plates),
   Pr. 2.20 (the quadrupole lens is 3D), §2.10–2.11 and §3.4 (corners and edges), Pr. 15.8
-  (collisions of like particles), Pr. 11.13 (line charges).
-- **Feasible, not yet built:** §13.6 multiple scattering (a beam through a foil of random
-  charges; the Gaussian angular spread), the harmonics of an elliptic orbit
-  (Pr. 14.12/14.14/14.22, with the radiation goals; the orbit must still end in a
-  detector, e.g. carried by a drift or decaying by radiation). Everything else needs a
-  feature from the table below or 3D. (§6.7, the energy-flow view, was built on 2026-09-29.)
+  (collisions of like particles), Pr. 11.13 (line charges), §13.6 (multiple scattering is
+  a Cauchy process in the slice: test MS1), Pr. 14.22 as a level (its harmonics need
+  some twenty orbits and an end to the flight: test S8).
+- **Feasible, not yet built:** none of the catalogue's NOW items is left. Everything else
+  needs a feature from the table below or 3D.
 
 ## How to read this list
 
@@ -172,7 +172,8 @@ Arc 10, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §
 Validation tests from the book (PHYSICS.md): K5 (Pr. 2.4, golden ratio), M7 (Pr. 12.9b,
 equatorial drift), M11 (§12.5, adiabatic invariance), S1 (Pr. 14.15, harmonics of circular
 motion), S2 (Parseval, 14.60–14.65), S5 (Pr. 14.23, the form factor of charges on a ring),
-S7 (Pr. 15.10, the spectrum of Coulomb bremsstrahlung on the hyperbola), B17 (Pr. 13.1,
+S7 (Pr. 15.10, the spectrum of Coulomb bremsstrahlung on the hyperbola), S8 (Pr. 14.22, the
+harmonics of an elliptic orbit), MS1 (§13.6, multiple scattering in the plane), B17 (Pr. 13.1,
 knock-on energy transfer), R4 (Pr. 16.2, classical atom collapse), R5 (Pr. 14.5b,
 radiation in a head-on collision), R6 (Pr. 16.10–16.11, a gap with radiation damping:
 Landau–Lifshitz against the exact solution), C2 (Pr. 16.1, the radiating oscillator decays
@@ -309,7 +310,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 - **§13.2–13.3 energy loss in matter, density effect.** OUT (a statistical medium).
 - **§13.4 Cherenkov; §13.7 transition radiation.** OUT (media).
 - **§13.5 / Pr. 13.5 screened Coulomb scattering.** F:screened.
-- **§13.6 multiple scattering.** A statistical beam through a field of random fixed charges (fixed seed): measure the rms angle against the Gaussian law. NOW (beams + many charges; cost limits).
+- **§13.6 multiple scattering.** *Test MS1; set aside as a level (2026-09-29).* In the slice the scatterers lie in the particle's own plane, so the impact parameters are uniform on a line rather than weighted by b db as in a foil: the sum of the deflections is a Cauchy distribution of half-width πnLK (K = 2qQ/pv), growing linearly with the thickness, not Jackson's Gaussian ∝ √L. MS1 confirms it (medians within 6 % of πnLK, ratio 1.96 for twice the thickness). A level would teach the wrong law for a real foil, which needs scatterers filling a 3D slab.
 - **Rutherford scattering (§13.5 context).** NOW (Geiger–Marsden level exists).
 
 ### Ch. 14: Radiation by moving charges
@@ -324,7 +325,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 - **Pr. 14.9 synchrotron energy decay.** NOW (exact test exists).
 - **Pr. 14.10 sudden stop.** Bremsstrahlung of a charge stopped by a hard wall (obstacle). NOW (a view: the radiation shell).
 - **§14.6 synchrotron spectrum; Pr. 14.15, 14.17–14.18 circular and helical motion.** *Test S1 (Pr. 14.15); level built (the critical frequency).* The in-plane spectrum at harmonics of ω₀. NOW (spectrum diagnostic to add). Helical motion is 3D.
-- **Pr. 14.12/14.14/14.22 harmonics of SHM, circular and elliptic orbits.** F:prescribed, or NOW for a Coulomb orbit (the ellipse's harmonics).
+- **Pr. 14.12/14.14/14.22 harmonics of SHM, circular and elliptic orbits.** *Test S8 (Pr. 14.22):* a flown Kepler ellipse radiates the book's Bessel-function harmonics (to 1e-9 along the major axis, 5e-6 elsewhere: the O(nβ) retardation). As a level set aside: sharp harmonics need some twenty orbits, and the flight must still end in a detector; the classical-atom levels orbit 1–3 times before their electron decays in. SHM harmonics: F:prescribed.
 - **Pr. 14.21 correspondence principle.** Radiation from a classical hydrogen orbit versus Bohr transition rates. A test with the §16.2 decay. NOW.
 - **Pr. 14.23 N charges on a ring.** A beam of N equally spaced charges on a circle: the radiation falls exponentially with N ("a steady current does not radiate"). *Levels built (in step, a quiet ring, a ring of four); test S5 (the form factor).* The player's free charges circle in crossed fields with the shot, whose circle drifts into its detector; the receiver sees them all.
 - **Pr. 14.25–14.26 synchrotron polarization, Crab nebula.** Polarization is 3D; energetics as a text.

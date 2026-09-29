@@ -598,3 +598,107 @@ fn s7_coulomb_bremsstrahlung() {
     );
     assert!(worst < 1e-5, "{worst:.3e}");
 }
+
+/// S8, Jackson Pr. 14.22 (an electron on an elliptic orbit in a classical hydrogen atom;
+/// Landau & Lifshitz §70): a charge −1 on a Kepler ellipse about a fixed charge +1 (a = 2,
+/// e = 0.6, `ω₀ = a^{−3/2}`; the book's parametrization, u the eccentric anomaly), flown by the
+/// single-particle runner for N = 20 orbits from the perihelion, radiates into its plane at
+/// the harmonics `nω₀`. In the dipole limit the orbit's Fourier (Kapteyn) series,
+/// `x = a(cos E − e) = −3ae/2 + Σ X_n cos nω₀t`, `X_n = (2a/n) J′_n(ne)`, and
+/// `y = a√(1 − e²) sin E = Σ Y_n sin nω₀t`, `Y_n = (2a√(1 − e²)/(ne)) J_n(ne)`, give over whole
+/// orbits at `ω = nω₀`, in a direction at φ from the major axis,
+/// `d²I/dω dΩ = (q² N² n⁴ ω₀²/4c³)(X_n² sin²φ + Y_n² cos²φ)`: every harmonic for e > 0 (a
+/// circle only its first). The same amplitudes give the book's power in the nth harmonic,
+/// `(4q²/3c³)(nω₀)⁴ a² (1/n²)[J′_n(ne)² + ((1 − e²)/e²) J_n(ne)²]`. Harmonics 1, 2, 3 and 5
+/// in three directions at c = 10⁶
+/// (β ≤ 1.4e-6). Required: 1e-4 relative (set before measuring: retardation and the
+/// multipoles beyond the dipole are O(nβ) ~ 1e-5).
+#[test]
+fn s8_harmonics_of_an_elliptic_orbit() {
+    use physics::dynamics::Particle;
+    use physics::field::{Coulomb, FixedCharge};
+    use physics::spectrum::RadiationWindow;
+    use physics::trajectory::{Acceptance, RunSettings, Scenario, run};
+    let (q, m, c) = (-1.0, 1.0, 1e6);
+    let (a, e, orbits) = (2.0_f64, 0.6_f64, 20u32);
+    // |qQ|/m = 1: ω₀ = a^{−3/2}; at the perihelion v² = (1 + e)/r_p.
+    let w0 = a.powf(-1.5);
+    let rp = a * (1.0 - e);
+    let vp = ((1.0 + e) / rp).sqrt();
+    let gamma = 1.0 / (1.0 - vp * vp / (c * c)).sqrt();
+    let window = RadiationWindow {
+        axis: DVec3::X,
+        half_angle: 0.0,
+        band: None,
+        energy: (0.0, 1.0),
+        abrupt_stop: false,
+    };
+    let tr = run(
+        &Scenario {
+            field: Coulomb::new(&[FixedCharge {
+                position: DVec3::ZERO,
+                charge: 1.0,
+                radius: 0.1,
+            }]),
+            obstacles: vec![],
+            particle: Particle {
+                charge: q,
+                mass: m,
+                radius: 0.0,
+                moment: 0.0,
+            },
+            c,
+            x0: DVec3::new(rp, 0.0, 0.0),
+            p0: DVec3::new(0.0, gamma * m * vp, 0.0),
+            detector: None,
+            bounds: None,
+            t_max: f64::from(orbits) * 2.0 * PI / w0,
+            radiation_reaction: false,
+            acceptance: Some(Acceptance {
+                radiation: Some(window),
+                ..Acceptance::default()
+            }),
+            gates: Vec::new(),
+        },
+        &RunSettings::with_tolerance(1e-12),
+    );
+    let mut worst: f64 = 0.0;
+    for n in [1, 2, 3, 5] {
+        let nf = f64::from(n);
+        let jn = bessel_j(n, nf * e);
+        let jp = 0.5 * (bessel_j(n - 1, nf * e) - bessel_j(n + 1, nf * e));
+        let (xn, yn) = (
+            2.0 * a / nf * jp,
+            2.0 * a * (1.0 - e * e).sqrt() / (nf * e) * jn,
+        );
+        for deg in [0.0_f64, 60.0, 130.0] {
+            let (s, co) = deg.to_radians().sin_cos();
+            let exact = q * q * f64::from(orbits).powi(2) * nf.powi(4) * w0 * w0
+                / (4.0 * c.powi(3))
+                * (xn * xn * s * s + yn * yn * co * co);
+            let got = spectrum(
+                &tr.emission,
+                q,
+                c,
+                DVec3::new(co, s, 0.0),
+                nf * w0,
+                0.0,
+                1,
+                false,
+            )[0];
+            let err = got / exact - 1.0;
+            println!(
+                "S8 harmonic {n}, φ = {deg}°: {got:.10e} (dipole formula {exact:.10e}): {err:.1e}"
+            );
+            worst = worst.max(err.abs());
+        }
+    }
+    println!(
+        "S8: {} steps, {} samples, ends at ({:.6}, {:.6}) (perihelion {rp})",
+        tr.stats.n_step,
+        tr.emission.len(),
+        tr.end.x.x,
+        tr.end.x.y
+    );
+    assert!(worst < 1e-4, "S8 {worst:.3e}");
+}
