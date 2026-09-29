@@ -194,21 +194,39 @@ fn r3_no_reaction_without_finite_c() {
 }
 
 /// R4, Jackson Problem 16.2 (the classical atom): a charge −1 on a circular orbit around a
-/// fixed charge +Z radiates and spirals in. Nonrelativistically the radius obeys
-/// `r³ = r₀³ − 9 Z (cτ)² c t` with `τ = 2q²/(3mc³)`, i.e. `d(r³)/dt = −6 Z τ` (units with
-/// Coulomb's constant 1, q = m = 1). At c = 8 (v/c = 0.056) the fitted slope of r³ over
-/// ~12 orbits must agree within 1 %: the relativistic correction is O((v/c)²) ≈ 0.3 %, and
-/// the slight eccentricity of the launch (Newtonian circular speed) scatters the samples.
+/// fixed charge +Z radiates and spirals in; nonrelativistically `d(r³)/dt = −6 Z τ`,
+/// `τ = 2q²/(3mc³)` (units with Coulomb's constant 1, q = m = 1). Exact reference at c = 8
+/// (v/c = 0.056; `scripts/wolfram/r4_classical_atom.wls`, Wolfram Engine 14.2): the
+/// adiabatic inspiral through relativistic circular orbits (γv² = Z/r), `dr/dt = −P/E′`
+/// with `E = γc² − Z/r` and the relativistic Larmor power `(2/3c³)γ⁴(v²/r)²`, from r₀ = 5
+/// to T = 1500: r(T) = 4.8377986383588659, a mean d(r³)/dt 0.48 % above Jackson's. The
+/// particle is launched on that inspiral (the exact circular momentum and the inspiral's
+/// radial velocity), so no eccentricity is excited. Required: r³(T) − r₀³ within 1e-4 of
+/// the exact value (set before measuring: the neglected terms, the residual eccentricity
+/// and Landau–Lifshitz's O((τω)²), are 1e-7 or less); Jackson's slope within 1 % of it.
+/// (The first version launched with the Newtonian circular speed and fitted the slope of
+/// r³ against Jackson's: 0.64 %, attributed to relativity plus the launch's eccentricity;
+/// relativity is 0.48 %.)
 #[test]
 fn r4_classical_atom_orbit_decay() {
-    let (z, c, r0) = (1.0_f64, 8.0_f64, 5.0_f64);
+    // From the Wolfram script: tangential momentum γv, radial velocity dr/dt at r₀, r(T).
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const LAUNCH: (f64, f64, f64) = (
+        0.44756311749347263,
+        -0.00010465622167041062,
+        4.8377986383588659,
+    );
+    let (z, c, r0, t_end) = (1.0_f64, 8.0_f64, 5.0_f64, 1500.0_f64);
     let tau = 2.0 / (3.0 * c.powi(3));
     let nucleus = FixedCharge {
         position: DVec3::ZERO,
         charge: z,
         radius: 0.05,
     };
-    let v = (z / r0).sqrt();
+    let (u, rdot, r_exact) = LAUNCH;
+    // At (0, −r₀) moving +x: the radial direction is −y; γ is that of the tangential
+    // motion (the radial velocity changes it by 1e-8).
+    let gamma = (1.0 + u * u / (c * c)).sqrt();
     let scn = Scenario {
         field: Coulomb::new(&[nucleus]),
         obstacles: vec![Shape::Sphere(Sphere {
@@ -223,38 +241,26 @@ fn r4_classical_atom_orbit_decay() {
         },
         c,
         x0: DVec3::new(0.0, -r0, 0.0),
-        p0: Kinematics::new(1.0, c).momentum_from_kinetic_energy(0.5 * v * v, DVec3::X),
+        p0: DVec3::new(u, -gamma * rdot, 0.0),
         detector: None,
         bounds: Some(cube(100.0)),
-        t_max: 1500.0,
+        t_max: t_end,
         radiation_reaction: true,
         acceptance: None,
         gates: Vec::new(),
     };
     let tr = run(&scn, &RunSettings::with_tolerance(TOL));
-    // Least-squares slope of r³ against t over every accepted step.
-    let pts: Vec<(f64, f64)> = tr
-        .samples
-        .iter()
-        .map(|s| (s.t, s.x.length().powi(3)))
-        .collect();
-    #[allow(clippy::cast_precision_loss)]
-    let n = pts.len() as f64;
-    let (mt, my) = (
-        pts.iter().map(|p| p.0).sum::<f64>() / n,
-        pts.iter().map(|p| p.1).sum::<f64>() / n,
-    );
-    let slope = pts.iter().map(|&(t, y)| (t - mt) * (y - my)).sum::<f64>()
-        / pts.iter().map(|&(t, _)| (t - mt).powi(2)).sum::<f64>();
-    let jackson = -6.0 * z * tau;
+    let d_measured = tr.end.x.length().powi(3) - r0.powi(3);
+    let d_exact = r_exact.powi(3) - r0.powi(3);
+    let err = d_measured / d_exact - 1.0;
+    let jackson = -6.0 * z * tau * t_end;
     println!(
-        "R4 c = {c}: d(r³)/dt = {slope:.6} (fit over {} samples), Jackson {jackson:.6}, \
-         ratio {:.4}; max |F_RR|/|F_L| = {:.2e}",
-        pts.len(),
-        slope / jackson,
+        "R4 c = {c}: r³(T) − r₀³ = {d_measured:.9} (t = {:.1}), exact {d_exact:.9}: {err:.1e}; Jackson {jackson:.6} ({:.2e} from exact); max |F_RR|/|F_L| = {:.2e}",
+        tr.end.t,
+        jackson / d_exact - 1.0,
         tr.reaction_ratio_max
     );
-    assert!((slope / jackson - 1.0).abs() < 0.01);
+    assert!(err.abs() < 1e-4 && (jackson / d_exact - 1.0).abs() < 0.01);
 }
 
 /// R5, Jackson Problem 14.5b: a charge q (mass m) fired head-on at a repulsive fixed
