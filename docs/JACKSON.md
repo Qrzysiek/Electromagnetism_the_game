@@ -145,9 +145,11 @@ Arc 10, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §
 
 Validation tests from the book (PHYSICS.md): K5 (Pr. 2.4, golden ratio), M7 (Pr. 12.9b,
 equatorial drift), M11 (§12.5, adiabatic invariance), S1 (Pr. 14.15, harmonics of circular
-motion), S2 (Parseval, 14.60–14.65), S5 (Pr. 14.23, the form factor of charges on a ring), B17 (Pr. 13.1, knock-on energy transfer), R4 (Pr. 16.2, classical atom
-collapse), R5 (Pr. 14.5b, radiation in a head-on collision), C2 (Pr. 16.1, the
-radiating oscillator decays at Γ = ω₀²τ).
+motion), S2 (Parseval, 14.60–14.65), S5 (Pr. 14.23, the form factor of charges on a ring),
+S7 (Pr. 15.10, the spectrum of Coulomb bremsstrahlung on the hyperbola), B17 (Pr. 13.1,
+knock-on energy transfer), R4 (Pr. 16.2, classical atom collapse), R5 (Pr. 14.5b,
+radiation in a head-on collision), C2 (Pr. 16.1, the radiating oscillator decays at
+Γ = ω₀²τ).
 
 ## Catalogue by chapter
 
@@ -311,7 +313,7 @@ radiating oscillator decays at Γ = ω₀²τ).
   - The radiated spectrum is flat up to ω ~ 1/(collision time).
   - NOW (with a spectrum diagnostic).
 - **§15.1 / Pr. 15.8 collisions of like particles: no dipole radiation.** Two charges interacting only with each other have `d̈ = F (q₁/m₁ − q₂/m₂)`: with equal charge-to-mass ratios the dipole moment stays with the centre of mass and only quadrupole radiation is left (Pr. 15.8 with a hard sphere; here the Coulomb collision). NOW, with the system measure (radiation goals see every particle). *Prototype (2026-09-29, not shipped):* c = 4, the shot q = m = 1 at β = 0.3 deflected ~40° into a detector by the player's free charge thrown at it: with an identical partner the pattern is inversion-symmetric, as a quadrupole's (5.2e-5 per steradian at 0° and at 180°, 2.3e-5 at 45° and 225°); with a partner of charge 2 (mass 1) dipole and quadrupole interfere (8e-6 at 0°, 2.1e-4 at 180°). Level idea tried and dropped (2026-09-29): free charges of mass 2 and charge 1 or 2 thrown at the shot, a quiet receiver. The partner of the shot's charge-to-mass ratio (charge 2) has no dipole radiation, but its collision is twice as strong, and its quadrupole radiation (3.5e-5 to 7e-5 per steradian behind the shot, 2.2e-5 to 6e-5 elsewhere) exceeds the unequal-ratio partner's dipole-plus-quadrupole radiation (charge 1: 8e-7 to 4.4e-6 behind, where the two interfere destructively; 1.7e-5 to 1e-4 ahead): at β = 0.3 "no dipole" does not mean "quieter", and a quiet goal would reward the wrong partner. The effect needs v ≪ c and equally strong collisions, which a player's free choice of partner does not give.
-- **Pr. 15.9 screened; Pr. 15.10 hyperbolic Coulomb orbit.** The dipole-approximation spectrum with the Hankel-function formula. A test against the numerical Fourier transform of the acceleration. NOW (Coulomb); F:screened.
+- **Pr. 15.9 screened; Pr. 15.10 hyperbolic Coulomb orbit.** *Test S7 (Pr. 15.10).* The flown hyperbola's in-plane spectrum against the exact radiation integral on the orbit (retardation included; Wolfram), whose dipole limit reproduces the book's closed form with `K_{iν}(νε)` to 2e-15. Screened: F:screened.
 - **§15.4–15.5 virtual quanta (Weizsäcker–Williams).** The field of a fast charge as a pulse of radiation. A view: the particle field map of a γ ≫ 1 charge. NOW.
 - **§15.6–15.7, Pr. 15.4, 15.13–15.16 radiation at sudden creation/disappearance of charges** (beta decay, π → μ, K decays). F:decay (instant creation gives the radiation shell).
 - **Pr. 15.7 fission inner bremsstrahlung, Pr. 15.12 energy loss.** OUT (nuclear / statistical); a text only.
