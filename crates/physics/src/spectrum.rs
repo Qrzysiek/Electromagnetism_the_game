@@ -15,8 +15,8 @@
 //! the detector absorbing it). In the plane `z = 0` the directions `n` are in-plane.
 //!
 //! The integral of 14.65 is taken in the phase time `τ = t − n·r/c` (`dτ = κ dt`), where
-//! the phase `ωτ` is exactly linear: with the amplitude `n × ((n − β) × β̇)/κ³` quadratic
-//! in τ over each pair of pieces between dense samples of the flight, each pair is
+//! the phase `ωτ` is exactly linear: with the amplitude `n × ((n − β) × β̇)/κ³` a quartic
+//! in τ over each group of four pieces between dense samples of the flight, each group is
 //! integrated exactly against `e^{iωτ}` (Filon's rule), so the samples need to resolve the
 //! motion but not the phase, however high the frequency.
 //!
@@ -205,27 +205,34 @@ impl Cx {
     }
 }
 
-/// The moments `φₖ(D) = ∫₀¹ uᵏ e^{iDu} du`, k = 0, 1, 2, given `e^{iD}`: by their series
-/// `Σⱼ (iD)ʲ/(j! (j + k + 1))` for |D| < 0.25 (ten terms, error < 1e-14), otherwise in
-/// closed form, `φ₀ = (e − 1)/(iD)`, `φₖ = e/(iD) − k φₖ₋₁/(iD)`.
-fn filon_moments(d: f64, e: Cx) -> [Cx; 3] {
-    if d.abs() < 0.25 {
-        let mut out = [Cx::default(); 3];
-        for (k, phi) in out.iter_mut().enumerate() {
-            // term_j = (iD)^j / j!
-            let mut term = Cx { re: 1.0, im: 0.0 };
-            for j in 0..10 {
+/// Highest power of the amplitude's model over a group of pieces (`pieces`).
+const ORDER: usize = 4;
+
+/// The moments `φₖ(D) = ∫₀¹ uᵏ e^{iDu} du`, k = 0, …, 4, given `e^{iD}`: for |D| < 0.5 by
+/// their series `Σⱼ (iD)ʲ/(j! (j + k + 1))`, summed until the terms fall below 1e-17 (at most
+/// 16 terms), otherwise by the recurrence `φ₀ = (e − 1)/(iD)`, `φₖ = (e − k φₖ₋₁)/(iD)`
+/// (which multiplies an error by `k/|D|` per step: at most 4!/0.5⁴ = 384 in all, 4e-14).
+fn filon_moments(d: f64, e: Cx) -> [Cx; ORDER + 1] {
+    let mut out = [Cx::default(); ORDER + 1];
+    if d.abs() < 0.5 {
+        // term_j = (iD)^j / j!
+        let mut term = Cx { re: 1.0, im: 0.0 };
+        for j in 0..16 {
+            if j > 0 && term.re.abs() + term.im.abs() < 1e-17 {
+                break;
+            }
+            for (k, phi) in out.iter_mut().enumerate() {
                 #[allow(clippy::cast_precision_loss)]
                 let w = 1.0 / (j + k + 1) as f64;
                 phi.re += term.re * w;
                 phi.im += term.im * w;
-                #[allow(clippy::cast_precision_loss)]
-                let next = term.mul(Cx {
-                    re: 0.0,
-                    im: d / (j + 1) as f64,
-                });
-                term = next;
             }
+            #[allow(clippy::cast_precision_loss)]
+            let next = term.mul(Cx {
+                re: 0.0,
+                im: d / (j + 1) as f64,
+            });
+            term = next;
         }
         return out;
     }
@@ -234,22 +241,19 @@ fn filon_moments(d: f64, e: Cx) -> [Cx; 3] {
         re: x.im / d,
         im: -x.re / d,
     };
-    let phi0 = over_id(Cx {
+    out[0] = over_id(Cx {
         re: e.re - 1.0,
         im: e.im,
     });
-    let e_id = over_id(e);
-    let p0 = over_id(phi0);
-    let phi1 = Cx {
-        re: e_id.re - p0.re,
-        im: e_id.im - p0.im,
-    };
-    let p1 = over_id(phi1);
-    let phi2 = Cx {
-        re: e_id.re - 2.0 * p1.re,
-        im: e_id.im - 2.0 * p1.im,
-    };
-    [phi0, phi1, phi2]
+    for k in 1..=ORDER {
+        #[allow(clippy::cast_precision_loss)]
+        let kf = k as f64;
+        out[k] = over_id(Cx {
+            re: e.re - kf * out[k - 1].re,
+            im: e.im - kf * out[k - 1].im,
+        });
+    }
+    out
 }
 
 /// `d²I/dω dΩ` in direction `n` at the frequencies `ω₀ + k δω` (`k < count`). With
@@ -327,16 +331,54 @@ fn phase_points(samples: &[Emission], c: f64, n: DVec3) -> Vec<(f64, DVec3)> {
         .collect()
 }
 
-/// A piece of the amplitude's model in the phase time (`pieces`).
-type Piece = (f64, f64, [DVec3; 3]);
+/// A piece of the amplitude's model in the phase time (`pieces`): `(τ₀, H, coefficients)`.
+type Piece = (f64, f64, [DVec3; ORDER + 1]);
 
-/// The pieces of the amplitude's model in the phase time: `(τ₀, H, [c₀, c₁, c₂])` with
-/// `g = c₀ + c₁ u + c₂ u²`, `u = (τ − τ₀)/H`, quadratic over each pair of pieces between
-/// samples (Lagrange basis on the pair's unequal widths), linear on a last odd piece (and
-/// on a degenerate pair).
+/// The polynomial through the points `(uₘ, gₘ)` (`u` distinct), as powers of `u`: Newton's
+/// divided differences, then expanded.
+fn interpolate(u: &[f64], g: &[DVec3]) -> [DVec3; ORDER + 1] {
+    let n = u.len();
+    let mut dd: Vec<DVec3> = g.to_vec();
+    for level in 1..n {
+        for m in (level..n).rev() {
+            dd[m] = (dd[m] - dd[m - 1]) / (u[m] - u[m - level]);
+        }
+    }
+    // Horner on the Newton form: p = dd[n−1]; p = p (u − u[m]) + dd[m].
+    let mut coeffs = [DVec3::ZERO; ORDER + 1];
+    coeffs[0] = dd[n - 1];
+    for (degree, m) in (0..n - 1).rev().enumerate() {
+        // Multiply the degree-`degree` polynomial by (u − u[m]) and add dd[m].
+        for k in (1..=degree + 1).rev() {
+            coeffs[k] = coeffs[k - 1] - coeffs[k] * u[m];
+        }
+        coeffs[0] = dd[m] - coeffs[0] * u[m];
+    }
+    coeffs
+}
+
+/// The pieces of the amplitude's model in the phase time: `(τ₀, H, [c₀, …, c₄])` with
+/// `g = Σ cₖ uᵏ`, `u = (τ − τ₀)/H`: a quartic through the five samples of each group of
+/// four pieces (the runners record 8 pieces per step: two groups), and where fewer are
+/// left or a group's phase times are not increasing, quadratic over pairs of pieces and
+/// linear on a last odd piece (as before, test S7: the quadratic model's error, falling as
+/// the cube of the piece length, left 1e-7 of the peak amplitude, 1e-3 of a spectrum's
+/// exponential tail).
 fn pieces(pts: &[(f64, DVec3)]) -> Vec<Piece> {
     let mut out = Vec::new();
     let mut i = 0;
+    while i + ORDER < pts.len() {
+        let t0 = pts[i].0;
+        let h = pts[i + ORDER].0 - t0;
+        let u: Vec<f64> = (0..=ORDER).map(|m| (pts[i + m].0 - t0) / h).collect();
+        if h > 0.0 && u.windows(2).all(|w| w[1] > w[0]) {
+            let g: Vec<DVec3> = (0..=ORDER).map(|m| pts[i + m].1).collect();
+            out.push((t0, h, interpolate(&u, &g)));
+            i += ORDER;
+        } else {
+            break;
+        }
+    }
     while i + 2 < pts.len() {
         let ((t0, g0), (t1, g1), (t2, g2)) = (pts[i], pts[i + 1], pts[i + 2]);
         let h = t2 - t0;
@@ -346,18 +388,35 @@ fn pieces(pts: &[(f64, DVec3)]) -> Vec<Piece> {
             let c0 = g0;
             let c1 = -g0 * ((u + 1.0) / u) - g1 / (u * (u - 1.0)) - g2 * (u / (1.0 - u));
             let c2 = g0 / u + g1 / (u * (u - 1.0)) + g2 / (1.0 - u);
-            out.push((t0, h, [c0, c1, c2]));
+            out.push((t0, h, [c0, c1, c2, DVec3::ZERO, DVec3::ZERO]));
         } else {
-            out.push((t0, t1 - t0, [g0, g1 - g0, DVec3::ZERO]));
-            out.push((t1, t2 - t1, [g1, g2 - g1, DVec3::ZERO]));
+            out.push((
+                t0,
+                t1 - t0,
+                [g0, g1 - g0, DVec3::ZERO, DVec3::ZERO, DVec3::ZERO],
+            ));
+            out.push((
+                t1,
+                t2 - t1,
+                [g1, g2 - g1, DVec3::ZERO, DVec3::ZERO, DVec3::ZERO],
+            ));
         }
         i += 2;
     }
     if i + 1 < pts.len() {
         let ((t0, g0), (t1, g1)) = (pts[i], pts[i + 1]);
-        out.push((t0, t1 - t0, [g0, g1 - g0, DVec3::ZERO]));
+        out.push((
+            t0,
+            t1 - t0,
+            [g0, g1 - g0, DVec3::ZERO, DVec3::ZERO, DVec3::ZERO],
+        ));
     }
     out
+}
+
+/// A piece's value at `s = (τ − τ₀)/H`.
+fn piece_value(co: &[DVec3; ORDER + 1], s: f64) -> DVec3 {
+    co.iter().rev().fold(DVec3::ZERO, |acc, &c| acc * s + c)
 }
 
 /// The spectral amplitude `∫ g e^{iωτ} dτ` (real and imaginary parts) at the frequencies
@@ -372,14 +431,14 @@ fn amplitude(
     abrupt_stop: bool,
 ) -> (Vec<DVec3>, Vec<DVec3>) {
     // In the phase time τ = t − n·r/c (dτ = κ dt, κ > 0) the phase is exactly linear:
-    // ∫ f e^{iωτ} dt = ∫ g e^{iωτ} dτ with g = n × ((n − β) × β̇)/κ³. g is taken quadratic
-    // in τ over each pair of pieces (Filon's rule, on the pieces' unequal widths) and
-    // integrated exactly against e^{iωτ}; a last odd piece is taken linear.
+    // ∫ f e^{iωτ} dt = ∫ g e^{iωτ} dτ with g = n × ((n − β) × β̇)/κ³. g is taken as a
+    // polynomial in τ over each piece of the model (`pieces`: quartic over groups of four
+    // pieces) and integrated exactly against e^{iωτ} (Filon's rule).
     let pts = phase_points(samples, c, n);
     let mut re = vec![DVec3::ZERO; count];
     let mut im = vec![DVec3::ZERO; count];
     // Adds H e^{iωτ₀} Σₖ cₖ φₖ(ωH) over the frequency grid.
-    let mut add = |tau0: f64, h: f64, coeffs: [DVec3; 3], order: usize| {
+    let mut add = |tau0: f64, h: f64, coeffs: [DVec3; ORDER + 1], order: usize| {
         if h <= 0.0 {
             return;
         }
@@ -402,7 +461,7 @@ fn amplitude(
         }
     };
     for (t0, h, coeffs) in pieces(&pts) {
-        let order = if coeffs[2] == DVec3::ZERO { 1 } else { 2 };
+        let order = coeffs.iter().rposition(|c| *c != DVec3::ZERO).unwrap_or(0);
         add(t0, h, coeffs, order);
     }
     if abrupt_stop {
@@ -422,10 +481,10 @@ fn amplitude(
 }
 
 /// Energy radiated per steradian in direction `n` by a system: `(1/4πc) ∫ |Σⱼ qⱼ gⱼ|² dτ`
-/// over the phase time, each `gⱼ` in its piecewise quadratic model (`pieces`, as in the
+/// over the phase time, each `gⱼ` in its piecewise polynomial model (`pieces`, as in the
 /// spectrum; 0 outside its flight, where it moves uniformly). On every interval between
-/// the pieces' ends of all particles the integrand is a polynomial of degree 4:
-/// three-point Gauss–Legendre integrates it exactly.
+/// the pieces' ends of all particles the integrand is a polynomial of degree 8:
+/// five-point Gauss–Legendre integrates it exactly.
 pub fn system_lienard_energy(sources: &[Source<'_>], c: f64, n: DVec3) -> f64 {
     if !c.is_finite() {
         return 0.0;
@@ -444,11 +503,21 @@ pub fn system_lienard_energy(sources: &[Source<'_>], c: f64, n: DVec3) -> f64 {
     cuts.dedup();
     // Per particle, the index of the piece at the current interval (they only advance).
     let mut at = vec![0usize; models.len()];
-    let r = 0.5 * (0.6f64).sqrt();
+    // Five-point Gauss–Legendre on [0, 1]: nodes (1 ± x)/2, weights w/2.
+    let (x1, x2) = (
+        (5.0 - 2.0 * (10.0f64 / 7.0).sqrt()).sqrt() / 3.0,
+        (5.0 + 2.0 * (10.0f64 / 7.0).sqrt()).sqrt() / 3.0,
+    );
+    let (w1, w2) = (
+        (322.0 + 13.0 * 70.0f64.sqrt()) / 900.0,
+        (322.0 - 13.0 * 70.0f64.sqrt()) / 900.0,
+    );
     let gauss = [
-        (0.5 - r, 5.0 / 18.0),
-        (0.5, 8.0 / 18.0),
-        (0.5 + r, 5.0 / 18.0),
+        (0.5 * (1.0 - x2), 0.5 * w2),
+        (0.5 * (1.0 - x1), 0.5 * w1),
+        (0.5, 0.5 * 128.0 / 225.0),
+        (0.5 * (1.0 + x1), 0.5 * w1),
+        (0.5 * (1.0 + x2), 0.5 * w2),
     ];
     let mut sum = 0.0;
     for w in cuts.windows(2) {
@@ -458,7 +527,7 @@ pub fn system_lienard_energy(sources: &[Source<'_>], c: f64, n: DVec3) -> f64 {
         }
         let mid = 0.5 * (a + b);
         // The piece of each particle containing the interval, if any.
-        let active: Vec<(f64, f64, f64, [DVec3; 3])> = models
+        let active: Vec<(f64, f64, f64, [DVec3; ORDER + 1])> = models
             .iter()
             .zip(at.iter_mut())
             .filter_map(|((q, p), k)| {
@@ -476,10 +545,7 @@ pub fn system_lienard_energy(sources: &[Source<'_>], c: f64, n: DVec3) -> f64 {
             let tau = a + u * (b - a);
             let total: DVec3 = active
                 .iter()
-                .map(|&(q, t0, h, co)| {
-                    let s = (tau - t0) / h;
-                    (co[0] + co[1] * s + co[2] * (s * s)) * q
-                })
+                .map(|&(q, t0, h, co)| piece_value(&co, (tau - t0) / h) * q)
                 .sum();
             sum += weight * total.length_squared() * (b - a);
         }
@@ -661,11 +727,12 @@ mod tests {
 
     #[test]
     fn filon_moments_match_quadrature() {
-        for d in [0.249_999, 0.250_001, 0.03, 1.7, -3.2, 40.0] {
+        // Both sides of the switch from the series to the recurrence, and beyond.
+        for d in [0.499_999, 0.500_001, 0.03, 1.7, -3.2, 40.0] {
             let got = filon_moments(d, Cx::cis(d));
             // Midpoint quadrature of ∫₀¹ uᵏ e^{iDu} du (error ~ D²/(24 m²)).
             let m = 200_000;
-            let mut want = [Cx::default(); 3];
+            let mut want = [Cx::default(); ORDER + 1];
             for j in 0..m {
                 let u = (f64::from(j) + 0.5) / f64::from(m);
                 let z = Cx::cis(d * u);
@@ -675,7 +742,7 @@ mod tests {
                     w.im += uk * z.im / f64::from(m);
                 }
             }
-            for k in 0..3 {
+            for k in 0..=ORDER {
                 let (a, b) = (got[k], want[k]);
                 assert!(
                     (a.re - b.re).abs() < 1e-9 && (a.im - b.im).abs() < 1e-9,

@@ -488,3 +488,113 @@ fn s4_sudden_stop() {
     println!("S4: abrupt ≤ {worst_a:.1e}; smooth against Wolfram ≤ {worst_b:.1e}");
     assert!(worst_a < 1e-12 && worst_b < 1e-7);
 }
+
+/// S7, Jackson Pr. 15.10: a charge deflected by a fixed repulsive Coulomb charge (a = qQ/(m
+/// v²) = 1, impact parameter 2, ε = √5, ω₀ = v/a = 1) at v/c = 1e-4, flown from 1e6 cells away
+/// along the hyperbola `x = a(ε + cosh ξ)`, `y = b sinh ξ`, `ω₀t = ξ + ε sinh ξ` and out to the
+/// same distance (the single-particle runner; its orbit is relativistic, the reference's
+/// Newtonian: they differ at O(β²) = 1e-8). The in-plane spectrum at ω = 0.25, 1 and 3 in
+/// four directions against the exact radiation integral (Jackson 14.65, retardation included)
+/// on that orbit (`scripts/wolfram/s7_coulomb_bremsstrahlung.wls`, Wolfram Engine 14.2: the
+/// path moved to Im ξ = π/2, where the oscillating phase becomes a decaying factor; the same
+/// integrals in the dipole approximation reproduce Jackson's closed form of Pr. 15.10(a),
+/// with the modified Bessel functions `K_{iν}(νε)`, to 2e-15, and differ from the full ones by
+/// up to 1.1e-3 here). Required: 1e-5 relative (set before measuring). Found with it: the
+/// quadratic amplitude model left 3e-4 to 8e-4 at 3ω₀, where the spectrum is 2.5e-7 of its
+/// peak (its error, falling as the cube of the piece length, was 1e-7 of the peak
+/// amplitude; 16 and 32 pieces per step gave 1.3e-4 and 2.7e-5): the model is now quartic
+/// (1.7e-6 to 4.9e-6 there). At v/c = 1e-3 the orbits' O(β²) difference, amplified by about
+/// πν in the spectrum's exponential tail, left 2e-5 at 3ω₀.
+#[test]
+fn s7_coulomb_bremsstrahlung() {
+    use physics::dynamics::Particle;
+    use physics::field::{Coulomb, FixedCharge};
+    use physics::spectrum::RadiationWindow;
+    use physics::trajectory::{Acceptance, RunSettings, Scenario, run};
+    // (ω, θ in degrees, d²I/dω dΩ), from the Wolfram script.
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const EXACT: [(f64, f64, f64); 12] = [
+        (0.25, 0.0, 1.4949831862036214e-15),
+        (0.25, 70.0, 4.795296365598279e-15),
+        (0.25, 150.0, 2.429065923009658e-15),
+        (0.25, 260.0, 5.117662573645249e-15),
+        (1.0, 0.0, 1.7500156246025824e-17),
+        (1.0, 70.0, 2.6775700478740977e-17),
+        (1.0, 150.0, 2.012662236445844e-17),
+        (1.0, 260.0, 2.766281173274464e-17),
+        (3.0, 0.0, 5.568460110525202e-24),
+        (3.0, 70.0, 6.5731913396562805e-24),
+        (3.0, 150.0, 5.8541647409679445e-24),
+        (3.0, 260.0, 6.65659331282458e-24),
+    ];
+    let (q, m, c): (f64, f64, f64) = (1.0, 1.0, 10_000.0);
+    let (a, v, b): (f64, f64, f64) = (1.0, 1.0, 2.0);
+    let eps = (1.0 + (b / a) * (b / a)).sqrt();
+    let w0 = v / a;
+    // The orbit at ξ, and the flight from −ξ_L to ξ_L (r = 1e4).
+    let xi_l = ((1e6 / a - 1.0) / eps).acosh();
+    let at = |xi: f64| {
+        let r = DVec3::new(a * (eps + xi.cosh()), b * xi.sinh(), 0.0);
+        let dt_dxi = (1.0 + eps * xi.cosh()) / w0;
+        let vel = DVec3::new(a * xi.sinh(), b * xi.cosh(), 0.0) / dt_dxi;
+        (r, vel, (xi + eps * xi.sinh()) / w0)
+    };
+    let (x0, v0, t0) = at(-xi_l);
+    let (_, _, t1) = at(xi_l);
+    let gamma = 1.0 / (1.0 - v0.length_squared() / (c * c)).sqrt();
+    let window = RadiationWindow {
+        axis: DVec3::X,
+        half_angle: 0.0,
+        band: None,
+        energy: (0.0, 1.0),
+        abrupt_stop: false,
+    };
+    let tr = run(
+        &Scenario {
+            // q Q = a m v² = 1.
+            field: Coulomb::new(&[FixedCharge {
+                position: DVec3::ZERO,
+                charge: a * m * v * v / q,
+                radius: 0.1,
+            }]),
+            obstacles: vec![],
+            particle: Particle {
+                charge: q,
+                mass: m,
+                radius: 0.0,
+                moment: 0.0,
+            },
+            c,
+            x0,
+            p0: v0 * (gamma * m),
+            detector: None,
+            bounds: None,
+            t_max: t1 - t0,
+            radiation_reaction: false,
+            acceptance: Some(Acceptance {
+                radiation: Some(window),
+                ..Acceptance::default()
+            }),
+            gates: Vec::new(),
+        },
+        &RunSettings::with_tolerance(1e-12),
+    );
+    let mut worst: f64 = 0.0;
+    for (w, deg, exact) in EXACT {
+        let n = DVec3::new(deg.to_radians().cos(), deg.to_radians().sin(), 0.0);
+        let got = spectrum(&tr.emission, q, c, n, w, 0.0, 1, false)[0];
+        let err = got / exact - 1.0;
+        println!(
+            "S7 ω = {w}, θ = {deg}°: {got:.12e} (exact {exact:.12e}), relative difference {err:.1e}"
+        );
+        worst = worst.max(err.abs());
+    }
+    println!(
+        "S7: {} steps, {} samples, flight ends at ({:.3}, {:.3})",
+        tr.stats.n_step,
+        tr.emission.len(),
+        tr.end.x.x,
+        tr.end.x.y
+    );
+    assert!(worst < 1e-5, "{worst:.3e}");
+}
