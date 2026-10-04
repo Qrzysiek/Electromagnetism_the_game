@@ -1,4 +1,4 @@
-//! Validation tests R1–R6 for radiation reaction (PHYSICS.md §3.1, §9). Run with
+//! Validation tests R1–R7 for radiation reaction (PHYSICS.md §3.1, §9). Run with
 //! `cargo test -p physics --test radiation_reaction -- --nocapture --test-threads=1`.
 
 #![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
@@ -529,4 +529,105 @@ fn r6_gap_with_radiation_damping() {
             assert!(balance.abs() < 1e-5, "R6 energy balance {balance:.3e}");
         }
     }
+}
+
+// --- R7: radiation reaction in a plane wave; Thomson radiation pressure -----------------
+
+/// Jackson §14.8 and Di Piazza, Lett. Math. Phys. 83, 305 (2008): in a plane wave the
+/// Landau–Lifshitz equation leaves every component but the light-front momentum
+/// `ρ = γ(1 − k̂·v/c)` to the Lorentz force, which conserves ρ; the reaction gives exactly
+/// `d(1/ρ)/dφ = (2q⁴/(3m³c⁵ω)) E(φ)²` in the phase `φ = ω(t − k̂·x/c) + φ₀` (the derivative
+/// term drops out exactly, even as a finite difference). (A) Strong waves (a₀ = 0.5 and 2,
+/// relativistic), 10 periods from rest: ρ along the flight against that closed form, to
+/// the integration accuracy (1e-9). (B) Weak wave (a₀ = 0.01) from rest, 50 periods: the
+/// mean push along k̂ (with the reaction minus without, at equal phase) is the Thomson
+/// radiation pressure `σ_T I/c = q⁴E₀²/(3m²c⁴)`, within 1e-3 (corrections O(a₀²) = 1e-4).
+#[test]
+fn r7_plane_wave_reaction_and_radiation_pressure() {
+    use physics::external::{External, PlaneWave};
+    use physics::trajectory::StepView;
+    let (q, m, c, w, phase0): (f64, f64, f64, f64, f64) = (0.1, 1.0, 2.0, 1.0, 0.3);
+    let scenario = |e0: f64, rr: bool, t_max: f64| Scenario {
+        field: External::Wave(PlaneWave::in_plane(e0, 0.0, w, phase0, c)),
+        obstacles: vec![],
+        particle: Particle {
+            charge: q,
+            mass: m,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        c,
+        x0: DVec3::ZERO,
+        p0: DVec3::ZERO,
+        detector: None,
+        bounds: Some(cube(1e6)),
+        t_max,
+        radiation_reaction: rr,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    let kin = Kinematics::new(m, c);
+    let rho = |p: DVec3| kin.gamma(p) - p.x / (m * c);
+    let phase = |t: f64, x: DVec3| w * (t - x.x / c) + phase0;
+    let integral = |a: f64, b: f64| (b - a) / 2.0 + ((2.0 * b).sin() - (2.0 * a).sin()) / 4.0;
+    // (A)
+    let mut worst: f64 = 0.0;
+    for a0 in [0.5, 2.0] {
+        let e0 = a0 * m * w * c / q;
+        let k = 2.0 * q.powi(4) * e0 * e0 / (3.0 * m.powi(3) * c.powi(5) * w);
+        let tr = run(
+            &scenario(e0, true, 130.0),
+            &RunSettings::with_tolerance(TOL),
+        );
+        let (mut dev, mut effect): (f64, f64) = (0.0, 0.0);
+        for s in &tr.samples {
+            let exact = 1.0 / (1.0 + k * integral(phase0, phase(s.t, s.x)));
+            dev = dev.max((rho(s.p) - exact).abs());
+            effect = effect.max(1.0 - exact);
+        }
+        println!("R7 (A) a0 = {a0}: rho falls by {effect:.3e}; largest deviation {dev:.2e}");
+        assert!(effect > 1e-2, "the reaction must show");
+        worst = worst.max(dev);
+    }
+    assert!(worst < 1e-9, "R7 (A) {worst:.3e}");
+    // (B): momentum along k̂ where the phase first reaches φ₀ + 2πN.
+    let a0 = 0.01;
+    let e0 = a0 * m * w * c / q;
+    let n = 50.0;
+    let target = phase0 + 2.0 * std::f64::consts::PI * n;
+    let at_phase = |rr: bool| -> (f64, DVec3) {
+        let mut found: Option<(f64, DVec3)> = None;
+        let scn = scenario(e0, rr, 2.0 * std::f64::consts::PI * n * 1.01 / w);
+        run_observed(
+            &scn,
+            &RunSettings::with_tolerance(TOL),
+            |v: &StepView<'_, _>| {
+                let (a, b) = (v.t_start(), v.t_end());
+                let ph = |t: f64| phase(t, v.state(t).0);
+                if found.is_none() && ph(a) < target && ph(b) >= target {
+                    let (mut lo, mut hi) = (a, b);
+                    for _ in 0..100 {
+                        let mid = 0.5 * (lo + hi);
+                        if ph(mid) < target {
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    found = Some((hi, v.state(hi).1));
+                }
+            },
+        );
+        found.expect("the phase is reached")
+    };
+    let (t_rr, p_rr) = at_phase(true);
+    let (_, p_free) = at_phase(false);
+    let force = (p_rr.x - p_free.x) / t_rr;
+    let thomson = q.powi(4) * e0 * e0 / (3.0 * m * m * c.powi(4));
+    let rel = (force / thomson - 1.0).abs();
+    println!(
+        "R7 (B) a0 = {a0}: mean push {force:.6e}, sigma_T I / c = {thomson:.6e}, relative \
+         difference {rel:.2e}"
+    );
+    assert!(rel < 1e-3, "R7 (B) {rel:.3e}");
 }
