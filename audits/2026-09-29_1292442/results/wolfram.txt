@@ -1,0 +1,19 @@
+dipole -grad(n.p/r^2) - E: {0, 0}
+sphere phi_in - phi_out at r=R: 0
+sphere E_in: {(Q*x)/R^3, (Q*y)/R^3}
+sphere E_out: {(Q*x)/(x^2 + y^2)^(3/2), (Q*y)/(x^2 + y^2)^(3/2)}
+sphere E_in - E_out at (R,0): {0, 0}
+beta^2 - (1 - 1/gamma^2): 0
+brake reaches c after a 0.1c shift: 9/10
+brake reaches c after a 0.07c shift: 93/100
+taper velocity minus integral: 0
+taper future v as s->Infinity: A*T + v0
+taper past velocity minus integral: 0
+taper past v as s->Infinity: -(A*T) + v0
+taper position minus integral: 0
+g(m) series: SeriesData[m, 0, {(3*Pi)/32, (3*Pi)/128, (45*Pi)/4096}, 2, 5, 1]
+h(m) series: SeriesData[m, 0, {Pi/32, (3*Pi)/128, (75*Pi)/4096}, 2, 5, 1]
+g leading / (3 Pi m^2/32): 1
+h leading / (Pi m^2/32): 1
+cup survivor kinetic at t=8: 0.005204356351439677
+wolfram checks finished

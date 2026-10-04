@@ -1,0 +1,38 @@
+
+running 1 test
+
+thread 'b6_comoving_pair_explodes_time_dilated' (5556) panicked at crates\physics\src\events.rs:33:5:
+assertion failed: ga > 0.0
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/48a229ceaefd4985c50990b14116b6d856af0985/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/48a229ceaefd4985c50990b14116b6d856af0985/library\core\src\panicking.rs:80
+   2: core::panicking::panic
+             at /rustc/48a229ceaefd4985c50990b14116b6d856af0985/library\core\src\panicking.rs:150
+   3: physics::beam::run_beam_cancellable<physics::field::Coulomb,physics::beam::run_beam_observed::closure_env$0<physics::field::Coulomb,physics::beam::run_beam::closure_env$0<physics::field::Coulomb> > >
+             at .\crates\physics\src\beam.rs:1531
+   4: physics::beam::run_beam_observed
+             at .\crates\physics\src\beam.rs:1119
+   5: physics::beam::run_beam
+             at .\crates\physics\src\beam.rs:1107
+   6: beams::comoving_pair
+             at .\crates\physics\tests\beams.rs:448
+   7: beams::b6_comoving_pair_explodes_time_dilated
+             at .\crates\physics\tests\beams.rs:410
+   8: beams::b6_comoving_pair_explodes_time_dilated::closure$0
+             at .\crates\physics\tests\beams.rs:409
+   9: core::ops::function::FnOnce::call_once<beams::b6_comoving_pair_explodes_time_dilated::closure_env$0,tuple$<> >
+             at /rustc/48a229ceaefd4985c50990b14116b6d856af0985/library\core\src\ops\function.rs:250
+  10: core::ops::function::FnOnce::call_once
+             at /rustc/48a229ceaefd4985c50990b14116b6d856af0985/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+test b6_comoving_pair_explodes_time_dilated ... FAILED
+
+failures:
+
+failures:
+    b6_comoving_pair_explodes_time_dilated
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.05s
+

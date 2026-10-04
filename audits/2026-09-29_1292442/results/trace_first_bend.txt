@@ -1,0 +1,2 @@
+     0.000    0.0000   10.0000 1.004988e0
+end Arrived t = 24.796, radiated (LL work) -0.0000e0, max |F_RR|/|F_L| 0.00e0

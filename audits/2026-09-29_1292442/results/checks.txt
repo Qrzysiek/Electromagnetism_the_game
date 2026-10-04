@@ -1,0 +1,234 @@
+Levels read: 88 from C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\levels
+
+== Charge clouds vs the potential-map formula ==
+The trajectory uses the uniform-sphere potential. The potential map evaluates Q/r for every Coulomb source (potential.wgsl), and paints a solid disk of charge_radius at the centre.
+
+76_jackson_bound_charge.json: cloud Q=1e+06 R=4 at [10.0, 10.0, 0.0], charge_radius=0.3
+  centre   d= 0.000  phi_true=375000  phi_map=1e+10  map/true=26666.6667
+  R/4      d= 1.000  phi_true=367187.5  phi_map=1000000  map/true=2.7234
+  R/2      d= 2.000  phi_true=343750  phi_map=500000  map/true=1.4545
+  3R/4     d= 3.000  phi_true=304687.5  phi_map=333333.33  map/true=1.0940
+  surface  d= 4.000  phi_true=250000  phi_map=250000  map/true=1.0000
+  shot launch d=2.0000 T=0.03125 q=-1e-06 total energy=-0.3125
+  turning radius  true=2.8284  map=3.2000  (map paints a solid disk of radius 0.3 at the centre)
+  colour at launch (q/T)(phi_map-phi_true) = -5 T0 (0 if the map used the trajectory potential)
+  at the painted disk edge d=0.3: phi_map=3333333.3 phi_true=374296.88 colour offset=-94.6892 T0
+
+77_jackson_resonance.json: cloud Q=1e+06 R=4 at [15.0, 10.0, 0.0], charge_radius=0.3
+  centre   d= 0.000  phi_true=375000  phi_map=1e+10  map/true=26666.6667
+  R/4      d= 1.000  phi_true=367187.5  phi_map=1000000  map/true=2.7234
+  R/2      d= 2.000  phi_true=343750  phi_map=500000  map/true=1.4545
+  3R/4     d= 3.000  phi_true=304687.5  phi_map=333333.33  map/true=1.0940
+  surface  d= 4.000  phi_true=250000  phi_map=250000  map/true=1.0000
+  shot launch d=0.0000 T=0.0078125 q=-1e-06 total energy=-0.3671875
+  turning radius  true=1.0000  map=2.7234  (map paints a solid disk of radius 0.3 at the centre)
+  colour at launch (q/T)(phi_map-phi_true) = -1.27995e+06 T0 (0 if the map used the trajectory potential)
+  at the painted disk edge d=0.3: phi_map=3333333.3 phi_true=374296.88 colour offset=-378.757 T0
+
+78_jackson_bound_knock.json: cloud Q=1 R=4 at [30.0, 10.0, 0.0], charge_radius=0.3
+  centre   d= 0.000  phi_true=0.375  phi_map=10000  map/true=26666.6667
+  R/4      d= 1.000  phi_true=0.3671875  phi_map=1  map/true=2.7234
+  R/2      d= 2.000  phi_true=0.34375  phi_map=0.5  map/true=1.4545
+  3R/4     d= 3.000  phi_true=0.3046875  phi_map=0.33333333  map/true=1.0940
+  surface  d= 4.000  phi_true=0.25  phi_map=0.25  map/true=1.0000
+  shot launch d=2.0000 T=0.03125 q=-1 total energy=-0.3125
+  turning radius  true=2.8284  map=3.2000  (map paints a solid disk of radius 0.3 at the centre)
+  colour at launch (q/T)(phi_map-phi_true) = -5 T0 (0 if the map used the trajectory potential)
+  at the painted disk edge d=0.3: phi_map=3.3333333 phi_true=0.37429687 colour offset=-94.6892 T0
+
+79_jackson_spectroscopy.json: cloud Q=1e+06 R=4 at [13.0, 10.0, 0.0], charge_radius=0.3
+  centre   d= 0.000  phi_true=375000  phi_map=1e+10  map/true=26666.6667
+  R/4      d= 1.000  phi_true=367187.5  phi_map=1000000  map/true=2.7234
+  R/2      d= 2.000  phi_true=343750  phi_map=500000  map/true=1.4545
+  3R/4     d= 3.000  phi_true=304687.5  phi_map=333333.33  map/true=1.0940
+  surface  d= 4.000  phi_true=250000  phi_map=250000  map/true=1.0000
+  shot launch d=0.0000 T=0.0078125 q=-1e-06 total energy=-0.3671875
+  turning radius  true=1.0000  map=2.7234  (map paints a solid disk of radius 0.3 at the centre)
+  colour at launch (q/T)(phi_map-phi_true) = -1.27995e+06 T0 (0 if the map used the trajectory potential)
+  at the painted disk edge d=0.3: phi_map=3333333.3 phi_true=374296.88 colour offset=-378.757 T0
+
+79_jackson_spectroscopy.json: cloud Q=1e+06 R=3 at [27.0, 10.0, 0.0], charge_radius=0.3
+  centre   d= 0.000  phi_true=500000  phi_map=1e+10  map/true=20000.0000
+  R/4      d= 0.750  phi_true=489583.33  phi_map=1333333.3  map/true=2.7234
+  R/2      d= 1.500  phi_true=458333.33  phi_map=666666.67  map/true=1.4545
+  3R/4     d= 2.250  phi_true=406250  phi_map=444444.44  map/true=1.0940
+  surface  d= 3.000  phi_true=333333.33  phi_map=333333.33  map/true=1.0000
+  shot launch d=0.0000 T=0.0185185 q=-1e-06 total energy=-0.48148148
+  turning radius  true=1.0000  map=2.0769  (map paints a solid disk of radius 0.3 at the centre)
+  colour at launch (q/T)(phi_map-phi_true) = -539973 T0 (0 if the map used the trajectory potential)
+  at the painted disk edge d=0.3: phi_map=3333333.3 phi_true=498333.33 colour offset=-153.09 T0
+
+== Stray fields absent from the potential and magnetic maps ==
+potential.wgsl sums fixed charges, dipoles, circular coils and polygon segments. Uniform stray E and B_z are stored on the flight (Level::scenario_with) and are sampled by the Total field view, and they are not uploaded by potential::params. The potential and magnetic maps are built from Level::display_scenario, which always passes disturbance index 0, and the map cache key does not include the selected disturbance.
+
+36_stray_field.json  (2 realization(s); map uses index 0)
+  [1] 'supply on'  E=(0, -6700)  Bz=0  waves=0
+      |Δφ| of -E·x across the grid ≈ 134000
+
+39_mains_hum.json  (4 realization(s); map uses index 0)
+  [0] 'phase 0°'  E=(0, 0)  Bz=0  waves=1
+  [1] 'phase 90°'  E=(0, 0)  Bz=0  waves=1
+  [2] 'phase 180°'  E=(0, 0)  Bz=0  waves=1
+  [3] 'phase 270°'  E=(0, 0)  Bz=0  waves=1
+
+40_earths_field.json  (3 realization(s); map uses index 0)
+  [1] 'facing north'  E=(0, 0)  Bz=7700  waves=0
+      magnetic map stays on realization 0 while this flight is selected
+  [2] 'facing south'  E=(0, 0)  Bz=-7700  waves=0
+      magnetic map stays on realization 0 while this flight is selected
+
+41_crt_earth_field.json  (1 realization(s); map uses index 0)
+  [0] 'facing north'  E=(0, 0)  Bz=7700  waves=0
+      shot 1 at (0,10) q=-1e-06 T=0.4
+        uniform Bz/b_ref=0.0428732 (b_ref=179600 for a 5-cell gyroradius; the magnetic map adds 0)
+      shot 2 at (0,10) q=-1e-06 T=0.6
+        uniform Bz/b_ref=0.0349365 (b_ref=220400 for a 5-cell gyroradius; the magnetic map adds 0)
+
+45_rf_beam_line.json  (2 realization(s); map uses index 0)
+  [1] 'supply on'  E=(0, -13000)  Bz=0  waves=0
+      |Δφ| of -E·x across the grid ≈ 260000
+
+57_jackson_exb_drift.json  (1 realization(s); map uses index 0)
+  [0] 'crossed fields'  E=(0, 100000)  Bz=330000  waves=0
+      |Δφ| of -E·x across the grid ≈ 2e+06
+      shot 1 at (2,10) q=1e-06 T=0.0001
+        empty potential map: flat colour u=10000 T0, forbidden excess g=9999 (true u at launch is 0)
+        true energy boundary is 0.001 cells against E (|q E|=0.1 per cell)
+        uniform Bz/b_ref=116.673 (b_ref=2828.43 for a 5-cell gyroradius; the magnetic map adds 0)
+      shot 2 at (2,10) q=-1e-06 T=0.0001
+        empty potential map: flat colour u=-10000 T0, forbidden excess g=-10001 (true u at launch is 0)
+        true energy boundary is 0.001 cells against E (|q E|=0.1 per cell)
+        uniform Bz/b_ref=116.673 (b_ref=2828.43 for a 5-cell gyroradius; the magnetic map adds 0)
+
+62_jackson_gradient_drift.json  (1 realization(s); map uses index 0)
+  [0] 'uniform B'  E=(0, 0)  Bz=330000  waves=0
+      shot 1 at (15,8) q=1e-06 T=0.5
+        uniform Bz/b_ref=1.65 (b_ref=200000 for a 5-cell gyroradius; the magnetic map adds 0)
+      shot 2 at (15,8) q=-1e-06 T=0.5
+        uniform Bz/b_ref=1.65 (b_ref=200000 for a 5-cell gyroradius; the magnetic map adds 0)
+
+63_jackson_runaway.json  (1 realization(s); map uses index 0)
+  [0] 'crossed fields'  E=(0, 3e+07)  Bz=1e+07  waves=0
+      |Δφ| of -E·x across the grid ≈ 6e+08
+      shot 1 at (4,10) q=1e-08 T=0.0001
+        empty potential map: flat colour u=30000 T0, forbidden excess g=29999 (true u at launch is 0)
+        true energy boundary is 0.000333333 cells against E (|q E|=0.3 per cell)
+        uniform Bz/b_ref=35.3551 (b_ref=282844 for a 5-cell gyroradius; the magnetic map adds 0)
+
+66_jackson_magnetosphere.json  (1 realization(s); map uses index 0)
+  [0] 'solar wind'  E=(0, 100000)  Bz=330000  waves=0
+      |Δφ| of -E·x across the grid ≈ 2e+06
+      shot 1 at (2,10) q=1e-06 T=0.0001
+        empty potential map: flat colour u=10000 T0, forbidden excess g=9999 (true u at launch is 0)
+        true energy boundary is 0.001 cells against E (|q E|=0.1 per cell)
+        uniform Bz/b_ref=116.673 (b_ref=2828.43 for a 5-cell gyroradius; the magnetic map adds 0)
+      shot 2 at (2,10) q=-1e-06 T=0.0001
+        empty potential map: flat colour u=-10000 T0, forbidden excess g=-10001 (true u at launch is 0)
+        true energy boundary is 0.001 cells against E (|q E|=0.1 per cell)
+        uniform Bz/b_ref=116.673 (b_ref=2828.43 for a 5-cell gyroradius; the magnetic map adds 0)
+
+82_jackson_in_step.json  (1 realization(s); map uses index 0)
+  [0] 'crossed fields'  E=(0, 6.98297)  Bz=34.9149  waves=0
+      |Δφ| of -E·x across the grid ≈ 139.659
+      shot 1 at (6,8) q=0.025 T=1.08034
+        empty potential map: flat colour u=1.29274 T0, forbidden excess g=0.29274 (true u at launch is 0)
+        true energy boundary is 6.1884 cells against E (|q E|=0.174574 per cell)
+        uniform Bz/b_ref=2.92022 (b_ref=11.9562 for a 5-cell gyroradius; the magnetic map adds 0)
+
+84_jackson_thomson.json  (1 realization(s); map uses index 0)
+  [0] 'light wave'  E=(0, 0)  Bz=0  waves=1
+
+86_jackson_quiet_ring.json  (1 realization(s); map uses index 0)
+  [0] 'crossed fields'  E=(0, 6.98297)  Bz=34.9149  waves=0
+      |Δφ| of -E·x across the grid ≈ 139.659
+      shot 1 at (6,8) q=0.025 T=1.08034
+        empty potential map: flat colour u=1.29274 T0, forbidden excess g=0.29274 (true u at launch is 0)
+        true energy boundary is 6.1884 cells against E (|q E|=0.174574 per cell)
+        uniform Bz/b_ref=2.92022 (b_ref=11.9562 for a 5-cell gyroradius; the magnetic map adds 0)
+
+87_jackson_ring_of_four.json  (1 realization(s); map uses index 0)
+  [0] 'crossed fields'  E=(0, 6.98297)  Bz=34.9149  waves=0
+      |Δφ| of -E·x across the grid ≈ 139.659
+      shot 1 at (6,8) q=0.025 T=1.08034
+        empty potential map: flat colour u=1.29274 T0, forbidden excess g=0.29274 (true u at launch is 0)
+        true energy boundary is 6.1884 cells against E (|q E|=0.174574 per cell)
+        uniform Bz/b_ref=2.92022 (b_ref=11.9562 for a 5-cell gyroradius; the magnetic map adds 0)
+
+== Moments, free particles, static waves, metal with radiation reaction ==
+  shots with a magnetic moment: ['29_stern_gerlach.json', '47_stern_gerlach_beam.json']
+  levels with free_particles: none
+  levels with an ω=0 wave: none
+  radiation reaction together with metal: none
+
+== Static plane-wave term, finite c ==
+PlaneWave::fields sets B = k̂ × E / c whenever c is finite, including ω = 0. External::sample's comment says that term has B = 0. W4 checks energy, and a uniform B does no work, so that test still passes.
+  ω=0 c=4: |E|=0.0209012 |B|=0.0052253 |B|/( |E|/c )=1
+  ω=1.3 c=4: |E|=0.0209012 |B|=0.0052253 |B|/( |E|/c )=1
+  ω=0 c=∞: |E|=0.0209012 |B|=0
+
+== Static electric dipole: field versus −∇(n·p / r²) ==
+antenna.rs::fields returns the Jackson E below and phi = 0 for every ω, including 0. LevelField::is_static is true when every antenna has ω = 0, and the trajectory energy diagnostic then uses q φ.
+  at (1.7, 0.4), p=(0.8, -0.3): |E|=0.28112932  φ=n·p/r²=0.23279408  |E − (−∇φ)|=1.864e-11  (the code stores φ = 0)
+
+== Launch node against its detector (and gates) ==
+Signed distance is Aabb::signed_distance of Level::box_region. A 2D detector is a slab z ∈ [−1, 1]. The runner treats g ≤ 0 at launch as an immediate event, before gates and acceptance.
+  launch nodes with g ≤ 0 on their detector: none
+  launch nodes inside a gate: none
+  beam samples whose box clearance is inside the distribution's reach (Gaussian 3σ of width and length): none
+  closest launch nodes (signed distance, file, shot, has acceptance):
+    2  58_jackson_van_allen.json shot 1  acceptance=False
+    3  02_slingshot.json shot 0  acceptance=False
+    4  31_dempster.json shot 0  acceptance=False
+    4  31_dempster.json shot 1  acceptance=False
+    4  38_synchrotron_light.json shot 0  acceptance=False
+    4  73_jackson_classical_atom.json shot 0  acceptance=True
+    4  74_jackson_circularization.json shot 0  acceptance=True
+    4  75_jackson_three_orbits.json shot 0  acceptance=True
+
+== Launch speed in units of c ==
+β = sqrt(ε(ε+2))/(1+ε), ε = T/(m c²), from Kinematics. A beam's energy spread reaches ±3σ (Gaussian) or ± the spread (uniform) of T₀. tapered adds up to 0.1c when the continuation points against the velocity, so β > 0.9 can make the past or the future superluminal.
+  shots whose upper-edge β exceeds 0.9: 7
+    β_edge=0.942809 β₀=0.942809  88_jackson_undulator.json shot 0  c=2 T=8 m=1 spread=0 shot
+    β_edge=0.942809 β₀=0.942809  85_jackson_braking.json shot 0  c=2 T=8 m=1 spread=0 shot
+    β_edge=0.942809 β₀=0.942809  84_jackson_thomson.json shot 0  c=2 T=8 m=1 spread=0 shot
+    β_edge=0.942809 β₀=0.942809  83_jackson_quiet_turn.json shot 0  c=2 T=8 m=1 spread=0 shot
+    β_edge=0.942809 β₀=0.942809  81_jackson_critical_frequency.json shot 0  c=2 T=8 m=1 spread=0 shot
+    β_edge=0.942809 β₀=0.942809  80_jackson_beaming.json shot 0  c=2 T=8 m=1 spread=0 shot
+    β_edge=0.910180 β₀=0.910180  30_beta_spectrometer.json shot 0  c=1 T=1.41421 m=1 spread=0 shot
+  highest upper-edge speeds:
+    β_edge=0.942809 β₀=0.942809  88_jackson_undulator.json shot 0  c=2 T=8
+    β_edge=0.942809 β₀=0.942809  85_jackson_braking.json shot 0  c=2 T=8
+    β_edge=0.942809 β₀=0.942809  84_jackson_thomson.json shot 0  c=2 T=8
+    β_edge=0.942809 β₀=0.942809  83_jackson_quiet_turn.json shot 0  c=2 T=8
+    β_edge=0.942809 β₀=0.942809  81_jackson_critical_frequency.json shot 0  c=2 T=8
+    β_edge=0.942809 β₀=0.942809  80_jackson_beaming.json shot 0  c=2 T=8
+    β_edge=0.910180 β₀=0.910180  30_beta_spectrometer.json shot 0  c=1 T=1.41421
+    β_edge=0.866025 β₀=0.866025  30_beta_spectrometer.json shot 1  c=1 T=1
+    β_edge=0.848365 β₀=0.848365  26_fast_lane.json shot 0  c=1.5 T=2
+    β_edge=0.805287 β₀=0.800000  48_relativistic_beam.json shot 0  c=5 T=16.6667
+    β_edge=0.429778 β₀=0.429778  38_synchrotron_light.json shot 0  c=2 T=0.43
+    β_edge=0.350000 β₀=0.350000  87_jackson_ring_of_four.json shot 0  c=4 T=1.08034
+
+== tapered continuation and the speed of light ==
+Transcription of beam::tapered. T = 0.1 c/|a|, u = τ/T, u₁ = 0.7. As |u| → ∞ the velocity is v + sign(u) â · 0.1 c. Braking (a opposite v) makes the past faster; speeding up makes the future faster.
+  brake, |v|=0.95c, a=−c: |v| at |u|=0.7 is 1.020000 c, at |u|=20 is 1.050000 c
+  brake, |v|=0.95c, a=−c, future: |v| at |u|=0.7 is 0.880000 c, at |u|=20 is 0.850000 c
+  speed up, |v|=0.95c, a=+c, future: |v| at |u|=0.7 is 1.020000 c, at |u|=20 is 1.050000 c
+  across, |v|=0.995c, a=+y: |v| at |u|=0.7 is 0.997459 c, at |u|=20 is 1.000012 c
+  closed form vs RK4 of a sech² over τ=-0.5: |Δr|=1.354e-14 |Δv|=1.088e-14
+  accelerated_fields' Newton loop (50 steps, stops on a step-size test, not on g = 0):
+    beside a braking charge: τ=-0.372626 g=-1.833e-01 |v|/c at τ=1.050000 max |v|/c during the iteration=1.050000
+    ahead of a braking charge: τ=0.105311 g=-2.107e-01 |v|/c at τ=0.855204 max |v|/c during the iteration=1.050000
+    behind a speeding charge: τ=-0.225165 g=0.000e+00 |v|/c at τ=0.850002 max |v|/c during the iteration=0.850018
+
+== Faraday cup: who can show the energy panel the fade disagrees with ==
+instant_drain defaults off, so a detector is Fate::Cup. c = ∞ and beam_interaction (or free particles, or max_free > 0) make the panel say the total is conserved. Listed levels have at least two charged particles in the file (a beam count, or more than one charged shot).
+  ['46_space_charge.json (16 charged particles)', '49_collimated_beam.json (16 charged particles)', '50_velocity_selector.json (24 charged particles)', '51_beam_preparation.json (16 charged particles)', '56_isotope_separator.json (16 charged particles)']
+  Illustration, not a shipped flight: after booking, the survivor feels q1 q2 factor(t) R̂/R² and nothing in the budget changes except its kinetic energy. U at entry = 0.5. At t=8, the survivor's kinetic energy is 0.00520436 (0.0104 of that U). An instant drain leaves it at 0.
+
+== Coil bracket g(m): series against the direct elliptic combination ==
+Transcribed from magnetic.rs. The m^0 and m^1 coefficients are omitted in the source because they cancel.
+  m=1e-08  series=2.9452431e-17  direct=2.220446e-16  (series-direct)/direct=-8.674e-01  series/lead=1.000000
+  m=0.0001  series=2.9453167e-09  direct=2.9453169e-09  (series-direct)/direct=-4.482e-08  series/lead=1.000025
+  m=0.02  series=0.00011840436  direct=0.00011840436  (series-direct)/direct=-9.877e-13  series/lead=1.005047
+  m=0.049999  series=0.00074570686  direct=0.00074570686  (series-direct)/direct=-1.819e-13  series/lead=1.012802

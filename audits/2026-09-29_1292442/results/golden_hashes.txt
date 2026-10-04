@@ -1,0 +1,107 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling either v1.18.0
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling rayon v1.12.0
+   Compiling syn v3.0.6
+   Compiling physics v0.1.0 (C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\crates\physics)
+   Compiling serde_derive v1.0.229
+   Compiling level v0.1.0 (C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\crates\level)
+    Finished `test` profile [optimized + debuginfo] target(s) in 14.97s
+     Running tests\determinism.rs (target\debug\deps\determinism-b3efac1cb0063554.exe)
+
+running 1 test
+test t11_matches_golden_hashes ... 01_first_bend: 78d94f8b57cbc886
+02_slingshot: ae3e29f49f6cd981
+03_geiger_marsden: a8b10dcd78ea66fd
+04_twin_beams: adf57d5a43b202b6
+05_two_stages: 8de7e0e77f63bd56
+06_injection: 64aed714f6eba8c4
+07_thomson_crt: 77a187c754e7759a
+08_around_the_wall: 4e6aac92180e970b
+09_einzel_lens: 091352c13faa4260
+10_reflectron: 6b30c25e6240bddc
+11_collimator: 4d5a221098b91bd2
+12_hemispherical_analyzer: 5a0468fdf578166b
+13_soft_landing: 48a40d278b87013a
+14_sorting_station: e1f40b0769b6bb32
+15_high_voltage_dome: f6f1a6798a96956a
+16_polarized_sphere: 2cb0e924eb390573
+17_image_charge: df173bad7065d3fc
+18_deflection_plates: 9f1711968f91be33
+19_power_supply: df7bd650ca7b8e5e
+20_build_a_deflector: 2fac714333de59e9
+21_shielding: 0140b86c70124364
+22_tune_the_lens: 9b0b00bbb18c73cf
+23_real_einzel_lens: 981b2bd28d014dc3
+24_beam_pipe: 1d70bdd8e56b3a90
+25_microscope_column: 2a559c401458f61a
+26_fast_lane: f96c93c14f9bb755
+27_first_coil: 483ed18dc4dd3090
+28_first_magnet: 0a3cb3f42efbe7d6
+29_stern_gerlach: 51daccd029d2bcda
+30_beta_spectrometer: 2764748a2c743bc8
+31_dempster: db3f0f10dff8dab1
+32_wien_filter: 5632c5fef112e3e9
+33_calutron: f809c61c2008cc1c
+34_build_wien_filter: 786ec2ab66ae4000
+35_mass_spectrometer: 8cefb035456bec2b
+36_stray_field: d4b3d01ad191acfb
+37_rf_kick: 50c3525d374df9ac
+38_synchrotron_light: 53ba0f923618b0e6
+39_mains_hum: 559b42d092a335cc
+40_earths_field: 0a6b04b5b1b7edc1
+41_crt_earth_field: a8756c635930da1e
+42_rf_separator: 58875b407f179b66
+43_tune_the_rf: 375b206cd5ef6947
+44_streak_camera: 44e07d19abdbbfa1
+45_rf_beam_line: a9dad6d374d82ca2
+46_space_charge: 279c781aded07665
+47_stern_gerlach_beam: e80ace641a963231
+48_relativistic_beam: 0bb2f7184e43f037
+49_collimated_beam: 5ec78fb1206306dd
+50_velocity_selector: 5e195f587ef0a769
+51_beam_preparation: ceb527beb2466bff
+52_chromatic_aberration: b98e41fdec7fc4b0
+53_real_analyzer: 8e775c1dd9db3376
+54_calutron_space_charge: a56f5474ff688b2b
+55_soft_landing_current: 896c2264d3d63654
+56_isotope_separator: 4e990a2c80e7bb3d
+57_jackson_exb_drift: 2dc447aea751054c
+58_jackson_van_allen: 4a064551bb4807c5
+59_throw_a_charge: 09b1b54709d3c07f
+60_jackson_faraday: 3000cc83f4b8dd45
+61_jackson_knock_on: 8c7965bcb4db0e0c
+62_jackson_gradient_drift: 670fb08407403b53
+63_jackson_runaway: 6226c9931ed8899c
+64_jackson_recoil: a071e284c79649bb
+65_jackson_stormer: 868ac70a353f1c86
+66_jackson_magnetosphere: cefd9e7af017f5b9
+67_jackson_own_image: 3aaa30b4f191f243
+68_jackson_two_spheres: 1be48d1203a88c2b
+69_jackson_slot: 613a1c51ffe09132
+70_jackson_golden_ratio: 9bd7b23ba9b38bc8
+71_jackson_multipoles: cb015578a94a6565
+72_jackson_sphere_slalom: ece8c5903a29788f
+73_jackson_classical_atom: bdfeeb643470c7d9
+74_jackson_circularization: d844911d8f32f2b9
+75_jackson_three_orbits: 644e060fe2bd89cc
+76_jackson_bound_charge: 022d23a9ce94885e
+77_jackson_resonance: 47c34e734dd4b3eb
+78_jackson_bound_knock: 585459eccbc27a68
+79_jackson_spectroscopy: 12481fd4e3e99e99
+80_jackson_beaming: 89a4e203316900d4
+81_jackson_critical_frequency: 5132e02919bb1d13
+82_jackson_in_step: 8ba5484ac3a5c509
+83_jackson_quiet_turn: 55365e4c170b6aa8
+84_jackson_thomson: 313624b5ad1f6a49
+85_jackson_braking: 7293170bf3dd50ca
+86_jackson_quiet_ring: 0f739075701649eb
+87_jackson_ring_of_four: a45e69478df2a2f6
+88_jackson_undulator: 1d10947073c3f59f
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 19.57s
+

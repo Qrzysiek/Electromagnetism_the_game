@@ -1,0 +1,99 @@
+sphere sdf: 0.0000000000000000e0
+shape sphere: 0.0000000000000000e0
+torus exterior: 0.0000000000000000e0
+torus above ring: 0.0000000000000000e0
+capsule side: 0.0000000000000000e0
+capsule end: 0.0000000000000000e0
+zero capsule: 0.0000000000000000e0
+aabb inside: 0.0000000000000000e0
+aabb corner: 0.0000000000000000e0
+oriented box rotation: 0.0000000000000000e0
+oriented box face: 0.0000000000000000e0
+crossing at 1: 0.0000000000000000e0
+dip found: 1.0926725019580474e-19
+underestimated v_max misses the dip: none
+near miss certified clear: none
+nan endpoint dropped: none
+elastic newtonian: 0.0000000000000000e0
+elastic not approaching: none
+gamma of velocity c=inf: 0.0000000000000000e0
+gamma of momentum c=inf: 0.0000000000000000e0
+gamma of velocity c=5: 0.0000000000000000e0
+ll linear: 0.0000000000000000e0
+ll on cone: 0.0000000000000000e0
+ll before cone: 0.0000000000000000e0
+ll after cone: 0.0000000000000000e0
+PREVIEW_GOOD 0.2
+PREVIEW_LIMIT 1.0
+VERIFY_GOOD 3.0
+VERIFY_LIMIT 20.0
+STEPS_GOOD 10000
+STEPS_LIMIT 200000
+SETUP_GOOD 1.0
+SETUP_LIMIT 5.0
+MEMORY_GOOD 64000000
+MEMORY_LIMIT 512000000
+RESIDUAL_GOOD 1.0e-10
+RESIDUAL_LIMIT 1.0e-8
+IMAGE_FORCE_LIMIT 1.0e-10
+shipped dome issues 0
+metal plus antenna: metal spheres respond electrostatically; antennas and disturbances would need a full-wave solution
+ramped coil plus metal: ramped coils with metal: its electrostatic response cannot screen the induced field
+elastic finite-c energy: 8.3266726846886741e-17
+elastic finite-c vs newtonian: 8.5504244572473298e-2
+objective level1 reference: 0.0000000000000000e0 Arrived
+MARGIN_SAFE 2.5000000000000000e-1
+SAFETY 1.0000000000000000e1
+FLOOR 1.0000000000000001e-9
+bounds -0.2 -0.5: SmallMargin Bounds margin -5.0000000000000000e-1 error 2.9999999999999999e-1 ratio 1.6666666661111110e-1
+bounds at MARGIN_SAFE: Verified
+bounds just under MARGIN_SAFE: SmallMargin Bounds margin 5.0000000000000000e-1 error 2.5000000000000000e-1 ratio 1.9999999992000000e-1
+bounds comfortable: Verified
+bounds tight: SmallMargin Bounds margin 1.1999999999999999e-3 error 2.0000000000000009e-4 ratio 5.9999970000014968e-1
+bounds -0.2 -0.5 counted as skipped: 1.0000000000000000e0
+preview margin short of MARGIN_SAFE: 4.9999999999999989e-2
+survey pulse 0 tol 1.0e-6 steps 5 outcome Timeout end_t 1.000000 worst 1.001855e0
+survey worst pulse 0 tol 1.0e-6 steps 4 ta 0.649540 tb 0.934023 sample_max 1.232004e0 fine_max 1.234290e0 ratio 1.001855e0 fine_frac 0.7969
+survey pulse 0 tol 1.0e-2 steps 2 outcome Timeout end_t 1.000000 worst 1.059198e0
+survey worst pulse 0 tol 1.0e-2 steps 2 ta 0.232689 tb 1.000000 sample_max 1.165850e0 fine_max 1.234866e0 ratio 1.059198e0 fine_frac 0.8438
+survey pulse 0 tol 1.0e-1 steps 2 outcome Timeout end_t 1.000000 worst 1.053625e0
+survey worst pulse 0 tol 1.0e-1 steps 2 ta 0.245196 tb 1.000000 sample_max 1.171941e0 fine_max 1.234786e0 ratio 1.053625e0 fine_frac 0.8281
+survey pulse 0 tol 1.0e0 steps 2 outcome Timeout end_t 1.000000 worst 1.053625e0
+survey worst pulse 0 tol 1.0e0 steps 2 ta 0.245196 tb 1.000000 sample_max 1.171941e0 fine_max 1.234786e0 ratio 1.053625e0 fine_frac 0.8281
+survey pulse 1 tol 1.0e-6 steps 14 outcome Timeout end_t 1.000000 worst 1.010434e0
+survey worst pulse 1 tol 1.0e-6 steps 10 ta 0.677260 tb 0.757945 sample_max 1.484506e0 fine_max 1.499996e0 ratio 1.010434e0 fine_frac 0.1250
+survey pulse 1 tol 1.0e-2 steps 5 outcome Timeout end_t 1.000000 worst 1.085572e0
+survey worst pulse 1 tol 1.0e-2 steps 4 ta 0.544866 tb 0.774610 sample_max 1.380573e0 fine_max 1.498712e0 ratio 1.085572e0 fine_frac 0.6250
+survey pulse 1 tol 1.0e-1 steps 4 outcome Timeout end_t 1.000000 worst 1.154266e0
+survey worst pulse 1 tol 1.0e-1 steps 3 ta 0.388832 tb 0.737134 sample_max 1.314910e0 fine_max 1.517755e0 ratio 1.154266e0 fine_frac 0.8594
+survey pulse 1 tol 1.0e0 steps 4 outcome Timeout end_t 1.000000 worst 1.006486e0
+survey worst pulse 1 tol 1.0e0 steps 2 ta 0.078588 tb 0.492305 sample_max 1.501361e0 fine_max 1.511098e0 ratio 1.006486e0 fine_frac 0.2656
+vmax candidate omega 32 pi tol 1.0e0 excess 5.141014e-1 ratio 1.115201e0
+vmax step ta 3.7355257559202193e-1 tb 5.3163301106785821e-1 samples 1.9829498347354888e0 1.6488462327574929e0 1.1041188089399014e0 4.7455246705231255e0 4.9171495021881402e0
+vmax sample_max 4.9171495021881402e0 fine_max 5.4836077251120541e0 ratio 1.1152005288169169e0 radius 1.8501225574544880e-1 1.25*sample_max 6.1464368777351748e0
+vmax gmin -1.7208308163117872e-1 loose Some(0.48334821863404964)
+vmax ga 6.8612029291433885e-1 gb 2.3526169054411292e-1 sample_max 4.9171495021881402e0 bare None padded None
+vmax outcome Collided(0) t 5.6982615902130429e-1
+vmax candidate did not separate the two factors
+vmax candidate omega 32 pi tol 1.0e0 excess 2.141161e-1 ratio 1.093420e0
+vmax step ta 6.8470840167309355e-1 tb 8.4135599856156584e-1 samples 2.3062744856673993e0 2.1790852454029315e0 2.0223906590013003e0 6.0601150944497144e0 5.9467189302946526e0
+vmax sample_max 6.0601150944497144e0 fine_max 6.6262524545825841e0 ratio 1.0934202323403690e0 radius 5.3534017747327987e-2 1.25*sample_max 7.5751438680621428e0
+vmax gmin -5.3534017747327987e-2 loose Some(0.7987668375722787)
+vmax ga 8.1909053478213223e-1 gb 2.3725996712562883e-1 sample_max 6.0601150944497144e0 bare None padded None
+vmax outcome Collided(0) t 8.7368633463423429e-1
+vmax candidate did not separate the two factors
+vmax candidate omega 64 pi tol 5.0e-1 excess 1.657279e-1 ratio 1.027295e0
+vmax step ta 3.0490728041940635e-1 tb 3.8585546349620881e-1 samples 4.0520833301765693e0 2.8895759097994405e0 1.0987844473926898e0 4.4635162842508160e0 1.9431334582380169e0
+vmax sample_max 4.4635162842508160e0 fine_max 4.5853492595679208e0 ratio 1.0272952908779527e0 radius 6.0281856117653035e-2 1.25*sample_max 5.5793953553135198e0
+vmax gmin -5.1124203530276927e-2 loose None
+vmax ga 2.0497684534412786e-1 gb 2.0150087966767427e-1 sample_max 4.4635162842508160e0 bare None padded None
+vmax outcome Collided(0) t 4.2328038347719943e-1
+vmax candidate did not separate the two factors
+vmax candidate omega 64 pi tol 5.0e-1 excess 3.658477e-3 ratio 1.101787e0
+vmax step ta 7.0202507541167025e-1 tb 7.7699706805932234e-1 samples 1.2489093506619993e0 1.3183218098015390e0 1.0487617072684645e0 2.2668021864460974e0 2.3499073666407178e0
+vmax sample_max 2.3499073666407178e0 fine_max 2.5890977264709898e0 ratio 1.1017871441341978e0 radius 9.1961923274168551e-4 1.25*sample_max 2.9373842083008972e0
+vmax gmin 2.1290941341535279e-4 loose Some(0.7497799579372806)
+vmax ga 9.6577996193745311e-2 gb 8.1418480086189418e-2 sample_max 2.3499073666407178e0 bare None padded None
+vmax outcome Timeout t 1.0000000000000000e0
+vmax candidate did not separate the two factors
+vmax factor: no separating step (omega 32 pi tol 1.0e0 excess 5.141014e-1 ratio 1.115201e0 ta 0.373553 tb 0.531633)

@@ -1,0 +1,9 @@
+    Finished `release` profile [optimized] target(s) in 0.21s
+     Running tests\beams.rs (target\release\deps\beams-14ca676ee26a5e85.exe)
+
+running 1 test
+test b6_comoving_pair_explodes_time_dilated ... B6: doubling after t = 765.1957 (lab); ╬│ t' = 765.1957; relative difference 6.3e-8 (u/c = 7.1e-4); Coulomb-only would give 459.1 (Newtonian) or 592.7 (relativistic); 116 steps, radiated 2.6e-17 of T
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.02s
+

@@ -1,0 +1,38 @@
+Pattern counts in *.rs (comments included; this is a scan, not a verdict).
+
+## crates\physics\src  (23 files)
+  totals: unwrap()=4, expect(=38, todo!=0, unimplemented!=0, mul_add=0, unsafe =0, f32=0
+  crates\physics\src\beam.rs: expect(=24
+  crates\physics\src\bem.rs: expect(=3
+  crates\physics\src\conductor.rs: expect(=3
+  crates\physics\src\events.rs: unwrap()=2, expect(=1
+  crates\physics\src\field_motion.rs: expect(=2
+  crates\physics\src\integrator\dop853.rs: unwrap()=1
+  crates\physics\src\lienard.rs: expect(=1
+  crates\physics\src\spectrum.rs: unwrap()=1, expect(=1
+  crates\physics\src\trajectory.rs: expect(=3
+
+## crates\level\src  (6 files)
+  totals: unwrap()=7, expect(=10, todo!=0, unimplemented!=0, mul_add=0, unsafe =0, f32=0
+  crates\level\src\analysis.rs: unwrap()=2, expect(=6
+  crates\level\src\lib.rs: unwrap()=3, expect(=3
+  crates\level\src\solve.rs: unwrap()=2, expect(=1
+
+## crates\game\src  (12 files)
+  totals: unwrap()=21, expect(=19, todo!=0, unimplemented!=0, mul_add=0, unsafe =0, f32=222
+  crates\game\src\curriculum.rs: unwrap()=1
+  crates\game\src\draw.rs: expect(=1, f32=76
+  crates\game\src\editor.rs: unwrap()=9, expect(=7
+  crates\game\src\level_editor.rs: unwrap()=3, expect(=1, f32=3
+  crates\game\src\main.rs: expect(=1, f32=14
+  crates\game\src\math.rs: f32=5
+  crates\game\src\potential.rs: expect(=1, f32=32
+  crates\game\src\radiation.rs: f32=75
+  crates\game\src\sandbox.rs: unwrap()=5, f32=6
+  crates\game\src\ui.rs: unwrap()=1, f32=11
+  crates\game\src\visuals.rs: unwrap()=1, expect(=1
+  crates\game\src\worker.rs: unwrap()=1, expect(=7
+
+## crates\generator\src  (1 files)
+  totals: unwrap()=1, expect(=2, todo!=0, unimplemented!=0, mul_add=0, unsafe =0, f32=0
+  crates\generator\src\main.rs: unwrap()=1, expect(=2

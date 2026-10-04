@@ -1,0 +1,9 @@
+2026-09-29T23:26:33.180595Z  INFO bevy_diagnostic::system_information_diagnostics_plugin::internal: SystemInfo { os: "Windows 11 Home", kernel: "26200", cpu: "AMD Ryzen 7 9800X3D 8-Core Processor", core_count: "8", memory: "61.6 GiB" }
+2026-09-29T23:26:33.625387Z  INFO bevy_render::renderer: AdapterInfo { name: "AMD Radeon RX 9070 XT", vendor: 4098, device: 30032, device_type: DiscreteGpu, device_pci_bus_id: "", driver: "AMD proprietary driver", driver_info: "26.8.1 (LLPC)", backend: Vulkan, subgroup_min_size: 32, subgroup_max_size: 64, transient_saves_memory: false }
+2026-09-29T23:26:33.904620Z  INFO bevy_pbr::cluster: GPU clustering is supported on this device.
+2026-09-29T23:26:33.909681Z  INFO bevy_render::batching::gpu_preprocessing: GPU preprocessing is fully supported on this device.
+2026-09-29T23:26:33.910752Z  INFO bevy_egui::render: Using bindless_mode_array_size 16 (Device maximum 4294967295)
+2026-09-29T23:26:33.910924Z  INFO bevy_winit::system: Creating new window Electromagnetism ÔÇô the game (66v0)
+2026-09-29T23:26:34.067468Z  WARN gilrs::mapping: SDL-mapping 03000000-4c05-0000-e60c-000000000000 PS5 Controller: Unknown button b14
+2026-09-29T23:26:34.067858Z  INFO bevy_input::gamepad: Gamepad 400v0 connected.
+2026-09-29T23:26:35.280363Z  INFO bevy_render::view::window::screenshot: Screenshot saved to audit\screenshots\closing_level1.png

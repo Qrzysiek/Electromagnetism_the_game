@@ -1,0 +1,5 @@
+on cone v=0.0: de -49999.999999999993 expect -49999.999999999993 residual 0.000e+00 samples 0.0 1.0 h 1.000e-05
+on cone v=0.5: de -49999.999999999993 expect -49999.999999999993 residual 0.000e+00 samples 0.0 1.0 h 1.000e-05
+before cone: de 0.000e+00 samples 1.0 1.0
+after cone: de 0.000e+00 samples 0.0 0.0
+linear field residual 1.000e-12

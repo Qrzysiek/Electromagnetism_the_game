@@ -1,0 +1,47 @@
+dop853 sha matches recorded: 0.000000e+00
+dop853 sha: 8bfc0a954a38af1a458f5ab8025fb09c923373a936f52ff61e32f1a15c8f298a
+dop853 coefficient count: 1.540000e+02
+dop853 A max abs: 0.000000e+00
+dop853 B max abs: 0.000000e+00
+dop853 C max abs: 0.000000e+00
+dop853 E max abs: 0.000000e+00
+dop853 BHH max abs: 0.000000e+00
+dop853 D max abs: 0.000000e+00
+dop853 stage-12 error index present: 0.000000e+00
+dop853 controller defaults: 0.000000e+00
+dop853 step-factor identity: 0.000000e+00
+dense derivative vs complex step: 1.955209e-16
+bem panels: 1.120000e+02
+bem entries checked: 2.700000e+01
+bem entry vs quadrature: 2.080587e-12
+bem one panel vs monopole: 6.774676e-07
+bem lu vs numpy: 1.364208e-16
+bem lu residual: 1.184447e-16
+mfs householder vs lstsq: 2.571297e-15
+mfs K=40 exterior vs dipole: 1.921161e-03
+mfs K=40 boundary vs z: 1.213518e-02
+mfs K=80 exterior vs dipole: 1.119482e-04
+mfs K=80 boundary vs z: 1.887182e-03
+mfs K=440 exterior vs dipole: 4.569134e-09
+mfs K=440 boundary vs z: 9.252455e-07
+strip mode laplace analytic: 0.000000e+00
+square duct k ratio minus 1: 2.928932e-01
+J0 at located root: 9.515739e-17
+circular pipe k ratio minus 1: 3.468149e-01
+shader field-motion vs f64: 5.414897e-08
+shader ln2 absolute: 1.944005e-08
+shader dipole bz: 1.325765e-08
+shader coulomb outside: 0.000000e+00
+shader coulomb inside floor: 9.900000e-01
+cap MAX_CHARGES: 0.000000e+00
+cap MAX_MAGNETS: 0.000000e+00
+cap MAX_LOOPS: 0.000000e+00
+cap MAX_SEGMENTS: 0.000000e+00
+charges dropped: 1.000000e+00
+magnets dropped: 1.000000e+00
+loops dropped: 1.000000e+00
+segments dropped: 1.000000e+00
+place json characters: 3.169100e+04
+windows env char note: 31691 versus 32767
+retarded worldline vs quadratic: 0.000000e+00
+retarded worldline residual: 4.440892e-16

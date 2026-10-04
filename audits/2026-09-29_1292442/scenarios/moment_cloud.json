@@ -1,0 +1,30 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "audit moment beside a cloud",
+  "description": "Not a shipped level. Neutral magnetic moment, finite c, electric field only from a charge cloud. The moment ban does not look at clouds.",
+  "grid": { "nx": 24, "ny": 16, "nz": 0, "subdivision": 1 },
+  "physics": {
+    "c": 5.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 30.0,
+    "tolerances": { "preview": 1e-9, "verify": 1e-11 }
+  },
+  "shots": [
+    {
+      "particle": { "charge": 0.0, "mass": 1.0, "radius": 0.0, "moment": 1.0 },
+      "launch": {
+        "node": [1, 8, 0],
+        "direction": [1.0, 0.0, 0.0],
+        "kinetic_energy": 0.5
+      },
+      "detector": { "min": [22, 0, 0], "max": [24, 16, 0] }
+    }
+  ],
+  "clouds": [{ "center": [12, 11, 0], "radius": 2.0, "charge": 50.0 }],
+  "limits": { "max_charges": 0, "magnitudes": [], "allow_positive": true, "allow_negative": true, "max_magnets": 0, "magnet_strengths": [] },
+  "reference_solution": []
+}

@@ -1,0 +1,61 @@
+dop853 row-sum relative: 6.607975e-17
+dop853 quadrature to order 8: 4.440892e-16
+dop853 5th estimator annihilates deg 4: 1.595946e-16
+dop853 3rd estimator to order 3: 5.551115e-17
+panel potential vs quadrature: 6.537459e-16
+panel gradient vs quadrature: 1.235687e-15
+panel grad vs d(potential): 5.382998e-10
+panel normal jump minus 4 pi: 2.709544e-05
+display monopole vs panel, relative: 4.847228e-02
+sphere sdf: 0.000000e+00
+torus exterior: 0.000000e+00
+torus above ring: 0.000000e+00
+capsule side: 0.000000e+00
+capsule end: 0.000000e+00
+zero capsule: 0.000000e+00
+aabb inside: 0.000000e+00
+aabb corner: 0.000000e+00
+oriented box rotation: 0.000000e+00
+crossing at 1: 0.000000e+00
+dip found: 5.551115e-17
+near miss certified clear: 0.000000e+00
+underestimated v_max misses the dip: 0.000000e+00
+nan endpoint dropped: 0.000000e+00
+elastic bisection vs wide bracket: 0.000000e+00
+elastic residual of the balance: 0.000000e+00
+elastic not approaching: 0.000000e+00
+radiation term vs Larmor: 5.868253e-07
+hyperbolic field motion vs RK4: 2.278161e-15
+hyperbolic C0 identity: 0.000000e+00
+uniform retarded Newton: 0.000000e+00
+uniform retarded residual: 0.000000e+00
+quartic interpolation: 1.165734e-15
+filon quartic vs quadrature: 1.977274e-15
+pipe mode laplace relative: 5.745371e-05
+pipe mode wall value: 1.224647e-16
+next mode decays faster: 0.000000e+00
+mfs boundary residual relative: 6.511449e-04
+mfs force vs Kelvin: 2.740438e-07
+verify far boundary skipped: 0.000000e+00
+verify comfortable ratio above 1: 0.000000e+00
+verify tight ratio at or below 1: 0.000000e+00
+fast 30_beta_spectrometer.json shot 0: beta 0.910180 a_parallel 0.000000 future 0.915657c past 0.915657c
+fast 80_jackson_beaming.json shot 0: beta 0.942809 a_parallel 0.000000 future 0.948098c past 0.948098c
+fast 81_jackson_critical_frequency.json shot 0: beta 0.942809 a_parallel 0.000000 future 0.948098c past 0.948098c
+fast 83_jackson_quiet_turn.json shot 0: beta 0.942809 a_parallel 0.000000 future 0.948098c past 0.948098c
+fast 84_jackson_thomson.json shot 0: beta 0.942809 a_parallel 0.000000 future 0.948098c past 0.948098c
+fast 85_jackson_braking.json shot 0: beta 0.942809 a_parallel 0.000000 future 0.948098c past 0.948098c
+fast 88_jackson_undulator.json shot 0: beta 0.942809 a_parallel 0.000000 future 0.948098c past 0.948098c
+newton direct residual: 1.421085e-12
+newton direct skips bracket: 0.000000e+00
+newton bracket engaged: 0.000000e+00
+newton shallow-slope last sample: 7.709099e-02
+newton no-root returns none: 0.000000e+00
+bessel J0 at the root: 9.515739e-17
+sphere-cup k versus circular pipe: 3.468149e-01
+shader AGM vs 40-iter: 1.373377e-05
+level19 display panels: 1.120000e+02
+level19 display monopole vs panels: 7.505885e-03
+curriculum slug mismatches: 0.000000e+00
+LEVELS.md name mismatches: 6.000000e+01
+remainder checks finished

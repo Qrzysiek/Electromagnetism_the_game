@@ -1,0 +1,42 @@
+MARGIN_SAFE 2.5000000000000000e-1
+SAFETY 1.0000000000000000e1
+FLOOR 1.0000000000000001e-9
+far pair -0.2 -0.5: SmallMargin Bounds margin -5.0000000000000000e-1 error 2.9999999999999999e-1 ratio 1.6666666661111110e-1
+far pair -0.2 -0.5 was scored: 1.0000000000000000e0
+far pair ratio: 1.6666666661111110e-1
+bounds at MARGIN_SAFE: Verified
+bounds just under MARGIN_SAFE: SmallMargin ratio 1.9999999992000000e-1
+shipped panel potential vs quadrature: 1.9789288858537749e-13
+shipped panel gradient vs quadrature: 1.6801754255955852e-12
+shipped panel potential continuity: 0.0000000000000000e0
+shipped panel normal jump minus 4 pi: 2.7095439669722055e-7
+ghost smooth: outcome Collided(0) n_step 3 margin -5.4323680383624939e-1 end_t 1.0000000000000013e0 end_x 2.9999999999999999e-1
+ghost smooth margin above -MARGIN_SAFE: 0.0000000000000000e0
+ghost smooth calls: main steps 3 ghost accepts 0 ghost field calls 1 t_seen 1.0000000000000013e0
+ghost buzz: outcome Collided(0) n_step 67 margin -2.0337466707325969e-1 end_t 3.3271944618094248e-3 end_x 2.9999999999999999e-1
+ghost buzz margin above -MARGIN_SAFE: 1.0000000000000000e0
+ghost buzz calls: main steps 50 ghost accepts 10000 ghost field calls 179898 t_seen 6.8122734255304951e-1
+ghost scan 1e3: outcome Collided(0) n_step 213 margin -2.5002264458626333e-1 end_t 1.9987487966028189e-1 end_x 2.9999999999999999e-1
+ghost scan 1e3 margin above -MARGIN_SAFE: 0.0000000000000000e0
+ghost scan 1e3 calls: main steps 169 ghost accepts 4217 ghost field calls 74057 t_seen 5.1998435173384125e0
+ghost scan 3e3: outcome Collided(0) n_step 624 margin -1.9757041419138222e-1 end_t 1.9987263386789661e-1 end_x 2.9999999999999999e-1
+ghost scan 3e3 margin above -MARGIN_SAFE: 1.0000000000000000e0
+ghost scan 3e3 calls: main steps 505 ghost accepts 10000 ghost field calls 175828 t_seen 4.1512958461594298e0
+ghost scan 1e4: outcome Collided(0) n_step 2089 margin -5.9270578851737143e-2 end_t 1.9997707335180714e-1 end_x 2.9999999999999999e-1
+ghost scan 1e4 margin above -MARGIN_SAFE: 1.0000000000000000e0
+ghost scan 1e4 calls: main steps 1687 ghost accepts 10000 ghost field calls 175872 t_seen 1.3853852110108094e0
+ghost scan 3e4: outcome Collided(0) n_step 6256 margin -1.9765930981843649e-2 end_t 1.9999930805438740e-1 end_x 2.9999999999999999e-1
+ghost scan 3e4 margin above -MARGIN_SAFE: 1.0000000000000000e0
+ghost scan 3e4 calls: main steps 5062 ghost accepts 10000 ghost field calls 175663 t_seen 5.9529789999481098e-1
+ghost scan 1e5: outcome Collided(0) n_step 20836 margin -5.9293159805029472e-3 end_t 1.9999969116217350e-1 end_x 2.9999999999999999e-1
+ghost scan 1e5 margin above -MARGIN_SAFE: 1.0000000000000000e0
+ghost scan 1e5 calls: main steps 16872 ghost accepts 10000 ghost field calls 175751 t_seen 3.1858004888571811e-1
+ghost scan 3e5: outcome Collided(0) n_step 62454 margin -1.9761289658438708e-3 end_t 1.9999935373945477e-1 end_x 2.9999999999999999e-1
+ghost scan 3e5 margin above -MARGIN_SAFE: 1.0000000000000000e0
+ghost scan 3e5 calls: main steps 50603 ghost accepts 10000 ghost field calls 175883 t_seen 2.3952652545746272e-1
+emission samples 49 trajectory samples 8 shared times 8
+emission vs post-impulse speed at shared times: 7.9745222282890005e-1
+emission t span 0.0000000000000000e0 4.0000000000000000e0 end t 4.0000000000000000e0
+ll drain cone: 0.0000000000000000e0
+ll drain before cone: 0.0000000000000000e0
+ll drain after cone: 0.0000000000000000e0

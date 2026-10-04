@@ -1,0 +1,25 @@
+   Compiling level v0.1.0 (C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\crates\level)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.98s
+     Running tests\levels.rs (target\debug\deps\levels-504809d01c8853d5.exe)
+
+running 1 test
+test electrode_image_force_is_negligible ... 15_high_voltage_dome: image force bound / max(|F|, F0) <= 0.0e0
+16_polarized_sphere: image force bound / max(|F|, F0) <= 0.0e0
+17_image_charge: image force bound / max(|F|, F0) <= 0.0e0
+18_deflection_plates: image force bound / max(|F|, F0) <= 5.0e-13
+19_power_supply: image force bound / max(|F|, F0) <= 6.1e-13
+20_build_a_deflector: image force bound / max(|F|, F0) <= 5.9e-13
+21_shielding: image force bound / max(|F|, F0) <= 4.3e-13
+22_tune_the_lens: image force bound / max(|F|, F0) <= 1.8e-11
+23_real_einzel_lens: image force bound / max(|F|, F0) <= 1.5e-11
+24_beam_pipe: image force bound / max(|F|, F0) <= 1.8e-13
+25_microscope_column: image force bound / max(|F|, F0) <= 3.1e-12
+67_jackson_own_image: image force bound / max(|F|, F0) <= 0.0e0
+68_jackson_two_spheres: image force bound / max(|F|, F0) <= 0.0e0
+69_jackson_slot: image force bound / max(|F|, F0) <= 1.6e-12
+70_jackson_golden_ratio: image force bound / max(|F|, F0) <= 0.0e0
+72_jackson_sphere_slalom: image force bound / max(|F|, F0) <= 0.0e0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 16.73s
+

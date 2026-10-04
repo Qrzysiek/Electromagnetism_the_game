@@ -1,0 +1,28 @@
+| level | log10 configs | random solve rate | search success | mean evals | expected effort: search / guessing | smoothness |
+|---|---|---|---|---|---|---|
+[analyze] First bend: random placements: 1000 ÔÇŽ
+[analyze] First bend: random placements: 100/1000 after 0.0 s
+[analyze] First bend: random placements: 200/1000 after 0.0 s
+[analyze] First bend: random placements: 300/1000 after 0.0 s
+[analyze] First bend: random placements: 400/1000 after 0.0 s
+[analyze] First bend: random placements: 500/1000 after 0.0 s
+[analyze] First bend: random placements: 600/1000 after 0.0 s
+[analyze] First bend: random placements: 700/1000 after 0.0 s
+[analyze] First bend: random placements: 800/1000 after 0.0 s
+[analyze] First bend: random placements: 900/1000 after 0.1 s
+[analyze] First bend: random placements: 1000/1000 after 0.1 s
+[analyze] First bend: random placements done in 0.1 s; 985 distinct placements flown so far, 0.2 s of flights, slowest 0.00 s
+[analyze] First bend: search runs: 16 ÔÇŽ
+[analyze] First bend: search runs: 2/16 after 0.0 s
+[analyze] First bend: search runs: 4/16 after 0.0 s
+[analyze] First bend: search runs: 5/16 after 0.0 s
+[analyze] First bend: search runs: 7/16 after 0.0 s
+[analyze] First bend: search runs: 8/16 after 0.0 s
+[analyze] First bend: search runs: 10/16 after 0.0 s
+[analyze] First bend: search runs: 12/16 after 0.0 s
+[analyze] First bend: search runs: 13/16 after 0.0 s
+[analyze] First bend: search runs: 15/16 after 0.0 s
+[analyze] First bend: search runs: 16/16 after 0.0 s
+[analyze] First bend: search done in 0.0 s; 1133 distinct placements flown so far, 0.2 s of flights, slowest 0.00 s
+[analyze] First bend: smoothness done in 0.0 s; 1900 distinct placements flown so far, 0.3 s of flights, slowest 0.01 s
+| 01_first_bend | 10.0 | 7.1e-2 | 16/16 | 10 | 10 / 14 | 0.77 |

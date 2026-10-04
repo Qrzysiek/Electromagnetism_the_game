@@ -1,0 +1,2 @@
+verify MARGIN_SAFE: 2.500000e-01
+verify preview short of MARGIN_SAFE: 5.000000e-02

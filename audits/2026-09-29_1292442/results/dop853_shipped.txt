@@ -1,0 +1,22 @@
+dop853 shipped safety vs 0.9: 0.0000000000000000e0
+dop853 shipped fac_min vs 0.333: 0.0000000000000000e0
+dop853 shipped fac_max vs 6: 0.0000000000000000e0
+dop853 shipped beta vs 0: 0.0000000000000000e0
+dop853 shipped uround vs 2.3e-16: 0.0000000000000000e0
+dop853 oscillator endpoint y0: 8.0147000147690051e-13
+dop853 oscillator endpoint y1: 1.4511725154875421e-12
+dop853 dense state vs oscillator: 3.0493385594354550e-12
+dop853 dense derivative vs oscillator: 1.1398509913718158e-10
+dop853 h proposed: 1.0000000000000000e0
+dop853 first accepted h: 2.0257876811174341e-1
+dop853 h at end: 2.0066830708507127e-1
+dop853 steps 50 accept 50 reject 0 fcn 773
+dop853 controller rejected a step: 0.0000000000000000e0
+dop853 exponential endpoint: 2.7133850721838826e-13
+dop853 exponential dense midpoint: 2.5668356329333619e-13
+dop853 exponential dense derivative: 2.4202861936828413e-13
+dop853 burst endpoint y0: 1.4520440405618729e-10
+dop853 burst endpoint y1: 2.3062874277002265e-8
+dop853 burst dense off the jump: 2.9968084902520786e-8
+dop853 burst accept 130 reject 36
+dop853 burst controller rejected a step: 1.0000000000000000e0

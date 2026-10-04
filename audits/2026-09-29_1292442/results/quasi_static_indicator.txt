@@ -1,0 +1,42 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.59s
+     Running tests\levels.rs (target\debug\deps\levels-504809d01c8853d5.exe)
+
+running 1 test
+test reference_solutions_are_verified ... 46_space_charge flight 0 shot 0: 16/16 arrive, verified
+47_stern_gerlach_beam flight 0 shot 0: 12/12 arrive, verified
+47_stern_gerlach_beam flight 0 shot 1: 12/12 arrive, verified
+48_relativistic_beam flight 0 shot 0: 16/16 arrive, verified
+48_relativistic_beam: quasi-static and retarded end points differ by up to 1.7e-3 cells, 1.4e-3 of the interaction's effect 1.2e0; indicator up to 1.6e-2
+49_collimated_beam flight 0 shot 0: 15/16 arrive, verified
+50_velocity_selector flight 0 shot 0: 8/8 arrive, verified
+50_velocity_selector flight 0 shot 1: 8/8 arrive, verified
+50_velocity_selector flight 0 shot 2: 7/8 arrive, verified
+51_beam_preparation flight 0 shot 0: 15/16 arrive, verified
+52_chromatic_aberration flight 0 shot 0: 8/8 arrive, verified
+52_chromatic_aberration flight 0 shot 1: 8/8 arrive, verified
+52_chromatic_aberration flight 0 shot 2: 8/8 arrive, verified
+53_real_analyzer flight 0 shot 0: 8/8 arrive, verified
+53_real_analyzer flight 0 shot 1: 8/8 arrive, verified
+53_real_analyzer flight 0 shot 2: 8/8 arrive, verified
+54_calutron_space_charge flight 0 shot 0: 4/5 arrive, verified
+54_calutron_space_charge flight 0 shot 1: 4/5 arrive, verified
+54_calutron_space_charge flight 0 shot 2: 5/5 arrive, verified
+54_calutron_space_charge: quasi-static and retarded end points differ by up to 6.0e-6 cells, 4.3e-7 of the interaction's effect 1.4e1; indicator up to 1.1e-3
+55_soft_landing_current flight 0 shot 0: 8/8 arrive, verified
+55_soft_landing_current: quasi-static and retarded end points differ by up to 4.0e-6 cells, 6.7e-6 of the interaction's effect 6.0e-1; indicator up to 9.6e-4
+56_isotope_separator flight 0 shot 0: 7/8 arrive, verified
+56_isotope_separator flight 0 shot 1: 8/8 arrive, verified
+59_throw_a_charge flight 0 shot 0: 1/1 arrive, verified
+61_jackson_knock_on flight 0 shot 0: 1/1 arrive, verified
+64_jackson_recoil flight 0 shot 0: 1/1 arrive, verified
+78_jackson_bound_knock flight 0 shot 0: 1/1 arrive, verified
+82_jackson_in_step flight 0 shot 0: 1/1 arrive, verified
+82_jackson_in_step: quasi-static and retarded end points differ by up to 5.0e-5 cells, 2.6e-4 of the interaction's effect 1.9e-1; indicator up to 6.8e-3
+86_jackson_quiet_ring flight 0 shot 0: 1/1 arrive, verified
+86_jackson_quiet_ring: quasi-static and retarded end points differ by up to 1.1e-5 cells, 9.0e-3 of the interaction's effect 1.2e-3; indicator up to 6.0e-2
+87_jackson_ring_of_four flight 0 shot 0: 1/1 arrive, verified
+87_jackson_ring_of_four: quasi-static and retarded end points differ by up to 1.5e-5 cells, 2.3e-3 of the interaction's effect 6.7e-3; indicator up to 3.9e-2
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 20.79s
+

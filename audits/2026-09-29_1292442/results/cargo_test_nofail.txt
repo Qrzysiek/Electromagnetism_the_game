@@ -1,0 +1,373 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.61s
+     Running unittests src\main.rs (target\debug\deps\game-d2df3154695941ad.exe)
+
+running 15 tests
+test editor::tests::grabbed_elements_follow_the_cursor_and_skip_blocked_nodes ... ok
+test editor::tests::place_edit_remove ... ok
+test editor::tests::power_supplies_are_operated_on_their_electrode ... ok
+test editor::tests::refinement_round_trip_keeps_positions ... ok
+test editor::tests::plates_place_rotate_tune_and_move ... ok
+test math::tests::pieces_split_text_and_formulas ... ok
+test curriculum::tests::every_shipped_level_has_a_place_in_order ... ok
+test editor::tests::velocity_arrow_drag_round_trip_and_continuous_setting ... ok
+test ui::tests::si_round_trip ... ok
+test sandbox::tests::level_edits_after_a_grid_change_hit_the_clicked_place ... ok
+test worker::tests::result_cache_replays_and_evicts ... ok
+test sandbox::tests::refining_the_level_keeps_the_player_elements_in_place ... ok
+test level_editor::tests::all_levels_are_reproducible_in_the_sandbox ... ok
+test visuals::tests::field_lines_terminate_with_coils ... ok
+test worker::tests::the_verdicts_exact_flight_is_sent_for_the_views ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running unittests src\main.rs (target\debug\deps\generator-51bd8fd4873b56be.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\integrator_eval-5746ef4cfdfc31f3.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\level-bc22232155d34264.exe)
+
+running 16 tests
+test beam::tests::inverse_normal_matches_reference_values ... ok
+test cost::tests::formatting ... ok
+test beam::tests::beam_samples ... ok
+test cost::tests::load_and_bar_position ... ok
+test tests::placement_limits ... ok
+test tests::plate_and_supply_placement ... ok
+test flight_tests::every_shot_flies_under_every_disturbance ... ok
+test tests::json_round_trip_is_exact ... ok
+test model::tests::notes_follow_the_level ... ok
+test tests::refinement_keeps_positions ... ok
+test tests::version_1_files_are_migrated ... ok
+test tests::plates_and_supplies_are_electrodes ... ok
+test tests::refinement_keeps_metal_in_place ... ok
+test cost::tests::measured_cost ... ok
+test beam::tests::a_level_as_an_interacting_beam ... ok
+test analysis::tests::power_supply_levels_are_analysed ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.60s
+
+     Running tests\determinism.rs (target\debug\deps\determinism-3e8b89436f826e6c.exe)
+
+running 2 tests
+test t11_matches_golden_hashes ... ok
+test t11_repeated_runs_are_identical ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.23s
+
+     Running tests\levels.rs (target\debug\deps\levels-a5a5465105acbedd.exe)
+
+running 6 tests
+test radiation_levels_need_radiation ... ok
+test realistic_levels_break_the_idealised_design ... ok
+test neglected_radiation_is_below_numerical_accuracy ... ok
+test metal_levels_are_accurate_and_consistent ... ok
+test electrode_image_force_is_negligible ... ok
+test reference_solutions_are_verified ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.90s
+
+     Running unittests src\lib.rs (target\debug\deps\physics-687f9e12c6936334.exe)
+
+running 28 tests
+test antenna::tests::newtonian_limit_is_the_instantaneous_static_dipole ... ok
+test antenna::tests::oscillating_dipole_satisfies_maxwell_equations ... ok
+test events::tests::returns_earliest_of_several_crossings ... ok
+test cancel::tests::stops_at_a_checkpoint_and_passes_results_through ... ok
+test events::tests::finds_simple_root_to_float_resolution ... ok
+test events::tests::certifies_near_miss ... ok
+test external::tests::plane_wave_satisfies_maxwell_equations ... ok
+test events::tests::finds_dip_between_positive_endpoints ... ok
+test external::tests::vector_potential_generates_the_fields ... ok
+test field::tests::coulomb_field_is_minus_gradient_of_potential ... ok
+test field_motion::tests::acceleration_and_jerk ... ok
+test geometry::capsule_tests::zero_length_capsule_is_a_sphere ... ok
+test geometry::tests::box_signed_distance ... ok
+test geometry::tests::torus_and_capsule_distances ... ok
+test integrator::dop853::tests::dense_derivative_matches_the_exact_derivative ... ok
+test integrator::dop853::tests::fifth_order_estimator_annihilates_polynomials_to_degree_4 ... ok
+test integrator::dop853::tests::row_sums_equal_nodes ... ok
+test integrator::dop853::tests::third_order_estimator_weights_are_exact_to_order_3 ... ok
+test integrator::dop853::tests::weights_satisfy_quadrature_conditions_to_order_8 ... ok
+test magnetic::tests::elliptic_integrals_match_reference_values ... ok
+test magnetic::tests::loop_bracket_series_matches_direct_formula ... ok
+test panel::tests::gradient_is_the_derivative_of_the_potential ... ok
+test panel::tests::jump_across_the_surface ... ok
+test spectrum::tests::arc_directions_are_symmetric_and_fine ... ok
+test units::tests::derived_units_are_consistent ... ok
+test panel::tests::matches_quadrature_off_the_triangle ... ok
+test spectrum::tests::filon_moments_match_quadrature ... ok
+test field_motion::tests::closed_form_matches_integration ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\acceptance.rs (target\debug\deps\acceptance-19b916fe4e7d80d6.exe)
+
+running 3 tests
+test d1_direction_window ... ok
+test d2_energy_window ... ok
+test d3_edge_of_the_window_is_not_verified ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\antenna.rs (target\debug\deps\antenna-5d7f994d23c7b1d3.exe)
+
+running 3 tests
+test a2_static_limit_is_the_charge_pair_field ... ok
+test a3_plane_symmetry_with_antennas ... ok
+test a1_radiated_power_equals_larmor_at_every_radius ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\beams.rs (target\debug\deps\beams-968f315cc7f11274.exe)
+
+running 23 tests
+test b13_accelerated_fields_match_lienard_wiechert ... ok
+test b15_a_stopped_charge_keeps_acting ... ok
+test b14_leaving_the_arena_changes_nothing_for_the_others ... ok
+test b18_equal_masses_exchange_velocities ... ok
+test b20_relativistic_collision_conserves_four_momentum ... ok
+test b16_energy_budget_balances ... ok
+test b1_two_body_reduces_to_one_body ... ok
+test b17_knock_on_energy_transfer ... ok
+test b19_bouncing_binary_conserves_energy_and_momentum ... ok
+test b2_coulomb_explosion_conserves_energy_momentum_angular_momentum ... ok
+test b4_interacting_beam_is_deterministic_and_verified ... ok
+test b11_quasi_static_comoving_pair ... FAILED
+test b3_non_interacting_beam_matches_single_flights ... ok
+test b22_radiation_goal_of_a_system ... ok
+test b21_screening_cup ... ok
+test b9_beam_radiation_reaction_matches_single_flights ... ok
+test b5_beam_gates_match_single_flights ... ok
+test b6_comoving_pair_explodes_time_dilated ... FAILED
+test b12_quasi_static_against_retarded ... ok
+test b23_field_motion_matches_lienard_wiechert ... ok
+test b8_retarded_beam_is_deterministic_and_verified ... ok
+test b7_retarded_interaction_tends_to_coulomb_as_one_over_c_squared ... ok
+test b10_positronium_decays_at_the_dipole_rate ... ok
+
+failures:
+
+---- b11_quasi_static_comoving_pair stdout ----
+
+thread 'b11_quasi_static_comoving_pair' (23464) panicked at crates\physics\src\events.rs:33:5:
+assertion failed: ga > 0.0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- b6_comoving_pair_explodes_time_dilated stdout ----
+
+thread 'b6_comoving_pair_explodes_time_dilated' (11696) panicked at crates\physics\src\events.rs:33:5:
+assertion failed: ga > 0.0
+
+
+failures:
+    b11_quasi_static_comoving_pair
+    b6_comoving_pair_explodes_time_dilated
+
+test result: FAILED. 21 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.06s
+
+error: test failed, to rerun pass `-p physics --test beams`
+     Running tests\clouds.rs (target\debug\deps\clouds-3a7e47bf9b8e329f.exe)
+
+running 2 tests
+test c1_cloud_field_potential_gauss_and_continuity ... ok
+test c2_radiating_oscillator_decays_at_gamma ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\conductors.rs (target\debug\deps\conductors-7b738026e37cefec.exe)
+
+running 6 tests
+test k1_single_sphere_boundary_condition_and_image_forces ... ok
+test k5_like_charges_attract_near_an_isolated_sphere ... ok
+test k3_particle_images_obey_the_boundary_conditions ... ok
+test k2b_two_spheres_match_the_full_image_series ... ok
+test k4_energy_conservation_with_image_forces ... ok
+test k2_several_spheres_boundary_conditions ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.59s
+
+     Running tests\electrodes.rs (target\debug\deps\electrodes-66aef181c31b8763.exe)
+
+running 5 tests
+test e4_plane_symmetry ... ok
+test e5_timing ... ok
+test e3_energy_conservation ... ok
+test e1_unit_cube_capacitance ... ok
+test e2_surface_residual_shrinks ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.80s
+
+     Running tests\gates.rs (target\debug\deps\gates-49ae5202e6f8b433.exe)
+
+running 4 tests
+test gates_passed_in_order ... ok
+test skipped_and_out_of_order_gates ... ok
+test gate_direction_window ... ok
+test gate_margins_enter_verification ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\integrator.rs (target\debug\deps\integrator-bedc0d55b571d2c0.exe)
+
+running 8 tests
+test dense_output_local_order_is_eight ... ok
+test dense_output_matches_step_endpoints ... ok
+test non_autonomous_right_hand_side ... ok
+test relativistic_hyperbolic_motion ... ok
+test step_respects_limit_and_cap ... ok
+test arenstorf_orbit_closes ... ok
+test global_order_is_eight ... ok
+test matches_independent_implementation_step_for_step ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\lienard.rs (target\debug\deps\lienard-ab436a1914d69f59.exe)
+
+running 4 tests
+test l1_uniform_motion_is_the_heaviside_field ... ok
+test l4_heaviside_feynman_forms ... ok
+test l2_slow_oscillation_matches_the_dipole_antenna ... ok
+test l3_circular_motion_satisfies_maxwell_equations ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\magnetism.rs (target\debug\deps\magnetism-b28d8456c3dd82d0.exe)
+
+running 15 tests
+test m1_dipole_is_divergence_and_curl_free ... ok
+test m1_loop_far_field_is_a_dipole ... ok
+test m1_in_plane_sources_give_exactly_perpendicular_field_in_the_plane ... ok
+test m1_polygon_coil_matches_quadrature_and_converges_to_circle ... ok
+test m3_exb_cycloid_newtonian ... ok
+test m6_particle_hits_coil_wire ... ok
+test m8_curl_of_the_vector_potential_is_the_field ... ok
+test m2_relativistic_cyclotron_radius_and_period ... ok
+test m10_canonical_angular_momentum_in_a_ramped_loop ... ok
+test m3_exb_drift_relativistic ... ok
+test m1_circular_loop_matches_axis_formula_and_quadrature ... ok
+test m9_faradays_law_for_ramped_coils ... ok
+test m4_energy_conservation_with_magnets ... ok
+test m11_adiabatic_invariance_of_the_magnetic_moment ... ok
+test m7_van_allen_equatorial_drift ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests\moments.rs (target\debug\deps\moments-834f024a1d9268a4.exe)
+
+running 5 tests
+test g1_gradients_of_bz_match_finite_differences ... ok
+test s1_stern_gerlach_impulse ... ok
+test s3_relativistic_conservation ... ok
+test s2_newtonian_conservation ... ok
+test s4_charged_moment_in_coil_field ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\poynting.rs (target\debug\deps\poynting-a20e0de7dba3e6e3.exe)
+
+running 3 tests
+test p1_poynting_theorem ... ok
+test p2_radiated_power ... ok
+test p3_work_on_a_particle ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\properties.rs (target\debug\deps\properties-b96fe854fd29713d.exe)
+
+running 3 tests
+test t7_speed_never_exceeds_c ... ok
+test t8_symmetry_plane_is_preserved_exactly ... ok
+test t8_symmetry_plane_is_preserved_with_magnets ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\radiation_reaction.rs (target\debug\deps\radiation_reaction-399722627bf7878d.exe)
+
+running 6 tests
+test r3_no_reaction_without_finite_c ... ok
+test r5_head_on_collision_radiates_jacksons_energy ... ok
+test r2_radiated_energy_matches_larmor_in_scattering ... ok
+test r6_gap_with_radiation_damping ... ok
+test r4_classical_atom_orbit_decay ... ok
+test r1_synchrotron_damping_exact ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\scattering.rs (target\debug\deps\scattering-7d37a54854d25d87.exe)
+
+running 1 test
+test ms1_multiple_scattering_in_the_plane_is_cauchy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+
+     Running tests\spectra.rs (target\debug\deps\spectra-78da1d3b2078dc5a.exe)
+
+running 8 tests
+test s7_coulomb_bremsstrahlung ... ok
+test s8_harmonics_of_an_elliptic_orbit ... ok
+test s3_measure_along_a_computed_flight ... ok
+test s4_sudden_stop ... ok
+test s5_ring_of_charges_form_factor ... ok
+test s2_spectrum_integrates_to_the_lienard_energy ... ok
+test s6_system_spectrum_integrates_to_the_system_energy ... ok
+test s1_harmonics_of_circular_motion ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.92s
+
+     Running tests\validation.rs (target\debug\deps\validation-c1d785243434a60b.exe)
+
+running 9 tests
+test t6_hyperbolic_motion_uniform_field ... ok
+test t2_rutherford_scattering ... ok
+test t4_kepler_orbit ... ok
+test t3_relativistic_coulomb_scattering ... ok
+test t10_error_scales_with_tolerance ... ok
+test t1_energy_conservation_many_charges ... ok
+test t5_relativistic_precession ... ok
+test t9_grazing_coulomb_orbit ... ok
+test t9_grazing_straight_line ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.26s
+
+     Running tests\verification.rs (target\debug\deps\verification-644fc173ab203736.exe)
+
+running 4 tests
+test clear_exit_through_bounds_is_verified ... ok
+test margins_match_analytic_closest_approach ... ok
+test clear_hit_and_clear_miss_are_verified ... ok
+test razor_thin_outcomes_are_marginal ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running tests\waves.rs (target\debug\deps\waves-727c38f89ca1be5e.exe)
+
+running 4 tests
+test w4_energy_conservation_with_static_stray_fields ... ok
+test w1_newtonian_oscillating_field ... ok
+test w3_plane_symmetry_with_external_fields ... ok
+test w2_relativistic_plane_wave_invariants ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests level
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests physics
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: 1 target failed:
+    `-p physics --test beams`

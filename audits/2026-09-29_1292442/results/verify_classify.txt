@@ -1,0 +1,57 @@
+   Compiling shipped_calls v0.1.0 (C:\Users\qrzys\AppData\Local\Temp\grok-goal-e1265ff9b472\implementer\shipped_calls)
+    Finished `release` profile [optimized] target(s) in 0.58s
+     Running `C:\Users\qrzys\AppData\Local\Temp\grok-goal-e1265ff9b472\implementer\shipped_calls\target\release\shipped_calls.exe`
+sphere sdf: 0.0000000000000000e0
+shape sphere: 0.0000000000000000e0
+torus exterior: 0.0000000000000000e0
+torus above ring: 0.0000000000000000e0
+capsule side: 0.0000000000000000e0
+capsule end: 0.0000000000000000e0
+zero capsule: 0.0000000000000000e0
+aabb inside: 0.0000000000000000e0
+aabb corner: 0.0000000000000000e0
+oriented box rotation: 0.0000000000000000e0
+oriented box face: 0.0000000000000000e0
+crossing at 1: 0.0000000000000000e0
+dip found: 1.0926725019580474e-19
+underestimated v_max misses the dip: none
+near miss certified clear: none
+nan endpoint dropped: none
+elastic newtonian: 0.0000000000000000e0
+elastic not approaching: none
+gamma of velocity c=inf: 0.0000000000000000e0
+gamma of momentum c=inf: 0.0000000000000000e0
+gamma of velocity c=5: 0.0000000000000000e0
+ll linear: 0.0000000000000000e0
+ll on cone: 0.0000000000000000e0
+ll before cone: 0.0000000000000000e0
+ll after cone: 0.0000000000000000e0
+PREVIEW_GOOD 0.2
+PREVIEW_LIMIT 1.0
+VERIFY_GOOD 3.0
+VERIFY_LIMIT 20.0
+STEPS_GOOD 10000
+STEPS_LIMIT 200000
+SETUP_GOOD 1.0
+SETUP_LIMIT 5.0
+MEMORY_GOOD 64000000
+MEMORY_LIMIT 512000000
+RESIDUAL_GOOD 1.0e-10
+RESIDUAL_LIMIT 1.0e-8
+IMAGE_FORCE_LIMIT 1.0e-10
+shipped dome issues 0
+metal plus antenna: metal spheres respond electrostatically; antennas and disturbances would need a full-wave solution
+ramped coil plus metal: ramped coils with metal: its electrostatic response cannot screen the induced field
+elastic finite-c energy: 8.3266726846886741e-17
+elastic finite-c vs newtonian: 8.5504244572473298e-2
+objective level1 reference: 0.0000000000000000e0 Arrived
+MARGIN_SAFE 2.5000000000000000e-1
+SAFETY 1.0000000000000000e1
+FLOOR 1.0000000000000001e-9
+bounds -0.2 -0.5: SmallMargin Bounds margin -5.0000000000000000e-1 error 2.9999999999999999e-1 ratio 1.6666666661111110e-1
+bounds at MARGIN_SAFE: Verified
+bounds just under MARGIN_SAFE: SmallMargin Bounds margin 5.0000000000000000e-1 error 2.5000000000000000e-1 ratio 1.9999999992000000e-1
+bounds comfortable: Verified
+bounds tight: SmallMargin Bounds margin 1.1999999999999999e-3 error 2.0000000000000009e-4 ratio 5.9999970000014968e-1
+bounds -0.2 -0.5 counted as skipped: 1.0000000000000000e0
+preview margin short of MARGIN_SAFE: 4.9999999999999989e-2

@@ -1,0 +1,8 @@
+strip laplace: 0
+strip laplace at a point: 0
+square duct laplace: 0
+game k over square-duct k, minus 1: -0.29289321881345248
+J0 at first zero: 0
+pi over 2 j01, minus 1: -0.34681485658361698
+angular integral minus 8 pi/3: 0
+larmor factor minus 2/3: 0

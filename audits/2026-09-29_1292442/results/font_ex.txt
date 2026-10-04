@@ -1,0 +1,8 @@
+Ubuntu-Light.ttf from epaint_default_fonts 0.36.2
+OS/2 version 3
+unitsPerEm 1000
+sxHeight 517
+sCapHeight 693
+x-height over em 0.517000
+abs(0.52 - 0.517) 3.000000e-03
+math.rs uses 0.52 * body em

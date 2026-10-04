@@ -1,0 +1,27 @@
+   Compiling exec_gap v0.1.0 (C:\Users\qrzys\AppData\Local\Temp\grok-goal-e1265ff9b472\implementer\exec_gap)
+    Finished `release` profile [optimized] target(s) in 1.71s
+     Running `C:\Users\qrzys\AppData\Local\Temp\grok-goal-e1265ff9b472\implementer\exec_gap\target\release\exec_gap.exe`
+fast 30_beta_spectrometer.json shot 0: beta 0.910180 a_parallel 0.000000 |a| 1.183467e-1 future 0.915657c past 0.915657c over_c 0.000e0 0.000e0
+fast 80_jackson_beaming.json shot 0: beta 0.942809 a_parallel 0.000000 |a| 3.130948e-4 future 0.948098c past 0.948098c over_c 0.000e0 0.000e0
+fast 81_jackson_critical_frequency.json shot 0: beta 0.942809 a_parallel 0.000000 |a| 8.464703e-4 future 0.948098c past 0.948098c over_c 0.000e0 0.000e0
+fast 83_jackson_quiet_turn.json shot 0: beta 0.942809 a_parallel 0.000000 |a| 3.951090e-2 future 0.948098c past 0.948098c over_c 0.000e0 0.000e0
+fast 84_jackson_thomson.json shot 0: beta 0.942809 a_parallel -0.000000 |a| 1.920063e-1 future 0.948098c past 0.948098c over_c 0.000e0 0.000e0
+fast 85_jackson_braking.json shot 0: beta 0.942809 a_parallel 0.000000 |a| 7.136405e-5 future 0.948098c past 0.948098c over_c 0.000e0 0.000e0
+fast 88_jackson_undulator.json shot 0: beta 0.942809 a_parallel 0.000000 |a| 2.297236e-3 future 0.948098c past 0.948098c over_c 0.000e0 0.000e0
+shader adapter: AMD Radeon RX 9070 XT
+shader fm setup 0: w2 1.9999999999999998e-1 s 1.5
+shader fm setup 1: w2 -2.9999999999999993e-1 s 1.2
+shader fm setup 2: w2 4.0000000000000000e0 s 0.5
+shader fm setup 3: w2 -4.0000000000000000e0 s 0.5
+shader fm 0 vs FieldMotion::state: 6.094221e-8
+shader fm 1 vs FieldMotion::state: 5.483937e-8
+shader fm 2 vs FieldMotion::state: 8.270923e-8
+shader fm 3 vs FieldMotion::state: 6.602622e-8
+shader field-motion vs f64: 8.270923e-8
+shader tapered 0 vs beam::tapered: 2.649095e-8
+shader tapered 1 vs beam::tapered: 2.649095e-8
+shader tapered 2 vs beam::tapered: 1.525048e-8
+shader tapered vs f64: 2.649095e-8
+shader dipole bz: 8.173725e-8
+shader coulomb outside: 0.000000e0
+shader coulomb inside floor: 9.900000e-1

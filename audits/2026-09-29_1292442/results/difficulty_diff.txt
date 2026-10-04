@@ -1,0 +1,4 @@
+published rows: 56
+remeasured rows: 58
+published rows present: 56
+mismatches among remeasured: 0

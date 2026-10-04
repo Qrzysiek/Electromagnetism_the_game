@@ -1,0 +1,82 @@
+   Compiling either v1.18.0
+   Compiling num-traits v0.2.19
+   Compiling windows-sys v0.61.2
+   Compiling bytemuck v1.25.2
+   Compiling serde_json v1.0.151
+   Compiling syn v2.0.119
+   Compiling syn v3.0.6
+   Compiling winapi v0.3.9
+   Compiling once_cell v1.21.4
+   Compiling memchr v2.8.3
+   Compiling clap_builder v4.6.7
+   Compiling regex-automata v0.4.18
+   Compiling bitflags v2.13.2
+   Compiling safe_arch v0.7.4
+   Compiling itertools v0.13.0
+   Compiling rayon v1.12.0
+   Compiling wide v0.7.33
+   Compiling winapi-util v0.1.11
+   Compiling tempfile v3.27.0
+   Compiling same-file v1.0.6
+   Compiling walkdir v2.5.0
+   Compiling rusty-fork v0.3.1
+   Compiling num-integer v0.1.47
+   Compiling approx v0.5.1
+   Compiling num-complex v0.4.6
+   Compiling regex v1.13.1
+   Compiling criterion-plot v0.8.2
+   Compiling num-rational v0.4.2
+   Compiling clap v4.6.7
+   Compiling simba v0.9.1
+   Compiling page_size v0.6.0
+   Compiling plotters v0.3.7
+   Compiling physics v0.1.0 (C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\crates\physics)
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling zerocopy-derive v0.8.59
+   Compiling nalgebra-macros v0.3.0
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling tinytemplate v1.2.1
+   Compiling nalgebra v0.34.2
+   Compiling zerocopy v0.8.59
+   Compiling half v2.7.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling ciborium-ll v0.2.2
+   Compiling rand_chacha v0.9.0
+   Compiling ciborium v0.2.2
+   Compiling proptest v1.11.0
+   Compiling criterion v0.8.2
+   Compiling ode_solvers v0.6.2
+
+running 6 tests
+    Finishedtest k1_single_sphere_boundary_condition_and_image_forces ...  `test` profile [optimized + debuginfo] target(s) in 23.71s
+     Running tests\conductors.rs (target\debug\deps\conductors-c3ea79e1f762ced0.exe)
+K1 grounded: max |φ| on the surface / scale = 2.57e-15
+K1 d = 1.5: grounded force rel. error 1.46e-16, neutral 1.43e-15
+K1 d = 2: grounded force rel. error 0.00e0, neutral 1.05e-15
+K1 d = 5: grounded force rel. error 0.00e0, neutral 1.46e-14
+ok
+test k2_several_spheres_boundary_conditions ... K2: 4352 induced charges, boundary residual (independent points) 5.1e-11
+K2 sphere 0: potential -0.000000000000, max deviation 6.34e-11
+K2 sphere 1: potential 2.411892737269, max deviation 9.63e-11
+K2 sphere 2: potential 0.800000000000, max deviation 5.24e-11
+K2 floating sphere: net charge from Gauss flux 1.500000000000 (set 1.5)
+ok
+test k2b_two_spheres_match_the_full_image_series ... K2b: largest relative difference to the full image series 8.71e-14
+ok
+test k3_particle_images_obey_the_boundary_conditions ... K3 truncation bound ρ^D = 1.56e-2
+K3 sphere 0: particle's contribution 1.49e-1, deviation 4.36e-4 (relative to its potential)
+K3 sphere 1: particle's contribution 6.46e-4, deviation 3.96e-4 (relative to its potential)
+K3 floating sphere: net induced charge 1.21e-3
+ok
+test k4_energy_conservation_with_image_forces ... K4 c = inf: Collided(0) after 61 steps, max |ΔW|/T0 = 2.83e-11
+K4 c = 5: Collided(0) after 60 steps, max |ΔW|/T0 = 2.69e-11
+ok
+test k5_like_charges_attract_near_an_isolated_sphere ... K5 Q/q = 1: d/R − 1 = 0.618034 (engine), 0.618034 (exact), 0.6178 (Jackson)
+K5 Q/q = 2: d/R − 1 = 0.427564 (engine), 0.427564 (exact), 0.4276 (Jackson)
+K5 Q/q = 0.5: d/R − 1 = 0.882269 (engine), 0.882269 (exact), 0.8823 (Jackson)
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.53s
+

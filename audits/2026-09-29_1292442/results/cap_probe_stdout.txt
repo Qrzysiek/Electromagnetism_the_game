@@ -1,0 +1,23 @@
+file cap_strong_last.png strong_first False json_chars 29734 exit 0
+2026-09-29T23:27:38.823627Z  INFO bevy_diagnostic::system_information_diagnostics_plugin::internal: SystemInfo { os: "Windows 11 Home", kernel: "26200", cpu: "AMD Ryzen 7 9800X3D 8-Core Processor", core_count: "8", memory: "61.6 GiB" }
+2026-09-29T23:27:38.998139Z  INFO bevy_render::renderer: AdapterInfo { name: "AMD Radeon RX 9070 XT", vendor: 4098, device: 30032, device_type: DiscreteGpu, device_pci_bus_id: "", driver: "AMD proprietary driver", driver_info: "26.8.1 (LLPC)", backend: Vulkan, subgroup_min_size: 32, subgroup_max_size: 64, transient_saves_memory: false }
+2026-09-29T23:27:39.107216Z  INFO bevy_pbr::cluster: GPU clustering is supported on this device.
+2026-09-29T23:27:39.107247Z  INFO bevy_render::batching::gpu_preprocessing: GPU preprocessing is fully supported on this device.
+2026-09-29T23:27:39.107616Z  INFO bevy_egui::render: Using bindless_mode_array_size 16 (Device maximum 4294967295)
+2026-09-29T23:27:39.107726Z  INFO bevy_winit::system: Creating new window Electromagnetism ÔÇô the game (66v0)
+2026-09-29T23:27:39.142159Z  WARN gilrs::mapping: SDL-mapping 03000000-4c05-0000-e60c-000000000000 PS5 Controller: Unknown button b14
+2026-09-29T23:27:39.142381Z  INFO bevy_input::gamepad: Gamepad 400v0 connected.
+2026-09-29T23:27:39.425491Z  INFO bevy_render::view::window::screenshot: Screenshot saved to C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\audit\screenshots\cap_strong_last.png
+
+file cap_strong_first.png strong_first True json_chars 29734 exit 0
+2026-09-29T23:27:41.026270Z  INFO bevy_diagnostic::system_information_diagnostics_plugin::internal: SystemInfo { os: "Windows 11 Home", kernel: "26200", cpu: "AMD Ryzen 7 9800X3D 8-Core Processor", core_count: "8", memory: "61.6 GiB" }
+2026-09-29T23:27:41.192572Z  INFO bevy_render::renderer: AdapterInfo { name: "AMD Radeon RX 9070 XT", vendor: 4098, device: 30032, device_type: DiscreteGpu, device_pci_bus_id: "", driver: "AMD proprietary driver", driver_info: "26.8.1 (LLPC)", backend: Vulkan, subgroup_min_size: 32, subgroup_max_size: 64, transient_saves_memory: false }
+2026-09-29T23:27:41.307848Z  INFO bevy_pbr::cluster: GPU clustering is supported on this device.
+2026-09-29T23:27:41.307886Z  INFO bevy_render::batching::gpu_preprocessing: GPU preprocessing is fully supported on this device.
+2026-09-29T23:27:41.308283Z  INFO bevy_egui::render: Using bindless_mode_array_size 16 (Device maximum 4294967295)
+2026-09-29T23:27:41.308390Z  INFO bevy_winit::system: Creating new window Electromagnetism ÔÇô the game (66v0)
+2026-09-29T23:27:41.349123Z  WARN gilrs::mapping: SDL-mapping 03000000-4c05-0000-e60c-000000000000 PS5 Controller: Unknown button b14
+2026-09-29T23:27:41.349353Z  INFO bevy_input::gamepad: Gamepad 400v0 connected.
+2026-09-29T23:27:43.409676Z  INFO bevy_render::view::window::screenshot: Screenshot saved to C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\audit\screenshots\cap_strong_first.png
+
+

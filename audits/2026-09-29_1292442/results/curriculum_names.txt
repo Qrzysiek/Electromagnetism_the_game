@@ -1,0 +1,6 @@
+curriculum rows 88 files 88
+YEAR 'GeigerÔÇôMarsden' VS 'GeigerÔÇôMarsden (1909)'
+YEAR "Thomson's cathode-ray tube" VS "Thomson's cathode-ray tube (1897)"
+YEAR 'SternÔÇôGerlach' VS 'SternÔÇôGerlach (1922)'
+YEAR "Dempster's mass spectrometer" VS "Dempster's mass spectrometer (1918)"
+strict mismatches beyond a year suffix 0

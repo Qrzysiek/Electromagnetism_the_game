@@ -1,0 +1,176 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.62s
+     Running unittests src\main.rs (target\debug\deps\game-d2df3154695941ad.exe)
+
+running 15 tests
+test editor::tests::power_supplies_are_operated_on_their_electrode ... ok
+test editor::tests::place_edit_remove ... ok
+test curriculum::tests::every_shipped_level_has_a_place_in_order ... ok
+test editor::tests::plates_place_rotate_tune_and_move ... ok
+test math::tests::pieces_split_text_and_formulas ... ok
+test editor::tests::grabbed_elements_follow_the_cursor_and_skip_blocked_nodes ... ok
+test editor::tests::velocity_arrow_drag_round_trip_and_continuous_setting ... ok
+test editor::tests::refinement_round_trip_keeps_positions ... ok
+test ui::tests::si_round_trip ... ok
+test sandbox::tests::level_edits_after_a_grid_change_hit_the_clicked_place ... ok
+test worker::tests::result_cache_replays_and_evicts ... ok
+test sandbox::tests::refining_the_level_keeps_the_player_elements_in_place ... ok
+test level_editor::tests::all_levels_are_reproducible_in_the_sandbox ... ok
+test visuals::tests::field_lines_terminate_with_coils ... ok
+test worker::tests::the_verdicts_exact_flight_is_sent_for_the_views ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running unittests src\main.rs (target\debug\deps\generator-51bd8fd4873b56be.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\integrator_eval-5746ef4cfdfc31f3.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\level-bc22232155d34264.exe)
+
+running 16 tests
+test beam::tests::inverse_normal_matches_reference_values ... ok
+test beam::tests::beam_samples ... ok
+test cost::tests::formatting ... ok
+test cost::tests::load_and_bar_position ... ok
+test flight_tests::every_shot_flies_under_every_disturbance ... ok
+test tests::json_round_trip_is_exact ... ok
+test tests::plate_and_supply_placement ... ok
+test tests::placement_limits ... ok
+test tests::refinement_keeps_positions ... ok
+test tests::version_1_files_are_migrated ... ok
+test model::tests::notes_follow_the_level ... ok
+test tests::plates_and_supplies_are_electrodes ... ok
+test tests::refinement_keeps_metal_in_place ... ok
+test cost::tests::measured_cost ... ok
+test beam::tests::a_level_as_an_interacting_beam ... ok
+test analysis::tests::power_supply_levels_are_analysed ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.34s
+
+     Running tests\determinism.rs (target\debug\deps\determinism-3e8b89436f826e6c.exe)
+
+running 2 tests
+test t11_matches_golden_hashes ... ok
+test t11_repeated_runs_are_identical ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.16s
+
+     Running tests\levels.rs (target\debug\deps\levels-a5a5465105acbedd.exe)
+
+running 6 tests
+test radiation_levels_need_radiation ... ok
+test realistic_levels_break_the_idealised_design ... ok
+test neglected_radiation_is_below_numerical_accuracy ... ok
+test metal_levels_are_accurate_and_consistent ... ok
+test electrode_image_force_is_negligible ... ok
+test reference_solutions_are_verified ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.57s
+
+     Running unittests src\lib.rs (target\debug\deps\physics-687f9e12c6936334.exe)
+
+running 28 tests
+test antenna::tests::newtonian_limit_is_the_instantaneous_static_dipole ... ok
+test antenna::tests::oscillating_dipole_satisfies_maxwell_equations ... ok
+test external::tests::plane_wave_satisfies_maxwell_equations ... ok
+test cancel::tests::stops_at_a_checkpoint_and_passes_results_through ... ok
+test events::tests::finds_simple_root_to_float_resolution ... ok
+test events::tests::returns_earliest_of_several_crossings ... ok
+test events::tests::finds_dip_between_positive_endpoints ... ok
+test events::tests::certifies_near_miss ... ok
+test external::tests::vector_potential_generates_the_fields ... ok
+test field::tests::coulomb_field_is_minus_gradient_of_potential ... ok
+test field_motion::tests::acceleration_and_jerk ... ok
+test geometry::capsule_tests::zero_length_capsule_is_a_sphere ... ok
+test geometry::tests::box_signed_distance ... ok
+test geometry::tests::torus_and_capsule_distances ... ok
+test integrator::dop853::tests::dense_derivative_matches_the_exact_derivative ... ok
+test integrator::dop853::tests::fifth_order_estimator_annihilates_polynomials_to_degree_4 ... ok
+test integrator::dop853::tests::row_sums_equal_nodes ... ok
+test integrator::dop853::tests::third_order_estimator_weights_are_exact_to_order_3 ... ok
+test integrator::dop853::tests::weights_satisfy_quadrature_conditions_to_order_8 ... ok
+test magnetic::tests::elliptic_integrals_match_reference_values ... ok
+test magnetic::tests::loop_bracket_series_matches_direct_formula ... ok
+test panel::tests::gradient_is_the_derivative_of_the_potential ... ok
+test panel::tests::jump_across_the_surface ... ok
+test spectrum::tests::arc_directions_are_symmetric_and_fine ... ok
+test units::tests::derived_units_are_consistent ... ok
+test panel::tests::matches_quadrature_off_the_triangle ... ok
+test spectrum::tests::filon_moments_match_quadrature ... ok
+test field_motion::tests::closed_form_matches_integration ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\acceptance.rs (target\debug\deps\acceptance-19b916fe4e7d80d6.exe)
+
+running 3 tests
+test d1_direction_window ... ok
+test d3_edge_of_the_window_is_not_verified ... ok
+test d2_energy_window ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\antenna.rs (target\debug\deps\antenna-5d7f994d23c7b1d3.exe)
+
+running 3 tests
+test a2_static_limit_is_the_charge_pair_field ... ok
+test a3_plane_symmetry_with_antennas ... ok
+test a1_radiated_power_equals_larmor_at_every_radius ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\beams.rs (target\debug\deps\beams-968f315cc7f11274.exe)
+
+running 23 tests
+test b13_accelerated_fields_match_lienard_wiechert ... ok
+test b15_a_stopped_charge_keeps_acting ... ok
+test b14_leaving_the_arena_changes_nothing_for_the_others ... ok
+test b18_equal_masses_exchange_velocities ... ok
+test b16_energy_budget_balances ... ok
+test b20_relativistic_collision_conserves_four_momentum ... ok
+test b1_two_body_reduces_to_one_body ... ok
+test b17_knock_on_energy_transfer ... ok
+test b2_coulomb_explosion_conserves_energy_momentum_angular_momentum ... ok
+test b19_bouncing_binary_conserves_energy_and_momentum ... ok
+test b4_interacting_beam_is_deterministic_and_verified ... ok
+test b11_quasi_static_comoving_pair ... FAILED
+test b3_non_interacting_beam_matches_single_flights ... ok
+test b21_screening_cup ... ok
+test b22_radiation_goal_of_a_system ... ok
+test b9_beam_radiation_reaction_matches_single_flights ... ok
+test b6_comoving_pair_explodes_time_dilated ... FAILED
+test b5_beam_gates_match_single_flights ... ok
+test b12_quasi_static_against_retarded ... ok
+test b23_field_motion_matches_lienard_wiechert ... ok
+test b8_retarded_beam_is_deterministic_and_verified ... ok
+test b7_retarded_interaction_tends_to_coulomb_as_one_over_c_squared ... ok
+test b10_positronium_decays_at_the_dipole_rate ... ok
+
+failures:
+
+---- b11_quasi_static_comoving_pair stdout ----
+
+thread 'b11_quasi_static_comoving_pair' (32904) panicked at crates\physics\src\events.rs:33:5:
+assertion failed: ga > 0.0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- b6_comoving_pair_explodes_time_dilated stdout ----
+
+thread 'b6_comoving_pair_explodes_time_dilated' (4344) panicked at crates\physics\src\events.rs:33:5:
+assertion failed: ga > 0.0
+
+
+failures:
+    b11_quasi_static_comoving_pair
+    b6_comoving_pair_explodes_time_dilated
+
+test result: FAILED. 21 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.15s
+
+error: test failed, to rerun pass `-p physics --test beams`

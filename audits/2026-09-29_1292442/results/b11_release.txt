@@ -1,0 +1,15 @@
+   Compiling physics v0.1.0 (C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\crates\physics)
+    Finished `release` profile [optimized] target(s) in 17.73s
+     Running tests\beams.rs (target\release\deps\beams-14ca676ee26a5e85.exe)
+
+running 2 tests
+test b11_quasi_static_comoving_pair ... B11: doubling after t = 765.1957 (lab); ╬│ t' = 765.1957; relative difference 7.4e-8 (u/c = 7.1e-4); Coulomb-only would give 459.1 (Newtonian) or 592.7 (relativistic); 23 steps, radiated 2.6e-17 of T
+ok
+test b12_quasi_static_against_retarded ... B12 particle 0: Collided(0) (Verified), exact Collided(0); models differ by 6.16e-5, 0.0 % of the interaction's effect 0.153; indicator 1.2e-3
+B12 particle 1: Arrived (Verified), exact Arrived; models differ by 1.69e-2, 0.5 % of the interaction's effect 3.757; indicator 1.1e-1
+B12 particle 2: LeftBounds (Verified), exact LeftBounds; models differ by 2.65e-4, 0.0 % of the interaction's effect 1.751; indicator 3.3e-2
+B12: 94 steps quasi-static, 315 retarded
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.09s
+

@@ -1,0 +1,12 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s
+     Running unittests src\lib.rs (target\debug\deps\physics-1699d0fab64d0402.exe)
+
+running 5 tests
+test integrator::dop853::tests::dense_derivative_matches_the_exact_derivative ... ok
+test integrator::dop853::tests::fifth_order_estimator_annihilates_polynomials_to_degree_4 ... ok
+test integrator::dop853::tests::row_sums_equal_nodes ... ok
+test integrator::dop853::tests::third_order_estimator_weights_are_exact_to_order_3 ... ok
+test integrator::dop853::tests::weights_satisfy_quadrature_conditions_to_order_8 ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+

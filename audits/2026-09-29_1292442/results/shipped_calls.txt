@@ -1,0 +1,44 @@
+   Compiling shipped_calls v0.1.0 (C:\Users\qrzys\AppData\Local\Temp\grok-goal-e1265ff9b472\implementer\shipped_calls)
+    Finished `release` profile [optimized] target(s) in 0.56s
+     Running `C:\Users\qrzys\AppData\Local\Temp\grok-goal-e1265ff9b472\implementer\shipped_calls\target\release\shipped_calls.exe`
+sphere sdf: 0.0000000000000000e0
+shape sphere: 0.0000000000000000e0
+torus exterior: 0.0000000000000000e0
+torus above ring: 0.0000000000000000e0
+capsule side: 0.0000000000000000e0
+capsule end: 0.0000000000000000e0
+zero capsule: 0.0000000000000000e0
+aabb inside: 0.0000000000000000e0
+aabb corner: 0.0000000000000000e0
+oriented box rotation: 0.0000000000000000e0
+oriented box face: 0.0000000000000000e0
+crossing at 1: 0.0000000000000000e0
+dip found: 1.0926725019580474e-19
+underestimated v_max misses the dip: none
+near miss certified clear: none
+nan endpoint dropped: none
+elastic newtonian: 0.0000000000000000e0
+elastic not approaching: none
+gamma of velocity c=inf: 0.0000000000000000e0
+gamma of momentum c=inf: 0.0000000000000000e0
+gamma of velocity c=5: 0.0000000000000000e0
+ll linear: 0.0000000000000000e0
+ll on cone: 0.0000000000000000e0
+ll before cone: 0.0000000000000000e0
+ll after cone: 0.0000000000000000e0
+PREVIEW_GOOD 0.2
+PREVIEW_LIMIT 1.0
+VERIFY_GOOD 3.0
+VERIFY_LIMIT 20.0
+STEPS_GOOD 10000
+STEPS_LIMIT 200000
+SETUP_GOOD 1.0
+SETUP_LIMIT 5.0
+MEMORY_GOOD 64000000
+MEMORY_LIMIT 512000000
+RESIDUAL_GOOD 1.0e-10
+RESIDUAL_LIMIT 1.0e-8
+IMAGE_FORCE_LIMIT 1.0e-10
+shipped dome issues 0
+metal plus antenna: metal spheres respond electrostatically; antennas and disturbances would need a full-wave solution
+ramped coil plus metal: ramped coils with metal: its electrostatic response cannot screen the induced field

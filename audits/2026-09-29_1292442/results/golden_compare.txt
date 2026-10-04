@@ -1,0 +1,6 @@
+printed hashes: 88
+json keys: 88
+missing from log: 0
+extra in log: 0
+hash mismatches: 0
+test result: ok. 1 passed; 0 failed
