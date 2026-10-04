@@ -125,8 +125,9 @@ pub struct FieldParams {
     /// Static grid width, height, 1 if present; number of charges.
     pub grid: UVec4,
     /// Antennas, waves, flags (1 radiation only, 2 left out by the model, 4 colour |E|,
-    /// 8 linear, 16 colour |S|), energy flow: part (bits 0–1: total, own, exchange,
-    /// external), 4 averaged over a period, number of frequency groups (bits 8–15).
+    /// 8 linear, 16 colour |S|, 32 colour of the charges' field alone), energy flow: part
+    /// (bits 0–1: total, own, exchange, external), 4 averaged over a period, number of
+    /// frequency groups (bits 8–15).
     pub counts: UVec4,
     /// Energy flow: saturation of the part shown, 0, 0, 0.
     pub flow: Vec4,
@@ -815,11 +816,18 @@ pub fn update(
         *b = buffer(items);
     }
     let flow = quantity == FieldQuantity::S && c.is_finite();
+    // In the particle-field view the colour (B_z or |E|) is the moving charges' field
+    // alone, as its arrows and scale are; the antennas and waves are uploaded only as the
+    // rest of the energy flow's exchange and external parts. (Until 2026-10 they were
+    // added to the colour too, so a level's light wave filled the view, saturated on the
+    // particle's far smaller scale: level 84.)
+    let charges_only = mode == MapMode::ParticleField;
     let flags = u32::from(view.radiation_only)
         | (u32::from(view.neglected_only) << 1)
         | (u32::from(quantity == FieldQuantity::E) << 2)
         | (u32::from(linear) << 3)
-        | (u32::from(flow) << 4);
+        | (u32::from(flow) << 4)
+        | (u32::from(charges_only) << 5);
     let part = game.flow_part;
     let averaged = view.average && !view.groups.is_empty();
     let flow_bits = part.index() as u32

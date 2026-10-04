@@ -17,7 +17,8 @@ struct Params {
     grid: vec4<u32>,
     // Number of antennas, of waves; flags: 1 radiation part only, 2 only what the
     // quasi-static beam interaction leaves out, 4 colour |E| (else B_z), 8 linear
-    // colour scale, 16 colour |S| (the energy flow); energy flow: part (bits 0-1: total,
+    // colour scale, 16 colour |S| (the energy flow), 32 colour of the charges' field alone
+    // (the particle-field view); energy flow: part (bits 0-1: total,
     // the charges' own, exchange, the rest's own), 4 averaged over a period, number of
     // frequency groups (bits 8-15).
     counts: vec4<u32>,
@@ -681,6 +682,11 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     ok = ok && ch.ok;
     if (!ok) {
         return vec4<f32>(0.0);
+    }
+    if ((params.counts.z & 32u) != 0u) {
+        // The particle-field view: the charges' field alone (the rest enters only the
+        // energy flow's exchange and external parts below).
+        f = ch.f;
     }
     let range = params.scales.w;
     var col: vec3<f32>;
