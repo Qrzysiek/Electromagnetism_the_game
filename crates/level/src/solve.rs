@@ -412,7 +412,7 @@ fn anneal_once(
         let (s, _) = objective(level, &trial);
         let accept = s <= score || {
             let u = rng.unit();
-            temperature > 0.0 && u < (-(s - score) / temperature.max(1e-9)).exp()
+            temperature > 0.0 && u < libm::exp(-(s - score) / temperature.max(1e-9))
         };
         if accept {
             current = trial;

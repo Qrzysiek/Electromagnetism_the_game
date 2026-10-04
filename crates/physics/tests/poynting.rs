@@ -1,6 +1,8 @@
 //! Validation tests P1–P3 for the field energy and its flow (PHYSICS.md §10, §9). Run with
 //! `cargo test --release -p physics --test poynting -- --nocapture`.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 mod common;
 
 use common::sphere_quadrature;

@@ -117,9 +117,9 @@ fn inverse_normal(p: f64) -> f64 {
     };
     const P_LOW: f64 = 0.024_25;
     if p < P_LOW {
-        tail((-2.0 * p.ln()).sqrt())
+        tail((-2.0 * libm::log(p)).sqrt())
     } else if p > 1.0 - P_LOW {
-        -tail((-2.0 * (1.0 - p).ln()).sqrt())
+        -tail((-2.0 * libm::log(1.0 - p)).sqrt())
     } else {
         let q = p - 0.5;
         let r = q * q;
@@ -209,10 +209,10 @@ impl BeamVerification {
 }
 
 impl Level {
-    /// Whether the level flies as one interacting system: its shots are beams (all of
-    /// them: mixing beam and single shots is not supported, `model_issues`), or it has
-    /// dynamic particles (the level's free particles or the player's free charges), with
-    /// which every shot flies as a beam of one.
+    /// Whether the level flies as one interacting system: a shot is a beam (a single shot
+    /// beside it flies as a beam of one particle), or it has dynamic particles (the level's
+    /// free particles or the player's free charges), with which every shot flies as a beam
+    /// of one.
     pub fn has_beams(&self) -> bool {
         self.shots.iter().any(|s| s.beam.is_some())
             || !self.free_particles.is_empty()
@@ -255,7 +255,7 @@ impl Level {
             })
             .collect();
         for e in player.iter().filter(|e| e.kind == ElementKind::Free) {
-            let (sin, cos) = e.angle_deg.to_radians().sin_cos();
+            let (sin, cos) = libm::sincos(e.angle_deg.to_radians());
             let v = DVec3::new(cos, sin, 0.0) * e.speed.unwrap_or(0.0);
             let m = self.limits.free_mass;
             out.push(BeamParticle {
@@ -385,7 +385,7 @@ impl Level {
                 } else {
                     [0.0; 4]
                 };
-                let (sin, cos) = (ang * spec.angle_spread_deg).to_radians().sin_cos();
+                let (sin, cos) = libm::sincos((ang * spec.angle_spread_deg).to_radians());
                 let dir = d * cos + across * sin;
                 out.push(Launch {
                     shot: s,

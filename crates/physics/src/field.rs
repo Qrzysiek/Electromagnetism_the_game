@@ -13,7 +13,8 @@ use crate::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 pub struct FieldSample {
     pub e: DVec3,
     pub b: DVec3,
-    /// Electrostatic potential (only meaningful for static electric fields).
+    /// Electrostatic potential of the static sources (only meaningful for static electric
+    /// fields; a `LevelField` adds nothing for its time-dependent sources).
     pub phi: f64,
 }
 
@@ -125,6 +126,14 @@ impl Coulomb {
             .iter()
             .copied()
             .zip(self.charges.iter().copied())
+    }
+
+    /// Positions, charges and radii of the clouds' uniform spheres (0 for a point
+    /// charge), in summation order: what pictures of the potential need.
+    pub fn sources(&self) -> impl Iterator<Item = (DVec3, f64, f64)> + '_ {
+        self.charges()
+            .zip(self.radii.iter().copied())
+            .map(|((p, q), r)| (p, q, r))
     }
 }
 
@@ -254,6 +263,11 @@ impl FieldSolver for LevelField {
             let f = a.fields(x, t_lab);
             s.e += f.e;
             s.b += f.b;
+            // `phi` is the potential of the static sources (as for the waves): a static
+            // antenna's electrostatic dipole potential; an oscillating one has none.
+            if a.omega == 0.0 {
+                s.phi += f.phi;
+            }
         }
         for ext in &self.external {
             let f = ext.sample(x, t_lab);

@@ -208,10 +208,11 @@ fn lienard(q: f32, c: f32, p: vec2<f32>, s: State, radiation_only: bool) -> Fiel
 }
 
 // The past of a charge now in state `s` continued back by τ (beam::tapered): constant
-// acceleration while |a τ| ≤ 0.07 c, then fading as sech², so that the velocity changes
-// by at most 0.1 c.
+// acceleration while |a τ| ≤ 0.7 Δv, then fading as sech², so that the velocity changes
+// by at most Δv = min(0.1 c, 0.9 (c − |v|)) (beam::taper_reach: never reaching c).
 fn tapered(s: State, tau: f32, c: f32) -> State {
-    let t_scale = 0.1 * c / max(length(s.a), 1e-20);
+    let reach = max(min(0.1 * c, 0.9 * max(c - length(s.v), 0.0)), 1e-20);
+    let t_scale = reach / max(length(s.a), 1e-20);
     let u = tau / t_scale;
     if (abs(u) <= 0.7) {
         return State(s.x + s.v * tau + s.a * (0.5 * tau * tau), s.v + s.a * tau, s.a);
@@ -230,14 +231,31 @@ fn tapered(s: State, tau: f32, c: f32) -> State {
 // The quasi-static beam interaction's field of a charge now in state `s`: its past
 // continued back with `tapered` (beam::accelerated_fields).
 fn accelerated(q: f32, c: f32, p: vec2<f32>, s: State) -> Field {
+    // Newton on the strictly decreasing g(τ) = −c τ − |p − x(τ)| (g(0) ≤ 0), kept inside
+    // the bracket of the signs seen (bisection where it would leave it).
     var tau = -length(p - s.x) / c;
-    for (var k = 0; k < 20; k = k + 1) {
+    var lo = -1e30;
+    var hi = 0.0;
+    for (var k = 0; k < 24; k = k + 1) {
         let st = tapered(s, tau, c);
         let d = p - st.x;
         let dist = max(length(d), 1e-6);
         let g = -c * tau - dist;
+        if (g > 0.0) {
+            lo = max(lo, tau);
+        } else {
+            hi = min(hi, tau);
+        }
         let slope = -c + dot(d, st.v) / dist;
-        tau = tau - g / slope;
+        var next = tau - g / slope;
+        if (!(next < hi && next > lo)) {
+            if (lo > -1e29) {
+                next = 0.5 * (lo + hi);
+            } else {
+                next = hi - 2.0 * max(hi - tau, dist / c);
+            }
+        }
+        tau = next;
     }
     return lienard(q, c, p, tapered(s, tau, c), false);
 }

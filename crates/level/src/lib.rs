@@ -458,7 +458,7 @@ impl RadiationGoal {
     pub fn to_physics(self) -> physics::spectrum::RadiationWindow {
         let a = self.direction[0].to_radians();
         physics::spectrum::RadiationWindow {
-            axis: DVec3::new(a.cos(), a.sin(), 0.0),
+            axis: DVec3::new(libm::cos(a), libm::sin(a), 0.0),
             half_angle: self.direction[1].to_radians(),
             band: self.band.map(|[lo, hi]| (lo, hi)),
             energy: (self.energy[0], self.energy[1]),
@@ -472,7 +472,10 @@ impl DetectorAcceptance {
         physics::trajectory::Acceptance {
             direction: self.direction.map(|[axis, half]| {
                 let a = axis.to_radians();
-                (DVec3::new(a.cos(), a.sin(), 0.0), half.to_radians())
+                (
+                    DVec3::new(libm::cos(a), libm::sin(a), 0.0),
+                    half.to_radians(),
+                )
             }),
             kinetic: self.kinetic.map(|[lo, hi]| (lo, hi)),
             radiation: self.radiation.map(RadiationGoal::to_physics),
@@ -1217,7 +1220,7 @@ impl Level {
                     let n = ((std::f64::consts::TAU * radius / 0.1).ceil() as usize).max(8);
                     for i in 0..n {
                         let a = std::f64::consts::TAU * i as f64 / n as f64;
-                        out.push(c + DVec3::new(a.cos(), a.sin(), 0.0) * *radius);
+                        out.push(c + DVec3::new(libm::cos(a), libm::sin(a), 0.0) * *radius);
                     }
                 }
                 Coil::Polygon { vertices, .. } => {
@@ -1364,6 +1367,32 @@ impl Level {
 
     /// Problems of the physical model of this level (combinations that are not
     /// supported), as messages. Empty if the level is consistent.
+    /// Positions and radii of the level's bodies and launch points for the containment
+    /// checks of `model_issues`: fixed elements with the radius of their kind (supplies
+    /// and plates have rules of their own), the shots' and the free particles' launch
+    /// points with the particle's radius (contact during the flight uses it too).
+    fn bodies(&self) -> impl Iterator<Item = (DVec3, f64)> + '_ {
+        let elements = self.elements.iter().filter_map(|e| {
+            let r = match e.kind {
+                ElementKind::Charge => self.physics.charge_radius,
+                ElementKind::Magnet => self.physics.magnet_radius,
+                ElementKind::Antenna => self.physics.antenna_radius,
+                ElementKind::Free => self.limits.free_radius,
+                ElementKind::Plate | ElementKind::Supply => return None,
+            };
+            Some((self.grid.position(e.node), r))
+        });
+        let shots = self
+            .shots
+            .iter()
+            .map(|s| (self.grid.position(s.launch.node), s.particle.radius));
+        let free = self
+            .free_particles
+            .iter()
+            .map(|f| (self.grid.position(f.node), f.particle.radius));
+        elements.chain(shots).chain(free)
+    }
+
     pub fn model_issues(&self) -> Vec<String> {
         let mut out = Vec::new();
         self.gate_issues(&mut out);
@@ -1371,7 +1400,14 @@ impl Level {
         if self.has_beams() {
             self.beam_issues(&mut out);
         }
-        if self.shots.iter().any(|s| s.particle.moment != 0.0) {
+        // Magnetic moments: of the shots and of the free particles.
+        let moments = self
+            .shots
+            .iter()
+            .map(|s| s.particle.moment)
+            .chain(self.free_particles.iter().map(|f| f.particle.moment))
+            .any(|m| m != 0.0);
+        if moments {
             // m ∇B_z is exact for E = 0, or for c = ∞ (PHYSICS.md §3.2). At finite c an
             // electric field adds velocity-dependent (Aharonov–Casher / hidden-momentum)
             // terms that are not modelled.
@@ -1379,6 +1415,9 @@ impl Level {
                 || self.limits.max_charges > 0
                 || self.limits.max_antennas > 0
                 || self.limits.max_plates > 0
+                || self.limits.max_free > 0
+                || !self.free_particles.is_empty()
+                || !self.clouds.is_empty()
                 || !self.conductors.is_empty()
                 || !self.electrodes.is_empty()
                 || self
@@ -1394,6 +1433,43 @@ impl Level {
             }
             if self.physics.radiation_reaction {
                 out.push("radiation reaction is not modelled for magnetic moments".into());
+            }
+        }
+        // A launch inside its own detector would arrive at t = 0.
+        let in_detector = (0..self.shots.len()).any(|i| {
+            self.detector_region(i)
+                .signed_distance(self.grid.position(self.shots[i].launch.node))
+                <= 0.0
+        }) || self.free_particles.iter().any(|f| {
+            f.detector.is_some_and(|d| {
+                self.box_region(d)
+                    .signed_distance(self.grid.position(f.node))
+                    <= 0.0
+            })
+        });
+        if in_detector {
+            out.push("a launch point is inside its own detector".into());
+        }
+        if self.physics.radiation_reaction && self.physics.c.is_some() {
+            // The metal responds electrostatically: its image follows the particle at
+            // once and the radiation it would reflect is missing, which near its surface
+            // changes the reaction by a factor of order one (PHYSICS.md §3.1).
+            if self.has_metal(&[]) || self.limits.max_plates > 0 {
+                out.push(
+                    "radiation reaction near metal: the metal's electrostatic response does \
+                     not reflect the radiation, which changes the reaction near it (not \
+                     modelled)"
+                        .into(),
+                );
+            }
+            // A drained charge's field jumps where the light cone of its removal passes;
+            // the reaction differentiates the field along the world line.
+            if self.physics.instant_drain && self.interacts() {
+                out.push(
+                    "radiation reaction with an instant drain: the drained charge's field \
+                     jumps where its light cone passes, which the reaction cannot follow"
+                        .into(),
+                );
             }
         }
         if self.limits.max_plates > 0 && self.limits.plate_voltages.is_empty() {
@@ -1426,13 +1502,9 @@ impl Level {
                 );
             }
             let boxes = physics::bem::Electrodes::shapes_only(self.box_electrodes());
-            let inside =
-                self.elements
-                    .iter()
-                    .any(|e| boxes.contains(self.grid.position(e.node), CONTACT_DISTANCE + 0.3))
-                    || self.shots.iter().any(|s| {
-                        boxes.contains(self.grid.position(s.launch.node), CONTACT_DISTANCE)
-                    });
+            let inside = self
+                .bodies()
+                .any(|(x, r)| boxes.contains(x, CONTACT_DISTANCE + r));
             if inside {
                 out.push("an element or launch point is inside or at an electrode".into());
             }
@@ -1451,7 +1523,7 @@ impl Level {
                         .into(),
                 );
             }
-            if self.shots.iter().any(|s| s.particle.moment != 0.0) {
+            if moments {
                 out.push("ramped coils with magnetic moments are not modelled".into());
             }
         }
@@ -1459,7 +1531,7 @@ impl Level {
         let too_fast = self
             .free_particles
             .iter()
-            .any(|f| f.velocity[0].hypot(f.velocity[1]) >= c)
+            .any(|f| libm::hypot(f.velocity[0], f.velocity[1]) >= c)
             || (self.limits.max_free > 0
                 && self.limits.free_speeds.iter().any(|&v| v >= c || v < 0.0));
         if too_fast {
@@ -1501,11 +1573,9 @@ impl Level {
                     }
                 }
                 let c = self.grid.position(a.center);
-                let inside = self.elements.iter().any(|e| {
-                    (self.grid.position(e.node) - c).length() < a.radius + CONTACT_DISTANCE + 0.3
-                }) || self.shots.iter().any(|s| {
-                    (self.grid.position(s.launch.node) - c).length() < a.radius + CONTACT_DISTANCE
-                });
+                let inside = self
+                    .bodies()
+                    .any(|(x, r)| (x - c).length() < a.radius + CONTACT_DISTANCE + r);
                 if inside {
                     out.push("an element or launch point is inside or at a metal sphere".into());
                 }
@@ -1544,7 +1614,7 @@ impl Level {
                 let a = e.angle_deg.to_radians();
                 OscillatingDipole {
                     position: self.grid.position(e.node),
-                    amplitude: DVec3::new(a.cos(), a.sin(), 0.0) * e.value,
+                    amplitude: DVec3::new(libm::cos(a), libm::sin(a), 0.0) * e.value,
                     omega: e.omega.unwrap_or(self.physics.rf_omega),
                     phase: 0.0,
                     c: self.c(),
@@ -1881,8 +1951,8 @@ fn electrodes_for(
 
 /// In-plane corners of an electrode box (z = 0), counter-clockwise.
 fn rect_corners(b: &physics::bem::BoxElectrode) -> [DVec3; 4] {
-    let u = DVec3::new(b.angle.cos(), b.angle.sin(), 0.0) * b.half_length;
-    let v = DVec3::new(-b.angle.sin(), b.angle.cos(), 0.0) * b.half_thickness;
+    let u = DVec3::new(libm::cos(b.angle), libm::sin(b.angle), 0.0) * b.half_length;
+    let v = DVec3::new(-libm::sin(b.angle), libm::cos(b.angle), 0.0) * b.half_thickness;
     let c = DVec3::new(b.center.x, b.center.y, 0.0);
     [c - u - v, c + u - v, c + u + v, c - u + v]
 }
@@ -1948,11 +2018,16 @@ impl Level {
         Conductors::new(spheres, &sources, resolution)
     }
 
-    /// One shot's scenario with metal spheres at display resolution (for pictures:
-    /// potential map, field lines, field views).
-    pub fn display_scenario(&self, shot: usize, player: &[Element]) -> Scenario<LevelField> {
+    /// One flight's scenario (shot, disturbance) with metal at display resolution (for
+    /// pictures: potential map, field lines, field views).
+    pub fn display_scenario(
+        &self,
+        shot: usize,
+        disturbance: usize,
+        player: &[Element],
+    ) -> Scenario<LevelField> {
         let (field, obstacles) = self.field_at(player, Resolution::Display);
-        self.scenario_with(shot, 0, field, obstacles)
+        self.scenario_with(shot, disturbance, field, obstacles)
     }
 
     /// Scenarios of all flights with the field at `resolution`.
@@ -1971,8 +2046,8 @@ impl Level {
     }
 
     /// Verifies every flight: preview at preview resolution, the tighter run with the
-    /// field at verification resolution (they differ only with metal spheres), so the
-    /// field model's error enters the verdict too.
+    /// field at verification resolution (they differ only with metal: spheres, electrodes,
+    /// player plates), so the field model's error enters the verdict too.
     pub fn verify_flights(&self, player: &[Element]) -> Vec<Verification> {
         let preview = self.scenarios(player);
         let fine = if self.has_metal(player) {
@@ -2237,6 +2312,8 @@ mod tests {
         l.free_particles.clear();
         l.limits.max_free = 0;
         l.limits.max_antennas = 0;
+        // Metal does not reflect radiation: no radiation reaction next to it.
+        l.physics.radiation_reaction = false;
         l.limits.max_plates = 2;
         l.limits.plate_voltages = vec![0.0, 1e4];
         l.limits.supply_voltages = vec![-2e4, 2e4];
@@ -2508,5 +2585,87 @@ mod flight_tests {
         assert!(scn[3].field.external.is_empty());
         assert_eq!(scn[4].field.external.len(), 1);
         assert!(matches!(scn[5].field.external[0], External::Wave(_)));
+    }
+}
+
+#[cfg(test)]
+mod model_tests {
+    use super::*;
+
+    fn has(level: &Level, text: &str) -> bool {
+        level.model_issues().iter().any(|i| i.contains(text))
+    }
+
+    /// A magnetic moment at finite c next to an electric source is rejected, whether the
+    /// moment is a shot's or a free particle's, and whether the source is a fixed charge
+    /// or a charge cloud (the Aharonov–Casher term is not modelled).
+    #[test]
+    fn moments_with_electric_sources_are_rejected() {
+        let base = shipped("stern_gerlach");
+        assert!(base.physics.c.is_some());
+        assert!(base.model_issues().is_empty());
+        let moment = "magnetic moments with electric fields";
+        let mut cloud = base.clone();
+        cloud.clouds.push(Cloud {
+            center: [2, 2, 0],
+            radius: 1.0,
+            charge: 1.0,
+        });
+        assert!(has(&cloud, moment), "a cloud is an electric source");
+        let mut free = base.clone();
+        let spec = free.shots[0].particle;
+        for s in &mut free.shots {
+            s.particle.moment = 0.0;
+        }
+        free.elements.push(Element::charge([2, 2, 0], 1.0));
+        assert!(!has(&free, moment));
+        free.free_particles.push(FreeParticle {
+            particle: spec,
+            node: [3, 3, 0],
+            velocity: [0.0, 0.0],
+            detector: None,
+        });
+        assert!(has(&free, moment), "a free particle's moment counts");
+    }
+
+    /// Containment checks use each body's own radius (they once added 0.3 to every
+    /// element), and a launch point inside its own detector is listed.
+    #[test]
+    fn containment_uses_the_bodies_radii() {
+        let mut l = shipped("high_voltage_dome");
+        assert!(l.model_issues().is_empty());
+        let sphere = l.conductors[0];
+        let c = l.grid.position(sphere.center);
+        // A magnet whose surface is 0.1 cells from the sphere's.
+        let gap = 0.1;
+        l.physics.magnet_radius = 0.6;
+        let d = sphere.radius + l.physics.magnet_radius + gap;
+        let s = f64::from(l.grid.subdivision);
+        #[allow(clippy::cast_possible_truncation)]
+        let node = [((c.x + d) * s).round() as i64, (c.y * s).round() as i64, 0];
+        let at = l.grid.position(node);
+        assert!(((at - c).length() - d).abs() < 0.5 / s, "node rounding");
+        l.elements.push(Element::magnet(node, 1.0));
+        // Inside with its own radius 0.6, outside with the 0.3 once assumed for all.
+        assert!((at - c).length() < sphere.radius + CONTACT_DISTANCE + 0.6);
+        assert!((at - c).length() > sphere.radius + CONTACT_DISTANCE + 0.3);
+        assert!(has(&l, "inside or at a metal sphere"));
+        l.physics.magnet_radius = 0.3;
+        assert!(!has(&l, "inside or at a metal sphere"));
+        // Now a launch inside its detector.
+        let mut m = shipped("first_bend");
+        assert!(m.model_issues().is_empty());
+        m.shots[0].launch.node = m.shots[0].detector.min;
+        assert!(has(&m, "inside its own detector"));
+    }
+
+    /// Radiation reaction near metal is rejected (the metal's response is electrostatic).
+    #[test]
+    fn radiation_reaction_near_metal_is_rejected() {
+        let mut l = shipped("image_charge");
+        assert!(l.model_issues().is_empty());
+        l.physics.c = Some(50.0);
+        l.physics.radiation_reaction = true;
+        assert!(has(&l, "radiation reaction near metal"));
     }
 }

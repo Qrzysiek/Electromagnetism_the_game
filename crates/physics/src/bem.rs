@@ -75,7 +75,7 @@ impl Resolution {
 
 impl BoxElectrode {
     fn axes(&self) -> (DVec3, DVec3) {
-        let (s, c) = self.angle.sin_cos();
+        let (s, c) = libm::sincos(self.angle);
         (DVec3::new(c, s, 0.0), DVec3::new(-s, c, 0.0))
     }
 
@@ -146,10 +146,10 @@ fn graded(n: usize, both: bool) -> Vec<f64> {
             #[allow(clippy::cast_precision_loss)]
             let kf = k as f64;
             if both {
-                0.5 * (1.0 - (std::f64::consts::PI * kf / nf).cos())
+                0.5 * (1.0 - libm::cos(std::f64::consts::PI * kf / nf))
             } else {
                 // Grade towards 1 (the top edge): sin mapping.
-                (0.5 * std::f64::consts::PI * kf / nf).sin()
+                libm::sin(0.5 * std::f64::consts::PI * kf / nf)
             }
         })
         .collect()
@@ -246,6 +246,9 @@ struct Geometry {
     panels: Vec<Triangle>,
     /// Precomputed panels and their mirror images.
     pre: Vec<(Panel, Panel)>,
+    /// For pictures, per panel: centroid, squared radius of exact integration
+    /// (`PICTURE_NEAR` sizes), the points of `PICTURE_RULE` and a third of the area.
+    picture: Vec<PictureRule>,
     owner: Vec<usize>,
     lu: Lu,
     unit: Vec<Vec<f64>>,
@@ -269,6 +272,27 @@ fn geometry_key(electrodes: &[BoxElectrode], size: f64) -> Vec<u64> {
         .collect();
     k.push(size.to_bits());
     k
+}
+
+/// A panel prepared for the picture evaluation (`Electrodes::picture_sample`).
+#[derive(Debug)]
+struct PictureRule {
+    centroid: DVec3,
+    near2: f64,
+    points: [DVec3; 3],
+    third: f64,
+}
+
+impl PictureRule {
+    fn new(t: &Triangle) -> Self {
+        let near = PICTURE_NEAR * t.size();
+        Self {
+            centroid: t.centroid(),
+            near2: near * near,
+            points: PICTURE_RULE.map(|[u, v, k]| t.a * u + t.b * v + t.c * k),
+            third: t.area() / 3.0,
+        }
+    }
 }
 
 fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
@@ -327,9 +351,11 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
         bytes: 8 * lu.a.len(),
         unknowns: n,
     };
+    let picture = panels.iter().map(PictureRule::new).collect();
     let g = Arc::new(Geometry {
         panels,
         pre,
+        picture,
         owner,
         lu,
         unit,
@@ -353,10 +379,24 @@ pub struct Electrodes {
     pub sigma: Vec<f64>,
     /// Potential of each electrode.
     pub potentials: Vec<f64>,
-    /// Evaluate panels as point charges at their centroids (display resolution: cheap,
-    /// for pictures only; physics always uses the exact integrals).
-    pub point_evaluation: bool,
+    /// Evaluate for pictures (display resolution: field lines, the field views): the
+    /// panels nearer than `PICTURE_NEAR` of their sizes exactly, the others by a
+    /// three-point rule (`picture_sample`). Physics always uses the exact integrals.
+    pub picture: bool,
 }
+
+/// Panels nearer than this many of their sizes are integrated exactly in pictures; the
+/// three-point rule for the others is then within 4.3e-6 of the plate potential of the
+/// exact integrals (level 19, from 0.05 cells off the plates; with one point charge per
+/// panel it was 4.7e-2, and 1.1e-3 with the near ones exact).
+pub const PICTURE_NEAR: f64 = 2.0;
+
+/// Barycentric points of the three-point rule on a triangle (degree 2, equal weights).
+pub const PICTURE_RULE: [[f64; 3]; 3] = [
+    [2.0 / 3.0, 1.0 / 6.0, 1.0 / 6.0],
+    [1.0 / 6.0, 2.0 / 3.0, 1.0 / 6.0],
+    [1.0 / 6.0, 1.0 / 6.0, 2.0 / 3.0],
+];
 
 impl Electrodes {
     /// Build cost of the geometry's factorization (zero without electrodes).
@@ -372,7 +412,7 @@ impl Electrodes {
         resolution: Resolution,
     ) -> Self {
         let mut e = Self::with_panel_size(electrodes, sources, resolution.panel_size());
-        e.point_evaluation = resolution == Resolution::Display;
+        e.picture = resolution == Resolution::Display;
         e
     }
 
@@ -454,7 +494,7 @@ impl Electrodes {
             geometry: Some(geo),
             sigma,
             potentials: alpha,
-            point_evaluation: false,
+            picture: false,
         }
     }
 
@@ -517,23 +557,54 @@ impl Electrodes {
     }
 }
 
+impl Electrodes {
+    /// The picture evaluation (`picture`): each panel and its mirror image exactly when
+    /// `x` is nearer than `PICTURE_NEAR` of its size to its centroid, otherwise by the
+    /// three-point rule `PICTURE_RULE` (error of order (size/R)³ of the panel's share).
+    fn picture_sample(&self, geo: &Geometry, x: DVec3) -> (f64, DVec3) {
+        let mut phi = 0.0;
+        let mut e = DVec3::ZERO;
+        // In the plane the mirror image's points are as far as the panel's: doubled.
+        let in_plane = x.z == 0.0;
+        for (((p, m), rule), &s) in geo.pre.iter().zip(&geo.picture).zip(&self.sigma) {
+            if (x - rule.centroid).length_squared() < rule.near2 {
+                let (pp, g) = pair_integrals(p, m, x);
+                phi += s * pp;
+                e -= g * s;
+                continue;
+            }
+            let w = s * rule.third;
+            for y in rule.points {
+                let mut add = |y: DVec3, w: f64| {
+                    let d = x - y;
+                    let inv = 1.0 / d.length();
+                    phi += w * inv;
+                    e += d * (w * inv * inv * inv);
+                };
+                if in_plane {
+                    add(y, 2.0 * w);
+                } else {
+                    add(y, w);
+                    add(DVec3::new(y.x, y.y, -y.z), w);
+                }
+            }
+        }
+        if in_plane {
+            // The mirror symmetry: no field across the plane.
+            e.z = 0.0;
+        }
+        (phi, e)
+    }
+}
+
 impl FieldSolver for Electrodes {
     fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
         let mut phi = 0.0;
         let mut e = DVec3::ZERO;
         if let Some(geo) = &self.geometry
-            && self.point_evaluation
+            && self.picture
         {
-            for (t, &s) in geo.panels.iter().zip(&self.sigma) {
-                let q = s * t.area();
-                let c = t.centroid();
-                for y in [c, DVec3::new(c.x, c.y, -c.z)] {
-                    let d = x - y;
-                    let inv = 1.0 / d.length();
-                    phi += q * inv;
-                    e += d * (q * inv * inv * inv);
-                }
-            }
+            (phi, e) = self.picture_sample(geo, x);
         } else if let Some(geo) = &self.geometry {
             for ((p, m), &s) in geo.pre.iter().zip(&self.sigma) {
                 let (pp, g) = pair_integrals(p, m, x);

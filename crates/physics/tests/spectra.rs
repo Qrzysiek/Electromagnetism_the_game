@@ -1,6 +1,8 @@
 //! Validation of the far-zone radiation measure (`spectrum.rs`, PHYSICS.md §3.4) against
 //! Jackson's analytic results, on prescribed motions.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 use std::f64::consts::PI;
 
 use physics::DVec3;

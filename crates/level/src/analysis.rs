@@ -203,7 +203,7 @@ impl Analysis {
 fn ln_choose(n: u64, k: u64) -> f64 {
     #[allow(clippy::cast_precision_loss)]
     (0..k)
-        .map(|i| ((n - i) as f64).ln() - ((i + 1) as f64).ln())
+        .map(|i| libm::log((n - i) as f64) - libm::log((i + 1) as f64))
         .sum()
 }
 
@@ -214,7 +214,7 @@ fn config_space_log10(level: &Level, options: &[Element]) -> f64 {
         // ln Σ_{j=0..max} C(n, j), via log-sum-exp.
         let terms: Vec<f64> = (0..=max.min(n)).map(|j| ln_choose(n, j)).collect();
         let m = terms.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        m + terms.iter().map(|t| (t - m).exp()).sum::<f64>().ln()
+        m + libm::log(terms.iter().map(|t| libm::exp(t - m)).sum::<f64>())
     };
     let ln = subsets(
         count(ElementKind::Charge),
@@ -232,7 +232,7 @@ fn config_space_log10(level: &Level, options: &[Element]) -> f64 {
     // Each tunable electrode's supply: off or one of the listed potentials.
     #[allow(clippy::cast_precision_loss)]
     let supplies = tunable_centres(level).len() as f64
-        * (level.limits.supply_voltages.len() as f64 + 1.0).ln();
+        * libm::log(level.limits.supply_voltages.len() as f64 + 1.0);
     (ln + supplies) / std::f64::consts::LN_10
 }
 
@@ -461,7 +461,7 @@ fn search(level: &Level, options: &[Element], budget: u32, seed: u64, memo: &Mem
         let trial = neighbour(level, &current, options, &mut rng);
         let (s, o) = memo.objective(level, &trial);
         let temperature = 0.5 * (1.0 - f64::from(eval) / f64::from(budget));
-        let accept = s <= score || rng.unit() < (-(s - score) / temperature.max(1e-9)).exp();
+        let accept = s <= score || rng.unit() < libm::exp(-(s - score) / temperature.max(1e-9));
         if accept {
             current = trial;
             score = s;
@@ -579,7 +579,7 @@ mod tests {
     fn power_supply_levels_are_analysed() {
         let l = crate::shipped("power_supply");
         let a = analyze(&l, 40, 2, 10, 1);
-        assert!((a.config_space_log10 - 5f64.log10()).abs() < 1e-12);
+        assert!((a.config_space_log10 - libm::log10(5.0)).abs() < 1e-12);
         assert!(a.random_solutions > 0 && a.random_solutions < 40);
         let options = single_element_options(&l);
         let memo = Memo::default();

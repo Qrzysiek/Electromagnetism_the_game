@@ -7,14 +7,17 @@
 //!   the magnetic and retarded parts, and every interaction of magnetic moments, scale as
 //!   `1/c²` and vanish.
 //! - For finite `c`, by default, the quasi-static interaction: each particle feels the
-//!   exact Liénard–Wiechert fields of the others, with their recent past taken from
-//!   their present state with constant acceleration (`accelerated_fields`; the
-//!   accelerations from a first pass with the fields of uniform motion,
-//!   `heaviside_fields`). That is exact in the velocities (so it contains the magnetic
-//!   attraction that reduces the space charge of a relativistic beam by 1/γ²) and to
-//!   first order in the accelerations (their near and radiation fields); it leaves out
-//!   the jerk terms, estimated per particle (`BeamRun::neglected_retardation`). It needs
-//!   no record and costs a few times the Coulomb force.
+//!   exact Liénard–Wiechert fields of the others, with their recent past continued from
+//!   their present state along the motion they would have in the uniform fields they
+//!   feel now (`FieldMotion`, `Continuation::Fields`; the fields from a first pass with
+//!   the fields of uniform motion, `heaviside_fields`), blending into the tapered constant
+//!   acceleration (`accelerated_fields`) where that motion swings far, and with the
+//!   tapered acceleration alone for a particle with a magnetic moment or out of the
+//!   plane. That is exact in the velocities (so it contains the magnetic attraction that
+//!   reduces the space charge of a relativistic beam by 1/γ²) and to first order in the
+//!   accelerations (their near and radiation fields); it leaves out the jerk terms the
+//!   continuation misses, estimated per particle (`BeamRun::neglected_retardation`). It
+//!   needs no record and costs a few times the Coulomb force.
 //! - For finite `c` with `BeamScenario::retarded`: each particle feels the Liénard–Wiechert
 //!   fields (`lienard.rs`) of the others at their retarded times, taken from the recorded
 //!   motion (the dense output of every accepted step). Retarded times inside the current
@@ -278,7 +281,7 @@ impl Fade {
         if t_r <= self.t_off {
             1.0
         } else {
-            (-self.rate * (t_r - self.t_off)).exp()
+            libm::exp(-self.rate * (t_r - self.t_off))
         }
     }
 
@@ -332,7 +335,7 @@ pub struct BeamRun {
     /// their jerk, `Σ_j |q_j| γ_j² |ȧ_j| / (c³ κ)` with the Doppler factor κ = 1 − n·β
     /// for the longer light delay ahead of a source, plus `|q_j| γ_j² |a_j| / (c² R)` for
     /// pairs so far apart that the source's continued past has left its constant
-    /// acceleration, `|a_j| R / (c κ) > 0.07 c`, see `tapered`), over that of the
+    /// acceleration, `|a_j| R / (c κ) > 0.7 Δv`, see `tapered`), over that of the
     /// fields kept, `Σ_j |E_j|`; plus, at each drained particle's removal, the impulse
     /// `|q| / (R c)` of its field lingering for the light time R/c (the quasi-static
     /// interaction drops it at once)
@@ -523,8 +526,9 @@ impl ViewGuards<'_> {
 impl View<'_> {
     /// Before launch each particle moves with its launch acceleration (it was already
     /// flying in the fields), tapered smoothly so that its velocity changes by less than
-    /// 0.1c (`tapered`). A sudden start from uniform motion would send a kink in every
-    /// acceleration field to every other particle, each forcing tiny steps when it arrives.
+    /// `taper_reach` (at most 0.1c, and never to c: `tapered`). A sudden start from
+    /// uniform motion would send a kink in every acceleration field to every other
+    /// particle, each forcing tiny steps when it arrives.
     fn before_launch<F>(&self, scn: &BeamScenario<F>, j: usize, t: f64) -> (DVec3, DVec3, DVec3) {
         let b = &scn.particles[j];
         let v0 = self.past.kin[j].velocity(b.p0);
@@ -946,6 +950,47 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         (e, b)
     }
 
+    /// Electric field at `x`, `t` (member `k` there) of the charges already absorbed that
+    /// still act: those fading in a screening cup, and with the retarded interaction also
+    /// a drained one whose removal has not yet reached `x` (not those stopped on bodies,
+    /// which stay in the energy books as static charges). For the energy budget: their
+    /// work on the particles present (only `E` does work).
+    fn absorbed_fields(&self, k: usize, x: DVec3, t: f64) -> DVec3 {
+        let me = self.members[k];
+        let mut e = DVec3::ZERO;
+        if let Some(past) = self.past {
+            let guards = past.view();
+            let view = guards.view();
+            // A scratch copy of the receiver's retarded-time guesses: the dynamics' own
+            // searches start from theirs, which these evaluations must not move.
+            let mut row = past.guess[me].lock().expect("not poisoned").clone();
+            for j in 0..self.scn.particles.len() {
+                if j != me
+                    && view.t_off[j].is_finite()
+                    && !view.stays[j]
+                    && self.scn.particles[j].particle.charge != 0.0
+                {
+                    e += view.fields_of(self.scn, &mut row, j, x, t).0;
+                }
+            }
+        } else if self.quasi_static() {
+            for &(j, qf, fd) in &self.fading {
+                if j != me {
+                    e += fd.quasi_static_fields(qf, self.scn.c, x, t).0;
+                }
+            }
+        } else if self.scn.interact {
+            for &(j, qf, fd) in &self.fading {
+                if j != me {
+                    let d = x - fd.position(t);
+                    let r2 = d.length_squared();
+                    e += d * (qf * fd.factor(t) / (r2 * r2.sqrt()));
+                }
+            }
+        }
+        e
+    }
+
     /// Sum of the retarded fields of the other particles at `x`, `t` (member `k`).
     fn retarded_fields(
         &self,
@@ -978,8 +1023,8 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         (e, b)
     }
 
-    /// Landau–Lifshitz force on member `k` in the total field: external plus the other
-    /// particles' retarded fields.
+    /// Landau–Lifshitz force on member `k` in the total field: external (with its image in
+    /// the metal, which moves with it) plus the other particles' retarded fields.
     fn radiation_reaction_force(
         &self,
         y: &[f64],
@@ -991,12 +1036,13 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         let t_y = t;
         let fields = |x: DVec3, t: f64| {
             let f = self.scn.field.sample(x, t);
+            let e_self = self.scn.field.self_field(x, q).0;
             let (e, b) = if self.quasi_static() {
                 self.quasi_static_fields(y, t_y, k, x, t, None)
             } else {
                 self.retarded_fields(k, x, t, view)
             };
-            (f.e + e, f.b + b)
+            (f.e + e_self + e, f.b + b)
         };
         landau_lifshitz(q, &self.kin[k], self.p(y, k), fields, Self::x(y, k), t)
     }
@@ -1191,9 +1237,13 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             }
         })
         .collect();
-    // Particles launched inside a boundary end at once.
+    // Particles launched inside a boundary end at once (an arrival is judged below, once
+    // the record exists); a boundary whose distance is not a number fails the particle.
     for t in &mut tracks {
-        if let Some(k) = t.g_prev.iter().position(|&g| g <= 0.0) {
+        if t.g_prev.iter().any(|g| g.is_nan()) {
+            t.traj.outcome = Outcome::Failed(crate::integrator::Error::NonFiniteEvent);
+            t.phase = Phase::Done;
+        } else if let Some(k) = t.g_prev.iter().position(|&g| g <= 0.0) {
             t.traj.outcome = events[k].outcome();
             t.phase = Phase::Done;
         }
@@ -1260,24 +1310,42 @@ pub fn run_beam_cancellable<F: FieldSolver>(
     let log = std::env::var_os("EM_BEAM_LOG").is_some();
     let log_start = std::time::Instant::now();
     let mut log_steps = 0u64;
-    // Particles that end at launch: drained, stopped there, or flying on.
+    // Particles that end at launch: drained, fading in a screening cup, stopped there, or
+    // flying on. One launched inside its detector has arrived at t = 0 and is judged by
+    // the gates and the detector's conditions like any entry.
     for (i, t) in tracks.iter_mut().enumerate() {
-        if matches!(t.phase, Phase::Done) {
-            let k = t
-                .g_prev
-                .iter()
-                .position(|&g| g <= 0.0)
-                .expect("ended at launch");
-            match events[k].fate(&scn.fates) {
-                // At launch inside its detector: the charge is gone at once.
-                Fate::Drain | Fate::Cup => past.t_off.write().expect("not poisoned")[i] = 0.0,
-                Fate::Stop => {
-                    past.t_off.write().expect("not poisoned")[i] = 0.0;
-                    past.stays.write().expect("not poisoned")[i] = true;
-                    stopped[i] = Some(scn.particles[i].x0);
+        if !matches!(t.phase, Phase::Done) {
+            continue;
+        }
+        let Some(k) = t.g_prev.iter().position(|&g| g <= 0.0) else {
+            // Failed (NaN): gone at once.
+            past.t_off.write().expect("not poisoned")[i] = 0.0;
+            continue;
+        };
+        match events[k].fate(&scn.fates) {
+            Fate::Drain => past.t_off.write().expect("not poisoned")[i] = 0.0,
+            Fate::Cup => {
+                past.t_off.write().expect("not poisoned")[i] = 0.0;
+                if events[k] == Event::Detector
+                    && let Some(region) = scn.particles[i].detector.as_ref()
+                {
+                    let b = &scn.particles[i];
+                    let v0 = Kinematics::new(b.particle.mass, scn.c).velocity(b.p0);
+                    let fd = Fade::at_entry(region, b.x0, v0, 0.0);
+                    fades[i] = Some(fd);
+                    past.fades.write().expect("not poisoned")[i] = Some(fd);
                 }
-                Fate::Pass => t.phase = Phase::Free,
             }
+            Fate::Stop => {
+                past.t_off.write().expect("not poisoned")[i] = 0.0;
+                past.stays.write().expect("not poisoned")[i] = true;
+                stopped[i] = Some(scn.particles[i].x0);
+            }
+            Fate::Pass => t.phase = Phase::Free,
+        }
+        if t.traj.outcome == Outcome::Arrived {
+            let kin = Kinematics::new(scn.particles[i].particle.mass, scn.c);
+            judge_beam_arrival(scn, t, i, &kin, &emission);
         }
     }
 
@@ -1374,10 +1442,9 @@ pub fn run_beam_cancellable<F: FieldSolver>(
         let mut y = vec![0.0; ode.dim()];
         loop {
             let t_a = int.t();
-            // Retarded interaction: every step shorter than a third of the light travel
-            // time between the closest pair of a charged member and a flying source. In
-            // a step of length h the distance shrinks by less than 2ch, so it stays above
-            // ch, and every retarded time of the step lies before its start: in the record.
+            // Retarded interaction: the step is capped (`h_cap` below) so that every
+            // retarded time a stage needs lies in the record or at most `EXTRAPOLATION` of
+            // the previous step's lengths past its end.
             if retarded {
                 past.prune(&members, int.y(), &ode, scn.c, &mut beta_max, t_a);
             }
@@ -1512,6 +1579,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             let mut g_next: Vec<Vec<f64>> = vec![Vec::new(); members.len()];
             let mut v_max = vec![0.0; members.len()];
             let mut first: Option<(f64, usize, usize)> = None; // (t, member, event)
+            let mut nan = false;
             for (k, &i) in members.iter().enumerate() {
                 v_max[k] = ((0..=4)
                     .map(|s| {
@@ -1527,21 +1595,30 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 let x_b = end_position(k);
                 g_next[k] = events.iter().map(|&ev| event_value(ev, i, x_b)).collect();
                 for (e, &ev) in events.iter().enumerate() {
-                    let mut g = |t: f64| event_value(ev, i, pos(k, t));
-                    let r = first_crossing(
-                        &mut g,
-                        t_a,
-                        t_b,
-                        tracks[i].g_prev[e],
-                        g_next[k][e],
-                        v_max[k],
-                    );
-                    if let Some(t) = r.time
+                    let ga = tracks[i].g_prev[e];
+                    // At the boundary already at the step's start: it reached it at the
+                    // same moment as the event that restarted the integration (two
+                    // particles entering their detectors together), so its event is now.
+                    let time = if ga <= 0.0 {
+                        Some(t_a)
+                    } else {
+                        let mut g = |t: f64| event_value(ev, i, pos(k, t));
+                        let r = first_crossing(&mut g, t_a, t_b, ga, g_next[k][e], v_max[k]);
+                        nan |= r.nan;
+                        r.time
+                    };
+                    if let Some(t) = time
                         && first.is_none_or(|(tf, _, _)| t < tf)
                     {
                         first = Some((t, k, e));
                     }
                 }
+            }
+            if nan {
+                // A boundary's distance is not a number: the step cannot be certified.
+                failed = Some(crate::integrator::Error::NonFiniteEvent);
+                stats = add_stats(stats, int.stats());
+                break 'segments;
             }
             let t_end = first.map_or(t_b, |(t, _, _)| t);
             if retarded {
@@ -1601,10 +1678,10 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             missing += qj.abs() * g * g * (jerk[l] - own * w).length()
                                 / (scn.c.powi(3) * kappa);
                             // Beyond the constant-acceleration range of a past continued
-                            // with its acceleration (`tapered`: |a τ| > 0.07 c) that
+                            // with its acceleration (`tapered`: |a τ| > 0.7 Δv) that
                             // acceleration fades: first-order error there.
                             let a_now = accel(l, t_end).length();
-                            if w < 1.0 && a_now * delay > TAPER_START * 0.1 * scn.c {
+                            if w < 1.0 && a_now * delay > TAPER_START * taper_reach(vj, scn.c) {
                                 missing +=
                                     (1.0 - w) * qj.abs() * g * g * a_now / (scn.c * scn.c * r);
                             }
@@ -1797,6 +1874,45 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 energy_err = energy_err.max((e - energy0).abs() / energy0.abs().max(1e-300));
             }
 
+            // The work done on the particles present by charges already absorbed that
+            // still act on them (fading in a screening cup; with the retarded interaction
+            // also the field of a drained one still on its way): energy that their
+            // absorption, booked at entry with the whole pair interaction, did not take
+            // out. Three-point Gauss–Legendre on the step, from the dense output.
+            if rs.record
+                && t_end > t_a
+                && (!ode.fading.is_empty()
+                    || (retarded
+                        && past
+                            .t_off
+                            .read()
+                            .expect("not poisoned")
+                            .iter()
+                            .any(|t| t.is_finite())))
+            {
+                let power = |t: f64| -> f64 {
+                    let mut p = 0.0;
+                    for (k, &i) in members.iter().enumerate() {
+                        let q = scn.particles[i].particle.charge;
+                        let real = matches!(
+                            tracks[i].phase,
+                            Phase::Flying | Phase::Free | Phase::Ghost { real: true, .. }
+                        ) || first.is_some_and(|(_, kk, _)| kk == k);
+                        if real && q != 0.0 {
+                            let v = ode.kin[k].velocity(mom(k, t));
+                            p += q * v.dot(ode.absorbed_fields(k, pos(k, t), t));
+                        }
+                    }
+                    p
+                };
+                let h = t_end - t_a;
+                let r = 0.5 * (0.6f64).sqrt();
+                absorbed -= h
+                    * (5.0 / 18.0 * power(t_a + (0.5 - r) * h)
+                        + 8.0 / 18.0 * power(t_a + 0.5 * h)
+                        + 5.0 / 18.0 * power(t_a + (0.5 + r) * h));
+            }
+
             // Energy budget at t_end (the event's particle still counted as present; its
             // absorption is booked below).
             let present_at = |tracks: &[Track], stopped: &[Option<DVec3>], skip: Option<usize>| {
@@ -1866,7 +1982,8 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     Fate::Drain | Fate::Cup => {
                         past.t_off.write().expect("not poisoned")[i] = t_end;
                         past.x_off.write().expect("not poisoned")[i] = tracks[i].traj.end.x;
-                        let cup = fate == Fate::Cup;
+                        // A cup is the detector's fate; other boundaries treat it as a drain.
+                        let cup = fate == Fate::Cup && events[e] == Event::Detector;
                         if cup && let Some(region) = scn.particles[i].detector.as_ref() {
                             let kin = Kinematics::new(scn.particles[i].particle.mass, scn.c);
                             let v_end = kin.velocity(tracks[i].traj.end.p);
@@ -1874,11 +1991,13 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             fades[i] = Some(fd);
                             past.fades.write().expect("not poisoned")[i] = Some(fd);
                         }
-                        // The quasi-static interaction drops the field at once; really it
-                        // lingers at each other particle for the light time R/c: a
-                        // neglected impulse of about |q| / (R c) on each.
+                        // A drained charge: the quasi-static interaction drops its field at
+                        // once; really it lingers at each other particle for the light
+                        // time R/c: a neglected impulse of about |q| / (R c) on each. (In
+                        // a cup the fade reaches the others with the light delay of its
+                        // uniform motion, `Fade::quasi_static_fields`: nothing dropped.)
                         let qi = scn.particles[i].particle.charge;
-                        if quasi_static && qi != 0.0 {
+                        if quasi_static && !cup && qi != 0.0 {
                             let xe = tracks[i].traj.end.x;
                             for (l, &j) in members.iter().enumerate() {
                                 let flying = matches!(
@@ -1900,42 +2019,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     }
                     Fate::Pass => {}
                 }
-                if tracks[i].traj.outcome == Outcome::Arrived
-                    && let Some(g) = tracks[i].gates.missing()
-                {
-                    tracks[i].traj.outcome = Outcome::SkippedGate(g);
-                }
-                // Acceptance, decided at the moment of entry.
-                if tracks[i].traj.outcome == Outcome::Arrived
-                    && let Some(acc) = scn.particles[i].acceptance
-                {
-                    let p = tracks[i].traj.end.p;
-                    let mut m = acc.margin(ode.kin[k].velocity(p), ode.kin[k].kinetic_energy(p));
-                    // A radiation goal: every charge's radiation up to now, their far
-                    // fields added (the receiver cannot tell them apart).
-                    if let Some(w) = acc.radiation {
-                        let sources: Vec<(f64, &[Emission])> = scn
-                            .particles
-                            .iter()
-                            .zip(&emission)
-                            .map(|(b, e)| (b.particle.charge, e.as_slice()))
-                            .collect();
-                        let e = w.measure_system(&sources, scn.c);
-                        tracks[i].traj.radiation = Some(e);
-                        m = m.min(w.margin(e));
-                    }
-                    if m < 0.0 {
-                        tracks[i].traj.outcome = Outcome::Rejected;
-                    }
-                    tracks[i].traj.margins = Some(Margins {
-                        obstacles: Vec::new(),
-                        bounds: None,
-                        detector: None,
-                        acceptance: Some(m),
-                        gates: Vec::new(),
-                        gate_acceptance: Vec::new(),
-                    });
-                }
+                judge_beam_arrival(scn, &mut tracks[i], i, &ode.kin[k], &emission);
                 t_now = t_end;
                 stats = add_stats(stats, int.stats());
                 restarts += 1;
@@ -2104,6 +2188,55 @@ pub fn elastic_impulse(
     Some(0.5 * (lo + hi))
 }
 
+/// The gates and the detector's conditions of particle `i` arriving now (at
+/// `track.traj.end`, the moment of entry): `SkippedGate` while a gate is still missing,
+/// `Rejected` outside the acceptance (the acceptance margin is recorded). A radiation
+/// goal measures every charge's radiation up to now, their far fields added (the receiver
+/// cannot tell them apart).
+fn judge_beam_arrival<F>(
+    scn: &BeamScenario<F>,
+    track: &mut Track<'_>,
+    i: usize,
+    kin: &Kinematics,
+    emission: &[Vec<Emission>],
+) {
+    if track.traj.outcome == Outcome::Arrived
+        && let Some(g) = track.gates.missing()
+    {
+        track.traj.outcome = Outcome::SkippedGate(g);
+    }
+    if track.traj.outcome != Outcome::Arrived {
+        return;
+    }
+    let Some(acc) = scn.particles[i].acceptance else {
+        return;
+    };
+    let p = track.traj.end.p;
+    let mut m = acc.margin(kin.velocity(p), kin.kinetic_energy(p));
+    if let Some(w) = acc.radiation {
+        let sources: Vec<(f64, &[Emission])> = scn
+            .particles
+            .iter()
+            .zip(emission)
+            .map(|(b, e)| (b.particle.charge, e.as_slice()))
+            .collect();
+        let e = w.measure_system(&sources, scn.c);
+        track.traj.radiation = Some(e);
+        m = m.min(w.margin(e));
+    }
+    if m < 0.0 {
+        track.traj.outcome = Outcome::Rejected;
+    }
+    track.traj.margins = Some(Margins {
+        obstacles: Vec::new(),
+        bounds: None,
+        detector: None,
+        acceptance: Some(m),
+        gates: Vec::new(),
+        gate_acceptance: Vec::new(),
+    });
+}
+
 /// A charge present for the energy budget: charge, moment, position, kinetic energy.
 type Present = (f64, f64, DVec3, f64);
 
@@ -2226,23 +2359,34 @@ pub fn continuation_weight(e: f64) -> f64 {
 }
 
 /// Where the continued past (`tapered`) stops having exactly the constant acceleration: at
-/// `|a τ| = TAPER_START · 0.1c`; beyond, the acceleration fades as `sech²` over the rest.
+/// `|a τ| = TAPER_START · Δv` (`taper_reach`); beyond, the acceleration fades as `sech²`
+/// over the rest.
 const TAPER_START: f64 = 0.7;
+
+/// The largest change of velocity of the continued past (`tapered`) of a charge moving at
+/// `v`: `Δv = min(0.1 c, 0.9 (c − |v|))`. The velocity changes along the fixed direction
+/// of `a`, so its speed stays below `|v| + Δv ≤ 0.9 c + 0.1 |v| < c`. (A cap of 0.1c
+/// alone let a past braked from `|v| > 0.9 c` exceed c; every shipped beam is slower than
+/// 0.89 c, where the cap is the 0.1c.)
+pub fn taper_reach(v: DVec3, c: f64) -> f64 {
+    (0.1 * c).min(0.9 * (c - v.length()).max(0.0))
+}
 
 /// Motion continued from position `r`, velocity `v` and acceleration `a` by `τ` (the
 /// quasi-static interaction's and the pre-launch past; the game's field views continue
-/// the world lines before launch with it too). With `T = 0.1c/|a|` and `u = τ/T`:
-/// the constant acceleration while `|u| ≤ u₁ = TAPER_START`; beyond, the acceleration
-/// `a sech²(s/w)`, `s = |u| − u₁`, `w = 1 − u₁`, so that the velocity changes by at most
-/// 0.1c and the acceleration and its derivative stay continuous. The first versions
-/// switched to uniform motion at `|u| = 1`: a jump of the acceleration, whose field
-/// arriving at the neighbours made the steps collapse to 1e-8 for a beam launched beside
-/// strong charges (the preview took 50 s, the exact verification did not finish). A taper
-/// `a sech²(u)` from the start cured that but departed from the constant acceleration
-/// early and made the relativistic beam's quasi-static flight 1e-3 cells worse; with
-/// `u₁ = 0.7` its difference from the exact one is 1.79e-3 cells (kinked: 1.72e-3).
+/// the world lines before launch with it too). With `T = Δv/|a|` (`Δv = taper_reach`)
+/// and `u = τ/T`: the constant acceleration while `|u| ≤ u₁ = TAPER_START`; beyond, the
+/// acceleration `a sech²(s/w)`, `s = |u| − u₁`, `w = 1 − u₁`, so that the velocity
+/// changes by at most `Δv`, never reaching c, and the acceleration and its derivative stay
+/// continuous. The first versions switched to uniform motion at `|u| = 1`: a jump of the
+/// acceleration, whose field arriving at the neighbours made the steps collapse to 1e-8
+/// for a beam launched beside strong charges (the preview took 50 s, the exact
+/// verification did not finish). A taper `a sech²(u)` from the start cured that but
+/// departed from the constant acceleration early and made the relativistic beam's
+/// quasi-static flight 1e-3 cells worse; with `u₁ = 0.7` its difference from the exact
+/// one is 1.79e-3 cells (kinked: 1.72e-3).
 pub fn tapered(r: DVec3, v: DVec3, a: DVec3, tau: f64, c: f64) -> (DVec3, DVec3, DVec3) {
-    let t_scale = 0.1 * c / a.length().max(1e-300);
+    let t_scale = taper_reach(v, c).max(1e-300) / a.length().max(1e-300);
     let u1 = TAPER_START;
     let w = 1.0 - u1;
     let u = tau / t_scale;
@@ -2250,8 +2394,8 @@ pub fn tapered(r: DVec3, v: DVec3, a: DVec3, tau: f64, c: f64) -> (DVec3, DVec3,
         return (r + v * tau + a * (0.5 * tau * tau), v + a * tau, a);
     }
     let s = (u.abs() - u1) / w;
-    let ln_cosh = s + (-2.0 * s).exp().ln_1p() - std::f64::consts::LN_2;
-    let th = s.tanh();
+    let ln_cosh = s + libm::log1p(libm::exp(-2.0 * s)) - std::f64::consts::LN_2;
+    let th = libm::tanh(s);
     let sign = u.signum();
     (
         r + v * tau + a * (t_scale * t_scale * (0.5 * u1 * u1 + u1 * w * s + w * w * ln_cosh)),
@@ -2262,12 +2406,14 @@ pub fn tapered(r: DVec3, v: DVec3, a: DVec3, tau: f64, c: f64) -> (DVec3, DVec3,
 
 /// Liénard–Wiechert fields `(E, B)` at `x`, a time `dt` after the present, of a charge
 /// `q` now at `r` with velocity `v` and acceleration `a`, whose past is taken as
-/// `r + v τ + a τ²/2` (velocity `v + a τ`, acceleration `a`) while `|a τ| ≤ 0.07 c`, its
+/// `r + v τ + a τ²/2` (velocity `v + a τ`, acceleration `a`) while `|a τ| ≤ 0.7 Δv`, its
 /// acceleration fading smoothly before that (`tapered`: the velocity changes by at most
-/// 0.1c, so the past never becomes superluminal; far points in a strong field see the
-/// source's older past, which constant acceleration would not describe anyway). The
-/// retarded time is solved on this curve by Newton's method. The error is of the order of
-/// the jerk, `|ȧ| τ³` in position with τ = R/c.
+/// `Δv = taper_reach`, so the past never becomes superluminal; far points in a strong
+/// field see the source's older past, which constant acceleration would not describe
+/// anyway). The retarded time is the root of `g(τ) = c (dt − τ) − |x − r(τ)|`, strictly
+/// decreasing on this subluminal curve, with `g(dt) ≤ 0`: Newton's method, kept inside
+/// the bracket of the signs seen so far (bisection where it would leave it). The error is
+/// of the order of the jerk, `|ȧ| τ³` in position with τ = R/c.
 pub fn accelerated_fields(
     q: f64,
     c: f64,
@@ -2281,15 +2427,28 @@ pub fn accelerated_fields(
         let (rc, vc, _) = tapered(r, v, a, tau, c);
         (rc, vc)
     };
-    // Retarded τ: the root of g(τ) = c (dt − τ) − |x − r(τ)|, from the uniform-motion guess.
+    // From the guess of a source at rest.
     let mut tau = dt - (x - r).length() / c;
-    for _ in 0..50 {
+    let (mut lo, mut hi) = (f64::NEG_INFINITY, dt);
+    for _ in 0..100 {
         let (rp, vp) = at(tau);
         let d = x - rp;
         let dist = d.length();
         let g = c * (dt - tau) - dist;
+        if g > 0.0 {
+            lo = lo.max(tau);
+        } else {
+            hi = hi.min(tau);
+        }
         let slope = -c + d.dot(vp) / dist;
-        let next = tau - g / slope;
+        let mut next = tau - g / slope;
+        if !(next < hi && (next > lo || lo == f64::NEG_INFINITY)) || !next.is_finite() {
+            next = if lo.is_finite() {
+                0.5 * (lo + hi)
+            } else {
+                hi - 2.0 * (hi - tau).max(dist / c)
+            };
+        }
         let done = (next - tau).abs() <= 4.0 * f64::EPSILON * (dt.abs() + dist / c).max(1e-300);
         tau = next;
         if done {

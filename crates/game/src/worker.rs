@@ -3,8 +3,10 @@
 //! need a one-off factorization per geometry, which must not stall rendering), sends
 //! every flight's preview trajectory first, then every flight's verification verdict
 //! (SPEC §2.3). Verification uses the field at verification resolution (it differs from
-//! the preview's only with metal spheres, PHYSICS.md §2.6). Every flight is timed for the
-//! sandbox's resource meters (`level::cost`).
+//! the preview's only with metal: spheres, electrodes, player plates; PHYSICS.md
+//! §2.6–2.7), and an interacting beam at finite c flies the exact retarded interaction
+//! there (the preview the quasi-static one). Every flight is timed for the sandbox's
+//! resource meters (`level::cost`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -29,11 +31,14 @@ pub struct PathPoint {
     pub x: DVec3,
     pub p: DVec3,
     pub kinetic: f64,
-    /// Potential energy relative to the launch point, `q(φ(x) − φ(A)) − m(B_z(x) − B_z(A))`.
+    /// Potential energy relative to the launch point, `q(φ(x) − φ(A)) − m(B_z(x) − B_z(A))`,
+    /// with the energy `½ q φ_self` of the particle's own image in metal spheres.
     pub potential: f64,
     /// Energy lost to radiation so far (minus the work of the radiation-reaction force;
     /// 0 when radiation reaction is off).
     pub radiated: f64,
+    /// The whole force of the flight: Lorentz force (with the image in metal), the
+    /// moment's `m ∇B_z`, and the radiation reaction when the level includes it.
     pub force: DVec3,
     pub speed_over_c: f64,
 }
@@ -768,19 +773,31 @@ fn build_path(
 ) -> Vec<PathPoint> {
     let kin = physics::dynamics::Kinematics::new(scn.particle.mass, scn.c);
     let (q, moment) = (scn.particle.charge, scn.particle.moment);
-    let at_a = scn.field.sample(scn.x0, 0.0);
-    let (phi_a, bz_a) = (at_a.phi, at_a.b.z);
-    let point = |t: f64, x: DVec3, p: DVec3, radiated: f64| {
+    // The force of the flight itself (`trajectory::run` integrates this one).
+    let ode = physics::dynamics::ParticleOde::new(&scn.field, &scn.particle, scn.c, 1.0);
+    let force = |x: DVec3, p: DVec3, t: f64| {
+        let mut f = ode.force(x, p, t);
+        if scn.radiation_reaction {
+            f += ode.radiation_reaction_force(x, p, t);
+        }
+        f
+    };
+    // Potential energy: the external potential, the moment's, and the image's ½ q φ_self.
+    let energy = |x: DVec3, t: f64| {
         let f = scn.field.sample(x, t);
+        q * f.phi + 0.5 * q * scn.field.self_field(x, q).1 - moment * f.b.z
+    };
+    let u_a = energy(scn.x0, 0.0);
+    let point = |t: f64, x: DVec3, p: DVec3, radiated: f64| {
         let v = kin.velocity(p);
         PathPoint {
             t,
             x,
             p,
             kinetic: kin.kinetic_energy(p),
-            potential: q * (f.phi - phi_a) - moment * (f.b.z - bz_a),
+            potential: energy(x, t) - u_a,
             radiated,
-            force: (f.e + v.cross(f.b)) * q + scn.field.grad_bz(x, t) * moment,
+            force: force(x, p, t),
             speed_over_c: if scn.c.is_finite() {
                 v.length() / scn.c
             } else {

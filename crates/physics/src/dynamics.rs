@@ -185,13 +185,15 @@ impl<F: FieldSolver> ParticleOde<F> {
         if !c.is_finite() {
             return DVec3::ZERO;
         }
+        // The field acting on the particle includes its image in the metal, which moves
+        // with it (`self_field`, as in `force`).
         landau_lifshitz(
             self.charge,
             &self.kin,
             p,
             |x, t| {
                 let f = self.field.sample(x, t);
-                (f.e, f.b)
+                (f.e + self.field.self_field(x, self.charge).0, f.b)
             },
             x,
             t,

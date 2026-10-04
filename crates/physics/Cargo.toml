@@ -9,6 +9,8 @@ workspace = true
 
 [dependencies]
 glam = "0.33.10"
+# Elementary functions bit-identical on every platform (the authoritative path).
+libm = "0.2.16"
 rayon = "1.12.0"
 
 

@@ -1,6 +1,8 @@
 //! Charge clouds: uniformly charged spheres particles can fly through (Thomson's atom,
 //! PHYSICS.md §2.1). Run with `cargo test --release -p physics --test clouds -- --nocapture`.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 mod common;
 
 use std::f64::consts::PI;

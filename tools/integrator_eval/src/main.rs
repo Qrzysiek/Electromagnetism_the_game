@@ -2,6 +2,8 @@
 //! crate on reference problems with known solutions. Run with
 //! `cargo run --release -p integrator_eval`.
 
+#![allow(clippy::disallowed_methods)] // an evaluation tool, not the authoritative path
+
 use std::f64::consts::PI;
 use std::hint::black_box;
 use std::time::Instant;

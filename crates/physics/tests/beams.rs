@@ -2,6 +2,8 @@
 //!
 //! `cargo test --release -p physics --test beams -- --nocapture --test-threads=1`
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 mod common;
 
 use common::Rng;
@@ -961,33 +963,75 @@ fn b15_a_stopped_charge_keeps_acting() {
 /// B16: the recorded energy budget balances. For c = ∞ (no radiation) kinetic +
 /// potential + interaction + absorbed is conserved over the whole flight, through the
 /// absorptions (one particle stops on the fixed charge, one is drained by the detector,
-/// one flies on beyond the arena), to the integration accuracy.
+/// one flies on beyond the arena), to the integration accuracy. Also with a screening cup
+/// (the levels' default detector): a particle enters it early and its charge fades as it
+/// flies on into the cup, pushing the other one for a while; that work comes out of the
+/// energy booked as absorbed at the entry (with the whole pair interaction).
 #[test]
 fn b16_energy_budget_balances() {
-    let scn = scene(true);
-    let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
-    let total =
-        |e: &physics::beam::EnergySample| e.kinetic + e.potential + e.interaction + e.absorbed;
-    let e0 = total(&r.energy[0]);
-    let scale = r.energy[0].kinetic;
-    let worst = r
-        .energy
-        .iter()
-        .map(|e| (total(e) - e0).abs() / scale)
-        .fold(0.0, f64::max);
-    let last = r.energy.last().unwrap();
-    println!(
-        "B16: {} samples; at the end kinetic {:.4}, potential {:.4}, interaction {:.4}, \
-         absorbed {:.4} (of T = {scale:.4}); balance off by {worst:.1e}; fates {:?}",
-        r.energy.len(),
-        last.kinetic,
-        last.potential,
-        last.interaction,
-        last.absorbed,
-        r.trajectories.iter().map(|t| t.outcome).collect::<Vec<_>>()
-    );
-    assert!(last.absorbed > 0.0);
-    assert!(worst < 1e-9, "{worst:.3e}");
+    use physics::beam::Fate;
+    let cup_scene = {
+        let mut scn = beam(
+            Coulomb::new(&[]),
+            vec![],
+            vec![
+                BeamParticle {
+                    particle: particle(1.0, 1.0),
+                    x0: DVec3::ZERO,
+                    p0: DVec3::new(1.0, 0.0, 0.0),
+                    detector: Some(Region::Box(Aabb {
+                        min: DVec3::new(2.0, -1.0, -1.0),
+                        max: DVec3::new(4.0, 1.0, 1.0),
+                    })),
+                    acceptance: None,
+                },
+                BeamParticle {
+                    particle: particle(1.0, 1.0),
+                    x0: DVec3::new(0.0, 3.0, 0.0),
+                    p0: DVec3::ZERO,
+                    detector: None,
+                    acceptance: None,
+                },
+            ],
+            true,
+            10.0,
+        );
+        scn.fates.detector = Fate::Cup;
+        scn
+    };
+    for (name, scn) in [("drain", scene(true)), ("cup", cup_scene)] {
+        let r = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+        let total =
+            |e: &physics::beam::EnergySample| e.kinetic + e.potential + e.interaction + e.absorbed;
+        let e0 = total(&r.energy[0]);
+        let scale = r.energy[0].kinetic;
+        let worst = r
+            .energy
+            .iter()
+            .map(|e| (total(e) - e0).abs() / scale)
+            .fold(0.0, f64::max);
+        let last = r.energy.last().unwrap();
+        // The fade's work: how much the absorbed energy fell after the entry.
+        let peak = r.energy.iter().map(|e| e.absorbed).fold(0.0, f64::max);
+        println!(
+            "B16 {name}: {} samples; at the end kinetic {:.4}, potential {:.4}, interaction \
+             {:.4}, absorbed {:.4} (of T = {scale:.4}; the fade's work {:.2e}); balance off \
+             by {worst:.1e}; fates {:?}",
+            r.energy.len(),
+            last.kinetic,
+            last.potential,
+            last.interaction,
+            last.absorbed,
+            peak - last.absorbed,
+            r.trajectories.iter().map(|t| t.outcome).collect::<Vec<_>>()
+        );
+        assert!(last.absorbed > 0.0);
+        if name == "cup" {
+            assert!(r.fades[0].is_some(), "the cup must fade the charge");
+            assert!(peak - last.absorbed > 1e-3 * scale, "the fade must do work");
+        }
+        assert!(worst < 1e-9, "{name}: {worst:.3e}");
+    }
 }
 
 /// B17, Jackson Problem 13.1: a heavy charge (z = 1, M = 10⁴) passes a light one (q = 1,
@@ -1535,4 +1579,32 @@ fn b23_field_motion_matches_lienard_wiechert() {
         }
     }
     assert!(worst < 1e-9, "{worst:.3e}");
+}
+
+/// B24: the continued past and future of a source (`beam::tapered`, used by the quasi-static
+/// interaction, before launch in the exact one, and by the field views) never reach c:
+/// braking or speeding up at 0.95 c, at any acceleration, far out along the taper. With
+/// the first cap, a velocity change of 0.1 c, the braking past reached 1.05 c (audit of
+/// 2026-09-29). Below 0.89 c the cap is unchanged: 0.1 c.
+#[test]
+fn b24_tapered_motion_stays_below_c() {
+    use physics::beam::{taper_reach, tapered};
+    let c = 1.0;
+    let v = DVec3::new(0.95, 0.0, 0.0);
+    let mut fastest: f64 = 0.0;
+    for a in [
+        DVec3::new(-1.0, 0.0, 0.0),
+        DVec3::new(1.0, 0.0, 0.0),
+        DVec3::new(-0.3, 0.8, 0.0),
+        DVec3::new(-100.0, 0.0, 0.0),
+    ] {
+        for tau in [-50.0, -1.0, -0.1, -0.01, 0.0, 0.01, 0.1, 1.0, 50.0] {
+            let (_, vt, _) = tapered(DVec3::ZERO, v, a, tau, c);
+            fastest = fastest.max(vt.length());
+            assert!(vt.length() < c, "a {a}, τ {tau}: |v| = {}", vt.length());
+        }
+    }
+    println!("tapered at 0.95 c: fastest continued speed {fastest:.4} c");
+    assert!((taper_reach(DVec3::new(0.8, 0.0, 0.0), c) - 0.1).abs() < 1e-15);
+    assert!((taper_reach(v, c) - 0.9 * 0.05).abs() < 1e-15);
 }

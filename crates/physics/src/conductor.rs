@@ -145,7 +145,7 @@ fn fibonacci(n: usize, twist: f64) -> Vec<DVec3> {
             let z = 1.0 - 2.0 * (fi + 0.5) / fn_;
             let r = (1.0 - z * z).sqrt();
             let phi = golden * fi + twist;
-            DVec3::new(r * phi.cos(), r * phi.sin(), z)
+            DVec3::new(r * libm::cos(phi), r * libm::sin(phi), z)
         })
         .collect()
 }

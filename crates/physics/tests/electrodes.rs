@@ -1,5 +1,7 @@
-//! Validation tests E1–E4 for box electrodes (BEM, PHYSICS.md §2.7). Run with
+//! Validation tests E1–E6 for box electrodes (BEM, PHYSICS.md §2.7). Run with
 //! `cargo test --release -p physics --test electrodes -- --nocapture --test-threads=1`.
+
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
 
 mod common;
 
@@ -216,4 +218,44 @@ fn e5_timing() {
         tr.stats.n_fcn,
         start.elapsed().as_secs_f64() * 1e3
     );
+}
+
+// --- E6: pictures ----------------------------------------------------------------------------
+
+/// The display resolution's picture evaluation (field lines, the field views; the
+/// potential map's shader does the same) against the exact integrals of the same mesh:
+/// the panels nearer than two of their sizes exactly, the rest by a three-point rule. Two
+/// plates as in level 19 (one at −1.2e5), from 0.05 cells off a face to 4 cells, beside
+/// the plates and past their ends. Target: 1e-4 of the plate potential (4e-3 of a
+/// contour step for a plate at 10 T₀) and 1e-3 of the field (the lines' direction). One
+/// point charge per panel was 4.7e-2 off there.
+#[test]
+fn e6_picture_evaluation_matches_the_integrals() {
+    use physics::bem::Resolution;
+    let plates = vec![
+        plate(11.0, 13.0, 0.0, 8.0, 0.4, 4.0, Bias::Potential(-1.2e5)),
+        plate(11.0, 7.0, 0.0, 8.0, 0.4, 4.0, Bias::Grounded),
+    ];
+    let picture = Electrodes::new(plates, &[], Resolution::Display);
+    assert!(picture.picture);
+    let mut exact = picture.clone();
+    exact.picture = false;
+    let (mut worst_phi, mut worst_e): (f64, f64) = (0.0, 0.0);
+    for x in [6.0, 7.5, 11.0, 14.6, 15.5] {
+        for d in [0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0] {
+            for y in [12.8 - d, 13.2 + d, 7.2 + d] {
+                let p = DVec3::new(x, y, 0.0);
+                let (a, b) = (picture.sample(p, 0.0), exact.sample(p, 0.0));
+                worst_phi = worst_phi.max((a.phi - b.phi).abs() / 1.2e5);
+                worst_e = worst_e.max((a.e - b.e).length() / b.e.length());
+            }
+        }
+    }
+    println!(
+        "E6: {} panels; potential within {worst_phi:.2e} of the plate potential, field \
+         within {worst_e:.2e} (relative)",
+        picture.sigma.len()
+    );
+    assert!(worst_phi < 1e-4, "{worst_phi:.3e}");
+    assert!(worst_e < 1e-3, "{worst_e:.3e}");
 }

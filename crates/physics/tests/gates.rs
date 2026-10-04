@@ -3,6 +3,8 @@
 //!
 //! `cargo test --release -p physics --test gates -- --nocapture`
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 use physics::DVec3;
 use physics::dynamics::Particle;
 use physics::field::Coulomb;

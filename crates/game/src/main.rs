@@ -1,5 +1,7 @@
 //! Electromagnetism – the game. Stage 1: 2D levels (a slice of the 3D world).
 
+#![allow(clippy::disallowed_methods)] // pictures only: the flights come from `physics`
+
 mod curriculum;
 mod draw;
 mod editor;
@@ -35,7 +37,7 @@ pub const PANEL_WIDTH: f32 = 340.0;
 pub type DrawnFieldLine = (Vec<Vec2>, Vec<(Vec2, Vec2)>);
 /// Field lines computed off the render thread: the setup key, and where they arrive.
 pub type FieldLinesJob = (
-    (u64, u64),
+    (u64, u64, usize),
     std::sync::Mutex<std::sync::mpsc::Receiver<Vec<DrawnFieldLine>>>,
 );
 
@@ -103,14 +105,15 @@ pub struct Game {
     /// Measured computational cost (sandbox resource meters) and the setup revision it
     /// belongs to; kept from the previous setup until the new one is measured.
     pub cost: Option<(u64, level::cost::Cost)>,
-    /// (revision, active shot, mode) the field map was computed for.
-    pub map_key: (u64, usize, bool, Option<MapMode>, bool),
+    /// (revision, active shot, active disturbance, all shots shown, mode, flight shown)
+    /// the field map was computed for.
+    pub map_key: (u64, usize, usize, bool, Option<MapMode>, bool),
     pub field_lines: Vec<DrawnFieldLine>,
     /// Distance between neighbouring field lines, in cells.
     pub field_line_spacing: f64,
     pub field_line_opacity: f32,
     /// (setup revision, spacing) the current field lines were computed for.
-    pub field_lines_key: (u64, u64),
+    pub field_lines_key: (u64, u64, usize),
     /// Field lines being computed off the render thread (a few seconds near metal): the
     /// setup key they belong to, and where they arrive.
     pub field_lines_job: Option<FieldLinesJob>,
@@ -176,11 +179,11 @@ impl Game {
             show_all_shots: true,
             sent_revision: 0,
             cost: None,
-            map_key: (0, 0, false, None, false),
+            map_key: (0, 0, 0, false, None, false),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
             field_line_opacity: 0.2,
-            field_lines_key: (0, 0),
+            field_lines_key: (0, 0, 0),
             field_lines_job: None,
             field_lines_wanted: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
             map: Some(MapMode::Potential),
@@ -549,7 +552,8 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
 }
 
 /// Developer capture for testing without input: with `EM_CAPTURE=<file.png>` the game
-/// opens level `EM_LEVEL` (1-based), enters the sandbox if `EM_SANDBOX=1`, selects the map
+/// opens level `EM_LEVEL` (1-based), enters the sandbox if `EM_SANDBOX=1`, shows the
+/// flight of shot `EM_SHOT` under disturbance `EM_DISTURBANCE` (1-based), selects the map
 /// `EM_MAP` (potential, magnetic, waves, particle, off), places `EM_PLACE` (JSON list of
 /// elements, or "reference"; in units of 1/`EM_GRID` cell with the grid refined 1-4×), holds
 /// the animation at `EM_TIME`, lets the
@@ -598,6 +602,21 @@ fn dev_capture(
             }
             if std::env::var("EM_SANDBOX").is_ok_and(|v| v == "1") {
                 sandbox::enter(&mut game);
+            }
+            // The flight shown (1-based): its shot and its disturbance.
+            if let Some(i) = std::env::var("EM_SHOT")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .filter(|&i| i >= 1)
+            {
+                game.active_shot = i - 1;
+            }
+            if let Some(i) = std::env::var("EM_DISTURBANCE")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .filter(|&i| i >= 1)
+            {
+                game.active_disturbance = i - 1;
             }
             game.radiation_only = std::env::var("EM_RAD_ONLY").is_ok_and(|v| v == "1");
             game.neglected_only = std::env::var("EM_NEGLECTED").is_ok_and(|v| v == "1");
@@ -686,6 +705,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<potential::PotentialMaterial>>,
+    mut buffers: ResMut<Assets<bevy::render::storage::ShaderBuffer>>,
     mut gizmo_store: ResMut<GizmoConfigStore>,
 ) {
     commands.spawn((
@@ -703,6 +723,7 @@ fn setup(
     // Field map: a unit quad scaled to the world bounds, shaded on the GPU.
     let material = materials.add(potential::PotentialMaterial {
         params: potential::PotentialParams::default(),
+        items: buffers.add(potential::buffer(Vec::new())),
     });
     let entity = commands
         .spawn((
@@ -984,6 +1005,7 @@ fn update_map(
     mut game: ResMut<Game>,
     quad: Res<PotentialQuad>,
     mut materials: ResMut<Assets<potential::PotentialMaterial>>,
+    mut buffers: ResMut<Assets<bevy::render::storage::ShaderBuffer>>,
     mut transforms: Query<&mut Transform>,
 ) {
     // The energy unit depends on the flight (particles launched at rest): redraw when it
@@ -992,9 +1014,13 @@ fn update_map(
         .flights
         .get(game.active_flight())
         .is_some_and(|f| f.preview_revision == game.sent_revision && f.preview.is_some());
+    let disturbance = game
+        .active_disturbance
+        .min(game.editor.level.flights_per_shot() - 1);
     let key = (
         game.sent_revision,
         game.active_shot,
+        disturbance,
         game.show_all_shots,
         game.map,
         has_flight,
@@ -1010,7 +1036,8 @@ fn update_map(
     if level.shots.is_empty() {
         return;
     }
-    let scenario = level.display_scenario(game.active_shot, &game.editor.placement);
+    // The active flight's field: its shot under its disturbance.
+    let scenario = level.display_scenario(game.active_shot, disturbance, &game.editor.placement);
     // The dark region: forbidden for every particle shown (the whole beam of a beam
     // shot, every shot in the collective view).
     let mut limits = vec![Vec::new(); level.shots.len()];
@@ -1020,20 +1047,28 @@ fn update_map(
     if !game.show_all_shots {
         limits = vec![std::mem::take(&mut limits[game.active_shot])];
     }
-    // A ramped coil's induced field does work: energy conservation forbids nothing.
-    if scenario.field.has_ramps() {
+    // Time-dependent fields (a ramped coil's induced field, antennas, waves) do work:
+    // energy conservation forbids nothing.
+    if !physics::field::FieldSolver::is_static(&scenario.field) {
         limits.clear();
     }
     let unit = game.energy_unit(game.active_shot).0;
-    if let Some(mut m) = materials.get_mut(&quad.material) {
-        m.params = potential::params(
-            &scenario,
-            &limits,
+    let (params, items) = potential::params(
+        &scenario,
+        &limits,
+        (
             level.physics.charge_radius,
             level.physics.magnet_radius,
-            mode,
-            unit,
-        );
+            level.physics.antenna_radius,
+        ),
+        mode,
+        unit,
+    );
+    if let Some(mut m) = materials.get_mut(&quad.material) {
+        m.params = params;
+        if let Some(mut b) = buffers.get_mut(&m.items) {
+            *b = potential::buffer(items);
+        }
     }
     let bounds = level.bounds();
     if let Ok(mut t) = transforms.get_mut(quad.entity) {
@@ -1047,12 +1082,19 @@ fn update_map(
     }
 }
 
-/// Recomputes the field lines (the electric field does not depend on the shot) when they
-/// are shown and the setup or spacing changed.
+/// Recomputes the field lines (the electric field does not depend on the shot, but on the
+/// disturbance) when they are shown and the setup, spacing or disturbance changed.
 fn update_field_lines(mut game: ResMut<Game>) {
     use std::sync::atomic::Ordering;
     // Results of a finished job for the current key.
-    let key = (game.sent_revision, game.field_line_spacing.to_bits());
+    let disturbance = game
+        .active_disturbance
+        .min(game.editor.level.flights_per_shot() - 1);
+    let key = (
+        game.sent_revision,
+        game.field_line_spacing.to_bits(),
+        disturbance,
+    );
     let arrived = game.field_lines_job.as_ref().and_then(|(k, rx)| {
         (*k == key)
             .then(|| rx.lock().ok().and_then(|r| r.try_recv().ok()))
@@ -1067,13 +1109,22 @@ fn update_field_lines(mut game: ResMut<Game>) {
     }
     game.field_lines_key = key;
     // Computed on a thread of its own (near metal it takes seconds); a newer key stops it.
-    let scenario = game
+    // The electrostatic field: the static part (no oscillating sources), without a
+    // ramped coil's induced field (it has no potential; its lines close on themselves).
+    let mut scenario = game
         .editor
         .level
-        .display_scenario(0, &game.editor.placement);
+        .display_scenario(0, disturbance, &game.editor.placement);
+    scenario.field = potential::static_part(&scenario.field);
+    for l in &mut scenario.field.loops {
+        l.rate = 0.0;
+    }
+    for p in &mut scenario.field.polygons {
+        p.rate = 0.0;
+    }
     let radius = game.editor.level.physics.charge_radius;
     let spacing = game.field_line_spacing;
-    let token = key.0 ^ key.1.rotate_left(17);
+    let token = key.0 ^ key.1.rotate_left(17) ^ (key.2 as u64).rotate_left(41);
     game.field_lines_wanted.store(token, Ordering::Release);
     let wanted = game.field_lines_wanted.clone();
     let (tx, rx) = std::sync::mpsc::channel();

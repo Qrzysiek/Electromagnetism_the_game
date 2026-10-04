@@ -20,7 +20,8 @@
 //! so a triangle with surface charge density σ has `φ = σ ∫1/R`, `E = −σ ∫∇(1/R)`
 //! (units k = 1). The formulas are exact for every point off the triangle's edges; on the
 //! triangle itself (h = 0 inside) the potential is continuous and the in-plane field is
-//! finite, while the normal field has the jump ±2πσ.
+//! finite, while the normal field jumps by 4πσ (±2πσ about its average, the value used
+//! on the triangle).
 
 use glam::DVec3;
 
@@ -101,13 +102,13 @@ impl Panel {
             // f = ln((R+ + l+)/(R- + l-)); for points on the edge line beyond an end
             // the arguments vanish together: use the equivalent form with R − l.
             let f = if l_minus > 0.0 || r_minus + l_minus > 1e-12 * r_minus.max(1e-300) {
-                ((r_plus + l_plus) / (r_minus + l_minus)).ln()
+                libm::log((r_plus + l_plus) / (r_minus + l_minus))
             } else {
-                ((r_minus - l_minus) / (r_plus - l_plus)).ln()
+                libm::log((r_minus - l_minus) / (r_plus - l_plus))
             };
             let beta = if r0_sq > 0.0 {
-                (p0 * l_plus / (r0_sq + abs_h * r_plus)).atan()
-                    - (p0 * l_minus / (r0_sq + abs_h * r_minus)).atan()
+                libm::atan(p0 * l_plus / (r0_sq + abs_h * r_plus))
+                    - libm::atan(p0 * l_minus / (r0_sq + abs_h * r_minus))
             } else {
                 0.0
             };

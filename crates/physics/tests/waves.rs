@@ -1,6 +1,8 @@
 //! Validation tests W1–W4 for external fields (PHYSICS.md §2.3, §9). Run with
 //! `cargo test -p physics --test waves -- --nocapture --test-threads=1`.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 mod common;
 
 use std::f64::consts::PI;

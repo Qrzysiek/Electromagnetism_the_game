@@ -257,7 +257,12 @@ pub struct PolygonCoil {
 /// `(|ra| − ra·û) / (|rb| − rb·û)` (both products are |r⊥|²) is used there.
 fn segment_potential(ra: DVec3, rb: DVec3) -> DVec3 {
     let d = rb - ra;
-    let u = d / d.length();
+    let len = d.length();
+    if len == 0.0 {
+        // A repeated vertex: a segment of no length carries no current path.
+        return DVec3::ZERO;
+    }
+    let u = d / len;
     let (la, lb) = (ra.length(), rb.length());
     let (pa, pb) = (ra.dot(u), rb.dot(u));
     let ratio = if pa + pb >= 0.0 {
@@ -265,7 +270,7 @@ fn segment_potential(ra: DVec3, rb: DVec3) -> DVec3 {
     } else {
         (la - pa) / (lb - pb)
     };
-    u * ratio.ln()
+    u * libm::log(ratio)
 }
 
 /// Exact field of a straight segment from `a` to `b` (current from `a` to `b`) at the
@@ -374,6 +379,33 @@ mod tests {
                 (series - direct).abs() <= 1e-14,
                 "m = {m}: {series} vs {direct}"
             );
+        }
+    }
+
+    /// A repeated vertex (the editor's "+ vertex" copies the last one) is a segment of no
+    /// length: the ramped coil's induced field stays finite and equals the coil's without
+    /// it (it once made the field NaN everywhere).
+    #[test]
+    fn repeated_vertex_adds_nothing() {
+        let square = |v: Vec<DVec3>| PolygonCoil {
+            vertices: v,
+            kappa: 2.0,
+            wire_radius: 0.1,
+            rate: 0.5,
+        };
+        let (a, b, c, d) = (
+            DVec3::new(0.0, 0.0, 0.0),
+            DVec3::new(4.0, 0.0, 0.0),
+            DVec3::new(4.0, 3.0, 0.0),
+            DVec3::new(0.0, 3.0, 0.0),
+        );
+        let plain = square(vec![a, b, c, d]);
+        let doubled = square(vec![a, b, c, c, d]);
+        for x in [DVec3::new(1.0, 1.0, 0.0), DVec3::new(-2.0, 5.0, 0.0)] {
+            let (e1, e2) = (plain.induced_e(x), doubled.induced_e(x));
+            assert!(e2.is_finite() && (e1 - e2).length() <= 1e-15 * e1.length());
+            assert!((plain.field_at(x, 1.0) - doubled.field_at(x, 1.0)).length() < 1e-14);
+            assert!((plain.grad_bz_in_plane(x) - doubled.grad_bz_in_plane(x)).length() < 1e-14);
         }
     }
 

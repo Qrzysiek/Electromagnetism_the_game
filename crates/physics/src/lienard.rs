@@ -25,7 +25,8 @@ pub trait Worldline {
 /// Retarded time for the field point `x` at time `t`: the root of
 /// `g(t_r) = c (t − t_r) − |x − r(t_r)|`, which is strictly decreasing for `|v| < c`.
 /// Bracketed, then Newton's method (`g' = −c + n·v`) kept inside the bracket, with
-/// bisection where it would leave it, to rounding.
+/// bisection where it would leave it, to rounding. A world line that is not subluminal
+/// (no positive `g` in 200 doublings of the bracket, or a NaN) has no retarded time: NaN.
 pub fn retarded_time(w: &impl Worldline, c: f64, x: DVec3, t: f64) -> f64 {
     let g = |tr: f64| c * (t - tr) - (x - w.state(tr).0).length();
     let mut hi = t;
@@ -37,11 +38,17 @@ pub fn retarded_time(w: &impl Worldline, c: f64, x: DVec3, t: f64) -> f64 {
     let mut step = -g_hi / c;
     let mut lo = t - step;
     let mut g_lo = g(lo);
-    while g_lo <= 0.0 {
+    let mut doublings = 0;
+    while g_lo <= 0.0 || g_lo.is_nan() {
+        if g_lo.is_nan() || doublings == 200 {
+            debug_assert!(false, "no retarded time: the world line is not subluminal");
+            return f64::NAN;
+        }
         (hi, g_hi) = (lo, g_lo);
         step *= 2.0;
         lo = hi - step;
         g_lo = g(lo);
+        doublings += 1;
     }
     let mut tr = lo + (hi - lo) * g_lo / (g_lo - g_hi);
     for _ in 0..100 {

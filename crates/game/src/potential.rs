@@ -4,17 +4,15 @@
 use bevy::asset::{AssetPath, embedded_asset, embedded_path};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
+use bevy::render::storage::ShaderBuffer;
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{Material2d, Material2dPlugin};
 use level::beam::Launch;
+use physics::external::External;
 use physics::field::{FieldSolver, LevelField};
 use physics::trajectory::Scenario;
 
-/// Array sizes; must match `potential.wgsl`.
-pub const MAX_CHARGES: usize = 1024;
-pub const MAX_MAGNETS: usize = 64;
-pub const MAX_LOOPS: usize = 16;
-pub const MAX_SEGMENTS: usize = 64;
+/// Most groups of particles with a dark region; must match `potential.wgsl`.
 pub const MAX_LIMITS: usize = 64;
 
 /// Which field the map shows.
@@ -31,40 +29,42 @@ pub enum MapMode {
     Total,
 }
 
+/// Uniform parameters of the maps. The sources themselves are in the storage buffer
+/// `PotentialMaterial::items`, one category after the other (`Items`).
 #[derive(ShaderType, Debug, Clone, Copy)]
 pub struct PotentialParams {
-    pub charges: [Vec4; MAX_CHARGES],
-    pub magnets: [Vec4; MAX_MAGNETS],
-    pub loops: [Vec4; MAX_LOOPS],
-    pub segments: [Vec4; MAX_SEGMENTS],
-    pub segment_kappa: [Vec4; MAX_SEGMENTS],
+    /// Energy limits, one per group of particles (see `params`).
     pub limits: [Vec4; MAX_LIMITS],
+    /// Numbers of solid charges, charge clouds, induced charges and magnets.
     pub counts: UVec4,
+    /// Numbers of circular coils, straight coil segments, static antennas and electrode
+    /// panels.
+    pub counts2: UVec4,
+    /// The uniform stray fields: `E_x`, `E_y` (potential `−E·(x − origin)`),
+    /// `B_z / b_ref`, 0.
+    pub uniform: Vec4,
+    /// `origin` of the uniform field's potential (x, y), antenna body radius, coil wire
+    /// radius.
+    pub origin: Vec4,
     pub limit_count: u32,
     pub phi_weight: f32,
     pub u_a: f32,
-    pub solid: u32,
     pub mode: u32,
-    pub wire: f32,
     pub moment_weight: f32,
 }
 
 impl Default for PotentialParams {
     fn default() -> Self {
         Self {
-            charges: [Vec4::ZERO; MAX_CHARGES],
-            magnets: [Vec4::ZERO; MAX_MAGNETS],
-            loops: [Vec4::ZERO; MAX_LOOPS],
-            segments: [Vec4::ZERO; MAX_SEGMENTS],
-            segment_kappa: [Vec4::ZERO; MAX_SEGMENTS],
             limits: [Vec4::ZERO; MAX_LIMITS],
             counts: UVec4::ZERO,
+            counts2: UVec4::ZERO,
+            uniform: Vec4::ZERO,
+            origin: Vec4::new(0.0, 0.0, 0.3, 0.1),
             limit_count: 0,
             phi_weight: 0.0,
             u_a: 0.0,
-            solid: 0,
             mode: 0,
-            wire: 0.1,
             moment_weight: 0.0,
         }
     }
@@ -74,6 +74,9 @@ impl Default for PotentialParams {
 pub struct PotentialMaterial {
     #[uniform(0)]
     pub params: PotentialParams,
+    /// The sources (`Items`), as `vec4<f32>`.
+    #[storage(1, read_only)]
+    pub items: Handle<ShaderBuffer>,
 }
 
 impl Material2d for PotentialMaterial {
@@ -93,6 +96,11 @@ impl Plugin for PotentialPlugin {
     }
 }
 
+/// A storage buffer must not be empty.
+pub fn buffer(v: Vec<[f32; 4]>) -> ShaderBuffer {
+    ShaderBuffer::from(if v.is_empty() { vec![[0.0f32; 4]] } else { v })
+}
+
 fn count(n: usize) -> u32 {
     u32::try_from(n).expect("fits")
 }
@@ -101,108 +109,179 @@ fn count(n: usize) -> u32 {
 /// the magnetic map.
 pub const GYRO_REFERENCE: f64 = 5.0;
 
-/// Shader parameters for one shot. The shader sums `Φ = Σ Q/r` over the charges and the
-/// field `B_z / b_ref` of the magnetic sources (pre-scaled by `1/b_ref`, with
-/// `b_ref = |p₀| / (|q| r_ref)`, or for a neutral particle with a magnetic moment `m`,
-/// `b_ref = T₀ / |m|`); the colours show the shot's `U/T₀ = (q Φ − m B_z)/T₀`.
+/// The static part of a level field, which the maps show: without the oscillating
+/// antennas and plane waves (a static antenna, ω = 0, is an electrostatic dipole; a
+/// static wave term a uniform field). Ramped coils stay, at t = 0.
+pub fn static_part(field: &LevelField) -> LevelField {
+    let mut f = field.clone();
+    f.antennas.retain(|a| a.omega == 0.0);
+    f.external.retain(External::is_static);
+    f
+}
+
+/// The sources of the map, in the order of the storage buffer:
+/// - solid charges `(x, y, Q, radius)`, in the plane;
+/// - charge clouds `(x, y, Q, R)` (the uniform sphere's potential inside);
+/// - charges induced on metal spheres `(x, y, Q, z)` (images and equivalent charges);
+/// - magnets `(x, y, μ / b_ref, radius)`;
+/// - circular coils `(x, y, radius, κ / b_ref)`;
+/// - straight coil segments, two each: `(a_x, a_y, b_x, b_y)`, `(κ / b_ref, 0, 0, 0)`;
+/// - static antennas `(x, y, p_x, p_y)` (potential `n·p / r²`);
+/// - electrode panels (upper halves, display mesh), three each: `(a, σ)`, `(b, size)`,
+///   `(c, area)` with the vertices' (x, y, z): the shader integrates the panels near a
+///   pixel exactly and the others by the three-point rule, as `Electrodes::sample` does
+///   for pictures (test E6).
+struct Items {
+    out: Vec<[f32; 4]>,
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn v4(a: f64, b: f64, c: f64, d: f64) -> [f32; 4] {
+    [a as f32, b as f32, c as f32, d as f32]
+}
+
+/// Shader parameters and sources for one shot. The shader sums the potential `Φ` of the
+/// static sources and the field `B_z / b_ref` of the magnetic ones (pre-scaled by
+/// `1/b_ref`, with `b_ref = p / (|q| r_ref)` for the momentum `p` of the energy unit `T₀`,
+/// or for a neutral particle with a magnetic moment `m`, `b_ref = T₀ / |m|`); the colours
+/// show the shot's
+/// `U/T₀ = (q Φ − m B_z)/T₀`. `Φ` is the potential of the flight's own field (its static
+/// part): point charges, charge clouds, metal, electrodes, static antennas, and the
+/// uniform stray field of the active disturbance, `−E·x` up to a constant (the shader's
+/// zero is the launch point, which keeps its f32 values small).
 ///
 /// The dark region is where every particle in `limits` is forbidden by energy
 /// conservation: each group (one shot, or one beam) contributes the highest total energy
 /// `E = T + U(x₀)` of its particles, and a point is dark only when `U > E` there for
 /// every group. More than `MAX_LIMITS` groups: no dark region (never too large).
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::too_many_lines)]
 pub fn params(
     scn: &Scenario<LevelField>,
     limits: &[Vec<Launch>],
-    charge_radius: f64,
-    magnet_radius: f64,
+    radii: (f64, f64, f64),
     mode: MapMode,
     energy_unit: f64,
-) -> PotentialParams {
+) -> (PotentialParams, Vec<[f32; 4]>) {
+    let (charge_radius, magnet_radius, antenna_radius) = radii;
     let kin = physics::dynamics::Kinematics::new(scn.particle.mass, scn.c);
     // Colours in units of the shot's energy unit (its T₀, or for a particle launched at
     // rest the kinetic energy it reaches, `Game::energy_unit`).
     let t0 = kin.kinetic_energy(scn.p0).max(energy_unit).max(1e-300);
     let (q, m) = (scn.particle.charge, scn.particle.moment);
+    // The momentum of the energy unit (a particle launched at rest: of the largest
+    // kinetic energy it reaches; with |p₀| it once gave b_ref = 1e-300 and an infinite map).
+    let p_unit = kin
+        .momentum_from_kinetic_energy(t0, physics::DVec3::X)
+        .length();
     let b_ref = if q != 0.0 {
-        (scn.p0.length() / (q.abs() * GYRO_REFERENCE)).max(1e-300)
+        (p_unit / (q.abs() * GYRO_REFERENCE)).max(1e-300)
     } else if m != 0.0 {
         t0 / m.abs()
     } else {
         1.0
     };
-    let f = &scn.field;
-    let at_a = f.sample(scn.x0, 0.0);
+    let f = static_part(&scn.field);
+    // The uniform stray fields (static disturbance terms); their potential is −E·x on the
+    // CPU, −E·(x − origin) in the shader: CPU potentials are shifted by E·origin to match.
+    let (mut e_u, mut b_u) = (physics::DVec3::ZERO, 0.0);
+    for ext in &f.external {
+        let s = ext.sample(physics::DVec3::ZERO, 0.0);
+        e_u += s.e;
+        b_u += s.b.z;
+    }
+    let origin = scn.x0;
+    let shift = e_u.dot(origin);
+    let energy_at = |x: physics::DVec3, qx: f64, mx: f64| {
+        let s = f.sample(x, 0.0);
+        qx * (s.phi + shift) - mx * s.b.z
+    };
     let mut out = PotentialParams {
-        u_a: ((q * at_a.phi - m * at_a.b.z) / t0) as f32,
+        u_a: (energy_at(scn.x0, q, m) / t0) as f32,
         phi_weight: (q / t0) as f32,
         moment_weight: (-m * b_ref / t0) as f32,
         mode: match mode {
             MapMode::Potential => 0,
             MapMode::Magnetic | MapMode::Waves | MapMode::ParticleField | MapMode::Total => 1,
         },
-        wire: f
-            .loops
-            .first()
-            .map(|l| l.wire_radius)
-            .or_else(|| f.polygons.first().map(|p| p.wire_radius))
-            .unwrap_or(0.1) as f32,
+        uniform: Vec4::new(e_u.x as f32, e_u.y as f32, (b_u / b_ref) as f32, 0.0),
+        origin: Vec4::new(
+            origin.x as f32,
+            origin.y as f32,
+            antenna_radius as f32,
+            f.loops
+                .first()
+                .map(|l| l.wire_radius)
+                .or_else(|| f.polygons.first().map(|p| p.wire_radius))
+                .unwrap_or(0.1) as f32,
+        ),
         ..PotentialParams::default()
     };
-    // Fixed charges (solid, in the plane), then the charges induced on metal (display
-    // resolution): sphere images and equivalent charges, and electrode panels as point
-    // charges at their centroids and mirror images (with their z).
-    let fixed: Vec<(physics::DVec3, f64)> = f.coulomb.charges().collect();
-    let mut induced: Vec<(physics::DVec3, f64)> = f.conductors.induced.charges().collect();
-    for (t, s) in f.electrodes.panels() {
-        let c = t.centroid();
-        let q_panel = s * t.area();
-        induced.push((c, q_panel));
-        induced.push((physics::DVec3::new(c.x, c.y, -c.z), q_panel));
+    let mut items = Items { out: Vec::new() };
+    let mut push = |v: [f32; 4]| items.out.push(v);
+    // Point charges (solid), then clouds.
+    let (mut solid, mut clouds) = (0, 0);
+    for (pos, qc, radius) in f.coulomb.sources() {
+        if radius == 0.0 {
+            push(v4(pos.x, pos.y, qc, charge_radius));
+            solid += 1;
+        }
     }
-    let mut n = 0;
-    for (pos, qc) in fixed.iter().take(MAX_CHARGES) {
-        out.charges[n] = Vec4::new(pos.x as f32, pos.y as f32, *qc as f32, charge_radius as f32);
-        n += 1;
+    for (pos, qc, radius) in f.coulomb.sources() {
+        if radius > 0.0 {
+            push(v4(pos.x, pos.y, qc, radius));
+            clouds += 1;
+        }
     }
-    out.solid = count(n);
-    for (pos, qc) in induced.iter().take(MAX_CHARGES - n) {
-        out.charges[n] = Vec4::new(pos.x as f32, pos.y as f32, *qc as f32, pos.z as f32);
-        n += 1;
+    // Charges induced on metal spheres (display resolution), with their z.
+    let mut induced = 0;
+    for (pos, qc) in f.conductors.induced.charges() {
+        push(v4(pos.x, pos.y, qc, pos.z));
+        induced += 1;
     }
-    out.counts.x = count(n);
-    for (i, d) in f.dipoles.iter().take(MAX_MAGNETS).enumerate() {
-        out.magnets[i] = Vec4::new(
-            d.position.x as f32,
-            d.position.y as f32,
-            (d.moment.z / b_ref) as f32,
-            magnet_radius as f32,
-        );
-        out.counts.y = count(i + 1);
+    for d in &f.dipoles {
+        push(v4(
+            d.position.x,
+            d.position.y,
+            d.moment.z / b_ref,
+            magnet_radius,
+        ));
     }
-    for (i, l) in f.loops.iter().take(MAX_LOOPS).enumerate() {
-        out.loops[i] = Vec4::new(
-            l.center.x as f32,
-            l.center.y as f32,
-            l.radius as f32,
-            (l.kappa / b_ref) as f32,
-        );
-        out.counts.z = count(i + 1);
+    for l in &f.loops {
+        push(v4(l.center.x, l.center.y, l.radius, l.kappa / b_ref));
     }
-    let mut n = 0;
+    let mut segments = 0;
     for poly in &f.polygons {
         let v = &poly.vertices;
         for i in 0..v.len() {
-            if n == MAX_SEGMENTS {
-                break;
-            }
             let (a, b) = (v[i], v[(i + 1) % v.len()]);
-            out.segments[n] = Vec4::new(a.x as f32, a.y as f32, b.x as f32, b.y as f32);
-            out.segment_kappa[n] = Vec4::new((poly.kappa / b_ref) as f32, 0.0, 0.0, 0.0);
-            n += 1;
+            push(v4(a.x, a.y, b.x, b.y));
+            push(v4(poly.kappa / b_ref, 0.0, 0.0, 0.0));
+            segments += 1;
         }
     }
-    out.counts.w = count(n);
+    for a in &f.antennas {
+        let (p, _, _) = a.moment(0.0);
+        push(v4(a.position.x, a.position.y, p.x, p.y));
+    }
+    let mut panels = 0;
+    for (t, s) in f.electrodes.panels() {
+        push(v4(t.a.x, t.a.y, t.a.z, s));
+        push(v4(t.b.x, t.b.y, t.b.z, t.size()));
+        push(v4(t.c.x, t.c.y, t.c.z, t.area()));
+        panels += 1;
+    }
+    out.counts = UVec4::new(
+        count(solid),
+        count(clouds),
+        count(induced),
+        count(f.dipoles.len()),
+    );
+    out.counts2 = UVec4::new(
+        count(f.loops.len()),
+        count(segments),
+        count(f.antennas.len()),
+        count(panels),
+    );
     if limits.len() <= MAX_LIMITS {
         for (i, group) in limits.iter().enumerate() {
             // Highest total energy of the group, in units of its highest kinetic energy.
@@ -211,9 +290,8 @@ pub fn params(
             for l in group {
                 let kin = physics::dynamics::Kinematics::new(l.particle.mass, scn.c);
                 let tk = kin.kinetic_energy(l.p0);
-                let at = f.sample(l.x0, 0.0);
                 (qg, mg) = (l.particle.charge, l.particle.moment);
-                e = e.max(tk + qg * at.phi - mg * at.b.z);
+                e = e.max(tk + energy_at(l.x0, qg, mg));
                 t = t.max(tk);
             }
             out.limits[i] = Vec4::new(
@@ -225,5 +303,5 @@ pub fn params(
         }
         out.limit_count = count(limits.len());
     }
-    out
+    (out, items.out)
 }

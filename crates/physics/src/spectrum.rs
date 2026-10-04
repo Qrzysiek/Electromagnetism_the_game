@@ -61,9 +61,9 @@ impl RadiationWindow {
     /// Directions sampling the arc, at most 2° apart (at most 91), symmetric about the
     /// axis, an odd number (for Simpson's rule).
     pub fn directions(&self) -> Vec<DVec3> {
-        let base = self.axis.y.atan2(self.axis.x);
+        let base = libm::atan2(self.axis.y, self.axis.x);
         if self.half_angle <= 0.0 {
-            return vec![DVec3::new(base.cos(), base.sin(), 0.0)];
+            return vec![DVec3::new(libm::cos(base), libm::sin(base), 0.0)];
         }
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let k = ((self.half_angle / 2f64.to_radians()).ceil() as usize).clamp(1, 45);
@@ -71,7 +71,7 @@ impl RadiationWindow {
             .map(|i| {
                 #[allow(clippy::cast_precision_loss)]
                 let a = base + self.half_angle * (i as f64 / k as f64 - 1.0);
-                DVec3::new(a.cos(), a.sin(), 0.0)
+                DVec3::new(libm::cos(a), libm::sin(a), 0.0)
             })
             .collect()
     }
@@ -193,7 +193,7 @@ struct Cx {
 
 impl Cx {
     fn cis(phase: f64) -> Self {
-        let (s, c) = phase.sin_cos();
+        let (s, c) = libm::sincos(phase);
         Self { re: c, im: s }
     }
 

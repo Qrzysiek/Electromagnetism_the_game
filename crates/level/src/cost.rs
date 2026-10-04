@@ -258,7 +258,7 @@ impl Meter {
         if v.is_nan() || v <= lo {
             return 0.0;
         }
-        ((v / lo).ln() / (hi / lo).ln()).clamp(0.0, 1.0)
+        (libm::log(v / lo) / libm::log(hi / lo)).clamp(0.0, 1.0)
     }
 
     pub fn text(&self) -> String {
@@ -376,7 +376,7 @@ mod tests {
         assert!(meter(1e-4).fraction().abs() < 1e-15);
         assert!((meter(30.0).fraction() - 1.0).abs() < 1e-12);
         let (g, l) = meter(0.0).marks();
-        assert!((g - 1000f64.ln() / 30_000f64.ln()).abs() < 1e-12);
+        assert!((g - libm::log(1000.0) / libm::log(30_000.0)).abs() < 1e-12);
         assert!(g < l && l < 1.0);
         assert!(meter(0.5).fraction() < g && meter(2.0).fraction() > g);
     }

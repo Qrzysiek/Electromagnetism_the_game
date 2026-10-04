@@ -1,5 +1,7 @@
-//! Tests D1–D3 for detector acceptance (direction and energy windows, PHYSICS.md §6.1).
+//! Tests D1–D4 for detector acceptance (direction and energy windows, PHYSICS.md §6.1).
 //! Run with `cargo test -p physics --test acceptance -- --nocapture`.
+
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
 
 mod common;
 
@@ -101,4 +103,40 @@ fn d3_edge_of_the_window_is_not_verified() {
         "{:?}",
         v.status
     );
+}
+
+/// D4: a launch inside the detector arrives at t = 0 and is judged like any entry: an
+/// energy window it misses rejects it, a gate it has not passed makes it `SkippedGate`,
+/// and with neither it arrives. (It once counted as arrived regardless: audit of
+/// 2026-09-29.)
+#[test]
+fn d4_launch_inside_the_detector_is_judged() {
+    use physics::trajectory::Gate;
+    let inside = |acc: Acceptance, gates: Vec<Gate>| {
+        let mut scn = scenario(0.0, acc);
+        scn.x0 = DVec3::new(11.0, 0.0, 0.0);
+        scn.gates = gates;
+        run(&scn, &RunSettings::with_tolerance(1e-12))
+    };
+    let window = |lo: f64, hi: f64| Acceptance {
+        direction: None,
+        kinetic: Some((lo, hi)),
+        radiation: None,
+    };
+    let gate = Gate {
+        region: Region::Box(Aabb {
+            min: DVec3::new(4.0, -100.0, -1.0),
+            max: DVec3::new(5.0, 100.0, 1.0),
+        }),
+        acceptance: None,
+    };
+    // T₀ = 0.5: inside the window [0.4, 0.6], outside [0.6, 0.8].
+    let tr = inside(window(0.4, 0.6), Vec::new());
+    assert_eq!(tr.outcome, Outcome::Arrived);
+    assert!((tr.margins.unwrap().acceptance.unwrap() - 0.1 / 0.6).abs() < 1e-12);
+    let tr = inside(window(0.6, 0.8), Vec::new());
+    assert_eq!(tr.outcome, Outcome::Rejected);
+    let tr = inside(window(0.4, 0.6), vec![gate]);
+    assert_eq!(tr.outcome, Outcome::SkippedGate(0));
+    println!("D4: inside the window arrived, outside rejected, with a gate skipped");
 }

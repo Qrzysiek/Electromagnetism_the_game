@@ -18,6 +18,9 @@ pub struct CrossingSearch {
     pub time: Option<f64>,
     /// Smallest value of `g` among all points evaluated (including the endpoints).
     pub min_sampled: f64,
+    /// An evaluated value was NaN: the search was abandoned, and the interval is not
+    /// certified (the caller must end the flight as failed, never treat it as clear).
+    pub nan: bool,
 }
 
 /// Finds the first `t ∈ (ta, tb]` with `g(t) ≤ 0`, given `ga = g(ta) > 0`, `gb = g(tb)`,
@@ -30,12 +33,21 @@ pub fn first_crossing(
     gb: f64,
     v_max: f64,
 ) -> CrossingSearch {
-    debug_assert!(ga > 0.0);
+    debug_assert!(
+        ga > 0.0 || ga.is_nan(),
+        "the interval starts on or past the boundary"
+    );
     let mut min_sampled = ga.min(gb);
-    let time = search(g, ta, tb, ga, gb, v_max, &mut min_sampled);
-    CrossingSearch { time, min_sampled }
+    let mut nan = false;
+    let time = search(g, ta, tb, ga, gb, v_max, &mut min_sampled, &mut nan);
+    CrossingSearch {
+        time: if nan { None } else { time },
+        min_sampled,
+        nan,
+    }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn search(
     g: &mut impl FnMut(f64) -> f64,
     ta: f64,
@@ -44,13 +56,15 @@ fn search(
     gb: f64,
     v_max: f64,
     min_sampled: &mut f64,
+    nan: &mut bool,
 ) -> Option<f64> {
     // A NaN event value is a bug upstream (a zero-length wire once gave one); every
     // comparison fails on it, and the search would subdivide down to float resolution
-    // everywhere, i.e. never end. Give up on the interval instead. (Infinite values are
-    // legitimate: a particle without a detector.)
-    if ga.is_nan() || gb.is_nan() {
-        debug_assert!(false, "NaN event value");
+    // everywhere, i.e. never end. Give up and report it (`CrossingSearch::nan`): the
+    // interval is not clear. (Infinite values are legitimate: a particle without a
+    // detector.)
+    if ga.is_nan() || gb.is_nan() || *nan {
+        *nan = true;
         return None;
     }
     if gb > 0.0 && ga + gb - v_max * (tb - ta) > 0.0 {
@@ -64,10 +78,10 @@ fn search(
     let gm = g(tm);
     *min_sampled = min_sampled.min(gm);
     if gm <= 0.0 {
-        return search(g, ta, tm, ga, gm, v_max, min_sampled).or(Some(tm));
+        return search(g, ta, tm, ga, gm, v_max, min_sampled, nan).or(Some(tm));
     }
-    search(g, ta, tm, ga, gm, v_max, min_sampled)
-        .or_else(|| search(g, tm, tb, gm, gb, v_max, min_sampled))
+    search(g, ta, tm, ga, gm, v_max, min_sampled, nan)
+        .or_else(|| search(g, tm, tb, gm, gb, v_max, min_sampled, nan))
 }
 
 #[cfg(test)]
@@ -99,9 +113,20 @@ mod tests {
         assert!(r.min_sampled < 1e-5);
     }
 
+    /// A NaN value (at an end or inside) never certifies the interval as clear.
+    #[test]
+    fn nan_is_reported_not_cleared() {
+        let r = first_crossing(&mut |_| 1.0, 0.0, 1.0, 1.0, f64::NAN, 1.0);
+        assert!(r.nan && r.time.is_none());
+        // Positive ends, NaN where the dip would be searched.
+        let g = |t: f64| if (t - 0.5).abs() < 0.3 { f64::NAN } else { 1.0 };
+        let r = first_crossing(&mut { g }, 0.0, 1.0, 1.0, 1.0, 10.0);
+        assert!(r.nan && r.time.is_none());
+    }
+
     #[test]
     fn returns_earliest_of_several_crossings() {
-        let g = |t: f64| (10.0 * t).cos() + 0.5;
+        let g = |t: f64| libm::cos(10.0 * t) + 0.5;
         let r = first_crossing(&mut { g }, 0.0, 3.0, g(0.0), g(3.0), 10.0);
         let expected = (2.0 * std::f64::consts::PI / 3.0) / 10.0;
         assert!((r.time.unwrap() - expected).abs() < 1e-13);

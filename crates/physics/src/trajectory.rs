@@ -70,7 +70,7 @@ impl Acceptance {
     pub fn margin(&self, velocity: DVec3, kinetic: f64) -> f64 {
         let mut m = f64::INFINITY;
         if let Some((axis, half)) = self.direction {
-            let dev = velocity.cross(axis).length().atan2(velocity.dot(axis));
+            let dev = libm::atan2(velocity.cross(axis).length(), velocity.dot(axis));
             m = m.min(half - dev);
         }
         if let Some((lo, hi)) = self.kinetic {
@@ -376,9 +376,23 @@ pub fn run_cancellable<F: FieldSolver>(
         .map(|&e| event_value(scn, e, scn.x0))
         .collect();
     let mut margin: Vec<f64> = g_prev.clone();
+    if g_prev.iter().any(|g| g.is_nan()) {
+        traj.outcome = Outcome::Failed(integrator::Error::NonFiniteEvent);
+        return Some(traj);
+    }
     if let Some(k) = g_prev.iter().position(|&g| g <= 0.0) {
+        // Launched at a boundary: the flight ends there. Inside the detector it is an
+        // arrival at t = 0, which must still pass the gates and the detector's conditions
+        // (the same rules as an entry during the flight).
         traj.outcome = events[k].outcome();
-        traj.margins = rs.margins.then(|| collect_margins(&events, &margin));
+        let acceptance_margin = judge_arrival(&mut traj, &gates, scn, &ode.kin, &emission);
+        traj.emission = emission;
+        traj.margins = rs.margins.then(|| {
+            let mut m = collect_margins(&events, &margin);
+            m.acceptance = acceptance_margin;
+            (m.gates, m.gate_acceptance) = gates.into_margins();
+            m
+        });
         return Some(traj);
     }
 
@@ -428,14 +442,21 @@ pub fn run_cancellable<F: FieldSolver>(
         }
 
         let mut first: Option<(f64, Event)> = None;
+        let mut nan = false;
         for (k, &ev) in events.iter().enumerate() {
             let mut g = |t: f64| event_value(scn, ev, view.state(t).0);
             let r = first_crossing(&mut g, t_a, t_b, g_prev[k], g_next[k], v_max);
+            nan |= r.nan;
             if let Some(t) = r.time
                 && first.is_none_or(|(tf, _)| t < tf)
             {
                 first = Some((t, ev));
             }
+        }
+        if nan {
+            // A boundary's distance is not a number: the step cannot be certified.
+            traj.outcome = Outcome::Failed(integrator::Error::NonFiniteEvent);
+            break;
         }
 
         let (t_end, event) = match first {
@@ -543,27 +564,7 @@ pub fn run_cancellable<F: FieldSolver>(
     }
     traj.stats = int.stats();
     // Acceptance of the detector: decided at the moment of entry.
-    let mut acceptance_margin = None;
-    if traj.outcome == Outcome::Arrived
-        && let Some(k) = gates.missing()
-    {
-        traj.outcome = Outcome::SkippedGate(k);
-    }
-    if traj.outcome == Outcome::Arrived
-        && let Some(acc) = scn.acceptance
-    {
-        let v = ode.kin.velocity(traj.end.p);
-        let mut m = acc.margin(v, ode.kin.kinetic_energy(traj.end.p));
-        if let Some(w) = acc.radiation {
-            let e = w.measure(&emission, q, scn.c);
-            traj.radiation = Some(e);
-            m = m.min(w.margin(e));
-        }
-        acceptance_margin = Some(m);
-        if m < 0.0 {
-            traj.outcome = Outcome::Rejected;
-        }
-    }
+    let acceptance_margin = judge_arrival(&mut traj, &gates, scn, &ode.kin, &emission);
 
     // Follow the continued trajectory (as if the boundary were not there) until the
     // event function reaches its minimum or the depth is clearly safe. The depth is then
@@ -599,6 +600,38 @@ pub fn run_cancellable<F: FieldSolver>(
         m
     });
     Some(traj)
+}
+
+/// The gates and the detector's conditions of an arrival, decided at the moment of entry
+/// (`traj.end`): `SkippedGate` while a gate is still missing, `Rejected` outside the
+/// acceptance. Returns the acceptance margin (None without conditions or arrival).
+fn judge_arrival<F>(
+    traj: &mut Trajectory,
+    gates: &GateTracker<'_>,
+    scn: &Scenario<F>,
+    kin: &Kinematics,
+    emission: &[Emission],
+) -> Option<f64> {
+    if traj.outcome == Outcome::Arrived
+        && let Some(k) = gates.missing()
+    {
+        traj.outcome = Outcome::SkippedGate(k);
+    }
+    if traj.outcome != Outcome::Arrived {
+        return None;
+    }
+    let acc = scn.acceptance?;
+    let v = kin.velocity(traj.end.p);
+    let mut m = acc.margin(v, kin.kinetic_energy(traj.end.p));
+    if let Some(w) = acc.radiation {
+        let e = w.measure(emission, scn.particle.charge, scn.c);
+        traj.radiation = Some(e);
+        m = m.min(w.margin(e));
+    }
+    if m < 0.0 {
+        traj.outcome = Outcome::Rejected;
+    }
+    Some(m)
 }
 
 /// Progress of one flight through its gates (PHYSICS.md §6.2): the next gate to pass, the

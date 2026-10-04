@@ -13,6 +13,11 @@
 //! This solves the vacuum Maxwell equations exactly everywhere outside the source point:
 //! near (quasi-static), intermediate and radiation zones alike. For `c = ∞` it reduces to
 //! the electrostatic dipole field of the instantaneous `p(t)` with `B = 0`.
+//!
+//! The potentials (Lorenz gauge, `E = −∇φ − ∂A/∂t`, `B = ∇ × A`) are
+//! `φ = n·p / r² + n·ṗ / (c r)` and `A = ṗ / (c² r)`, retarded. The sample's `phi` is this
+//! φ: for `ω = 0` the electrostatic dipole potential `n·p / r²`, which with the field makes
+//! `T + qφ` the conserved energy of a static antenna's flight.
 
 use glam::DVec3;
 
@@ -34,7 +39,7 @@ pub struct OscillatingDipole {
 impl OscillatingDipole {
     /// `(p, ṗ, p̈)` at time `t`.
     pub fn moment(&self, t: f64) -> (DVec3, DVec3, DVec3) {
-        let (s, c) = (self.omega * t + self.phase).sin_cos();
+        let (s, c) = libm::sincos(self.omega * t + self.phase);
         let w = self.omega;
         (
             self.amplitude * c,
@@ -52,7 +57,7 @@ impl OscillatingDipole {
             return FieldSample {
                 e: (n * (3.0 * n.dot(p)) - p) / (r * r * r),
                 b: DVec3::ZERO,
-                phi: 0.0,
+                phi: n.dot(p) / (r * r),
             };
         }
         let c = self.c;
@@ -61,7 +66,18 @@ impl OscillatingDipole {
             + (n * (3.0 * n.dot(pd)) - pd) / (c * r * r)
             + n.cross(n.cross(pdd)) / (c * c * r);
         let b = (pd.cross(n) / (r * r) + pdd.cross(n) / (c * r)) / (c * c);
-        FieldSample { e, b, phi: 0.0 }
+        let phi = n.dot(p) / (r * r) + n.dot(pd) / (c * r);
+        FieldSample { e, b, phi }
+    }
+
+    /// The Lorenz-gauge vector potential `A = ṗ / (c² r)` (retarded; 0 for `c = ∞`).
+    pub fn vector_potential(&self, x: DVec3, t: f64) -> DVec3 {
+        if self.c.is_infinite() {
+            return DVec3::ZERO;
+        }
+        let r = (x - self.position).length();
+        let (_, pd, _) = self.moment(t - r / self.c);
+        pd / (self.c * self.c * r)
     }
 
     /// Time-averaged radiated power (Larmor): `⟨P⟩ = p₀² ω⁴ / (3 c³)`.
@@ -128,6 +144,45 @@ mod tests {
             let ampere = (curl(&b) - dt(&e) / (c * c)).length() / sb;
             assert!(faraday < 1e-6, "Faraday {faraday:.2e} at {x}");
             assert!(ampere < 1e-6, "Ampère {ampere:.2e} at {x}");
+        }
+    }
+
+    /// The potentials generate the fields: `E = −∇φ − ∂A/∂t`, `B = ∇ × A` (central
+    /// differences), oscillating and static (ω = 0, where φ is the electrostatic dipole
+    /// potential), at finite and infinite c.
+    #[test]
+    fn potentials_generate_the_fields() {
+        for (c, omega) in [
+            (3.0, 1.7),
+            (3.0, 0.0),
+            (f64::INFINITY, 1.7),
+            (f64::INFINITY, 0.0),
+        ] {
+            let a = OscillatingDipole {
+                omega,
+                c,
+                ..dipole(c)
+            };
+            for x in [DVec3::new(1.3, 0.2, -0.4), DVec3::new(-3.0, 4.0, 1.0)] {
+                let t = 0.7;
+                let h = 1e-5;
+                let phi = |x: DVec3| a.fields(x, t).phi;
+                let pot = |x: DVec3, t: f64| a.vector_potential(x, t);
+                let grad = DVec3::new(
+                    phi(x + DVec3::X * h) - phi(x - DVec3::X * h),
+                    phi(x + DVec3::Y * h) - phi(x - DVec3::Y * h),
+                    phi(x + DVec3::Z * h) - phi(x - DVec3::Z * h),
+                ) / (2.0 * h);
+                let da_dt = (pot(x, t + h) - pot(x, t - h)) / (2.0 * h);
+                let d = |axis: DVec3| (pot(x + axis * h, t) - pot(x - axis * h, t)) / (2.0 * h);
+                let (dx, dy, dz) = (d(DVec3::X), d(DVec3::Y), d(DVec3::Z));
+                let curl = DVec3::new(dy.z - dz.y, dz.x - dx.z, dx.y - dy.x);
+                let f = a.fields(x, t);
+                let e_err = (-grad - da_dt - f.e).length() / f.e.length();
+                assert!(e_err < 1e-8, "c {c}, ω {omega}, {x}: E {e_err:.2e}");
+                let b_err = (curl - f.b).length();
+                assert!(b_err <= 1e-8 * f.e.length() / c.min(1e300), "B {b_err:.2e}");
+            }
         }
     }
 

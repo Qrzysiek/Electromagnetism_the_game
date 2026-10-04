@@ -1,6 +1,7 @@
 //! Shared helpers for the validation tests.
 
 #![allow(dead_code)]
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
 
 use physics::DVec3;
 use physics::dynamics::Particle;

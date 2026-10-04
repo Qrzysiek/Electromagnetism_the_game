@@ -24,11 +24,11 @@ verified reference solution for every shot and negligible radiation
 |---|---|---|---|---|---|
 | 1 | First bend | 1 Introduction | one charge bends a beam | ≤ 3 charges | 1 |
 | 2 | Slingshot | 1 Introduction | bending around a level charge | ≤ 3 charges | 1 |
-| 3 | Geiger–Marsden | 1 Introduction | Coulomb scattering, sign and strength | ≤ 3 charges | 1 |
+| 3 | Geiger–Marsden (1909) | 1 Introduction | Coulomb scattering, sign and strength | ≤ 3 charges | 1 |
 | 4 | Twin beams | 1 Introduction | several shots, one setup | ≤ 3 charges | 1 |
 | 5 | Two stages | 1 Introduction | a gate to pass before the detector counts | ≤ 3 charges | 1 |
 | 6 | Injection | 1 Introduction | the detector also requires a direction (±8°) | ≤ 3 charges | 1 |
-| 7 | Thomson's cathode-ray tube | 1 Intermediate | two energies onto one-cell spots; deflection ∝ 1/T | ≤ 3 charges | 1 |
+| 7 | Thomson's cathode-ray tube (1897) | 1 Intermediate | two energies onto one-cell spots; deflection ∝ 1/T | ≤ 3 charges | 1 |
 | 8 | Around the wall | 1 Intermediate | the wall joined with injection: around the obstacle, then enter along the axis (±8°) | ≤ 4 charges | 2 |
 | 9 | Einzel lens | 1 Intermediate | focusing of an angular spread | ≤ 4 charges | 2 |
 | 10 | Reflectron | 1 Intermediate | reflection; energy-dependent turning point | ≤ 4 charges | 2 |
@@ -50,9 +50,9 @@ verified reference solution for every shot and negligible radiation
 | 26 | Fast lane | 3 Introduction | γ changes the bending | ≤ 3 charges | 1 |
 | 27 | First coil | 3 Introduction | magnetic fields from level coils | ≤ 3 charges | 1 |
 | 28 | First magnet | 3 Introduction | placing your own magnets | ≤ 3 magnets | 1 |
-| 29 | Stern–Gerlach | 3 Introduction | neutral atoms with spin up or down, force m grad B_z | ≤ 3 magnets | 1 |
+| 29 | Stern–Gerlach (1922) | 3 Introduction | neutral atoms with spin up or down, force m grad B_z | ≤ 3 magnets | 1 |
 | 30 | Beta-ray spectrometer | 3 Intermediate | relativistic circular orbits: \|qQ\| = γmv²R, two electron energies | ≤ 3 charges | 1 |
-| 31 | Dempster's mass spectrometer | 3 Intermediate | 180° focusing and mass separation | ≤ 3 charges | 1 |
+| 31 | Dempster's mass spectrometer (1918) | 3 Intermediate | 180° focusing and mass separation | ≤ 3 charges | 1 |
 | 32 | Wien filter | 3 Intermediate | crossed E (your charges) and B (a coil); the selected speed leaves straight (±3°) | ≤ 4 charges | 2 |
 | 33 | Calutron | 3 Intermediate | isotope separation with magnets only | ≤ 4 magnets | 2 |
 | 34 | Build a Wien filter | 3 Intermediate | the whole velocity selector from charges and magnets; straight exit (±3°) | ≤ 4 charges, ≤ 2 magnets | 3 |
@@ -140,7 +140,8 @@ Columns:
   and a one-move neighbour. High means that attempts carry information.
 
 Measured 2026-09-28 after the curriculum restructure, with 1000 random samples and 16
-search runs of 400 evaluations per level:
+search runs of 400 evaluations per level; levels 57–88 (the Jackson series, added later)
+on 2026-10-05 with the same settings:
 
 | level | log10 configs | random solve rate | search success | mean evals | expected effort: search / guessing | smoothness |
 |---|---|---|---|---|---|---|
@@ -200,14 +201,54 @@ search runs of 400 evaluations per level:
 | 54_calutron_space_charge | 9.7 | 1.0e-3 | 9/16 | 99 | 410 / 1000 | 0.81 |
 | 55_soft_landing_current | 9.1 | < 3.0e-3 | 12/16 | 200 | 334 / 333 | 0.74 |
 | 56_isotope_separator | 28.6 | < 3.0e-3 | 1/16 | 187 | 6187 / 333 | 0.91 |
+| 57_jackson_exb_drift | 10.4 | 3.0e-3 | 16/16 | 90 | 90 / 333 | 0.65 |
+| 58_jackson_van_allen | 20.7 | 3.0e-3 | 16/16 | 70 | 70 / 333 | 0.62 |
+| 59_throw_a_charge | 14.2 | 7.0e-3 | 16/16 | 92 | 92 / 143 | 0.84 |
+| 60_jackson_faraday | 7.8 | 8.0e-3 | 16/16 | 60 | 60 / 125 | 0.62 |
+| 61_jackson_knock_on | 11.6 | 2.0e-3 | 5/16 | 236 | 1116 / 500 | 0.90 |
+| 62_jackson_gradient_drift | 20.0 | 1.0e-3 | 12/16 | 147 | 281 / 1000 | 0.65 |
+| 63_jackson_runaway | 18.5 | < 3.0e-3 | 13/16 | 110 | 202 / 333 | 0.81 |
+| 64_jackson_recoil | 11.6 | 1.4e-2 | 15/16 | 131 | 158 / 71 | 0.84 |
+| 65_jackson_stormer | 13.5 | < 3.0e-3 | 9/16 | 229 | 540 / 333 | 0.71 |
+| 66_jackson_magnetosphere | 36.0 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.80 |
+| 67_jackson_own_image | 10.3 | 4.3e-2 | 16/16 | 18 | 18 / 23 | 0.84 |
+| 68_jackson_two_spheres | 9.8 | 8.0e-3 | 15/16 | 68 | 94 / 125 | 0.77 |
+| 69_jackson_slot | 9.0 | 2.0e-3 | 15/16 | 239 | 266 / 500 | 0.71 |
+| 70_jackson_golden_ratio | 13.4 | 1.0e-3 | 10/16 | 87 | 327 / 1000 | 0.66 |
+| 71_jackson_multipoles | 10.5 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.69 |
+| 72_jackson_sphere_slalom | 25.0 | < 3.0e-3 | 2/16 | 157 | 2957 / 333 | 0.77 |
+| 73_jackson_classical_atom | 10.1 | 5.1e-2 | 16/16 | 17 | 17 / 20 | 0.62 |
+| 74_jackson_circularization | 10.1 | < 3.0e-3 | 7/16 | 210 | 724 / 333 | 0.67 |
+| 75_jackson_three_orbits | 19.0 | < 3.0e-3 | 2/16 | 219 | 3019 / 333 | 0.71 |
+| 76_jackson_bound_charge | 10.1 | 8.0e-3 | 16/16 | 101 | 101 / 125 | 0.60 |
+| 77_jackson_resonance | 8.0 | 2.0e-3 | 16/16 | 97 | 97 / 500 | 0.86 |
+| 78_jackson_bound_knock | 11.6 | 7.0e-3 | 15/16 | 93 | 120 / 143 | 0.76 |
+| 79_jackson_spectroscopy | 25.5 | < 3.0e-3 | 14/16 | 194 | 251 / 333 | 0.75 |
+| 80_jackson_beaming | 10.1 | 5.1e-2 | 16/16 | 81 | 81 / 20 | 0.59 |
+| 81_jackson_critical_frequency | 10.1 | 1.4e-2 | 12/16 | 107 | 240 / 71 | 0.62 |
+| 82_jackson_in_step | 13.2 | 4.1e-1 | 16/16 | 9 | 9 / 2 | 0.78 |
+| 83_jackson_quiet_turn | 15.8 | 3.0e-3 | 12/16 | 165 | 298 / 333 | 0.79 |
+| 84_jackson_thomson | 9.2 | 2.2e-2 | 15/16 | 94 | 120 / 45 | 0.60 |
+| 85_jackson_braking | 9.2 | 6.4e-2 | 16/16 | 30 | 30 / 16 | 0.63 |
+| 86_jackson_quiet_ring | 13.2 | 3.0e-3 | 3/16 | 107 | 1840 / 333 | 0.82 |
+| 87_jackson_ring_of_four | 21.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.87 |
+| 88_jackson_undulator | 24.6 | < 3.0e-3 | 5/16 | 123 | 1003 / 333 | 0.52 |
 
-Reading the table by tier: the introductions are solved by the search in 15–16 of 16 runs
-within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
+Reading the table by tier (levels 1–56): the introductions are solved by the search in
+15–16 of 16 runs within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
 landing 2/16, Build a Wien filter 2/16, Velocity selector 1/16). The master levels are not
 found by a search over the whole level (0/16, the Isotope separator 1/16), since they
 are meant to be built stage by stage, as their references were; random guessing of the
 whole level is hopeless (log10 configs 16–30). Their stages are each within reach of the
 modules the arc taught (see the finale notes below).
+
+The Jackson series (57–88): the search solves most introductions in 15–16 of 16 runs
+(Faraday's law, the classical atom and the bound charge among them); none of its 16 runs
+solved Magnetosphere (66, the arc's master), Multipoles (71) or A ring of four (87), and
+random guessing found none of them either. The search sees only the distance objective
+(plus the deficits of the conditions), so these numbers also measure how much a goal's
+conditions (Multipoles' 0.05° direction windows, a radiation band, gates) hide from it,
+not only how hard the physics is.
 
 Notes:
 

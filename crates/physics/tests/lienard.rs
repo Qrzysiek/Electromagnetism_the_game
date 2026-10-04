@@ -1,6 +1,8 @@
 //! Validation tests L1–L4 for the Liénard–Wiechert fields (PHYSICS.md §2.5). Run with
 //! `cargo test -p physics --test lienard -- --nocapture --test-threads=1`.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 use physics::DVec3;
 use physics::antenna::OscillatingDipole;
 use physics::lienard::{Worldline, fields};

@@ -1,5 +1,7 @@
 //! Property tests T7 (speed limit) and T8 (plane of symmetry), PHYSICS.md §9.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 mod common;
 
 use common::cube;

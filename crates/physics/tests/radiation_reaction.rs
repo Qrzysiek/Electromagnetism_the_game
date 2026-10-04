@@ -1,6 +1,8 @@
 //! Validation tests R1–R6 for radiation reaction (PHYSICS.md §3.1, §9). Run with
 //! `cargo test -p physics --test radiation_reaction -- --nocapture --test-threads=1`.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 mod common;
 
 use common::{UNIT_PARTICLE, cube};

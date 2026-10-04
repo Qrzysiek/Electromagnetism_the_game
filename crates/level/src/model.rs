@@ -66,7 +66,9 @@ impl Level {
                  radiation terms).",
             ));
         }
-        if self.shots.iter().any(|s| s.particle.moment != 0.0) {
+        if self.shots.iter().any(|s| s.particle.moment != 0.0)
+            || self.free_particles.iter().any(|f| f.particle.moment != 0.0)
+        {
             out.push(note(
                 true,
                 "Magnetic moments: fixed perpendicular to the plane (a spin state, up or \

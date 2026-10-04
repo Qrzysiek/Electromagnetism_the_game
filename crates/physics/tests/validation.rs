@@ -2,6 +2,7 @@
 //! result and prints the measured error; run with
 //! `cargo test -p physics --test validation -- --nocapture --test-threads=1`.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
 #![allow(clippy::cast_precision_loss)] // small loop counters
 
 mod common;

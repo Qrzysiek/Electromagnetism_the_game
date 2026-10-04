@@ -48,13 +48,13 @@ fn functions(w2: f64, s: f64) -> (f64, f64, f64, f64) {
     }
     if w2 > 0.0 {
         let w = w2.sqrt();
-        let (sn, cs) = (w * s).sin_cos();
-        let half = (0.5 * w * s).sin();
+        let (sn, cs) = libm::sincos(w * s);
+        let half = libm::sin(0.5 * w * s);
         (cs, sn / w, 2.0 * half * half / w2, (s - sn / w) / w2)
     } else {
         let k = (-w2).sqrt();
-        let (sh, ch) = ((k * s).sinh(), (k * s).cosh());
-        let half = (0.5 * k * s).sinh();
+        let (sh, ch) = (libm::sinh(k * s), libm::cosh(k * s));
+        let half = libm::sinh(0.5 * k * s);
         (ch, sh / k, 2.0 * half * half / -w2, (sh / k - s) / -w2)
     }
 }
@@ -166,6 +166,8 @@ pub fn field_motion_fields(
 #[derive(Clone, Copy, Debug)]
 pub struct Retarded {
     pub s: f64,
+    /// The emission time, in the same clock as the motion's reference time `t₀` (not
+    /// relative to the observer).
     pub t: f64,
     pub x: DVec3,
     pub v: DVec3,
@@ -199,9 +201,13 @@ impl FieldMotion {
     /// in 12 steps, the bracket is searched by doubling first. `None` if there is no root:
     /// a charge accelerated forever by `E > cB` never reaches observers beyond its horizon
     /// (and far back its hyperbolic functions overflow): the search gives up after 64
-    /// doublings or at a value that is not finite.
+    /// doublings or at a value that is not finite. Also `None` where `G` is not resolved:
+    /// far back on such a world line `c (t₀ + dt − t(s))` and `|x − x(s)|` grow beyond
+    /// 1e5 times the observer's distance and their difference is rounding noise (it once
+    /// gave a "root" at an excursion of 1e73).
     pub fn retarded(&self, x: DVec3, dt: f64) -> Option<Retarded> {
         let c = self.c;
+        // `G`, its slope, its rounding error, and the evaluation.
         let eval = |s: f64| {
             let (u, du, dx) = self.at(s);
             let d = x - (self.x0 + DVec3::new(dx[1], dx[2], 0.0));
@@ -209,7 +215,8 @@ impl FieldMotion {
             let value = c * dt - dx[0] - dist;
             // dG/ds = −U⁰ + n·U (negative: the world line is timelike).
             let slope = -u[0] + d.dot(DVec3::new(u[1], u[2], 0.0)) / dist.max(1e-300);
-            (value, slope, (u, du, dx))
+            let noise = 4.0 * f64::EPSILON * ((c * dt).abs() + dx[0].abs() + dist);
+            (value, slope, noise, (u, du, dx))
         };
         let done_at = |s: f64, ev: ([f64; 3], [f64; 3], [f64; 3])| {
             let (u, du, dx) = ev;
@@ -217,7 +224,7 @@ impl FieldMotion {
             let d = [u[0] - self.u0[0], u[1] - self.u0[1], u[2] - self.u0[2]];
             Retarded {
                 s,
-                t: t - self.t0 - dt,
+                t,
                 x: xr,
                 v,
                 a,
@@ -231,6 +238,9 @@ impl FieldMotion {
         let (rv, v2) = (r.dot(v0), v0.length_squared());
         let tau_u = dt - (rv + (rv * rv + (c * c - v2) * r.length_squared()).sqrt()) / (c * c - v2);
         let scale = (r.length() / c).max(dt.abs()).max(1e-300) / gamma0;
+        // `G` is resolved where its rounding error is below 1e-10 of the observer's
+        // distance (or light time).
+        let unresolved = |noise: f64| noise > 1e-10 * r.length().max(c * dt.abs()).max(1e-300);
         let tol = |s: f64| 4.0 * f64::EPSILON * (s.abs() + scale);
         let (mut lo, mut hi) = (f64::NEG_INFINITY, f64::INFINITY);
         let mut s = tau_u / gamma0;
@@ -243,8 +253,8 @@ impl FieldMotion {
                         break;
                     }
                     let trial = hi.min(s) - step;
-                    let value = eval(trial).0;
-                    if !value.is_finite() {
+                    let (value, _, noise, _) = eval(trial);
+                    if !value.is_finite() || unresolved(noise) {
                         return None;
                     }
                     if value >= 0.0 {
@@ -259,8 +269,8 @@ impl FieldMotion {
                         break;
                     }
                     let trial = lo.max(s) + step;
-                    let value = eval(trial).0;
-                    if !value.is_finite() {
+                    let (value, _, noise, _) = eval(trial);
+                    if !value.is_finite() || unresolved(noise) {
                         return None;
                     }
                     if value <= 0.0 {
@@ -275,8 +285,8 @@ impl FieldMotion {
                 }
                 s = 0.5 * (lo + hi);
             }
-            let (value, slope, ev) = eval(s);
-            if !(value.is_finite() && slope.is_finite()) {
+            let (value, slope, noise, ev) = eval(s);
+            if !(value.is_finite() && slope.is_finite()) || unresolved(noise) {
                 return None;
             }
             if value > 0.0 {
@@ -296,8 +306,8 @@ impl FieldMotion {
             }
             s = next;
         }
-        let (value, _, ev) = eval(s);
-        value.is_finite().then(|| done_at(s, ev))
+        let (value, _, noise, ev) = eval(s);
+        (value.is_finite() && !unresolved(noise)).then(|| done_at(s, ev))
     }
 }
 

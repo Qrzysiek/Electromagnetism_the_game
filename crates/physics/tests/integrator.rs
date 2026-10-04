@@ -2,6 +2,8 @@
 //! an independent implementation (`ode_solvers`). Measured values are recorded in
 //! PHYSICS.md §5.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 use std::f64::consts::PI;
 
 use ode_solvers::{SVector, System};

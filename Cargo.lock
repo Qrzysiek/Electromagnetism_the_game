@@ -3980,6 +3980,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 name = "level"
 version = "0.1.0"
 dependencies = [
+ "libm",
  "physics",
  "rayon",
  "serde",
@@ -4973,6 +4974,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "glam 0.33.10",
+ "libm",
  "ode_solvers",
  "proptest",
  "rayon",

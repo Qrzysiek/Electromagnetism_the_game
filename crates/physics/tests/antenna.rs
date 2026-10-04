@@ -1,5 +1,7 @@
-//! Validation tests A1–A3 for oscillating dipoles (PHYSICS.md §2.4, §9). Run with
+//! Validation tests A1–A4 for oscillating dipoles (PHYSICS.md §2.4, §9). Run with
 //! `cargo test -p physics --test antenna -- --nocapture --test-threads=1`.
+
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
 
 mod common;
 
@@ -97,9 +99,9 @@ fn a1_radiated_power_equals_larmor_at_every_radius() {
 
 // --- A2: static limit ---------------------------------------------------------------------
 
-/// `ω = 0`: the field of a dipole `p` equals that of charges `±Q` at `±d/2` along `p̂`
-/// with `Qd = |p|`, up to the quadrupole-free `O((d/r)²)` correction (the pair has no
-/// quadrupole moment, so the next term is the octupole).
+/// `ω = 0`: the field and the potential of a dipole `p` equal those of charges `±Q` at
+/// `±d/2` along `p̂` with `Qd = |p|`, up to the quadrupole-free `O((d/r)²)` correction
+/// (the pair has no quadrupole moment, so the next term is the octupole).
 #[test]
 fn a2_static_limit_is_the_charge_pair_field() {
     let p = DVec3::new(0.3, 0.8, -0.2);
@@ -125,17 +127,25 @@ fn a2_static_limit_is_the_charge_pair_field() {
                 radius: 0.0,
             },
         ]);
-        let mut worst: f64 = 0.0;
+        let (mut worst, mut worst_phi): (f64, f64) = (0.0, 0.0);
         for x in [
             DVec3::new(2.0, 0.0, 0.0),
             DVec3::new(-1.0, 1.5, 0.5),
             DVec3::new(0.2, 0.3, -3.0),
         ] {
-            let a = dip.fields(x, 1.3).e;
-            let b = pair.sample(x, 0.0).e;
-            worst = worst.max((a - b).length() / b.length());
+            let (a, b) = (dip.fields(x, 1.3), pair.sample(x, 0.0));
+            worst = worst.max((a.e - b.e).length() / b.e.length());
+            // Potential relative to its size p/r² (it vanishes across the dipole).
+            let scale = p.length() / x.length_squared();
+            worst_phi = worst_phi.max((a.phi - b.phi).abs() / scale);
         }
-        println!("A2 d = {d}: max relative difference {worst:.2e}");
+        println!(
+            "A2 d = {d}: max relative difference {worst:.2e} (E), {worst_phi:.2e} (potential)"
+        );
+        assert!(
+            worst_phi < (d / 1.8_f64).powi(2),
+            "A2 potential {worst_phi:.3e}"
+        );
         // Octupole correction ~ (d/r)² with r ≥ 1.8.
         assert!(worst < (d / 1.8_f64).powi(2), "A2 {worst:.3e}");
     }
@@ -195,4 +205,66 @@ fn a3_plane_symmetry_with_antennas() {
     println!("A3: {} steps, outcome {:?}", tr.stats.n_accept, tr.outcome);
     assert!(tr.stats.n_accept > 30);
     assert!(tr.samples.iter().all(|s| s.x.z == 0.0 && s.p.z == 0.0));
+}
+
+// --- A4: a static antenna conserves energy ------------------------------------------------
+
+/// `ω = 0` (any c): the antenna is an electrostatic dipole with potential `φ = n·p/r²`, so
+/// `T + qφ` is conserved along a flight past it. The kinetic energy swings by about half
+/// the launch energy on this path (as in the audit's case: p = (0, 2) at (12, 11), passed
+/// 3 cells below with T₀ = 0.5); the conserved energy must hold to the integration
+/// accuracy.
+#[test]
+fn a4_static_antenna_conserves_energy() {
+    for c in [f64::INFINITY, 5.0] {
+        let antenna = OscillatingDipole {
+            position: DVec3::new(12.0, 11.0, 0.0),
+            amplitude: DVec3::new(0.0, 2.0, 0.0),
+            omega: 0.0,
+            phase: 0.0,
+            c,
+            radius: 0.3,
+        };
+        let field = LevelField {
+            antennas: vec![antenna],
+            ..LevelField::default()
+        };
+        assert!(field.is_static());
+        let kin = physics::dynamics::Kinematics::new(1.0, c);
+        let p0 = kin.momentum_from_kinetic_energy(0.5, DVec3::X);
+        let scn = Scenario {
+            field,
+            obstacles: vec![Shape::Sphere(Sphere {
+                center: antenna.position,
+                radius: antenna.radius,
+            })],
+            particle: UNIT_PARTICLE,
+            c,
+            x0: DVec3::new(2.0, 8.0, 0.0),
+            p0,
+            detector: None,
+            bounds: Some(cube(40.0)),
+            t_max: 30.0,
+            radiation_reaction: false,
+            acceptance: None,
+            gates: Vec::new(),
+        };
+        let tr = run(&scn, &RunSettings::with_tolerance(1e-12));
+        let swing = tr
+            .samples
+            .iter()
+            .map(|s| (kin.kinetic_energy(s.p) - 0.5).abs())
+            .fold(0.0, f64::max);
+        println!(
+            "A4 c = {c}: kinetic energy swings by {:.3} T₀, energy error {:.2e} T₀",
+            swing / 0.5,
+            tr.energy_max_abs_error / 0.5
+        );
+        assert!(swing > 0.2 * 0.5, "the path must pass the dipole");
+        assert!(
+            tr.energy_max_abs_error < 1e-9 * 0.5,
+            "{:.3e}",
+            tr.energy_max_abs_error
+        );
+    }
 }

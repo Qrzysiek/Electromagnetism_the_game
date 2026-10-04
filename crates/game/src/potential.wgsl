@@ -1,10 +1,11 @@
 // Field maps, computed per pixel (visual only, f32).
 //
 // Mode 0, potential: colour shows the particle's potential energy relative to the launch
-// point, U / T0 = [q (phi - phi_A) - m (B_z - B_z,A)] / T0 (m: its magnetic moment): red
-// uphill, blue downhill, contours every T0/4. Dark: forbidden by energy conservation for
-// every particle shown (each group, a shot or a beam, forbids U > E with E its highest
-// total energy); its boundary, the turning line, is bright.
+// point, U / T0 = [q (phi - phi_A) - m (B_z - B_z,A)] / T0 (m: its magnetic moment), in
+// the static part of the flight's field: red uphill, blue downhill, contours every T0/4.
+// Dark: forbidden by energy conservation for every particle shown (each group, a shot or
+// a beam, forbids U > E with E its highest total energy); its boundary, the turning line,
+// is bright.
 //
 // Mode 1, magnetic field: B_z in units of b_ref: for a charged particle the field in which
 // it circles with a 5-cell gyroradius (so the value is 5 / r_gyro); for a neutral one with
@@ -16,40 +17,59 @@
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
 
 struct Params {
-    // xy: position (cells), z: charge Q, w: sphere radius (cells) for the first
-    // `solid` charges (fixed charges, in the plane), else the charge's z (induced charges
-    // of metal: images and equivalent charges off the plane).
-    charges: array<vec4<f32>, 1024>,
-    // xy: position, z: mu / b_ref, w: sphere radius.
-    magnets: array<vec4<f32>, 64>,
-    // xy: centre, z: radius, w: kappa / b_ref.
-    loops: array<vec4<f32>, 16>,
-    // Straight coil segments: (ax, ay, bx, by), current from a to b.
-    segments: array<vec4<f32>, 64>,
-    // x: kappa / b_ref of the segment.
-    segment_kappa: array<vec4<f32>, 64>,
     // Energy limits, one per group of particles: x: q / T, y: -m b_ref / T, z: E / T.
     // Forbidden for the group where x Phi + y B_z / b_ref > z.
     limits: array<vec4<f32>, 64>,
-    // Numbers of charges, magnets, loops, segments.
+    // Numbers of solid charges, charge clouds, induced charges, magnets.
     counts: vec4<u32>,
+    // Numbers of circular coils, straight segments, static antennas, electrode panels.
+    counts2: vec4<u32>,
+    // Uniform stray field: E_x, E_y (potential -E.(x - origin)), B_z / b_ref.
+    uniform_field: vec4<f32>,
+    // xy: origin of the uniform field's potential, z: antenna body radius, w: coil wire
+    // radius.
+    origin: vec4<f32>,
     // Number of energy limits (0: no dark region).
     limit_count: u32,
-    // q / T0 of the shot the colours show: weight of Phi = sum Q / r in U / T0.
+    // q / T0 of the shot the colours show: weight of Phi in U / T0.
     phi_weight: f32,
     // U / T0 at the launch point.
     u_a: f32,
-    // Number of leading charges that are solid spheres in the plane.
-    solid: u32,
     // 0: potential, 1: magnetic field.
     mode: u32,
-    // Coil wire radius (cells).
-    wire: f32,
     // -m b_ref / T0: weight of B_z / b_ref in U / T0 (0 without a magnetic moment).
     moment_weight: f32,
 };
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
+// The sources, one category after the other (potential.rs, `Items`): solid charges
+// (x, y, Q, radius), clouds (x, y, Q, R), induced charges (x, y, Q, z), magnets
+// (x, y, mu / b_ref, radius), coils (x, y, radius, kappa / b_ref), segments (two each:
+// (ax, ay, bx, by), (kappa / b_ref, 0, 0, 0)), static antennas (x, y, px, py), electrode
+// panels (three each: (a, sigma), (b, size), (c, area)).
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> items: array<vec4<f32>>;
+
+fn first_cloud() -> u32 {
+    return params.counts.x;
+}
+fn first_induced() -> u32 {
+    return first_cloud() + params.counts.y;
+}
+fn first_magnet() -> u32 {
+    return first_induced() + params.counts.z;
+}
+fn first_loop() -> u32 {
+    return first_magnet() + params.counts.w;
+}
+fn first_segment() -> u32 {
+    return first_loop() + params.counts2.x;
+}
+fn first_antenna() -> u32 {
+    return first_segment() + 2u * params.counts2.y;
+}
+fn first_panel() -> u32 {
+    return first_antenna() + params.counts2.z;
+}
 
 fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
     return pow(c, vec3<f32>(2.2));
@@ -80,53 +100,155 @@ fn elliptic_ke(m: f32, m1: f32) -> vec2<f32> {
     return vec2<f32>(k, k * (1.0 - sum));
 }
 
-// Signed distance to the nearest solid (charge, magnet, coil wire).
+// Signed distance to the nearest solid (charge, magnet, static antenna, coil wire).
 fn solid_distance(p: vec2<f32>) -> f32 {
     var d = 1e9;
-    for (var i = 0u; i < params.solid; i = i + 1u) {
-        let c = params.charges[i];
+    for (var i = 0u; i < params.counts.x; i = i + 1u) {
+        let c = items[i];
         d = min(d, distance(p, c.xy) - c.w);
     }
-    for (var i = 0u; i < params.counts.y; i = i + 1u) {
-        let m = params.magnets[i];
+    for (var i = 0u; i < params.counts.w; i = i + 1u) {
+        let m = items[first_magnet() + i];
         d = min(d, distance(p, m.xy) - m.w);
     }
-    for (var i = 0u; i < params.counts.z; i = i + 1u) {
-        let l = params.loops[i];
-        d = min(d, abs(distance(p, l.xy) - l.z) - params.wire);
+    for (var i = 0u; i < params.counts2.z; i = i + 1u) {
+        let a = items[first_antenna() + i];
+        d = min(d, distance(p, a.xy) - params.origin.z);
     }
-    for (var i = 0u; i < params.counts.w; i = i + 1u) {
-        let s = params.segments[i];
+    for (var i = 0u; i < params.counts2.x; i = i + 1u) {
+        let l = items[first_loop() + i];
+        d = min(d, abs(distance(p, l.xy) - l.z) - params.origin.w);
+    }
+    for (var i = 0u; i < params.counts2.y; i = i + 1u) {
+        let s = items[first_segment() + 2u * i];
         let ab = s.zw - s.xy;
         let t = clamp(dot(p - s.xy, ab) / dot(ab, ab), 0.0, 1.0);
-        d = min(d, distance(p, s.xy + ab * t) - params.wire);
+        d = min(d, distance(p, s.xy + ab * t) - params.origin.w);
     }
     return d;
 }
 
-fn potential_colour(p: vec2<f32>) -> vec3<f32> {
-    var phi = 0.0;
-    for (var i = 0u; i < params.counts.x; i = i + 1u) {
-        let c = params.charges[i];
-        var z = 0.0;
-        if (i >= params.solid) {
-            z = c.w;
+// Potential of a uniformly charged triangle (unit density) at r (Wilton et al. 1984,
+// as physics::panel): sum over the edges of P0 f - |h| beta, with f written without
+// cancellation for f32 (from the identity (R+ + l+)(R+ - l+) = R0^2 = (R- + l-)(R- - l-)).
+fn panel_potential(r: vec3<f32>, a: vec3<f32>, b: vec3<f32>, c: vec3<f32>) -> f32 {
+    let n = normalize(cross(b - a, c - a));
+    let h = dot(n, r - a);
+    let abs_h = abs(h);
+    let rho = r - n * h;
+    var pot = 0.0;
+    var beta_sum = 0.0;
+    for (var e = 0; e < 3; e = e + 1) {
+        var p = a;
+        var q = b;
+        if (e == 1) {
+            p = b;
+            q = c;
+        } else if (e == 2) {
+            p = c;
+            q = a;
         }
-        let d = p - c.xy;
-        phi = phi + c.z / max(sqrt(dot(d, d) + z * z), 1e-4);
+        let l = normalize(q - p);
+        let m = cross(l, n);
+        let p0 = dot(p - rho, m);
+        let l_minus = dot(p - rho, l);
+        let l_plus = dot(q - rho, l);
+        let r_minus = length(r - p);
+        let r_plus = length(r - q);
+        let r0_sq = p0 * p0 + h * h;
+        // On the edge's line (R0 = 0) the term P0 f vanishes.
+        if (r0_sq > 1e-12 * (r_minus * r_minus + r_plus * r_plus)) {
+            var f = 0.0;
+            if (l_minus >= 0.0) {
+                f = log((r_plus + l_plus) / (r_minus + l_minus));
+            } else if (l_plus <= 0.0) {
+                f = log((r_minus - l_minus) / (r_plus - l_plus));
+            } else {
+                f = log((r_plus + l_plus) * (r_minus - l_minus) / r0_sq);
+            }
+            pot = pot + p0 * f;
+            beta_sum = beta_sum + atan(p0 * l_plus / (r0_sq + abs_h * r_plus))
+                - atan(p0 * l_minus / (r0_sq + abs_h * r_minus));
+        }
     }
+    return pot - abs_h * beta_sum;
+}
+
+// The electric potential of the static sources at p (z = 0).
+fn potential(p: vec2<f32>) -> f32 {
+    var phi = 0.0;
+    // Solid charges (in the plane), clouds, induced charges (off the plane).
+    for (var i = 0u; i < params.counts.x; i = i + 1u) {
+        let c = items[i];
+        phi = phi + c.z / max(distance(p, c.xy), 1e-4);
+    }
+    for (var i = 0u; i < params.counts.y; i = i + 1u) {
+        let c = items[first_cloud() + i];
+        let r = distance(p, c.xy);
+        if (r < c.w) {
+            // Inside the uniform sphere.
+            phi = phi + c.z * (3.0 * c.w * c.w - r * r) / (2.0 * c.w * c.w * c.w);
+        } else {
+            phi = phi + c.z / r;
+        }
+    }
+    for (var i = 0u; i < params.counts.z; i = i + 1u) {
+        let c = items[first_induced() + i];
+        let d = p - c.xy;
+        phi = phi + c.z / max(sqrt(dot(d, d) + c.w * c.w), 1e-4);
+    }
+    // Static antennas: n.p / r^2.
+    for (var i = 0u; i < params.counts2.z; i = i + 1u) {
+        let a = items[first_antenna() + i];
+        let d = p - a.xy;
+        let r = max(length(d), 1e-4);
+        phi = phi + dot(d, a.zw) / (r * r * r);
+    }
+    // Electrode panels and their mirror images (equal in the plane): exactly within two
+    // panel sizes, by the three-point rule beyond.
+    let r3 = vec3<f32>(p, 0.0);
+    for (var i = 0u; i < params.counts2.w; i = i + 1u) {
+        let k = first_panel() + 3u * i;
+        let ta = items[k];
+        let tb = items[k + 1u];
+        let tc = items[k + 2u];
+        let centroid = (ta.xyz + tb.xyz + tc.xyz) / 3.0;
+        if (distance(r3, centroid) < 2.0 * tb.w) {
+            phi = phi + 2.0 * ta.w * panel_potential(r3, ta.xyz, tb.xyz, tc.xyz);
+        } else {
+            let y1 = (4.0 * ta.xyz + tb.xyz + tc.xyz) / 6.0;
+            let y2 = (ta.xyz + 4.0 * tb.xyz + tc.xyz) / 6.0;
+            let y3 = (ta.xyz + tb.xyz + 4.0 * tc.xyz) / 6.0;
+            let s = 1.0 / distance(r3, y1) + 1.0 / distance(r3, y2) + 1.0 / distance(r3, y3);
+            phi = phi + 2.0 * ta.w * tc.w * s / 3.0;
+        }
+    }
+    // The uniform stray field.
+    return phi - dot(params.uniform_field.xy, p - params.origin.xy);
+}
+
+fn potential_colour(p: vec2<f32>) -> vec3<f32> {
+    let phi = potential(p);
     var b = 0.0;
     if (params.moment_weight != 0.0 || params.limit_count > 0u) {
         b = magnetic_field(p);
     }
-    let u = params.phi_weight * phi + params.moment_weight * b - params.u_a;
+    // (Zero weights are skipped: 0 times a huge field would be NaN.)
+    var u = params.phi_weight * phi - params.u_a;
+    if (params.moment_weight != 0.0) {
+        u = u + params.moment_weight * b;
+    }
     // Excess of U over the allowed energy, the least over the groups: > 0 forbidden.
     var g = 0.0;
     if (params.limit_count > 0u) {
         g = 1e30;
         for (var i = 0u; i < params.limit_count; i = i + 1u) {
             let l = params.limits[i];
-            g = min(g, l.x * phi + l.y * b - l.z);
+            var excess = l.x * phi - l.z;
+            if (l.y != 0.0) {
+                excess = excess + l.y * b;
+            }
+            g = min(g, excess);
         }
     } else {
         g = -1e30;
@@ -161,16 +283,17 @@ fn potential_colour(p: vec2<f32>) -> vec3<f32> {
 }
 
 fn magnetic_field(p: vec2<f32>) -> f32 {
-    var b = 0.0;
+    // The uniform stray field.
+    var b = params.uniform_field.z;
     // Dipoles with moment along z: B_z = -mu / r^3 in the plane.
-    for (var i = 0u; i < params.counts.y; i = i + 1u) {
-        let m = params.magnets[i];
+    for (var i = 0u; i < params.counts.w; i = i + 1u) {
+        let m = items[first_magnet() + i];
         let r = max(distance(p, m.xy), 1e-3);
         b = b - m.z / (r * r * r);
     }
     // Circular coils in the plane (z = 0): B_z = 2k / (alpha^2 beta) [(a^2 - rho^2) E + alpha^2 K].
-    for (var i = 0u; i < params.counts.z; i = i + 1u) {
-        let l = params.loops[i];
+    for (var i = 0u; i < params.counts2.x; i = i + 1u) {
+        let l = items[first_loop() + i];
         let a = l.z;
         let rho = distance(p, l.xy);
         let alpha2 = max((a - rho) * (a - rho), 1e-8);
@@ -179,15 +302,16 @@ fn magnetic_field(p: vec2<f32>) -> f32 {
         b = b + 2.0 * l.w / (alpha2 * sqrt(beta2)) * ((a * a - rho * rho) * ke.y + alpha2 * ke.x);
     }
     // Straight segments.
-    for (var i = 0u; i < params.counts.w; i = i + 1u) {
-        let s = params.segments[i];
+    for (var i = 0u; i < params.counts2.y; i = i + 1u) {
+        let s = items[first_segment() + 2u * i];
+        let kappa = items[first_segment() + 2u * i + 1u].x;
         let ra = s.xy - p;
         let rb = s.zw - p;
         let la = length(ra);
         let lb = length(rb);
         let cross_z = ra.x * rb.y - ra.y * rb.x;
         let denom = max(la * lb * (la * lb + dot(ra, rb)), 1e-12);
-        b = b + params.segment_kappa[i].x * cross_z * (la + lb) / denom;
+        b = b + kappa * cross_z * (la + lb) / denom;
     }
     return b;
 }

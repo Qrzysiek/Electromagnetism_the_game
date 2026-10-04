@@ -1,6 +1,7 @@
 //! Validation of magnetic fields and motion in them (PHYSICS.md §9, M1–M6). Run with
 //! `cargo test -p physics --test magnetism -- --nocapture --test-threads=1`.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
 #![allow(clippy::cast_precision_loss)] // small loop counters
 
 mod common;

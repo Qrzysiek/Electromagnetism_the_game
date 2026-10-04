@@ -70,8 +70,10 @@ impl Grid {
 ///
 /// Only charges are sources and sinks of E: lines pass magnets and coil wires, which
 /// carry no charge, and end on metal spheres (whose induced charge is part of the
-/// field), perpendicular to their surface. The total work is capped (`MAX_STEPS` integration steps,
-/// `MAX_LINES` lines), since this runs on the render thread.
+/// field), perpendicular to their surface, and on static antennas (dipoles). A uniform
+/// stray field alone draws parallel lines from the arena's edges. The caller passes the
+/// electrostatic field. The total work is capped (`MAX_STEPS` integration steps,
+/// `MAX_LINES` lines).
 ///
 /// In the 2D slice of a 3D field, line density does not represent field strength
 /// (SPEC §4): lines show direction.
@@ -91,14 +93,27 @@ pub fn field_lines_cancellable(
     const MAX_STEPS: usize = 400_000;
     const MAX_LINES: usize = 2_000;
     let charges: Vec<DVec3> = scn.field.coulomb.charges().map(|(p, _)| p).collect();
+    // Metal spheres and static antennas (lines end on their surface).
     let metal: Vec<(DVec3, f64)> = scn
         .field
         .conductors
         .spheres
         .iter()
         .map(|s| (s.center, s.radius))
+        .chain(
+            scn.field
+                .antennas
+                .iter()
+                .filter(|a| a.omega == 0.0)
+                .map(|a| (a.position, a.radius)),
+        )
         .collect();
-    if charges.is_empty() && metal.is_empty() && scn.field.electrodes.is_empty() {
+    let uniform = scn
+        .field
+        .external
+        .iter()
+        .any(|e| e.is_static() && e.sample(DVec3::ZERO, 0.0).e != DVec3::ZERO);
+    if charges.is_empty() && metal.is_empty() && scn.field.electrodes.is_empty() && !uniform {
         return Some(Vec::new());
     }
     let stopped = std::cell::Cell::new(false);

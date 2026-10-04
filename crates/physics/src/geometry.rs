@@ -33,7 +33,7 @@ impl Torus {
         let d = x - self.center;
         let axial = d.dot(self.normal);
         let radial = (d - self.normal * axial).length();
-        (radial - self.major).hypot(axial) - self.minor
+        libm::hypot(radial - self.major, axial) - self.minor
     }
 }
 

@@ -1,6 +1,8 @@
 //! Validation test MS1: multiple Coulomb scattering in the plane (PHYSICS.md §9). Run with
 //! `cargo test --release -p physics --test scattering -- --nocapture`.
 
+#![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
+
 mod common;
 
 use std::f64::consts::PI;

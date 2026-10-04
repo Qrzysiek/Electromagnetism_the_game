@@ -77,6 +77,10 @@ impl Settings {
 pub enum Error {
     StepSizeTooSmall,
     MaxStepsReached,
+    /// An event function (a distance to a boundary) was NaN on an accepted step: the
+    /// geometry or the field is broken there, and the step cannot be certified free of
+    /// crossings (set by the flight runners, not by the integrator).
+    NonFiniteEvent,
 }
 
 impl std::fmt::Display for Error {
@@ -84,6 +88,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::StepSizeTooSmall => write!(f, "step size too small"),
             Error::MaxStepsReached => write!(f, "maximum number of steps reached"),
+            Error::NonFiniteEvent => write!(f, "a distance to a boundary was not a number"),
         }
     }
 }
@@ -306,8 +311,8 @@ impl Dop853 {
             let err = h.abs() * err * (1.0 / (n_f * deno)).sqrt();
 
             // New step size.
-            let fac11 = err.powf(expo1);
-            let fac = fac11 / self.facold.powf(st.beta);
+            let fac11 = libm::pow(err, expo1);
+            let fac = fac11 / libm::pow(self.facold, st.beta);
             let fac = facc2.max(facc1.min(fac / st.safety));
             let mut h_new = h / fac;
 
@@ -415,7 +420,7 @@ impl Dop853 {
         let h1 = if der12 <= 1e-15 {
             1e-6_f64.max(h.abs() * 1e-3)
         } else {
-            (0.01 / der12).powf(1.0 / 8.0)
+            libm::pow(0.01 / der12, 1.0 / 8.0)
         };
         (100.0 * h.abs()).min(h1).min(st.h_max)
     }
@@ -507,8 +512,8 @@ mod tests {
             for k in 0..=8 {
                 let t = d.t_start() + (d.t_end() - d.t_start()) * f64::from(k) / 8.0;
                 worst = worst
-                    .max((d.eval_derivative_component(0, t) + t.sin()).abs())
-                    .max((d.eval_derivative_component(1, t) + t.cos()).abs());
+                    .max((d.eval_derivative_component(0, t) + libm::sin(t)).abs())
+                    .max((d.eval_derivative_component(1, t) + libm::cos(t)).abs());
             }
             let t = d.t_end();
             ends = ends

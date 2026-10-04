@@ -905,7 +905,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             );
         ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B")
             .on_hover_text(
-                "The static magnetic field of magnets and coils (perpendicular to the plane)",
+                "The static magnetic field of magnets, coils and the stray field of the \n                 disturbance shown (perpendicular to the plane)",
             );
         if crate::radiation::waves_available(&level) {
             ui.selectable_value(&mut game.map, Some(MapMode::Waves), "waves")
@@ -968,19 +968,37 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     ) {
         field_view_controls(ui, game, &level, radiation);
     }
-    let ramped = level.coils.iter().any(level::Coil::is_ramped);
+    // Fields that change in time do work on the particle: no energy limit then.
+    let (_, disturbance) = level.flight_of(game.active_flight());
+    let time_dependent = level.coils.iter().any(level::Coil::is_ramped)
+        || level
+            .elements
+            .iter()
+            .chain(&game.editor.placement)
+            .any(|e| {
+                e.kind == level::ElementKind::Antenna
+                    && e.omega.unwrap_or(level.physics.rf_omega) != 0.0
+            })
+        || level
+            .disturbances
+            .get(disturbance)
+            .is_some_and(|d| d.waves.iter().any(|w| w.omega != 0.0));
     let legend = match game.map {
-        Some(MapMode::Potential) if ramped => {
-            "Red: uphill for this shot's particle, blue: downhill (the static part). No dark \
-             region: a ramped coil's induced electric field has no potential and does work \
-             on the particle, so energy conservation forbids nothing here."
+        Some(MapMode::Potential) if time_dependent => {
+            "Red: uphill for this shot's particle, blue: downhill (the static part of the \
+             field). No dark region: the time-dependent fields (a ramped coil's induced \
+             field, antennas, waves) do work on the particle, so energy conservation \
+             forbids nothing here."
         }
         Some(MapMode::Potential) => {
             "Red: uphill for this shot's particle, blue: downhill; contours every T₀/4. \
              Dark: forbidden by energy conservation for every particle shown (all shots \
-             with \"show all\"; a beam counts with its most energetic particle). Exact, \
-             also with magnets; with interacting beam particles only a guide, since they \
-             exchange energy."
+             with \"show all\"; a beam counts with its most energetic particle). The \
+             flight's own static field, with the disturbance shown and magnets: exact for \
+             charges, clouds, coils, antennas and stray fields; metal from its picture \
+             model (spheres to about 1e-4, electrodes on a coarser mesh, within about 0.5 % \
+             of their potential). With interacting beam particles only a guide, since \
+             they exchange energy."
         }
         Some(MapMode::Magnetic) if shot.particle.charge == 0.0 && shot.particle.moment != 0.0 => {
             "B perpendicular to the plane. Orange: out of the plane, teal: into it. \
@@ -993,17 +1011,20 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
              contours every 0.25."
         }
         Some(MapMode::Waves) => {
-            "Fields of the antennas and waves at the animation time (exact retarded fields). \
-             Colour: B perpendicular to the plane (orange out, blue in), on the chosen \
-             scale (bar above); arrows: E. Near an antenna the field is quasi-static; further out the \
-             radiation travels outwards at c."
+            "Fields of the antennas and waves at the animation time (their exact retarded \
+             fields, drawn in single precision). Colour: B perpendicular to the plane \
+             (orange out, blue in), on the chosen scale (bar above); arrows: E. Near an \
+             antenna the field is quasi-static; further out the radiation travels outwards \
+             at c."
         }
         Some(MapMode::Total) => {
             "The total field at the animation time: level charges, magnets and coils, \
              antennas, waves and disturbances, and the particle's own field (retarded, \
-             Liénard–Wiechert). The particle's field is usually far weaker than the \
-             electrodes'; raise the range to see it. Colour: B_z or |E| on the chosen \
-             scale (bar above); arrows: E."
+             Liénard–Wiechert). The static part is computed in double precision on 6 \
+             points per cell and interpolated between them (metal from its picture model); \
+             antennas, waves and the particle are evaluated per pixel. The particle's field \
+             is usually far weaker than the electrodes'; raise the range to see it. Colour: \
+             B_z or |E| on the chosen scale (bar above); arrows: E."
         }
         Some(MapMode::ParticleField) if level.has_beams() && game.neglected_only => {
             "What the quasi-static beam interaction leaves out of the dynamics: the full \
@@ -1023,6 +1044,13 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
              outside (with the instant drain its field disappears as the news of its \
              absorption spreads at c); one absorbed by a body stays there at rest. Colour: \
              B perpendicular to the plane, on the chosen scale; arrows: E."
+        }
+        Some(MapMode::ParticleField) if shot.particle.moment != 0.0 => {
+            "The field of the particle itself at the animation time. Its charge's field is \
+             Liénard–Wiechert (exact); its magnetic moment is drawn as the static dipole \
+             field B_z = −m/r³ from its retarded position, without the terms of a moving \
+             dipole (of order v/c). Colour: B perpendicular to the plane, on the chosen \
+             scale; arrows: E. Before launch the particle is taken to move uniformly."
         }
         Some(MapMode::ParticleField) => {
             "The field of the particle itself (Liénard–Wiechert, exact) at the animation \
@@ -1051,7 +1079,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         );
     }
     ui.checkbox(&mut game.show_field_lines, "Electric field lines (F)")
-        .on_hover_text("Lines along the static electric field of the level's sources");
+        .on_hover_text(
+            "Lines along the static electric field (with the stray field of the disturbance \n             shown)",
+        );
     ui.add(egui::Slider::new(&mut game.field_line_spacing, 0.5..=4.0).text("spacing (cells)"))
         .on_hover_text("Smallest distance between neighbouring field lines");
     ui.add(egui::Slider::new(&mut game.field_line_opacity, 0.05..=1.0).text("opacity"))
