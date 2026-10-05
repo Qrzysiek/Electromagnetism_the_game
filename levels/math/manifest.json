@@ -101,6 +101,12 @@
   "height_ex": 1.645,
   "baseline_ex": 0.025
  },
+ "\\omega^4": {
+  "file": "70900ee358b87ffe.svg",
+  "width_ex": 2.395,
+  "height_ex": 1.929,
+  "baseline_ex": 0.025
+ },
  "\\omega_0": {
   "file": "c21a9164798ae206.svg",
   "width_ex": 2.395,
@@ -166,6 +172,12 @@
   "width_ex": 8.683,
   "height_ex": 2.452,
   "baseline_ex": 0.566
+ },
+ "\\sigma = \\sigma_T\\,\\frac{\\omega^4}{(\\omega_0^2 - \\omega^2)^2 + (\\omega\\Gamma)^2}": {
+  "file": "ff8cd71fe1ee003f.svg",
+  "width_ex": 20.045,
+  "height_ex": 3.696,
+  "baseline_ex": 1.458
  },
  "\\sqrt{2mT}": {
   "file": "78cf1c66e9401bdf.svg",

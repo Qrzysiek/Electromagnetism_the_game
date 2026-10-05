@@ -91,13 +91,17 @@ def beam(count, transmission, energy=0.01, angle_deg=0.5, width=0.2, length=0.2,
             "transmission": transmission, "seed": seed}
 
 
-def radiation_goal(axis_deg, half_deg, energy, band=None):
+def radiation_goal(axis_deg, half_deg, energy, band=None, window=None):
     """Radiation goal of a shot's detector (PHYSICS.md §3.4): the energy per steradian the
     flight radiates into the directions axis ± half (degrees), in all frequencies or in
-    `band` = (omega_min, omega_max), must lie in `energy` = (min, max)."""
+    `band` = (omega_min, omega_max), must lie in `energy` = (min, max). With `window` =
+    (t1, t2) a steady receiver: the mean power per steradian received over that window
+    of its time (then `energy` bounds the power), and the particle need not arrive."""
     g = {"direction": [axis_deg, half_deg], "energy": list(energy)}
     if band is not None:
         g["band"] = list(band)
+    if window is not None:
+        g["window"] = list(window)
     return g
 
 
@@ -2131,6 +2135,67 @@ def jackson_thomson():
         max_magnets=3, strengths=[40.0, 80.0], region=(5, 2, 34, 18))
 
 
+def bound_scattered_power(q, m, w0sq, w, c, e0, axis_deg, half_deg, pol_deg):
+    """Mean power per steradian a charge bound with omega_0^2 = w0sq scatters from a plane
+    wave (omega w, amplitude e0, polarization at pol_deg), averaged over the arc axis ±
+    half: the Landau-Lifshitz steady state (test S10), chi = (q/m)(1 - i w tau)/(w0^2 -
+    w^2 - i w Gamma), Gamma = w0^2 tau, radiating (q^2/8 pi c^3) w^4 |chi|^2 e0^2 sin^2 of
+    the angle from the polarization."""
+    tau = 2.0 * q * q / (3.0 * m * c ** 3)
+    num = abs(complex(1.0, -w * tau)) ** 2
+    den = abs(complex(w0sq - w * w, -w * w0sq * tau)) ** 2
+    chi2 = (q / m) ** 2 * num / den
+    a, h = math.radians(axis_deg - pol_deg), math.radians(half_deg)
+    # mean of sin^2(theta) over a +- h
+    mean = 0.5 - math.cos(2 * a) * (math.sin(2 * h) / (4 * h) if h > 0 else 0.5)
+    return q * q / (8 * math.pi * c ** 3) * w ** 4 * chi2 * e0 * e0 * mean
+
+
+def jackson_cross_section():
+    # Jackson §16.8, the cross section of a bound charge, with the steady receiver. A
+    # Thomson atom (Q = 16, R = 4: omega_0 = 1/2) and its electron (q = -1, m = 1), c = 2
+    # (tau = 1/12, Gamma = omega_0^2 tau = 0.021: a transient decays as e^{-Gamma t/2}),
+    # lit from the left by a plane wave (omega = 0.35, polarized along y, amplitude 0.01:
+    # the electron swings ~0.1). The receiver behind the light (180 +- 10 degrees: the
+    # scattered light only, the wave goes the other way; in the plane the dipole radiates
+    # the most along x) counts the band 0.32-0.38 over t = 400-1100 (the start's transient,
+    # at the atom's own frequency, outside the band and decayed). The electron starts with a
+    # small swing along x, which sends nothing back along the axis. Bare atom: 0.92 sigma_T
+    # (Rayleigh's side). The goal, 3-6 times that, wants the spring along y softened: a
+    # pair of positive charges at +-d along y gives omega_y^2 = omega_0^2 - 4Q/d^3 (no shift
+    # of the electron): (2, 5), (4, 6), (8, 8), (16, 10), and (16, 7) past the resonance;
+    # single charges also pull the electron aside.
+    q, m, big_q, r, c = -1.0, 1.0, 16.0, 4.0, 2.0
+    w0 = cloud_omega(q, big_q, r)
+    w, e0 = 0.35, 0.01
+    bare = bound_scattered_power(q, m, w0 * w0, w, c, e0, 180.0, 10.0, 90.0)
+    return level(
+        "Jackson §16.8: why the sky is blue",
+        "Jackson §16.8: light scattered by a bound electron. The light (ω = 0.35, from the "
+        "left, its field along y) shakes the atom's electron, and the shaken electron sends "
+        "light back to the receiver. How much depends on how near the light's frequency is "
+        "to the atom's own: "
+        r"$\sigma = \sigma_T\,\frac{\omega^4}{(\omega_0^2 - \omega^2)^2 + (\omega\Gamma)^2}$. "
+        "Far below the resonance it grows as $\\omega^4$ (Rayleigh: blue light, nearer the "
+        "ultraviolet resonances of air, scatters more than red, so the sky is blue); at the "
+        "resonance it is enormous; far above it the electron scatters like a free one "
+        "(Thomson). This atom rings at ω₀ = 0.5, too stiff for this light: soften its spring "
+        "along the light's field until the receiver counts 3 to 6 times what the bare atom "
+        "sends. A charge pulls the swinging electron the harder the nearer it comes: on the "
+        "line of the swing it weakens the spring, across it it stiffens it. Mind its steady "
+        "pull too. The receiver averages over a window, after the start has died away; the "
+        "electron must stay in its atom.",
+        grid=(40, 20), c=c, t_max=1200.0, radiation_reaction=True,
+        shots=[shot(q, m, (26, 10), 0.0, 0.5 * w0 ** 2 * 0.2 ** 2,
+                    box((0, 8, 1, 12), radiation=radiation_goal(
+                        180.0, 10.0, (3.0 * bare, 6.0 * bare), band=(0.32, 0.38),
+                        window=(400.0, 1100.0))))],
+        clouds=[cloud(26, 10, r, big_q)],
+        disturbances=[stray("light", waves=[wave(e0, w, 0.0, 0.0)])],
+        reference=[charge(26, 2, 8.0), charge(26, 18, 8.0)],
+        max_charges=4, magnitudes=[1.0, 2.0, 4.0, 8.0, 16.0], region=(16, 0, 36, 20))
+
+
 def jackson_braking():
     # Jackson §15.2 (radiation in a collision; the sudden stop): the target stops the
     # particle at once (the goal's abrupt_stop), which radiates the flat spectrum
@@ -2455,6 +2520,7 @@ ARCS = [
         ("Intermediate", [
             ("jackson_quiet_turn", jackson_quiet_turn),
             ("jackson_thomson", jackson_thomson),
+            ("jackson_cross_section", jackson_cross_section),
             ("jackson_braking", jackson_braking),
             ("jackson_quiet_ring", jackson_quiet_ring),
             ("jackson_ring_of_four", jackson_ring_of_four),

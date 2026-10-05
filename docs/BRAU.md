@@ -159,7 +159,7 @@ that already does it. "Ex." is an exercise, "§" a section.
   against the exact Bessel-function result.
 - §10.4 (synchrotron and undulator radiation, Ex. 10.6, 10.17): covered (levels 38, 81,
   88; S1, S8).
-- §10.5 (coherence, form factors, Ex. 10.18–10.19): covered (S5, level 87); Ex. 10.20
+- §10.5 (coherence, form factors, Ex. 10.18–10.19): covered (S5, level 88); Ex. 10.20
   (coherent transition radiation): F:optics.
 - §10.6 (Cherenkov radiation, Ex. 10.22): F:optics. Ex. 10.21 (tachyons): OUT.
 

@@ -1379,6 +1379,7 @@ fn b22_radiation_goal_of_a_system() {
         band: Some((0.7, 1.3)),
         energy: (0.0, 1e9),
         abrupt_stop: false,
+        steady: None,
     };
     let detector = Region::Box(Aabb {
         min: DVec3::new(8.0, -3.0, -1.0),

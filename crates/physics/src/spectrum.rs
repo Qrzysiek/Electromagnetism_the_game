@@ -29,6 +29,22 @@
 //! dW/dΩ      = (1/4πc) ∫ |Σⱼ qⱼ gⱼ(τ)|² dτ,   gⱼ = n × ((n − βⱼ) × β̇ⱼ)/κⱼ³
 //! d²I/dω dΩ  = (1/4π²c) |Σⱼ qⱼ ∫ gⱼ e^{iωτ} dτ|²
 //! ```
+//!
+//! A *steady* receiver (a scatterer driven by a wave) measures the mean power per
+//! steradian it receives over a window `[τ₁, τ₂]` of its own time τ (the arrival time less
+//! the light time from the origin, the phase time above), with the amplitudes weighted by
+//! the window `W = sin⁴(π (τ − τ₁)/T)`, `T = τ₂ − τ₁` (`∫ W² dτ = 35T/128`): its spectrum's
+//! main lobe is `±6π/T`, beyond which the amplitude falls as `(TΔω)⁻⁵`:
+//!
+//! ```text
+//! dP/dΩ          = (1/4πc) ∫ W² |Σⱼ qⱼ gⱼ|² dτ / (35T/128)
+//! dP/dΩ in band  = (1/4π²c) ∫_band |Σⱼ qⱼ ∫ W gⱼ e^{iωτ} dτ|² dω / (35T/128)
+//! ```
+//!
+//! For a source radiating `g = G cos(ω₁τ + φ)` steadily both give the true mean
+//! `|G|²/8πc`, the band to the window's leakage past its edges (for ω₁ at the centre of a
+//! band ±B: 6e-7 at TB = 24; Hann's `sin²`, the first choice, leaked 1.4e-5 there, test
+//! S10): a transient at another frequency is left out by the band.
 
 use glam::DVec3;
 use rayon::prelude::*;
@@ -55,6 +71,10 @@ pub struct RadiationWindow {
     /// The detector stops the particle abruptly (a target): the stop's radiation counts
     /// (`spectrum`). Its spectrum is flat to infinite frequency, so this needs a band.
     pub abrupt_stop: bool,
+    /// A steady receiver: the window `(τ₁, τ₂)` of its time over which it measures the
+    /// mean power per steradian (`energy` then bounds that power), instead of the
+    /// energy of the whole flight (module docs).
+    pub steady: Option<(f64, f64)>,
 }
 
 impl RadiationWindow {
@@ -92,9 +112,13 @@ impl RadiationWindow {
         self.band.map_or(0.0, |(_, hi)| hi)
     }
 
-    /// Measured energy per steradian, averaged over the arc (Simpson's rule in angle).
-    /// The directions are computed in parallel and summed in order (deterministic).
+    /// Measured energy per steradian (for a steady receiver the mean power per
+    /// steradian), averaged over the arc (Simpson's rule in angle). The directions are
+    /// computed in parallel and summed in order (deterministic).
     pub fn measure(&self, samples: &[Emission], q: f64, c: f64) -> f64 {
+        if self.steady.is_some() {
+            return self.measure_system(&[(q, samples)], c);
+        }
         let dirs = self.directions();
         let values: Vec<f64> = dirs
             .par_iter()
@@ -112,12 +136,27 @@ impl RadiationWindow {
         let dirs = self.directions();
         let values: Vec<f64> = dirs
             .par_iter()
-            .map(|&n| match self.band {
-                None => system_lienard_energy(sources, c, n),
-                Some((lo, hi)) => system_band_energy(sources, c, n, lo, hi),
+            .map(|&n| match (self.steady, self.band) {
+                (Some(win), band) => system_steady_power(sources, c, n, band, win),
+                (None, None) => system_lienard_energy(sources, c, n),
+                (None, Some((lo, hi))) => system_band_energy(sources, c, n, lo, hi),
             })
             .collect();
         arc_mean(&values)
+    }
+
+    /// Whether a flight's samples reach over the steady window in every direction of the
+    /// arc (its phase times from at most τ₁ to at least τ₂); true without one.
+    pub fn covers(&self, samples: &[Emission], c: f64) -> bool {
+        let (Some((t1, t2)), Some(first), Some(last)) =
+            (self.steady, samples.first(), samples.last())
+        else {
+            return self.steady.is_none();
+        };
+        self.directions().iter().all(|&n| {
+            let tau = |s: &Emission| s.0 - n.dot(s.1) / c;
+            tau(first) <= t1 && tau(last) >= t2
+        })
     }
 }
 
@@ -435,6 +474,31 @@ fn amplitude(
     // polynomial in τ over each piece of the model (`pieces`: quartic over groups of four
     // pieces) and integrated exactly against e^{iωτ} (Filon's rule).
     let pts = phase_points(samples, c, n);
+    let (mut re, mut im) = amplitude_of(&pts, omega0, d_omega, count);
+    if abrupt_stop {
+        let &(t, x, v, _) = samples.last().expect("at least two samples");
+        let kappa = 1.0 - n.dot(v) / c;
+        let f_end = n.cross(n.cross(v / c)) / kappa;
+        let tau = t - n.dot(x) / c;
+        let mut e = Cx::cis(omega0 * tau);
+        let step = Cx::cis(d_omega * tau);
+        for k in 0..count {
+            re[k] -= f_end * e.re;
+            im[k] -= f_end * e.im;
+            e = e.mul(step);
+        }
+    }
+    (re, im)
+}
+
+/// `∫ g e^{iωτ} dτ` (real and imaginary parts) at the frequencies `ω₀ + k δω` of the
+/// amplitude points `(τ, g)` (`amplitude`), by Filon's rule on their pieces.
+fn amplitude_of(
+    pts: &[(f64, DVec3)],
+    omega0: f64,
+    d_omega: f64,
+    count: usize,
+) -> (Vec<DVec3>, Vec<DVec3>) {
     let mut re = vec![DVec3::ZERO; count];
     let mut im = vec![DVec3::ZERO; count];
     // Adds H e^{iωτ₀} Σₖ cₖ φₖ(ωH) over the frequency grid.
@@ -460,24 +524,107 @@ fn amplitude(
             ed = ed.mul(step_d);
         }
     };
-    for (t0, h, coeffs) in pieces(&pts) {
+    for (t0, h, coeffs) in pieces(pts) {
         let order = coeffs.iter().rposition(|c| *c != DVec3::ZERO).unwrap_or(0);
         add(t0, h, coeffs, order);
     }
-    if abrupt_stop {
-        let &(t, x, v, _) = samples.last().expect("at least two samples");
-        let kappa = 1.0 - n.dot(v) / c;
-        let f_end = n.cross(n.cross(v / c)) / kappa;
-        let tau = t - n.dot(x) / c;
-        let mut e = Cx::cis(omega0 * tau);
-        let step = Cx::cis(d_omega * tau);
+    (re, im)
+}
+
+/// The weight of a steady receiver's window `(τ₁, τ₂)` at its time τ:
+/// `sin⁴(π (τ − τ₁)/T)` inside, 0 outside (module docs).
+fn steady_weight(tau: f64, (t1, t2): (f64, f64)) -> f64 {
+    if tau <= t1 || tau >= t2 {
+        return 0.0;
+    }
+    let s = libm::sin(PI * (tau - t1) / (t2 - t1));
+    let s2 = s * s;
+    s2 * s2
+}
+
+/// `∫ W² dτ` of the steady window (`steady_weight`) of length T: `35T/128`.
+fn steady_norm((t1, t2): (f64, f64)) -> f64 {
+    35.0 / 128.0 * (t2 - t1)
+}
+
+/// A flight's amplitude points in direction `n` weighted by the steady window
+/// (`steady_weight`): those inside it and one on each side, where the weight is 0 (the
+/// window and its first three derivatives vanish at its ends, so the pieces' model of the
+/// weighted amplitude is smooth there).
+fn windowed_points(samples: &[Emission], c: f64, n: DVec3, win: (f64, f64)) -> Vec<(f64, DVec3)> {
+    let pts = phase_points(samples, c, n);
+    let lo = pts.iter().rposition(|p| p.0 <= win.0).unwrap_or(0);
+    let hi = pts
+        .iter()
+        .position(|p| p.0 >= win.1)
+        .unwrap_or(pts.len().saturating_sub(1));
+    if pts.is_empty() || hi <= lo {
+        return Vec::new();
+    }
+    pts[lo..=hi]
+        .iter()
+        .map(|&(tau, g)| (tau, g * steady_weight(tau, win)))
+        .collect()
+}
+
+/// The mean power per steradian a steady receiver gets from a system in direction `n`
+/// over its window `win`, in all frequencies or in the band (module docs).
+pub fn system_steady_power(
+    sources: &[Source<'_>],
+    c: f64,
+    n: DVec3,
+    band: Option<(f64, f64)>,
+    win: (f64, f64),
+) -> f64 {
+    if !c.is_finite() || win.1 <= win.0 {
+        return 0.0;
+    }
+    let norm = steady_norm(win);
+    let points: Vec<(f64, Vec<(f64, DVec3)>)> = sources
+        .iter()
+        .filter(|(q, s)| *q != 0.0 && s.len() >= 2)
+        .map(|&(q, s)| (q, windowed_points(s, c, n, win)))
+        .filter(|(_, p)| p.len() >= 2)
+        .collect();
+    match band {
+        None => energy_of_points(&points, c) / norm,
+        Some((lo, hi)) if hi > lo => {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let intervals =
+                (((hi - lo) / resolving_step(win.1 - win.0)).ceil() as usize).clamp(8, 4096);
+            #[allow(clippy::cast_precision_loss)]
+            let d_omega = (hi - lo) / intervals as f64;
+            let s = spectrum_of_points(&points, c, lo, d_omega, intervals + 1);
+            let inner: f64 = s[1..intervals].iter().sum();
+            (inner + 0.5 * (s[0] + s[intervals])) * d_omega / norm
+        }
+        Some(_) => 0.0,
+    }
+}
+
+/// `d²I/dω dΩ` of the particles' amplitude points `(qⱼ, [(τ, gⱼ)])` at `ω₀ + k δω`: their
+/// amplitudes added before squaring.
+fn spectrum_of_points(
+    points: &[(f64, Vec<(f64, DVec3)>)],
+    c: f64,
+    omega0: f64,
+    d_omega: f64,
+    count: usize,
+) -> Vec<f64> {
+    let mut re = vec![DVec3::ZERO; count];
+    let mut im = vec![DVec3::ZERO; count];
+    for (q, pts) in points {
+        let (r, i) = amplitude_of(pts, omega0, d_omega, count);
         for k in 0..count {
-            re[k] -= f_end * e.re;
-            im[k] -= f_end * e.im;
-            e = e.mul(step);
+            re[k] += r[k] * *q;
+            im[k] += i[k] * *q;
         }
     }
-    (re, im)
+    let scale = 1.0 / (4.0 * PI * PI * c);
+    re.iter()
+        .zip(&im)
+        .map(|(r, i)| scale * (r.length_squared() + i.length_squared()))
+        .collect()
 }
 
 /// Energy radiated per steradian in direction `n` by a system: `(1/4πc) ∫ |Σⱼ qⱼ gⱼ|² dτ`
@@ -489,10 +636,20 @@ pub fn system_lienard_energy(sources: &[Source<'_>], c: f64, n: DVec3) -> f64 {
     if !c.is_finite() {
         return 0.0;
     }
-    let models: Vec<(f64, Vec<Piece>)> = sources
+    let points: Vec<(f64, Vec<(f64, DVec3)>)> = sources
         .iter()
         .filter(|(q, s)| *q != 0.0 && s.len() >= 2)
-        .map(|&(q, s)| (q, pieces(&phase_points(s, c, n))))
+        .map(|&(q, s)| (q, phase_points(s, c, n)))
+        .collect();
+    energy_of_points(&points, c)
+}
+
+/// `(1/4πc) ∫ |Σⱼ qⱼ gⱼ|² dτ` for the particles' amplitude points `(qⱼ, [(τ, gⱼ)])`
+/// (`system_lienard_energy`).
+fn energy_of_points(points: &[(f64, Vec<(f64, DVec3)>)], c: f64) -> f64 {
+    let models: Vec<(f64, Vec<Piece>)> = points
+        .iter()
+        .map(|(q, pts)| (*q, pieces(pts)))
         .filter(|(_, p)| !p.is_empty())
         .collect();
     let mut cuts: Vec<f64> = models
@@ -648,6 +805,9 @@ pub fn arc_spectrum(
     if !c.is_finite() || samples.len() < 2 || bins == 0 || omega_max <= 0.0 {
         return Vec::new();
     }
+    if window.steady.is_some() {
+        return system_arc_spectrum(window, &[(q, samples)], c, omega_max, bins);
+    }
     let tau_span = |n: DVec3| {
         let tau = |s: &Emission| s.0 - n.dot(s.1) / c;
         (tau(&samples[samples.len() - 1]) - tau(&samples[0])).abs()
@@ -667,6 +827,28 @@ pub fn system_arc_spectrum(
 ) -> Vec<(f64, f64)> {
     if !c.is_finite() || bins == 0 || omega_max <= 0.0 {
         return Vec::new();
+    }
+    if let Some(win) = window.steady {
+        // The power spectrum over the window (per unit time and frequency).
+        let norm = steady_norm(win);
+        return arc_spectrum_of(
+            window,
+            |_| win.1 - win.0,
+            omega_max,
+            bins,
+            |n, w0, dw, count| {
+                let points: Vec<(f64, Vec<(f64, DVec3)>)> = sources
+                    .iter()
+                    .filter(|(q, s)| *q != 0.0 && s.len() >= 2)
+                    .map(|&(q, s)| (q, windowed_points(s, c, n, win)))
+                    .filter(|(_, p)| p.len() >= 2)
+                    .collect();
+                spectrum_of_points(&points, c, w0, dw, count)
+                    .into_iter()
+                    .map(|v| v / norm)
+                    .collect()
+            },
+        );
     }
     arc_spectrum_of(
         window,
@@ -760,6 +942,7 @@ mod tests {
             band: None,
             energy: (0.0, 1.0),
             abrupt_stop: false,
+            steady: None,
         };
         let d = w.directions();
         assert_eq!(d.len(), 11);

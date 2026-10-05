@@ -452,6 +452,13 @@ pub struct RadiationGoal {
     /// counts (needs a band: its spectrum is flat to infinite frequency).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abrupt_stop: bool,
+    /// A steady receiver (a scatterer driven by a wave, PHYSICS.md §3.4): the window
+    /// `[τ₁, τ₂]` of the receiver's time (arrival less the light time from the origin)
+    /// over which it measures the mean power per steradian, which `energy` then bounds.
+    /// The particle need not arrive: it is measured when its flight ends after the
+    /// window (the flight times out), and must not end before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<[f64; 2]>,
 }
 
 impl RadiationGoal {
@@ -463,6 +470,7 @@ impl RadiationGoal {
             band: self.band.map(|[lo, hi]| (lo, hi)),
             energy: (self.energy[0], self.energy[1]),
             abrupt_stop: self.abrupt_stop,
+            steady: self.window.map(|[t1, t2]| (t1, t2)),
         }
     }
 }
@@ -1352,6 +1360,38 @@ impl Level {
                 "a radiation goal with an abrupt stop needs a band (the stop's spectrum is flat to infinite frequency)"
                     .into(),
             );
+        }
+        for (i, s) in self.shots.iter().enumerate() {
+            let Some(acc) = s.detector.acceptance else {
+                continue;
+            };
+            let Some(r) = acc.radiation else { continue };
+            let Some([t1, t2]) = r.window else { continue };
+            if !(t1.is_finite() && t2.is_finite() && 0.0 <= t1 && t1 < t2) {
+                out.push(format!(
+                    "shot {}: a steady receiver's window must run forward from t ≥ 0",
+                    i + 1
+                ));
+            } else if t2 >= self.physics.t_max {
+                out.push(format!(
+                    "shot {}: a steady receiver's window must end before the time limit (the \
+                     light time from the scatterer to the origin is part of it)",
+                    i + 1
+                ));
+            }
+            if r.abrupt_stop {
+                out.push(format!(
+                    "shot {}: a steady receiver measures no stop (the particle need not arrive)",
+                    i + 1
+                ));
+            }
+            if acc.direction.is_some() || acc.kinetic.is_some() {
+                out.push(format!(
+                    "shot {}: a steady receiver's detector has no conditions on the arrival \
+                     (the particle need not arrive)",
+                    i + 1
+                ));
+            }
         }
         if self.gates.iter().any(has) {
             out.push("gates cannot have radiation goals".into());

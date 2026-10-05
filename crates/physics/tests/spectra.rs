@@ -311,6 +311,7 @@ fn s3_measure_along_a_computed_flight() {
             band,
             energy: (0.0, 1e6),
             abrupt_stop: false,
+            steady: None,
         };
         let scn = Scenario {
             field: UniformFields {
@@ -550,6 +551,7 @@ fn s7_coulomb_bremsstrahlung() {
         band: None,
         energy: (0.0, 1.0),
         abrupt_stop: false,
+        steady: None,
     };
     let tr = run(
         &Scenario {
@@ -634,6 +636,7 @@ fn s8_harmonics_of_an_elliptic_orbit() {
         band: None,
         energy: (0.0, 1.0),
         abrupt_stop: false,
+        steady: None,
     };
     let tr = run(
         &Scenario {
@@ -737,6 +740,7 @@ fn s9_nonlinear_thomson_harmonics() {
         band: None,
         energy: (0.0, 1.0),
         abrupt_stop: false,
+        steady: None,
     };
     let tr = run(
         &Scenario {
@@ -843,4 +847,141 @@ fn s9_nonlinear_thomson_harmonics() {
         a0 * a0 / (4.0 + a0 * a0)
     );
     assert!(worst < 1e-4, "S9 {worst:.3e}");
+}
+
+/// S10, the steady receiver (PHYSICS.md §3.4): a charge bound in a cloud (q = −1, m = 1,
+/// Q = 8, R = 2: ω₀ = 1), with radiation reaction at c = 2 (τ = 1/12, Γ = ω₀²τ = 1/12),
+/// driven by a plane wave along x polarized along y, scatters it steadily; a receiver
+/// measures the mean power per steradian over its window [τ₁, τ₁ + 2000]. Reference: the
+/// Landau–Lifshitz steady state `x̂ = χ E₀ ŷ`, `χ = (q/m)(1 − iωτ)/(ω₀² − ω² − iωΓ)`
+/// (as C3), radiating `dP/dΩ = (q²/8πc³) ω⁴ |χ|² E₀² cos²θ` (θ from x), averaged over the
+/// arc (`1/2 + sin 2α/4α` over ±α). At ω = 0.3, 0.97 and 3 (Rayleigh, the resonance's
+/// flank, Thomson; amplitude 1e-4 · min(1, c/ω)), on the arc 0° ± 10° and in the direction
+/// 60°. (a) Started on the steady state, from τ₁ = 20: all frequencies and the band ω ±
+/// 0.012 (the window's main lobe is ±6π/T = ±0.0094). (b) Started at rest at the centre
+/// (as in a level: a transient at ω₀ decaying as `e^{−Γt/2}`), from τ₁ = 180 (`e^{−7.5}`):
+/// the band leaves the transient out; all frequencies only away from the resonance.
+/// Required (set before measuring): (a) 1e-5 (the band's quadrature, the window's leakage
+/// past the band edges and the arc's Simpson rule are far below); (b) 1e-4 (the
+/// transient's remnant: its power at ω₀ against the line at ω = 0.3 about 4e-5). The first
+/// window, Hann's `sin²`, leaked 1.5e-5 of the line past the band's edges in every banded
+/// case (an FFT of the window: 1.45e-5 outside ±0.012 at T = 2000; its tail prefactor
+/// was underestimated); `sin⁴` leaks 6.1e-7.
+#[test]
+fn s10_steady_receiver() {
+    use physics::dynamics::{Kinematics, Particle};
+    use physics::external::{External, PlaneWave};
+    use physics::field::{ChargeCloud, Coulomb, LevelField};
+    use physics::geometry::{Aabb, Region};
+    use physics::spectrum::RadiationWindow;
+    use physics::trajectory::{Acceptance, Outcome, RunSettings, Scenario, run};
+    let (q, m, big_q, r, c): (f64, f64, f64, f64, f64) = (-1.0, 1.0, 8.0, 2.0, 2.0);
+    let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
+    let tau = 2.0 * q * q / (3.0 * m * c.powi(3));
+    let gamma = omega0 * omega0 * tau;
+    let span = 2000.0;
+    let mut worst: [f64; 2] = [0.0; 2];
+    for w in [0.3, 0.97, 3.0] {
+        // χ = (q/m)(1 − iωτ)/(ω₀² − ω² − iωΓ).
+        let (nr, ni) = (1.0, -w * tau);
+        let (dr, di) = (omega0 * omega0 - w * w, -w * gamma);
+        let d2 = dr * dr + di * di;
+        let (chi_r, chi_i) = (
+            (nr * dr + ni * di) / d2 * q / m,
+            (ni * dr - nr * di) / d2 * q / m,
+        );
+        let chi2 = chi_r * chi_r + chi_i * chi_i;
+        let e0 = 1e-4 * (c / w).min(1.0) / chi2.sqrt();
+        let peak = q * q / (8.0 * PI * c.powi(3)) * w.powi(4) * chi2 * e0 * e0;
+        for (case, on_steady, t1) in [(0, true, 20.0), (1, false, 180.0)] {
+            let (x0, v0) = if on_steady {
+                (chi_r * e0, w * chi_i * e0)
+            } else {
+                (0.0, 0.0)
+            };
+            let bands: Vec<Option<(f64, f64)>> = if on_steady || (w - omega0).abs() > 0.5 {
+                vec![None, Some((w - 0.012, w + 0.012))]
+            } else {
+                vec![Some((w - 0.012, w + 0.012))]
+            };
+            for band in bands {
+                for (axis, half) in [(0.0_f64, 10.0_f64), (60.0, 0.0)] {
+                    let a = axis.to_radians();
+                    let alpha = half.to_radians();
+                    let mean = if alpha > 0.0 {
+                        // cos²θ over a ± α.
+                        0.5 + (2.0 * a).cos() * (2.0 * alpha).sin() / (4.0 * alpha)
+                    } else {
+                        a.cos().powi(2)
+                    };
+                    let window = RadiationWindow {
+                        axis: DVec3::new(a.cos(), a.sin(), 0.0),
+                        half_angle: alpha,
+                        band,
+                        energy: (0.0, 1e300),
+                        abrupt_stop: false,
+                        steady: Some((t1, t1 + span)),
+                    };
+                    let kin = Kinematics::new(m, c);
+                    let scn = Scenario {
+                        field: LevelField {
+                            coulomb: Coulomb::with_clouds(
+                                &[],
+                                &[ChargeCloud {
+                                    position: DVec3::ZERO,
+                                    charge: big_q,
+                                    radius: r,
+                                }],
+                            ),
+                            external: vec![External::Wave(PlaneWave::in_plane(e0, 0.0, w, 0.0, c))],
+                            ..LevelField::default()
+                        },
+                        obstacles: vec![],
+                        particle: Particle {
+                            charge: q,
+                            mass: m,
+                            radius: 0.0,
+                            moment: 0.0,
+                        },
+                        c,
+                        x0: DVec3::new(0.0, x0, 0.0),
+                        p0: DVec3::new(
+                            0.0,
+                            kin.gamma_of_velocity(DVec3::new(0.0, v0, 0.0)) * m * v0,
+                            0.0,
+                        ),
+                        detector: Some(Region::Box(Aabb {
+                            min: DVec3::new(50.0, 50.0, -1.0),
+                            max: DVec3::new(51.0, 51.0, 1.0),
+                        })),
+                        bounds: None,
+                        t_max: t1 + span + 1.0,
+                        radiation_reaction: true,
+                        acceptance: Some(Acceptance {
+                            radiation: Some(window),
+                            ..Acceptance::default()
+                        }),
+                        gates: Vec::new(),
+                    };
+                    let tr = run(&scn, &RunSettings::with_tolerance(1e-11));
+                    assert_eq!(tr.outcome, Outcome::Arrived, "ω {w}");
+                    let got = tr.radiation.expect("measured");
+                    let want = peak * mean;
+                    let rel = got / want - 1.0;
+                    println!(
+                        "S10 ({}) ω = {w}, {}, arc {axis}° ± {half}°: {got:.9e} per sr per time \
+                         (Landau–Lifshitz steady state {want:.9e}): {rel:.1e}; {} steps",
+                        if on_steady { "a" } else { "b" },
+                        band.map_or("all frequencies".to_string(), |(lo, hi)| format!(
+                            "band {lo:.3}–{hi:.3}"
+                        )),
+                        tr.stats.n_accept
+                    );
+                    worst[case] = worst[case].max(rel.abs());
+                }
+            }
+        }
+    }
+    assert!(worst[0] < 1e-5, "S10 (a) {:.3e}", worst[0]);
+    assert!(worst[1] < 1e-4, "S10 (b) {:.3e}", worst[1]);
 }

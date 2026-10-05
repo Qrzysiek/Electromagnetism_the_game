@@ -675,11 +675,29 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 } else {
                     "The particle".into()
                 };
-                ui.label(format!(
-                    "{who} {} after t = {:.3}.",
-                    outcome_text(game, p.outcome),
-                    p.flight_time
-                ));
+                // A steady receiver measures a particle that need not arrive.
+                let steady = level.shots[shot_index]
+                    .detector
+                    .acceptance
+                    .and_then(|a| a.radiation)
+                    .is_some_and(|r| r.window.is_some());
+                match (steady, p.outcome) {
+                    (true, Outcome::Arrived) => ui.label(format!(
+                        "{who} kept scattering until t = {:.3}; the receiver's mean power is in \
+                         its window.",
+                        p.flight_time
+                    )),
+                    (true, Outcome::Rejected) => ui.label(format!(
+                        "{who} scattered until t = {:.3}; the receiver's mean power is outside \
+                         its window (or the flight ended before the window did).",
+                        p.flight_time
+                    )),
+                    _ => ui.label(format!(
+                        "{who} {} after t = {:.3}.",
+                        outcome_text(game, p.outcome),
+                        p.flight_time
+                    )),
+                };
                 // Detector acceptance: what is allowed, and how the particle arrived.
                 if let Some(acc) = level.shots[shot_index].detector.acceptance
                     && let Some(last) = p.path.last()
@@ -2185,29 +2203,56 @@ fn radiation_goal(
     let band = goal.band.map_or("all frequencies".to_string(), |[a, b]| {
         format!("ω {a:.3}–{b:.3}")
     });
-    let need = if lo > 0.0 {
-        format!("{} – {} per sr", fmt_si(lo), fmt_si(hi))
+    // A steady receiver measures a mean power (per unit time), the others an energy.
+    let unit = if goal.window.is_some() {
+        "per sr per unit time"
     } else {
-        format!("below {} per sr", fmt_si(hi))
+        "per sr"
     };
-    ui.label(
-        egui::RichText::new(format!(
-            "Radiation goal: into {axis:.0}° ± {half:.0}°, {band}: {need}"
-        ))
-        .small(),
-    )
-    .on_hover_text(
-        "The receiver (the band outside the arena) stands far away: it collects the particle's radiation, not the particle. The particle itself must still end in its detector. The radiation leaves at the speed of light whenever the particle is accelerated, mostly in the direction it is heading, and reaches the receiver after the flight: switch the map to 'particle field' to watch it go.",
-    );
-    ui.label(
-        egui::RichText::new(if system {
-            "The receiver is far away and collects radiation, not the particle; the particle must still end in its detector. It sees every particle: their fields add, in phase they reinforce, in antiphase they cancel."
-        } else {
-            "The receiver is far away and collects radiation, not the particle; the particle must still end in its detector."
-        })
-        .small()
-        .italics(),
-    );
+    let need = if lo > 0.0 {
+        format!("{} – {} {unit}", fmt_si(lo), fmt_si(hi))
+    } else {
+        format!("below {} {unit}", fmt_si(hi))
+    };
+    if let Some([t1, t2]) = goal.window {
+        ui.label(
+            egui::RichText::new(format!(
+                "Steady receiver: into {axis:.0}° ± {half:.0}°, {band}, from t = {t1:.0} to {t2:.0}: {need}"
+            ))
+            .small(),
+        )
+        .on_hover_text(
+            "The receiver (the band outside the arena) stands far away and collects the light the particle scatters while a wave drives it: the mean power it receives over its window, after the start's transient has died away (its time is the arrival time less the light time from the centre of the arena). The particle need not arrive anywhere; it must keep scattering, bound, until the window has passed.",
+        );
+        ui.label(
+            egui::RichText::new(if system {
+                "The receiver is far away and averages the scattered light over its window; the particle need not arrive. It sees every particle: their fields add."
+            } else {
+                "The receiver is far away and averages the scattered light over its window; the particle need not arrive."
+            })
+            .small()
+            .italics(),
+        );
+    } else {
+        ui.label(
+            egui::RichText::new(format!(
+                "Radiation goal: into {axis:.0}° ± {half:.0}°, {band}: {need}"
+            ))
+            .small(),
+        )
+        .on_hover_text(
+            "The receiver (the band outside the arena) stands far away: it collects the particle's radiation, not the particle. The particle itself must still end in its detector. The radiation leaves at the speed of light whenever the particle is accelerated, mostly in the direction it is heading, and reaches the receiver after the flight: switch the map to 'particle field' to watch it go.",
+        );
+        ui.label(
+            egui::RichText::new(if system {
+                "The receiver is far away and collects radiation, not the particle; the particle must still end in its detector. It sees every particle: their fields add, in phase they reinforce, in antiphase they cancel."
+            } else {
+                "The receiver is far away and collects radiation, not the particle; the particle must still end in its detector."
+            })
+            .small()
+            .italics(),
+        );
+    }
     if let Some(e) = radiation {
         let ok = e >= lo && e <= hi;
         let color = if ok {
@@ -2215,10 +2260,12 @@ fn radiation_goal(
         } else {
             egui::Color32::from_rgb(255, 170, 80)
         };
-        ui.colored_label(
-            color,
-            egui::RichText::new(format!("Radiated into it: {} per sr", fmt_si(e))).small(),
-        );
+        let text = if goal.window.is_some() {
+            format!("Received: {} {unit} (mean power)", fmt_si(e))
+        } else {
+            format!("Radiated into it: {} {unit}", fmt_si(e))
+        };
+        ui.colored_label(color, egui::RichText::new(text).small());
     }
     if spectrum.is_empty() {
         return;
@@ -2258,9 +2305,10 @@ fn radiation_goal(
     }
     ui.label(
         egui::RichText::new(format!(
-            "Spectrum into these directions, ω from 0 to {omega_max:.3}{}; peak {} per sr per unit ω",
+            "Spectrum into these directions, ω from 0 to {omega_max:.3}{}; peak {} {unit} per unit ω{}",
             if goal.band.is_some() { " (band shaded)" } else { " (all of it counts)" },
-            fmt_si(peak)
+            fmt_si(peak),
+            if goal.window.is_some() { ", over the window" } else { "" }
         ))
         .small(),
     );

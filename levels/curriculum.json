@@ -275,6 +275,7 @@
           "levels": [
             "jackson_quiet_turn",
             "jackson_thomson",
+            "jackson_cross_section",
             "jackson_braking",
             "jackson_quiet_ring",
             "jackson_ring_of_four"

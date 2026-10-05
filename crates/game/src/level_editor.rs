@@ -384,7 +384,8 @@ fn edit_acceptance(
     focus
 }
 
-/// A radiation goal: arc of directions, optional frequency band, energy per steradian.
+/// A radiation goal: arc of directions, optional frequency band, energy per steradian;
+/// or, with a receiving window, a steady receiver's power per steradian.
 fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> bool {
     let mut focus = row(ui, "Radiation goal", |ui| {
         let mut on = radiation.is_some();
@@ -397,6 +398,7 @@ fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> b
                     band: None,
                     energy: [0.0, 1.0],
                     abrupt_stop: false,
+                    window: None,
                 });
             }
             (false, true) => *radiation = None,
@@ -409,6 +411,7 @@ fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> b
         band,
         energy: [lo, hi],
         abrupt_stop,
+        window,
     }) = radiation
     else {
         return focus;
@@ -444,7 +447,31 @@ fn edit_radiation(ui: &mut egui::Ui, radiation: &mut Option<RadiationGoal>) -> b
         }
         f
     });
-    focus |= row(ui, "  energy / sr", |ui| {
+    focus |= row(ui, "  steady from t", |ui| {
+        let mut on = window.is_some();
+        ui.checkbox(&mut on, "").on_hover_text(
+            "A steady receiver: the mean power per steradian it receives over this window of \
+             its time, instead of the flight's whole energy (the particle need not arrive)",
+        );
+        match (on, window.is_some()) {
+            (true, false) => *window = Some([100.0, 200.0]),
+            (false, true) => *window = None,
+            _ => {}
+        }
+        let mut f = false;
+        if let Some([a, b]) = window {
+            f |= si(ui, a, 0.01);
+            ui.label("–");
+            f |= si(ui, b, 0.01);
+        }
+        f
+    });
+    let label = if window.is_some() {
+        "  power / sr"
+    } else {
+        "  energy / sr"
+    };
+    focus |= row(ui, label, |ui| {
         si(ui, lo, 0.01) | {
             ui.label("–");
             si(ui, hi, 0.01)
@@ -477,9 +504,12 @@ fn acceptance_in_range(a: &DetectorAcceptance, radiation_allowed: bool) -> bool 
                 band,
                 energy,
                 abrupt_stop,
+                window: receiving,
             } = r;
             radiation_allowed
                 && (!abrupt_stop || band.is_some())
+                && !(abrupt_stop && receiving.is_some())
+                && receiving.is_none_or(|w| window(w) && w[0] >= 0.0)
                 && x.is_finite()
                 && (0.0..=180.0).contains(&h)
                 && band.is_none_or(|b| window(b) && b[0] >= 0.0)

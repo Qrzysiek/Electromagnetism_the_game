@@ -106,10 +106,11 @@ verified reference solution for every shot and negligible radiation
 | 82 | Jackson Pr. 14.23: in step | 10 Introduction | a charge circles in crossed fields (ω₀ = 0.8) while its circle drifts into the detector; the receiver at 90° sees every particle: add a charge circling in step, whose field adds (four times the energy; ≥ 1.4e-4 per steradian in 0.6–1.0, the charge alone sends 4.84e-5) | ≤ 3 free charges | 1 |
 | 83 | Jackson §14.2: a quiet turn | 10 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
 | 84 | Jackson §14.8: Thomson scattering | 10 Intermediate | a light wave from the right (ω = 1) shakes the particle, which scatters it; the receiver at 30° counts 27–33, the Doppler-shifted line ω(1 + β cos φ)/(1 − β cos(θ − φ)) of a particle heading for it (≈ 4γ²ω head on) | ≤ 3 magnets (40, 80) | 1 |
-| 85 | Jackson §15.2: braking radiation | 10 Intermediate | the target stops the particle abruptly; its flash ∝ sin²θ/(1 − β cos θ)² is zero straight ahead and largest at cos θ = β (≈ 20°): strike the target ~12–32° off the receiver's axis (band 100–200, ≥ 5e-3 per steradian) | ≤ 3 magnets (40, 80) | 1 |
-| 86 | Jackson Pr. 14.23: a quiet ring | 10 Intermediate | the same drifting circle, and the receiver must stay below 7e-6 per steradian in 0.6–1.0: a partner on the far side of the circle, circling in antiphase about the same drifting centre, cancels the fundamental | ≤ 3 free charges | 1 |
-| 87 | Jackson Pr. 14.23: a ring of four | 10 Intermediate | the band 0.6–2.6 holds ω₀, 2ω₀, 3ω₀ (below 1.3e-5 per steradian): a pair leaves 2ω₀, three at 120° leave 3ω₀; four evenly spaced radiate only at 4ω₀, outside the band | ≤ 5 free charges | 3 |
-| 88 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
+| 85 | Jackson §16.8: why the sky is blue | 10 Intermediate | a steady receiver: a plane wave (ω = 0.35) lights a Thomson atom (ω₀ = 0.5, c = 2: radiation damping Γ = ω₀²τ = 0.021); the receiver behind the light averages the backscattered power in 0.32–0.38 over t = 400–1100, and wants 3–6 times the bare atom's (σ = 0.92 σ_T on Rayleigh's side): soften the spring along the light's field (a charge on the line of the swing weakens it; ω_y² = ω₀² − 4Q/d³ for a pair) | ≤ 4 charges | 1 |
+| 86 | Jackson §15.2: braking radiation | 10 Intermediate | the target stops the particle abruptly; its flash ∝ sin²θ/(1 − β cos θ)² is zero straight ahead and largest at cos θ = β (≈ 20°): strike the target ~12–32° off the receiver's axis (band 100–200, ≥ 5e-3 per steradian) | ≤ 3 magnets (40, 80) | 1 |
+| 87 | Jackson Pr. 14.23: a quiet ring | 10 Intermediate | the same drifting circle, and the receiver must stay below 7e-6 per steradian in 0.6–1.0: a partner on the far side of the circle, circling in antiphase about the same drifting centre, cancels the fundamental | ≤ 3 free charges | 1 |
+| 88 | Jackson Pr. 14.23: a ring of four | 10 Intermediate | the band 0.6–2.6 holds ω₀, 2ω₀, 3ω₀ (below 1.3e-5 per steradian): a pair leaves 2ω₀, three at 120° leave 3ω₀; four evenly spaced radiate only at 4ω₀, outside the band | ≤ 5 free charges | 3 |
+| 89 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 
 ## Automatic detectors
 
@@ -229,10 +230,11 @@ on 2026-10-05 with the same settings:
 | 82_jackson_in_step | 13.2 | 4.1e-1 | 16/16 | 9 | 9 / 2 | 0.78 |
 | 83_jackson_quiet_turn | 15.8 | 3.0e-3 | 12/16 | 165 | 298 / 333 | 0.79 |
 | 84_jackson_thomson | 9.2 | 2.2e-2 | 15/16 | 94 | 120 / 45 | 0.60 |
-| 85_jackson_braking | 9.2 | 6.4e-2 | 16/16 | 30 | 30 / 16 | 0.63 |
-| 86_jackson_quiet_ring | 13.2 | 3.0e-3 | 3/16 | 107 | 1840 / 333 | 0.82 |
-| 87_jackson_ring_of_four | 21.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.87 |
-| 88_jackson_undulator | 24.6 | < 3.0e-3 | 5/16 | 123 | 1003 / 333 | 0.52 |
+| 85_jackson_cross_section | 13.2 | 2.8e-2 | 31/32 | 60 | 73 / 36 | 0.73 |
+| 86_jackson_braking | 9.2 | 6.4e-2 | 16/16 | 30 | 30 / 16 | 0.63 |
+| 87_jackson_quiet_ring | 13.2 | 3.0e-3 | 3/16 | 107 | 1840 / 333 | 0.82 |
+| 88_jackson_ring_of_four | 21.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.87 |
+| 89_jackson_undulator | 24.6 | < 3.0e-3 | 5/16 | 123 | 1003 / 333 | 0.52 |
 
 Reading the table by tier (levels 1–56): the introductions are solved by the search in
 15–16 of 16 runs within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
@@ -242,9 +244,9 @@ are meant to be built stage by stage, as their references were; random guessing 
 whole level is hopeless (log10 configs 16–30). Their stages are each within reach of the
 modules the arc taught (see the finale notes below).
 
-The Jackson series (57–88): the search solves most introductions in 15–16 of 16 runs
+The Jackson series (57–89): the search solves most introductions in 15–16 of 16 runs
 (Faraday's law, the classical atom and the bound charge among them); none of its 16 runs
-solved Magnetosphere (66, the arc's master), Multipoles (71) or A ring of four (87), and
+solved Magnetosphere (66, the arc's master), Multipoles (71) or A ring of four (88), and
 random guessing found none of them either. The search sees only the distance objective
 (plus the deficits of the conditions), so these numbers also measure how much a goal's
 conditions (Multipoles' 0.05° direction windows, a radiation band, gates) hide from it,

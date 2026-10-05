@@ -1,0 +1,156 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Jackson §16.8: why the sky is blue",
+  "description": "Jackson §16.8: light scattered by a bound electron. The light (ω = 0.35, from the left, its field along y) shakes the atom's electron, and the shaken electron sends light back to the receiver. How much depends on how near the light's frequency is to the atom's own: $\\sigma = \\sigma_T\\,\\frac{\\omega^4}{(\\omega_0^2 - \\omega^2)^2 + (\\omega\\Gamma)^2}$. Far below the resonance it grows as $\\omega^4$ (Rayleigh: blue light, nearer the ultraviolet resonances of air, scatters more than red, so the sky is blue); at the resonance it is enormous; far above it the electron scatters like a free one (Thomson). This atom rings at ω₀ = 0.5, too stiff for this light: soften its spring along the light's field until the receiver counts 3 to 6 times what the bare atom sends. A charge pulls the swinging electron the harder the nearer it comes: on the line of the swing it weakens the spring, across it it stiffens it. Mind its steady pull too. The receiver averages over a window, after the start has died away; the electron must stay in its atom.",
+  "grid": {
+    "nx": 40,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 2.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 1200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    },
+    "radiation_reaction": true
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": -1.0,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          26,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.005000000000000001
+      },
+      "detector": {
+        "min": [
+          0,
+          8,
+          0
+        ],
+        "max": [
+          1,
+          12,
+          0
+        ],
+        "acceptance": {
+          "radiation": {
+            "direction": [
+              180.0,
+              10.0
+            ],
+            "energy": [
+              1.3601573048319683e-06,
+              2.7203146096639366e-06
+            ],
+            "band": [
+              0.32,
+              0.38
+            ],
+            "window": [
+              400.0,
+              1100.0
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 4,
+    "magnitudes": [
+      1.0,
+      2.0,
+      4.0,
+      8.0,
+      16.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        16,
+        0,
+        0
+      ],
+      "max": [
+        36,
+        20,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        26,
+        2,
+        0
+      ],
+      "kind": "charge",
+      "value": 8.0
+    },
+    {
+      "node": [
+        26,
+        18,
+        0
+      ],
+      "kind": "charge",
+      "value": 8.0
+    }
+  ],
+  "disturbances": [
+    {
+      "name": "light",
+      "e": [
+        0.0,
+        0.0
+      ],
+      "bz": 0.0,
+      "waves": [
+        {
+          "amplitude": 0.01,
+          "direction_deg": 0.0,
+          "omega": 0.35,
+          "phase_deg": 0.0
+        }
+      ]
+    }
+  ],
+  "clouds": [
+    {
+      "center": [
+        26,
+        10,
+        0
+      ],
+      "radius": 4.0,
+      "charge": 16.0
+    }
+  ]
+}

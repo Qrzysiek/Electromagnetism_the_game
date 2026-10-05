@@ -171,7 +171,9 @@ pub fn classify(a: &Trajectory, b: &Trajectory, t_max: f64) -> Status {
         }
         consider(boundary, y, (x - y).abs(), FLOOR);
     }
-    if b.outcome != Outcome::Timeout {
+    // A flight cut by the time limit has no margin to it (a steady receiver's, measured
+    // at the limit, too).
+    if b.outcome != Outcome::Timeout && b.end.t < t_max {
         consider(
             Boundary::TimeLimit,
             t_max - b.end.t,

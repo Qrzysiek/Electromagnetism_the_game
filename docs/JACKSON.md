@@ -21,11 +21,11 @@ ratio", and the description cites the section or problem (planned level field `r
   a Cauchy process in the slice: test MS1), Pr. 14.22 as a level (its harmonics need
   some twenty orbits and an end to the flight: test S8), Pr. 16.12 (an average over
   random interruptions, which a deterministic flight does not realise).
-- **Feasible, not yet built** (the charge cloud realises F:bound, but these entries kept
-  that tag until 2026-10-05): a level on §16.8's cross section (Rayleigh's ω⁴ through
-  the resonance to Thomson's; the test C3 is built). A radiation goal is measured when
-  its particle arrives, and a scattering bound electron stays bound, so the level needs
-  a receiver for the steady scattered power: a design question for the owner. Everything else needs a feature from the table below or 3D;
+- **Built on 2026-10-05:** a level on §16.8's cross section, *Why the sky is blue*
+  (level 85; Rayleigh's ω⁴ through the resonance to Thomson's, test C3), with a new kind
+  of radiation goal, the steady receiver (PHYSICS.md §3.4, test S10): a scattering bound
+  electron stays bound, so the receiver averages the power it scatters over a window
+  instead of waiting for it to arrive. Everything else needs a feature from the table below or 3D;
   wave optics is planned as its own stage (F:optics, `SPEC.md` §8).
 
 ## How to read this list
@@ -279,7 +279,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 
 ### Ch. 10: Scattering and diffraction
 
-- **Rayleigh scattering by one bound charge**: built as test C3 (§16.8, the charge cloud); a level is NOW. Mie scattering, diffraction and Babinet need wave solvers: F:optics.
+- **Rayleigh scattering by one bound charge**: built as test C3 (§16.8, the charge cloud) and the level *Why the sky is blue* (85). Mie scattering, diffraction and Babinet need wave solvers: F:optics.
 - Thomson scattering by free charges (§14.8) is covered in Ch. 14.
 
 ### Ch. 11: Special relativity
@@ -363,7 +363,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - Text only (LL avoids them).
   - Pr. 16.10–16.11 (gap acceleration with damping): *test R6*, LL against the integro-differential (exact non-runaway) solution, which in one dimension is exact for Lorentz–Dirac in the rapidity (Pr. 16.8); and the book's first-order results.
 - **Pr. 16.1, §16.7 radiating oscillator.** Level breadth: energy decays as e^{−Γt}, and the line width is Γ. Built (arc 9; test C2).
-- **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. Built: the resonance is a level of arc 9, and the cross section from Rayleigh to Thomson is *test C3* (the charge cloud in a plane wave, against (16.78); Jackson's (16.73) is the Landau–Lifshitz reduction). A level on the cross section: NOW.
+- **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. Built: the resonance is a level of arc 9, and the cross section from Rayleigh to Thomson is *test C3* (the charge cloud in a plane wave, against (16.78); Jackson's (16.73) is the Landau–Lifshitz reduction). The level on the cross section: *Why the sky is blue* (85): the player softens the atom's spring along the light's field until a steady receiver counts 3–6 times the bare atom's backscatter.
 - **Pr. 16.12 collision broadening.** Set aside. Its spectrum is an average over an ensemble of wave trains cut at random, exponentially distributed times; the game's flights are deterministic and end once. One cut train is a finite flight of the radiation goals (the charge moves uniformly after its end): its line is the finite-time line of S1 (width 2π/T) on the decaying oscillator of C2, and Jackson's average over T is algebra on it. A test of the average through the game's measure would need the spectrum at thousands of cut times, because the counter-rotating part oscillates in T at 2ω₀, which a Gauss–Laguerre rule in T cannot average.
 - **Pr. 16.13 dipole sum rule.** *Test C4.* As stated it diverges for §16.8's own oscillator: its polarizability tends to `−(e²/mω²)(1 − iωτ)`, not the free value the problem assumes, so σ_t tends to σ_T. With σ_T subtracted it holds exactly up to the factor `1 − ω₀²τ²`, which the measured cross section resolves.
 
@@ -384,7 +384,7 @@ These combine several chapters; most come from the problems.
 11. **Λ decay reconstruction** (Pr. 11.20): decay in flight in a B field. F:decay.
 12. **Stark deflector** (Pr. 4.5): the electric Stern–Gerlach for polar molecules. F:polar.
 13. **RF cavity linac** (§8.7): phase stability with gates. F:cavity.
-14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built in part (arc 9; the cross section as test C3); a level on the cross section is NOW.
+14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built (arc 9; the cross section as test C3 and level 85).
 
 ## For the 3D simulation (future reference)
 

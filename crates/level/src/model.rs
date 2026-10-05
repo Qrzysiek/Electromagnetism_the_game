@@ -171,6 +171,21 @@ impl Level {
                 s.detector
                     .acceptance
                     .and_then(|a| a.radiation)
+                    .is_some_and(|r| r.window.is_some())
+            }) {
+                out.push(note(
+                    false,
+                    "Steady receiver: the mean power per steradian over its window, the \
+                     radiation weighted by a smooth window (sin⁴) so that with a band a line \
+                     outside it leaks in by about 1e-6; what is left of the start's transient \
+                     (damped by the radiation reaction, at the atom's own frequency) counts \
+                     unless the band leaves it out.",
+                ));
+            }
+            if self.shots.iter().any(|s| {
+                s.detector
+                    .acceptance
+                    .and_then(|a| a.radiation)
                     .is_some_and(|r| r.abrupt_stop)
             }) {
                 out.push(note(

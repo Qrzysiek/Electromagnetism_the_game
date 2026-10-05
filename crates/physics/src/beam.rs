@@ -2405,6 +2405,13 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             }
         }
     }
+    // Steady receivers of the particles that flew to the end (measured with every
+    // particle's whole emission).
+    for (i, t) in tracks.iter_mut().enumerate() {
+        if t.traj.outcome == Outcome::Timeout {
+            judge_beam_steady(scn, t, i, &emission);
+        }
+    }
     let mut trajectories: Vec<Trajectory> = tracks
         .into_iter()
         .zip(&scn.particles)
@@ -2515,6 +2522,9 @@ fn judge_beam_arrival<F>(
     kin: &Kinematics,
     emission: &[Vec<Emission>],
 ) {
+    if judge_beam_steady(scn, track, i, emission) {
+        return;
+    }
     if track.traj.outcome == Outcome::Arrived
         && let Some(g) = track.gates.missing()
     {
@@ -2550,6 +2560,59 @@ fn judge_beam_arrival<F>(
         gates: Vec::new(),
         gate_acceptance: Vec::new(),
     });
+}
+
+/// A steady receiver's verdict on particle `i` (PHYSICS.md §3.4), when its detector has
+/// one (returns whether it has): the particle need not arrive; its flight is measured with
+/// all the others (their far fields added) when it times out, or arrives after the
+/// window; ended before it covers the window, it is rejected.
+fn judge_beam_steady<F>(
+    scn: &BeamScenario<F>,
+    track: &mut Track<'_>,
+    i: usize,
+    emission: &[Vec<Emission>],
+) -> bool {
+    let Some(w) = scn.particles[i]
+        .acceptance
+        .and_then(|a| a.radiation)
+        .filter(|w| w.steady.is_some())
+    else {
+        return false;
+    };
+    if !matches!(track.traj.outcome, Outcome::Timeout | Outcome::Arrived) {
+        return true;
+    }
+    if let Some(g) = track.gates.missing() {
+        track.traj.outcome = Outcome::SkippedGate(g);
+        return true;
+    }
+    let m = if w.covers(&emission[i], scn.c) {
+        let sources: Vec<(f64, &[Emission])> = scn
+            .particles
+            .iter()
+            .zip(emission)
+            .map(|(b, e)| (b.particle.charge, e.as_slice()))
+            .collect();
+        let e = w.measure_system(&sources, scn.c);
+        track.traj.radiation = Some(e);
+        w.margin(e)
+    } else {
+        -1.0
+    };
+    track.traj.outcome = if m >= 0.0 {
+        Outcome::Arrived
+    } else {
+        Outcome::Rejected
+    };
+    track.traj.margins = Some(Margins {
+        obstacles: Vec::new(),
+        bounds: None,
+        detector: None,
+        acceptance: Some(m),
+        gates: Vec::new(),
+        gate_acceptance: Vec::new(),
+    });
+    true
 }
 
 /// A charge present for the energy budget: charge, moment, position, kinetic energy.

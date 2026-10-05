@@ -612,6 +612,35 @@ fn judge_arrival<F>(
     kin: &Kinematics,
     emission: &[Emission],
 ) -> Option<f64> {
+    // A steady receiver (PHYSICS.md §3.4): the particle need not arrive. Its flight is
+    // measured when it times out, or arrives after the window; ended before it covers
+    // the window, it is rejected.
+    if let Some(w) = scn
+        .acceptance
+        .and_then(|a| a.radiation)
+        .filter(|w| w.steady.is_some())
+    {
+        if !matches!(traj.outcome, Outcome::Timeout | Outcome::Arrived) {
+            return None;
+        }
+        if let Some(k) = gates.missing() {
+            traj.outcome = Outcome::SkippedGate(k);
+            return None;
+        }
+        let m = if w.covers(emission, scn.c) {
+            let e = w.measure(emission, scn.particle.charge, scn.c);
+            traj.radiation = Some(e);
+            w.margin(e)
+        } else {
+            -1.0
+        };
+        traj.outcome = if m >= 0.0 {
+            Outcome::Arrived
+        } else {
+            Outcome::Rejected
+        };
+        return Some(m);
+    }
     if traj.outcome == Outcome::Arrived
         && let Some(k) = gates.missing()
     {
