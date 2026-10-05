@@ -316,7 +316,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - A test against the impulse approximation.
   - NOW (beams with two species).
 - **Pr. 13.2/13.3 energy transfer to a harmonically bound charge.** Adiabatic cut-off for b > v/ω₀: slow collisions transfer nothing. Built: Pr. 13.2 as a level (arc 9); Pr. 13.3 as *test C5* (a relativistic pass, ξ = 0.3 to 4, against the K₀, K₁ formula within 6e-6; Brau §5.2.3 is the same problem).
-- **§13.2–13.3 energy loss in matter, density effect.** OUT (a statistical medium).
+- **§13.2–13.3 energy loss in matter, density effect.** The medium is OUT (statistical; the density effect needs a dielectric). Its per-atom part, the distant collisions summed over impact parameters with Bohr's adiabatic cut-off, is *test C7* (with Brau §7.3.1).
 - **§13.4 Cherenkov; §13.7 transition radiation.** OUT (media).
 - **§13.5 / Pr. 13.5 screened Coulomb scattering.** F:screened.
 - **§13.6 multiple scattering.** *Test MS1; set aside as a level (2026-09-29).* In the slice the scatterers lie in the particle's own plane, so the impact parameters are uniform on a line rather than weighted by b db as in a foil: the sum of the deflections is a Cauchy distribution of half-width πnLK (K = 2qQ/pv), growing linearly with the thickness, not Jackson's Gaussian ∝ √L. MS1 confirms it (medians within 6 % of πnLK, ratio 1.96 for twice the thickness). A level would teach the wrong law for a real foil, which needs scatterers filling a 3D slab.

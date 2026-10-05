@@ -395,22 +395,12 @@ fn c4_dipole_sum_rule() {
     assert!(rel.abs() < 1e-4, "C4 {rel:.3e}");
 }
 
-/// C5, Jackson Problems 13.2–13.3 (Brau §5.2.3, excitation by a fast charged particle): a
-/// charge z = 16 passes at v = 0.8c (c = 100) and impact parameter b an electron (q = −1,
-/// m = 1) at rest at the centre of a neutral cloud (Q = 1, R = 4: ω₀ = 1/8). Its field is
-/// the engine's Liénard–Wiechert field of a charge in uniform motion (`lienard::fields`: an
-/// infinitely heavy projectile, as in the problem), from 300 b before the closest approach
-/// to 300 b after it. The energy left in the oscillator against Problem 13.3's
-/// `ΔE = (2z²q²/(m b² v²)) [ξ² K₁(ξ)² + ξ² K₀(ξ)²/γ²]`, `ξ = ω₀b/(γv)` = 0.3, 1, 2, 4: from
-/// nearly the impulse to a free charge (Pr. 13.1) to the adiabatic cut-off, where the
-/// transfer falls as e^{−2ξ} (`scripts/wolfram/c5_bound_energy_transfer.wls`, Wolfram Engine
-/// 14.2: the closed form and the Fourier integral of the field agree to 28 digits).
-/// Required: within 1e-4. Neglected by the problem: the dipole approximation, (swing/b)² ~
-/// 1e-9; the electron's speed, (v_e/c)² ~ 1e-10; the projectile's magnetic force, at first
-/// order v_e v/c² ~ 1e-5 (the scale c = 100 keeps it there with swings of 1e-2); the field
-/// left at the ends, ~1e-5.
-#[test]
-fn c5_energy_transfer_to_a_bound_charge() {
+/// The passing charge of tests C5 and C7: an electron (q = −1, m = 1) at rest at the centre
+/// of a neutral cloud (Q = 1, R = 4: ω₀ = 1/8), and a charge z = 16 passing at v = 0.8c
+/// (c = 100) at the impact parameter `b = ξγv/ω₀`, its field the engine's Liénard–Wiechert
+/// field of uniform motion (an infinitely heavy projectile), from 300 b before the closest
+/// approach to 300 b after it. Returns b, the energy left in the oscillator and the steps.
+fn passing_charge_transfer(xi: f64) -> (f64, f64, u64) {
     use physics::field::FieldSample;
     use physics::lienard::{Worldline, fields};
     struct Line {
@@ -439,17 +429,9 @@ fn c5_energy_transfer_to_a_bound_charge() {
             }
         }
     }
-    let (q, m, big_q, r) = (-1.0_f64, 1.0_f64, 1.0_f64, 4.0_f64);
-    let (z, c, v) = (16.0_f64, 100.0_f64, 80.0_f64);
+    let (q, m, big_q, r, z, c, v) = PASSING;
     let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
     let gamma = 1.0 / (1.0 - (v / c).powi(2)).sqrt();
-    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
-    const TRANSFER: [(f64, f64); 4] = [
-        (0.3, 7.0433438139553840203e-7),
-        (1.0, 2.9960611994406950320e-8),
-        (2.0, 1.7038348612222998048e-9),
-        (4.0, 1.4109718907197246090e-11),
-    ];
     let atom = || {
         Coulomb::with_clouds(
             &[],
@@ -462,52 +444,121 @@ fn c5_energy_transfer_to_a_bound_charge() {
     };
     let phi0 = atom().sample(DVec3::ZERO, 0.0).phi;
     let kin = Kinematics::new(m, c);
-    let mut worst: f64 = 0.0;
-    for (xi, reference) in TRANSFER {
-        let b = xi * gamma * v / omega0;
-        let span = 300.0 * b;
-        let scn = Scenario {
-            field: Passing {
-                atom: atom(),
-                z,
-                path: Line {
-                    x0: DVec3::new(-span, b, 0.0),
-                    v: DVec3::new(v, 0.0, 0.0),
-                },
-                c,
-            },
-            obstacles: vec![],
-            particle: Particle {
-                charge: q,
-                mass: m,
-                radius: 0.0,
-                moment: 0.0,
+    let b = xi * gamma * v / omega0;
+    let span = 300.0 * b;
+    let scn = Scenario {
+        field: Passing {
+            atom: atom(),
+            z,
+            path: Line {
+                x0: DVec3::new(-span, b, 0.0),
+                v: DVec3::new(v, 0.0, 0.0),
             },
             c,
-            x0: DVec3::ZERO,
-            p0: DVec3::ZERO,
-            detector: None,
-            bounds: None,
-            t_max: 2.0 * span / v,
-            radiation_reaction: false,
-            acceptance: None,
-            gates: Vec::new(),
-        };
-        let tr = run(&scn, &RunSettings::with_tolerance(TOL));
-        assert_eq!(tr.outcome, Outcome::Timeout, "C5 at ξ = {xi}");
-        let energy =
-            kin.kinetic_energy(tr.end.p) + q * (scn.field.atom.sample(tr.end.x, 0.0).phi - phi0);
+        },
+        obstacles: vec![],
+        particle: Particle {
+            charge: q,
+            mass: m,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        c,
+        x0: DVec3::ZERO,
+        p0: DVec3::ZERO,
+        detector: None,
+        bounds: None,
+        t_max: 2.0 * span / v,
+        radiation_reaction: false,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+    assert_eq!(tr.outcome, Outcome::Timeout, "the pass at ξ = {xi}");
+    let energy =
+        kin.kinetic_energy(tr.end.p) + q * (scn.field.atom.sample(tr.end.x, 0.0).phi - phi0);
+    (b, energy, tr.stats.n_accept)
+}
+
+/// q, m, Q, R, z, c, v of `passing_charge_transfer`.
+const PASSING: (f64, f64, f64, f64, f64, f64, f64) = (-1.0, 1.0, 1.0, 4.0, 16.0, 100.0, 80.0);
+
+/// C5, Jackson Problems 13.2–13.3 (Brau §5.2.3, excitation by a fast charged particle): a
+/// charge z = 16 passes at v = 0.8c (c = 100) and impact parameter b an electron (q = −1,
+/// m = 1) at rest at the centre of a neutral cloud (Q = 1, R = 4: ω₀ = 1/8)
+/// (`passing_charge_transfer`). The energy left in the oscillator against Problem 13.3's
+/// `ΔE = (2z²q²/(m b² v²)) [ξ² K₁(ξ)² + ξ² K₀(ξ)²/γ²]`, `ξ = ω₀b/(γv)` = 0.3, 1, 2, 4: from
+/// nearly the impulse to a free charge (Pr. 13.1) to the adiabatic cut-off, where the
+/// transfer falls as e^{−2ξ} (`scripts/wolfram/c5_bound_energy_transfer.wls`, Wolfram Engine
+/// 14.2: the closed form and the Fourier integral of the field agree to 28 digits).
+/// Required: within 1e-4. Neglected by the problem: the dipole approximation, (swing/b)² ~
+/// 1e-9; the electron's speed, (v_e/c)² ~ 1e-10; the projectile's magnetic force, at first
+/// order v_e v/c² ~ 1e-5 (the scale c = 100 keeps it there with swings of 1e-2); the field
+/// left at the ends, ~1e-5.
+#[test]
+fn c5_energy_transfer_to_a_bound_charge() {
+    let (q, m, _, _, z, _, v) = PASSING;
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const TRANSFER: [(f64, f64); 4] = [
+        (0.3, 7.0433438139553840203e-7),
+        (1.0, 2.9960611994406950320e-8),
+        (2.0, 1.7038348612222998048e-9),
+        (4.0, 1.4109718907197246090e-11),
+    ];
+    let mut worst: f64 = 0.0;
+    for (xi, reference) in TRANSFER {
+        let (b, energy, steps) = passing_charge_transfer(xi);
         let rel = energy / reference - 1.0;
         let impulse = 2.0 * (z * q).powi(2) / (m * (b * v).powi(2));
         println!(
             "C5 ξ = {xi} (b = {b:.2}): ΔE = {energy:.10e}, Jackson Pr. 13.3 {reference:.10e}: \
-             {rel:.1e}; {:.4} of the impulse to a free charge; {} steps",
-            energy / impulse,
-            tr.stats.n_accept
+             {rel:.1e}; {:.4} of the impulse to a free charge; {steps} steps",
+            energy / impulse
         );
         worst = worst.max(rel.abs());
     }
     assert!(worst < 1e-4, "C5 {worst:.3e}");
+}
+
+/// C7, Bohr's classical energy loss (Brau §7.3.1; Jackson §13.2, distant collisions): C5's
+/// transfer summed over the impact parameters, `∫ 2π b ΔE(b) db`, the energy a passing
+/// charge gives per unit length to a medium of one such electron per unit volume. Problem
+/// 13.3's ΔE integrates in closed form: `(4πz²q²/(mv²)) [F(ξ₁) − F(ξ₂)]`, `F(ξ) = ξK₀K₁ −
+/// (β²/2) ξ² (K₁² − K₀²)` (`scripts/wolfram/c5_bound_energy_transfer.wls`: equal to the
+/// direct integral to 30 digits). Measured: the flights of C5 at the 32 nodes of a
+/// Gauss–Legendre rule in ln ξ over ξ = 0.1 … 10 (the integrand `2π b² ΔE` in ln ξ is smooth
+/// there; beyond 10 it is below e^{−20}). Required: within 1e-4 (as C5). Printed: Bohr's
+/// approximation for small ξ₁, `F ≈ ln(1.123/ξ₁) − β²/2`: the adiabatic cut-off acts as a
+/// largest impact parameter 1.123 γv/ω₀.
+#[test]
+fn c7_bohr_energy_loss() {
+    let (_, _, big_q, r, z, c, v) = PASSING;
+    let (q, m) = (PASSING.0, PASSING.1);
+    let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
+    let beta = v / c;
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const LOSS: f64 = 1.0554403419788837408;
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const F_LOW: f64 = 2.0997318468598346293;
+    let (lo, hi) = (0.1_f64.ln(), 10.0_f64.ln());
+    let (mut total, mut steps) = (0.0, 0);
+    for (x, w) in common::gauss_legendre(32) {
+        let xi = (0.5 * (lo + hi) + 0.5 * (hi - lo) * x).exp();
+        let (b, energy, k) = passing_charge_transfer(xi);
+        total += 0.5 * (hi - lo) * w * 2.0 * PI * b * b * energy;
+        steps += k;
+    }
+    let rel = total / LOSS - 1.0;
+    let prefactor = 4.0 * PI * (z * q).powi(2) / (m * v * v);
+    println!(
+        "C7: ∫ 2π b ΔE db over ξ = 0.1 … 10 = {total:.12e} (closed form {LOSS:.12e}): \
+         {rel:.1e}; F(0.1) − F(10) = {:.6} (exact {F_LOW:.6}; Bohr's ln(1.123/ξ) − β²/2 = \
+         {:.6}); the cut-off b = 1.123 γv/ω₀ = {:.1}; {steps} steps",
+        total / prefactor,
+        (1.123_f64 / 0.1).ln() - beta * beta / 2.0,
+        1.123 * v / (omega0 * (1.0 - beta * beta).sqrt())
+    );
+    assert!(rel.abs() < 1e-4, "C7 {rel:.3e}");
 }
 
 /// C6, collective radiation damping (Brau §4.3.2 and §10.5; Landau & Lifshitz §75): N

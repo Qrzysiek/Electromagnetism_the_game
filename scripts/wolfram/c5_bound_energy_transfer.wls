@@ -27,3 +27,18 @@ Do[Module[{b = xi gam v/w0, closed, fperp, fpar, numeric},
       "; the Fourier integral ", N[numeric, 20], " (relative ", N[numeric/closed - 1, 3],
       "); the impulse limit 2 z^2 q^2/(m b^2 v^2) ", N[2 z^2 q^2/(m b^2 v^2), 6]]],
   {xi, {3/10, 1, 2, 4}}];
+
+(* Test C7 (Brau §7.3.1; Jackson §13.2): the transfer summed over impact parameters,
+   Int 2 pi b Delta E(b) db from xi1 to xi2 = (4 pi z^2 q^2/(m v^2)) (F(xi1) - F(xi2)),
+   F(xi) = xi K0 K1 - (beta^2/2) xi^2 (K1^2 - K0^2): the closed form, and the integral of
+   the closed-form Delta E taken numerically, for xi from 0.1 to 10. *)
+beta = v/c;
+f[x_] := x BesselK[0, x] BesselK[1, x] - beta^2/2 x^2 (BesselK[1, x]^2 - BesselK[0, x]^2);
+pref = 4 Pi z^2 q^2/(m v^2);
+closedLoss = pref (f[1/10] - f[10]);
+numericLoss = NIntegrate[2 Pi (x gam v/w0) (2 z^2 q^2/(m (x gam v/w0)^2 v^2))
+     (x^2 BesselK[1, x]^2 + x^2 BesselK[0, x]^2/gam^2) (gam v/w0), {x, 1/10, 1, 10},
+   WorkingPrecision -> prec, PrecisionGoal -> 25];
+Print["C7: 2 pi Int Delta E b db over xi in [0.1, 10] = ", N[closedLoss, 20], "; numerically ",
+  N[numericLoss, 20], " (relative ", N[numericLoss/closedLoss - 1, 3], "); F(0.1) = ",
+  N[f[1/10], 20], ", F(10) = ", N[f[10], 6]];
