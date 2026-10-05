@@ -577,8 +577,8 @@ fn fly_beam(
                     let comp = |c: usize| dense.eval_component(6 * k + c, t);
                     let der = |c: usize| dense.eval_derivative_component(6 * k + c, t);
                     let x = DVec3::new(comp(0), comp(1), comp(2));
-                    let p = DVec3::new(comp(3), comp(4), comp(5)) * p_ref;
-                    let dp = DVec3::new(der(3), der(4), der(5)) * p_ref;
+                    let p = DVec3::new(comp(3), comp(4), comp(5)) * p_ref[k];
+                    let dp = DVec3::new(der(3), der(4), der(5)) * p_ref[k];
                     lines[i].push((t, x, kins[i].velocity(p), kins[i].acceleration(p, dp)));
                 }
                 for s in 1..=per_step {

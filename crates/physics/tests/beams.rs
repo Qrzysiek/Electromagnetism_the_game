@@ -1283,7 +1283,7 @@ fn b21_screening_cup() {
                         dense.eval_derivative_component(6 * k + 3, t),
                         dense.eval_derivative_component(6 * k + 4, t),
                         dense.eval_derivative_component(6 * k + 5, t),
-                    ) * p_ref
+                    ) * p_ref[k]
                 };
                 let pos = |t: f64| {
                     DVec3::new(

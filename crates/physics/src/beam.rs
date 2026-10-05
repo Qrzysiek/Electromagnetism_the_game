@@ -374,13 +374,14 @@ impl Event {
 
 /// The right-hand side for the particles in `members` (indices into the scenario), of
 /// which those with `source` set act on the others. Scaled state per member:
-/// `(x, p / p_ref)`.
+/// `(x, p / p_ref)`, each member with its own particle's momentum scale.
 struct BeamOde<'a, F> {
     scn: &'a BeamScenario<F>,
     members: Vec<usize>,
     source: Vec<bool>,
     kin: Vec<Kinematics>,
-    p_ref: f64,
+    /// Momentum scale of each member (`momentum_scales`).
+    p_ref: Vec<f64>,
     /// Retarded interaction (finite `c`): the recorded motion of every particle.
     past: Option<&'a Past>,
     /// Charges of absorbed particles at rest where they stopped (`Fate::Stop`), acting as
@@ -407,7 +408,8 @@ struct Past {
     /// Drained particles fading in their cups (`Fade`, experimental).
     fades: RwLock<Vec<Option<Fade>>>,
     kin: Vec<Kinematics>,
-    p_ref: f64,
+    /// Momentum scale of each particle (`momentum_scales`).
+    p_ref: Vec<f64>,
     /// Acceleration of each particle at launch (external fields and the others'
     /// quasi-static fields): the motion before launch continues it.
     a0: Vec<DVec3>,
@@ -569,7 +571,7 @@ impl View<'_> {
                 let d = &s0.dense;
                 let comp = |i: usize| d.eval_component(6 * k0 + i, s0.t_start);
                 let x = DVec3::new(comp(0), comp(1), comp(2));
-                let v = kin.velocity(DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref);
+                let v = kin.velocity(DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref[j]);
                 return (x + v * (t - s0.t_start), v, DVec3::ZERO);
             }
             return self.before_launch(scn, j, t);
@@ -582,7 +584,7 @@ impl View<'_> {
         let tt = t.min(reach);
         let comp = |i: usize| d.eval_component(6 * k + i, tt);
         let x = DVec3::new(comp(0), comp(1), comp(2));
-        let p = DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref;
+        let p = DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref[j];
         let v = kin.velocity(p);
         if t > reach {
             return (x + v * (t - reach), v, DVec3::ZERO);
@@ -591,7 +593,7 @@ impl View<'_> {
             d.eval_derivative_component(6 * k + 3, tt),
             d.eval_derivative_component(6 * k + 4, tt),
             d.eval_derivative_component(6 * k + 5, tt),
-        ) * self.past.p_ref;
+        ) * self.past.p_ref[j];
         (x, v, kin.acceleration(p, dp))
     }
 
@@ -740,7 +742,8 @@ impl View<'_> {
         let tt = t.min(reach);
         let comp = |i: usize| d.eval_component(6 * k + i, tt);
         let x = DVec3::new(comp(0), comp(1), comp(2));
-        let v = self.past.kin[j].velocity(DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref);
+        let v =
+            self.past.kin[j].velocity(DVec3::new(comp(3), comp(4), comp(5)) * self.past.p_ref[j]);
         if t > reach {
             return (x + v * (t - reach), v);
         }
@@ -754,7 +757,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
     }
 
     fn p(&self, y: &[f64], k: usize) -> DVec3 {
-        DVec3::new(y[6 * k + 3], y[6 * k + 4], y[6 * k + 5]) * self.p_ref
+        DVec3::new(y[6 * k + 3], y[6 * k + 4], y[6 * k + 5]) * self.p_ref[k]
     }
 
     /// Force on member `k` from the external fields and the source members.
@@ -1111,7 +1114,7 @@ impl<F: FieldSolver> OdeSystem for BeamOde<'_, F> {
         };
         for (k, f) in forces.into_iter().enumerate() {
             let v = self.kin[k].velocity(self.p(y, k));
-            let dp = f / self.p_ref;
+            let dp = f / self.p_ref[k];
             dy[6 * k..6 * k + 6].copy_from_slice(&[v.x, v.y, v.z, dp.x, dp.y, dp.z]);
         }
     }
@@ -1148,6 +1151,21 @@ struct Track<'a> {
     rest_max: f64,
 }
 
+/// Each particle's momentum scale for the integrator's scaled state `(x, p / p_ref)`: its
+/// launch momentum, or for a particle launched at rest its mass (one velocity unit), as
+/// for single flights. Per particle, so that a light particle beside a heavy one keeps
+/// its own relative accuracy (a shared scale, the mean launch momentum, left a resting
+/// electron's momentum controlled only to the tolerance times a heavy partner's).
+fn momentum_scales<F>(scn: &BeamScenario<F>) -> Vec<f64> {
+    scn.particles
+        .iter()
+        .map(|b| {
+            let s = b.p0.length();
+            if s > 0.0 { s } else { b.particle.mass }
+        })
+        .collect()
+}
+
 /// Runs a beam flight.
 pub fn run_beam<F: FieldSolver>(scn: &BeamScenario<F>, rs: &RunSettings) -> BeamRun {
     run_beam_observed(scn, rs, |_, _, _| {})
@@ -1155,12 +1173,12 @@ pub fn run_beam<F: FieldSolver>(scn: &BeamScenario<F>, rs: &RunSettings) -> Beam
 
 /// As `run_beam`, calling `observer(dense, members, p_ref)` after every accepted step
 /// (member `k` of the state is particle `members[k]`; its position is component
-/// `6k..6k+3`, its momentum `p_ref ×` components `6k+3..6k+6`). Ghosts are members too:
-/// their states after their end time are not part of their trajectories.
+/// `6k..6k+3`, its momentum `p_ref[k] ×` components `6k+3..6k+6`). Ghosts are members
+/// too: their states after their end time are not part of their trajectories.
 pub fn run_beam_observed<F: FieldSolver>(
     scn: &BeamScenario<F>,
     rs: &RunSettings,
-    mut observer: impl FnMut(&Dense, &[usize], f64),
+    mut observer: impl FnMut(&Dense, &[usize], &[f64]),
 ) -> BeamRun {
     run_beam_cancellable(scn, rs, |d, m, p| {
         observer(d, m, p);
@@ -1174,7 +1192,7 @@ pub fn run_beam_observed<F: FieldSolver>(
 pub fn run_beam_cancellable<F: FieldSolver>(
     scn: &BeamScenario<F>,
     rs: &RunSettings,
-    mut observer: impl FnMut(&Dense, &[usize], f64) -> bool,
+    mut observer: impl FnMut(&Dense, &[usize], &[f64]) -> bool,
 ) -> Option<BeamRun> {
     let n = scn.particles.len();
     let mut events: Vec<Event> = (0..scn.obstacles.len()).map(Event::Obstacle).collect();
@@ -1194,11 +1212,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             .detector
             .map_or(f64::INFINITY, |d| d.signed_distance(x)),
     };
-    #[allow(clippy::cast_precision_loss)]
-    let p_ref = {
-        let s: f64 = scn.particles.iter().map(|b| b.p0.length()).sum::<f64>() / n.max(1) as f64;
-        if s > 0.0 { s } else { 1.0 }
-    };
+    let p_ref = momentum_scales(scn);
 
     let mut tracks: Vec<Track> = scn
         .particles
@@ -1294,7 +1308,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             .iter()
             .map(|b| Kinematics::new(b.particle.mass, scn.c))
             .collect(),
-        p_ref,
+        p_ref: p_ref.clone(),
         a0: if retarded {
             launch_accelerations(scn)
         } else {
@@ -1403,7 +1417,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                 .iter()
                 .map(|&i| Kinematics::new(scn.particles[i].particle.mass, scn.c))
                 .collect(),
-            p_ref,
+            p_ref: members.iter().map(|&i| p_ref[i]).collect(),
             past: retarded.then_some(&past),
             stopped: stopped
                 .iter()
@@ -1425,7 +1439,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
         let mut y0 = Vec::with_capacity(6 * members.len());
         for &i in &members {
             let (x, p) = states[i];
-            let s = p / p_ref;
+            let s = p / p_ref[i];
             y0.extend_from_slice(&[x.x, x.y, x.z, s.x, s.y, s.z]);
         }
         let mut energy0 = ode.energy(&y0, t_now);
@@ -1511,7 +1525,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             };
             let t_step = int.t();
             let dense = int.dense();
-            if !observer(dense, &members, p_ref) {
+            if !observer(dense, &members, &ode.p_ref) {
                 return None;
             }
             let pos = |k: usize, t: f64| {
@@ -1526,7 +1540,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     dense.eval_component(6 * k + 3, t),
                     dense.eval_component(6 * k + 4, t),
                     dense.eval_component(6 * k + 5, t),
-                ) * p_ref
+                ) * ode.p_ref[k]
             };
 
             // Contacts between flying particles with a radius (rigid spheres): the earliest
@@ -1640,7 +1654,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                         dense.eval_derivative_component(6 * k + 3, t),
                         dense.eval_derivative_component(6 * k + 4, t),
                         dense.eval_derivative_component(6 * k + 5, t),
-                    ) * p_ref;
+                    ) * ode.p_ref[k];
                     ode.kin[k].acceleration(mom(k, t), dp)
                 };
                 let continued = ode.continuations(&y_end, t_end).unwrap_or_default();
@@ -1725,7 +1739,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                                 dense.eval_derivative_component(6 * k + 3, t),
                                 dense.eval_derivative_component(6 * k + 4, t),
                                 dense.eval_derivative_component(6 * k + 5, t),
-                            ) * p_ref;
+                            ) * ode.p_ref[k];
                             larmor_power(&ode.kin[k], q, mom(k, t), dp)
                         };
                         let h = t_end - t_a;
@@ -1761,7 +1775,7 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             dense.eval_derivative_component(6 * k + 3, t),
                             dense.eval_derivative_component(6 * k + 4, t),
                             dense.eval_derivative_component(6 * k + 5, t),
-                        ) * p_ref;
+                        ) * ode.p_ref[k];
                         emission[i].push((
                             t,
                             pos(k, t),

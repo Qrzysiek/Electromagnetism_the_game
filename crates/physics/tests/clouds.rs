@@ -721,10 +721,10 @@ fn c6_collective_radiation_damping() {
                         return;
                     }
                     let (mut x, mut v) = (DVec3::ZERO, DVec3::ZERO);
-                    for k in 0..n {
+                    for (k, &scale) in p_ref.iter().enumerate() {
                         let comp = |i: usize| dense.eval_component(6 * k + i, t1);
                         x += DVec3::new(comp(0), comp(1), 0.0);
-                        v += kin.velocity(DVec3::new(comp(3), comp(4), 0.0) * p_ref);
+                        v += kin.velocity(DVec3::new(comp(3), comp(4), 0.0) * scale);
                     }
                     let (x, v) = (x / n as f64, v / n as f64);
                     // The mode's energy, with the mass the oscillation shows.
