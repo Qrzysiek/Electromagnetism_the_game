@@ -704,3 +704,143 @@ fn s8_harmonics_of_an_elliptic_orbit() {
     );
     assert!(worst < 1e-4, "S8 {worst:.3e}");
 }
+
+/// S9, nonlinear Thomson scattering (Brau §10.3.2): a charge (q = m = 1, c = 2) at rest
+/// where a plane wave (along x, E along y, ω = 1) reaches a₀ = qE₀/(mωc) = 1, flown by the
+/// single-particle runner for 20 periods of the wave's phase φ. From rest (A(0) = 0) the
+/// orbit is a figure of eight drifting at `c a₀²/(4 + a₀²)`, in closed form in φ:
+/// `p = mc (a₀² sin²φ / 2, a₀ sin φ)`, `γ = 1 + a₀² sin²φ/2`, `x = (c a₀²/4ω)(φ − sin 2φ/2)`,
+/// `y = (c a₀/ω)(1 − cos φ)`, `t = [(1 + a₀²/4)φ − (a₀²/8) sin 2φ]/ω`. Every period of φ is
+/// alike, so in a direction θ it radiates the harmonics of `ω₁ = ω/(1 + (a₀²/4)(1 − cos θ))`
+/// (the drift's Doppler shift), and after N periods `d²I/dω dΩ` at `n ω₁` is N² times the
+/// single period's, `(q²/4π²c) |∫ n×((n − β)×β̇)/κ² e^{iωτ} dt|²` over one period: computed
+/// on the closed-form orbit by the trapezoidal rule in φ (the integrand is periodic in φ at
+/// the harmonics, so the rule converges exponentially; 4096 points), independent of the
+/// runner and of the measure's Filon rule. Along the wave (θ = 0) `t − x/c = φ/ω` exactly
+/// and the transverse momentum is sinusoidal in φ, so only the fundamental radiates there.
+/// Required: within 1e-4 (as S8); on the axis, harmonics 2 and 3 below 1e-12 of the
+/// fundamental.
+#[test]
+fn s9_nonlinear_thomson_harmonics() {
+    use physics::dynamics::Particle;
+    use physics::external::{External, PlaneWave};
+    use physics::field::LevelField;
+    use physics::spectrum::RadiationWindow;
+    use physics::trajectory::{Acceptance, RunSettings, Scenario, run};
+    let (q, m, c, w, a0) = (1.0_f64, 1.0_f64, 2.0_f64, 1.0_f64, 1.0_f64);
+    let e0 = a0 * m * w * c / q;
+    let periods = 20u32;
+    let t_period = 2.0 * PI * (1.0 + a0 * a0 / 4.0) / w;
+    let window = RadiationWindow {
+        axis: DVec3::X,
+        half_angle: 0.0,
+        band: None,
+        energy: (0.0, 1.0),
+        abrupt_stop: false,
+    };
+    let tr = run(
+        &Scenario {
+            field: LevelField {
+                external: vec![External::Wave(PlaneWave::in_plane(e0, 0.0, w, 0.0, c))],
+                ..LevelField::default()
+            },
+            obstacles: vec![],
+            particle: Particle {
+                charge: q,
+                mass: m,
+                radius: 0.0,
+                moment: 0.0,
+            },
+            c,
+            x0: DVec3::ZERO,
+            p0: DVec3::ZERO,
+            detector: None,
+            bounds: None,
+            t_max: f64::from(periods) * t_period,
+            radiation_reaction: false,
+            acceptance: Some(Acceptance {
+                radiation: Some(window),
+                ..Acceptance::default()
+            }),
+            gates: Vec::new(),
+        },
+        &RunSettings::with_tolerance(1e-12),
+    );
+    // The closed-form orbit at phase φ: position, β, dβ/dt, t, dt/dφ.
+    let orbit = |phi: f64| {
+        let (s, co) = phi.sin_cos();
+        let gamma = 1.0 + 0.5 * a0 * a0 * s * s;
+        let dgamma = a0 * a0 * s * co;
+        let r = DVec3::new(
+            c * a0 * a0 / (4.0 * w) * (phi - 0.5 * (2.0 * phi).sin()),
+            c * a0 / w * (1.0 - co),
+            0.0,
+        );
+        let beta = DVec3::new(0.5 * a0 * a0 * s * s / gamma, a0 * s / gamma, 0.0);
+        let dbeta = DVec3::new(
+            0.5 * a0 * a0 * (2.0 * s * co * gamma - s * s * dgamma) / (gamma * gamma),
+            a0 * (co * gamma - s * dgamma) / (gamma * gamma),
+            0.0,
+        );
+        let t = ((1.0 + a0 * a0 / 4.0) * phi - a0 * a0 / 8.0 * (2.0 * phi).sin()) / w;
+        (r, beta, dbeta * (w / gamma), t, gamma / w)
+    };
+    let cases: [(f64, [u32; 3]); 4] = [
+        (0.0, [1, 2, 3]),
+        (30.0, [1, 2, 3]),
+        (90.0, [1, 2, 3]),
+        (150.0, [1, 2, 3]),
+    ];
+    let samples = 4096;
+    let mut worst: f64 = 0.0;
+    let mut on_axis_fundamental = 0.0;
+    for (deg, harmonics) in cases {
+        let (sn, cs) = f64::to_radians(deg).sin_cos();
+        let n = DVec3::new(cs, sn, 0.0);
+        let w1 = w / (1.0 + a0 * a0 / 4.0 * (1.0 - cs));
+        for h in harmonics {
+            let om = f64::from(h) * w1;
+            let (mut re, mut im) = (DVec3::ZERO, DVec3::ZERO);
+            let dphi = 2.0 * PI / f64::from(samples);
+            for k in 0..samples {
+                let (r, beta, beta_dot, t, dt) = orbit(f64::from(k) * dphi);
+                let kappa = 1.0 - n.dot(beta);
+                let g = n.cross((n - beta).cross(beta_dot)) / (kappa * kappa) * (dt * dphi);
+                let (si, co) = (om * (t - n.dot(r) / c)).sin_cos();
+                re += g * co;
+                im += g * si;
+            }
+            let exact = q * q / (4.0 * PI * PI * c)
+                * f64::from(periods).powi(2)
+                * (re.length_squared() + im.length_squared());
+            let got = spectrum(&tr.emission, q, c, n, om, 0.0, 1, false)[0];
+            if deg == 0.0 && h > 1 {
+                // Both vanish: nothing to compare but their size.
+                let share = got / on_axis_fundamental;
+                println!(
+                    "S9 θ = 0°, harmonic {h} (ω = {om:.6}): {got:.3e}, {share:.1e} of the \
+                     fundamental (closed-form orbit {exact:.1e})"
+                );
+                worst = worst.max(share / 1e-12 * 1e-4);
+                continue;
+            }
+            if deg == 0.0 {
+                on_axis_fundamental = got;
+            }
+            let err = got / exact - 1.0;
+            println!(
+                "S9 θ = {deg}°, harmonic {h} (ω = {om:.6}): {got:.10e} (closed-form orbit \
+                 {exact:.10e}): {err:.1e}"
+            );
+            worst = worst.max(err.abs());
+        }
+    }
+    println!(
+        "S9: {} steps, {} samples; the drift {:.6} c (c a₀²/(4 + a₀²) = {:.6} c)",
+        tr.stats.n_step,
+        tr.emission.len(),
+        tr.end.x.x / tr.end.t / c,
+        a0 * a0 / (4.0 + a0 * a0)
+    );
+    assert!(worst < 1e-4, "S9 {worst:.3e}");
+}
