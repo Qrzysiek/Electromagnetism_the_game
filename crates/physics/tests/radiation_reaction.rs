@@ -631,3 +631,101 @@ fn r7_plane_wave_reaction_and_radiation_pressure() {
     );
     assert!(rel < 1e-3, "R7 (B) {rel:.3e}");
 }
+
+/// R8, radiation pressure on a charge crossing a plane wave (Brau Ex. 10.14): a charge
+/// (q = 0.1, m = 1, c = 2) moving at βc along x through a wave (ω = 1, a₀ = 0.01, linearly
+/// polarized in the plane) travelling at the angle θ to its velocity, from the phase where
+/// A = 0 (so the canonical momentum adds no transverse drift). In the charge's mean rest
+/// frame the push is `σ_T I′/c` along k̂′, with `I′ = I γ²(1 − β cos θ)²`; back in the
+/// laboratory, `⟨dp_x/dt⟩ = (σ_T I/c) γ²(1 − β cos θ)(cos θ − β)` and `⟨dp_y/dt⟩ =
+/// (σ_T I/c)(1 − β cos θ) sin θ` (independent of the polarization; Brau's is out of the
+/// plane). Measured as in R7 (B): the momentum with the reaction minus without, where the
+/// phase first reaches 20 periods, over the time. Required: both components within 1e-3 of
+/// the larger (O(a₀²) = 1e-4).
+#[test]
+fn r8_radiation_pressure_on_a_moving_charge() {
+    use physics::external::{External, PlaneWave};
+    use physics::trajectory::StepView;
+    use std::f64::consts::PI;
+    let (q, m, c, w, a0) = (0.1_f64, 1.0_f64, 2.0_f64, 1.0_f64, 0.01_f64);
+    let e0 = a0 * m * w * c / q;
+    let thomson = q.powi(4) * e0 * e0 / (3.0 * m * m * c.powi(4));
+    let periods = 20.0;
+    let kin = Kinematics::new(m, c);
+    let mut worst: f64 = 0.0;
+    for beta in [0.5_f64, 0.9] {
+        let gamma = 1.0 / (1.0 - beta * beta).sqrt();
+        for deg in [0.0_f64, 60.0, 120.0, 180.0] {
+            let theta = deg.to_radians();
+            let (st, ct) = theta.sin_cos();
+            let k_hat = DVec3::new(ct, st, 0.0);
+            let phase = |t: f64, x: DVec3| w * (t - k_hat.dot(x) / c);
+            let target = 2.0 * PI * periods;
+            let duration = target / (w * (1.0 - beta * ct));
+            let at_phase = |rr: bool| -> (f64, DVec3) {
+                let scn = Scenario {
+                    field: External::Wave(PlaneWave::in_plane(e0, theta, w, 0.0, c)),
+                    obstacles: vec![],
+                    particle: Particle {
+                        charge: q,
+                        mass: m,
+                        radius: 0.0,
+                        moment: 0.0,
+                    },
+                    c,
+                    x0: DVec3::ZERO,
+                    p0: DVec3::new(gamma * m * beta * c, 0.0, 0.0),
+                    detector: None,
+                    bounds: None,
+                    t_max: duration * 1.05,
+                    radiation_reaction: rr,
+                    acceptance: None,
+                    gates: Vec::new(),
+                };
+                let mut found: Option<(f64, DVec3)> = None;
+                run_observed(
+                    &scn,
+                    &RunSettings::with_tolerance(TOL),
+                    |v: &StepView<'_, _>| {
+                        let (a, b) = (v.t_start(), v.t_end());
+                        let ph = |t: f64| phase(t, v.state(t).0);
+                        if found.is_none() && ph(a) < target && ph(b) >= target {
+                            let (mut lo, mut hi) = (a, b);
+                            for _ in 0..100 {
+                                let mid = 0.5 * (lo + hi);
+                                if ph(mid) < target {
+                                    lo = mid;
+                                } else {
+                                    hi = mid;
+                                }
+                            }
+                            found = Some((hi, v.state(hi).1));
+                        }
+                    },
+                );
+                found.expect("the phase is reached")
+            };
+            let (t_rr, p_rr) = at_phase(true);
+            let (_, p_free) = at_phase(false);
+            let force = (p_rr - p_free) / t_rr;
+            let reference = DVec3::new(
+                gamma * gamma * (1.0 - beta * ct) * (ct - beta),
+                (1.0 - beta * ct) * st,
+                0.0,
+            ) * thomson;
+            let scale = reference.x.abs().max(reference.y.abs());
+            let err = (force - reference).length() / scale;
+            println!(
+                "R8 β = {beta}, θ = {deg}°: mean push ({:.6e}, {:.6e}), Brau ({:.6e}, {:.6e}) \
+                 [σ_T I/c = {thomson:.4e}]: {err:.1e}; the charge's speed changed by {:.1e}",
+                force.x,
+                force.y,
+                reference.x,
+                reference.y,
+                (kin.velocity(p_rr).length() / c - beta).abs()
+            );
+            worst = worst.max(err);
+        }
+    }
+    assert!(worst < 1e-3, "R8 {worst:.3e}");
+}
