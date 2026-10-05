@@ -11,8 +11,9 @@ ratio", and the description cites the section or problem (planned level field `r
 ## Status (2026-10-05)
 
 - **Built:** five arcs, 32 levels (arcs 6–10, below), the book's validation tests listed
-  after them (the latest: Z1–Z3 §1.11–1.13 and §5.17, the circuits' groundwork; C3 §16.8
-  scattering by a bound charge, C4 Pr. 16.13 the dipole sum rule, R7 §14.8 radiation pressure, S8 Pr. 14.22, MS1 §13.6, S7 Pr. 15.10, R6
+  after them (the latest: C5 Pr. 13.2–13.3 energy transfer to a bound charge; Z1–Z3
+  §1.11–1.13 and §5.17, the circuits' groundwork; C3 §16.8 scattering by a bound charge,
+  C4 Pr. 16.13 the dipole sum rule, R7 §14.8 radiation pressure, S8 Pr. 14.22, MS1 §13.6, S7 Pr. 15.10, R6
   Pr. 16.10–16.11, L4 Pr. 6.2), and the energy-flow view (§6.7).
 - **Set aside, with the reasons in the entries:** Pr. 1.1b (a Faraday cage of plates),
   Pr. 2.20 (the quadrupole lens is 3D), §2.10–2.11 and §3.4 (corners and edges), Pr. 15.8
@@ -314,7 +315,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - A beam two-body level: knock the light charge into a detector.
   - A test against the impulse approximation.
   - NOW (beams with two species).
-- **Pr. 13.2/13.3 energy transfer to a harmonically bound charge.** Adiabatic cut-off for b > v/ω₀: slow collisions transfer nothing. Built: Pr. 13.2 as a level (arc 9); Pr. 13.3 NOW (the charge cloud).
+- **Pr. 13.2/13.3 energy transfer to a harmonically bound charge.** Adiabatic cut-off for b > v/ω₀: slow collisions transfer nothing. Built: Pr. 13.2 as a level (arc 9); Pr. 13.3 as *test C5* (a relativistic pass, ξ = 0.3 to 4, against the K₀, K₁ formula within 6e-6; Brau §5.2.3 is the same problem).
 - **§13.2–13.3 energy loss in matter, density effect.** OUT (a statistical medium).
 - **§13.4 Cherenkov; §13.7 transition radiation.** OUT (media).
 - **§13.5 / Pr. 13.5 screened Coulomb scattering.** F:screened.

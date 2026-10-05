@@ -394,3 +394,118 @@ fn c4_dipole_sum_rule() {
     );
     assert!(rel.abs() < 1e-4, "C4 {rel:.3e}");
 }
+
+/// C5, Jackson Problems 13.2–13.3 (Brau §5.2.3, excitation by a fast charged particle): a
+/// charge z = 16 passes at v = 0.8c (c = 100) and impact parameter b an electron (q = −1,
+/// m = 1) at rest at the centre of a neutral cloud (Q = 1, R = 4: ω₀ = 1/8). Its field is
+/// the engine's Liénard–Wiechert field of a charge in uniform motion (`lienard::fields`: an
+/// infinitely heavy projectile, as in the problem), from 300 b before the closest approach
+/// to 300 b after it. The energy left in the oscillator against Problem 13.3's
+/// `ΔE = (2z²q²/(m b² v²)) [ξ² K₁(ξ)² + ξ² K₀(ξ)²/γ²]`, `ξ = ω₀b/(γv)` = 0.3, 1, 2, 4: from
+/// nearly the impulse to a free charge (Pr. 13.1) to the adiabatic cut-off, where the
+/// transfer falls as e^{−2ξ} (`scripts/wolfram/c5_bound_energy_transfer.wls`, Wolfram Engine
+/// 14.2: the closed form and the Fourier integral of the field agree to 28 digits).
+/// Required: within 1e-4. Neglected by the problem: the dipole approximation, (swing/b)² ~
+/// 1e-9; the electron's speed, (v_e/c)² ~ 1e-10; the projectile's magnetic force, at first
+/// order v_e v/c² ~ 1e-5 (the scale c = 100 keeps it there with swings of 1e-2); the field
+/// left at the ends, ~1e-5.
+#[test]
+fn c5_energy_transfer_to_a_bound_charge() {
+    use physics::field::FieldSample;
+    use physics::lienard::{Worldline, fields};
+    struct Line {
+        x0: DVec3,
+        v: DVec3,
+    }
+    impl Worldline for Line {
+        fn state(&self, t: f64) -> (DVec3, DVec3, DVec3) {
+            (self.x0 + self.v * t, self.v, DVec3::ZERO)
+        }
+    }
+    struct Passing {
+        atom: Coulomb,
+        z: f64,
+        path: Line,
+        c: f64,
+    }
+    impl FieldSolver for Passing {
+        fn sample(&self, x: DVec3, t: f64) -> FieldSample {
+            let a = self.atom.sample(x, t);
+            let f = fields(&self.path, self.z, self.c, x, t);
+            FieldSample {
+                e: a.e + f.e(),
+                b: a.b + f.b,
+                phi: a.phi,
+            }
+        }
+    }
+    let (q, m, big_q, r) = (-1.0_f64, 1.0_f64, 1.0_f64, 4.0_f64);
+    let (z, c, v) = (16.0_f64, 100.0_f64, 80.0_f64);
+    let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
+    let gamma = 1.0 / (1.0 - (v / c).powi(2)).sqrt();
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const TRANSFER: [(f64, f64); 4] = [
+        (0.3, 7.0433438139553840203e-7),
+        (1.0, 2.9960611994406950320e-8),
+        (2.0, 1.7038348612222998048e-9),
+        (4.0, 1.4109718907197246090e-11),
+    ];
+    let atom = || {
+        Coulomb::with_clouds(
+            &[],
+            &[ChargeCloud {
+                position: DVec3::ZERO,
+                charge: big_q,
+                radius: r,
+            }],
+        )
+    };
+    let phi0 = atom().sample(DVec3::ZERO, 0.0).phi;
+    let kin = Kinematics::new(m, c);
+    let mut worst: f64 = 0.0;
+    for (xi, reference) in TRANSFER {
+        let b = xi * gamma * v / omega0;
+        let span = 300.0 * b;
+        let scn = Scenario {
+            field: Passing {
+                atom: atom(),
+                z,
+                path: Line {
+                    x0: DVec3::new(-span, b, 0.0),
+                    v: DVec3::new(v, 0.0, 0.0),
+                },
+                c,
+            },
+            obstacles: vec![],
+            particle: Particle {
+                charge: q,
+                mass: m,
+                radius: 0.0,
+                moment: 0.0,
+            },
+            c,
+            x0: DVec3::ZERO,
+            p0: DVec3::ZERO,
+            detector: None,
+            bounds: None,
+            t_max: 2.0 * span / v,
+            radiation_reaction: false,
+            acceptance: None,
+            gates: Vec::new(),
+        };
+        let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+        assert_eq!(tr.outcome, Outcome::Timeout, "C5 at ξ = {xi}");
+        let energy =
+            kin.kinetic_energy(tr.end.p) + q * (scn.field.atom.sample(tr.end.x, 0.0).phi - phi0);
+        let rel = energy / reference - 1.0;
+        let impulse = 2.0 * (z * q).powi(2) / (m * (b * v).powi(2));
+        println!(
+            "C5 ξ = {xi} (b = {b:.2}): ΔE = {energy:.10e}, Jackson Pr. 13.3 {reference:.10e}: \
+             {rel:.1e}; {:.4} of the impulse to a free charge; {} steps",
+            energy / impulse,
+            tr.stats.n_accept
+        );
+        worst = worst.max(rel.abs());
+    }
+    assert!(worst < 1e-4, "C5 {worst:.3e}");
+}
