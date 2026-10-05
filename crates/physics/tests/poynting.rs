@@ -1,4 +1,4 @@
-//! Validation tests P1–P4 for the field energy, its flow and its momentum (PHYSICS.md §10, §9). Run with
+//! Validation tests P1–P5 for the field energy, its flow and its momentum (PHYSICS.md §10, §9). Run with
 //! `cargo test --release -p physics --test poynting -- --nocapture`.
 
 #![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
@@ -268,4 +268,58 @@ fn p4_field_momentum() {
         "P4 (c) β = 1e-3, magnetic force only: stored momentum's share {share:.8}, off 1/3 by {off:.2e}"
     );
     assert!(off < 1e-5, "P4 (c) {off:.3e}");
+}
+
+/// P5, the 4/3 problem (Brau §11.1.2 and Ex. 11.1; Jackson §16.4): the field energy and
+/// momentum of a charge moving uniformly at βc, outside the sphere of radius a of its rest
+/// frame (contracted to an ellipsoid in the laboratory: a uniformly charged shell), from
+/// the engine's Liénard–Wiechert field (`lienard::fields`, the energy and momentum
+/// densities of `poynting`). In the rest frame's coordinates r′ ≥ a (laboratory volume
+/// `r′² dr′ dΩ′/γ`), with r′ = a/s and Gauss–Legendre in s and cos θ′. Reference:
+/// `U = U₀ γ (1 + β²/3)` and `P = (4/3)(U₀/c²) γ v`, `U₀ = q²/(2a)`: the electromagnetic
+/// mass from the momentum is 4/3 of that from the energy, and (U, Pc) is no 4-vector
+/// (U² − P²c² depends on β) until the stresses that hold the shell together are added
+/// (Poincaré). Required: both within 1e-12 (the integrands are polynomials in cos θ′ times
+/// r′⁻⁴, which the rules integrate exactly).
+#[test]
+fn p5_electromagnetic_mass_four_thirds() {
+    use physics::poynting::momentum_density;
+    let (q, a, c) = (1.3_f64, 0.7_f64, 2.0_f64);
+    let u0 = q * q / (2.0 * a);
+    let radial = common::gauss_legendre(8);
+    let mut worst: f64 = 0.0;
+    for beta in [0.1_f64, 0.6, 0.95] {
+        let v = DVec3::new(beta * c, 0.0, 0.0);
+        let gamma = 1.0 / (1.0 - beta * beta).sqrt();
+        let charge = Uniform { x0: DVec3::ZERO, v };
+        let (mut energy, mut momentum) = (0.0, DVec3::ZERO);
+        for (n, w_angle) in sphere_quadrature(DVec3::X, 16, 16) {
+            for &(x, w_s) in &radial {
+                let s = 0.5 * (1.0 + x);
+                let r = a / s;
+                // Laboratory point of the rest-frame point r n (contracted along v).
+                let lab = DVec3::new(r * n.x / gamma, r * n.y, r * n.z);
+                let f = fields(&charge, q, c, lab, 0.0);
+                let weight = w_angle * 0.5 * w_s * a.powi(3) / s.powi(4) / gamma;
+                energy += weight * energy_density(f.e(), f.b, c);
+                momentum += momentum_density(f.e(), f.b) * weight;
+            }
+        }
+        let u_ref = u0 * gamma * (1.0 + beta * beta / 3.0);
+        let p_ref = 4.0 / 3.0 * u0 / (c * c) * gamma * v.x;
+        let (eu, ep) = (energy / u_ref - 1.0, (momentum.x - p_ref) / p_ref);
+        println!(
+            "P5 β = {beta}: U = {energy:.15e} (U₀γ(1 + β²/3) {u_ref:.15e}, {eu:.1e}); P = \
+             {:.15e} ((4/3)(U₀/c²)γv {p_ref:.15e}, {ep:.1e}; transverse {:.1e}); mass from \
+             P/(γv) {:.6} and from U/(γc²) {:.6} (U₀/c² = {:.6}); U² − P²c² = {:.10}",
+            momentum.x,
+            momentum.y.abs().max(momentum.z.abs()),
+            momentum.x / (gamma * v.x),
+            energy / (gamma * c * c),
+            u0 / (c * c),
+            energy * energy - (momentum.x * c).powi(2)
+        );
+        worst = worst.max(eu.abs()).max(ep.abs());
+    }
+    assert!(worst < 1e-12, "P5 {worst:.3e}");
 }
