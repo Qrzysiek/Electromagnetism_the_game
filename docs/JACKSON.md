@@ -11,17 +11,20 @@ ratio", and the description cites the section or problem (planned level field `r
 ## Status (2026-10-05)
 
 - **Built:** five arcs, 32 levels (arcs 6–10, below), the book's validation tests listed
-  after them (the latest: C3 §16.8 scattering by a bound charge, C4 Pr. 16.13 the dipole
-  sum rule, R7 §14.8 radiation pressure, S8 Pr. 14.22, MS1 §13.6, S7 Pr. 15.10, R6
+  after them (the latest: Z1–Z3 §1.11–1.13 and §5.17, the circuits' groundwork; C3 §16.8
+  scattering by a bound charge, C4 Pr. 16.13 the dipole sum rule, R7 §14.8 radiation pressure, S8 Pr. 14.22, MS1 §13.6, S7 Pr. 15.10, R6
   Pr. 16.10–16.11, L4 Pr. 6.2), and the energy-flow view (§6.7).
 - **Set aside, with the reasons in the entries:** Pr. 1.1b (a Faraday cage of plates),
   Pr. 2.20 (the quadrupole lens is 3D), §2.10–2.11 and §3.4 (corners and edges), Pr. 15.8
   (collisions of like particles), Pr. 11.13 (line charges), §13.6 (multiple scattering is
   a Cauchy process in the slice: test MS1), Pr. 14.22 as a level (its harmonics need
-  some twenty orbits and an end to the flight: test S8).
+  some twenty orbits and an end to the flight: test S8), Pr. 16.12 (an average over
+  random interruptions, which a deterministic flight does not realise).
 - **Feasible, not yet built** (the charge cloud realises F:bound, but these entries kept
   that tag until 2026-10-05): a level on §16.8's cross section (Rayleigh's ω⁴ through
-  the resonance to Thomson's; the test C3 is built), Pr. 16.12 collision broadening. Everything else needs a feature from the table below or 3D;
+  the resonance to Thomson's; the test C3 is built). A radiation goal is measured when
+  its particle arrives, and a scattering bound electron stays bound, so the level needs
+  a receiver for the steady scattered power: a design question for the owner. Everything else needs a feature from the table below or 3D;
   wave optics is planned as its own stage (F:optics, `SPEC.md` §8).
 
 ## How to read this list
@@ -194,7 +197,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - Test: the square plate C = 0.3667874 (see Pr. 3.21).
 - **§1.13 relaxation method.** Background for our BEM. Test only (compare with Pr. 1.22–1.24 examples).
 - **Pr. 1.1b shielding.** No field inside a closed conductor. A Faraday cage of plates was tried and set aside (Arc 7 above: walls open at the top and bottom screen only when tall, beyond the setup budget); it needs electrodes that close in z.
-- **Pr. 1.13, induced charge between plates (Green reciprocity).** A charge between grounded plates. F:image-force for a level; a test is NOW with BEM.
+- **Pr. 1.12–1.13, induced charge between plates (Green reciprocity).** A charge between grounded plates. *Test Z1* (BEM, two unequal plates: the induced charges equal `−q φ_k(x)`, Pr. 1.13's fractional distance between them, and the symmetric coefficients of capacitance of §1.11; the circuits' Shockley–Ramo coupling). F:image-force for a level.
 
 ### Ch. 2: Boundary-value problems I
 
@@ -239,7 +242,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 - **Pr. 5.19 cylindrical magnet.** F:coils+.
 - **§5.10–5.12 magnetized sphere, permanent magnets, magnetic shielding.** The materials stage (F:dielectric analogue for μ).
 - **§5.15 Faraday's law.** Betatron (induction accelerator): the "2:1 rule", with the orbit flux twice the flux at the orbit field. F:ramp.
-- **§5.17 inductances.** The circuits stage (SPEC).
+- **§5.17 inductances.** The circuits stage (SPEC). Its groundwork is built as tests: *Z2*, the mutual inductance of coplanar coils as linked flux (Pr. 5.28's closed form, Pr. 5.34(c)'s series for side-by-side loops); *Z3*, a ring's self-inductance from its own vector potential (Pr. 5.32; the corrections are of order (b/a)², with coefficient (1/8) ln(8a/b) + 1/16).
 - **§5.18 eddy currents.** OUT (conductors as media).
 
 ### Ch. 6: Maxwell equations, conservation laws
@@ -360,7 +363,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - Pr. 16.10–16.11 (gap acceleration with damping): *test R6*, LL against the integro-differential (exact non-runaway) solution, which in one dimension is exact for Lorentz–Dirac in the rapidity (Pr. 16.8); and the book's first-order results.
 - **Pr. 16.1, §16.7 radiating oscillator.** Level breadth: energy decays as e^{−Γt}, and the line width is Γ. Built (arc 9; test C2).
 - **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. Built: the resonance is a level of arc 9, and the cross section from Rayleigh to Thomson is *test C3* (the charge cloud in a plane wave, against (16.78); Jackson's (16.73) is the Landau–Lifshitz reduction). A level on the cross section: NOW.
-- **Pr. 16.12 collision broadening.** NOW (the charge cloud, with interruptions at fixed times).
+- **Pr. 16.12 collision broadening.** Set aside. Its spectrum is an average over an ensemble of wave trains cut at random, exponentially distributed times; the game's flights are deterministic and end once. One cut train is a finite flight of the radiation goals (the charge moves uniformly after its end): its line is the finite-time line of S1 (width 2π/T) on the decaying oscillator of C2, and Jackson's average over T is algebra on it. A test of the average through the game's measure would need the spectrum at thousands of cut times, because the counter-rotating part oscillates in T at 2ω₀, which a Gauss–Laguerre rule in T cannot average.
 - **Pr. 16.13 dipole sum rule.** *Test C4.* As stated it diverges for §16.8's own oscillator: its polarizability tends to `−(e²/mω²)(1 − iωτ)`, not the free value the problem assumes, so σ_t tends to σ_T. With σ_T subtracted it holds exactly up to the factor `1 − ω₀²τ²`, which the measured cross section resolves.
 
 ## Cross-topic highlights (most interesting levels)
