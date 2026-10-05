@@ -1,4 +1,4 @@
-//! Validation tests W1–W4 for external fields (PHYSICS.md §2.3, §9). Run with
+//! Validation tests W1–W5 for external fields (PHYSICS.md §2.3, §9). Run with
 //! `cargo test -p physics --test waves -- --nocapture --test-threads=1`.
 
 #![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
@@ -234,4 +234,117 @@ fn w4_energy_conservation_with_static_stray_fields() {
         assert!(tr.stats.n_accept > 20);
         assert!(rel < 1e-10, "energy error {rel:.3e}");
     }
+}
+
+/// W5, the Lawson–Woodward theorem (Brau Ex. 4.6) and its violation by radiation reaction:
+/// a charge (q = 0.1, m = 1) at rest in the path of a plane-wave pulse (c = 2, ω = 1,
+/// a₀ = qE₀/(mωc) = 1) given by its vector potential `A_y = (E₀/ω) g(φ) sin φ`,
+/// `φ = ω(t − x/c) − φ₀`, `g = exp(−φ²/2σ²)`, σ = 6π (a test-local field: E and B from A,
+/// so A vanishes exactly before and after the pulse). Without radiation reaction the
+/// canonical momentum `p⊥ + qA` and the light-front momentum `ρ = γ − p_x/mc` are conserved:
+/// the charge ends at rest (a plane wave in vacuum gives no net energy), displaced by
+/// `Δx = (q²/2m²cω) ∫A² dφ = (q²E₀²/2m²cω³)(σ√π/2)(1 − e^{−σ²})` and `Δy = −(q/mω)∫A dφ = 0`.
+/// With it, Landau–Lifshitz's exact plane-wave solution (Di Piazza 2008, test R7) gives
+/// `1/ρ = 1 + (2q⁴/3m³c⁵ω) ∫E² dφ`, `∫E² dφ = E₀²√π (σ/2 + 1/4σ)` up to e^{−σ²}: the pulse
+/// leaves the charge moving forward (radiation pressure). Required: without, |p| below
+/// 1e-9 of mca₀, Δx within 1e-8, Δy within 1e-8 of Δx; with, 1/ρ within 1e-9.
+#[test]
+fn w5_lawson_woodward_and_radiation_pressure() {
+    use physics::field::FieldSample;
+    struct Pulse {
+        e0: f64,
+        w: f64,
+        sigma: f64,
+        phi0: f64,
+        c: f64,
+    }
+    impl FieldSolver for Pulse {
+        fn sample(&self, x: DVec3, t: f64) -> FieldSample {
+            let phi = self.w * (t - x.x / self.c) - self.phi0;
+            let g = (-0.5 * (phi / self.sigma).powi(2)).exp();
+            let dg = -phi / (self.sigma * self.sigma) * g;
+            // E_y = −∂A_y/∂t = −ω dA/dφ, B = x̂ × E / c.
+            let (s, co) = phi.sin_cos();
+            let ey = -self.e0 * (dg * s + g * co);
+            FieldSample {
+                e: DVec3::new(0.0, ey, 0.0),
+                b: DVec3::new(0.0, 0.0, ey / self.c),
+                phi: 0.0,
+            }
+        }
+    }
+    let (q, m, c, w, a0) = (0.1_f64, 1.0_f64, 2.0_f64, 1.0_f64, 1.0_f64);
+    let e0 = a0 * m * w * c / q;
+    let sigma = 6.0 * PI;
+    let pulse = Pulse {
+        e0,
+        w,
+        sigma,
+        phi0: 8.0 * sigma,
+        c,
+    };
+    let sp = PI.sqrt();
+    let dx_ref = q * q * e0 * e0 / (2.0 * m * m * c * w.powi(3))
+        * (sigma * sp / 2.0)
+        * (1.0 - (-sigma * sigma).exp());
+    let inv_rho_ref = 1.0
+        + 2.0 * q.powi(4) / (3.0 * m.powi(3) * c.powi(5) * w)
+            * e0
+            * e0
+            * sp
+            * (sigma / 2.0 + 1.0 / (4.0 * sigma));
+    let kin = Kinematics::new(m, c);
+    let mut ok = true;
+    for reaction in [false, true] {
+        let scn = Scenario {
+            field: Pulse { ..pulse },
+            obstacles: vec![],
+            particle: Particle {
+                charge: q,
+                mass: m,
+                radius: 0.0,
+                moment: 0.0,
+            },
+            c,
+            x0: DVec3::ZERO,
+            p0: DVec3::ZERO,
+            detector: None,
+            bounds: None,
+            t_max: 450.0,
+            radiation_reaction: reaction,
+            acceptance: None,
+            gates: Vec::new(),
+        };
+        let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+        assert_eq!(tr.outcome, Outcome::Timeout);
+        let p = tr.end.p;
+        let rho = kin.gamma(p) - p.x / (m * c);
+        if reaction {
+            let rel = 1.0 / rho / inv_rho_ref - 1.0;
+            let v = kin.velocity(p);
+            println!(
+                "W5 with radiation reaction: 1/ρ = {:.12} (Di Piazza {inv_rho_ref:.12}): {rel:.1e}; \
+                 the charge leaves at v = ({:.6e}, {:.1e}) c ({} steps)",
+                1.0 / rho,
+                v.x / c,
+                v.y / c,
+                tr.stats.n_accept
+            );
+            ok &= rel.abs() < 1e-9;
+        } else {
+            let (ex, ey) = (tr.end.x.x / dx_ref - 1.0, tr.end.x.y / dx_ref);
+            let ep = p.length() / (m * c * a0);
+            println!(
+                "W5 without: |p| = {:.1e} mca₀ after the pulse (ρ = 1 + {:.1e}); Δx = {:.12} \
+                 (Lawson–Woodward drift {dx_ref:.12}): {ex:.1e}; Δy = {:.1e} Δx ({} steps)",
+                ep,
+                rho - 1.0,
+                tr.end.x.x,
+                ey,
+                tr.stats.n_accept
+            );
+            ok &= ep < 1e-9 && ex.abs() < 1e-8 && ey.abs() < 1e-8;
+        }
+    }
+    assert!(ok, "W5");
 }

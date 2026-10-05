@@ -18,7 +18,8 @@ list records the overlap and what Brau adds.
   radiation damping: it showed that the beam runner's quasi-static interaction loses the
   collective damping of bound charges, PHYSICS.md §3.3); test P5 (§11.1.2, the 4/3
   problem); test P6 (Ex. 10.15, the electron's shadow: the optical theorem through the
-  exchange flux, and the axis dark above the resonance, bright below it).
+  exchange flux, and the axis dark above the resonance, bright below it); test W5
+  (Ex. 4.6, Lawson–Woodward, and radiation reaction's violation of it).
 - **Proposed (NOW, for the owner to choose):** the ten items in "Proposals" below, all
   validation tests and one level.
 - **Needs a feature:** F:emission (space-charge flow, Ex. 3.1; planned with vacuum tubes),
@@ -179,7 +180,8 @@ Ranked by what they would add (all tests unless marked):
 2. **The electron's shadow** (Ex. 10.15): built, test P6 (within 3.4e-12; the shadow
    on the axis is dark above the resonance and bright below it).
 3. **The 4/3 problem** (§11.1.2, Ex. 11.1): built, test P5 (within 1.3e-14).
-4. **Lawson–Woodward** (Ex. 4.6): no net acceleration from a plane-wave pulse in vacuum.
+4. **Lawson–Woodward** (Ex. 4.6): built, test W5 (at rest after the pulse to 1.8e-13;
+   with radiation reaction the exact push, 1.7e-13).
 5. **Nonlinear Thomson harmonics** (§10.3.2): the harmonic spectrum at a₀ ~ 1.
 6. **Relativistic radiation pressure** (Ex. 10.14): R7 for a charge crossing the wave.
 7. **Bohr's classical energy loss** (§7.3.1): C5 summed over impact parameters.
