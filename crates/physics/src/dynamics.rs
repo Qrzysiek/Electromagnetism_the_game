@@ -232,6 +232,14 @@ impl<F: FieldSolver> OdeSystem for ParticleOde<F> {
         if self.radiation_reaction { 7 } else { 6 }
     }
 
+    /// The reaction's work is a quadrature: it must not choose the steps. (Under the step
+    /// control, its absolute tolerance, scaled by the launch energy, collapsed the steps
+    /// against the rounding noise of the reaction's derivative for a particle launched
+    /// nearly at rest: test C3 failed after 760 000 steps of 1.6e-8.)
+    fn quadratures(&self) -> usize {
+        usize::from(self.radiation_reaction)
+    }
+
     fn rhs(&self, t: f64, y: &[f64], dy: &mut [f64]) {
         let x = Self::position(y);
         let p = self.momentum(y);

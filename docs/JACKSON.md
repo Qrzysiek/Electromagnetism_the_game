@@ -11,18 +11,17 @@ ratio", and the description cites the section or problem (planned level field `r
 ## Status (2026-10-05)
 
 - **Built:** five arcs, 32 levels (arcs 6–10, below), the book's validation tests listed
-  after them (the latest: R7 §14.8 radiation pressure, S8 Pr. 14.22, MS1 §13.6, S7
-  Pr. 15.10, R6 Pr. 16.10–16.11, L4 Pr. 6.2), and the energy-flow view (§6.7).
+  after them (the latest: C3 §16.8 scattering by a bound charge, C4 Pr. 16.13 the dipole
+  sum rule, R7 §14.8 radiation pressure, S8 Pr. 14.22, MS1 §13.6, S7 Pr. 15.10, R6
+  Pr. 16.10–16.11, L4 Pr. 6.2), and the energy-flow view (§6.7).
 - **Set aside, with the reasons in the entries:** Pr. 1.1b (a Faraday cage of plates),
   Pr. 2.20 (the quadrupole lens is 3D), §2.10–2.11 and §3.4 (corners and edges), Pr. 15.8
   (collisions of like particles), Pr. 11.13 (line charges), §13.6 (multiple scattering is
   a Cauchy process in the slice: test MS1), Pr. 14.22 as a level (its harmonics need
   some twenty orbits and an end to the flight: test S8).
 - **Feasible, not yet built** (the charge cloud realises F:bound, but these entries kept
-  that tag until 2026-10-05): §16.8 scattering by a bound charge (the cross section from
-  Rayleigh's ω⁴ through the resonance to Thomson's; a test, perhaps a level), Pr. 16.13
-  the dipole sum rule (a test), Pr. 16.12 collision broadening, §4.5–4.6 the oscillator
-  model of polarizability. Everything else needs a feature from the table below or 3D;
+  that tag until 2026-10-05): a level on §16.8's cross section (Rayleigh's ω⁴ through
+  the resonance to Thomson's; the test C3 is built), Pr. 16.12 collision broadening. Everything else needs a feature from the table below or 3D;
   wave optics is planned as its own stage (F:optics, `SPEC.md` §8).
 
 ## How to read this list
@@ -229,7 +228,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - The energy of a dipole in a field needs polar particles: F:polar.
 - **Pr. 4.5 force and torque on a dipole.** Deflection of polar/polarizable neutral molecules (Stark deflector). F:polar.
 - **§4.4 dielectric sphere; Pr. 4.9 charge near a dielectric sphere.** F:dielectric.
-- **§4.5–4.6 molecular polarizability; the oscillator model.** NOW (the charge cloud: a bound charge q displaced by a field, α = q R³/|Q|, R³ for a neutral pair as in Jackson's estimate).
+- **§4.5–4.6 molecular polarizability; the oscillator model.** Covered by tests (the charge cloud). The static `α = q²/(mω₀²) = |q| R³/|Q|` (R³ for a neutral pair, as in Jackson's estimate) is the force balance in the field that C1 validates. The oscillator model's `α(ω)`, with radiation damping, is what C3 measures: in Rayleigh's regime σ is `(8π/3)(ω/c)⁴|α|²`.
 - **§4.7 energy in dielectrics** (a dielectric is pulled into a capacitor). F:dielectric; the materials stage.
 
 ### Ch. 5: Magnetostatics, Faraday's law
@@ -276,7 +275,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 
 ### Ch. 10: Scattering and diffraction
 
-- **Rayleigh scattering by one bound charge**: NOW (§16.8, the charge cloud). Mie scattering, diffraction and Babinet need wave solvers: F:optics.
+- **Rayleigh scattering by one bound charge**: built as test C3 (§16.8, the charge cloud); a level is NOW. Mie scattering, diffraction and Babinet need wave solvers: F:optics.
 - Thomson scattering by free charges (§14.8) is covered in Ch. 14.
 
 ### Ch. 11: Special relativity
@@ -360,9 +359,9 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - Text only (LL avoids them).
   - Pr. 16.10–16.11 (gap acceleration with damping): *test R6*, LL against the integro-differential (exact non-runaway) solution, which in one dimension is exact for Lorentz–Dirac in the rapidity (Pr. 16.8); and the book's first-order results.
 - **Pr. 16.1, §16.7 radiating oscillator.** Level breadth: energy decays as e^{−Γt}, and the line width is Γ. Built (arc 9; test C2).
-- **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. NOW (the charge cloud in a plane wave; the resonance is a level of arc 9, the cross section not yet).
+- **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. Built: the resonance is a level of arc 9, and the cross section from Rayleigh to Thomson is *test C3* (the charge cloud in a plane wave, against (16.78); Jackson's (16.73) is the Landau–Lifshitz reduction). A level on the cross section: NOW.
 - **Pr. 16.12 collision broadening.** NOW (the charge cloud, with interruptions at fixed times).
-- **Pr. 16.13 dipole sum rule.** NOW, a test.
+- **Pr. 16.13 dipole sum rule.** *Test C4.* As stated it diverges for §16.8's own oscillator: its polarizability tends to `−(e²/mω²)(1 − iωτ)`, not the free value the problem assumes, so σ_t tends to σ_T. With σ_T subtracted it holds exactly up to the factor `1 − ω₀²τ²`, which the measured cross section resolves.
 
 ## Cross-topic highlights (most interesting levels)
 
@@ -381,7 +380,7 @@ These combine several chapters; most come from the problems.
 11. **Λ decay reconstruction** (Pr. 11.20): decay in flight in a B field. F:decay.
 12. **Stark deflector** (Pr. 4.5): the electric Stern–Gerlach for polar molecules. F:polar.
 13. **RF cavity linac** (§8.7): phase stability with gates. F:cavity.
-14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built in part (arc 9); the scattering cross section is NOW.
+14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built in part (arc 9; the cross section as test C3); a level on the cross section is NOW.
 
 ## For the 3D simulation (future reference)
 

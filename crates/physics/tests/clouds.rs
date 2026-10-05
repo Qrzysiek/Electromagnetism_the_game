@@ -11,7 +11,7 @@ use common::cube;
 use physics::DVec3;
 use physics::dynamics::{Kinematics, Particle};
 use physics::field::{ChargeCloud, Coulomb, FieldSolver, FixedCharge};
-use physics::trajectory::{RunSettings, Scenario, run};
+use physics::trajectory::{Outcome, RunSettings, Scenario, run};
 
 const TOL: f64 = 1e-12;
 
@@ -177,4 +177,220 @@ fn c2_radiating_oscillator_decays_at_gamma() {
         tr.reaction_ratio_max
     );
     assert!((-slope / gamma - 1.0).abs() < 0.02);
+}
+
+/// The bound charge of tests C3 and C4: an electron (q = −1, m = 1) at the centre of a cloud
+/// (Q = 8, R = 2: ω₀ = 1), c = 8 (τ = 2q²/(3mc³): ω₀τ = 1.3e-3), radiation reaction on.
+const BOUND: (f64, f64, f64, f64, f64) = (-1.0, 1.0, 8.0, 2.0, 8.0);
+
+/// One flight of the bound charge (`BOUND`) driven by a plane wave of frequency `w` along x,
+/// polarized along y, for 20 periods, started on the analytic steady state, at the amplitude
+/// 1e-4 · min(1, c/ω) (v/c ≤ 1e-4). Returns the measured extinction cross section (the
+/// wave's work per time, in the steady state minus the reaction's, over the intensity
+/// `I = cE₀²/8π`), Jackson's (16.78), the flight's radiated (Liénard) energy per time over
+/// I, and the number of steps.
+fn bound_charge_in_wave(w: f64) -> (f64, f64, f64, u64) {
+    use physics::external::{External, PlaneWave};
+    use physics::field::LevelField;
+    let (q, m, big_q, r, c) = BOUND;
+    let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
+    let tau = 2.0 * q * q / (3.0 * m * c.powi(3));
+    let gamma = omega0 * omega0 * tau;
+    let sigma_t = 8.0 * PI / 3.0 * (q * q / (m * c * c)).powi(2);
+    // Jackson (16.74) with Γ' = 0: X = χ E₀ for E = Re[E₀ e^{−iωt}] at the origin,
+    // χ = (q/m)(1 − iωτ)/(ω₀² − ω² − iωΓ), Γ = ω₀²τ; the field amplitude that gives |X|.
+    let (nr, ni) = (1.0, -w * tau);
+    let (dr, di) = (omega0 * omega0 - w * w, -w * gamma);
+    let d2 = dr * dr + di * di;
+    let (chi_r, chi_i) = (
+        (nr * dr + ni * di) / d2 * q / m,
+        (ni * dr - nr * di) / d2 * q / m,
+    );
+    let e0 = 1e-4 * (c / w).min(1.0) / (chi_r * chi_r + chi_i * chi_i).sqrt();
+    // x(0) = Re[X], v(0) = Re[−iωX] = ω Im[X], along the polarization (y).
+    let (xr, xi) = (chi_r * e0, chi_i * e0);
+    let v0 = w * xi;
+    let field = LevelField {
+        coulomb: Coulomb::with_clouds(
+            &[],
+            &[ChargeCloud {
+                position: DVec3::ZERO,
+                charge: big_q,
+                radius: r,
+            }],
+        ),
+        external: vec![External::Wave(PlaneWave::in_plane(e0, 0.0, w, 0.0, c))],
+        ..LevelField::default()
+    };
+    let kin = Kinematics::new(m, c);
+    let scn = Scenario {
+        field,
+        obstacles: vec![],
+        particle: Particle {
+            charge: q,
+            mass: m,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        c,
+        x0: DVec3::new(0.0, xr, 0.0),
+        p0: DVec3::new(
+            0.0,
+            kin.gamma_of_velocity(DVec3::new(0.0, v0, 0.0)) * m * v0,
+            0.0,
+        ),
+        detector: None,
+        bounds: Some(cube(100.0)),
+        t_max: 20.0 * 2.0 * PI / w,
+        radiation_reaction: true,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    let tr = run(&scn, &RunSettings::with_tolerance(TOL));
+    assert_eq!(tr.outcome, Outcome::Timeout, "flight at ω = {w}");
+    let intensity = c * e0 * e0 / (8.0 * PI);
+    (
+        -tr.radiation_work / (scn.t_max * intensity),
+        sigma_t * w.powi(4) / d2,
+        tr.radiated_energy / (scn.t_max * intensity),
+        tr.stats.n_accept,
+    )
+}
+
+/// C3, Jackson §16.8: scattering of a plane wave by a bound charge (`bound_charge_in_wave`),
+/// from Rayleigh's `σ_T (ω/ω₀)⁴` below the resonance through its peak `6πc²/ω₀²` (Jackson's
+/// 6πƛ₀²) to Thomson's `σ_T` above it. Reference: Jackson (16.78) with no other damping
+/// (Γ' = 0), `σ_t = σ_T ω⁴/((ω₀² − ω²)² + ω²Γ²)`, `Γ = ω₀²τ`, the exact steady state of his
+/// (16.73), which is the Landau–Lifshitz reduction (his (16.10)). Required: within 1e-4 (the
+/// neglected O(v/c)² is below 1e-8). Printed: the steady state of Abraham–Lorentz (`x⃛ →
+/// iω³x`, the width τω² for Γ), which differs by up to ω₀τ in the wings of the line and by
+/// (ωτ)² far from it, the order either reduction neglects; and the flight's radiated
+/// (Liénard) energy, which is the extinction: nothing is absorbed (Γ' = 0).
+#[test]
+fn c3_bound_charge_scattering_cross_section() {
+    let (q, m, big_q, r, c) = BOUND;
+    let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
+    let tau = 2.0 * q * q / (3.0 * m * c.powi(3));
+    let sigma_t = 8.0 * PI / 3.0 * (q * q / (m * c * c)).powi(2);
+    let mut worst: f64 = 0.0;
+    for w in [0.1, 0.3, 0.7, 0.999, 1.0, 1.001, 1.5, 3.0, 10.0] {
+        let (measured, jackson, radiated, steps) = bound_charge_in_wave(w);
+        let abraham_lorentz =
+            sigma_t * w.powi(4) / ((omega0 * omega0 - w * w).powi(2) + (tau * w.powi(3)).powi(2));
+        let rel = (measured / jackson - 1.0).abs();
+        println!(
+            "C3 ω/ω₀ = {w}: σ/σ_T = {:.6e} (Jackson (16.78) {:.6e}, off by {rel:.1e}; \
+             Abraham–Lorentz {:.2e} relative; radiated (Liénard) {:.2e} relative; {steps} steps)",
+            measured / sigma_t,
+            jackson / sigma_t,
+            abraham_lorentz / jackson - 1.0,
+            radiated / measured - 1.0,
+        );
+        worst = worst.max(rel);
+    }
+    println!(
+        "C3: σ_T = {sigma_t:.4e}; at the resonance 6πc²/ω₀² = {:.4e}; worst {worst:.1e}",
+        6.0 * PI * c * c / (omega0 * omega0)
+    );
+    assert!(worst < 1e-4, "C3 {worst:.3e}");
+}
+
+/// C4, Jackson Problem 16.13: the dipole sum rule `∫₀^∞ σ_t dω = 2π²q²/(mc)`. Its premise, a
+/// polarizability tending to the free charge's `−q²/(mω²)`, fails for the radiating
+/// oscillator of §16.8 by the factor (1 − iωτ) of (16.74): its σ_t tends to Thomson's σ_T
+/// (Fig. 16.2), and the integral diverges. What holds is the rule with the free charge's
+/// Thomson scattering subtracted, exactly for this oscillator: `∫₀^∞ (σ_t − σ_T) dω =
+/// (2π²q²/mc)(1 − ω₀²τ²)` (`scripts/wolfram/c4_dipole_sum_rule.wls`, Wolfram Engine 14.2:
+/// symbolically for any Γ < 2ω₀; Abraham–Lorentz's steady state, whose plateau ends at
+/// ω ~ 1/τ, integrates to 2.0000 times the rule, its runaway pole in the upper half plane
+/// breaking the Kramers–Kronig premise). The measured cross section of C3 at the nodes of
+/// Gauss–Legendre rules on three pieces, each smooth: from 0.1 ω₀ to the line in ω, on the
+/// line (ω₀ ± 50Γ) in θ with `ω = ω₀ + (Γ/2) tan θ` (which makes it flat), above it to
+/// 200 ω₀ in 1/ω. Outside, Jackson's σ_t stands in: below 0.1 ω₀ it is under 1e-4 σ_T (its
+/// integral 2e-9 of the sum; the subtracted σ_T is exact), and a flight there would take
+/// 20 periods of the drive at steps set by ω₀; beyond 200 ω₀ σ_t − σ_T is 8e-6 of the sum.
+/// Required: within 1e-4 of the exact value (the measured σ_t is within 1e-6, C3). Printed:
+/// the rules' own error on Jackson's σ_t, and how far the rule without the factor 1 − ω₀²τ²
+/// is.
+#[test]
+fn c4_dipole_sum_rule() {
+    let (q, m, big_q, r, c) = BOUND;
+    let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
+    let tau = 2.0 * q * q / (3.0 * m * c.powi(3));
+    let gamma = omega0 * omega0 * tau;
+    let sigma_t = 8.0 * PI / 3.0 * (q * q / (m * c * c)).powi(2);
+    let jackson =
+        |w: f64| sigma_t * w.powi(4) / ((omega0 * omega0 - w * w).powi(2) + (w * gamma).powi(2));
+    // From the Wolfram script (q = −1, m = 1, c = 8, ω₀ = 1).
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const EXACT: f64 = 2.4673969169886816951;
+    let sum_rule = 2.0 * PI * PI * q * q / (m * c);
+    let (half, w_min, w_max) = (50.0 * gamma, 0.1 * omega0, 200.0 * omega0);
+    // Each piece: (Gauss–Legendre order, ends of the variable, ω and dω/d(variable)).
+    type Map = fn(f64, f64, f64) -> (f64, f64);
+    let pieces: [(usize, f64, f64, Map); 3] = [
+        (32, w_min, omega0 - half, |s, _, _| (s, 1.0)),
+        (
+            96,
+            -(2.0 * half / gamma).atan(),
+            (2.0 * half / gamma).atan(),
+            |s, w0, g| {
+                let t = libm::tan(s);
+                (w0 + 0.5 * g * t, 0.5 * g * (1.0 + t * t))
+            },
+        ),
+        (32, 1.0 / w_max, 1.0 / (omega0 + half), |s, _, _| {
+            (1.0 / s, 1.0 / (s * s))
+        }),
+    ];
+    let (mut measured, mut analytic, mut flights, mut steps) = (0.0, 0.0, 0, 0);
+    let mut line = 0.0;
+    for (i, (n, a, b, map)) in pieces.into_iter().enumerate() {
+        let (mut piece_m, mut piece_a) = (0.0, 0.0);
+        for (x, wt) in common::gauss_legendre(n) {
+            let s = 0.5 * (a + b) + 0.5 * (b - a) * x;
+            let (w, dw) = map(s, omega0, gamma);
+            let (sigma, _, _, k) = bound_charge_in_wave(w);
+            let weight = 0.5 * (b - a) * wt * dw;
+            piece_m += weight * (sigma - sigma_t);
+            piece_a += weight * (jackson(w) - sigma_t);
+            flights += 1;
+            steps += k;
+        }
+        println!(
+            "C4 piece [{a:.4}, {b:.4}] ({n} flights): measured {piece_m:.10e}, Jackson {piece_a:.10e}"
+        );
+        measured += piece_m;
+        analytic += piece_a;
+        if i == 1 {
+            line = piece_m;
+        }
+    }
+    // Outside 0.1–200 ω₀: Jackson's σ_t, below in ω, beyond in 1/ω.
+    let (mut below, mut beyond, mut below_sigma) = (0.0, 0.0, 0.0);
+    for (x, wt) in common::gauss_legendre(32) {
+        let w = 0.5 * w_min * (1.0 + x);
+        below += 0.5 * w_min * wt * (jackson(w) - sigma_t);
+        below_sigma += 0.5 * w_min * wt * jackson(w);
+        let u = 0.5 / w_max * (1.0 + x);
+        beyond += 0.5 / w_max * wt * (jackson(1.0 / u) - sigma_t) / (u * u);
+    }
+    measured += below + beyond;
+    analytic += below + beyond;
+    let rel = measured / EXACT - 1.0;
+    println!(
+        "C4: ∫(σ − σ_T) dω measured {measured:.12e} (exact {EXACT:.12e}, off by {rel:.2e}; the \
+         rules on Jackson's σ_t {:.1e}; Jackson's σ_t below 0.1 ω₀ {:.1e} of it, σ_t − σ_T \
+         beyond 200 ω₀ {:.1e}); over 2π²q²/(mc) {:.8} (exact 1 − ω₀²τ² = {:.8}: the rule \
+         without the factor is off by {:.2e}); the line alone (ω₀ ± 50Γ) {:.6} of the rule; \
+         {flights} flights, {steps} steps",
+        analytic / EXACT - 1.0,
+        below_sigma / EXACT,
+        beyond / EXACT,
+        measured / sum_rule,
+        1.0 - (omega0 * tau).powi(2),
+        measured / sum_rule - 1.0,
+        line / sum_rule,
+    );
+    assert!(rel.abs() < 1e-4, "C4 {rel:.3e}");
 }

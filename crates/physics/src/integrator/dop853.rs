@@ -21,6 +21,14 @@ use super::dop853_coefficients::{A, B, BHH, C, D, E};
 pub trait OdeSystem {
     fn dim(&self) -> usize;
     fn rhs(&self, t: f64, y: &[f64], dy: &mut [f64]);
+
+    /// The number of trailing components that are quadratures: integrated with the
+    /// others, at the same order, but left out of the step-size control (a passive
+    /// integral must not choose the steps; its accuracy follows from the steps the rest
+    /// needs). The standard treatment, as in SUNDIALS' quadratures.
+    fn quadratures(&self) -> usize {
+        0
+    }
 }
 
 /// Integrator parameters. Defaults are those of `dop853.f`.
@@ -174,6 +182,8 @@ impl Dense {
 pub struct Dop853 {
     settings: Settings,
     n: usize,
+    /// Components under step-size control: the leading `n − quadratures`.
+    n_ctl: usize,
     t: f64,
     y: Vec<f64>,
     /// Stage derivatives `k[1..=16]` (index 0 unused). `k[1]` is `f(t, y)`.
@@ -194,6 +204,7 @@ impl Dop853 {
         assert_eq!(y0.len(), n, "state dimension mismatch");
         let mut s = Self {
             n,
+            n_ctl: n - sys.quadratures().min(n),
             t: t0,
             y: y0.to_vec(),
             k: vec![vec![0.0; n]; 17],
@@ -255,7 +266,7 @@ impl Dop853 {
         let facc1 = 1.0 / st.fac_min;
         let facc2 = 1.0 / st.fac_max;
         #[allow(clippy::cast_precision_loss)] // n is a small state dimension
-        let n_f = n as f64;
+        let n_f = self.n_ctl as f64;
 
         loop {
             if self.stats.n_step > st.max_steps {
@@ -295,6 +306,9 @@ impl Dop853 {
                 }
                 self.incr[i] = acc;
                 self.y_new[i] = self.y[i] + h * acc;
+                if i >= self.n_ctl {
+                    continue;
+                }
                 let sk = st.atol + st.rtol * self.y[i].abs().max(self.y_new[i].abs());
                 let erri = acc - BHH[1] * k[1][i] - BHH[2] * k[9][i] - BHH[3] * k[12][i];
                 err2 += (erri / sk) * (erri / sk);
@@ -394,7 +408,7 @@ impl Dop853 {
         let f0 = &self.k[1];
         let mut dnf = 0.0;
         let mut dny = 0.0;
-        for i in 0..self.n {
+        for i in 0..self.n_ctl {
             let sk = st.atol + st.rtol * self.y[i].abs();
             dnf += (f0[i] / sk) * (f0[i] / sk);
             dny += (self.y[i] / sk) * (self.y[i] / sk);
@@ -411,7 +425,7 @@ impl Dop853 {
         let mut f1 = vec![0.0; self.n];
         sys.rhs(self.t + h, &self.y1, &mut f1);
         let mut der2 = 0.0;
-        for i in 0..self.n {
+        for i in 0..self.n_ctl {
             let sk = st.atol + st.rtol * self.y[i].abs();
             der2 += ((f1[i] - f0[i]) / sk) * ((f1[i] - f0[i]) / sk);
         }
