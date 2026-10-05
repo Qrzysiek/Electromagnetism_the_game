@@ -29,11 +29,11 @@ struct Params {
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
 // World-line samples, two per sample: (τ, x, y, vx), (vy, ax, ay, 0).
 @group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> samples: array<vec4<f32>>;
-// Items: charges, six vec4 each: (offset, count, q, has_end), (τ_end, x_end, y_end,
+// Items: charges, seven vec4 each: (offset, count, q, has_end), (τ_end, x_end, y_end,
 // 1 if its charge stays where it was absorbed, 0 if drained), (magnetic moment, fade rate
 // in a screening cup (0: none), 0, 0), and the quasi-static interaction's continued past
 // (its motion in the fields it feels now, field_motion.rs): (U₀, ω²), (Λ U₀, 1 if valid),
-// (Λ² U₀, 0);
+// (Λ² U₀, 0), and the jerk of their change along its path (Δȧ, T, 0);
 // then antennas, two vec4 each: (x, y, p0x, p0y), (ω, phase now, radius, frequency group
 // (255: static)); then waves, two vec4 each: (k̂x, k̂y, êx, êy), (E0, ω, phase now at x = 0,
 // frequency group).
@@ -290,30 +290,71 @@ struct FmPoint {
     slope_u: vec3<f32>,
 };
 
-// The continued past of charge k (now in state `now`) at proper time s.
+// The jerk correction of charge k's continued past at the coordinate time tau from now
+// (field_motion.rs JerkCorrection): δa = Δȧ T g(τ/T), g(u) = u (1 − u²)³ inside the taper
+// and 0 beyond, with δv and δx its integrals (written in τ inside, so that f32 keeps the
+// small times).
+struct Corr {
+    dx: vec2<f32>,
+    dv: vec2<f32>,
+    da: vec2<f32>,
+};
+
+fn jerk_corr(k: u32, tau: f32) -> Corr {
+    let p3 = items[7u * k + 6u];
+    let jerk = p3.xy;
+    let big_t = max(p3.z, 1e-30);
+    let u = tau / big_t;
+    if (abs(u) < 1.0) {
+        let u2 = u * u;
+        let w = 1.0 - u2;
+        return Corr(
+            jerk * (tau * tau * tau * (1.0 / 6.0 - u2 * (0.15 - u2 * (1.0 / 14.0 - u2 / 72.0)))),
+            jerk * (tau * tau * (0.5 - u2 * (0.75 - u2 * (0.5 - u2 / 8.0)))),
+            jerk * (tau * w * w * w),
+        );
+    }
+    let su = sign(u);
+    return Corr(
+        jerk * (su * big_t * big_t * big_t * (187.0 / 2520.0) + (tau - su * big_t) * big_t * big_t / 8.0),
+        jerk * (big_t * big_t / 8.0),
+        vec2<f32>(0.0),
+    );
+}
+
+// The continued past of charge k (now in state `now`) at proper time s, with its jerk
+// correction; slope_u: (U⁰, dX/ds).
 fn fm_at(k: u32, now: State, s: f32, c: f32) -> FmPoint {
-    let p0 = items[6u * k + 3u];
-    let p1 = items[6u * k + 4u];
-    let p2 = items[6u * k + 5u];
+    let p0 = items[7u * k + 3u];
+    let p1 = items[7u * k + 4u];
+    let p2 = items[7u * k + 5u];
     let f = fm_functions(p0.w, s);
     let u = p0.xyz + f.y * p1.xyz + f.z * p2.xyz;
     let du = f.x * p1.xyz + f.y * p2.xyz;
     let dx = s * p0.xyz + f.z * p1.xyz + f.w * p2.xyz;
     let v = u.yz * (c / u.x);
     let a = (du.yz * u.x - u.yz * du.x) * (c * c / (u.x * u.x * u.x));
-    return FmPoint(State(now.x + dx.yz, v, a), dx.x, length(u - p0.xyz) / c, u);
+    let corr = jerk_corr(k, dx.x / c);
+    let slope = vec3<f32>(u.x, u.yz + corr.dv * (u.x / c));
+    return FmPoint(
+        State(now.x + dx.yz + corr.dx, v + corr.dv, a + corr.da),
+        dx.x,
+        length(u - p0.xyz) / c,
+        slope,
+    );
 }
 
 // The quasi-static interaction's field at p of charge k, now in state `now`: its past
-// continued along its motion in the fields it feels now, blending into `accelerated` where
-// that swings far (excursion 0.5 to 1, quintic smoothstep; beam::continued_fields), or
-// `accelerated` alone where no motion was given or its retarded point is not found.
+// continued along its motion in the fields it feels now with the jerk of their change,
+// blending into `accelerated` where that swings far (excursion 0.5 to 1, quintic
+// smoothstep; beam::Continuation::fields), or `accelerated` alone where no motion was
+// given or its retarded point is not found.
 fn continued(q: f32, c: f32, p: vec2<f32>, now: State, k: u32) -> Field {
-    if (items[6u * k + 4u].w < 0.5) {
+    if (items[7u * k + 4u].w < 0.5) {
         return accelerated(q, c, p, now);
     }
     // Newton on G(s) = −c t(s) − |p − x(s)| from the uniform-motion guess.
-    let u0 = items[6u * k + 3u].xyz;
+    let u0 = items[7u * k + 3u].xyz;
     let gamma0 = u0.x / c;
     let v0 = u0.yz / gamma0;
     let r = p - now.x;
@@ -387,10 +428,10 @@ fn charges(p: vec2<f32>) -> Charges {
     let neglected_only = (params.counts.z & 2u) != 0u;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.grid.w; k = k + 1u) {
-        let head = items[6u * k];
-        let end = items[6u * k + 1u];
-        let moment = items[6u * k + 2u].x;
-        let fade = items[6u * k + 2u].y;
+        let head = items[7u * k];
+        let end = items[7u * k + 1u];
+        let moment = items[7u * k + 2u].x;
+        let fade = items[7u * k + 2u].y;
         let o = u32(head.x);
         let n = u32(head.y);
         let q = head.z;
@@ -530,7 +571,7 @@ fn antennas(p: vec2<f32>) -> Charges {
 // (π/2: a quarter period later, for the average over a period).
 fn antennas_at(p: vec2<f32>, dph: f32, group: i32) -> Charges {
     let c = params.scales.x;
-    let base = 6u * params.grid.w;
+    let base = 7u * params.grid.w;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.counts.x; k = k + 1u) {
         let a0 = items[base + 2u * k];
@@ -575,7 +616,7 @@ fn waves(p: vec2<f32>) -> Field {
 // The waves of frequency group `group` (all for −1), their phases advanced by `dph`.
 fn waves_at(p: vec2<f32>, dph: f32, group: i32) -> Field {
     let c = params.scales.x;
-    let base = 6u * params.grid.w + 2u * params.counts.x;
+    let base = 7u * params.grid.w + 2u * params.counts.x;
     var f = Field(vec2<f32>(0.0), 0.0);
     for (var k = 0u; k < params.counts.y; k = k + 1u) {
         let w0 = items[base + 2u * k];
@@ -702,7 +743,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
             // each frequency's average; the charges exchange with the static part only.
             var still = st;
             for (var k = 0u; k < params.counts.x; k = k + 1u) {
-                if (items[6u * params.grid.w + 2u * k + 1u].w > 254.5) {
+                if (items[7u * params.grid.w + 2u * k + 1u].w > 254.5) {
                     let sa = antennas_at(p, 0.0, 255).f;
                     still.e = still.e + sa.e;
                     still.bz = still.bz + sa.bz;

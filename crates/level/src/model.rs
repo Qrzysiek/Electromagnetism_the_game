@@ -222,22 +222,26 @@ impl Level {
                         if self.physics.radiation_reaction {
                             "Beam: all particles fly together. Each feels the others' fields, \
                      radiation included, computed from where they are now as if they had \
-                     always moved in the fields they feel now (exact in the velocities, so \
-                     the magnetic attraction that weakens the repulsion of a fast beam by \
-                     1/γ² is included, and for fields that stay the same along their paths \
-                     over the light time between them; approximate where those fields \
-                     change: the estimated error is shown per particle, and checked against \
-                     the exact retarded fields in the level tests). Each particle \
+                     always moved in the fields they feel now, those fields changing along \
+                     their paths as they do now (exact in the velocities, so the magnetic \
+                     attraction that weakens the repulsion of a fast beam by 1/γ² is \
+                     included; exact to the rate of change of the fields, so the others' \
+                     share of each one's radiation damping is included too; approximate \
+                     where the fields change unevenly over the light time between them: \
+                     the estimated error is shown per particle, and checked against the \
+                     exact retarded fields in the level tests). Each particle \
                      feels its own radiation reaction (Landau–Lifshitz)."
                         } else {
                             "Beam: all particles fly together. Each feels the others' fields, \
                      radiation included, computed from where they are now as if they had \
-                     always moved in the fields they feel now (exact in the velocities, so \
-                     the magnetic attraction that weakens the repulsion of a fast beam by \
-                     1/γ² is included, and for fields that stay the same along their paths \
-                     over the light time between them; approximate where those fields \
-                     change: the estimated error is shown per particle, and checked against \
-                     the exact retarded fields in the level tests)."
+                     always moved in the fields they feel now, those fields changing along \
+                     their paths as they do now (exact in the velocities, so the magnetic \
+                     attraction that weakens the repulsion of a fast beam by 1/γ² is \
+                     included; exact to the rate of change of the fields, so the others' \
+                     share of each one's radiation damping is included too; approximate \
+                     where the fields change unevenly over the light time between them: \
+                     the estimated error is shown per particle, and checked against the \
+                     exact retarded fields in the level tests)."
                         },
                     )
                 } else if self.interacts() && self.physics.radiation_reaction {

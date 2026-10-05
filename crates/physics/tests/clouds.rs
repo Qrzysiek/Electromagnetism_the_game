@@ -582,9 +582,17 @@ fn c7_bohr_energy_loss() {
 /// lowers the frequency to `ω₀/√(1 + δ)`. Required, with the exact retarded interaction:
 /// the fitted decay rate and the frequency (from the zero crossings) within 2 % of these
 /// (Landau–Lifshitz is first order in ω₀τ, as for C2), fitted after the pulse (t > 14).
-/// Printed: the default quasi-static
-/// interaction, which continues each source's past as motion in a uniform field (no jerk,
-/// so none of the others' `(2/3c³) d⃛`).
+/// Required too, since 2026-10-05, of the default quasi-static interaction: each source's
+/// past continued along its motion in the fields it feels with the jerk of their change
+/// (the others' `(2/3c³) d⃛`), the others' acceleration fields to O(1/c²) and the
+/// radiation reaction in that motion (the Darwin mass acting as a mass). Its expected
+/// error: the point-limit coupling for F (the jerk's field is uniform), `(N − ΣF)/N` ≤
+/// 1.3 %, the taper of the jerk and O(δ²) below that. Until then it continued the pasts in
+/// uniform fields without the jerk and decayed at 1.00 Γ₁ for the pair and the square;
+/// with the jerk alone at 1.99 and 3.97 Γ₁ (the Darwin coupling acting as a softer
+/// spring: the same frequency to first order, damping per mass too high by (1 + δ)²); with
+/// the Darwin fields too, 1.96 and 3.72 (one factor: the damping forces were not in the
+/// continued motion).
 #[test]
 #[allow(clippy::cast_precision_loss)] // small counts
 fn c6_collective_radiation_damping() {
@@ -773,9 +781,7 @@ fn c6_collective_radiation_damping() {
                 pts.len(),
                 crossings.len()
             );
-            if retarded {
-                worst = worst.max(rel.abs()).max(rel_w.abs());
-            }
+            worst = worst.max(rel.abs()).max(rel_w.abs());
         }
     }
     println!(

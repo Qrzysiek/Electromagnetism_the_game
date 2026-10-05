@@ -15,8 +15,64 @@
 //!
 //! (hyperbolic functions for `E > cB`, powers of `s` for `E = cB`: all three are the
 //! series `sᵏ Σₙ (−ω²s²)ⁿ/(2n + k)!`). The speed stays below c.
+//!
+//! The fields a source feels change along its path, which motion in uniform fields does
+//! not follow: the jerk that misses (`JerkCorrection`) is added to the continued past as
+//! a tapered cubic term in coordinate time, and the retarded point is searched on the
+//! corrected world line (`FieldMotion::retarded_with`).
 
 use glam::DVec3;
+
+/// A continued past's jerk from the change of the fields along the source's path, which
+/// the motion in uniform fields does not have (the quasi-static beam interaction,
+/// PHYSICS.md §3.3). Added to the motion as `δa(τ) = Δȧ T g(τ/T)`, `g(u) = u (1 − u²)³`
+/// for `|u| < 1` and 0 beyond, with the velocity and position changes `δv = Δȧ T² G₁(u)`,
+/// `δx = Δȧ T³ G₂(u)` (`G₁' = g`, `G₂' = G₁`, both zero at `u = 0`): `Δȧ τ`, `Δȧ τ²/2`,
+/// `Δȧ τ³/6` near the present (to relative `O(u²)`: `G₂ = u³/6 − 3u⁵/20 + …`), the jerk
+/// fading within `T` (the acceleration continuous to its second derivative), the velocity
+/// changed by at most `|Δȧ| T²/8`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct JerkCorrection {
+    /// `Δȧ`, the jerk added at the present.
+    pub jerk: DVec3,
+    /// `T`, the time over which it fades (positive and finite).
+    pub scale: f64,
+}
+
+/// `G₂(1) = 1/6 − 3/20 + 1/14 − 1/72`.
+const G2_ONE: f64 = 187.0 / 2520.0;
+
+impl JerkCorrection {
+    /// No correction.
+    pub const NONE: Self = Self {
+        jerk: DVec3::ZERO,
+        scale: 1.0,
+    };
+
+    /// `(δx, δv, δa)` at the coordinate time `τ` from the present.
+    pub fn at(&self, tau: f64) -> (DVec3, DVec3, DVec3) {
+        let big_t = self.scale;
+        let u = tau / big_t;
+        let (g, g1, g2) = if u.abs() < 1.0 {
+            let u2 = u * u;
+            let w = 1.0 - u2;
+            (
+                u * w * w * w,
+                // u²/2 − 3u⁴/4 + u⁶/2 − u⁸/8 = (1 − (1 − u²)⁴)/8.
+                u2 * (0.5 - u2 * (0.75 - u2 * (0.5 - u2 / 8.0))),
+                // u³/6 − 3u⁵/20 + u⁷/14 − u⁹/72.
+                u * u2 * (1.0 / 6.0 - u2 * (0.15 - u2 * (1.0 / 14.0 - u2 / 72.0))),
+            )
+        } else {
+            (0.0, 0.125, u.signum() * (G2_ONE + (u.abs() - 1.0) / 8.0))
+        };
+        (
+            self.jerk * (big_t * big_t * big_t * g2),
+            self.jerk * (big_t * big_t * g1),
+            self.jerk * (big_t * g),
+        )
+    }
+}
 
 /// The motion of a charge in uniform in-plane fields (`FieldMotion::new`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -144,6 +200,24 @@ impl FieldMotion {
         let da_ds = (dn / u0[0].powi(3) - n * (3.0 * u1[0] / u0[0].powi(4))) * (c * c);
         da_ds * (c / u0[0])
     }
+
+    /// The snap `d²a/dt²` at `s = 0`.
+    pub fn snap(&self) -> DVec3 {
+        let c = self.c;
+        let sp = |w: [f64; 3]| DVec3::new(w[1], w[2], 0.0);
+        // With W = U⁰ and u the spatial part: U' = Λ U₀, U'' = Λ² U₀, U''' = −ω² Λ U₀ at
+        // s = 0; a = c² N W⁻³ with N = u'W − uW', and d/dt = (c/W) d/ds.
+        let (w0, w1, w2) = (self.u0[0], self.v1[0], self.v2[0]);
+        let w3 = -self.w2 * self.v1[0];
+        let (u, u1, u2) = (sp(self.u0), sp(self.v1), sp(self.v2));
+        let u3 = u1 * -self.w2;
+        let n = u1 * w0 - u * w1;
+        let dn = u2 * w0 - u * w2;
+        let ddn = u3 * w0 + u2 * w1 - u1 * w2 - u * w3;
+        (ddn / w0.powi(5) - dn * (7.0 * w1 / w0.powi(6)) - n * (3.0 * w2 / w0.powi(6))
+            + n * (15.0 * w1 * w1 / w0.powi(7)))
+            * c.powi(4)
+    }
 }
 
 /// Liénard–Wiechert fields `(E, B)` at `x`, at the time `dt` after the motion's reference
@@ -206,28 +280,39 @@ impl FieldMotion {
     /// 1e5 times the observer's distance and their difference is rounding noise (it once
     /// gave a "root" at an excursion of 1e73).
     pub fn retarded(&self, x: DVec3, dt: f64) -> Option<Retarded> {
+        self.retarded_with(x, dt, &JerkCorrection::NONE)
+    }
+
+    /// `retarded` on the world line with the jerk correction `corr` added (in coordinate
+    /// time from the reference time). The point's position, velocity and acceleration
+    /// include the correction; its excursion is the motion's own.
+    pub fn retarded_with(&self, x: DVec3, dt: f64, corr: &JerkCorrection) -> Option<Retarded> {
         let c = self.c;
         // `G`, its slope, its rounding error, and the evaluation.
         let eval = |s: f64| {
             let (u, du, dx) = self.at(s);
-            let d = x - (self.x0 + DVec3::new(dx[1], dx[2], 0.0));
+            let delta = corr.at(dx[0] / c);
+            let d = x - (self.x0 + DVec3::new(dx[1], dx[2], 0.0) + delta.0);
             let dist = d.length();
             let value = c * dt - dx[0] - dist;
-            // dG/ds = −U⁰ + n·U (negative: the world line is timelike).
-            let slope = -u[0] + d.dot(DVec3::new(u[1], u[2], 0.0)) / dist.max(1e-300);
+            // dG/ds = −U⁰ + n·dX/ds, dX/ds = u + δv U⁰/c (negative: the world line is
+            // timelike).
+            let slope = -u[0]
+                + d.dot(DVec3::new(u[1], u[2], 0.0) + delta.1 * (u[0] / c)) / dist.max(1e-300);
             let noise = 4.0 * f64::EPSILON * ((c * dt).abs() + dx[0].abs() + dist);
-            (value, slope, noise, (u, du, dx))
+            (value, slope, noise, (u, du, dx, delta))
         };
-        let done_at = |s: f64, ev: ([f64; 3], [f64; 3], [f64; 3])| {
-            let (u, du, dx) = ev;
+        #[allow(clippy::type_complexity)]
+        let done_at = |s: f64, ev: ([f64; 3], [f64; 3], [f64; 3], (DVec3, DVec3, DVec3))| {
+            let (u, du, dx, delta) = ev;
             let (t, xr, v, a) = self.state_from(u, du, dx);
             let d = [u[0] - self.u0[0], u[1] - self.u0[1], u[2] - self.u0[2]];
             Retarded {
                 s,
                 t,
-                x: xr,
-                v,
-                a,
+                x: xr + delta.0,
+                v: v + delta.1,
+                a: a + delta.2,
                 excursion: (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt() / c,
             }
         };
@@ -382,5 +467,99 @@ mod tests {
             (jerk - numeric).length() < 1e-7 * jerk.length(),
             "{jerk} vs {numeric}"
         );
+    }
+
+    /// The snap is the derivative of the jerk along the motion: the jerks of the motions
+    /// started from the states a little before and after (central difference in coordinate
+    /// time), in magnetic- and electric-dominated fields.
+    #[test]
+    fn snap() {
+        let (q, m, c) = (-0.4, 0.9, 3.0);
+        let (x0, v0) = (DVec3::new(0.5, -1.0, 0.0), DVec3::new(-1.2, 1.9, 0.0));
+        for (e, b) in [
+            (DVec3::new(0.3, 0.9, 0.0), DVec3::new(0.0, 0.0, -0.7)),
+            (DVec3::new(2.5, -1.0, 0.0), DVec3::new(0.0, 0.0, 0.1)),
+        ] {
+            let motion = FieldMotion::new(q, m, c, 2.0, x0, v0, e, b).expect("planar");
+            let h = 1e-4;
+            let jerk_at = |s: f64| {
+                let (t, x, v, _) = motion.state(s);
+                let m2 = FieldMotion::new(q, m, c, t, x, v, e, b).expect("planar");
+                (t, m2.jerk())
+            };
+            let ((tp, jp), (tm, jm)) = (jerk_at(h), jerk_at(-h));
+            let numeric = (jp - jm) / (tp - tm);
+            let snap = motion.snap();
+            assert!(
+                (snap - numeric).length() < 1e-7 * snap.length(),
+                "{snap} vs {numeric}"
+            );
+        }
+    }
+
+    /// The jerk correction's position, velocity and acceleration are each other's
+    /// derivatives (central differences, inside the taper, across its end and beyond),
+    /// start as `Δȧ τ³/6`, `Δȧ τ²/2`, `Δȧ τ`, and the velocity change stays below
+    /// `|Δȧ| T²/8`.
+    #[test]
+    fn jerk_correction() {
+        let corr = JerkCorrection {
+            jerk: DVec3::new(0.3, -0.8, 0.0),
+            scale: 2.5,
+        };
+        let h = 1e-5;
+        for tau in [-7.0, -2.6, -2.5, -2.4, -1.0, -0.3, 0.0, 0.4, 2.45, 2.5, 3.0] {
+            let (x, v, a) = corr.at(tau);
+            let (xp, vp, _) = corr.at(tau + h);
+            let (xm, vm, _) = corr.at(tau - h);
+            assert!(((xp - xm) / (2.0 * h) - v).length() < 1e-8, "{tau}: v");
+            assert!(((vp - vm) / (2.0 * h) - a).length() < 1e-8, "{tau}: a");
+            assert!(
+                v.length() <= corr.jerk.length() * corr.scale.powi(2) / 8.0 * (1.0 + 1e-15),
+                "{tau}: |δv|"
+            );
+            assert!(x.is_finite() && v.is_finite() && a.is_finite());
+        }
+        let tau = 1e-3;
+        let (x, v, a) = corr.at(tau);
+        let rel = |got: DVec3, want: DVec3| (got - want).length() / want.length();
+        assert!(rel(x, corr.jerk * (tau.powi(3) / 6.0)) < 1e-6);
+        assert!(rel(v, corr.jerk * (tau * tau / 2.0)) < 1e-6);
+        assert!(rel(a, corr.jerk * tau) < 1e-6);
+        // The jerk of the corrected past at the present: Δȧ.
+        let (_, _, ap) = corr.at(h);
+        let (_, _, am) = corr.at(-h);
+        assert!(rel((ap - am) / (2.0 * h), corr.jerk) < 1e-9);
+    }
+
+    /// The retarded point on the corrected world line: on the light cone of the observer,
+    /// and with the correction's position, velocity and acceleration at its time.
+    #[test]
+    fn retarded_with_correction() {
+        let (q, m, c) = (0.7, 1.3, 5.0);
+        let (x0, v0) = (DVec3::new(1.0, 2.0, 0.0), DVec3::new(3.0, -1.5, 0.0));
+        let (e, b) = (DVec3::new(0.8, -0.4, 0.0), DVec3::new(0.0, 0.0, 1.1));
+        let motion = FieldMotion::new(q, m, c, 0.0, x0, v0, e, b).expect("planar");
+        let corr = JerkCorrection {
+            jerk: DVec3::new(-2.0, 1.0, 0.0),
+            scale: 0.8,
+        };
+        for x in [DVec3::new(4.0, 1.0, 0.0), DVec3::new(-3.0, 6.0, 0.0)] {
+            let plain = motion.retarded(x, 0.3).expect("a retarded point");
+            let r = motion
+                .retarded_with(x, 0.3, &corr)
+                .expect("a retarded point");
+            let (_, xs, vs, a_s) = motion.state(r.s);
+            let (dx, dv, da) = corr.at(r.t);
+            assert!(((r.x - (xs + dx)).length()) < 1e-13);
+            assert!(((r.v - (vs + dv)).length()) < 1e-13);
+            assert!(((r.a - (a_s + da)).length()) < 1e-12);
+            let cone = c * (0.3 - r.t) - (x - r.x).length();
+            assert!(cone.abs() < 1e-12, "{cone:e}");
+            assert!(
+                (r.t - plain.t).abs() > 1e-4,
+                "the correction moves the point"
+            );
+        }
     }
 }

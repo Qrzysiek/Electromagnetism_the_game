@@ -1466,10 +1466,13 @@ fn b22_radiation_goal_of_a_system() {
 /// Runge–Kutta, steps ≤ 1e-4, from a table every 0.01). Magnetic-dominated (a ring
 /// level's charge: q = 1/40 at 0.35c in crossed fields, B = 34.9, E = 6.98) and
 /// electric-dominated (E > cB) fields, points near and far, ahead and behind. Required:
-/// 1e-9 relative (set before measuring).
+/// 1e-9 relative (set before measuring). The same with the jerk correction added to the
+/// world line (`FieldMotion::retarded_with`; on the integrated motion the correction's
+/// polynomials written here independently, from `(1 − (1 − u²)⁴)/8` and the integral of
+/// `(1 − s²)⁴`), with tapers shorter and longer than the retarded times.
 #[test]
 fn b23_field_motion_matches_lienard_wiechert() {
-    use physics::field_motion::{FieldMotion, field_motion_fields};
+    use physics::field_motion::{FieldMotion, JerkCorrection, field_motion_fields};
     use physics::lienard::{Worldline, fields};
     struct Integrated {
         q: f64,
@@ -1535,8 +1538,41 @@ fn b23_field_motion_matches_lienard_wiechert() {
             (y.0, v, a)
         }
     }
+    /// The integrated motion with the jerk correction `jerk`, `scale` added.
+    struct Corrected<'a> {
+        base: &'a Integrated,
+        jerk: DVec3,
+        scale: f64,
+    }
+    impl Worldline for Corrected<'_> {
+        fn state(&self, t: f64) -> (DVec3, DVec3, DVec3) {
+            let big_t = self.scale;
+            // δa = Δȧ T g, δv = Δȧ T² G₁, δx = Δȧ T³ G₂ with g = u (1 − u²)³ inside.
+            let inner = |u: f64| {
+                let w = 1.0 - u * u;
+                let g1 = (1.0 - w.powi(4)) / 8.0;
+                let int_w4 = u - 4.0 * u.powi(3) / 3.0 + 6.0 * u.powi(5) / 5.0
+                    - 4.0 * u.powi(7) / 7.0
+                    + u.powi(9) / 9.0;
+                (u * w.powi(3), g1, (u - int_w4) / 8.0)
+            };
+            let u = t / big_t;
+            let (g, g1, g2) = if u.abs() < 1.0 {
+                inner(u)
+            } else {
+                let at_one = inner(1.0).2;
+                (0.0, 0.125, u.signum() * (at_one + (u.abs() - 1.0) / 8.0))
+            };
+            let (x, v, a) = self.base.state(t);
+            (
+                x + self.jerk * (big_t.powi(3) * g2),
+                v + self.jerk * (big_t * big_t * g1),
+                a + self.jerk * (big_t * g),
+            )
+        }
+    }
     let mut worst: f64 = 0.0;
-    for (name, q, m, c, e, bz, v0) in [
+    for (name, q, m, c, e, bz, v0, jerks) in [
         (
             "magnetic",
             1.0 / 40.0,
@@ -1545,6 +1581,10 @@ fn b23_field_motion_matches_lienard_wiechert() {
             DVec3::new(0.0, 6.983, 0.0),
             34.915,
             DVec3::new(-1.4, 0.0, 0.0),
+            [
+                (DVec3::new(0.8, -0.5, 0.0), 1.5),
+                (DVec3::new(-3.0, 2.0, 0.0), 0.3),
+            ],
         ),
         (
             "electric",
@@ -1554,6 +1594,10 @@ fn b23_field_motion_matches_lienard_wiechert() {
             DVec3::new(0.6, 0.3, 0.0),
             0.05,
             DVec3::new(2.0, 1.5, 0.0),
+            [
+                (DVec3::new(-0.1, 0.2, 0.0), 2.0),
+                (DVec3::new(0.5, 0.4, 0.0), 0.4),
+            ],
         ),
     ] {
         let b = DVec3::new(0.0, 0.0, bz);
@@ -1576,9 +1620,87 @@ fn b23_field_motion_matches_lienard_wiechert() {
                 f.retarded_time
             );
             worst = worst.max(rel);
+            for (jerk, scale) in jerks {
+                let corr = JerkCorrection { jerk, scale };
+                let r = motion
+                    .retarded_with(x, 0.0, &corr)
+                    .expect("a retarded point");
+                let (ec, bc) = motion.fields(q, x, &r);
+                let line = Corrected {
+                    base: &world,
+                    jerk,
+                    scale,
+                };
+                let g = fields(&line, q, c, x, 0.0);
+                let rel = ((ec - g.e()).length() / g.e().length())
+                    .max((bc - g.b).length() / g.b.length());
+                println!(
+                    "B23 {name} at {x}, jerk {jerk} over {scale}: |E| {:.4e} (without it \
+                     {:.4e}), retarded t {:.3}, relative difference {rel:.1e}",
+                    g.e().length(),
+                    f.e().length(),
+                    g.retarded_time
+                );
+                worst = worst.max(rel);
+            }
         }
     }
     assert!(worst < 1e-9, "{worst:.3e}");
+}
+
+/// B25: the continued past with its jerk correction (`beam::jerk_correction`, the largest
+/// the cap allows: the jerk in the worst directions, the motion at 0.95 c and 0.99 c in
+/// fields that brake or speed it up hard) never reaches c wherever its fields are used
+/// (the motion's excursion below 1, `beam::SWING`).
+#[test]
+fn b25_jerk_corrected_past_stays_below_c() {
+    use physics::beam::jerk_correction;
+    use physics::field_motion::FieldMotion;
+    let c = 1.0;
+    let mut fastest: f64 = 0.0;
+    for speed in [0.95, 0.99] {
+        let v = DVec3::new(speed, 0.0, 0.0);
+        for (e, bz) in [
+            (DVec3::new(-3.0, 0.0, 0.0), 0.0),
+            (DVec3::new(3.0, 0.0, 0.0), 0.0),
+            (DVec3::new(0.0, 2.0, 0.0), 1.0),
+            (DVec3::new(0.5, -0.5, 0.0), 4.0),
+        ] {
+            let b = DVec3::new(0.0, 0.0, bz);
+            let motion =
+                FieldMotion::new(1.0, 1.0, c, 0.0, DVec3::ZERO, v, e, b).expect("in the plane");
+            let a = motion.present().1;
+            for d in [
+                DVec3::new(1e3, 0.0, 0.0),
+                DVec3::new(-1e3, 0.0, 0.0),
+                DVec3::new(0.0, 1e3, 0.0),
+                DVec3::new(1e-3, 1e-3, 0.0),
+            ] {
+                let corr = jerk_correction(d, v, a, c);
+                for k in -400..=0 {
+                    let s = f64::from(k) * 0.01;
+                    let (t, _, vs, _) = motion.state(s);
+                    // |U(s) − U₀|/c (c = 1).
+                    let excursion = {
+                        let gamma = |w: DVec3| 1.0 / (1.0 - w.length_squared()).sqrt();
+                        let (u0, us) = (v * gamma(v), vs * gamma(vs));
+                        let (g0, gs) = (gamma(v), gamma(vs));
+                        ((gs - g0).powi(2) + (us - u0).length_squared()).sqrt()
+                    };
+                    if excursion >= 1.0 {
+                        continue;
+                    }
+                    let speed_now = (vs + corr.at(t).1).length();
+                    fastest = fastest.max(speed_now);
+                    assert!(
+                        speed_now < c,
+                        "{speed} c, {e} {bz}, jerk {d}, s {s}: {speed_now}"
+                    );
+                }
+            }
+        }
+    }
+    println!("B25: fastest jerk-corrected past where used: {fastest:.6} c");
 }
 
 /// B24: the continued past and future of a source (`beam::tapered`, used by the quasi-static

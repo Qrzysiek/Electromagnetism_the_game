@@ -55,8 +55,11 @@ fn reference_solutions_are_verified() {
             // comparison measures the interaction models only: comparing the level's own
             // flights (with radiation reaction) against an exact run without it mixed in
             // the radiation reaction's effect (found on level 51, where it dominated).
+            // Both at the verification tolerance: at the preview tolerance their integration
+            // errors (5e-6 cells on Soft landing at full current) masked the difference of
+            // the models.
             if level.physics.c.is_some() && level.interacts() && !level.physics.beam_retarded {
-                let rs = RunSettings::with_tolerance(level.physics.tolerances.preview);
+                let rs = RunSettings::with_tolerance(level.physics.tolerances.verify);
                 // The interaction is switched on the flights themselves: a level with free
                 // particles or free charges always interacts (`Level::interacts`), whatever
                 // its `beam_interaction` says (the first version switched that flag and

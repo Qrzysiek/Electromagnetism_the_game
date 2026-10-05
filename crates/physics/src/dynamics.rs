@@ -38,15 +38,36 @@ pub fn landau_lifshitz(
     x: DVec3,
     t: f64,
 ) -> DVec3 {
-    let (c, m) = (kin.c, kin.mass);
-    let gamma = kin.gamma(p);
     let v = kin.velocity(p);
     let (e, b) = fields(x, t);
-    let h = 1e-5 / v.length().max(1.0);
+    let h = path_step(v);
     let (ep, bp) = fields(x + v * h, t + h);
     let (em, bm) = fields(x - v * h, t - h);
     let de = (ep - em) / (2.0 * h);
     let db = (bp - bm) / (2.0 * h);
+    landau_lifshitz_from(q, kin, p, (e, b), (de, db))
+}
+
+/// The time step of the central differences that give the rate of change of the fields
+/// along the path of a charge moving at `v`: `(F(x + v h, t + h) − F(x − v h, t − h))/2h`
+/// (`landau_lifshitz`; the beam runner's quasi-static interaction takes the same samples
+/// for its continued pasts' jerk).
+pub fn path_step(v: DVec3) -> f64 {
+    1e-5 / v.length().max(1.0)
+}
+
+/// The Landau–Lifshitz force from the fields `(E, B)` at the charge and their rate of
+/// change along its path `(DE/Dt, DB/Dt)` (`landau_lifshitz`).
+pub fn landau_lifshitz_from(
+    q: f64,
+    kin: &Kinematics,
+    p: DVec3,
+    (e, b): (DVec3, DVec3),
+    (de, db): (DVec3, DVec3),
+) -> DVec3 {
+    let (c, m) = (kin.c, kin.mass);
+    let gamma = kin.gamma(p);
+    let v = kin.velocity(p);
     let a1 = 2.0 * q * q * q / (3.0 * m * c * c * c);
     let a2 = 2.0 * q.powi(4) / (3.0 * m * m * c.powi(4));
     let lorentz = e + v.cross(b);

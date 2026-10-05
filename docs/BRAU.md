@@ -15,8 +15,9 @@ list records the overlap and what Brau adds.
 
 - **Built from Brau:** test C5 (§5.2.3, excitation by a fast charged particle, the same
   problem as Jackson Pr. 13.3); test C6 (§4.3.2 and §10.5, a cluster's collective
-  radiation damping: it showed that the beam runner's quasi-static interaction loses the
-  collective damping of bound charges, PHYSICS.md §3.3); test P5 (§11.1.2, the 4/3
+  radiation damping: it showed that the beam runner's quasi-static interaction lost the
+  collective damping of bound charges, which its continued pasts now carry with the jerk
+  of their fields' change, PHYSICS.md §3.3); test P5 (§11.1.2, the 4/3
   problem); test P6 (Ex. 10.15, the electron's shadow: the optical theorem through the
   exchange flux, and the axis dark above the resonance, bright below it); test W5
   (Ex. 4.6, Lawson–Woodward, and radiation reaction's violation of it); test S9 (§10.3.2,
@@ -179,7 +180,9 @@ that already does it. "Ex." is an exercise, "§" a section.
 Ranked by what they would add (all tests unless marked):
 
 1. **Collective radiation damping of a cluster** (§4.3.2, §10.5): built, test C6. The
-   exact retarded interaction gives it within 0.75 %; the quasi-static one loses it.
+   exact retarded interaction gives it within 0.75 %; the quasi-static one lost it, and
+   with the jerk, the Darwin fields and the damping in its continued pasts gives it
+   within 0.60 % (2026-10-05).
 2. **The electron's shadow** (Ex. 10.15): built, test P6 (within 3.4e-12; the shadow
    on the axis is dark above the resonance and bright below it).
 3. **The 4/3 problem** (§11.1.2, Ex. 11.1): built, test P5 (within 1.3e-14).

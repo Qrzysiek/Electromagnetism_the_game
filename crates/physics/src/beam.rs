@@ -10,14 +10,17 @@
 //!   exact Liénard–Wiechert fields of the others, with their recent past continued from
 //!   their present state along the motion they would have in the uniform fields they
 //!   feel now (`FieldMotion`, `Continuation::Fields`; the fields from a first pass with
-//!   the fields of uniform motion, `heaviside_fields`), blending into the tapered constant
-//!   acceleration (`accelerated_fields`) where that motion swings far, and with the
-//!   tapered acceleration alone for a particle with a magnetic moment or out of the
+//!   the fields of uniform motion, `heaviside_fields`), plus the jerk from the change of
+//!   those fields along their paths (`JerkCorrection`, tapered), blending into the tapered
+//!   constant acceleration (`accelerated_fields`) where that motion swings far, and with
+//!   the tapered acceleration alone for a particle with a magnetic moment or out of the
 //!   plane. That is exact in the velocities (so it contains the magnetic attraction that
-//!   reduces the space charge of a relativistic beam by 1/γ²) and to first order in the
-//!   accelerations (their near and radiation fields); it leaves out the jerk terms the
-//!   continuation misses, estimated per particle (`BeamRun::neglected_retardation`). It
-//!   needs no record and costs a few times the Coulomb force.
+//!   reduces the space charge of a relativistic beam by 1/γ²) and through the jerk of the
+//!   pasts (the near and radiation fields of the accelerations, and the others' share of
+//!   the radiation reaction, `(2/3c³) d⃛`); it leaves out the snap and the others'
+//!   acceleration fields in the continuations' own accelerations, estimated per particle
+//!   (`BeamRun::neglected_retardation`). It needs no record and costs a few times the
+//!   Coulomb force.
 //! - For finite `c` with `BeamScenario::retarded`: each particle feels the Liénard–Wiechert
 //!   fields (`lienard.rs`) of the others at their retarded times, taken from the recorded
 //!   motion (the dense output of every accepted step). Retarded times inside the current
@@ -57,10 +60,10 @@ use std::sync::{Mutex, RwLock};
 
 use glam::DVec3;
 
-use crate::dynamics::{Kinematics, Particle, landau_lifshitz};
+use crate::dynamics::{Kinematics, Particle, landau_lifshitz, landau_lifshitz_from, path_step};
 use crate::events::first_crossing;
 use crate::field::FieldSolver;
-use crate::field_motion::FieldMotion;
+use crate::field_motion::{FieldMotion, JerkCorrection};
 use crate::geometry::{Aabb, Region, Shape};
 use crate::integrator::OdeSystem;
 use crate::integrator::dop853::{Dense, Dop853, Settings, Stats};
@@ -172,13 +175,15 @@ pub struct BeamScenario<F> {
     pub fates: Fates,
 }
 
-/// How the quasi-static interaction continues a source's past from its present state.
+/// How the quasi-static interaction continues a source's past from its present state
+/// (`first_pass`).
 #[derive(Clone, Copy, Debug)]
-enum Continuation {
+pub enum Continuation {
     /// Along the motion it would have in the fields it feels now, taken as uniform: exact
     /// and relativistic (`FieldMotion`; the rotation of its acceleration in a magnetic
-    /// field included, and never faster than light).
-    Fields(FieldMotion),
+    /// field included, and never faster than light), plus the jerk from the change of
+    /// those fields along its path (`JerkCorrection`, `jerk_correction`).
+    Fields(FieldMotion, JerkCorrection),
     /// With its present acceleration, tapered (`tapered`): a particle with a magnetic
     /// moment (its gradient force is not a Lorentz force), or out of the plane.
     Accelerated(DVec3),
@@ -204,12 +209,20 @@ impl Continuation {
     /// The fields `(E, B)` at `x`, time `dt` after the source's present, of the source `q`
     /// now at `r` with velocity `v`, and the weight of the motion in the fields in them (0
     /// for the constant acceleration).
-    fn fields(&self, q: f64, c: f64, x: DVec3, dt: f64, r: DVec3, v: DVec3) -> (DVec3, DVec3, f64) {
+    pub fn fields(
+        &self,
+        q: f64,
+        c: f64,
+        x: DVec3,
+        dt: f64,
+        r: DVec3,
+        v: DVec3,
+    ) -> (DVec3, DVec3, f64) {
         match self {
-            Continuation::Fields(m) => {
+            Continuation::Fields(m, corr) => {
                 // No retarded point (beyond the horizon of a charge accelerated forever):
                 // the constant acceleration alone.
-                let ret = m.retarded(x, dt);
+                let ret = m.retarded_with(x, dt, corr);
                 let w = ret.map_or(0.0, |r| swing_weight(r.excursion));
                 let (mut e, mut b) = match ret {
                     Some(r) if w > 0.0 => {
@@ -235,10 +248,238 @@ impl Continuation {
     /// The jerk of the continued past at the present (0 for constant acceleration).
     fn jerk(&self) -> DVec3 {
         match self {
-            Continuation::Fields(m) => m.jerk(),
+            Continuation::Fields(m, corr) => m.jerk() + corr.jerk,
             Continuation::Accelerated(_) => DVec3::ZERO,
         }
     }
+
+    /// The jerk an observer a light delay `delay` away sees of it: the correction's share
+    /// fades as `1 − (delay/T)²` (the taper, `JerkCorrection`); for the error estimate.
+    fn jerk_seen(&self, delay: f64) -> DVec3 {
+        match self {
+            Continuation::Fields(m, corr) => {
+                let u = delay / corr.scale;
+                m.jerk() + corr.jerk * (1.0 - u * u).max(0.0)
+            }
+            Continuation::Accelerated(_) => DVec3::ZERO,
+        }
+    }
+
+    /// The snap of the continued past at the present (the correction has none there).
+    fn snap(&self) -> DVec3 {
+        match self {
+            Continuation::Fields(m, _) => m.snap(),
+            Continuation::Accelerated(_) => DVec3::ZERO,
+        }
+    }
+}
+
+/// The quasi-static interaction's first pass for one member: how its past is continued,
+/// and its Landau–Lifshitz reaction from the fields it feels there (None unless it
+/// reacts).
+#[derive(Clone, Copy, Debug)]
+struct Continued {
+    how: Continuation,
+    reaction: Option<DVec3>,
+}
+
+/// A member of the quasi-static interaction's first pass (`first_pass`): a particle in
+/// flight (a ghost too) at time `t`.
+#[derive(Clone, Copy, Debug)]
+pub struct PassMember {
+    pub charge: f64,
+    pub mass: f64,
+    pub moment: f64,
+    pub x: DVec3,
+    pub v: DVec3,
+    /// Its momentum (of velocity `v`).
+    pub p: DVec3,
+    /// Whether its field acts on the others.
+    pub source: bool,
+    /// Whether it feels its radiation reaction.
+    pub reacts: bool,
+}
+
+/// The quasi-static interaction's first pass at time `t`: how every member's past is
+/// continued, and the Landau–Lifshitz reaction of those that react (the beam runner's
+/// right-hand sides; the game's field views take it on the recorded states). A charged
+/// member's past moves in the fields it feels, with the jerk of their change along its
+/// path (`Continuation::Fields`). Those fields: `felt(j, x, t')`, all but the others'
+/// acceleration fields (the external ones, its image's, the others' of uniform motion on
+/// from their states at `t`, absorbed charges'), sampled as the radiation reaction samples
+/// them (`landau_lifshitz`); plus the others' acceleration fields to O(1/c²)
+/// (`darwin_field`) from a first estimate of their accelerations and jerks (their motion
+/// in `felt` alone); and the motion feels the radiation reaction too, its own (if it
+/// reacts) and the others' share, their near fields `(2q/3c³) ȧ` from the estimated
+/// jerks. So the continuations' accelerations are the sources' own through 1/c³: the
+/// moving charges' mutual (Darwin) mass acts as a mass, on the damping forces too, not as
+/// a softer spring. A member without motion in the fields (a magnetic moment: its gradient
+/// force is no Lorentz force; or out of the plane) is continued with its acceleration
+/// `fallback(j)` (plus those fields' share).
+pub fn first_pass(
+    c: f64,
+    t: f64,
+    members: &[PassMember],
+    felt: impl Fn(usize, DVec3, f64) -> (DVec3, DVec3),
+    fallback: impl Fn(usize) -> DVec3,
+) -> Vec<(Continuation, Option<DVec3>)> {
+    let n = members.len();
+    let kin: Vec<Kinematics> = members.iter().map(|m| Kinematics::new(m.mass, c)).collect();
+    // The fields felt and their rate of change along the path.
+    let sample = |j: usize| {
+        let m = &members[j];
+        let (e, b) = felt(j, m.x, t);
+        let h = path_step(m.v);
+        let (ep, bp) = felt(j, m.x + m.v * h, t + h);
+        let (em, bm) = felt(j, m.x - m.v * h, t - h);
+        Felt {
+            e,
+            b,
+            de: (ep - em) / (2.0 * h),
+            db: (bp - bm) / (2.0 * h),
+        }
+    };
+    // A member's motion in the fields `f`, with the jerk of their change.
+    let motion = |j: usize, f: &Felt| {
+        let m = &members[j];
+        if m.moment != 0.0 {
+            return None;
+        }
+        FieldMotion::new(m.charge, m.mass, c, t, m.x, m.v, f.e, f.b).map(|fm| {
+            let d = missing_jerk(m.charge, &kin[j], m.p, (f.de, f.db));
+            (fm, jerk_correction(d, m.v, fm.present().1, c))
+        })
+    };
+    // First estimate, without the others' accelerations.
+    #[allow(clippy::type_complexity)]
+    let first: Vec<(Option<Felt>, Option<(FieldMotion, JerkCorrection)>)> = (0..n)
+        .map(|j| {
+            let f = (members[j].charge != 0.0).then(|| sample(j));
+            (f, f.and_then(|f| motion(j, &f)))
+        })
+        .collect();
+    let fallen: Vec<Option<DVec3>> = (0..n)
+        .map(|j| first[j].1.is_none().then(|| fallback(j)))
+        .collect();
+    let sources: Vec<(usize, f64, DVec3, DVec3, DVec3, DVec3)> = (0..n)
+        .filter(|&i| members[i].source && members[i].charge != 0.0)
+        .map(|i| {
+            let (a, jerk) = match (first[i].1, fallen[i]) {
+                (Some((fm, corr)), _) => (fm.present().1, fm.jerk() + corr.jerk),
+                (None, a) => (a.unwrap_or(DVec3::ZERO), DVec3::ZERO),
+            };
+            (i, members[i].charge, members[i].x, members[i].v, a, jerk)
+        })
+        .collect();
+    (0..n)
+        .map(|j| {
+            let m = &members[j];
+            let Some(f0) = first[j].0 else {
+                return (
+                    Continuation::Accelerated(fallen[j].unwrap_or(DVec3::ZERO)),
+                    None,
+                );
+            };
+            // The others' acceleration fields at the member, along its path as the samples
+            // of `felt` (the others moving on with their estimated jerks).
+            let h = path_step(m.v);
+            let darwin = |s: f64| {
+                let mut e = DVec3::ZERO;
+                for &(i, qi, xi, vi, ai, ji) in &sources {
+                    if i != j {
+                        let dt = s * h;
+                        e += darwin_field(qi, c, m.x + m.v * dt, xi + vi * dt, ai + ji * dt);
+                    }
+                }
+                e
+            };
+            let (e0, ep, em) = (darwin(0.0), darwin(1.0), darwin(-1.0));
+            let f = Felt {
+                e: f0.e + e0,
+                b: f0.b,
+                de: f0.de + (ep - em) / (2.0 * h),
+                db: f0.db,
+            };
+            let reaction = m
+                .reacts
+                .then(|| landau_lifshitz_from(m.charge, &kin[j], m.p, (f.e, f.b), (f.de, f.db)));
+            // The radiation reaction's share in the motion, as a uniform field: its own and
+            // the others' near fields of their jerks.
+            let mut damping = reaction.unwrap_or(DVec3::ZERO) / m.charge;
+            let c3 = c * c * c;
+            for &(i, qi, _, _, _, ji) in &sources {
+                if i != j {
+                    damping += ji * (2.0 * qi / (3.0 * c3));
+                }
+            }
+            let moving = Felt {
+                e: f.e + damping,
+                ..f
+            };
+            let how = match motion(j, &moving) {
+                Some((fm, corr)) => Continuation::Fields(fm, corr),
+                None => {
+                    let extra = kin[j].acceleration(m.p, (e0 + damping) * m.charge);
+                    let a = fallen[j].unwrap_or_else(|| fallback(j));
+                    Continuation::Accelerated(a + extra)
+                }
+            };
+            (how, reaction)
+        })
+        .collect()
+}
+
+/// The fields `(e, b)` a member feels as the quasi-static interaction takes them (the
+/// external ones, its own image's, the others' of uniform motion) and their rate of change
+/// `(de, db)` along its path, by the central differences of `landau_lifshitz`.
+#[derive(Clone, Copy, Debug)]
+struct Felt {
+    e: DVec3,
+    b: DVec3,
+    de: DVec3,
+    db: DVec3,
+}
+
+/// The jerk correction's velocity change is at most this fraction of `taper_reach`
+/// (`jerk_correction`): that keeps the corrected past below c wherever the motion in the
+/// fields is used (excursion below `SWING[1]`: its speed stays below `c − 0.25 (c − |v|)`).
+const JERK_REACH: f64 = 0.2;
+
+/// The jerk correction fades within this many times the motion's own time scale
+/// (`jerk_correction`).
+const JERK_SPAN: f64 = 5.0;
+
+/// The jerk correction of a source with velocity `v` and acceleration `a` whose continued
+/// past misses the jerk `d` (from the change of the fields along its path). Its time
+/// scale `T` has `1/T² = 1/T_v² + 1/T_m²`:
+/// - `T_v = √(8 Δv/|d|)` keeps its velocity change below `Δv = JERK_REACH ·
+///   taper_reach(v)`, so the corrected past never reaches c;
+/// - `T_m = JERK_SPAN (|a| + √(|v| |d|))/|d|` ends it where the jerk would have changed
+///   the acceleration by the motion's own scale. For a charge bound harmonically,
+///   `|d| = ω²|v|` and `T_m ≥ 5/ω` (the cubic would not follow the swing much longer);
+///   crossing a field's gradient length `L` at speed `v`, about `5 L/v`.
+///
+/// Near the present the taper changes the corrected past by a relative `0.9 (τ/T)²`, so
+/// for observers well inside `c T` the correction is the bare jerk.
+pub fn jerk_correction(d: DVec3, v: DVec3, a: DVec3, c: f64) -> JerkCorrection {
+    let dn = d.length();
+    let tm = JERK_SPAN * (a.length() + (v.length() * dn).sqrt()) / dn;
+    let tv2 = 8.0 * JERK_REACH * taper_reach(v, c) / dn;
+    let scale = 1.0 / (1.0 / tv2 + 1.0 / (tm * tm)).sqrt();
+    if scale > 0.0 && scale.is_finite() && dn.is_finite() {
+        JerkCorrection { jerk: d, scale }
+    } else {
+        JerkCorrection::NONE
+    }
+}
+
+/// The jerk the motion in uniform fields misses for a charge `q` with momentum `p`, whose
+/// fields change along its path at the rates `(de, db)`: the force's rate of change
+/// `q (DE/Dt + v × DB/Dt)` beyond the motion's own, as an acceleration (the jerk is
+/// linear in it).
+fn missing_jerk(q: f64, kin: &Kinematics, p: DVec3, (de, db): (DVec3, DVec3)) -> DVec3 {
+    let v = kin.velocity(p);
+    kin.acceleration(p, (de + v.cross(db)) * q)
 }
 
 /// A particle absorbed by a screening cup (`Fate::Cup`): it flies on into the cup at its
@@ -332,13 +573,16 @@ pub struct BeamRun {
     pub energy: Vec<EnergySample>,
     /// Quasi-static interaction: per particle, the estimated relative error of the
     /// interaction's impulse: the time integral of the neglected fields of the others (from
-    /// their jerk, `Σ_j |q_j| γ_j² |ȧ_j| / (c³ κ)` with the Doppler factor κ = 1 − n·β
-    /// for the longer light delay ahead of a source, plus `|q_j| γ_j² |a_j| / (c² R)` for
-    /// pairs so far apart that the source's continued past has left its constant
-    /// acceleration, `|a_j| R / (c κ) > 0.7 Δv`, see `tapered`), over that of the
-    /// fields kept, `Σ_j |E_j|`; plus, at each drained particle's removal, the impulse
-    /// `|q| / (R c)` of its field lingering for the light time R/c (the quasi-static
-    /// interaction drops it at once)
+    /// the jerk their continued pasts miss, `Σ_j |q_j| γ_j² |ȧ_j − w ȧ_j,cont| / (c³ κ)`
+    /// with the Doppler factor κ = 1 − n·β for the longer light delay ahead of a source;
+    /// from the snap they miss, `w (3/8) |q_j| γ_j² R |s_j − s_j,cont| / (c⁴ κ²)`, at most
+    /// the jerk's term; plus `|q_j| γ_j² |a_j| / (c² R)` for pairs so far apart that the
+    /// source's continued past has left its constant acceleration, `|a_j| R / (c κ) >
+    /// 0.7 Δv`, see `tapered`), over that of the fields kept, `Σ_j |E_j|`; plus, at each
+    /// removal, the impulse of what the quasi-static interaction changes at once while
+    /// really the change takes the light time R/c to arrive: a drained charge's whole
+    /// field, `|q| / (R c)`; one flying on into a cup its acceleration field, `|q| γ² |a| /
+    /// c³`; one stopped on a body that and its velocity field, `|q| γ² (|a| + |v|²/R) / c³`
     /// (sampled at the step ends; 0 without quasi-static interaction). The trajectory
     /// error follows the impulse error: a short plunge of a neighbour matters little.
     pub neglected_retardation: Vec<f64>,
@@ -766,38 +1010,44 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         self.force_with(y, k, t, acc.as_deref(), true)
     }
 
-    /// Quasi-static interaction: how every member's past is continued (first pass): along
-    /// its motion in the fields it feels in the state `y`, the external fields and the
-    /// others' fields of uniform motion.
-    fn continuations(&self, y: &[f64], t: f64) -> Option<Vec<Continuation>> {
-        self.quasi_static().then(|| {
-            (0..self.members.len())
-                .map(|j| {
-                    let part = self.scn.particles[self.members[j]].particle;
-                    let x = Self::x(y, j);
-                    let p = self.p(y, j);
-                    if part.charge != 0.0 && part.moment == 0.0 {
-                        let f = self.scn.field.sample(x, t);
-                        let e_self = self.scn.field.self_field(x, part.charge).0;
-                        let (e, b) = self.quasi_static_fields(y, t, j, x, t, None);
-                        if let Some(m) = FieldMotion::new(
-                            part.charge,
-                            part.mass,
-                            self.scn.c,
-                            t,
-                            x,
-                            self.kin[j].velocity(p),
-                            f.e + e_self + e,
-                            f.b + b,
-                        ) {
-                            return Continuation::Fields(m);
-                        }
-                    }
-                    let f = self.force_with(y, j, t, None, false);
-                    Continuation::Accelerated(self.kin[j].acceleration(p, f))
-                })
-                .collect()
-        })
+    /// Quasi-static interaction: how every member's past is continued, and the reaction of
+    /// those that react (`first_pass`), in the state `y` at time `t`.
+    fn continuations(&self, y: &[f64], t: f64) -> Option<Vec<Continued>> {
+        if !self.quasi_static() {
+            return None;
+        }
+        let members: Vec<PassMember> = (0..self.members.len())
+            .map(|j| {
+                let part = self.scn.particles[self.members[j]].particle;
+                let p = self.p(y, j);
+                PassMember {
+                    charge: part.charge,
+                    mass: part.mass,
+                    moment: part.moment,
+                    x: Self::x(y, j),
+                    v: self.kin[j].velocity(p),
+                    p,
+                    source: self.source[j],
+                    reacts: self.reacts(j),
+                }
+            })
+            .collect();
+        // The fields as the radiation reaction samples them (`radiation_reaction_force`).
+        let felt = |j: usize, x: DVec3, tt: f64| {
+            let f = self.scn.field.sample(x, tt);
+            let e_self = self.scn.field.self_field(x, members[j].charge).0;
+            let (e, b) = self.quasi_static_fields(y, t, j, x, tt, None);
+            (f.e + e_self + e, f.b + b)
+        };
+        let fallback = |j: usize| {
+            self.kin[j].acceleration(members[j].p, self.force_with(y, j, t, None, false))
+        };
+        Some(
+            first_pass(self.scn.c, t, &members, felt, fallback)
+                .into_iter()
+                .map(|(how, reaction)| Continued { how, reaction })
+                .collect(),
+        )
     }
 
     /// Force on member `k`; for the quasi-static interaction `acc` are the members'
@@ -807,7 +1057,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         y: &[f64],
         k: usize,
         t: f64,
-        acc: Option<&[Continuation]>,
+        acc: Option<&[Continued]>,
         rr: bool,
     ) -> DVec3 {
         self.force_in(y, k, t, acc, rr, None)
@@ -820,7 +1070,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         y: &[f64],
         k: usize,
         t: f64,
-        acc: Option<&[Continuation]>,
+        acc: Option<&[Continued]>,
         rr: bool,
         view: Option<&View<'_>>,
     ) -> DVec3 {
@@ -873,7 +1123,11 @@ impl<F: FieldSolver> BeamOde<'_, F> {
             }
         }
         if rr && self.reacts(k) {
-            force += self.radiation_reaction_force(y, k, t, view);
+            force += match acc.and_then(|a| a[k].reaction) {
+                // The quasi-static first pass has it.
+                Some(f) => f,
+                None => self.radiation_reaction_force(y, k, t, view),
+            };
         }
         force
     }
@@ -900,7 +1154,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
         k: usize,
         x: DVec3,
         t: f64,
-        acc: Option<&[Continuation]>,
+        acc: Option<&[Continued]>,
     ) -> (DVec3, DVec3) {
         let (mut e, mut b) = (DVec3::ZERO, DVec3::ZERO);
         for (j, &src) in self.source.iter().enumerate() {
@@ -911,7 +1165,7 @@ impl<F: FieldSolver> BeamOde<'_, F> {
             if qj == 0.0 {
                 continue;
             }
-            let (ej, bj) = match acc.map(|a| a[j]) {
+            let (ej, bj) = match acc.map(|a| a[j].how) {
                 Some(cont) => {
                     let (e, b, _) = cont.fields(
                         qj,
@@ -1643,11 +1897,16 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     members: members.clone(),
                 });
             }
-            // Quasi-static interaction: estimated neglected fields (the jerk the sources'
-            // continued past misses: the change of their acceleration over the step less the
-            // continuation's own), relative to the fields kept, at the step's end.
+            // Quasi-static interaction: estimated neglected fields, relative to the fields
+            // kept, over the step: the jerk the sources' continued pasts miss (the change
+            // of their acceleration over the step less the continuations' own jerk, as
+            // each observer sees it, averaged over the step's ends) and the snap they miss
+            // (the rate of change of the continuations' jerk over the step less their own
+            // snap).
             if quasi_static && t_end > t_a {
+                let mut y_a = vec![0.0; ode.dim()];
                 let mut y_end = vec![0.0; ode.dim()];
+                dense.eval(t_a, &mut y_a);
                 dense.eval(t_end, &mut y_end);
                 let accel = |k: usize, t: f64| {
                     let dp = DVec3::new(
@@ -1657,9 +1916,11 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                     ) * ode.p_ref[k];
                     ode.kin[k].acceleration(mom(k, t), dp)
                 };
+                let step = t_end - t_a;
+                let at_a = ode.continuations(&y_a, t_a).unwrap_or_default();
                 let continued = ode.continuations(&y_end, t_end).unwrap_or_default();
                 let jerk: Vec<DVec3> = (0..members.len())
-                    .map(|k| (accel(k, t_end) - accel(k, t_a)) / (t_end - t_a))
+                    .map(|k| (accel(k, t_end) - accel(k, t_a)) / step)
                     .collect();
                 for (k, &i) in members.iter().enumerate() {
                     let qi = scn.particles[i].particle.charge;
@@ -1681,16 +1942,38 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             let kappa = (1.0 - d.dot(vj) / (r * scn.c)).max(1e-6);
                             let delay = r / (scn.c * kappa);
                             // The jerk the continuation misses: for the motion in the
-                            // fields (weight w for this pair) the difference from its own.
-                            let (w, own) = match continued.get(l) {
-                                Some(cont @ Continuation::Fields(_)) => {
-                                    let (_, _, w) = cont.fields(qj, scn.c, xi, 0.0, xj, vj);
-                                    (w, cont.jerk())
+                            // fields (weight w for this pair) the difference from its own;
+                            // and the snap the motion in the fields misses, near or far a
+                            // field error `(3/8) |q| R |s| / c⁴` (the near-field term of a
+                            // past that grows as τ⁴, `−(q R/8c⁴)(3 − n n·) s`), at most
+                            // the jerk's own (where the snap changes the jerk within the
+                            // light delay the past has no Taylor series to speak of; the
+                            // constant acceleration's whole jerk counts as missing anyway).
+                            let (w, own, snap) = match (at_a.get(l), continued.get(l)) {
+                                (
+                                    Some(ca),
+                                    Some(
+                                        ce @ Continued {
+                                            how: Continuation::Fields(..),
+                                            ..
+                                        },
+                                    ),
+                                ) => {
+                                    let (_, _, w) = ce.how.fields(qj, scn.c, xi, 0.0, xj, vj);
+                                    let own =
+                                        (ca.how.jerk_seen(delay) + ce.how.jerk_seen(delay)) * 0.5;
+                                    let rate = (ce.how.jerk() - ca.how.jerk()) / step;
+                                    let snap = rate - (ca.how.snap() + ce.how.snap()) * 0.5;
+                                    (w, own, snap)
                                 }
-                                _ => (0.0, DVec3::ZERO),
+                                _ => (0.0, DVec3::ZERO, DVec3::ZERO),
                             };
-                            missing += qj.abs() * g * g * (jerk[l] - own * w).length()
-                                / (scn.c.powi(3) * kappa);
+                            let jerk_scale = qj.abs() * g * g / (scn.c.powi(3) * kappa);
+                            missing += jerk_scale * (jerk[l] - own * w).length();
+                            let snap_term = 0.375 * qj.abs() * g * g * snap.length() * r
+                                / (scn.c.powi(4) * kappa * kappa);
+                            missing +=
+                                w * snap_term.min(jerk_scale * (jerk[l].length() + own.length()));
                             // Beyond the constant-acceleration range of a past continued
                             // with its acceleration (`tapered`: |a τ| > 0.7 Δv) that
                             // acceleration fades: first-order error there.
@@ -1713,10 +1996,15 @@ pub fn run_beam_cancellable<F: FieldSolver>(
             if scn.radiation_reaction && scn.c.is_finite() {
                 let mut y_end = vec![0.0; ode.dim()];
                 dense.eval(t_end, &mut y_end);
+                // The quasi-static first pass once for all (it gives the reactions too).
+                let acc = ode.continuations(&y_end, t_end);
                 for (k, &i) in members.iter().enumerate() {
                     if matches!(tracks[i].phase, Phase::Flying) && ode.reacts(k) {
-                        let rr = ode.radiation_reaction_force(&y_end, k, t_end, None);
-                        let rest = (ode.force(&y_end, k, t_end) - rr).length();
+                        let rr = acc.as_ref().and_then(|a| a[k].reaction).unwrap_or_else(|| {
+                            ode.radiation_reaction_force(&y_end, k, t_end, None)
+                        });
+                        let total = ode.force_with(&y_end, k, t_end, acc.as_deref(), true);
+                        let rest = (total - rr).length();
                         let tr = &mut tracks[i];
                         tr.rr_max = tr.rr_max.max(rr.length());
                         tr.rest_max = tr.rest_max.max(rest);
@@ -1992,6 +2280,38 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                         };
                     }
                 }
+                // What the quasi-static interaction changes at once while really the change
+                // reaches each other particle with the light delay R/c: a neglected impulse
+                // on each of about the field dropped times R/c. A drained charge drops its
+                // whole field, |q| / (R c); one flying on into a cup (`Fade`: the field of
+                // its uniform motion, faded at the retarded time) its acceleration field,
+                // |q| γ² |a| / c³; one stopped on a body (at rest at once) that and the
+                // velocity part of its field, |q| γ² (|a| + |v|²/R) / c³.
+                let qi = scn.particles[i].particle.charge;
+                if quasi_static && qi != 0.0 && fate != Fate::Pass {
+                    let cup = fate == Fate::Cup && events[e] == Event::Detector;
+                    let p = ode.p(&y, k);
+                    let (g, v) = (ode.kin[k].gamma(p), ode.kin[k].velocity(p));
+                    let a = ode.kin[k].acceleration(p, ode.force(&y, k, t_end)).length();
+                    let xe = tracks[i].traj.end.x;
+                    for (l, &j) in members.iter().enumerate() {
+                        let flying = matches!(
+                            tracks[j].phase,
+                            Phase::Flying | Phase::Free | Phase::Ghost { real: true, .. }
+                        );
+                        if j != i && flying && scn.particles[j].particle.charge != 0.0 {
+                            let r = (BeamOde::<F>::x(&y, l) - xe).length();
+                            neglected[j].0 += qi.abs()
+                                * match fate {
+                                    Fate::Stop => {
+                                        g * g * (a + v.length_squared() / r) / scn.c.powi(3)
+                                    }
+                                    _ if cup => g * g * a / scn.c.powi(3),
+                                    _ => 1.0 / (r * scn.c),
+                                };
+                        }
+                    }
+                }
                 match fate {
                     Fate::Drain | Fate::Cup => {
                         past.t_off.write().expect("not poisoned")[i] = t_end;
@@ -2004,25 +2324,6 @@ pub fn run_beam_cancellable<F: FieldSolver>(
                             let fd = Fade::at_entry(region, tracks[i].traj.end.x, v_end, t_end);
                             fades[i] = Some(fd);
                             past.fades.write().expect("not poisoned")[i] = Some(fd);
-                        }
-                        // A drained charge: the quasi-static interaction drops its field at
-                        // once; really it lingers at each other particle for the light
-                        // time R/c: a neglected impulse of about |q| / (R c) on each. (In
-                        // a cup the fade reaches the others with the light delay of its
-                        // uniform motion, `Fade::quasi_static_fields`: nothing dropped.)
-                        let qi = scn.particles[i].particle.charge;
-                        if quasi_static && !cup && qi != 0.0 {
-                            let xe = tracks[i].traj.end.x;
-                            for (l, &j) in members.iter().enumerate() {
-                                let flying = matches!(
-                                    tracks[j].phase,
-                                    Phase::Flying | Phase::Free | Phase::Ghost { real: true, .. }
-                                );
-                                if j != i && flying && scn.particles[j].particle.charge != 0.0 {
-                                    let r = (BeamOde::<F>::x(&y, l) - xe).length();
-                                    neglected[j].0 += qi.abs() / (r * scn.c);
-                                }
-                            }
                         }
                     }
                     Fate::Stop => {
@@ -2306,6 +2607,16 @@ pub fn heaviside_fields(q: f64, c: f64, x: DVec3, r: DVec3, v: DVec3) -> (DVec3,
     (e, v.cross(e) / (c * c))
 }
 
+/// The near-zone field at `x` of the acceleration `a` of a charge `q` at `r`, to O(1/c²)
+/// (the acceleration term of the Darwin field, `−(1/c) ∂A/∂t` of the Darwin vector
+/// potential `(q/2cR) [v + n (n·v)]`): `−(q/2c²R) [a + n (n·a)]`.
+pub fn darwin_field(q: f64, c: f64, x: DVec3, r: DVec3, a: DVec3) -> DVec3 {
+    let d = x - r;
+    let dist = d.length();
+    let n = d / dist;
+    (a + n * n.dot(a)) * (-q / (2.0 * c * c * dist))
+}
+
 /// Acceleration of every particle at launch: external fields and the others' fields of
 /// uniform motion (the quasi-static interaction) at t = 0.
 fn launch_accelerations<F: FieldSolver>(scn: &BeamScenario<F>) -> Vec<DVec3> {
@@ -2342,29 +2653,6 @@ fn launch_accelerations<F: FieldSolver>(scn: &BeamScenario<F>) -> Vec<DVec3> {
 /// polynomial is used: retarded times inside the current step (pairs closer than `c h`)
 /// come from this extrapolation, the standard treatment of delays shorter than a step.
 const EXTRAPOLATION: f64 = 2.0;
-
-/// The quasi-static interaction's fields `(E, B)` at `x` of a source `q` (mass `m`) now at
-/// `r` with velocity `v` and acceleration `a`, which feels the fields `e`, `b` (the
-/// external ones and the others'): its past continued along its motion in those fields,
-/// blending into the tapered constant acceleration where that swings far (`Continuation`),
-/// or with the acceleration alone out of the plane. For the game's field views, which
-/// show what this interaction leaves out.
-#[allow(clippy::too_many_arguments)]
-pub fn continued_fields(
-    q: f64,
-    m: f64,
-    c: f64,
-    x: DVec3,
-    r: DVec3,
-    v: DVec3,
-    a: DVec3,
-    fields: (DVec3, DVec3),
-) -> (DVec3, DVec3) {
-    let cont = FieldMotion::new(q, m, c, 0.0, r, v, fields.0, fields.1)
-        .map_or(Continuation::Accelerated(a), Continuation::Fields);
-    let (e, b, _) = cont.fields(q, c, x, 0.0, r, v);
-    (e, b)
-}
 
 /// The weight of the motion in the fields in the quasi-static interaction's field at the
 /// excursion `e` (`SWING`), for the game's GPU field view.

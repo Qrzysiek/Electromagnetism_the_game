@@ -20,7 +20,10 @@ use bevy::render::storage::ShaderBuffer;
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 use level::Level;
+use std::sync::{Arc, RwLock};
+
 use physics::DVec3;
+use physics::beam::{Continuation, PassMember};
 use physics::dynamics::Kinematics;
 use physics::external::External;
 use physics::field::{FieldSolver, LevelField};
@@ -208,8 +211,15 @@ pub struct RadiationView {
     /// Obstacles of the shown flight (the field is not drawn inside sources).
     obstacles: Vec<Shape>,
     /// The flight's whole field (what the particles feel: for the quasi-static
-    /// interaction's continued pasts, `source_fields`).
+    /// interaction's continued pasts, `first_pass_at`).
     source_field: LevelField,
+    /// Whether the particles feel their radiation reaction (the quasi-static
+    /// interaction's continued pasts include it).
+    reacts: bool,
+    /// The quasi-static interaction's continued pasts of the sources at recent times
+    /// (`pasts_at`; shared by the parallel samplers).
+    #[allow(clippy::type_complexity)]
+    pasts: RwLock<Vec<(u64, Arc<Vec<Option<Continuation>>>)>>,
     pub arrows: Vec<(Vec2, Vec2)>,
 }
 
@@ -283,6 +293,8 @@ pub fn setup(
         c: f64::INFINITY,
         obstacles: Vec::new(),
         source_field: LevelField::default(),
+        reacts: false,
+        pasts: RwLock::new(Vec::new()),
         arrows: Vec::new(),
     });
 }
@@ -507,6 +519,8 @@ pub fn update(
         view.key = Some(key);
         view.time = f64::NAN;
         view.radiation_only = game.radiation_only;
+        view.reacts = level.physics.radiation_reaction;
+        view.pasts.write().expect("not poisoned").clear();
         view.sources = match beam {
             Some(b) => {
                 // Species by position in the flight (dynamic particles follow the shots).
@@ -728,6 +742,7 @@ pub fn update(
     let started = std::time::Instant::now();
     let mut samples: Vec<[f32; 4]> = Vec::new();
     let mut items: Vec<[f32; 4]> = Vec::new();
+    let pasts = (view.neglected_only && c.is_finite()).then(|| pasts_at(&view, t, c));
     for (i, s) in view.sources.iter().enumerate() {
         items.push([
             (samples.len() / 2) as f32,
@@ -748,21 +763,26 @@ pub fn update(
             0.0,
             0.0,
         ]);
-        // The quasi-static interaction's continued past (`beam::continued_fields`): its
-        // motion in the fields it feels now, `(U₀, ω²)`, `(Λ U₀, valid)`, `(Λ² U₀, 0)`.
-        let motion = (view.neglected_only && s.moment == 0.0)
-            .then(|| source_fields(&view, i, t, c))
-            .flatten()
-            .and_then(|(r, v, _, e, b)| {
-                physics::field_motion::FieldMotion::new(s.charge, s.mass, c, 0.0, r, v, e, b)
-            });
-        match motion.map(|m| m.parameters()) {
-            Some((u0, v1, v2, w2)) => {
+        // The quasi-static interaction's continued past (`physics::beam::first_pass`): its
+        // motion in the fields it feels now, `(U₀, ω²)`, `(Λ U₀, valid)`, `(Λ² U₀, 0)`,
+        // and the jerk of their change along its path, `(Δȧ, T, 0)`.
+        let motion = pasts.as_ref().and_then(|p| match p[i] {
+            Some(Continuation::Fields(m, corr)) => Some((m.parameters(), corr)),
+            _ => None,
+        });
+        match motion {
+            Some(((u0, v1, v2, w2), corr)) => {
                 items.push([u0[0] as f32, u0[1] as f32, u0[2] as f32, w2 as f32]);
                 items.push([v1[0] as f32, v1[1] as f32, v1[2] as f32, 1.0]);
                 items.push([v2[0] as f32, v2[1] as f32, v2[2] as f32, 0.0]);
+                items.push([
+                    corr.jerk.x as f32,
+                    corr.jerk.y as f32,
+                    corr.scale as f32,
+                    0.0,
+                ]);
             }
-            None => items.extend([[0.0; 4]; 3]),
+            None => items.extend([[0.0; 4]; 4]),
         }
         for &(ts, x, v, a) in &s.samples {
             samples.push([(ts - t) as f32, x.x as f32, x.y as f32, v.x as f32]);
@@ -1250,12 +1270,10 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
             if (x - r).length() <= 0.15 {
                 return None;
             }
-            let (eq, bq) = match (s.moment == 0.0)
-                .then(|| source_fields(view, i, t, c))
-                .flatten()
-            {
-                Some((_, _, _, es, bs)) => {
-                    physics::beam::continued_fields(s.charge, s.mass, c, x, r, v, a, (es, bs))
+            let (eq, bq) = match pasts_at(view, t, c)[i] {
+                Some(cont) => {
+                    let (e, b, _) = cont.fields(s.charge, c, x, 0.0, r, v);
+                    (e, b)
                 }
                 None => physics::beam::accelerated_fields(s.charge, c, x, 0.0, r, v, a),
             };
@@ -1266,49 +1284,98 @@ fn charges(view: &RadiationView, x: DVec3, t: f64, c: f64) -> Option<(DVec3, f64
     Some((e, bz))
 }
 
-/// Source `i` at time `t` while it flies: position, velocity, acceleration, and the fields
-/// it feels as the quasi-static interaction takes them (its continued past moves in them):
-/// the flight's own field and the other particles' (those flying by their uniform motion,
-/// those stopped by a body at rest where they stopped, those in a screening cup fading).
-#[allow(clippy::type_complexity)]
-fn source_fields(
-    view: &RadiationView,
-    i: usize,
-    t: f64,
-    c: f64,
-) -> Option<(DVec3, DVec3, DVec3, DVec3, DVec3)> {
-    use physics::lienard::Worldline;
-    let s = &view.sources[i];
-    if s.end.is_some_and(|(te, _)| t >= te) {
-        return None;
+/// The quasi-static interaction's continued pasts of the sources at time `t`
+/// (`first_pass_at`), from the view's cache of recent times.
+fn pasts_at(view: &RadiationView, t: f64, c: f64) -> Arc<Vec<Option<Continuation>>> {
+    let key = t.to_bits();
+    if let Some((_, p)) = view
+        .pasts
+        .read()
+        .expect("not poisoned")
+        .iter()
+        .find(|(k, _)| *k == key)
+    {
+        return p.clone();
     }
-    let (r, v, a) = s.line.state(t);
-    let f = view.source_field.sample(r, t);
-    let (mut e, mut b) = (f.e, f.b);
-    for (j, o) in view.sources.iter().enumerate() {
-        if j == i || o.charge == 0.0 {
-            continue;
-        }
-        match o.end {
-            Some((te, xe)) if t >= te => {
-                if o.stays {
-                    let d = r - xe;
-                    e += d * (o.charge / d.length().max(1e-6).powi(3));
-                } else if let Some(fd) = o.fade {
-                    let (ef, bf) = fd.quasi_static_fields(o.charge, c, r, t);
-                    e += ef;
-                    b += bf;
+    let p = Arc::new(first_pass_at(view, t, c));
+    let mut cache = view.pasts.write().expect("not poisoned");
+    if cache.len() >= 64 {
+        cache.remove(0);
+    }
+    cache.push((key, p.clone()));
+    p
+}
+
+/// The quasi-static interaction's continued pasts of the sources flying at `t`, as the
+/// dynamics continued them (`physics::beam::first_pass` on their recorded states), indexed
+/// like `view.sources` (None for those absorbed). The fields they feel: the flight's own
+/// field (and their images) and the other particles' (those flying by their uniform motion
+/// from `t`, those stopped by a body at rest where they stopped, those in a screening cup
+/// fading).
+fn first_pass_at(view: &RadiationView, t: f64, c: f64) -> Vec<Option<Continuation>> {
+    use physics::lienard::Worldline;
+    let flying: Vec<usize> = (0..view.sources.len())
+        .filter(|&i| view.sources[i].end.is_none_or(|(te, _)| t < te))
+        .collect();
+    let states: Vec<(DVec3, DVec3, DVec3)> = flying
+        .iter()
+        .map(|&i| view.sources[i].line.state(t))
+        .collect();
+    let members: Vec<PassMember> = flying
+        .iter()
+        .zip(&states)
+        .map(|(&i, &(r, v, _))| {
+            let s = &view.sources[i];
+            let gamma = Kinematics::new(s.mass, c).gamma_of_velocity(v);
+            PassMember {
+                charge: s.charge,
+                mass: s.mass,
+                moment: s.moment,
+                x: r,
+                v,
+                p: v * (gamma * s.mass),
+                source: s.charge != 0.0,
+                reacts: view.reacts && s.charge != 0.0,
+            }
+        })
+        .collect();
+    let felt = |j: usize, x: DVec3, tt: f64| {
+        let i = flying[j];
+        let f = view.source_field.sample(x, tt);
+        let mut e = f.e + view.source_field.self_field(x, view.sources[i].charge).0;
+        let mut b = f.b;
+        for (o, other) in view.sources.iter().enumerate() {
+            if o == i || other.charge == 0.0 {
+                continue;
+            }
+            match other.end {
+                Some((te, xe)) if t >= te => {
+                    if other.stays {
+                        let d = x - xe;
+                        e += d * (other.charge / d.length().max(1e-6).powi(3));
+                    } else if let Some(fd) = other.fade {
+                        let (ef, bf) = fd.quasi_static_fields(other.charge, c, x, tt);
+                        e += ef;
+                        b += bf;
+                    }
+                }
+                _ => {
+                    let (ro, vo, _) = other.line.state(t);
+                    let at = ro + vo * (tt - t);
+                    let (eh, bh) = physics::beam::heaviside_fields(other.charge, c, x, at, vo);
+                    e += eh;
+                    b += bh;
                 }
             }
-            _ => {
-                let (ro, vo, _) = o.line.state(t);
-                let (eh, bh) = physics::beam::heaviside_fields(o.charge, c, r, ro, vo);
-                e += eh;
-                b += bh;
-            }
         }
+        (e, b)
+    };
+    let pass = physics::beam::first_pass(c, t, &members, felt, |j| states[j].2);
+    let mut out = vec![None; view.sources.len()];
+    for (j, (how, _)) in pass.into_iter().enumerate() {
+        out[flying[j]] = Some(how);
     }
-    Some((r, v, a, e, b))
+    out
 }
 
 /// The velocity a tracer moves with: the energy's velocity `S/u` of the part shown (at most
