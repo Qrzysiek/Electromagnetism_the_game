@@ -23,8 +23,8 @@ list records the overlap and what Brau adds.
   nonlinear Thomson harmonics); test R8 (Ex. 10.14, radiation pressure on a moving
   charge); test C7 (§7.3.1, Bohr's classical energy loss); test C8 (Ex. 3.6, the
   polarization force of an atom); test P7 (Ex. 2.24, magnets through the stress tensor).
-- **Proposed (NOW, for the owner to choose):** the ten items in "Proposals" below, all
-  validation tests and one level.
+- **Proposed:** of the ten proposals below, nine are built (2026-10-05); the tenth, a
+  level, waits for the owner's call.
 - **Needs a feature:** F:emission (space-charge flow, Ex. 3.1; planned with vacuum tubes),
   F:screened (Proca, Ex. 2.25), F:dielectric and F:magnetic (Chapter 6), F:optics
   (Chapters 7–9, transition and Cherenkov radiation), F:spin (§11.3, Ex. 11.9).
@@ -193,4 +193,9 @@ Ranked by what they would add (all tests unless marked):
 8. **Polarization force of an atom** (Ex. 3.6): built, test C8 (2.8e-5 against the
    exact linear response; the adiabatic `−α z²/(2r⁴)` impulse approached as ~1.9/ξ²).
 9. **Magnets attracting through the stress tensor** (Ex. 2.24): built, test P7 (2.8e-15).
-10. **The aperture lens** (Ex. 2.10): a level and a test (electron optics).
+10. **The aperture lens** (Ex. 2.10): a level (electron optics). In the slice the aperture
+   is a slot (focal length `2V/(E₂ − E₁)`, half Davisson and Calbick's round hole), and the
+   fields on its two sides come from further apertures on supplies, which is close to
+   "Tune the lens" (level 22): the owner's call. As a test it adds little: the thin-lens
+   formula holds only to O(slot width/f), and an exact reference would be the engine's own
+   boundary-element field.
