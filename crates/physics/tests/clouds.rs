@@ -786,3 +786,86 @@ fn c6_collective_radiation_damping() {
     );
     assert!(worst < 0.02, "C6 {worst:.3e}");
 }
+
+/// C8, the polarization force of an atom (Brau §3.1.3 and Ex. 3.6): a slow charge z = 1/800
+/// (m = 1) passes a neutral Thomson atom (cloud Q = 1, R = 4; an electron q = −1, m = 1 at
+/// rest at its centre: ω₀ = 1/8, polarizability α = q²/(mω₀²) = R³ = 64) at impact parameter
+/// b = 20, from 20 b before the closest approach to 20 b after it, both particles flown by
+/// the beam runner (c = ∞). The charge displaces the electron and is attracted by the
+/// dipole it induced: in the adiabatic limit by the potential `−α z²/(2r⁴)`, an impulse
+/// `−3π α z²/(4 v b⁴)` toward the atom. Reference, at ξ = ω₀b/v = 10, 25, 50: the exact
+/// linear response for the straight path, the oscillator driven from rest and its dipole's
+/// force integrated over the same flight (`scripts/wolfram/c8_polarization_force.wls`,
+/// Wolfram Engine 14.2, NDSolve at 30 digits), which approaches the adiabatic impulse as
+/// ~1.9/ξ². Required: within 1e-4 (neglected: the induced charge's quadrupole, at first
+/// order in swing/b = 1e-5; the charge's deflection, 6e-7 rad).
+#[test]
+fn c8_polarization_force_of_an_atom() {
+    use physics::beam::{BeamParticle, BeamScenario, Fates, run_beam};
+    let (q, m, big_q, r) = (-1.0_f64, 1.0_f64, 1.0_f64, 4.0_f64);
+    let (z, mass, b) = (1.0 / 800.0, 1.0_f64, 20.0_f64);
+    let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
+    let alpha = q * q / (m * omega0 * omega0);
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const IMPULSE: [(f64, f64); 3] = [
+        (10.0, -6.0094856779354391829e-9),
+        (25.0, -1.4770866642470541742e-8),
+        (50.0, -2.9474575648422653079e-8),
+    ];
+    let mut worst: f64 = 0.0;
+    for (xi, reference) in IMPULSE {
+        let v = omega0 * b / xi;
+        let particle = |charge: f64, mass: f64, x0: DVec3, p0: DVec3| BeamParticle {
+            particle: Particle {
+                charge,
+                mass,
+                radius: 0.0,
+                moment: 0.0,
+            },
+            x0,
+            p0,
+            detector: None,
+            acceptance: None,
+        };
+        let scn = BeamScenario {
+            field: Coulomb::with_clouds(
+                &[],
+                &[ChargeCloud {
+                    position: DVec3::ZERO,
+                    charge: big_q,
+                    radius: r,
+                }],
+            ),
+            obstacles: vec![],
+            particles: vec![
+                particle(
+                    z,
+                    mass,
+                    DVec3::new(-20.0 * b, b, 0.0),
+                    DVec3::new(mass * v, 0.0, 0.0),
+                ),
+                particle(q, m, DVec3::ZERO, DVec3::ZERO),
+            ],
+            c: f64::INFINITY,
+            bounds: None,
+            t_max: 40.0 * b / v,
+            interact: true,
+            retarded: false,
+            gates: Vec::new(),
+            radiation_reaction: false,
+            fates: Fates::default(),
+        };
+        let run = run_beam(&scn, &RunSettings::with_tolerance(TOL));
+        let got = run.trajectories[0].end.p.y;
+        let rel = got / reference - 1.0;
+        let adiabatic = -3.0 * PI * alpha * z * z / (4.0 * v * b.powi(4));
+        println!(
+            "C8 ξ = {xi} (v = {v}): impulse {got:.10e} (linear response {reference:.10e}): \
+             {rel:.1e}; {:.4} of the adiabatic −3παz²/(4vb⁴); {} steps",
+            got / adiabatic,
+            run.stats.n_accept
+        );
+        worst = worst.max(rel.abs());
+    }
+    assert!(worst < 1e-4, "C8 {worst:.3e}");
+}
