@@ -1,4 +1,4 @@
-//! Validation tests P1–P5 for the field energy, its flow and its momentum (PHYSICS.md §10, §9). Run with
+//! Validation tests P1–P6 for the field energy, its flow and its momentum (PHYSICS.md §10, §9). Run with
 //! `cargo test --release -p physics --test poynting -- --nocapture`.
 
 #![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
@@ -322,4 +322,106 @@ fn p5_electromagnetic_mass_four_thirds() {
         worst = worst.max(eu.abs()).max(ep.abs());
     }
     assert!(worst < 1e-12, "P5 {worst:.3e}");
+}
+
+/// P6, the electron's shadow (Brau Ex. 10.15; the optical theorem, Jackson §10.11): C3's
+/// bound charge (q = −1, m = 1, ω₀ = 1, c = 8) on its steady state in a plane wave along x
+/// (Jackson (16.74) with Γ' = 0, a prescribed world line, swing 1e-3), driven below the
+/// resonance (0.99 ω₀) and above it (3 ω₀). The exchange flux between the incident wave
+/// and the charge's Liénard–Wiechert field, `(c²/4π)(E_inc × B_sc + E_sc × B_inc)`,
+/// averaged over a period (16 points). (a) Integrated over spheres of radius λ/2, 2λ, 8λ
+/// (Gauss–Legendre in cos θ about the incident direction, 128 × 16): Poynting's theorem
+/// for the exchange terms makes it minus the incident wave's work on the charge, on the
+/// steady state the extinction `σ_t I`, Jackson's (16.78), `I = cE₀²/8π`: what the
+/// scatterer takes out of the beam is missing from the interference. (b) On the axis
+/// behind the charge, where incident and scattered waves keep the same phase: the exact
+/// dipole field gives `(q ω² E₀/(8πc r)) [(2 − (kr)⁻²) Re X − 2 Im X/(kr)]`, X the complex
+/// swing. Its sign is that of q Re X: above the resonance the charge moves against the
+/// field, as a free one does, and the axis is dark (Brau's shadow); below it, bright,
+/// though the total extinction is the same positive σ_t I. Required: (a) within 1e-9 (an
+/// identity; the rules resolve the fringes, kr ≤ 16π·3); (b) within 1e-3 (the dipole
+/// approximation: swing over distance ≤ 4e-5).
+#[test]
+fn p6_the_electrons_shadow() {
+    use physics::external::PlaneWave;
+    use std::f64::consts::PI;
+    struct Steady {
+        xr: f64,
+        xi: f64,
+        w: f64,
+    }
+    impl Worldline for Steady {
+        fn state(&self, t: f64) -> (DVec3, DVec3, DVec3) {
+            let (s, co) = (self.w * t).sin_cos();
+            let y = self.xr * co + self.xi * s;
+            let vy = self.w * (-self.xr * s + self.xi * co);
+            (
+                DVec3::new(0.0, y, 0.0),
+                DVec3::new(0.0, vy, 0.0),
+                DVec3::new(0.0, -self.w * self.w * y, 0.0),
+            )
+        }
+    }
+    let (q, m, c, omega0) = (-1.0_f64, 1.0_f64, 8.0_f64, 1.0_f64);
+    let tau = 2.0 * q * q / (3.0 * m * c.powi(3));
+    let gamma = omega0 * omega0 * tau;
+    let sigma_thomson = 8.0 * PI / 3.0 * (q * q / (m * c * c)).powi(2);
+    let mut worst: [f64; 2] = [0.0, 0.0];
+    for w in [0.99_f64, 3.0] {
+        // X = χ E₀ for E = Re[E₀ e^{−iωt}] at the origin, χ = (q/m)(1 − iωτ)/(ω₀² − ω² − iωΓ).
+        let (nr, ni) = (1.0, -w * tau);
+        let (dr, di) = (omega0 * omega0 - w * w, -w * gamma);
+        let d2 = dr * dr + di * di;
+        let (chi_r, chi_i) = (
+            (nr * dr + ni * di) / d2 * q / m,
+            (ni * dr - nr * di) / d2 * q / m,
+        );
+        let e0 = 1e-3 / (chi_r * chi_r + chi_i * chi_i).sqrt();
+        let (xr, xi) = (chi_r * e0, chi_i * e0);
+        let electron = Steady { xr, xi, w };
+        let wave = PlaneWave::in_plane(e0, 0.0, w, 0.0, c);
+        let sigma = sigma_thomson * w.powi(4) / d2;
+        let reference = -sigma * c * e0 * e0 / (8.0 * PI);
+        let (k, period, nt) = (w / c, 2.0 * PI / w, 16);
+        #[allow(clippy::cast_precision_loss)]
+        let averaged = |x: DVec3, n: DVec3| {
+            (0..nt)
+                .map(|i| {
+                    let t = period * i as f64 / nt as f64;
+                    let (e1, b1) = wave.fields(x, t);
+                    let f = fields(&electron, q, c, x, t);
+                    exchange(e1, b1, f.e(), f.b, c).1.dot(n)
+                })
+                .sum::<f64>()
+                / f64::from(nt)
+        };
+        for radius in [0.5, 2.0, 8.0].map(|l| l * 2.0 * PI / k) {
+            let total: f64 = sphere_quadrature(DVec3::X, 128, 16)
+                .into_iter()
+                .map(|(n, wa)| wa * radius * radius * averaged(n * radius, n))
+                .sum();
+            let rel = total / reference - 1.0;
+            let axis = averaged(DVec3::X * radius, DVec3::X);
+            let kr = k * radius;
+            let dipole = q * w * w * e0 / (8.0 * PI * c * radius)
+                * ((2.0 - 1.0 / (kr * kr)) * xr - 2.0 * xi / kr);
+            let rel_axis = axis / dipole - 1.0;
+            println!(
+                "P6 ω = {w} ω₀, r = {:.1} λ: exchange flux through the sphere {total:.12e} \
+                 (−σ_t I = {reference:.12e}, σ_t = {:.2} σ_T): {rel:.1e}; on the axis behind \
+                 {axis:.6e} ({}; the dipole formula {dipole:.6e}: {rel_axis:.1e})",
+                kr / (2.0 * PI),
+                sigma / sigma_thomson,
+                if axis < 0.0 { "dark" } else { "bright" }
+            );
+            worst[0] = worst[0].max(rel.abs());
+            worst[1] = worst[1].max(rel_axis.abs());
+        }
+    }
+    assert!(
+        worst[0] < 1e-9 && worst[1] < 1e-3,
+        "P6 {:.3e}, {:.3e}",
+        worst[0],
+        worst[1]
+    );
 }

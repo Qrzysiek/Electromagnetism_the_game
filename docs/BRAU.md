@@ -17,7 +17,8 @@ list records the overlap and what Brau adds.
   problem as Jackson Pr. 13.3); test C6 (§4.3.2 and §10.5, a cluster's collective
   radiation damping: it showed that the beam runner's quasi-static interaction loses the
   collective damping of bound charges, PHYSICS.md §3.3); test P5 (§11.1.2, the 4/3
-  problem).
+  problem); test P6 (Ex. 10.15, the electron's shadow: the optical theorem through the
+  exchange flux, and the axis dark above the resonance, bright below it).
 - **Proposed (NOW, for the owner to choose):** the ten items in "Proposals" below, all
   validation tests and one level.
 - **Needs a feature:** F:emission (space-charge flow, Ex. 3.1; planned with vacuum tubes),
@@ -175,8 +176,8 @@ Ranked by what they would add (all tests unless marked):
 
 1. **Collective radiation damping of a cluster** (§4.3.2, §10.5): built, test C6. The
    exact retarded interaction gives it within 0.75 %; the quasi-static one loses it.
-2. **The electron's shadow** (Ex. 10.15): the optical theorem through the energy-flow
-   machinery, on C3's steady state.
+2. **The electron's shadow** (Ex. 10.15): built, test P6 (within 3.4e-12; the shadow
+   on the axis is dark above the resonance and bright below it).
 3. **The 4/3 problem** (§11.1.2, Ex. 11.1): built, test P5 (within 1.3e-14).
 4. **Lawson–Woodward** (Ex. 4.6): no net acceleration from a plane-wave pulse in vacuum.
 5. **Nonlinear Thomson harmonics** (§10.3.2): the harmonic spectrum at a₀ ~ 1.
