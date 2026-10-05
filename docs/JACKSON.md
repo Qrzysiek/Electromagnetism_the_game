@@ -8,18 +8,22 @@ manual will be consulted for reference outcomes when a level or test is built.
 Level names follow the pattern "Jackson §12.3: E×B drift" or "Jackson Pr. 2.4: The golden
 ratio", and the description cites the section or problem (planned level field `reference`).
 
-## Status (2026-09-29)
+## Status (2026-10-05)
 
 - **Built:** five arcs, 32 levels (arcs 6–10, below), the book's validation tests listed
-  after them (the latest: S8 Pr. 14.22, MS1 §13.6, S7 Pr. 15.10, R6 Pr. 16.10–16.11,
-  L4 Pr. 6.2), and the energy-flow view (§6.7).
+  after them (the latest: R7 §14.8 radiation pressure, S8 Pr. 14.22, MS1 §13.6, S7
+  Pr. 15.10, R6 Pr. 16.10–16.11, L4 Pr. 6.2), and the energy-flow view (§6.7).
 - **Set aside, with the reasons in the entries:** Pr. 1.1b (a Faraday cage of plates),
   Pr. 2.20 (the quadrupole lens is 3D), §2.10–2.11 and §3.4 (corners and edges), Pr. 15.8
   (collisions of like particles), Pr. 11.13 (line charges), §13.6 (multiple scattering is
   a Cauchy process in the slice: test MS1), Pr. 14.22 as a level (its harmonics need
   some twenty orbits and an end to the flight: test S8).
-- **Feasible, not yet built:** none of the catalogue's NOW items is left. Everything else
-  needs a feature from the table below or 3D.
+- **Feasible, not yet built** (the charge cloud realises F:bound, but these entries kept
+  that tag until 2026-10-05): §16.8 scattering by a bound charge (the cross section from
+  Rayleigh's ω⁴ through the resonance to Thomson's; a test, perhaps a level), Pr. 16.13
+  the dipole sum rule (a test), Pr. 16.12 collision broadening, §4.5–4.6 the oscillator
+  model of polarizability. Everything else needs a feature from the table below or 3D;
+  wave optics is planned as its own stage (F:optics, `SPEC.md` §8).
 
 ## How to read this list
 
@@ -30,7 +34,8 @@ Each item is tagged with what it needs:
   beams, gates, Liénard–Wiechert fields, Landau–Lifshitz radiation reaction).
 - **F:name**: needs a new feature from the table in the next section.
 - **3D**: needs the full 3D simulation (listed separately at the end, for when we get there).
-- **OUT**: out of reach for a particle simulation (media, wave optics, quantum).
+- **OUT**: out of reach for a particle simulation (continuous media beyond the planned
+  optics stage, quantum).
 
 Also:
 
@@ -64,6 +69,7 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 | **Dynamic particles** (*done*) | Level free particles (targets, with optional detectors) and player free charges with a launch velocity (drag the arrow; rapidity for relativistic levels); rigid-sphere collisions. | Pr. 13.1 knock-on and Pr. 13.2 as proper two-body levels; two-body problems with reduced mass (§12.6 / Pr. 12.13 Darwin); Rutherford scattering with a recoiling target; Pr. 14.6 collision radiation with both partners moving |
 | **F:plasma** (neutralizing background) | A beam or cloud with a uniform fixed neutralizing background. | Pr. 7.12 plasma oscillations; §7.5 plasma frequency; ion channels |
 | **F:antennas+** (more antenna types) | Magnetic dipole (AC loop in plane, moment along z) and centre-fed linear antenna in the plane. | §9.3 magnetic dipole fields; Pr. 9.14; §9.4 centre-fed antenna, Pr. 9.16; §9.12 |
+| **F:optics** (wave optics, planned after dielectrics: `SPEC.md` §8) | Mirrors, prisms, lenses, apertures and gratings of free shape, uniform along z, with dispersive ε(ω), solved as waves (a frequency-domain boundary integral solver, or FDTD). | §7.3–7.4 reflection and refraction (Fresnel, Brewster, total internal reflection and its evanescent wave), §7.5–7.11 dispersion as a continuum, Ch. 8 waveguides and fibres, Ch. 10 Mie scattering, diffraction and Babinet, §13.4 Cherenkov and §13.7 transition radiation |
 | **F:image-force** (electrode image force) | The force of a particle's own induced charges on electrodes (today a bound, `IMAGE_FORCE_LIMIT`). | Pr. 1.13, Pr. 3.19–3.20 (induced charge between grounded plates, Green reciprocity); vacuum tubes (SPEC "inside components") |
 
 ## Built levels
@@ -223,7 +229,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - The energy of a dipole in a field needs polar particles: F:polar.
 - **Pr. 4.5 force and torque on a dipole.** Deflection of polar/polarizable neutral molecules (Stark deflector). F:polar.
 - **§4.4 dielectric sphere; Pr. 4.9 charge near a dielectric sphere.** F:dielectric.
-- **§4.5–4.6 molecular polarizability; the oscillator model.** F:bound (charge on a spring polarizes in a field).
+- **§4.5–4.6 molecular polarizability; the oscillator model.** NOW (the charge cloud: a bound charge q displaced by a field, α = q R³/|Q|, R³ for a neutral pair as in Jackson's estimate).
 - **§4.7 energy in dielectrics** (a dielectric is pulled into a capacitor). F:dielectric; the materials stage.
 
 ### Ch. 5: Magnetostatics, Faraday's law
@@ -248,10 +254,10 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 ### Ch. 7–8: Waves, waveguides, cavities
 
 - **§7.5 plasma frequency; Pr. 7.12 plasma oscillations.** F:plasma.
-- **§7.5 Lorentz dispersion model.** F:bound (driven oscillators by a plane wave).
+- **§7.5 Lorentz dispersion model.** One driven oscillator: NOW (the charge cloud in a plane wave, §16.8 below); the index of a medium of them: F:optics.
 - **§7.7 MHD waves.** OUT.
 - **§8.7 resonant cavities (TM₀₁₀ pillbox with axis in the plane).** An RF accelerator gap: timing a particle to the RF phase. F:cavity.
-- **§8.1–8.6 waveguides, §8.10–8.11 fibres.** OUT (they need FDTD or mode solvers, not particles).
+- **§8.1–8.6 waveguides, §8.10–8.11 fibres.** F:optics (they need a wave solver, not particles).
 
 ### Ch. 9: Radiating systems
 
@@ -270,7 +276,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 
 ### Ch. 10: Scattering and diffraction
 
-- **OUT**: Rayleigh scattering, Mie scattering, diffraction and Babinet need wave solvers.
+- **Rayleigh scattering by one bound charge**: NOW (§16.8, the charge cloud). Mie scattering, diffraction and Babinet need wave solvers: F:optics.
 - Thomson scattering by free charges (§14.8) is covered in Ch. 14.
 
 ### Ch. 11: Special relativity
@@ -306,7 +312,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - A beam two-body level: knock the light charge into a detector.
   - A test against the impulse approximation.
   - NOW (beams with two species).
-- **Pr. 13.2/13.3 energy transfer to a harmonically bound charge.** Adiabatic cut-off for b > v/ω₀: slow collisions transfer nothing. F:bound.
+- **Pr. 13.2/13.3 energy transfer to a harmonically bound charge.** Adiabatic cut-off for b > v/ω₀: slow collisions transfer nothing. Built: Pr. 13.2 as a level (arc 9); Pr. 13.3 NOW (the charge cloud).
 - **§13.2–13.3 energy loss in matter, density effect.** OUT (a statistical medium).
 - **§13.4 Cherenkov; §13.7 transition radiation.** OUT (media).
 - **§13.5 / Pr. 13.5 screened Coulomb scattering.** F:screened.
@@ -353,10 +359,10 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 - **§16.3–16.6 Abraham–Lorentz, runaways, preacceleration, classical electron models.**
   - Text only (LL avoids them).
   - Pr. 16.10–16.11 (gap acceleration with damping): *test R6*, LL against the integro-differential (exact non-runaway) solution, which in one dimension is exact for Lorentz–Dirac in the rapidity (Pr. 16.8); and the book's first-order results.
-- **Pr. 16.1, §16.7 radiating oscillator.** Level breadth: energy decays as e^{−Γt}, and the line width is Γ. F:bound.
-- **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. F:bound + plane waves.
-- **Pr. 16.12 collision broadening.** F:bound + random interruptions.
-- **Pr. 16.13 dipole sum rule.** A test for F:bound.
+- **Pr. 16.1, §16.7 radiating oscillator.** Level breadth: energy decays as e^{−Γt}, and the line width is Γ. Built (arc 9; test C2).
+- **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. NOW (the charge cloud in a plane wave; the resonance is a level of arc 9, the cross section not yet).
+- **Pr. 16.12 collision broadening.** NOW (the charge cloud, with interruptions at fixed times).
+- **Pr. 16.13 dipole sum rule.** NOW, a test.
 
 ## Cross-topic highlights (most interesting levels)
 
@@ -375,7 +381,7 @@ These combine several chapters; most come from the problems.
 11. **Λ decay reconstruction** (Pr. 11.20): decay in flight in a B field. F:decay.
 12. **Stark deflector** (Pr. 4.5): the electric Stern–Gerlach for polar molecules. F:polar.
 13. **RF cavity linac** (§8.7): phase stability with gates. F:cavity.
-14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. F:bound.
+14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built in part (arc 9); the scattering cross section is NOW.
 
 ## For the 3D simulation (future reference)
 
@@ -399,5 +405,5 @@ These need motion or fields out of the plane, so they wait for the 3D stage.
 
 ## Out of reach (all dimensions)
 
-- Media and wave optics: reflection and refraction (§7.3–7.4), dispersion in media as a continuum (§7.5–7.11), waveguides and fibres (Ch. 8 apart from analytic cavity modes), scattering and diffraction (Ch. 10), Cherenkov and transition radiation (§13.4, §13.7), energy loss in matter (§13.2–13.3), eddy currents (§5.18).
+- Media: energy loss in matter (§13.2–13.3), eddy currents (§5.18). (Wave optics, reflection and refraction, dispersion, waveguides, scattering and diffraction, Cherenkov and transition radiation moved to F:optics, a planned stage.)
 - Quantum topics: the Dirac quantization condition (§6.12), nuclear and atomic applications beyond classical estimates (§9.11, Ch. 15 decays except as classical sudden-creation radiation).
