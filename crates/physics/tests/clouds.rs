@@ -509,3 +509,229 @@ fn c5_energy_transfer_to_a_bound_charge() {
     }
     assert!(worst < 1e-4, "C5 {worst:.3e}");
 }
+
+/// C6, collective radiation damping (Brau §4.3.2 and §10.5; Landau & Lifshitz §75): N
+/// electrons (q = −1, m = 1) at their planar equilibrium in a cloud (Q = 4, R = 4:
+/// ω₀ = 1/4 for any N), at rest, set swinging along x by a smooth pulse of uniform field
+/// (Gaussian, σ = 1, centred at t = 8: zero to 1e-14 at the launch, so the runner's uniform
+/// past before the launch is exact; a kick at the launch leaves a kink in each world line,
+/// which the reaction's field derivative turns into a worse defect at every other electron
+/// and back: the square stalled at t ≈ 7 after a million steps). A uniform field moves only
+/// the centre of mass, which oscillates at exactly ω₀ whatever the repulsion (Kohn's
+/// theorem, exact for c = ∞): the cluster's dipole plasmon. At c = 3 (ω₀τ = 6.2e-3) each electron radiates (its own
+/// Landau–Lifshitz reaction) and feels the others' radiation fields, the term
+/// `(2/3c³) d⃛` of the total dipole moment (Landau & Lifshitz §75): the mode decays at N
+/// times the single charge's rate Γ₁ = ω₀²τ as the cluster shrinks against the
+/// wavelength. Reference, for in-phase dipoles at the cluster's size (separations 0.27–0.41
+/// of λ/2π): the classical cooperative decay `Γ₁ Σⱼ F(k r_ij, θ_ij)`, `F(x, θ) =
+/// (3/2)[sin²θ (sin x)/x + (1 − 3cos²θ)(cos x/x² − sin x/x³)]` (F = 1 for j = i; θ between
+/// the motion and the separation), divided by `(1 + δ)²`: the moving charges' mutual
+/// magnetic (Darwin) energy makes the mode heavier by `δ = Σ_{j≠i} q²(1 + cos²θ_ij)/(2mc²
+/// r_ij)` (the k² part of the dipoles' coupling; c = 3 makes q²/mc² = 0.11), which also
+/// lowers the frequency to `ω₀/√(1 + δ)`. Required, with the exact retarded interaction:
+/// the fitted decay rate and the frequency (from the zero crossings) within 2 % of these
+/// (Landau–Lifshitz is first order in ω₀τ, as for C2), fitted after the pulse (t > 14).
+/// Printed: the default quasi-static
+/// interaction, which continues each source's past as motion in a uniform field (no jerk,
+/// so none of the others' `(2/3c³) d⃛`).
+#[test]
+#[allow(clippy::cast_precision_loss)] // small counts
+fn c6_collective_radiation_damping() {
+    use physics::beam::{BeamParticle, BeamScenario, Fates, run_beam_observed};
+    use physics::field::FieldSample;
+    struct Pulsed {
+        atom: Coulomb,
+        e0: f64,
+    }
+    impl FieldSolver for Pulsed {
+        fn sample(&self, x: DVec3, t: f64) -> FieldSample {
+            let a = self.atom.sample(x, t);
+            let g = (-0.5 * (t - 8.0).powi(2)).exp();
+            FieldSample {
+                e: a.e + DVec3::new(self.e0 * g, 0.0, 0.0),
+                b: a.b,
+                phi: a.phi,
+            }
+        }
+    }
+    let (q, m, big_q, r, c) = (-1.0_f64, 1.0_f64, 4.0_f64, 4.0_f64, 3.0_f64);
+    let omega0 = (q.abs() * big_q / (m * r.powi(3))).sqrt();
+    let tau = 2.0 * q * q / (3.0 * m * c.powi(3));
+    let gamma1 = omega0 * omega0 * tau;
+    let k = omega0 / c;
+    // Planar equilibria: a pair on the y axis (d³ = |q|R³/(4Q)), a square (±a, ±a)
+    // (a³ = |q|R³ (1/4 + 1/(8√2))/Q).
+    let d = (q.abs() * r.powi(3) / (4.0 * big_q)).cbrt();
+    let a = (q.abs() * r.powi(3) * (0.25 + 1.0 / (8.0 * 2f64.sqrt())) / big_q).cbrt();
+    let clusters: [(&str, Vec<DVec3>); 3] = [
+        ("one", vec![DVec3::ZERO]),
+        (
+            "pair",
+            vec![DVec3::new(0.0, d, 0.0), DVec3::new(0.0, -d, 0.0)],
+        ),
+        (
+            "square",
+            vec![
+                DVec3::new(a, a, 0.0),
+                DVec3::new(-a, a, 0.0),
+                DVec3::new(-a, -a, 0.0),
+                DVec3::new(a, -a, 0.0),
+            ],
+        ),
+    ];
+    let f = |x: f64, cos_t: f64| {
+        let sin2 = 1.0 - cos_t * cos_t;
+        1.5 * (sin2 * x.sin() / x
+            + (1.0 - 3.0 * cos_t * cos_t) * (x.cos() / (x * x) - x.sin() / x.powi(3)))
+    };
+    // The pulse's impulse gives the centre of mass a swing of about 0.05 (σ = 1: the
+    // factor e^{−ω₀²σ²/2} = 0.97 for a pulse not much shorter than the period).
+    let e0 = 0.05 * omega0 / ((2.0 * PI).sqrt() * (-0.5 * omega0 * omega0).exp());
+    let fit_from = 14.0;
+    let mut worst: f64 = 0.0;
+    for (name, sites) in clusters {
+        let n = sites.len();
+        // All electrons are equivalent: the sums for the first.
+        let (mut sum, mut delta) = (1.0, 0.0);
+        for &s in &sites[1..] {
+            let sep = s - sites[0];
+            let cos_t = sep.x / sep.length();
+            sum += f(k * sep.length(), cos_t);
+            delta += q * q * (1.0 + cos_t * cos_t) / (2.0 * m * c * c * sep.length());
+        }
+        let reference = gamma1 * sum / (1.0 + delta).powi(2);
+        let frequency = omega0 / (1.0 + delta).sqrt();
+        for retarded in [true, false] {
+            let kin = Kinematics::new(m, c);
+            let scn = BeamScenario {
+                field: Pulsed {
+                    atom: Coulomb::with_clouds(
+                        &[],
+                        &[ChargeCloud {
+                            position: DVec3::ZERO,
+                            charge: big_q,
+                            radius: r,
+                        }],
+                    ),
+                    e0,
+                },
+                obstacles: vec![],
+                particles: sites
+                    .iter()
+                    .map(|&s| BeamParticle {
+                        particle: Particle {
+                            charge: q,
+                            mass: m,
+                            radius: 0.0,
+                            moment: 0.0,
+                        },
+                        x0: s,
+                        p0: DVec3::ZERO,
+                        detector: None,
+                        acceptance: None,
+                    })
+                    .collect(),
+                c,
+                bounds: None,
+                t_max: fit_from + 3.0 / reference,
+                interact: true,
+                retarded,
+                gates: Vec::new(),
+                radiation_reaction: true,
+                fates: Fates::default(),
+            };
+            let mut pts: Vec<(f64, f64)> = Vec::new();
+            let mut crossings: Vec<f64> = Vec::new();
+            let run = run_beam_observed(
+                &scn,
+                &RunSettings::with_tolerance(TOL),
+                |dense, members, p_ref| {
+                    if members.len() != n {
+                        return;
+                    }
+                    let mean_x = |t: f64| {
+                        (0..n).map(|k| dense.eval_component(6 * k, t)).sum::<f64>() / n as f64
+                    };
+                    let (t0, t1) = (dense.t_start(), dense.t_end());
+                    // Zero crossings of the centre of mass, bisected on the dense output.
+                    if t0 > fit_from && mean_x(t0).signum() != mean_x(t1).signum() {
+                        let (mut lo, mut hi) = (t0, t1);
+                        for _ in 0..60 {
+                            let mid = 0.5 * (lo + hi);
+                            if mean_x(mid).signum() == mean_x(lo).signum() {
+                                lo = mid;
+                            } else {
+                                hi = mid;
+                            }
+                        }
+                        crossings.push(0.5 * (lo + hi));
+                    }
+                    if t1 < fit_from {
+                        return;
+                    }
+                    let (mut x, mut v) = (DVec3::ZERO, DVec3::ZERO);
+                    for k in 0..n {
+                        let comp = |i: usize| dense.eval_component(6 * k + i, t1);
+                        x += DVec3::new(comp(0), comp(1), 0.0);
+                        v += kin.velocity(DVec3::new(comp(3), comp(4), 0.0) * p_ref);
+                    }
+                    let (x, v) = (x / n as f64, v / n as f64);
+                    // The mode's energy, with the mass the oscillation shows.
+                    let energy = 0.5
+                        * n as f64
+                        * m
+                        * ((1.0 + delta) * v.length_squared()
+                            + omega0 * omega0 * x.length_squared());
+                    pts.push((t1, energy.ln()));
+                },
+            );
+            assert!(
+                run.trajectories
+                    .iter()
+                    .all(|t| t.outcome == Outcome::Timeout),
+                "C6 {name}: {:?}",
+                run.trajectories
+                    .iter()
+                    .map(|t| (t.outcome, t.end.t))
+                    .collect::<Vec<_>>()
+            );
+            let np = pts.len() as f64;
+            let (mt, my) = (
+                pts.iter().map(|p| p.0).sum::<f64>() / np,
+                pts.iter().map(|p| p.1).sum::<f64>() / np,
+            );
+            let slope = pts.iter().map(|&(t, y)| (t - mt) * (y - my)).sum::<f64>()
+                / pts.iter().map(|&(t, _)| (t - mt).powi(2)).sum::<f64>();
+            let rel = -slope / reference - 1.0;
+            let half_periods = (crossings.len() - 1) as f64;
+            let measured_w = PI * half_periods / (crossings[crossings.len() - 1] - crossings[0]);
+            let rel_w = measured_w / frequency - 1.0;
+            println!(
+                "C6 {name} (N = {n}), {}: decay rate {:.4} Γ₁ (reference {:.4} Γ₁: cooperative \
+                 {sum:.4}, Darwin δ = {delta:.4}; point limit {n}): {rel:.2e}; frequency \
+                 {:.6} ω₀ (reference {:.6}): {rel_w:.1e}; {} samples, {} crossings",
+                if retarded {
+                    "exact retarded"
+                } else {
+                    "quasi-static"
+                },
+                -slope / gamma1,
+                reference / gamma1,
+                measured_w / omega0,
+                frequency / omega0,
+                pts.len(),
+                crossings.len()
+            );
+            if retarded {
+                worst = worst.max(rel.abs()).max(rel_w.abs());
+            }
+        }
+    }
+    println!(
+        "C6: ω₀ = {omega0}, ω₀τ = {:.2e}, kd = {:.3}, ka = {:.3}",
+        omega0 * tau,
+        k * d,
+        k * a
+    );
+    assert!(worst < 0.02, "C6 {worst:.3e}");
+}
