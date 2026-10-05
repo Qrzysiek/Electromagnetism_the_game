@@ -1,4 +1,4 @@
-//! Validation tests P1–P3 for the field energy and its flow (PHYSICS.md §10, §9). Run with
+//! Validation tests P1–P4 for the field energy, its flow and its momentum (PHYSICS.md §10, §9). Run with
 //! `cargo test --release -p physics --test poynting -- --nocapture`.
 
 #![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
@@ -195,4 +195,77 @@ fn p3_work_on_a_particle() {
         }
     }
     assert!(worst < 1e-10, "P3 {worst:.3e}");
+}
+
+// --- P4: field momentum ------------------------------------------------------------------------
+
+/// P4, field momentum (Jackson §6.7): the force on the charges inside a volume is
+/// `∮ T·n dA − d/dt ∫ g dV`, with Maxwell's stress tensor `T` and the momentum density
+/// `g = E × B / 4π`. A charge held in uniform motion through uniform static fields
+/// `(E₀, B₀)`: its field translates rigidly, so `d/dt ∫_V g dV = −∮ g (v·n) dA` for its own
+/// terms and for the exchange terms (the other field being uniform). For any sphere around
+/// the charge, (a) the exchange terms give the Lorentz force,
+/// `∮ T₁₂·n dA + ∮ g₁₂ (v·n) dA = q(E₀ + v×B₀)`, and (b) its own give zero (no self-force in
+/// uniform motion). β = 0, 0.3 and 0.8 at c = 2, spheres of radius 1, 3 and 10 around an
+/// off-centre charge; Gauss–Legendre in the polar angle (64 nodes) and uniform in the
+/// azimuth (128), spectrally accurate for these smooth integrands. Required: 1e-10 of the
+/// force (a), and of the stress's own scale `∮ |T₁·n| dA` (b). (c) below: the stored
+/// momentum's share of a magnetic force at low speed.
+#[test]
+fn p4_field_momentum() {
+    use physics::poynting::{momentum_density, momentum_exchange, stress};
+    let (q, c) = (1.0, 2.0);
+    let (e0, b0) = (DVec3::new(0.05, 0.02, -0.03), DVec3::new(0.1, -0.2, 0.3));
+    let x0 = DVec3::new(0.2, -0.15, 0.1);
+    let dir = DVec3::new(0.6, 0.8, 0.0);
+    let quad = sphere_quadrature(DVec3::Z, 64, 128);
+    let (mut worst_a, mut worst_b): (f64, f64) = (0.0, 0.0);
+    for beta in [0.0, 0.3, 0.8] {
+        let v = dir * (beta * c);
+        let force = (e0 + v.cross(b0)) * q;
+        for r in [1.0, 3.0, 10.0] {
+            let (mut ex, mut flux, mut own, mut scale) =
+                (DVec3::ZERO, DVec3::ZERO, DVec3::ZERO, 0.0);
+            for &(n, w) in &quad {
+                let f = fields(&Uniform { x0, v }, q, c, n * r, 0.0);
+                let (e1, b1) = (f.e(), f.b);
+                let da = w * r * r;
+                let (g12, t12) = momentum_exchange((e1, b1), (e0, b0), n, c);
+                ex += (t12 + g12 * v.dot(n)) * da;
+                flux += g12 * (v.dot(n) * da);
+                let t11 = stress(e1, b1, n, c);
+                own += (t11 + momentum_density(e1, b1) * v.dot(n)) * da;
+                scale += t11.length() * da;
+            }
+            let ea = (ex - force).length() / force.length();
+            let eb = own.length() / scale;
+            println!(
+                "P4 β = {beta}, R = {r}: exchange off by {ea:.2e} of the force (the stored \
+                 momentum's share {:.3e}), own terms {eb:.2e}",
+                flux.length() / force.length()
+            );
+            worst_a = worst_a.max(ea);
+            worst_b = worst_b.max(eb);
+        }
+    }
+    assert!(worst_a < 1e-10, "P4 (a) {worst_a:.3e}");
+    assert!(worst_b < 1e-10, "P4 (b) {worst_b:.3e}");
+    // (c) A slow charge in a magnetic field alone: a third of the force arrives as the
+    // stored exchange momentum (`∮ g₁₂ (v·n) dA = (q/3) v×B₀` for any sphere, the
+    // momentum's counterpart of P3's energy), two thirds through the stress. β = 1e-3:
+    // required within 1e-5 (the corrections are O(β²)).
+    let v = dir * (1e-3 * c);
+    let force = v.cross(b0) * q;
+    let mut flux = DVec3::ZERO;
+    for &(n, w) in &quad {
+        let f = fields(&Uniform { x0, v }, q, c, n * 3.0, 0.0);
+        let (g12, _) = momentum_exchange((f.e(), f.b), (DVec3::ZERO, b0), n, c);
+        flux += g12 * (v.dot(n) * w * 9.0);
+    }
+    let share = flux.dot(force) / force.length_squared();
+    let off = (flux - force / 3.0).length() / force.length();
+    println!(
+        "P4 (c) β = 1e-3, magnetic force only: stored momentum's share {share:.8}, off 1/3 by {off:.2e}"
+    );
+    assert!(off < 1e-5, "P4 (c) {off:.3e}");
 }

@@ -580,13 +580,14 @@ Note on R2: the first version compared LL work with `∫P dt` alone. It found a 
 
 ### Energy-flow tests (`cargo test --release -p physics --test poynting -- --nocapture`)
 
-The energy density `u = (E² + c²B²)/8π` and the Poynting vector `S = (c²/4π) E × B` (`physics::poynting`), used by the energy-flow view (§10).
+The energy density `u = (E² + c²B²)/8π` and the Poynting vector `S = (c²/4π) E × B` (`physics::poynting`), used by the energy-flow view (§10), and the field's momentum: its density `g = S/c² = E × B/4π` and Maxwell's stress tensor `T·n = [E (E·n) − n E²/2 + c² (B (B·n) − n B²/2)]/4π` (test P4; not shown in the game yet).
 
 | # | Scenario | Reference | Threshold | Measured |
 |---|---|---|---|---|
 | P1 | Poynting's theorem away from charges, for the retarded field of a charge circling and bobbing across the plane (β up to 0.68 at c = 2) and for its exchange terms with a static field (a fixed charge, a uniform E and B); five points 1.6 to 50 away, off the plane | `∂u/∂t + ∇·S = 0` (central differences over 1e-4 in space and time) | < 1e-6 of the sum of the terms' magnitudes (the differences' own error ~1e-8, as in L3) | own ≤ 2.0e-7, exchange ≤ 6.3e-8 |
 | P2 | The radiation part's flow through spheres of radius 1 and 25 around the retarded position; β = 0.3, 0.6, 0.9, the acceleration across, oblique to and nearly along the motion | Liénard's power `(2q²/3c³) γ⁶ (a² − |v × a|²/c²)`: the flow weighted by `κ = 1 − n·β` (`dt/dt′`, Jackson 14.38) | < 1e-10 | ≤ 2.0e-14; the radiation field's energy velocity `S/u` is `c n` to 6e-16 |
 | P3 | A charge in uniform motion (β = 0.1, 0.5, 0.9) through a uniform E and B; the exchange flow into spheres of radius 0.5 and 5 centred on its present position | `q v·E [1 − (1 − β²)(artanh β − β)/β³]` (derived from the Heaviside field: the rest of the work `q v·E` comes from the exchange energy stored inside the sphere, which falls as the charge moves off its centre at the rate `(1/4π) E·∮E_p (v·n) dA`; the `E_p × B` term has no flux, B does no work) | < 1e-10 of `q|v||E|` | ≤ 1.7e-14; the inflow is 0.668, 0.704, 0.851 of the work at β = 0.1, 0.5, 0.9 (2/3 as β → 0, all of it as β → 1) |
+| P4 | Field momentum (Jackson §6.7): a charge held in uniform motion (β = 0, 0.3, 0.8, c = 2) through uniform static E₀ and B₀; spheres of radius 1, 3, 10 around it, off-centre; Maxwell's stress tensor and the momentum density `g = E × B/4π` (`physics::poynting`) | `F = ∮ T·n dA − d/dt ∫ g dV` with `d/dt ∫ g dV = −∮ g (v·n) dA` for a rigidly translating field: (a) the exchange terms give the Lorentz force `q(E₀ + v×B₀)`; (b) the charge's own terms give zero; (c) at β = 1e-3 in a magnetic field alone, a third of the force arrives as the stored exchange momentum, `∮ g₁₂ (v·n) dA = (q/3) v×B₀` (two thirds through the stress: the momentum's counterpart of P3) | (a), (b) < 1e-10; (c) < 1e-5 (O(β²)) | (a) ≤ 3.6e-15; (b) ≤ 9.6e-16; (c) 1.3e-7. The stored share of the force at β = 0.3 and 0.8 here: 0.266 and 0.196, independent of the sphere |
 
 ### Scattering test (`cargo test --release -p physics --test scattering -- --nocapture`)
 
