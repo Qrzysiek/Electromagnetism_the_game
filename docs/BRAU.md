@@ -22,7 +22,7 @@ list records the overlap and what Brau adds.
   (Ex. 4.6, Lawson–Woodward, and radiation reaction's violation of it); test S9 (§10.3.2,
   nonlinear Thomson harmonics); test R8 (Ex. 10.14, radiation pressure on a moving
   charge); test C7 (§7.3.1, Bohr's classical energy loss); test C8 (Ex. 3.6, the
-  polarization force of an atom).
+  polarization force of an atom); test P7 (Ex. 2.24, magnets through the stress tensor).
 - **Proposed (NOW, for the owner to choose):** the ten items in "Proposals" below, all
   validation tests and one level.
 - **Needs a feature:** F:emission (space-charge flow, Ex. 3.1; planned with vacuum tubes),
@@ -192,5 +192,5 @@ Ranked by what they would add (all tests unless marked):
 7. **Bohr's classical energy loss** (§7.3.1): built, test C7 (7.5e-6).
 8. **Polarization force of an atom** (Ex. 3.6): built, test C8 (2.8e-5 against the
    exact linear response; the adiabatic `−α z²/(2r⁴)` impulse approached as ~1.9/ξ²).
-9. **Magnets attracting through the stress tensor** (Ex. 2.24).
+9. **Magnets attracting through the stress tensor** (Ex. 2.24): built, test P7 (2.8e-15).
 10. **The aperture lens** (Ex. 2.10): a level and a test (electron optics).

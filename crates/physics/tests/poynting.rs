@@ -1,4 +1,4 @@
-//! Validation tests P1–P6 for the field energy, its flow and its momentum (PHYSICS.md §10, §9). Run with
+//! Validation tests P1–P7 for the field energy, its flow and its momentum (PHYSICS.md §10, §9). Run with
 //! `cargo test --release -p physics --test poynting -- --nocapture`.
 
 #![allow(clippy::disallowed_methods)] // references; the flights use libm (clippy.toml)
@@ -424,4 +424,86 @@ fn p6_the_electrons_shadow() {
         worst[0],
         worst[1]
     );
+}
+
+/// P7, two magnets pulling through the stress tensor (Brau Ex. 2.24; Jackson §5.7 and
+/// §12.10): the force on a magnetic dipole is the flux of Maxwell's stress through any
+/// surface around it, of which only the cross terms of the two dipoles' fields remain,
+/// `(c²/4π)[B₁(B₂·n) + B₂(B₁·n) − n B₁·B₂]` (`poynting::momentum_exchange`). Dipoles of the
+/// engine (`MagneticDipole`, moments in field units μ = μ₀m/4π = m/c²): parallel moments
+/// along z side by side (the game's magnets), antiparallel ones, and a tilted pair in 3D;
+/// spheres of radius 0.3 d and 0.6 d around the second (Gauss–Legendre in cos θ, 64 × 128).
+/// Reference: the dipole–dipole force `(3c²/r⁴)[(μ₁·r̂)μ₂ + (μ₂·r̂)μ₁ + (μ₁·μ₂)r̂ −
+/// 5(μ₁·r̂)(μ₂·r̂)r̂]`, and for moments along z the engine's own `m ∇B_z` (the force on a
+/// particle's moment, PHYSICS.md §3.2). Required: within 1e-12 (an identity).
+#[test]
+fn p7_magnets_through_the_stress_tensor() {
+    use physics::magnetic::MagneticDipole;
+    use physics::poynting::momentum_exchange;
+    let c = 2.0_f64;
+    let dipole = |position: DVec3, moment: DVec3| MagneticDipole {
+        position,
+        moment,
+        radius: 0.1,
+    };
+    let pairs = [
+        (
+            "parallel, along z",
+            DVec3::Z * 0.8,
+            DVec3::Z * 1.3,
+            DVec3::new(2.5, 0.0, 0.0),
+        ),
+        (
+            "antiparallel",
+            DVec3::Z * 0.8,
+            DVec3::Z * -1.3,
+            DVec3::new(1.5, 2.0, 0.0),
+        ),
+        (
+            "tilted, in 3D",
+            DVec3::new(0.3, -0.5, 0.7),
+            DVec3::new(-0.6, 0.2, 0.9),
+            DVec3::new(1.2, 0.7, -1.9),
+        ),
+    ];
+    let mut worst: f64 = 0.0;
+    for (name, mu1, mu2, d) in pairs {
+        let (one, two) = (dipole(DVec3::ZERO, mu1), dipole(d, mu2));
+        let r = d.length();
+        let rh = d / r;
+        let reference = (mu2 * mu1.dot(rh) + mu1 * mu2.dot(rh) + rh * mu1.dot(mu2)
+            - rh * (5.0 * mu1.dot(rh) * mu2.dot(rh)))
+            * (3.0 * c * c / r.powi(4));
+        for radius in [0.3 * r, 0.6 * r] {
+            let mut force = DVec3::ZERO;
+            for (n, w) in sphere_quadrature(DVec3::Z, 64, 128) {
+                let x = d + n * radius;
+                let (_, stress) = momentum_exchange(
+                    (DVec3::ZERO, one.field(x)),
+                    (DVec3::ZERO, two.field(x)),
+                    n,
+                    c,
+                );
+                force += stress * (w * radius * radius);
+            }
+            let err = (force - reference).length() / reference.length();
+            println!(
+                "P7 {name}, sphere {:.1} d: force ({:.12e}, {:.12e}, {:.12e}) against the dipole \
+                 formula: {err:.1e}",
+                radius / r,
+                force.x,
+                force.y,
+                force.z
+            );
+            worst = worst.max(err);
+        }
+        if mu1.x == 0.0 && mu1.y == 0.0 && mu2.x == 0.0 && mu2.y == 0.0 {
+            // The engine's force on a moment along z: m ∇B_z, with m = μ c².
+            let engine = one.grad_bz(d) * (mu2.z * c * c);
+            let err = (engine - reference).length() / reference.length();
+            println!("P7 {name}: the engine's m ∇B_z {err:.1e} from it");
+            worst = worst.max(err);
+        }
+    }
+    assert!(worst < 1e-12, "P7 {worst:.3e}");
 }
