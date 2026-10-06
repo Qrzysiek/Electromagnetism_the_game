@@ -16,6 +16,12 @@ want to settle are marked **(owner)**.
 - **The geometry's circuit parameters** (PHYSICS.md §2.8, tests Z1–Z3): the electrodes'
   capacitance matrix by the boundary element method, mutual inductances by Neumann's
   formula, a ring's self-inductance.
+- **The circuit engine** (`circuit.rs`, PHYSICS.md §2.9, tests Z4–Z9): modified nodal
+  analysis of R, L (with mutual inductances), C, capacitance blocks, DC, AC and pulse
+  sources and timed switches, integrated by RADAU5 between breakpoints with consistent
+  restarts; the inductors' current rates from their law, for the induced fields. Against
+  closed forms (RC, LC, charge sharing through a switch with its heat, a pulse, coupled
+  inductors, a driven tank and its energy balance): within 1e-9.
 - **Time-dependent coils.** Coils already take a linear ramp of their strength with the
   exact induced field `−κ̇ A_unit` (circular and polygonal coils, test M10).
 
