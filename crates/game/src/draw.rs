@@ -369,6 +369,32 @@ fn draw_dielectric(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode) {
     gizmos.linestrip_2d(box_outline(b, 0.0), teal);
 }
 
+/// A dielectric sphere: its cross-section hatched in teal, as a dielectric box.
+fn draw_dielectric_sphere(gizmos: &mut Gizmos, c: Vec2, radius: f64) {
+    #[allow(clippy::cast_possible_truncation)]
+    let r = radius as f32;
+    let teal = Color::srgb(0.3, 0.75, 0.7);
+    // Diagonal hatching every 0.3 cells, clipped to the circle.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let lines = ((2.0 * std::f32::consts::SQRT_2 * r / 0.3).ceil() as u32).max(2);
+    let (u, v) = (
+        Vec2::new(1.0, 1.0).normalize(),
+        Vec2::new(1.0, -1.0).normalize(),
+    );
+    for k in 1..lines {
+        #[allow(clippy::cast_precision_loss)]
+        let s = -r + 2.0 * r * k as f32 / lines as f32;
+        let half = (r * r - s * s).max(0.0).sqrt();
+        seg(
+            gizmos,
+            c + v * s - u * half,
+            c + v * s + u * half,
+            teal.with_alpha(0.45),
+        );
+    }
+    gizmos.circle_2d(c, r, teal).resolution(96);
+}
+
 fn draw_coil(gizmos: &mut Gizmos, grid: Grid, coil: &Coil) {
     let copper = Color::srgb(0.95, 0.6, 0.3);
     let arrow = |gizmos: &mut Gizmos, at: Vec2, dir: Vec2| {
@@ -506,8 +532,11 @@ pub fn draw(
     }
 
     // Dielectrics: translucent boxes with a teal rim (insulators, not metal).
-    for d in level.box_dielectrics() {
-        draw_dielectric(&mut gizmos, &d.shape);
+    for b in level.dielectric_boxes() {
+        draw_dielectric(&mut gizmos, &b);
+    }
+    for d in &level.dielectric_spheres {
+        draw_dielectric_sphere(&mut gizmos, to_vec2(grid.position(d.center)), d.radius);
     }
 
     // Electrodes: the level's (at the potentials of the player's power supplies), then

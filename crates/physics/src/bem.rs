@@ -24,7 +24,7 @@
 //! the verification of flights. The field of a given panel set is the exact field of a
 //! real charge distribution, so energy is conserved to integration accuracy.
 //!
-//! **Dielectrics.** Boxes of relative permittivity ε (`BoxDielectric`) are meshed the same
+//! **Dielectrics.** Boxes of relative permittivity ε (`Dielectric`) are meshed the same
 //! way and solved in the same system: their panels carry the bound (polarization) charge,
 //! fixed by the continuity of the normal displacement across the surface. With
 //! `λ = (ε − 1)/(ε + 1)` and the average normal field `Eₙ` at the centroid (the panel's
@@ -66,12 +66,128 @@ pub struct BoxElectrode {
     pub bias: Bias,
 }
 
-/// A dielectric box (same geometry as an electrode) of relative permittivity
-/// `permittivity` (≥ 1).
+/// The shape of a dielectric body: a box (as an electrode; its bias is ignored) or a
+/// sphere centred in the plane.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct BoxDielectric {
-    pub shape: BoxElectrode,
+pub enum BodyShape {
+    Box(BoxElectrode),
+    Sphere { center: DVec3, radius: f64 },
+}
+
+impl BodyShape {
+    /// Upper-half surface (z ≥ 0) as triangles with outward normals.
+    pub fn mesh(&self, size: f64) -> Vec<Triangle> {
+        match self {
+            BodyShape::Box(b) => b.mesh(size),
+            BodyShape::Sphere { center, radius } => {
+                sphere_mesh(*center, *radius, SPHERE_PANEL * size)
+            }
+        }
+    }
+
+    fn key(&self) -> Vec<u64> {
+        match self {
+            BodyShape::Box(e) => vec![
+                0,
+                e.center.x.to_bits(),
+                e.center.y.to_bits(),
+                e.angle.to_bits(),
+                e.half_length.to_bits(),
+                e.half_thickness.to_bits(),
+                e.half_height.to_bits(),
+            ],
+            BodyShape::Sphere { center, radius } => {
+                vec![1, center.x.to_bits(), center.y.to_bits(), radius.to_bits()]
+            }
+        }
+    }
+}
+
+/// Panels on a dielectric sphere are this fraction of the resolution's size: its flat
+/// facets meet at small kinks, where the normal-field condition converges only at order
+/// about 1.3 (test N4: glass 2.5 % off at the verification's size), so it gets finer
+/// panels than a box (about 1.3 % there, as the cube's 1.1 %).
+pub const SPHERE_PANEL: f64 = 0.6;
+
+/// A dielectric body of relative permittivity `permittivity` (≥ 0; 1 is vacuum).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Dielectric {
+    pub shape: BodyShape,
     pub permittivity: f64,
+}
+
+/// The upper half (z ≥ 0) of a sphere: the upper four faces of an octahedron, each cut
+/// into `n²` triangles (`n` segments per edge, edges no longer than `size` on the
+/// sphere), projected onto it. Nearly uniform panels, no slivers at the pole, and the
+/// equator exactly at z = 0 (the mirror plane). Normals point outwards.
+fn sphere_mesh(center: DVec3, radius: f64, size: f64) -> Vec<Triangle> {
+    // An octahedron edge spans a quarter circle (π/2 · r) on the sphere.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let n = ((std::f64::consts::FRAC_PI_2 * radius / size).ceil() as usize).max(2);
+    let top = DVec3::Z;
+    let equator = [DVec3::X, DVec3::Y, -DVec3::X, -DVec3::Y];
+    let on_sphere = |v: DVec3| center + v.normalize() * radius;
+    let mut out = Vec::new();
+    for k in 0..4 {
+        let (a, b, c) = (top, equator[k], equator[(k + 1) % 4]);
+        // Barycentric grid: point (i, j) = a + (b − a) i/n + (c − a) j/n, i + j ≤ n.
+        #[allow(clippy::cast_precision_loss)]
+        let nf = n as f64;
+        #[allow(clippy::cast_precision_loss)]
+        let p = |i: usize, j: usize| {
+            on_sphere(a + (b - a) * (i as f64 / nf) + (c - a) * (j as f64 / nf))
+        };
+        for i in 0..n {
+            for j in 0..n - i {
+                // Orientation (a, b, c) of the face (top, east, north): outward for a
+                // counter-clockwise run seen from outside.
+                let t1 = Triangle {
+                    a: p(i, j),
+                    b: p(i + 1, j),
+                    c: p(i, j + 1),
+                };
+                out.push(orient_outward(t1, center));
+                if i + j + 1 < n {
+                    let t2 = Triangle {
+                        a: p(i + 1, j),
+                        b: p(i + 1, j + 1),
+                        c: p(i, j + 1),
+                    };
+                    out.push(orient_outward(t2, center));
+                }
+            }
+        }
+    }
+    // Flat triangles with their corners on the sphere enclose too little: their sag,
+    // about h²/(8r), cost the polarizability (∝ r³) 15 % at panels of half the radius
+    // (test N4). Scaled from the centre so that the polyhedron's volume is the sphere's
+    // (the tetrahedra from the centre; the equator stays at z = 0).
+    let half_volume: f64 = out
+        .iter()
+        .map(|t| (t.a - center).dot((t.b - center).cross(t.c - center)) / 6.0)
+        .sum();
+    let scale = libm::cbrt(std::f64::consts::FRAC_PI_3 * 2.0 * radius.powi(3) / half_volume);
+    let grow = |v: DVec3| center + (v - center) * scale;
+    out.iter()
+        .map(|t| Triangle {
+            a: grow(t.a),
+            b: grow(t.b),
+            c: grow(t.c),
+        })
+        .collect()
+}
+
+/// The triangle with its vertices ordered so that its normal points away from `center`.
+fn orient_outward(t: Triangle, center: DVec3) -> Triangle {
+    if t.normal().dot(t.centroid() - center) >= 0.0 {
+        t
+    } else {
+        Triangle {
+            a: t.a,
+            b: t.c,
+            c: t.b,
+        }
+    }
 }
 
 /// Mesh resolution: largest panel size relative to the electrode's smallest dimension is
@@ -280,7 +396,7 @@ struct Geometry {
     cost: crate::field::SetupCost,
 }
 
-fn geometry_key(electrodes: &[BoxElectrode], dielectrics: &[BoxDielectric], size: f64) -> Vec<u64> {
+fn geometry_key(electrodes: &[BoxElectrode], dielectrics: &[Dielectric], size: f64) -> Vec<u64> {
     let shape = |e: &BoxElectrode| {
         [
             e.center.x.to_bits(),
@@ -295,7 +411,7 @@ fn geometry_key(electrodes: &[BoxElectrode], dielectrics: &[BoxDielectric], size
     for d in dielectrics {
         // Marker, then the shape and the permittivity.
         k.push(u64::MAX);
-        k.extend(shape(&d.shape));
+        k.extend(d.shape.key());
         k.push(d.permittivity.to_bits());
     }
     k.push(size.to_bits());
@@ -325,7 +441,7 @@ impl PictureRule {
 
 fn cached_geometry(
     electrodes: &[BoxElectrode],
-    dielectrics: &[BoxDielectric],
+    dielectrics: &[Dielectric],
     size: f64,
 ) -> Arc<Geometry> {
     static CACHE: OnceLock<Mutex<HashMap<Vec<u64>, Arc<Geometry>>>> = OnceLock::new();
@@ -470,7 +586,7 @@ fn solve_bordered(lu: &Lu, b: &[f64], n: usize) -> Vec<f64> {
 pub struct Electrodes {
     pub electrodes: Vec<BoxElectrode>,
     /// Dielectric boxes, solved with the electrodes (their panels after the electrodes').
-    pub dielectrics: Vec<BoxDielectric>,
+    pub dielectrics: Vec<Dielectric>,
     geometry: Option<Arc<Geometry>>,
     /// Surface charge density of each (upper) panel.
     pub sigma: Vec<f64>,
@@ -533,7 +649,7 @@ impl Electrodes {
     /// Electrodes and dielectric boxes at a resolution.
     pub fn new_with_dielectrics(
         electrodes: Vec<BoxElectrode>,
-        dielectrics: Vec<BoxDielectric>,
+        dielectrics: Vec<Dielectric>,
         sources: &[(DVec3, f64)],
         resolution: Resolution,
     ) -> Self {
@@ -555,7 +671,7 @@ impl Electrodes {
     /// Electrodes and dielectric boxes, with an explicit largest panel size (cells).
     pub fn with_dielectrics(
         electrodes: Vec<BoxElectrode>,
-        dielectrics: Vec<BoxDielectric>,
+        dielectrics: Vec<Dielectric>,
         sources: &[(DVec3, f64)],
         size: f64,
     ) -> Self {

@@ -243,12 +243,13 @@ impl Level {
                  is neglected; its bound is shown in the flight details.",
             ));
         }
-        if !self.dielectrics.is_empty() {
+        if !self.dielectrics.is_empty() || !self.dielectric_spheres.is_empty() {
             out.push(note(
                 false,
                 "Dielectrics: bound charge on flat triangles from the continuity of the normal \
                  displacement, averaged over each triangle; about 1 % off at the verification's \
-                 resolution for glass (ε = 4), up to 5 % as ε grows large (PHYSICS.md §2.7). \
+                 resolution for glass (ε = 4; a sphere 1.4 %), up to 5 % as ε grows large \
+                 (PHYSICS.md §2.7). \
                  Static response (no dispersion), no charge the particle induces in them.",
             ));
         }

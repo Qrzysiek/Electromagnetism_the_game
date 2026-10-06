@@ -10,7 +10,7 @@
 #![allow(clippy::disallowed_methods)] // references; the engine uses libm (clippy.toml)
 
 use physics::DVec3;
-use physics::bem::{Bias, BoxDielectric, BoxElectrode, Electrodes};
+use physics::bem::{Bias, BodyShape, BoxElectrode, Dielectric, Electrodes};
 
 const ALPHA_CONDUCTOR: f64 = 3.644_305_190_268;
 const ALPHA_ZERO: f64 = -1.638_415_712_936_517;
@@ -42,8 +42,8 @@ fn uniform() -> ([(DVec3, f64); 2], f64) {
 fn dielectric_cube(eps: f64, sources: &[(DVec3, f64)], size: f64) -> Electrodes {
     Electrodes::with_dielectrics(
         Vec::new(),
-        vec![BoxDielectric {
-            shape: cube(),
+        vec![Dielectric {
+            shape: BodyShape::Box(cube()),
             permittivity: eps,
         }],
         sources,
@@ -141,4 +141,92 @@ fn n3_cube_of_glass_converges() {
         a[1] / limit - 1.0
     );
     assert!(d1.abs() > d2.abs() && o >= 1.0, "N3 {a:?}");
+}
+
+fn dielectric_sphere(eps: f64, radius: f64, sources: &[(DVec3, f64)], size: f64) -> Electrodes {
+    Electrodes::with_dielectrics(
+        Vec::new(),
+        vec![Dielectric {
+            shape: BodyShape::Sphere {
+                center: DVec3::ZERO,
+                radius,
+            },
+            permittivity: eps,
+        }],
+        sources,
+        size,
+    )
+}
+
+/// N4: a dielectric sphere (radius 1) in a uniform field (as in N2): its polarizability
+/// `p/(|V|ε₀E₀) = 3(ε − 1)/(ε + 2)` exactly (Jackson §4.4), at ε = 4, ε → ∞ and ε = 0.
+/// Required as N2: the error shrinks with every refinement at an observed order of at
+/// least 1. The sphere has no edges, so the method should do better than on the cube.
+#[test]
+fn n4_sphere_in_a_uniform_field() {
+    let (sources, field) = uniform();
+    let volume = 4.0 / 3.0 * std::f64::consts::PI;
+    for eps in [4.0, 1e12, 0.0] {
+        let exact = 3.0 * (eps - 1.0) / (eps + 2.0);
+        let errors: Vec<f64> = SIZES
+            .iter()
+            .map(|&size| {
+                let e = dielectric_sphere(eps, 1.0, &sources, size);
+                let p: f64 = e
+                    .panels()
+                    .map(|(t, s)| 2.0 * s * t.area() * t.centroid().x)
+                    .sum();
+                let alpha = p / (volume * field / (4.0 * std::f64::consts::PI));
+                alpha / exact - 1.0
+            })
+            .collect();
+        let o = order(errors[1], errors[2]);
+        println!(
+            "N4 sphere ε = {eps:e}: errors {:.2e}, {:.2e}, {:.2e} (exact {exact:.6}); order {o:.2}",
+            errors[0], errors[1], errors[2]
+        );
+        assert!(
+            errors[0].abs() > errors[1].abs() && errors[1].abs() > errors[2].abs() && o >= 1.0,
+            "N4 ε = {eps}: {errors:?}"
+        );
+    }
+}
+
+/// N5: a point charge q = 1 at distance d = 1.6 from the centre of a dielectric sphere
+/// (radius 1, ε = 4): the field of the sphere's bound charge at the charge against the
+/// exact Legendre series (the boundary conditions give the outside coefficients
+/// `B_l = −(ε − 1) l q a^{2l+1} / ((εl + l + 1) d^{l+1})`, so
+/// `E_r(d) = −q Σ l(l + 1)(ε − 1) a^{2l+1} / ((εl + l + 1) d^{2l+3})`), summed to 1e-16.
+/// Required as N2: converging with every refinement at an observed order of at least 1.
+#[test]
+fn n5_charge_near_a_dielectric_sphere() {
+    let (eps, a, d) = (4.0_f64, 1.0_f64, 1.6_f64);
+    let mut exact = 0.0;
+    for l in 1..400 {
+        let lf = f64::from(l);
+        let term = lf * (lf + 1.0) * (eps - 1.0) * a.powi(2 * l + 1)
+            / ((eps * lf + lf + 1.0) * d.powi(2 * l + 3));
+        exact -= term;
+        if term < 1e-17 {
+            break;
+        }
+    }
+    let x = DVec3::new(d, 0.0, 0.0);
+    let errors: Vec<f64> = SIZES
+        .iter()
+        .map(|&size| {
+            use physics::field::FieldSolver;
+            let e = dielectric_sphere(eps, a, &[(x, 1.0)], size);
+            e.sample(x, 0.0).e.x / exact - 1.0
+        })
+        .collect();
+    let o = order(errors[1], errors[2]);
+    println!(
+        "N5 charge 0.6 from a glass sphere: E = {exact:.10} (series); errors {:.2e}, {:.2e}, {:.2e}; order {o:.2}",
+        errors[0], errors[1], errors[2]
+    );
+    assert!(
+        errors[0].abs() > errors[1].abs() && errors[1].abs() > errors[2].abs() && o >= 1.0,
+        "N5 {errors:?}"
+    );
 }

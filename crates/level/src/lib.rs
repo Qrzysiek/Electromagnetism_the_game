@@ -76,6 +76,9 @@ pub struct Level {
     /// fields partially; particles do not enter them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dielectrics: Vec<Dielectric>,
+    /// Dielectric spheres placed by the level (PHYSICS.md §2.7), as the boxes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dielectric_spheres: Vec<DielectricSphere>,
     /// Stages of the instrument: boxes every flight must pass, in order, before its
     /// detector counts, each with optional conditions on the entering particle
     /// (PHYSICS.md §6.2).
@@ -119,6 +122,16 @@ pub struct Dielectric {
     pub height: f64,
     #[serde(default)]
     pub angle_deg: f64,
+    pub permittivity: f64,
+}
+
+/// A dielectric sphere centred in the plane, of relative permittivity `permittivity`
+/// (≥ 1; PHYSICS.md §2.7).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DielectricSphere {
+    pub center: Node,
+    /// Radius in cells.
+    pub radius: f64,
     pub permittivity: f64,
 }
 
@@ -257,6 +270,8 @@ struct LevelFile {
     #[serde(default)]
     dielectrics: Vec<Dielectric>,
     #[serde(default)]
+    dielectric_spheres: Vec<DielectricSphere>,
+    #[serde(default)]
     gates: Vec<Detector>,
 }
 
@@ -292,6 +307,7 @@ impl From<LevelFile> for Level {
             free_particles: f.free_particles,
             electrodes: f.electrodes,
             dielectrics: f.dielectrics,
+            dielectric_spheres: f.dielectric_spheres,
             gates: f.gates,
         }
     }
@@ -1247,6 +1263,9 @@ impl Level {
         for d in &mut self.dielectrics {
             scale(&mut d.center);
         }
+        for d in &mut self.dielectric_spheres {
+            scale(&mut d.center);
+        }
         for e in self
             .elements
             .iter_mut()
@@ -1311,6 +1330,11 @@ impl Level {
             }
             if self.conductors.iter().any(|c| {
                 (p - self.grid.position(c.center)).length() < c.radius + CONTACT_DISTANCE + reach
+            }) {
+                return Err(PlacementError::Occupied(e.node));
+            }
+            if self.dielectric_spheres.iter().any(|d| {
+                (p - self.grid.position(d.center)).length() < d.radius + CONTACT_DISTANCE + reach
             }) {
                 return Err(PlacementError::Occupied(e.node));
             }
@@ -1420,8 +1444,7 @@ impl Level {
             }
         }
         // Dielectrics: apart from metal and from each other.
-        let dielectrics: Vec<physics::bem::BoxElectrode> =
-            self.box_dielectrics().iter().map(|d| d.shape).collect();
+        let dielectrics = self.dielectric_boxes();
         let metal_boxes = self.all_box_electrodes(player);
         for (i, d) in dielectrics.iter().enumerate() {
             let corners = rect_corners(d);
@@ -1441,6 +1464,29 @@ impl Level {
                 .any(|c| one.contains(pos(c.center), c.radius + CONTACT_DISTANCE))
             {
                 out.push(format!("Dielectric {} touches a metal sphere.", i + 1));
+            }
+        }
+        // Dielectric spheres: apart from metal, from the boxes and from each other.
+        let all_boxes = physics::bem::Electrodes::shapes_only(
+            metal_boxes.iter().chain(&dielectrics).copied().collect(),
+        );
+        for (i, d) in self.dielectric_spheres.iter().enumerate() {
+            let c = pos(d.center);
+            let reach = d.radius + CONTACT_DISTANCE;
+            let near_sphere = |q: DVec3, r: f64| (c - q).length() < reach + r;
+            if all_boxes.contains(c, reach)
+                || self
+                    .conductors
+                    .iter()
+                    .any(|m| near_sphere(pos(m.center), m.radius))
+                || self.dielectric_spheres[i + 1..]
+                    .iter()
+                    .any(|o| near_sphere(pos(o.center), o.radius))
+            {
+                out.push(format!(
+                    "Dielectric sphere {} touches metal or another dielectric.",
+                    i + 1
+                ));
             }
         }
         let dielectric_shapes = physics::bem::Electrodes::shapes_only(dielectrics);
@@ -1479,7 +1525,11 @@ impl Level {
             if in_sphere || boxes.contains(p, radius + CONTACT_DISTANCE) {
                 out.push(format!("{who} starts inside or touching metal."));
             }
-            if dielectric_shapes.contains(p, radius + CONTACT_DISTANCE) {
+            let in_dielectric_sphere = self
+                .dielectric_spheres
+                .iter()
+                .any(|d| (p - pos(d.center)).length() < d.radius + radius + CONTACT_DISTANCE);
+            if in_dielectric_sphere || dielectric_shapes.contains(p, radius + CONTACT_DISTANCE) {
                 out.push(format!("{who} starts inside or touching a dielectric."));
             }
             if self
@@ -1557,7 +1607,7 @@ impl Level {
     ) -> Result<Vec<physics::bem::BoxElectrode>, PlacementError> {
         // Electrodes and dielectrics alike: plates keep clear of them, elements out.
         let mut boxes = self.box_electrodes();
-        boxes.extend(self.box_dielectrics().iter().map(|d| d.shape));
+        boxes.extend(self.dielectric_boxes());
         let reach = self
             .physics
             .charge_radius
@@ -1922,6 +1972,7 @@ impl Level {
         !self.conductors.is_empty()
             || !self.electrodes.is_empty()
             || !self.dielectrics.is_empty()
+            || !self.dielectric_spheres.is_empty()
             || player.iter().any(|e| e.kind == ElementKind::Plate)
     }
 
@@ -2162,6 +2213,23 @@ impl Level {
         if tunable(true) && self.limits.supply_voltages.is_empty() {
             out.push("tunable driven coils need at least one supply voltage".into());
         }
+        let dielectric = !self.dielectrics.is_empty() || !self.dielectric_spheres.is_empty();
+        if dielectric {
+            // The bound charge answers the fixed charges (as the electrodes' surface charge
+            // does), not the metal spheres' images nor fields changing in time.
+            if !self.conductors.is_empty() {
+                out.push("metal spheres and dielectrics are not yet solved together".into());
+            }
+            let time_dependent = self.limits.max_antennas > 0
+                || self.elements.iter().any(|e| e.kind == ElementKind::Antenna)
+                || !self.disturbances.is_empty();
+            if time_dependent {
+                out.push(
+                    "dielectrics respond to static charges only: no antennas or outside fields"
+                        .into(),
+                );
+            }
+        }
         if !self.electrodes.is_empty() || self.limits.max_plates > 0 {
             if !self.conductors.is_empty() {
                 out.push("metal spheres and box electrodes are not yet solved together".into());
@@ -2382,11 +2450,17 @@ impl Level {
         obstacles.extend(
             physics::bem::Electrodes::shapes_only(boxes.clone()).obstacles(CONTACT_DISTANCE),
         );
-        let dielectrics = self.box_dielectrics();
         obstacles.extend(
-            physics::bem::Electrodes::shapes_only(dielectrics.iter().map(|d| d.shape).collect())
+            physics::bem::Electrodes::shapes_only(self.dielectric_boxes())
                 .obstacles(CONTACT_DISTANCE),
         );
+        for d in &self.dielectric_spheres {
+            obstacles.push(Shape::Sphere(Sphere {
+                center: self.grid.position(d.center),
+                radius: d.radius + CONTACT_DISTANCE,
+            }));
+        }
+        let dielectrics = self.physics_dielectrics();
         for c in &self.conductors {
             obstacles.push(Shape::Sphere(Sphere {
                 center: self.grid.position(c.center),
@@ -2619,22 +2693,42 @@ impl Level {
         }
     }
 
-    /// The level's dielectric boxes for the physics.
-    pub fn box_dielectrics(&self) -> Vec<physics::bem::BoxDielectric> {
+    /// The level's dielectric boxes as boxes (for geometry: obstacles, clearances).
+    pub fn dielectric_boxes(&self) -> Vec<physics::bem::BoxElectrode> {
         self.dielectrics
             .iter()
-            .map(|d| physics::bem::BoxDielectric {
-                shape: physics::bem::BoxElectrode {
-                    center: self.grid.position(d.center),
-                    angle: d.angle_deg.to_radians(),
-                    half_length: d.length / 2.0,
-                    half_thickness: d.thickness / 2.0,
-                    half_height: d.height / 2.0,
-                    bias: Bias::Charge(0.0),
-                },
-                permittivity: d.permittivity,
+            .map(|d| physics::bem::BoxElectrode {
+                center: self.grid.position(d.center),
+                angle: d.angle_deg.to_radians(),
+                half_length: d.length / 2.0,
+                half_thickness: d.thickness / 2.0,
+                half_height: d.height / 2.0,
+                bias: Bias::Charge(0.0),
             })
             .collect()
+    }
+
+    /// The level's dielectrics for the physics: the boxes, then the spheres.
+    pub fn physics_dielectrics(&self) -> Vec<physics::bem::Dielectric> {
+        let boxes = self
+            .dielectric_boxes()
+            .into_iter()
+            .zip(&self.dielectrics)
+            .map(|(b, d)| physics::bem::Dielectric {
+                shape: physics::bem::BodyShape::Box(b),
+                permittivity: d.permittivity,
+            });
+        let spheres = self
+            .dielectric_spheres
+            .iter()
+            .map(|d| physics::bem::Dielectric {
+                shape: physics::bem::BodyShape::Sphere {
+                    center: self.grid.position(d.center),
+                    radius: d.radius,
+                },
+                permittivity: d.permittivity,
+            });
+        boxes.chain(spheres).collect()
     }
 
     /// The level's electrodes as physics boxes, at their own bias.
@@ -2725,7 +2819,7 @@ pub const IMAGE_FORCE_LIMIT: f64 = 1e-10;
 /// Box electrodes with the surface charge the fixed charges induce on them.
 fn electrodes_for(
     boxes: Vec<physics::bem::BoxElectrode>,
-    dielectrics: Vec<physics::bem::BoxDielectric>,
+    dielectrics: Vec<physics::bem::Dielectric>,
     charges: &[FixedCharge],
     resolution: Resolution,
 ) -> physics::bem::Electrodes {
@@ -3055,6 +3149,7 @@ mod tests {
             }],
             electrodes: vec![],
             dielectrics: vec![],
+            dielectric_spheres: vec![],
             gates: vec![],
         }
     }

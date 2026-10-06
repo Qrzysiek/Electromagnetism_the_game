@@ -105,13 +105,47 @@ wait for the 3D stage.
 
 1. **(owner)** The slice: sheet tubes in the levels, validated in 3D (proposed), or wait
    for 3D views?
+  - depends if that changes physics. At this stage I demand that there should be only 3d physics, and only physics that have symmetry that allows to be 
 2. **(owner)** Pairwise first (exact, slower, a few hundred electrons interactive?) and
    the mean field after, or the mean field from the start?
+  - Whatever makes it interactive. If exact is good enough to make it interactive then okay, if not start with mean field as preview.
 3. **(owner)** Space-charge-limited emission first, thermionic later?
+  - sure
 4. **(owner)** Macroparticles (weight w) as a stated approximation?
+  - sure
 5. **(owner)** Two-way circuit coupling by splitting (checked per level), or the fully
    implicit system (particles and circuit in one RADAU5 system, several times slower)?
+  - again, if it is fast enough for real time, make it more accurate, if not then make it approximate as preview, maybe automatic check after creating in sandbox, so that those levels can be also done easily by hand.
 6. **(owner)** The new goal kinds (current, charge, circuit amplitude).
+  - sure, whatever is fitting the framework or just need relatively small extension.
+
+## Decisions (owner, 2026-10-07)
+
+1. **Geometry: z-invariant tubes.** Only real 3D physics, justified by a symmetry. The
+   tubes are translation-invariant along z (the owner: every thin strip of the cathode
+   behaves the same, and the strips glued together form the full 3D cathode), the
+   symmetry the textbook diode theory itself assumes. Consequences:
+   - a separate geometry mode for such levels: a particle is a line of charge along z
+     (charge per unit length), fields of line charges (potential `−2λ ln r`, force
+     `∝ 1/r`), electrodes as 2D cross-sections solved by 2D boundary elements;
+   - everything in such a level must be z-invariant (electrodes, wires along z, uniform
+     or solenoid B along z); point charges, magnets and in-plane coils break the
+     symmetry and are refused there;
+   - the references then hold exactly: Child–Langmuir (planar), Langmuir–Blodgett
+     (coaxial), Lau's 2D law for a strip cathode of finite width;
+   - retardation and magnetic forces between electrons (~v²/c², 1e-3 at tube energies)
+     neglected, measured and stated, as for beams.
+   Finite 3D tubes wait for the 3D stage.
+2. **Speed decides the method:** exact pairwise interaction where it is interactive,
+   otherwise a mean field as the preview (with the exact model in the verification).
+3. **Emission:** space-charge-limited first, thermionic later.
+4. **Macroparticles** (weight w: charge and mass per unit length) as a stated
+   approximation.
+5. **Circuits:** the accurate (fully coupled) model if it runs in real time; otherwise an
+   approximate preview with the accurate model in the verification (an automatic check
+   after a sandbox edit), so that such levels can be built by hand too.
+6. **Goals:** current, collected charge and circuit amplitude, as far as they fit the
+   framework or need only a small extension.
 
 Sources: Lau, "Simple theory for the two-dimensional Child–Langmuir law", PRL 87,
 278301 (2001), and Lau et al., "On the Child–Langmuir law in one, two, and three

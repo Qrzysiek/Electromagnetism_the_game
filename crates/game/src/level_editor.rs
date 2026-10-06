@@ -9,9 +9,10 @@
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::{
-    Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric, Disturbance,
-    Drive, Electrode, Element, ElementKind, FreeParticle, Grid, Launch, Level, Limits, Node,
-    ParticleSpec, RadiationGoal, Region2, Shot, Source, Switch, TolerancesSpec, Wave, WorldPhysics,
+    Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
+    DielectricSphere, Disturbance, Drive, Electrode, Element, ElementKind, FreeParticle, Grid,
+    Launch, Level, Limits, Node, ParticleSpec, RadiationGoal, Region2, Shot, Source, Switch,
+    TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -1361,6 +1362,55 @@ fn edit_dielectrics(ui: &mut egui::Ui, list: &mut Vec<Dielectric>, grid: &Grid) 
     focus
 }
 
+fn edit_dielectric_spheres(
+    ui: &mut egui::Ui,
+    list: &mut Vec<DielectricSphere>,
+    grid: &Grid,
+) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, d) in list.iter_mut().enumerate() {
+        let DielectricSphere {
+            center,
+            radius,
+            permittivity,
+        } = d;
+        ui.push_id(("dielectric sphere", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Sphere {}", i + 1));
+                focus |= node(ui, center, grid);
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("radius");
+                focus |= positive(ui, radius, 0.05, MAX_POSITIVE);
+                ui.label("ε");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(permittivity)
+                            .speed(0.1)
+                            .range(1.0..=MAX_PERMITTIVITY),
+                    )
+                    .has_focus();
+            });
+        });
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize && ui.small_button("+ dielectric sphere").clicked() {
+        let m = grid.max_node();
+        list.push(DielectricSphere {
+            center: [m[0] / 2, m[1] / 2, 0],
+            radius: 2.0,
+            permittivity: 4.0,
+        });
+    }
+    focus
+}
+
 fn edit_disturbances(ui: &mut egui::Ui, list: &mut Vec<Disturbance>) -> bool {
     let mut focus = false;
     let mut remove = None;
@@ -1663,6 +1713,7 @@ pub fn edit_level(
         free_particles,
         electrodes,
         dielectrics,
+        dielectric_spheres,
         gates,
     } = level;
     let mut focus = false;
@@ -1708,7 +1759,10 @@ pub fn edit_level(
     egui::CollapsingHeader::new(format!("Electrodes ({})", electrodes.len()))
         .show(ui, |ui| focus |= edit_electrodes(ui, electrodes, &g));
     egui::CollapsingHeader::new(format!("Dielectrics ({})", dielectrics.len()))
-        .show(ui, |ui| focus |= edit_dielectrics(ui, dielectrics, &g))
+        .show(ui, |ui| {
+            focus |= edit_dielectrics(ui, dielectrics, &g);
+            focus |= edit_dielectric_spheres(ui, dielectric_spheres, &g);
+        })
         .header_response
         .on_hover_text(
             "Insulating boxes of permittivity ε: their bound charge screens a field partly \
@@ -1767,6 +1821,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         free_particles,
         electrodes,
         dielectrics,
+        dielectric_spheres,
         gates,
     } = level;
     if gates.len() > MAX_COUNT as usize {
@@ -2015,6 +2070,22 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             || !(1.0..=MAX_PERMITTIVITY).contains(permittivity)
         {
             return fail("dielectric outside the editor's range");
+        }
+    }
+    if dielectric_spheres.len() > MAX_COUNT as usize {
+        return fail("too many dielectric spheres");
+    }
+    for d in dielectric_spheres {
+        let DielectricSphere {
+            center,
+            radius,
+            permittivity,
+        } = d;
+        if !on_grid(center)
+            || !(MIN_POSITIVE..=MAX_POSITIVE).contains(radius)
+            || !(1.0..=MAX_PERMITTIVITY).contains(permittivity)
+        {
+            return fail("dielectric sphere outside the editor's range");
         }
     }
     if conductors.len() > MAX_COUNT as usize {
