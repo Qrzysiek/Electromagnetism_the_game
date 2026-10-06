@@ -704,7 +704,8 @@ pub enum Coil {
         drive: Option<Drive>,
         /// The player sets its ramp rate with a power supply (an element of kind `Supply`
         /// on its terminal, `Coil::supply_node`, on the slider of `limits.coil_rates`), or,
-        /// if a circuit drives it, its source's level; without one it keeps `rate`.
+        /// if a circuit drives it, its source's level (a voltage: `limits.supply_voltages`);
+        /// without one it keeps `rate`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         tunable: bool,
     },
@@ -935,9 +936,9 @@ pub struct Limits {
     /// slider over the range of the list, like `plate_voltages`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supply_voltages: Vec<f64>,
-    /// Ramp rates dκ/dt the power supply of a tunable coil may be set to (signed): a
-    /// slider over the range of the list, like `supply_voltages` (for a driven coil, its
-    /// source's level).
+    /// Ramp rates dκ/dt the power supply of a tunable undriven coil may be set to
+    /// (signed): a slider over the range of the list, like `supply_voltages` (a driven
+    /// coil's supply sets its source's voltage, from `supply_voltages`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub coil_rates: Vec<f64>,
     /// Maximum number of free charges the player may place (dynamic particles).
@@ -1529,11 +1530,13 @@ impl Level {
         electrodes.chain(coils).collect()
     }
 
-    /// The slider list of a supply's target: potentials or ramp rates.
+    /// The slider list of a supply's target: a voltage (an electrode's potential, or the
+    /// source of a circuit driving a coil: a voltage source too) or a ramp rate (an
+    /// undriven coil's).
     pub fn supply_list(&self, target: SupplyTarget) -> &[f64] {
         match target {
-            SupplyTarget::Electrode(_) => &self.limits.supply_voltages,
-            SupplyTarget::Coil(_) => &self.limits.coil_rates,
+            SupplyTarget::Coil(i) if !self.coils[i].is_driven() => &self.limits.coil_rates,
+            SupplyTarget::Electrode(_) | SupplyTarget::Coil(_) => &self.limits.supply_voltages,
         }
     }
 
@@ -2148,12 +2151,16 @@ impl Level {
         if (1..targets.len()).any(|i| targets[..i].contains(&targets[i])) {
             out.push("two tunable electrodes or coils share a centre node".into());
         }
-        let tunable_coils = self
-            .coils
-            .iter()
-            .any(|c| matches!(c, Coil::Circle { tunable: true, .. }));
-        if tunable_coils && self.limits.coil_rates.is_empty() {
+        let tunable = |driven: bool| {
+            self.coils
+                .iter()
+                .any(|c| matches!(c, Coil::Circle { tunable: true, .. }) && c.is_driven() == driven)
+        };
+        if tunable(false) && self.limits.coil_rates.is_empty() {
             out.push("tunable coils need at least one ramp rate".into());
+        }
+        if tunable(true) && self.limits.supply_voltages.is_empty() {
+            out.push("tunable driven coils need at least one supply voltage".into());
         }
         if !self.electrodes.is_empty() || self.limits.max_plates > 0 {
             if !self.conductors.is_empty() {
@@ -3394,6 +3401,12 @@ mod tests {
             capacitance: 0.0,
             switch: None,
         });
+        // Its supply is now a voltage (`supply_voltages`, here ±1e4).
+        assert_eq!(l.supply_targets()[0].0, centre);
+        assert_eq!(
+            l.supply_list(l.supply_targets()[0].1),
+            &l.limits.supply_voltages[..]
+        );
         let c = l.physics.c.expect("finite c");
         let end = l.drive_end();
         for (placement, v) in [(&supply(0.4)[..], 0.4), (&[][..], 1.0)] {

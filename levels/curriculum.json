@@ -141,7 +141,8 @@
         {
           "name": "Intermediate",
           "levels": [
-            "induction_kick"
+            "induction_kick",
+            "betatron"
           ]
         },
         {

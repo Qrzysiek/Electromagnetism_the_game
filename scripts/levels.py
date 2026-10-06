@@ -220,10 +220,11 @@ def slider_problems(lvl):
     for what, vals in lists.items():
         if vals and min(vals) != -max(vals):
             out.append(f"{what} slider [{min(vals)}, {max(vals)}] not symmetric about 0")
-    # A tunable coil's supply sits on its terminal (`Coil::supply_node`).
+    # A tunable coil's supply sits on its terminal (`Coil::supply_node`); an undriven
+    # coil's is a ramp rate, a driven coil's its source's voltage.
     coil_centres = [[c["center"][0] + math.floor(c["radius"] + 0.5), c["center"][1], c["center"][2]]
                     for c in lvl.get("coils", [])
-                    if c.get("shape") == "circle" and c.get("tunable")]
+                    if c.get("shape") == "circle" and c.get("tunable") and not c.get("drive")]
     for e in lvl["reference_solution"]:
         if e["kind"] == "plate":
             vals = lists["plate voltages"]
@@ -955,6 +956,64 @@ def induction_kick():
         shots=[shot(1e-6, 1.0, (15, 6), 0.0, 1e-6, box((18, 11, 22, 15), kinetic=(0.3, 10.0)))],
         coils=[coil], c=c, t_max=200.0,
         max_charges=3, magnitudes=[m * M for m in (0.05, 0.1, 0.2)], region=(8, 10, 22, 17))
+
+
+def pulse(high, rise, delay=0.0, width=1e4, fall=0.0, low=0.0):
+    """A trapezoid source (PHYSICS.md 2.9): `low` until `delay`, up to `high` over `rise`,
+    held for `width`, down over `fall` (its top the player's power supply sets)."""
+    return {"kind": "pulse", "low": low, "high": high, "delay": delay, "rise": rise,
+            "width": width, "fall": fall}
+
+
+def betatron(core=1.34e8, guide=2.3e3, kinetic=(8.6, 11.3), core_slider=3.1e8,
+             guide_slider=8.3e3, rise=300.0, detector=None):
+    # Wideroe's betatron: an ion at rest at R = 8 between a core coil (radius 4) and a
+    # guide coil (radius 12), concentric. Its canonical angular momentum is 0, so
+    # p = q A_phi(R, t); a circle at R needs p = q R B_z(R, t). With both coils' strengths
+    # rising in proportion that holds at every t iff A_phi(R) = R B_z(R) for the mixture:
+    # the core must rise 2.057 times as fast as the guide (exact loop integrals; field
+    # index n = -3.8 < 1, radially stable). The guide ramps at the player's rate g; the
+    # core follows a trapezoid source through a fast circuit (L/R = 2, c = 1e4): its
+    # current rises in step with the source for `rise`, then holds. The rise needs
+    # kappa_top / rise = 2.057 g, i.e. a source top V = 2.057 g rise N / tau (N = 189.5,
+    # its self-flux). When the core stops, the flux through the orbit stops growing while
+    # the guide's field rises on: the orbit shrinks onto the detector between the coils,
+    # with the energy the betatron gave it. A wrong ratio moves the orbit during the rise:
+    # inward onto the detector too slow, or outward into the guide. The core's supply is
+    # its source's top voltage (`supply_voltages`), the guide's its ramp rate. Measured
+    # (generator trace): the orbit holds at r = 8.00 +- 0.04 through the rise while T
+    # climbs to 4.6, then shrinks onto the detector (r = 6 to 7) at t = 567, T ~ 10.
+    # Solving intervals (generator window): the core 130M to 142.5M (the energy is its
+    # flux's), the guide 1.48k to 3.39k (and islands up to 3.59k: a wrong ratio settles
+    # the orbit at another radius, which the extraction still reaches); the sliders
+    # (+-310M, +-8.3k) keep 0, their ends and middles outside.
+    c = 1e4
+    n_core = 189.5
+    tau = 2.0
+    r = n_core / c ** 2 / tau
+    core_coil = circle_coil(15, 15, 4.0, 0.0)
+    core_coil["drive"] = drive(pulse(0.0, rise), r)
+    core_coil["tunable"] = True
+    guide_coil = circle_coil(15, 15, 12.0, 0.0)
+    guide_coil["tunable"] = True
+    detector = detector or box((8, 14, 9, 16), kinetic=kinetic)
+    return level(
+        "Betatron",
+        "Wideroe's betatron accelerates without any electrode: a changing flux induces an "
+        "electric field around it, and a magnetic field holds the particle on its circle. "
+        "The particle starts at rest between two coils. The inner one (the core, on a "
+        "circuit whose source rises and then holds) supplies most of the flux, the outer "
+        "one (the guide, ramped) the field at the orbit. The orbit keeps its radius only if "
+        "the flux inside it grows twice as fast as the guide field times the orbit's area, "
+        "$\\Phi(R) = 2\\pi R^2 B(R)$: then the particle gains energy turn after turn on "
+        "the same circle. When the core's source stops rising, the flux stops growing but "
+        "the guide's field rises on, and the orbit shrinks onto the detector. Set the two "
+        "supplies so that the particle arrives there with its energy in the window.",
+        grid=(30, 30), c=c, t_max=900.0,
+        shots=[shot(1e-6, 1.0, (23, 15), 90.0, 1e-9, detector)],
+        coils=[core_coil, guide_coil],
+        supplies=slider(core_slider, core), coil_rates=slider(guide_slider, guide),
+        reference=[supply(19, 15, core), supply(27, 15, guide)])
 
 
 def pulse_sorter(refs=(1.46e5, 9.6e4, -3.36e5), detectors=None):
@@ -2713,6 +2772,7 @@ ARCS = [
         ]),
         ("Intermediate", [
             ("induction_kick", induction_kick),
+            ("betatron", betatron),
         ]),
         ("Master", [
             ("pulse_sorter", pulse_sorter),

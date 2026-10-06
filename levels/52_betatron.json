@@ -1,0 +1,139 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Betatron",
+  "description": "Wideroe's betatron accelerates without any electrode: a changing flux induces an electric field around it, and a magnetic field holds the particle on its circle. The particle starts at rest between two coils. The inner one (the core, on a circuit whose source rises and then holds) supplies most of the flux, the outer one (the guide, ramped) the field at the orbit. The orbit keeps its radius only if the flux inside it grows twice as fast as the guide field times the orbit's area, $\\Phi(R) = 2\\pi R^2 B(R)$: then the particle gains energy turn after turn on the same circle. When the core's source stops rising, the flux stops growing but the guide's field rises on, and the orbit shrinks onto the detector. Set the two supplies so that the particle arrives there with its energy in the window.",
+  "grid": {
+    "nx": 30,
+    "ny": 30,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 10000.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 900.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          23,
+          15,
+          0
+        ],
+        "direction": [
+          6.123233995736766e-17,
+          1.0,
+          0.0
+        ],
+        "kinetic_energy": 1e-09
+      },
+      "detector": {
+        "min": [
+          8,
+          14,
+          0
+        ],
+        "max": [
+          9,
+          16,
+          0
+        ],
+        "acceptance": {
+          "kinetic": [
+            8.6,
+            11.3
+          ]
+        }
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [
+    {
+      "shape": "circle",
+      "center": [
+        15,
+        15,
+        0
+      ],
+      "radius": 4.0,
+      "kappa": 0.0,
+      "drive": {
+        "source": {
+          "kind": "pulse",
+          "low": 0.0,
+          "high": 0.0,
+          "delay": 0.0,
+          "rise": 300.0,
+          "width": 10000.0,
+          "fall": 0.0
+        },
+        "resistance": 9.475e-07
+      },
+      "tunable": true
+    },
+    {
+      "shape": "circle",
+      "center": [
+        15,
+        15,
+        0
+      ],
+      "radius": 12.0,
+      "kappa": 0.0,
+      "tunable": true
+    }
+  ],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -310000000.0,
+      134000000.0,
+      310000000.0
+    ],
+    "coil_rates": [
+      -8300.0,
+      2300.0,
+      8300.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        19,
+        15,
+        0
+      ],
+      "kind": "supply",
+      "value": 134000000.0
+    },
+    {
+      "node": [
+        27,
+        15,
+        0
+      ],
+      "kind": "supply",
+      "value": 2300.0
+    }
+  ]
+}

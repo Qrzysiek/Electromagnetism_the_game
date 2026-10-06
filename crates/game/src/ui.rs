@@ -1627,7 +1627,14 @@ fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                     }
                     level::Coil::Polygon { .. } => String::new(),
                 };
-                (format!("Coil {} dκ/dt:", i + 1), own)
+                // A driven coil's supply is its circuit's source voltage, an undriven
+                // one's its ramp rate.
+                let what = if level.coils[i].is_driven() {
+                    "source V"
+                } else {
+                    "dκ/dt"
+                };
+                (format!("Coil {} {what}:", i + 1), own)
             }
         };
         let list = level.supply_list(target).to_vec();
