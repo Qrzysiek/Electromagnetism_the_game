@@ -22,7 +22,7 @@ ratio", and the description cites the section or problem (planned level field `r
   some twenty orbits and an end to the flight: test S8), Pr. 16.12 (an average over
   random interruptions, which a deterministic flight does not realise).
 - **Built on 2026-10-05:** a level on §16.8's cross section, *Why the sky is blue*
-  (level 88; Rayleigh's ω⁴ through the resonance to Thomson's, test C3), with a new kind
+  (level 89; Rayleigh's ω⁴ through the resonance to Thomson's, test C3), with a new kind
   of radiation goal, the steady receiver (PHYSICS.md §3.4, test S10): a scattering bound
   electron stays bound, so the receiver averages the power it scatters over a window
   instead of waiting for it to arrive. Everything else needs a feature from the table below or 3D;
@@ -384,7 +384,7 @@ These combine several chapters; most come from the problems.
 11. **Λ decay reconstruction** (Pr. 11.20): decay in flight in a B field. F:decay.
 12. **Stark deflector** (Pr. 4.5): the electric Stern–Gerlach for polar molecules. F:polar.
 13. **RF cavity linac** (§8.7): phase stability with gates. F:cavity.
-14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built (arc 10; the cross section as test C3 and level 88).
+14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built (arc 10; the cross section as test C3 and level 89).
 
 ## For the 3D simulation (future reference)
 

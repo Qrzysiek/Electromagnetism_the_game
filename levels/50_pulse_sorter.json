@@ -1,59 +1,27 @@
 {
   "format_version": 2,
   "engine_version": "0.1.0",
-  "name": "Tune the lens",
-  "description": "A real Einzel lens: three metal apertures, the outer ones grounded. The two halves of the middle aperture have a power supply each. At the right voltage the lens focuses the three diverging rays into the small detector; too little and they stay apart, too much and they cross before it.",
+  "name": "Pulse sorter",
+  "description": "Finale of the circuits: three ions, launched at t = 0, 30 and 60, fly through three pairs of deflection plates, and each top plate hangs on its own circuit with its own power supply. The first charges through a resistor, the second is switched on at t = 40, the third rings with an inductor. Each ion meets the three plates at a different stage of their circuits (the Circuits panel shows each plate's V(t), with the launches marked). Set the three supplies so that every ion lands in its own detector.",
   "grid": {
-    "nx": 30,
+    "nx": 40,
     "ny": 20,
     "nz": 0,
     "subdivision": 1
   },
   "physics": {
-    "c": 5.0,
+    "c": null,
     "charge_radius": 0.3,
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
-    "t_max": 400.0,
+    "t_max": 160.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
     }
   },
   "shots": [
-    {
-      "particle": {
-        "charge": 1e-06,
-        "mass": 1.0,
-        "radius": 0.0
-      },
-      "launch": {
-        "node": [
-          0,
-          10,
-          0
-        ],
-        "direction": [
-          0.9945218953682733,
-          -0.10452846326765347,
-          0.0
-        ],
-        "kinetic_energy": 0.5
-      },
-      "detector": {
-        "min": [
-          28,
-          9,
-          0
-        ],
-        "max": [
-          30,
-          11,
-          0
-        ]
-      }
-    },
     {
       "particle": {
         "charge": 1e-06,
@@ -75,13 +43,13 @@
       },
       "detector": {
         "min": [
-          28,
-          9,
+          38,
+          12,
           0
         ],
         "max": [
-          30,
-          11,
+          40,
+          13,
           0
         ]
       }
@@ -99,21 +67,55 @@
           0
         ],
         "direction": [
-          0.9945218953682733,
-          0.10452846326765347,
+          1.0,
+          0.0,
           0.0
         ],
-        "kinetic_energy": 0.5
+        "kinetic_energy": 0.5,
+        "time": 30.0
       },
       "detector": {
         "min": [
-          28,
+          38,
           9,
           0
         ],
         "max": [
-          30,
-          11,
+          40,
+          10,
+          0
+        ]
+      }
+    },
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5,
+        "time": 60.0
+      },
+      "detector": {
+        "min": [
+          38,
+          6,
+          0
+        ],
+        "max": [
+          40,
+          7,
           0
         ]
       }
@@ -129,103 +131,78 @@
     "max_magnets": 0,
     "magnet_strengths": [],
     "supply_voltages": [
-      -490000.0,
+      -460000.0,
+      -300000.0,
+      -200000.0,
+      -100000.0,
       100000.0,
       200000.0,
       300000.0,
-      400000.0,
-      490000.0
+      460000.0
     ]
   },
   "reference_solution": [
     {
       "node": [
+        7,
         14,
-        15,
         0
       ],
       "kind": "supply",
-      "value": 300000.0
+      "value": 146000.0
     },
     {
       "node": [
+        18,
         14,
-        5,
         0
       ],
       "kind": "supply",
-      "value": 300000.0
+      "value": 96000.0
+    },
+    {
+      "node": [
+        29,
+        14,
+        0
+      ],
+      "kind": "supply",
+      "value": -336000.0
     }
   ],
   "electrodes": [
     {
       "center": [
-        10,
-        15,
+        7,
+        14,
         0
       ],
-      "length": 6,
+      "length": 4,
       "thickness": 0.4,
-      "height": 3.0,
-      "angle_deg": 90.0,
+      "height": 2.0,
+      "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
+      },
+      "tunable": true,
+      "drive": {
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "resistance": 20.0
       }
     },
     {
       "center": [
-        10,
-        5,
+        7,
+        6,
         0
       ],
-      "length": 6,
+      "length": 4,
       "thickness": 0.4,
-      "height": 3.0,
-      "angle_deg": 90.0,
-      "bias": {
-        "kind": "grounded"
-      }
-    },
-    {
-      "center": [
-        14,
-        15,
-        0
-      ],
-      "length": 6,
-      "thickness": 0.4,
-      "height": 3.0,
-      "angle_deg": 90.0,
-      "bias": {
-        "kind": "grounded"
-      },
-      "tunable": true
-    },
-    {
-      "center": [
-        14,
-        5,
-        0
-      ],
-      "length": 6,
-      "thickness": 0.4,
-      "height": 3.0,
-      "angle_deg": 90.0,
-      "bias": {
-        "kind": "grounded"
-      },
-      "tunable": true
-    },
-    {
-      "center": [
-        18,
-        15,
-        0
-      ],
-      "length": 6,
-      "thickness": 0.4,
-      "height": 3.0,
-      "angle_deg": 90.0,
+      "height": 2.0,
+      "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
       }
@@ -233,13 +210,75 @@
     {
       "center": [
         18,
-        5,
+        14,
         0
       ],
-      "length": 6,
+      "length": 4,
       "thickness": 0.4,
-      "height": 3.0,
-      "angle_deg": 90.0,
+      "height": 2.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "drive": {
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "resistance": 0.4,
+        "switch": {
+          "at": 40.0
+        }
+      }
+    },
+    {
+      "center": [
+        18,
+        6,
+        0
+      ],
+      "length": 4,
+      "thickness": 0.4,
+      "height": 2.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        29,
+        14,
+        0
+      ],
+      "length": 4,
+      "thickness": 0.4,
+      "height": 2.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "drive": {
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "resistance": 0.5,
+        "inductance": 130.0
+      }
+    },
+    {
+      "center": [
+        29,
+        6,
+        0
+      ],
+      "length": 4,
+      "thickness": 0.4,
+      "height": 2.0,
+      "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
       }

@@ -26,6 +26,12 @@ pub fn is_signed(kind: ElementKind) -> bool {
     )
 }
 
+/// Kinds whose value is a potential set with a slider in every mode (plates, power
+/// supplies): anything in the range of the level's list (`Limits::allows_potential`).
+pub fn is_potential(kind: ElementKind) -> bool {
+    matches!(kind, ElementKind::Plate | ElementKind::Supply)
+}
+
 pub struct Editor {
     /// The level as loaded (recommended grid).
     base: Level,
@@ -115,8 +121,16 @@ impl Editor {
             .find(|&k| max_of(&level, k) > 0)
             .unwrap_or(ElementKind::Charge);
         let positive = default_positive(&level, kind);
-        let continuous_magnitude =
-            KINDS.map(|k| magnitudes(&level, k).first().copied().unwrap_or(1.0));
+        // Potentials start at 0 (or the end of the range nearest to it), not at an end of
+        // the slider.
+        let continuous_magnitude = KINDS.map(|k| {
+            let list = magnitudes(&level, k);
+            if is_potential(k) {
+                value_range(list).map_or(0.0, |(lo, hi)| 0.0_f64.clamp(lo, hi))
+            } else {
+                list.first().copied().unwrap_or(1.0)
+            }
+        });
         let continuous_omega = level.limits.antenna_omegas.first().copied().unwrap_or(1.0);
         let continuous_speed = level.limits.free_speeds.first().copied().unwrap_or(0.0);
         Self {
@@ -148,7 +162,7 @@ impl Editor {
 
     /// Value of a new element of the selected kind.
     pub fn selected_value(&self) -> f64 {
-        let m = if self.continuous() {
+        let m = if self.continuous() || is_potential(self.kind) {
             self.continuous_magnitude[kind_index(self.kind)]
         } else {
             magnitudes(&self.level, self.kind)
@@ -179,6 +193,9 @@ impl Editor {
         if on {
             // Start the sliders at the currently selected discrete values.
             for (i, k) in KINDS.into_iter().enumerate() {
+                if is_potential(k) {
+                    continue; // already a slider
+                }
                 let list = magnitudes(&self.level, k);
                 let idx = if k == self.kind {
                     self.magnitude_index
@@ -465,7 +482,7 @@ impl Editor {
     }
 
     /// Switches on the power supply of the tunable electrode centred at `centre`, at the
-    /// listed potential nearest to the electrode's own bias.
+    /// electrode's own bias (within the supply's range).
     fn add_supply(&mut self, centre: Node) -> Result<(), PlacementError> {
         let Some(el) = self.level.electrodes.iter().find(|e| e.center == centre) else {
             return Ok(());
@@ -474,9 +491,10 @@ impl Editor {
             ConductorBias::Potential(v) => v,
             ConductorBias::Grounded | ConductorBias::Charge(_) => 0.0,
         };
-        let Some(v) = nearest_linear(&self.level.limits.supply_voltages, own) else {
+        let Some((lo, hi)) = value_range(&self.level.limits.supply_voltages) else {
             return Ok(());
         };
+        let v = own.clamp(lo, hi);
         let mut trial = self.placement.clone();
         trial.push(Element::supply(centre, v));
         self.try_placement(trial)
@@ -546,6 +564,13 @@ impl Editor {
 
     /// Tries a new placement; keeps it if the level allows it.
     fn try_placement(&mut self, trial: Vec<Element>) -> Result<(), PlacementError> {
+        // Not into a setup the physics cannot compute (a free charge on a coil's wire).
+        let added =
+            self.level.setup_issues(&trial).len() > self.level.setup_issues(&self.placement).len();
+        if added {
+            self.message = Some("Too close: on a coil's wire or touching metal.".into());
+            return Err(PlacementError::Occupied(self.cursor));
+        }
         match self.level.check_placement(&trial) {
             Ok(()) => {
                 self.placement = trial;
@@ -614,8 +639,8 @@ impl Editor {
             trial[i].value = -trial[i].value;
             let _ = self.try_placement(trial);
         } else if is_signed(self.kind) {
-            // The opposite potential, where the level lists it.
-            if self.continuous() {
+            // The opposite potential (free charges: where the level lists it).
+            if self.continuous() || is_potential(self.kind) {
                 let k = kind_index(self.kind);
                 let (lo, hi) =
                     value_range(magnitudes(&self.level, self.kind)).unwrap_or((0.0, 0.0));
@@ -682,11 +707,11 @@ impl Editor {
         }
     }
 
-    /// `cycle_magnitude` for signed potentials: the next listed value (hardcore: a step of
-    /// 1/20 of the range).
+    /// `cycle_magnitude` for signed values: potentials (and in hardcore free charges) by a
+    /// step of 1/20 of the range, free charges otherwise to the next listed value.
     fn cycle_signed(&mut self, on: Option<usize>, kind: ElementKind, list: &[f64], step: isize) {
         let n = list.len();
-        if self.continuous() {
+        if self.continuous() || is_potential(kind) {
             let (lo, hi) = value_range(list).expect("non-empty");
             let d = signed_step(list) * f64::from(step_i32(step));
             match on {
@@ -1047,7 +1072,10 @@ fn nearest_listed(list: &[f64], v: f64) -> Option<f64> {
 /// Snaps an element to the level's discrete lists (leaving hardcore mode).
 fn snap(level: &Level, e: &mut Element) {
     if is_signed(e.kind) {
-        if let Some(v) = nearest_linear(magnitudes(level, e.kind), e.value) {
+        // Potentials stay: they are sliders in both modes.
+        if !is_potential(e.kind)
+            && let Some(v) = nearest_linear(magnitudes(level, e.kind), e.value)
+        {
             e.value = v;
         }
         if e.kind == ElementKind::Plate {
@@ -1148,6 +1176,9 @@ mod tests {
         l
     }
 
+    /// Plate potentials are sliders (the owner, 2026-10-06): a new plate starts grounded,
+    /// the keys step by 1/20 of the range, any potential in the range is accepted (also
+    /// unlisted ones) and none outside it.
     #[test]
     fn plates_place_rotate_tune_and_move() {
         let mut e = Editor::new(plate_level());
@@ -1155,15 +1186,29 @@ mod tests {
         assert_eq!(e.kind, ElementKind::Plate);
         e.set_cursor([21, 10, 0]);
         e.place().unwrap();
-        assert_eq!(e.placement, vec![Element::plate([21, 10, 0], -2e4, 0.0)]);
+        assert_eq!(e.placement, vec![Element::plate([21, 10, 0], 0.0, 0.0)]);
         e.rotate(1);
         assert_eq!(e.placement[0].angle_deg.to_bits(), 90f64.to_bits());
         e.cycle_magnitude(1);
-        assert_eq!(e.placement[0].value.to_bits(), 0f64.to_bits());
-        e.flip_sign(); // −0 is not listed: rejected, unchanged.
         e.cycle_magnitude(1);
+        assert_eq!(e.placement[0].value.to_bits(), 4e3f64.to_bits());
         e.flip_sign();
-        assert_eq!(e.placement[0].value.to_bits(), (-2e4f64).to_bits());
+        assert_eq!(e.placement[0].value.to_bits(), (-4e3f64).to_bits());
+        let mut p = e.placement[0];
+        p.value = 1.37e4;
+        e.set_element(0, p);
+        assert_eq!(
+            e.placement[0].value.to_bits(),
+            1.37e4f64.to_bits(),
+            "unlisted, in range"
+        );
+        p.value = 2.5e4;
+        e.set_element(0, p);
+        assert_eq!(
+            e.placement[0].value.to_bits(),
+            1.37e4f64.to_bits(),
+            "out of range"
+        );
         // Picked up by its body (1 cell off centre along its length), it keeps the offset.
         e.set_cursor([21, 11, 0]);
         assert!(e.grab());
@@ -1183,19 +1228,24 @@ mod tests {
     fn power_supplies_are_operated_on_their_electrode() {
         let mut e = Editor::new(plate_level());
         let centre = e.level.electrodes[0].center;
-        // Anywhere on the tunable electrode: switches the supply on at the listed potential
-        // nearest to the electrode's own bias (−30k), then steps it.
+        // Anywhere on the tunable electrode: switches the supply on at the electrode's own
+        // bias (−30k), then steps it by 1/20 of the slider's range (6k).
         e.set_cursor([centre[0] + 3, centre[1], 0]);
         e.place().unwrap();
         assert_eq!(e.supply(centre), Some(-3e4));
         e.place().unwrap();
-        assert_eq!(e.supply(centre), Some(0.0));
-        e.place().unwrap();
+        assert_eq!(e.supply(centre), Some(-2.4e4));
         e.flip_sign();
-        assert_eq!(e.supply(centre), Some(-3e4));
+        assert_eq!(e.supply(centre), Some(2.4e4));
         assert!(!e.grab(), "supplies stay on their electrode");
-        e.set_supply(centre, Some(6e4));
-        assert_eq!(e.supply(centre), Some(6e4));
+        e.set_supply(centre, Some(4.21e4));
+        assert_eq!(
+            e.supply(centre),
+            Some(4.21e4),
+            "any potential on the slider"
+        );
+        e.set_supply(centre, Some(7e4));
+        assert_eq!(e.supply(centre), Some(4.21e4), "beyond the slider: refused");
         e.remove();
         assert_eq!(e.supply(centre), None);
         // The other electrode is not tunable: a click there places nothing.

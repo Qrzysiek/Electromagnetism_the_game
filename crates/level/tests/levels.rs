@@ -325,6 +325,57 @@ fn drive_back_action_is_negligible() {
     }
 }
 
+/// No shipped level has geometry the physics cannot compute (`Level::setup_issues`):
+/// metal apart, no particle starting in metal or on a wire.
+#[test]
+fn shipped_setups_are_computable() {
+    for (name, level) in shipped_levels() {
+        let issues = level.setup_issues(&level.reference_solution);
+        assert!(issues.is_empty(), "{name}: {issues:?}");
+    }
+}
+
+/// Voltages are set with sliders (the owner, 2026-10-06): each power supply's and
+/// plate's range is symmetric about 0, and no reference potential lies where a player
+/// would try first: within 5 % of the range's half from 0, from either end or from the
+/// middle of either half (`scripts/levels.py`, `guessable`; `generator window` shows
+/// each level's whole solving interval, which the level designs keep clear of them).
+#[test]
+fn slider_ranges_hide_the_answer() {
+    use level::ElementKind;
+    for (name, level) in shipped_levels() {
+        let l = &level.limits;
+        for (kind, list) in [
+            (ElementKind::Supply, &l.supply_voltages),
+            (ElementKind::Plate, &l.plate_voltages),
+        ] {
+            let Some((lo, hi)) = level::value_range(list) else {
+                continue;
+            };
+            // Exactly symmetric (a grounded-only list [0] has lo = 0 = -hi).
+            #[allow(clippy::float_cmp)]
+            let symmetric = lo == -hi;
+            assert!(
+                symmetric,
+                "{name}: {kind:?} slider [{lo}, {hi}] not symmetric"
+            );
+            for e in level.reference_solution.iter().filter(|e| e.kind == kind) {
+                if hi == 0.0 {
+                    continue; // nothing to tune (grounded plates only)
+                }
+                let v = e.value.abs();
+                for p in [0.0, 0.5 * hi, hi] {
+                    assert!(
+                        (v - p).abs() >= 0.05 * hi,
+                        "{name}: {kind:?} {} near {p} on the slider ±{hi}",
+                        e.value
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Realistic iterations (chapter 15, SPEC §3) build an earlier level's idealised solution
 /// in and add a real effect that breaks it: on its own, without the player's elements,
 /// the built-in design must not solve the level (otherwise the effect is decoration).

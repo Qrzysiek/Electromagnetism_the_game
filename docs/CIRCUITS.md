@@ -33,7 +33,15 @@ want to settle are marked **(owner)**.
   the sandbox editor's controls, the panel's plots, the model notes with the
   back-action bound and the quasi-static parameter; arc 5 "Circuits" with Charging a
   plate (RC), Chopper (a switch) and Ringing plate (LC), all Newtonian, where the
-  quasi-static model is exact.
+  quasi-static model is exact, and Induction kick (a driven coil, at c = 1e4: the
+  quasi-static parameter 1.5e-4).
+- **The arc's master** (2026-10-06): Pulse sorter, three ions launched at t = 0, 30 and
+  60 through three plate pairs on an RC, a switched and an LC circuit, one supply each;
+  each ion meets the circuits at a different stage, so the three landings fix the three
+  supplies.
+- **Sliders** (the owner, 2026-10-06): a power supply's potential, and a player plate's,
+  is set with a slider over a range symmetric about 0 whose ends and middles do not
+  solve the level (`generator window` measures each level's solving intervals).
 - **Time-dependent coils.** Coils already take a linear ramp of their strength with the
   exact induced field `−κ̇ A_unit` (circular and polygonal coils, test M10).
 

@@ -65,10 +65,12 @@
     "max_magnets": 0,
     "magnet_strengths": [],
     "supply_voltages": [
-      -120000.0,
-      -60000.0,
-      60000.0,
-      120000.0
+      -205000.0,
+      -140000.0,
+      -70000.0,
+      70000.0,
+      140000.0,
+      205000.0
     ]
   },
   "reference_solution": [
@@ -79,7 +81,7 @@
         0
       ],
       "kind": "supply",
-      "value": 120000.0
+      "value": 140000.0
     }
   ],
   "electrodes": [

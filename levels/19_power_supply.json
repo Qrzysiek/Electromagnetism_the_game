@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Power supply",
-  "description": "Instead of placing charges, turn a knob: the top deflection plate is connected to a power supply (yellow frame). Click the plate, or choose in the panel, to set its potential. A positive plate pushes positive ions away, a negative one pulls them. Bring the beam into the detector.",
+  "description": "Instead of placing charges, turn a knob: the top deflection plate is connected to a power supply (yellow frame). Click the plate to switch it on, and set its potential with the slider in the panel. A positive plate pushes positive ions away, a negative one pulls them. Bring the beam into the detector.",
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -65,10 +65,12 @@
     "max_magnets": 0,
     "magnet_strengths": [],
     "supply_voltages": [
+      -340000.0,
       -120000.0,
       -60000.0,
       60000.0,
-      120000.0
+      120000.0,
+      340000.0
     ]
   },
   "reference_solution": [

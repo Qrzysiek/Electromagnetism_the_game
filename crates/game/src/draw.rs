@@ -865,6 +865,12 @@ fn path_at(path: &[(f64, physics::DVec3)], t: f64) -> Option<physics::DVec3> {
     if t < path[0].0 || t > last.0 {
         return None;
     }
+    // A flight that ended where it started (a particle launched touching metal) has one
+    // sample: clamp(1, 0) below would panic (the owner's crash with a free charge next
+    // to a grounded sphere, found by scripts/pairs.py --gui).
+    if path.len() == 1 {
+        return Some(last.1);
+    }
     let k = path
         .partition_point(|(tk, _)| *tk <= t)
         .clamp(1, path.len() - 1);

@@ -135,6 +135,18 @@
             "chopper",
             "ringing_plate"
           ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "induction_kick"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "pulse_sorter"
+          ]
         }
       ]
     },

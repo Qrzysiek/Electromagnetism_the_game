@@ -870,13 +870,16 @@ pub struct Limits {
     /// Maximum number of plates (electrodes) the player may place.
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub max_plates: u32,
-    /// Potentials a player plate may be held at (signed; 0 is grounded).
+    /// Potentials a player plate may be held at (signed; 0 is grounded): set with a
+    /// slider, anything in the range of the list (`Limits::allows_potential`); the listed
+    /// values are what the solver tries.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plate_voltages: Vec<f64>,
     /// Size of the player's plates.
     #[serde(default, skip_serializing_if = "PlateSize::is_default")]
     pub plate: PlateSize,
-    /// Potentials the power supply of a tunable level electrode may be set to (signed).
+    /// Potentials the power supply of a tunable level electrode may be set to (signed): a
+    /// slider over the range of the list, like `plate_voltages`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supply_voltages: Vec<f64>,
     /// Maximum number of free charges the player may place (dynamic particles).
@@ -999,6 +1002,35 @@ pub fn value_range(list: &[f64]) -> Option<(f64, f64)> {
     (lo <= hi).then_some((lo, hi))
 }
 
+/// In-plane distance from `p` to a coil's wire (its centre line).
+fn coil_wire_distance(level: &Level, coil: &Coil, p: DVec3) -> f64 {
+    let p = DVec3::new(p.x, p.y, 0.0);
+    match coil {
+        Coil::Circle { center, radius, .. } => {
+            let c = level.grid.position(*center);
+            ((p - DVec3::new(c.x, c.y, 0.0)).length() - radius).abs()
+        }
+        Coil::Polygon { vertices, .. } => {
+            let n = vertices.len();
+            (0..n)
+                .map(|i| {
+                    let a = level.grid.position(vertices[i]);
+                    let b = level.grid.position(vertices[(i + 1) % n]);
+                    let (a, b) = (DVec3::new(a.x, a.y, 0.0), DVec3::new(b.x, b.y, 0.0));
+                    let ab = b - a;
+                    let len2 = ab.length_squared();
+                    let s = if len2 > 0.0 {
+                        ((p - a).dot(ab) / len2).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    (p - (a + ab * s)).length()
+                })
+                .fold(f64::INFINITY, f64::min)
+        }
+    }
+}
+
 impl Limits {
     /// Whether `v` is an allowed value from `list`: exactly one of its entries, or in
     /// hardcore mode anything in its range.
@@ -1008,6 +1040,15 @@ impl Limits {
         } else {
             list.iter().any(|m| m.to_bits() == v.to_bits())
         }
+    }
+
+    /// Whether `v` is a potential the player may set with a slider (power supplies and
+    /// plates): anything in the range of `list`, in every mode. The owner (2026-10-06):
+    /// voltages are tuned by sliders, over a range symmetric about 0 whose ends do not
+    /// give the answer away (checked for the shipped levels by `slider_ranges_hide_the_
+    /// answer`).
+    pub fn allows_potential(list: &[f64], v: f64) -> bool {
+        v.is_finite() && value_range(list).is_some_and(|(lo, hi)| (lo..=hi).contains(&v))
     }
 }
 
@@ -1282,6 +1323,77 @@ impl Level {
         Ok(())
     }
 
+    /// Geometry the physics cannot compute, which the level editor's free fields allow:
+    /// metal spheres overlapping or touching each other or an electrode (the image
+    /// series and the boundary elements assume separate bodies; such setups failed or
+    /// ran for minutes), and particles that start inside or touching metal or on a coil's
+    /// wire (the field is singular there: NaN forces). Found by `scripts/pairs.py`. The
+    /// game shows these instead of computing; the shipped levels have none.
+    pub fn setup_issues(&self, player: &[Element]) -> Vec<String> {
+        let mut out = Vec::new();
+        let pos = |n: Node| self.grid.position(n);
+        let boxes = physics::bem::Electrodes::shapes_only(self.all_box_electrodes(player));
+        for (i, a) in self.conductors.iter().enumerate() {
+            for (j, b) in self.conductors.iter().enumerate().skip(i + 1) {
+                if (pos(a.center) - pos(b.center)).length() < a.radius + b.radius + CONTACT_DISTANCE
+                {
+                    out.push(format!(
+                        "Metal spheres {} and {} touch or overlap.",
+                        i + 1,
+                        j + 1
+                    ));
+                }
+            }
+            if boxes.contains(pos(a.center), a.radius + CONTACT_DISTANCE) {
+                out.push(format!("Metal sphere {} touches an electrode.", i + 1));
+            }
+        }
+        let wire = self.physics.wire_radius + CONTACT_DISTANCE;
+        let starts = self
+            .shots
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (format!("Shot {}", i + 1), s.launch.node, 0.0))
+            .chain(self.free_particles.iter().enumerate().map(|(i, f)| {
+                (
+                    format!("Free particle {}", i + 1),
+                    f.node,
+                    f.particle.radius,
+                )
+            }))
+            .chain(
+                player
+                    .iter()
+                    .filter(|e| e.kind == ElementKind::Free)
+                    .enumerate()
+                    .map(|(i, e)| {
+                        (
+                            format!("Your free charge {}", i + 1),
+                            e.node,
+                            self.limits.free_radius,
+                        )
+                    }),
+            );
+        for (who, node, radius) in starts {
+            let p = pos(node);
+            let in_sphere = self
+                .conductors
+                .iter()
+                .any(|c| (p - pos(c.center)).length() < c.radius + radius + CONTACT_DISTANCE);
+            if in_sphere || boxes.contains(p, radius + CONTACT_DISTANCE) {
+                out.push(format!("{who} starts inside or touching metal."));
+            }
+            if self
+                .coils
+                .iter()
+                .any(|c| coil_wire_distance(self, c, p) < wire + radius)
+            {
+                out.push(format!("{who} starts on a coil's wire."));
+            }
+        }
+        out
+    }
+
     /// Power supplies: each on the centre of a different tunable electrode, at an allowed
     /// potential.
     fn check_supplies(&self, player: &[Element]) -> Result<(), PlacementError> {
@@ -1298,7 +1410,7 @@ impl Level {
                 return Err(PlacementError::Occupied(e.node));
             }
             supplied.push(e.node);
-            if !self.limits.allows(&self.limits.supply_voltages, e.value) {
+            if !Limits::allows_potential(&self.limits.supply_voltages, e.value) {
                 return Err(PlacementError::MagnitudeNotAllowed(e.value));
             }
         }
@@ -1340,7 +1452,7 @@ impl Level {
             if !angle_ok {
                 return Err(PlacementError::AngleNotAllowed(e.angle_deg));
             }
-            if !self.limits.allows(&self.limits.plate_voltages, e.value) {
+            if !Limits::allows_potential(&self.limits.plate_voltages, e.value) {
                 return Err(PlacementError::MagnitudeNotAllowed(e.value));
             }
             let b = self.plate_box(e);
@@ -2810,8 +2922,10 @@ mod tests {
             err(&[plate(14, 2, 1e4, 45.0)]),
             Err(PlacementError::AngleNotAllowed(_))
         ));
+        // Potentials are sliders: anything in the list's range, nothing beyond it.
+        assert_eq!(err(&[plate(14, 2, 5e3, 0.0)]), Ok(()), "unlisted, in range");
         assert!(matches!(
-            err(&[plate(14, 2, 5e3, 0.0)]),
+            err(&[plate(14, 2, 2e4, 0.0)]),
             Err(PlacementError::MagnitudeNotAllowed(_))
         ));
         // Sticking out of the grid (x from −1 to 3).
@@ -2864,14 +2978,16 @@ mod tests {
             ]),
             Err(PlacementError::TooManyPlates)
         ));
-        // Power supplies: on the tunable electrode's centre, once, at a listed potential.
+        // Power supplies: on the tunable electrode's centre, once, at a potential on the
+        // slider (the list's range).
         assert_eq!(err(&[Element::supply([5, 8, 0], 2e4)]), Ok(()));
+        assert_eq!(err(&[Element::supply([5, 8, 0], 1e4)]), Ok(()), "unlisted");
         assert!(matches!(
             err(&[Element::supply([6, 8, 0], 2e4)]),
             Err(PlacementError::NoTunableElectrode(_))
         ));
         assert!(matches!(
-            err(&[Element::supply([5, 8, 0], 1e4)]),
+            err(&[Element::supply([5, 8, 0], 3e4)]),
             Err(PlacementError::MagnitudeNotAllowed(_))
         ));
         assert!(matches!(

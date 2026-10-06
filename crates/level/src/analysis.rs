@@ -573,13 +573,16 @@ mod tests {
     use super::*;
 
     /// A level whose only choices are power supplies: its configurations are counted
-    /// (off or one of 4 potentials: 5), random placements exist (this used to loop
+    /// (off or one of the listed candidate potentials: the player's slider is continuous,
+    /// the analysis samples its candidates), random placements exist (this used to loop
     /// forever), and every distinct placement is flown once.
     #[test]
+    #[allow(clippy::cast_precision_loss)]
     fn power_supply_levels_are_analysed() {
         let l = crate::shipped("power_supply");
         let a = analyze(&l, 40, 2, 10, 1);
-        assert!((a.config_space_log10 - libm::log10(5.0)).abs() < 1e-12);
+        let configs = 1.0 + l.limits.supply_voltages.len() as f64;
+        assert!((a.config_space_log10 - libm::log10(configs)).abs() < 1e-12);
         assert!(a.random_solutions > 0 && a.random_solutions < 40);
         let options = single_element_options(&l);
         let memo = Memo::default();
@@ -589,6 +592,6 @@ mod tests {
             assert!(!p.is_empty() && l.check_placement(&p).is_ok());
             memo.solves(&l, &p);
         }
-        assert!(memo.objective.lock().unwrap().len() <= 4);
+        assert!(memo.objective.lock().unwrap().len() <= l.limits.supply_voltages.len());
     }
 }

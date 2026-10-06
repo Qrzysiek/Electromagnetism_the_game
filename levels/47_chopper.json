@@ -98,10 +98,12 @@
     "max_magnets": 0,
     "magnet_strengths": [],
     "supply_voltages": [
+      -360000.0,
       -120000.0,
       -60000.0,
       60000.0,
-      120000.0
+      120000.0,
+      360000.0
     ]
   },
   "reference_solution": [

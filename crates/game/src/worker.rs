@@ -153,6 +153,8 @@ pub enum Response {
     /// Levels with circuits: the driven quantities over time and the model notes (which
     /// need the solved circuit, so they are made here rather than on the render thread).
     Circuit { revision: u64, view: CircuitView },
+    /// A setup the physics cannot compute (`Level::setup_issues`): nothing is flown.
+    Invalid { revision: u64, issues: Vec<String> },
 }
 
 /// The circuits of a level (PHYSICS.md §2.10) for the panel.
@@ -346,6 +348,7 @@ fn retag(r: Response, revision: u64) -> Response {
         },
         Response::Cost { cost, .. } => Response::Cost { revision, cost },
         Response::Circuit { view, .. } => Response::Circuit { revision, view },
+        Response::Invalid { issues, .. } => Response::Invalid { revision, issues },
     }
 }
 
@@ -385,6 +388,18 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
         };
         let tx = &sink;
         let current = |r: u64| newest.load(Ordering::Acquire) == r;
+        let issues = req.level.setup_issues(&req.placement);
+        if !issues.is_empty() {
+            let msg = Response::Invalid {
+                revision: req.revision,
+                issues,
+            };
+            if tx.send(msg).is_err() {
+                return;
+            }
+            cache.put(key, sink.record.into_inner());
+            continue 'requests;
+        }
         if req.level.has_beams() {
             if !beam_request(&req, tx, newest) {
                 return;
@@ -972,5 +987,179 @@ mod tests {
             Response::BeamVerified { revision: 99, .. }
         ));
         assert_eq!(c.entries.front().map(|e| e.0), Some(5), "moved to front");
+    }
+
+    /// The pairwise element check (`scripts/pairs.py`, which writes the cases to
+    /// `EM_PAIRS` and reads the report from `EM_PAIRS_REPORT`): every case goes through
+    /// the worker loop as the game sends it. A placement the game refuses is "rejected";
+    /// an accepted one must finish without a panic, within the time limit, with finite
+    /// numbers and a verdict for every flight.
+    #[test]
+    #[ignore = "run by scripts/pairs.py"]
+    fn pairwise_cases() {
+        let Ok(dir) = std::env::var("EM_PAIRS") else {
+            return;
+        };
+        let report =
+            std::env::var("EM_PAIRS_REPORT").unwrap_or_else(|_| format!("{dir}/../report.json"));
+        let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
+            .expect("cases directory")
+            .map(|e| e.expect("entry").path())
+            .collect();
+        files.sort();
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let results = Mutex::new(Vec::new());
+        let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(8));
+        std::thread::scope(|s| {
+            for _ in 0..threads {
+                s.spawn(|| {
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(file) = files.get(i) else {
+                            break;
+                        };
+                        let (name, status, detail) = run_case(file);
+                        if status != "ok" && status != "rejected" {
+                            eprintln!("[{}/{}] {name}: {status} {detail}", i + 1, files.len());
+                        }
+                        results.lock().unwrap().push((
+                            i,
+                            serde_json::json!({"name": name, "status": status, "detail": detail}),
+                        ));
+                    }
+                });
+            }
+        });
+        let mut results = results.into_inner().unwrap();
+        results.sort_by_key(|r| r.0);
+        let list: Vec<serde_json::Value> = results.into_iter().map(|r| r.1).collect();
+        std::fs::write(&report, serde_json::to_string_pretty(&list).unwrap()).expect("report");
+    }
+
+    /// Time one case may take (preview and verification of every flight).
+    const CASE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+    #[allow(clippy::too_many_lines)]
+    fn run_case(file: &std::path::Path) -> (String, &'static str, String) {
+        let case: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(file).expect("case")).expect("json");
+        let name = case["name"].as_str().unwrap_or("?").to_string();
+        let level: level::Level = match serde_json::from_value(case["level"].clone()) {
+            Ok(l) => l,
+            Err(e) => return (name, "bad case", e.to_string()),
+        };
+        let placement: Vec<level::Element> =
+            serde_json::from_value(case["placement"].clone()).expect("placement");
+        if let Err(e) = level.check_placement(&placement) {
+            return (name, "rejected", crate::editor::describe(&e));
+        }
+        let flights = level.flight_count();
+        let (req_tx, req_rx) = channel::<Request>();
+        let (out_tx, out_rx) = channel::<Response>();
+        let newest = Arc::new(AtomicU64::new(1));
+        let seen = newest.clone();
+        let worker = std::thread::spawn(move || worker_loop(&req_rx, &out_tx, &seen));
+        req_tx
+            .send(Request {
+                revision: 1,
+                level,
+                placement,
+            })
+            .expect("send");
+        // The loop returns once the request is done and nothing else can come.
+        drop(req_tx);
+        let deadline = Instant::now() + CASE_TIME_LIMIT;
+        let mut verdicts = 0;
+        let mut problem: Option<(&'static str, String)> = None;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            match out_rx.recv_timeout(left) {
+                Ok(Response::Preview {
+                    flight, preview, ..
+                }) => {
+                    let bad = preview.path.iter().find(|p| {
+                        !(p.t.is_finite()
+                            && p.x.is_finite()
+                            && p.p.is_finite()
+                            && p.kinetic.is_finite()
+                            && p.potential.is_finite()
+                            && p.radiated.is_finite()
+                            && p.force.is_finite())
+                    });
+                    if let Some(p) = bad {
+                        problem.get_or_insert(("nonfinite", format!("flight {flight}: {p:?}")));
+                    }
+                }
+                Ok(Response::Verified { flight, status, .. }) => {
+                    verdicts += 1;
+                    if matches!(status, Status::Failed) {
+                        problem.get_or_insert(("failed", format!("flight {flight}")));
+                    }
+                }
+                Ok(Response::BeamPreview {
+                    flight, preview, ..
+                }) => {
+                    let bad = preview
+                        .paths
+                        .iter()
+                        .flatten()
+                        .any(|(t, x)| !t.is_finite() || !x.is_finite());
+                    if bad {
+                        problem.get_or_insert(("nonfinite", format!("beam flight {flight}")));
+                    }
+                }
+                Ok(Response::BeamVerified {
+                    flight, results, ..
+                }) => {
+                    verdicts += 1;
+                    if results.iter().any(|r| matches!(r.0, Status::Failed)) {
+                        problem.get_or_insert(("failed", format!("beam flight {flight}")));
+                    }
+                }
+                Ok(Response::Circuit { view, .. }) => {
+                    let bad = view
+                        .plots
+                        .iter()
+                        .flat_map(|p| &p.1)
+                        .any(|(t, v)| !t.is_finite() || !v.is_finite());
+                    if bad {
+                        problem.get_or_insert(("nonfinite", "circuit plot".into()));
+                    }
+                }
+                Ok(Response::Cost { .. }) => {}
+                Ok(Response::Invalid { issues, .. }) => {
+                    return (name, "rejected", issues.join(" "));
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    // Abandon it (the loop checks the revision) and report.
+                    newest.store(2, Ordering::Release);
+                    return (
+                        name,
+                        "slow",
+                        format!("no verdict within {CASE_TIME_LIMIT:?}"),
+                    );
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        if let Err(payload) = worker.join() {
+            let msg = payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_string()))
+                .unwrap_or_default();
+            return (name, "panic", msg);
+        }
+        if let Some((status, detail)) = problem {
+            return (name, status, detail);
+        }
+        if verdicts < flights {
+            return (
+                name,
+                "incomplete",
+                format!("{verdicts} of {flights} verdicts"),
+            );
+        }
+        (name, "ok", String::new())
     }
 }

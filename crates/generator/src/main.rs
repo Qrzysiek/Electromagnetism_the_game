@@ -50,6 +50,15 @@ enum Command {
     },
     /// Rewrite level files in the current format (older formats are migrated on load).
     Normalize { paths: Vec<PathBuf> },
+    /// For each power supply and plate of the reference solution: scan its potential over
+    /// the slider's range (the others as in the reference) and print the intervals that
+    /// solve the level (preview tolerance; each interval's middle verified).
+    Window {
+        path: PathBuf,
+        /// Potentials scanned across the range.
+        #[arg(long, default_value_t = 240)]
+        steps: u32,
+    },
     /// Print the reference flight of one flight index: t, x, y, |p|, radiated energy.
     Trace {
         path: PathBuf,
@@ -72,6 +81,58 @@ fn most_elements(level: &Level) -> usize {
     let l = &level.limits;
     let supplies = level.electrodes.iter().filter(|e| e.tunable).count();
     (l.max_charges + l.max_magnets + l.max_antennas + l.max_plates) as usize + supplies
+}
+
+/// `generator window`: the solving intervals of each slider-set potential.
+#[allow(clippy::cast_precision_loss)]
+fn window(level: &Level, steps: u32) {
+    use level::ElementKind;
+    let reference = &level.reference_solution;
+    for (i, e) in reference.iter().enumerate() {
+        let list = match e.kind {
+            ElementKind::Supply => &level.limits.supply_voltages,
+            ElementKind::Plate => &level.limits.plate_voltages,
+            _ => continue,
+        };
+        let Some((lo, hi)) = level::value_range(list) else {
+            continue;
+        };
+        let mut trial = reference.clone();
+        let mut solves = |v: f64| {
+            trial[i].value = v;
+            search::objective(level, &trial).1 == physics::trajectory::Outcome::Arrived
+        };
+        let at = |k: u32| lo + (hi - lo) * f64::from(k) / f64::from(steps);
+        let mut intervals: Vec<(f64, f64)> = Vec::new();
+        let mut start: Option<f64> = None;
+        for k in 0..=steps {
+            let v = at(k);
+            match (solves(v), start) {
+                (true, None) => start = Some(v),
+                (false, Some(s)) => {
+                    intervals.push((s, at(k - 1)));
+                    start = None;
+                }
+                _ => {}
+            }
+        }
+        if let Some(s) = start {
+            intervals.push((s, hi));
+        }
+        println!(
+            "{}: {:?} at {:?}, reference {:.4e}, range [{lo:.4e}, {hi:.4e}]",
+            level.name, e.kind, e.node, e.value
+        );
+        for (a, b) in intervals {
+            let mut mid = reference.clone();
+            mid[i].value = 0.5 * (a + b);
+            println!(
+                "  solves on [{a:.4e}, {b:.4e}] ({:.1} % of the range; middle verified: {})",
+                100.0 * (b - a) / (hi - lo),
+                search::is_verified_solution(level, &mid)
+            );
+        }
+    }
 }
 
 /// The fewest player elements that solve the level: the reference solution's count, unless
@@ -191,6 +252,7 @@ fn main() {
                 println!("{}: format {}", path.display(), level.format_version);
             }
         }
+        Command::Window { path, steps } => window(&load(&path), steps),
         Command::Trace {
             path,
             flight,

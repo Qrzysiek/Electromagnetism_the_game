@@ -59,11 +59,12 @@ class Auto:
     `strip` is the probe box (x0, y0, x1, y1); `axis` is the coordinate the particle
     crosses when entering it ('x' for a vertical strip, 'y' for a horizontal one). The
     final detector keeps the strip's extent along that axis and is `size` nodes wide
-    across it, around the landing point.
+    across it, around the landing point. Shots of one species share a detector unless
+    `own` (e.g. the same ion launched at different times, sorted apart).
     """
 
-    def __init__(self, strip, axis, size=1):
-        self.strip, self.axis, self.size = strip, axis, size
+    def __init__(self, strip, axis, size=1, own=False):
+        self.strip, self.axis, self.size, self.own = strip, axis, size, own
 
 
 def box(b, direction=None, kinetic=None, radiation=None):
@@ -190,6 +191,38 @@ def drive(source, r, l=0.0, c=0.0, switch=None):
     if switch is not None:
         d["switch"] = {"closed": True, "at": switch[1]} if switch[0] else {"at": switch[1]}
     return d
+
+
+def slider(vmax, *candidates):
+    """The potentials of a power supply or a player plate: a slider over [-vmax, vmax].
+    The owner (2026-10-06): voltages are tuned with sliders whose range is symmetric about
+    0 and whose ends do not give the answer away (no answer near 0, the ends or the
+    middle of either half: `guessable`, also checked by the level tests). The
+    candidates are the values the solver and the difficulty analysis try."""
+    return sorted({-vmax, vmax, *candidates})
+
+
+def guessable(v, vmax):
+    """Whether a potential is near a point of its slider that a player would try first:
+    0, either end, or the middle of either half (within 5 % of the range's half)."""
+    return any(abs(abs(v) - p) < 0.05 * vmax for p in (0.0, 0.5 * vmax, vmax))
+
+
+def slider_problems(lvl):
+    """The slider rules (see `slider`) on a built level: each potential list symmetric
+    about 0, and no reference potential at a guessable point."""
+    out = []
+    lists = {"supply": lvl["limits"].get("supply_voltages", []),
+             "plate": lvl["limits"].get("plate_voltages", [])}
+    for kind, vals in lists.items():
+        if vals and min(vals) != -max(vals):
+            out.append(f"{kind} slider [{min(vals)}, {max(vals)}] not symmetric about 0")
+    for e in lvl["reference_solution"]:
+        vals = lists.get(e["kind"])
+        if vals and max(vals) > 0 and guessable(e["value"], max(vals)):
+            out.append(f"{e['kind']} at {e['node'][:2]}: {e['value']:g} is guessable on "
+                       f"the slider +-{max(vals):g}")
+    return out
 
 
 def player_plate(x, y, v, angle_deg=0.0):
@@ -798,12 +831,12 @@ def power_supply():
     return level(
         "Power supply",
         "Instead of placing charges, turn a knob: the top deflection plate is connected to "
-        "a power supply (yellow frame). Click the plate, or choose in the panel, to set "
-        "its potential. A positive plate pushes positive ions away, a negative one pulls "
+        "a power supply (yellow frame). Click the plate to switch it on, and set its "
+        "potential with the slider in the panel. A positive plate pushes positive ions away, a negative one pulls "
         "them. Bring the beam into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 2))],
         electrodes=[plate(11, 13, 8, tunable=True), plate(11, 7, 8)],
-        supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, -1.2e5)])
+        supplies=slider(3.4e5, -1.2e5, -6e4, 6e4, 1.2e5), reference=[supply(11, 13, -1.2e5)])
 
 
 # Circuits (PHYSICS.md 2.9-2.10): a source through a resistor (with an inductor or a
@@ -816,8 +849,9 @@ def power_supply():
 def charging_a_plate():
     # Through R = 3 the top plate charges with tau = RC = 7.9: as the ions cross it holds
     # 59 to 85 % of its supply's voltage. -120k lands the beam at y = 12.49, -60k at 11.22
-    # (in "Power supply", charged at once, -60k gave 12): only -120k reaches the
-    # detector.
+    # (in "Power supply", charged at once, -60k gave 12). The supply solves from -140k
+    # to -85k (generator window); the slider's ends (+-310k) and their middles lie
+    # outside.
     return level(
         "Charging a plate",
         "The top deflection plate is connected to its power supply through a resistor R. "
@@ -828,14 +862,16 @@ def charging_a_plate():
         "the launch marked. Set the supply so that the beam lands in the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 12, 30, 13)))],
         electrodes=[plate(11, 13, 8, tunable=True, drive=drive(dc(), 3.0)), plate(11, 7, 8)],
-        supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, -1.2e5)], c=None)
+        supplies=slider(3.1e5, -1.2e5, -6e4, 6e4, 1.2e5), reference=[supply(11, 13, -1.2e5)],
+        c=None)
 
 
 def chopper():
     # The top plate carries no charge until a switch connects it to its supply through
     # R = 0.4 at t = 30 (tau = 1.05): the ion launched at t = 0 crosses the plates at
     # t = 7 to 15 and flies straight on; the one launched at t = 40 meets a fully
-    # charged plate: 120k lands it at y = 5.54, 60k at 8.23 (none: 10).
+    # charged plate: 120k lands it at y = 5.54, 60k at 8.23 (none: 10). The supply
+    # solves from 90k to 165k; the slider's ends (+-360k) and their middles lie outside.
     return level(
         "Chopper",
         "A switch connects the top plate to its power supply at t = 30, through a small "
@@ -847,7 +883,8 @@ def chopper():
                shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 5, 30, 7)), time=40.0)],
         electrodes=[plate(11, 13, 8, tunable=True, drive=drive(dc(), 0.4, switch=(False, 30.0))),
                     plate(11, 7, 8)],
-        supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, 1.2e5)], c=None)
+        supplies=slider(3.6e5, -1.2e5, -6e4, 6e4, 1.2e5), reference=[supply(11, 13, 1.2e5)],
+        c=None)
 
 
 def ringing_plate():
@@ -855,7 +892,8 @@ def ringing_plate():
     # 1/sqrt(LC) = 0.286, the first maximum at t = pi/omega = 11, overshooting the
     # supply's voltage by 79 %. The ions cross the plates at t = 7 to 15, around it:
     # 120k lands the beam at y = 3.98 (6 cells down; "Power supply"'s static plate gave
-    # 4), 60k at 7.60.
+    # 4), 60k at 7.60. The supply solves from 107.5k to 170k (generator window); the
+    # slider's ends (+-205k) and their middles (+-102.5k) lie outside.
     return level(
         "Ringing plate",
         "Now an inductor L sits between the supply and the top plate. With the plate's "
@@ -867,7 +905,75 @@ def ringing_plate():
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 3, 30, 5)))],
         electrodes=[plate(11, 13, 8, tunable=True, drive=drive(dc(), 0.2, l=4.66)),
                     plate(11, 7, 8)],
-        supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, 1.2e5)], c=None)
+        supplies=slider(2.05e5, -1.4e5, -7e4, 7e4, 1.4e5), reference=[supply(11, 13, 1.4e5)],
+        c=None)
+
+
+def induction_kick():
+    # Jackson's Faraday level (5.15) with the coil on a circuit: its current rises
+    # through R from 0, kappa(t) = kappa_inf (1 - e^{-t/tau}), tau = L/R = 20, with L =
+    # N/c^2 its self-inductance (N = 448.5 for radius 8 and wire 0.1). A driven coil
+    # needs a finite c: c = 1e4, where the circuit's quasi-static parameter (light time
+    # across the arena / tau) is 1.5e-4, its corrections of order its square (the
+    # first-order retardation of a closed current vanishes), and the ion (v ~ 1)
+    # Newtonian to 1e-8. The
+    # canonical angular momentum holds p_phi = -q kappa(t) A_phi(rho) for the ion
+    # starting at rest: the kick follows the flux, not its rate. kappa_inf = 1e6 (V/R =
+    # kappa_inf c^2 = 1e14, R = L/tau = 2.24e-7, V = 2.24e7): at 4 cells from the axis,
+    # where A_phi ~ 1.6 per unit kappa, a kick p ~ 1.6. As in Faraday's level the
+    # detector asks for T >= 0.3, which only the induced field supplies: three charges
+    # of at most 0.2M at least 4 cells away give at most 0.15.
+    tau, n_coil, c = 20.0, 448.5, 1e4
+    r = n_coil / c ** 2 / tau
+    coil = circle_coil(15, 10, 8.0, 0.0)
+    coil["drive"] = drive(dc(1e6 * c ** 2 * r), r)
+    return level(
+        "Induction kick",
+        "The coil's current now comes from a circuit: switched on at t = 0 through a "
+        "resistor, it rises as $I(t) = (V/R)(1 - e^{-t/\\tau})$ with $\\tau = L/R$, L the "
+        "coil's own inductance. While it rises, the changing flux induces an electric "
+        "field around the axis that drives the particle at rest; once the current "
+        "settles, the induction stops. Faraday's law in integral form: the kick depends "
+        "only on how much the flux changed, not on how fast. Bring the particle into the "
+        "detector with at least 0.3 of kinetic energy.",
+        shots=[shot(1e-6, 1.0, (15, 6), 0.0, 1e-6, box((18, 11, 22, 15), kinetic=(0.3, 10.0)))],
+        coils=[coil], c=c, t_max=200.0,
+        max_charges=3, magnitudes=[m * M for m in (0.05, 0.1, 0.2)], region=(8, 10, 22, 17))
+
+
+def pulse_sorter(refs=(1.46e5, 9.6e4, -3.36e5), detectors=None):
+    # Arc 5 finale: three ions, launched at t = 0, 30 and 60, pass three deflection plate
+    # pairs in a row (x = 5-9, 16-20, 27-31; gaps of 8 cells), each top plate on its own
+    # circuit and its own supply slider. A charges through R = 20 (tau ~ 25 with these
+    # small plates' C ~ 1.25), B is switched on at t = 40, C rings (L = 130: period ~ 80).
+    # Measured deflections per volt (generator check, linear at 30 kV), each ion relative
+    # to the largest: A 0.28, 0.82, 1; B 0, 0.96, 1; C 1, 0.89, 0.13. Each ion weighs the
+    # three circuits differently, so the three landing points fix the three supplies and
+    # no slider is redundant; the player must read the circuits' plots. The reference
+    # (+146k, +96k, -336k: 0.32, 0.21 and 0.73 of the slider's +-460k, away from its
+    # guessable points) lands the ions at y = 12.3, 9.3 and 6.5, top to bottom in launch
+    # order, every flight clear of the plates; the detectors are placed around them.
+    # Small, low plates (4 x 2 cells, as in the microscope column): six full-size ones
+    # took 5.5 s to set up, over the sandbox budget.
+    def pair(x, d):
+        return [plate(x, 14, 4, height=2.0, tunable=True, drive=d), plate(x, 6, 4, height=2.0)]
+    electrodes = (pair(7, drive(dc(), 20.0)) + pair(18, drive(dc(), 0.4, switch=(False, 40.0)))
+                  + pair(29, drive(dc(), 0.5, l=130.0)))
+    detectors = detectors or [Auto((38, 0, 40, 20), "x", 1, own=True) for _ in range(3)]
+    shots = [shot(1e-6, 1.0, (0, 10), 0.0, 0.5, d, time=t)
+             for t, d in zip((0.0, 30.0, 60.0), detectors)]
+    return level(
+        "Pulse sorter",
+        "Finale of the circuits: three ions, launched at t = 0, 30 and 60, fly through "
+        "three pairs of deflection plates, and each top plate hangs on its own circuit "
+        "with its own power supply. The first charges through a resistor, the second is "
+        "switched on at t = 40, the third rings with an inductor. Each ion meets the "
+        "three plates at a different stage of their circuits (the Circuits panel shows "
+        "each plate's V(t), with the launches marked). Set the three supplies so that "
+        "every ion lands in its own detector.",
+        grid=(40, 20), shots=shots, electrodes=electrodes, c=None, t_max=160.0,
+        supplies=slider(4.6e5, -3e5, -2e5, -1e5, 1e5, 2e5, 3e5),
+        reference=[supply(x, 14, v) for x, v in zip((7, 18, 29), refs) if v])
 
 
 def tune_the_lens():
@@ -885,7 +991,7 @@ def tune_the_lens():
         "stay apart, too much and they cross before it.",
         shots=[shot(1e-6, 1.0, (0, 10), a, 0.5, Auto((28, 0, 30, 20), "x", 1))
                for a in (-6.0, 0.0, 6.0)],
-        electrodes=apertures, supplies=[1e5, 2e5, 3e5, 4e5],
+        electrodes=apertures, supplies=slider(4.9e5, 1e5, 2e5, 3e5, 4e5),
         reference=[supply(14, 15, 3e5), supply(14, 5, 3e5)])
 
 
@@ -897,8 +1003,8 @@ def build_a_deflector():
         "potential pushes positive ions away. Plates keep a cell away from other metal "
         "and from the other elements.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 1))],
-        max_plates=3, plate_voltages=[-1e5, -5e4, 5e4, 1e5], region=(5, 3, 22, 17),
-        reference=[player_plate(10, 12, 1e5)])
+        max_plates=3, plate_voltages=slider(2.3e5, -1e5, -7.5e4, -5e4, 5e4, 7.5e4, 1e5),
+        region=(5, 3, 22, 17), reference=[player_plate(10, 12, 7.5e4)])
 
 
 def shielding():
@@ -1298,7 +1404,7 @@ def microscope_column():
     gate = box((19, 9, 21, 11))
     spot = box((38, 3, 40, 5), direction=(0.0, 20.0))
     shots = [shot(1e-6, 1.0, (0, 10), a, 0.5, spot) for a in (-6.0, 0.0, 6.0)]
-    volts = [-2e5, -1e5, 1e5, 2e5, 3e5, 4e5, 5e5]
+    volts = slider(7.1e5, -2e5, -1e5, 1e5, 2e5, 3e5, 4e5, 5e5)
     mags = [m * M for m in (0.1, 0.2, 0.3, 0.5, 1)]
     lvl = level(
         "Microscope column",
@@ -2529,6 +2635,12 @@ ARCS = [
             ("chopper", chopper),
             ("ringing_plate", ringing_plate),
         ]),
+        ("Intermediate", [
+            ("induction_kick", induction_kick),
+        ]),
+        ("Master", [
+            ("pulse_sorter", pulse_sorter),
+        ]),
     ]),
     ("Beams", [
         ("Introduction", [
@@ -2726,7 +2838,8 @@ def resolve_auto(lvl):
         # Shots of the same species (particle and energy, differing only in direction)
         # share one detector; different species get detectors of their own.
         screen = (x0, x1) if d.axis == "x" else (y0, y1)
-        species = (d.axis, screen, json.dumps(s["particle"]), s["launch"]["kinetic_energy"])
+        species = (d.axis, screen, json.dumps(s["particle"]), s["launch"]["kinetic_energy"],
+                   id(d) if d.own else None)
         placed.append([species, [s], across[0], across[1], lo, lo + size])
     groups = {}
     for p in placed:
@@ -2744,7 +2857,7 @@ def resolve_auto(lvl):
             if m - a[3] < 0.2 or b[2] - m < 0.2 or m - a[4] < 1 or b[5] - m < 1:
                 sys.exit(f"{lvl['name']}: two landing points are too close to separate")
             a[5], b[4] = m, m
-    for (axis, (c0, c1), _, _), shots, _, _, lo, hi in placed:
+    for (axis, (c0, c1), _, _, _), shots, _, _, lo, hi in placed:
         for s in shots:
             s["detector"] = box((c0, lo, c1, hi) if axis == "x" else (lo, c0, hi, c1))
     return lvl
@@ -2843,6 +2956,8 @@ def main():
         print(f"{key}: reference {'verified' if ok else 'NOT VERIFIED'}", flush=True)
         if not ok:
             print(report)
+        for problem in slider_problems(json.load(open(path, encoding="utf-8"))):
+            sys.exit(f"{key}: {problem}")
 
     render_math()
 

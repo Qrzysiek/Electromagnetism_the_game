@@ -108,6 +108,8 @@ pub struct Game {
     /// Levels with circuits: the circuit view (plots, model notes) and the setup revision
     /// it belongs to.
     pub circuit: Option<(u64, worker::CircuitView)>,
+    /// A setup the physics cannot compute (`Level::setup_issues`) and its revision.
+    pub setup_issues: Option<(u64, Vec<String>)>,
     /// (revision, active shot, active disturbance, all shots shown, mode, flight shown)
     /// the field map was computed for.
     pub map_key: (u64, usize, usize, bool, Option<MapMode>, bool),
@@ -183,6 +185,7 @@ impl Game {
             sent_revision: 0,
             cost: None,
             circuit: None,
+            setup_issues: None,
             map_key: (0, 0, 0, false, None, false),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
@@ -283,8 +286,19 @@ impl Game {
     /// The flight shown in the details panel.
     /// What the physics thread is still doing for the current setup: new flights (the
     /// paths shown are from the previous setup), or the verification.
+    /// The current setup's issues if the physics cannot compute it.
+    pub fn invalid_setup(&self) -> Option<&[String]> {
+        self.setup_issues
+            .as_ref()
+            .filter(|(r, _)| *r == self.sent_revision)
+            .map(|(_, i)| i.as_slice())
+    }
+
     pub fn progress(&self) -> Progress {
         let current = self.sent_revision;
+        if self.invalid_setup().is_some() {
+            return Progress::Done;
+        }
         let (stale, verifying) = if self.editor.level.has_beams() {
             (
                 self.beams.iter().any(|b| b.preview_revision != current),
@@ -556,7 +570,7 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
 }
 
 /// Developer capture for testing without input: with `EM_CAPTURE=<file.png>` the game
-/// opens level `EM_LEVEL` (1-based), enters the sandbox if `EM_SANDBOX=1`, shows the
+/// opens level `EM_LEVEL` (1-based) or the level file `EM_LEVEL_FILE`, enters the sandbox if `EM_SANDBOX=1`, shows the
 /// flight of shot `EM_SHOT` under disturbance `EM_DISTURBANCE` (1-based), selects the map
 /// `EM_MAP` (potential, magnetic, waves, particle, off), places `EM_PLACE` (JSON list of
 /// elements, or "reference"; in units of 1/`EM_GRID` cell with the grid refined 1-4×), holds
@@ -603,6 +617,16 @@ fn dev_capture(
                 .filter(|&i| i >= 1 && i <= game.levels.len())
             {
                 game.select_level(i - 1);
+            }
+            // Any level file (the pairwise element check, scripts/pairs.py, writes them).
+            if let Some(level) = std::env::var("EM_LEVEL_FILE")
+                .ok()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .and_then(|s| level::Level::from_json(&s).ok())
+            {
+                let i = game.level_index;
+                game.levels[i] = level;
+                game.load_level(i);
             }
             if std::env::var("EM_SANDBOX").is_ok_and(|v| v == "1") {
                 sandbox::enter(&mut game);
@@ -1207,6 +1231,9 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
             }
             Response::Circuit { revision, view } if revision == current => {
                 game.circuit = Some((revision, view));
+            }
+            Response::Invalid { revision, issues } if revision == current => {
+                game.setup_issues = Some((revision, issues));
             }
             _ => {}
         }

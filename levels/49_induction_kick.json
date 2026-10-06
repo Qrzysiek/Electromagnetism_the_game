@@ -1,0 +1,119 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Induction kick",
+  "description": "The coil's current now comes from a circuit: switched on at t = 0 through a resistor, it rises as $I(t) = (V/R)(1 - e^{-t/\\tau})$ with $\\tau = L/R$, L the coil's own inductance. While it rises, the changing flux induces an electric field around the axis that drives the particle at rest; once the current settles, the induction stops. Faraday's law in integral form: the kick depends only on how much the flux changed, not on how fast. Bring the particle into the detector with at least 0.3 of kinetic energy.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": 10000.0,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-6,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          15,
+          6,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 1e-6
+      },
+      "detector": {
+        "min": [
+          18,
+          11,
+          0
+        ],
+        "max": [
+          22,
+          15,
+          0
+        ],
+        "acceptance": {
+          "kinetic": [
+            0.3,
+            10.0
+          ]
+        }
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [
+    {
+      "shape": "circle",
+      "center": [
+        15,
+        10,
+        0
+      ],
+      "radius": 8.0,
+      "kappa": 0.0,
+      "drive": {
+        "source": {
+          "kind": "dc",
+          "value": 22425000.0
+        },
+        "resistance": 2.2425e-7
+      }
+    }
+  ],
+  "limits": {
+    "max_charges": 3,
+    "magnitudes": [
+      50000.0,
+      100000.0,
+      200000.0
+    ],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "region": {
+      "min": [
+        8,
+        10,
+        0
+      ],
+      "max": [
+        22,
+        17,
+        0
+      ]
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        16,
+        10,
+        0
+      ],
+      "kind": "charge",
+      "value": 200000.0
+    }
+  ]
+}

@@ -49,7 +49,7 @@ that already does it. "Ex." is an exercise, "§" a section.
   Liénard–Wiechert fields).
 - Ex. 1.5, 1.7 (the twin and the constantly accelerated rocket): hyperbolic motion is a
   charge in a uniform E (covered, T-tests); proper time is not shown by the game.
-- Ex. 1.11 (Doppler shift): covered by level 87 (Thomson scattering with Doppler shifts).
+- Ex. 1.11 (Doppler shift): covered by level 88 (Thomson scattering with Doppler shifts).
 - Ex. 1.18 (E ∥ B in some frame), Ex. 1.21 (a moving capacitor), Ex. 1.22 (a moving
   current): field transformations; moving conductors are OUT (electrodes are fixed).
 
@@ -155,11 +155,11 @@ that already does it. "Ex." is an exercise, "§" a section.
   extinction (the optical theorem). NOW, a test joining C3 (the bound charge's steady
   state) and the energy-flow tests (P1–P3: the exchange flux through a large sphere).
 - **§10.3.2 (nonlinear Thomson scattering):** the harmonics of a charge in a strong wave
-  (a₀ ~ 1). Level 87 shows the second harmonic; NOW, a test of the harmonic spectrum
+  (a₀ ~ 1). Level 88 shows the second harmonic; NOW, a test of the harmonic spectrum
   against the exact Bessel-function result.
 - §10.4 (synchrotron and undulator radiation, Ex. 10.6, 10.17): covered (levels 38, 81,
   88; S1, S8).
-- §10.5 (coherence, form factors, Ex. 10.18–10.19): covered (S5, level 91); Ex. 10.20
+- §10.5 (coherence, form factors, Ex. 10.18–10.19): covered (S5, level 92); Ex. 10.20
   (coherent transition radiation): F:optics.
 - §10.6 (Cherenkov radiation, Ex. 10.22): F:optics. Ex. 10.21 (tachyons): OUT.
 

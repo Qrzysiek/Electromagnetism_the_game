@@ -194,7 +194,9 @@ fn energy_bar(ui: &mut egui::Ui, label: &str, value: f64, color: egui::Color32) 
             ],
             egui::Stroke::new(1.0, egui::Color32::GRAY),
         );
-        if value != 0.0 && value.abs() < 1e-3 {
+        // Bounded width: a flight that falls onto a charge reaches 1e5 T₀, and a long
+        // number widened the panel (and with it moved the board under the cursor).
+        if value != 0.0 && !(1e-3..1e3).contains(&value.abs()) {
             ui.label(format!("{value:+.2e}"));
         } else {
             ui.label(format!("{value:+.3}"));
@@ -216,7 +218,7 @@ pub fn panel(
             .max_rect(ctx.viewport_rect()),
     );
     let game = &mut *game;
-    let response = egui::Panel::right("side_panel")
+    egui::Panel::right("side_panel")
         .exact_size(PANEL_WIDTH)
         .resizable(false)
         .show(&mut root, |ui| {
@@ -237,7 +239,10 @@ pub fn panel(
                 eprintln!("panel overflow: content {used:.1} wider than {available:.1}");
             }
         });
-    game.panel_left_px = Some(response.response.rect.left() * ctx.pixels_per_point());
+    // The panel's nominal edge, not its measured rect: an overflowing row must not move
+    // the board (and with it the node under the cursor).
+    let left = ctx.viewport_rect().right() - PANEL_WIDTH;
+    game.panel_left_px = Some(left * ctx.pixels_per_point());
     Ok(())
 }
 
@@ -699,7 +704,23 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         }
         crate::Progress::Done => {}
     }
-    if level.has_beams() {
+    if let Some(issues) = game.invalid_setup().map(<[String]>::to_vec) {
+        ui.label(egui::RichText::new("Result").strong());
+        ui.colored_label(
+            egui::Color32::from_rgb(255, 170, 80),
+            "This setup cannot be computed:",
+        );
+        for issue in issues {
+            ui.colored_label(egui::Color32::from_rgb(255, 170, 80), issue);
+        }
+        ui.label(
+            egui::RichText::new(
+                "Metal bodies must stay apart, and particles must not start in metal or on \
+                 a wire: the fields are singular there.",
+            )
+            .small(),
+        );
+    } else if level.has_beams() {
         beam_result(ui, game, &level);
     } else {
         // Result.
@@ -880,7 +901,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
 
         // Energy bars at the animated point of the active shot: one particle, named.
         let (unit, unit_is_t0) = game.energy_unit(level.flight_of(game.active_flight()).0);
-        ui.horizontal(|ui| {
+        // Wrapped: the long unit note (a particle that gains far more than T₀) overflowed the
+        // panel in level 90 with a charge pulling the electron out of its atom.
+        ui.horizontal_wrapped(|ui| {
             ui.label(egui::RichText::new("Energy of").strong());
             let (shot_i, d) = level.flight_of(game.active_flight());
             let who = if level.disturbances.is_empty() {
@@ -1415,6 +1438,14 @@ pub fn fmt_potential(v: f64) -> String {
     }
 }
 
+/// A slider for a potential over `[lo, hi]` (power supplies, plates); the value can also
+/// be typed (SI prefixes).
+pub fn potential_slider(v: &mut f64, lo: f64, hi: f64) -> egui::Slider<'_> {
+    egui::Slider::new(v, lo..=hi)
+        .custom_formatter(|v, _| fmt_si(v))
+        .custom_parser(parse_si)
+}
+
 /// Palette row for new plates: potential and orientation.
 /// New free charges: their charge, launch speed and direction. A placed one's velocity
 /// is set by dragging the handle at the tip of its arrow.
@@ -1501,15 +1532,41 @@ fn free_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
 }
 
 fn plate_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
-    ui.horizontal_wrapped(|ui| {
-        ui.label("New plate:");
-        if !game.editor.continuous() {
-            for (i, v) in level.limits.plate_voltages.iter().enumerate() {
-                ui.selectable_value(&mut game.editor.magnitude_index, i, fmt_potential(*v))
-                    .on_hover_text("Q/E or the wheel: next potential; S: the opposite one");
+    // The potential: a slider in every mode (hardcore shows its own), for the plate under
+    // the cursor if there is one, else for new plates.
+    if !game.editor.continuous()
+        && let Some((lo, hi)) = level::value_range(&level.limits.plate_voltages)
+    {
+        let target = game
+            .editor
+            .element_at_cursor()
+            .filter(|&i| game.editor.placement[i].kind == ElementKind::Plate);
+        let k = crate::editor::kind_index(ElementKind::Plate);
+        let mut v = target.map_or(game.editor.continuous_magnitude[k], |i| {
+            game.editor.placement[i].value
+        });
+        ui.horizontal(|ui| {
+            ui.label(if target.is_some() {
+                "This plate:"
+            } else {
+                "New plate:"
+            });
+            let r = ui
+                .add(potential_slider(&mut v, lo, hi))
+                .on_hover_text("Q/E or the wheel: a step; S: the opposite potential");
+            game.text_focus |= r.has_focus();
+        });
+        match target {
+            Some(i) => {
+                let mut e = game.editor.placement[i];
+                if e.value.to_bits() != v.to_bits() {
+                    e.value = v;
+                    game.editor.set_element(i, e);
+                }
             }
+            None => game.editor.continuous_magnitude[k] = v,
         }
-    });
+    }
     if !game.editor.continuous() {
         ui.horizontal(|ui| {
             ui.label("Orientation:");
@@ -1560,26 +1617,17 @@ fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         let current = game.editor.supply(e.center);
         ui.horizontal_wrapped(|ui| {
             ui.label(format!("Electrode {}:", i + 1));
+            // A slider over the level's range, in every mode (the owner: voltages are
+            // tuned, not picked from a list whose ends give the answer away).
             let mut choice = current;
-            if game.editor.continuous() {
-                let mut on = current.is_some();
-                ui.checkbox(&mut on, "on");
-                if let Some((lo, hi)) = level::value_range(&list) {
-                    let mut v = current.unwrap_or(lo.max(0.0_f64.min(hi)));
-                    let r = ui.add_enabled(
-                        on,
-                        egui::Slider::new(&mut v, lo..=hi)
-                            .custom_formatter(|v, _| fmt_si(v))
-                            .custom_parser(parse_si),
-                    );
-                    game.text_focus |= r.has_focus();
-                    choice = on.then_some(v);
-                }
-            } else {
-                ui.selectable_value(&mut choice, None, format!("off ({own})"));
-                for v in &list {
-                    ui.selectable_value(&mut choice, Some(*v), fmt_potential(*v));
-                }
+            let mut on = current.is_some();
+            ui.checkbox(&mut on, "on")
+                .on_hover_text(format!("Off, the electrode is {own}"));
+            if let Some((lo, hi)) = level::value_range(&list) {
+                let mut v = current.unwrap_or(lo.max(0.0_f64.min(hi)));
+                let r = ui.add_enabled(on, potential_slider(&mut v, lo, hi));
+                game.text_focus |= r.has_focus();
+                choice = on.then_some(v);
             }
             game.editor.set_supply(e.center, choice);
         });

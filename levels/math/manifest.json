@@ -53,6 +53,12 @@
   "height_ex": 1.879,
   "baseline_ex": 0.375
  },
+ "I(t) = (V/R)(1 - e^{-t/\\tau})": {
+  "file": "698d2c5fb3001038.svg",
+  "width_ex": 23.431,
+  "height_ex": 2.587,
+  "baseline_ex": 0.566
+ },
  "N\\omega_0": {
   "file": "a8d640d1d02d85c0.svg",
   "width_ex": 4.404,
@@ -206,6 +212,12 @@
  "\\tan(\\theta/2) = qQ/(2T_0 b)": {
   "file": "91131f1622c2b7ee.svg",
   "width_ex": 21.503,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
+ "\\tau = L/R": {
+  "file": "ef0528a1254722d1.svg",
+  "width_ex": 8.576,
   "height_ex": 2.262,
   "baseline_ex": 0.566
  },
