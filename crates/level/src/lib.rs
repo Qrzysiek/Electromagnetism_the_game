@@ -1773,6 +1773,7 @@ impl Level {
             conductors: self.conductors_for(&sources, resolution),
             electrodes: electrodes_for(boxes, &sources, resolution),
             time_offset: 0.0,
+            drives: None,
         };
         (field, obstacles)
     }

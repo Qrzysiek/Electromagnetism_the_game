@@ -404,20 +404,65 @@ pub fn run_cancellable<F: FieldSolver>(
         ..Settings::default()
     };
     let mut int = Dop853::new(&ode, 0.0, &ode.pack(scn.x0, scn.p0), settings);
+    // The fields' breakpoints within the flight (a circuit's switch toggles and pulse
+    // corners, PHYSICS.md §2.10): the steps end one ulp before each, where the fields
+    // still have their values before it, and the integration restarts on it with the
+    // values after it, so that no step straddles a jump.
+    let breaks: Vec<f64> = scn
+        .field
+        .breakpoints()
+        .into_iter()
+        .filter(|&b| b > 0.0 && b < scn.t_max)
+        .collect();
+    let mut next_break = 0;
+    // The fields' knots (a circuit's step ends: the fields are continuous there, their
+    // derivatives not): the steps end on them, so that each step integrates smooth
+    // fields at the integrator's full order.
+    let knots: Vec<f64> = scn
+        .field
+        .knots()
+        .into_iter()
+        .filter(|&k| k > 0.0 && k < scn.t_max)
+        .collect();
+    let mut next_knot = 0;
+    // Statistics of the integrators ended at breakpoints.
+    let mut stats_before = Stats::default();
     let mut g_next = vec![0.0; events.len()];
     // Triggered event whose penetration depth must be followed past the event step:
     // (event index, depth so far, minimum not yet reached).
     let mut pending_depth: Option<(usize, f64, bool)> = None;
 
     loop {
+        // Breakpoints closer than an ulp: restart on them directly.
+        while let Some(&b) = breaks.get(next_break)
+            && just_below(b) <= int.t()
+        {
+            stats_before = add_stats(stats_before, int.stats());
+            let y = int.y().to_vec();
+            int = Dop853::new(&ode, b.max(int.t()), &y, settings);
+            next_break += 1;
+        }
+        while let Some(&k) = knots.get(next_knot)
+            && k <= int.t()
+        {
+            next_knot += 1;
+        }
+        let to_break = breaks.get(next_break).map(|&b| just_below(b));
+        let limit = [to_break, knots.get(next_knot).copied()]
+            .into_iter()
+            .flatten()
+            .fold(scn.t_max, f64::min);
         let t_a = int.t();
-        let reached_end = match int.step(&ode, scn.t_max, f64::INFINITY) {
+        let reached_limit = match int.step(&ode, limit, f64::INFINITY) {
             Ok(done) => done,
             Err(e) => {
                 traj.outcome = Outcome::Failed(e);
                 break;
             }
         };
+        // The limit is the least of t_max, the breakpoint and the knot: which one it is.
+        let reached_end = reached_limit && limit >= scn.t_max;
+        let at_break = reached_limit && to_break.is_some_and(|b| limit >= b);
         let t_b = int.t();
         let dense = int.dense();
         let view = StepView { ode: &ode, dense };
@@ -560,9 +605,16 @@ pub fn run_cancellable<F: FieldSolver>(
             traj.outcome = Outcome::Timeout;
             break;
         }
+        if at_break {
+            // At a breakpoint (one ulp before it): restart on it.
+            stats_before = add_stats(stats_before, int.stats());
+            let y = int.y().to_vec();
+            int = Dop853::new(&ode, breaks[next_break], &y, settings);
+            next_break += 1;
+        }
         std::mem::swap(&mut g_prev, &mut g_next);
     }
-    traj.stats = int.stats();
+    traj.stats = add_stats(stats_before, int.stats());
     // Acceptance of the detector: decided at the moment of entry.
     let acceptance_margin = judge_arrival(&mut traj, &gates, scn, &ode.kin, &emission);
 
@@ -600,6 +652,21 @@ pub fn run_cancellable<F: FieldSolver>(
         m
     });
     Some(traj)
+}
+
+/// The largest float below the positive time `t`.
+fn just_below(t: f64) -> f64 {
+    f64::from_bits(t.to_bits() - 1)
+}
+
+/// The sum of two integrators' statistics.
+fn add_stats(a: Stats, b: Stats) -> Stats {
+    Stats {
+        n_fcn: a.n_fcn + b.n_fcn,
+        n_step: a.n_step + b.n_step,
+        n_accept: a.n_accept + b.n_accept,
+        n_reject: a.n_reject + b.n_reject,
+    }
 }
 
 /// The gates and the detector's conditions of an arrival, decided at the moment of entry

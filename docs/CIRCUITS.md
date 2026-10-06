@@ -22,6 +22,13 @@ want to settle are marked **(owner)**.
   restarts; the inductors' current rates from their law, for the induced fields. Against
   closed forms (RC, LC, charge sharing through a switch with its heat, a pulse, coupled
   inductors, a driven tank and its energy balance): within 1e-9.
+- **Driven electrodes and coils** (`drive.rs`, PHYSICS.md §2.10, tests Z10–Z13): series
+  chains (a source through a resistance, with an inductance or a switch for a plate, a
+  capacitance for a coil) driving electrodes, through the boundary-element capacitance
+  matrix with the floating electrodes, and circular coils, through their self- and
+  mutual inductances; one-way coupling; the flights restart at the circuit's breakpoints
+  and end their steps on its knots, so that the canonical angular momentum in a driven
+  coil holds to 3e-15. Polygonal coils are not drivable yet.
 - **Time-dependent coils.** Coils already take a linear ramp of their strength with the
   exact induced field `−κ̇ A_unit` (circular and polygonal coils, test M10).
 

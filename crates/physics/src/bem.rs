@@ -561,12 +561,18 @@ impl Electrodes {
     /// The picture evaluation (`picture`): each panel and its mirror image exactly when
     /// `x` is nearer than `PICTURE_NEAR` of its size to its centroid, otherwise by the
     /// three-point rule `PICTURE_RULE` (error of order (size/R)³ of the panel's share).
-    fn picture_sample(&self, geo: &Geometry, x: DVec3) -> (f64, DVec3) {
+    fn picture_sample(
+        &self,
+        geo: &Geometry,
+        x: DVec3,
+        sigma: impl Fn(usize) -> f64,
+    ) -> (f64, DVec3) {
         let mut phi = 0.0;
         let mut e = DVec3::ZERO;
         // In the plane the mirror image's points are as far as the panel's: doubled.
         let in_plane = x.z == 0.0;
-        for (((p, m), rule), &s) in geo.pre.iter().zip(&geo.picture).zip(&self.sigma) {
+        for (i, ((p, m), rule)) in geo.pre.iter().zip(&geo.picture).enumerate() {
+            let s = sigma(i);
             if (x - rule.centroid).length_squared() < rule.near2 {
                 let (pp, g) = pair_integrals(p, m, x);
                 phi += s * pp;
@@ -595,18 +601,19 @@ impl Electrodes {
         }
         (phi, e)
     }
-}
 
-impl FieldSolver for Electrodes {
-    fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
+    /// Field and potential of the panels with the densities `sigma(i)`: exact integrals,
+    /// or the picture evaluation.
+    fn sample_densities(&self, x: DVec3, sigma: impl Fn(usize) -> f64) -> FieldSample {
         let mut phi = 0.0;
         let mut e = DVec3::ZERO;
         if let Some(geo) = &self.geometry
             && self.picture
         {
-            (phi, e) = self.picture_sample(geo, x);
+            (phi, e) = self.picture_sample(geo, x, sigma);
         } else if let Some(geo) = &self.geometry {
-            for ((p, m), &s) in geo.pre.iter().zip(&self.sigma) {
+            for (i, (p, m)) in geo.pre.iter().enumerate() {
+                let s = sigma(i);
                 let (pp, g) = pair_integrals(p, m, x);
                 phi += s * pp;
                 e -= g * s;
@@ -617,5 +624,34 @@ impl FieldSolver for Electrodes {
             b: DVec3::ZERO,
             phi,
         }
+    }
+
+    /// As `sample`, with the potential of electrode `e` changed by `d` for each `(e, d)`
+    /// of `shifts`: its unit system's surface charge times `d` added (the solution is
+    /// linear in the potentials, §2.7). For electrodes driven by a circuit (`drive.rs`).
+    pub fn sample_shifted(&self, x: DVec3, shifts: &[(usize, f64)]) -> FieldSample {
+        let Some(geo) = &self.geometry else {
+            return FieldSample::default();
+        };
+        self.sample_densities(x, |i| {
+            let mut s = self.sigma[i];
+            for &(e, d) in shifts {
+                s += d * geo.unit[e][i];
+            }
+            s
+        })
+    }
+
+    /// The coefficients of capacitance `C[i][j]`: the charge on electrode i with electrode
+    /// j at potential 1 and the others grounded (Maxwell's matrix, §2.8). None without
+    /// electrodes.
+    pub fn capacitance(&self) -> Option<&[Vec<f64>]> {
+        self.geometry.as_ref().map(|g| g.capacitance.as_slice())
+    }
+}
+
+impl FieldSolver for Electrodes {
+    fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
+        self.sample_densities(x, |i| self.sigma[i])
     }
 }

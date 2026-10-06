@@ -480,15 +480,19 @@ pub struct CircuitSolution {
 }
 
 impl CircuitSolution {
+    /// The step whose polynomial gives the state at `t` (≥ 0): right-continuous, so that
+    /// at a breakpoint it is the step after it (the integration of the flights restarts
+    /// there). The steps are told apart by their ends only: a step's recorded start is its
+    /// end minus its length, which may differ from the previous end by an ulp.
     fn segment(&self, t: f64) -> Option<&Dense> {
-        let k = self.segments.partition_point(|d| d.t_end() < t);
+        let k = self.segments.partition_point(|d| d.t_end() <= t);
         self.segments
             .get(k.min(self.segments.len().saturating_sub(1)))
     }
 
     fn value(&self, i: usize, t: f64) -> f64 {
         match self.segment(t) {
-            Some(d) if t >= d.t_start() => d.eval_component(i, t.min(d.t_end())),
+            Some(d) if t >= 0.0 => d.eval_component(i, t.min(d.t_end())),
             _ => self.start[i],
         }
     }
@@ -503,12 +507,36 @@ impl CircuitSolution {
         }
     }
 
-    /// The current of component `k` (an inductor or a source) at time `t`.
+    /// The current of component `k` (an inductor or a source) at time `t`. An inductor's
+    /// is its value at the start of RADAU5's step plus the integral of its rate
+    /// (`current_rate`) over the step, so that the rate is exactly its derivative (a coil's
+    /// induced field then keeps Faraday's law with its field exactly); at the steps' ends
+    /// it is RADAU5's value, by Radau quadrature's orthogonality.
     pub fn current(&self, k: usize, t: f64) -> f64 {
-        self.value(
-            self.layout.current[k].expect("a component with a current"),
-            t,
-        )
+        let i = self.layout.current[k].expect("a component with a current");
+        let Some(p) = self.inductors.iter().position(|&(c, ..)| c == k) else {
+            return self.value(i, t);
+        };
+        let Some(d) = self.segment(t) else {
+            return self.start[i];
+        };
+        if t < 0.0 {
+            return self.start[i];
+        }
+        let x = t.min(d.t_end());
+        let integral = |node: usize| {
+            if node == 0 {
+                0.0
+            } else {
+                d.integral_component(node - 1, x)
+            }
+        };
+        let m = self.inductors.len();
+        let mut current = d.eval_component(i, d.t_start());
+        for (j, &(_, a, b)) in self.inductors.iter().enumerate() {
+            current += self.inverse_inductance[p + m * j] * (integral(a) - integral(b));
+        }
+        current
     }
 
     /// The rate of change of inductor `k`'s current at time `t`, from the inductors' law
@@ -517,7 +545,8 @@ impl CircuitSolution {
     /// derivative of the dense output is a power of the step less accurate. Within a step
     /// the two differ by a cubic vanishing at the three collocation points, which
     /// integrates to zero over the step, Radau quadrature being exact to degree 4: the
-    /// current's change over each step is the integral of this rate.)
+    /// current's change over each step is the integral of this rate, and `current` is
+    /// that integral.)
     pub fn current_rate(&self, k: usize, t: f64) -> f64 {
         if !(0.0..=self.t_end).contains(&t) {
             return 0.0;
@@ -537,7 +566,8 @@ impl CircuitSolution {
             .sum()
     }
 
-    /// The times at which RADAU5's steps ended (for tests).
+    /// The times at which RADAU5's steps ended: the polynomials join there, continuous
+    /// but with their derivatives changing.
     pub fn step_ends(&self) -> Vec<f64> {
         self.segments.iter().map(Dense::t_end).collect()
     }

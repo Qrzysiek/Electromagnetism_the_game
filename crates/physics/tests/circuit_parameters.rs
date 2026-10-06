@@ -4,16 +4,18 @@
 //!
 //! Inductances are in units of `μ₀/4π` (the game's `1/c²`): the Neumann integral
 //! `N = ∮∮ dl₁·dl₂/|x₁ − x₂|`, which a coil's vector potential per unit strength
-//! (`κ = μ₀I/4π = 1`) gives as `∮ A·dl` around the other coil.
+//! (`κ = μ₀I/4π = 1`) gives as `∮ A·dl` around the other coil. Circular coils through the
+//! engine's own functions (`physics::inductance`), which driven coils use.
 
 #![allow(clippy::disallowed_methods)] // references; the engine's fields use libm (clippy.toml)
 #![allow(clippy::cast_precision_loss)] // small loop counters
 
 mod common;
 
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::PI;
 
 use physics::DVec3;
+use physics::inductance::{around_circle, mutual_circles, ring_self};
 use physics::magnetic::{CircularLoop, PolygonCoil};
 
 /// A coil of the game's slice: in the plane z = 0, current counter-clockwise.
@@ -26,20 +28,6 @@ fn ring(center: DVec3, radius: f64, wire_radius: f64) -> CircularLoop {
         wire_radius,
         rate: 0.0,
     }
-}
-
-/// `∮ A·dl` around a circle in the plane z = 0 (the trapezoidal rule, exponentially
-/// convergent for the smooth periodic integrand).
-fn around_circle(a: impl Fn(DVec3) -> DVec3, center: DVec3, radius: f64, n: usize) -> f64 {
-    (0..n)
-        .map(|i| {
-            let t = TAU * i as f64 / n as f64;
-            let (s, c) = t.sin_cos();
-            a(center + DVec3::new(c, s, 0.0) * radius).dot(DVec3::new(-s, c, 0.0) * radius)
-        })
-        .sum::<f64>()
-        * TAU
-        / n as f64
 }
 
 /// `∮ A·dl` along a closed polygon (Gauss–Legendre on each side).
@@ -73,8 +61,8 @@ fn z2_mutual_inductance_of_coplanar_coils() {
     #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
     const CONCENTRIC: f64 = 41.804596452269273977;
     let (inner, outer) = (ring(DVec3::ZERO, 3.0, 0.1), ring(DVec3::ZERO, 5.0, 0.1));
-    let n21 = around_circle(|x| inner.unit_vector_potential(x), DVec3::ZERO, 5.0, 256);
-    let n12 = around_circle(|x| outer.unit_vector_potential(x), DVec3::ZERO, 3.0, 256);
+    let n21 = mutual_circles(&inner, &outer);
+    let n12 = mutual_circles(&outer, &inner);
     for (name, v) in [
         ("inner's flux in the outer", n21),
         ("outer's in the inner", n12),
@@ -93,12 +81,9 @@ fn z2_mutual_inductance_of_coplanar_coils() {
         (10.0, -0.010097623953420449727),
     ];
     for (r, reference) in SIDE {
-        let one = ring(DVec3::ZERO, 1.0, 0.1);
-        let v = around_circle(
-            |x| one.unit_vector_potential(x),
-            DVec3::new(r, 0.0, 0.0),
-            1.0,
-            256,
+        let v = mutual_circles(
+            &ring(DVec3::ZERO, 1.0, 0.1),
+            &ring(DVec3::new(r, 0.0, 0.0), 1.0, 0.1),
         );
         let e = v / reference - 1.0;
         let u = 1.0 / r;
@@ -124,7 +109,13 @@ fn z2_mutual_inductance_of_coplanar_coils() {
         rate: 0.0,
     };
     let in_square = around_polygon(|x| circle.unit_vector_potential(x), &square.vertices, 48);
-    let in_circle = around_circle(|x| square.unit_vector_potential(x), DVec3::ZERO, 1.0, 256);
+    let in_circle = around_circle(
+        |x| square.unit_vector_potential(x),
+        DVec3::ZERO,
+        DVec3::Z,
+        1.0,
+        256,
+    );
     let e = in_square / in_circle - 1.0;
     println!(
         "Z2 (c) circle and square: the circle's flux in the square {in_square:.15e}, the \
@@ -158,17 +149,7 @@ fn z3_self_inductance_of_a_ring() {
     let mut worst: f64 = 0.0;
     for (ratio, reference) in FLUX {
         let b = a / ratio;
-        let loop_ = ring(DVec3::ZERO, a, b);
-        let n = 64;
-        let flux = (0..n)
-            .map(|i| {
-                let psi = TAU * i as f64 / n as f64;
-                let (s, c) = psi.sin_cos();
-                let rho = a + b * c;
-                TAU * rho * loop_.unit_vector_potential(DVec3::new(rho, 0.0, b * s)).y
-            })
-            .sum::<f64>()
-            / n as f64;
+        let flux = ring_self(&ring(DVec3::ZERO, a, b));
         let e = flux / reference - 1.0;
         let jackson = 4.0 * PI * a * ((8.0 * a / b).ln() - 2.0);
         let coefficient = (flux - jackson) / (4.0 * PI * a * (b / a).powi(2));

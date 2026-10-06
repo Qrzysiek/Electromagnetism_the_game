@@ -1,10 +1,13 @@
 //! Field sources (PHYSICS.md §2).
 
+use std::sync::Arc;
+
 use glam::DVec3;
 
 use crate::antenna::OscillatingDipole;
 use crate::bem::Electrodes;
 use crate::conductor::Conductors;
+use crate::drive::Drives;
 use crate::external::External;
 use crate::magnetic::{CircularLoop, MagneticDipole, PolygonCoil};
 
@@ -41,6 +44,20 @@ pub trait FieldSolver: Sync {
     fn grad_bz(&self, _x: DVec3, _t: f64) -> DVec3 {
         DVec3::ZERO
     }
+
+    /// The times (of the flight, ascending) at which the fields change abruptly: a
+    /// circuit's switch toggles and pulse corners (PHYSICS.md §2.10). The integration
+    /// stops just before each and restarts on it, so that no step straddles one.
+    fn breakpoints(&self) -> Vec<f64> {
+        Vec::new()
+    }
+
+    /// The times (of the flight, ascending) at which the fields are continuous but their
+    /// time derivatives are not: a circuit's integration steps (PHYSICS.md §2.10). The
+    /// integration's steps end on them, so that each integrates smooth fields.
+    fn knots(&self) -> Vec<f64> {
+        Vec::new()
+    }
 }
 
 impl<F: FieldSolver + ?Sized> FieldSolver for &F {
@@ -58,6 +75,14 @@ impl<F: FieldSolver + ?Sized> FieldSolver for &F {
 
     fn grad_bz(&self, x: DVec3, t: f64) -> DVec3 {
         (**self).grad_bz(x, t)
+    }
+
+    fn breakpoints(&self) -> Vec<f64> {
+        (**self).breakpoints()
+    }
+
+    fn knots(&self) -> Vec<f64> {
+        (**self).knots()
     }
 }
 
@@ -203,6 +228,9 @@ pub struct LevelField {
     /// Added to the flight time before evaluating time-dependent sources: a particle
     /// launched at lab time `t₀` sees the fields at `t₀ + t`.
     pub time_offset: f64,
+    /// The circuit driving electrodes and circular coils (`drive.rs`), solved in lab time;
+    /// the driven coils' own `kappa` and `rate` are then not used.
+    pub drives: Option<Arc<Drives>>,
 }
 
 impl LevelField {
@@ -216,14 +244,18 @@ impl LevelField {
         self.magnetic_at(x, 0.0)
     }
 
-    /// Magnetic field of the magnets and coils at lab time `t` (ramped coils change).
+    /// Magnetic field of the magnets and coils at lab time `t` (ramped and driven coils
+    /// change).
     pub fn magnetic_at(&self, x: DVec3, t: f64) -> DVec3 {
         let mut b = DVec3::ZERO;
         for d in &self.dipoles {
             b += d.field(x);
         }
-        for l in &self.loops {
-            b += l.field_at(x, t);
+        for (i, l) in self.loops.iter().enumerate() {
+            b += match self.driven_loop(i, t) {
+                Some((kappa, _)) => CircularLoop { kappa, ..*l }.field(x),
+                None => l.field_at(x, t),
+            };
         }
         for p in &self.polygons {
             b += p.field_at(x, t);
@@ -231,9 +263,16 @@ impl LevelField {
         b
     }
 
-    /// Whether a coil's current is ramped (time-dependent B and an induced E).
+    /// Whether a coil's current is ramped or driven (time-dependent B and an induced E).
     pub fn has_ramps(&self) -> bool {
-        self.loops.iter().any(|l| l.rate != 0.0) || self.polygons.iter().any(|p| p.rate != 0.0)
+        self.loops.iter().any(|l| l.rate != 0.0)
+            || self.polygons.iter().any(|p| p.rate != 0.0)
+            || self.drives.as_ref().is_some_and(|d| !d.loops.is_empty())
+    }
+
+    /// The strength and rate of loop `i` at lab time `t` if a circuit drives it.
+    fn driven_loop(&self, i: usize, t: f64) -> Option<(f64, f64)> {
+        self.drives.as_ref()?.loop_strength(i, t)
     }
 }
 
@@ -245,16 +284,25 @@ impl FieldSolver for LevelField {
             s.e += c.e;
             s.phi += c.phi;
         }
+        let t_lab = t + self.time_offset;
         if !self.electrodes.is_empty() {
-            let c = self.electrodes.sample(x, t);
+            let c = match &self.drives {
+                Some(d) if !d.electrodes.is_empty() => self
+                    .electrodes
+                    .sample_shifted(x, &d.electrode_shifts(t_lab)),
+                _ => self.electrodes.sample(x, t),
+            };
             s.e += c.e;
             s.phi += c.phi;
         }
-        let t_lab = t + self.time_offset;
         s.b = self.magnetic_at(x, t_lab);
-        // Induced field of ramped coils, −∂A/∂t (quasi-static, PHYSICS.md §2.2).
-        for l in &self.loops {
-            s.e += l.induced_e(x);
+        // Induced field of ramped and driven coils, −∂A/∂t (quasi-static, PHYSICS.md
+        // §2.2).
+        for (i, l) in self.loops.iter().enumerate() {
+            s.e += match self.driven_loop(i, t_lab) {
+                Some((_, rate)) => l.unit_vector_potential(x) * (-rate),
+                None => l.induced_e(x),
+            };
         }
         for p in &self.polygons {
             s.e += p.induced_e(x);
@@ -280,8 +328,30 @@ impl FieldSolver for LevelField {
 
     fn is_static(&self) -> bool {
         !self.has_ramps()
+            && self.drives.is_none()
             && self.external.iter().all(External::is_static)
             && self.antennas.iter().all(|a| a.omega == 0.0)
+    }
+
+    fn breakpoints(&self) -> Vec<f64> {
+        self.drives.as_ref().map_or_else(Vec::new, |d| {
+            d.breakpoints()
+                .iter()
+                .map(|&b| b - self.time_offset)
+                .filter(|&b| b > 0.0)
+                .collect()
+        })
+    }
+
+    fn knots(&self) -> Vec<f64> {
+        self.drives.as_ref().map_or_else(Vec::new, |d| {
+            d.solution
+                .step_ends()
+                .into_iter()
+                .map(|k| k - self.time_offset)
+                .filter(|&k| k > 0.0)
+                .collect()
+        })
     }
 
     fn self_field(&self, x: DVec3, q: f64) -> (DVec3, f64) {
@@ -297,8 +367,10 @@ impl FieldSolver for LevelField {
             g += d.grad_bz(x);
         }
         let t_lab = t + self.time_offset;
-        for l in &self.loops {
-            g += if l.rate == 0.0 {
+        for (i, l) in self.loops.iter().enumerate() {
+            g += if let Some((kappa, _)) = self.driven_loop(i, t_lab) {
+                CircularLoop { kappa, ..*l }.grad_bz_in_plane(x)
+            } else if l.rate == 0.0 {
                 l.grad_bz_in_plane(x)
             } else {
                 CircularLoop {

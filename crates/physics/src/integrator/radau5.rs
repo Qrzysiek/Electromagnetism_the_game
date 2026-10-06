@@ -144,6 +144,26 @@ impl Dense {
         c[i] + s * (c[i + n] + (s - self.c2m1) * (c[i + 2 * n] + (s - self.c1m1) * c[i + 3 * n]))
     }
 
+    /// The integral of component `i` from the step's start to `x` (within the step), of
+    /// the collocation polynomial: exact up to rounding, and exactly 0 at the start.
+    pub fn integral_component(&self, i: usize, x: f64) -> f64 {
+        let n = self.n;
+        let h = self.t - self.t_old;
+        let c = &self.cont;
+        let (a, b) = (self.c2m1, self.c1m1);
+        // The polynomial in s = (x − t)/h ∈ [−1, 0] as k0 + k1 s + k2 s² + k3 s³ ...
+        let k3 = c[i + 3 * n];
+        let k2 = c[i + 2 * n] - (a + b) * k3;
+        let k1 = c[i + n] - a * c[i + 2 * n] + a * b * k3;
+        let k0 = c[i];
+        // ... and in u = s + 1 ∈ [0, 1], from the step's start.
+        let m0 = k0 - k1 + k2 - k3;
+        let m1 = k1 - 2.0 * k2 + 3.0 * k3;
+        let m2 = k2 - 3.0 * k3;
+        let u = (x - self.t_old) / h;
+        h * u * (m0 + u * (m1 / 2.0 + u * (m2 / 3.0 + u * k3 / 4.0)))
+    }
+
     /// The whole state at `x`.
     pub fn eval(&self, x: f64, y: &mut [f64]) {
         for (i, yi) in y.iter_mut().enumerate() {
@@ -1138,5 +1158,47 @@ mod tests {
                 r.y()[0]
             );
         }
+    }
+
+    /// The dense output's integral against two-point Gauss–Legendre on the collocation
+    /// polynomial (exact for its cubic), over parts of every step of a damped oscillator;
+    /// required 1e-14 of the integrand's scale times the interval (rounding).
+    #[test]
+    fn integral_of_the_dense_output() {
+        struct Oscillator;
+        impl StiffSystem for Oscillator {
+            fn dim(&self) -> usize {
+                2
+            }
+            fn rhs(&self, _t: f64, y: &[f64], f: &mut [f64]) {
+                f[0] = y[1];
+                f[1] = -y[0] - 0.3 * y[1];
+            }
+        }
+        let mut r = Radau5::new(
+            &Oscillator,
+            0.0,
+            &[1.0, 0.0],
+            10.0,
+            Settings::new(1e-8, 1e-8),
+        );
+        let g = 0.5 / libm::sqrt(3.0);
+        let mut worst: f64 = 0.0;
+        while !r.done() {
+            r.step(&Oscillator).expect("integrates");
+            let d = r.dense();
+            for frac in [0.1, 0.5, 0.9, 1.0] {
+                let x = d.t_start() + frac * (d.t_end() - d.t_start());
+                let (mid, half) = (0.5 * (d.t_start() + x), 0.5 * (x - d.t_start()));
+                for i in 0..2 {
+                    let gauss = half
+                        * (d.eval_component(i, mid - 2.0 * g * half)
+                            + d.eval_component(i, mid + 2.0 * g * half));
+                    worst =
+                        worst.max((d.integral_component(i, x) - gauss).abs() / (x - d.t_start()));
+                }
+            }
+        }
+        assert!(worst < 1e-14, "{worst:.3e}");
     }
 }
