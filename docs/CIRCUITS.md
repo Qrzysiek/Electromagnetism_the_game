@@ -29,6 +29,11 @@ want to settle are marked **(owner)**.
   mutual inductances; one-way coupling; the flights restart at the circuit's breakpoints
   and end their steps on its knots, so that the canonical angular momentum in a driven
   coil holds to 3e-15. Polygonal coils are not drivable yet.
+- **Levels** (2026-10-06): the level format's `drive` on electrodes and circular coils,
+  the sandbox editor's controls, the panel's plots, the model notes with the
+  back-action bound and the quasi-static parameter; arc 5 "Circuits" with Charging a
+  plate (RC), Chopper (a switch) and Ringing plate (LC), all Newtonian, where the
+  quasi-static model is exact.
 - **Time-dependent coils.** Coils already take a linear ramp of their strength with the
   exact induced field `−κ̇ A_unit` (circular and polygonal coils, test M10).
 

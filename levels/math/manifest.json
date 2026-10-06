@@ -71,6 +71,18 @@
   "height_ex": 2.713,
   "baseline_ex": 0.791
  },
+ "V(t) = V_s(1 - e^{-t/RC})": {
+  "file": "2c004d91b9a831f6.svg",
+  "width_ex": 21.542,
+  "height_ex": 2.587,
+  "baseline_ex": 0.566
+ },
+ "V_s": {
+  "file": "5df6cd07cd936c95.svg",
+  "width_ex": 2.257,
+  "height_ex": 1.901,
+  "baseline_ex": 0.355
+ },
  "\\cos\\theta = \\beta": {
   "file": "7a737285438e6389.svg",
   "width_ex": 8.763,
@@ -94,6 +106,12 @@
   "width_ex": 17.712,
   "height_ex": 2.514,
   "baseline_ex": 0.691
+ },
+ "\\omega = 1/\\sqrt{LC}": {
+  "file": "6992344e3134db1c.svg",
+  "width_ex": 11.877,
+  "height_ex": 2.758,
+  "baseline_ex": 0.566
  },
  "\\omega\\,\\Delta t": {
   "file": "ac8add78df66600e.svg",
@@ -190,6 +208,12 @@
   "width_ex": 21.503,
   "height_ex": 2.262,
   "baseline_ex": 0.566
+ },
+ "\\tau = RC": {
+  "file": "b9d42b89b6fc4708.svg",
+  "width_ex": 7.623,
+  "height_ex": 1.781,
+  "baseline_ex": 0.186
  },
  "\\tfrac{3}{2}\\gamma^3 c/R": {
   "file": "9973c4ab9ebd098e.svg",

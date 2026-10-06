@@ -113,6 +113,34 @@ impl Level {
                 ),
             ));
         }
+        if self.has_drives() {
+            out.push(note(
+                true,
+                "Circuits: ideal lumped components (Kirchhoff's laws), sources through \
+                 resistors, inductors and capacitors into the plates and coils, integrated \
+                 to about 1e-9 of their scale; a plate's capacitances come from the boundary \
+                 elements, a coil's inductance from the flux of its own field.",
+            ));
+            let back = self.drive_back_action_bound(player);
+            out.push(note(
+                false,
+                &format!(
+                    "Circuits drive one way: the particles' back-action on them (the charge a \
+                     particle induces on a plate, the voltage it induces in a coil) is left \
+                     out, at most {back:.1e} of the drive here."
+                ),
+            ));
+            let ratio = self.drive_quasi_static_ratio(player);
+            out.push(note(
+                false,
+                &format!(
+                    "Circuits are quasi-static: the plates' and coils' own retardation and \
+                     radiation, and the magnetic field of the charging currents, are left out \
+                     (light time across the arena × the drives' fastest relative rate = \
+                     {ratio:.1e})."
+                ),
+            ));
+        }
         if !self.clouds.is_empty() {
             out.push(note(
                 true,

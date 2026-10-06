@@ -1,0 +1,124 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Ringing plate",
+  "description": "Now an inductor L sits between the supply and the top plate. With the plate's capacitance it makes an LC circuit: the charge rushes in, overshoots and swings around the supply's voltage at $\\omega = 1/\\sqrt{LC}$, slowly damped by the small resistance. The first swing peaks just as the ions pass, at almost twice the supply's voltage (see the Circuits panel). Set the supply so that the beam lands in the detector.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 400.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          10,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          27,
+          3,
+          0
+        ],
+        "max": [
+          30,
+          5,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -120000.0,
+      -60000.0,
+      60000.0,
+      120000.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        11,
+        13,
+        0
+      ],
+      "kind": "supply",
+      "value": 120000.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        11,
+        13,
+        0
+      ],
+      "length": 8,
+      "thickness": 0.4,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "drive": {
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "resistance": 0.2,
+        "inductance": 4.66
+      }
+    },
+    {
+      "center": [
+        11,
+        7,
+        0
+      ],
+      "length": 8,
+      "thickness": 0.4,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    }
+  ]
+}

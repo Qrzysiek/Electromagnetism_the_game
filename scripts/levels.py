@@ -157,9 +157,10 @@ def free_charge(x, y, q, angle_deg, speed):
 
 
 def plate(x, y, length, thickness=0.4, height=4.0, angle_deg=0.0, kind="grounded",
-          value=None, tunable=False):
+          value=None, tunable=False, drive=None):
     """A box electrode (plate, slab or wall) standing on the plane; `tunable`: the player
-    sets its potential with a power supply."""
+    sets its potential with a power supply (a driven plate's source level); `drive`: a
+    circuit (see `drive`)."""
     bias = {"kind": kind}
     if value is not None:
         bias["value"] = value
@@ -167,7 +168,28 @@ def plate(x, y, length, thickness=0.4, height=4.0, angle_deg=0.0, kind="grounded
          "height": height, "angle_deg": angle_deg, "bias": bias}
     if tunable:
         e["tunable"] = True
+    if drive is not None:
+        e["drive"] = drive
     return e
+
+
+def dc(v=0.0):
+    """A constant source (its level the player's power supply sets on a tunable plate)."""
+    return {"kind": "dc", "value": v}
+
+
+def drive(source, r, l=0.0, c=0.0, switch=None):
+    """A circuit driving a plate or a circular coil (PHYSICS.md 2.10): `source` through
+    the resistance r, with a series inductance l (plates) or capacitance c (coils);
+    `switch` = (closed at first, time it toggles) makes r a switch (plates without l)."""
+    d = {"source": source, "resistance": r}
+    if l:
+        d["inductance"] = l
+    if c:
+        d["capacitance"] = c
+    if switch is not None:
+        d["switch"] = {"closed": True, "at": switch[1]} if switch[0] else {"at": switch[1]}
+    return d
 
 
 def player_plate(x, y, v, angle_deg=0.0):
@@ -782,6 +804,70 @@ def power_supply():
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((27, 0, 30, 20), "x", 2))],
         electrodes=[plate(11, 13, 8, tunable=True), plate(11, 7, 8)],
         supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, -1.2e5)])
+
+
+# Circuits (PHYSICS.md 2.9-2.10): a source through a resistor (with an inductor or a
+# switch) drives a plate; the plates of "Power supply" (the top one's capacitance against
+# the grounded lower plate is C = 2.63, from the boundary elements). The plate levels are
+# Newtonian (c = infinity), where the circuits' quasi-static model is exact; the ions
+# (T0 = 0.5, m = 1) fly at 1 cell per time unit and cross the plates (x = 7 to 15) at t
+# = 7 to 15 after their launch.
+
+def charging_a_plate():
+    # Through R = 3 the top plate charges with tau = RC = 7.9: as the ions cross it holds
+    # 59 to 85 % of its supply's voltage. -120k lands the beam at y = 12.49, -60k at 11.22
+    # (in "Power supply", charged at once, -60k gave 12): only -120k reaches the
+    # detector.
+    return level(
+        "Charging a plate",
+        "The top deflection plate is connected to its power supply through a resistor R. "
+        "A plate is a capacitor: its charge has to flow in through R, so its potential "
+        "rises as $V(t) = V_s(1 - e^{-t/RC})$ towards the supply's $V_s$, with the time "
+        "constant $\\tau = RC$, here about 8 (C comes from the plates' shape). The ions "
+        "cross the plates while it is still charging: the Circuits panel shows V(t), with "
+        "the launch marked. Set the supply so that the beam lands in the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 12, 30, 13)))],
+        electrodes=[plate(11, 13, 8, tunable=True, drive=drive(dc(), 3.0)), plate(11, 7, 8)],
+        supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, -1.2e5)], c=None)
+
+
+def chopper():
+    # The top plate carries no charge until a switch connects it to its supply through
+    # R = 0.4 at t = 30 (tau = 1.05): the ion launched at t = 0 crosses the plates at
+    # t = 7 to 15 and flies straight on; the one launched at t = 40 meets a fully
+    # charged plate: 120k lands it at y = 5.54, 60k at 8.23 (none: 10).
+    return level(
+        "Chopper",
+        "A switch connects the top plate to its power supply at t = 30, through a small "
+        "resistor: the plate charges within about one time unit, so the switch turns the "
+        "deflector on. Two ions are launched, at t = 0 and at t = 40. Set the supply so "
+        "that each reaches its own detector: the first flies past the plates before the "
+        "switch closes, the second after.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 9, 30, 11))),
+               shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 5, 30, 7)), time=40.0)],
+        electrodes=[plate(11, 13, 8, tunable=True, drive=drive(dc(), 0.4, switch=(False, 30.0))),
+                    plate(11, 7, 8)],
+        supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, 1.2e5)], c=None)
+
+
+def ringing_plate():
+    # With L = 4.66 in series (and R = 0.2) the top plate (C = 2.63) rings: omega =
+    # 1/sqrt(LC) = 0.286, the first maximum at t = pi/omega = 11, overshooting the
+    # supply's voltage by 79 %. The ions cross the plates at t = 7 to 15, around it:
+    # 120k lands the beam at y = 3.98 (6 cells down; "Power supply"'s static plate gave
+    # 4), 60k at 7.60.
+    return level(
+        "Ringing plate",
+        "Now an inductor L sits between the supply and the top plate. With the plate's "
+        "capacitance it makes an LC circuit: the charge rushes in, overshoots and swings "
+        "around the supply's voltage at $\\omega = 1/\\sqrt{LC}$, slowly damped by the "
+        "small resistance. The first swing peaks just as the ions pass, at almost twice "
+        "the supply's voltage (see the Circuits panel). Set the supply so that the beam "
+        "lands in the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 3, 30, 5)))],
+        electrodes=[plate(11, 13, 8, tunable=True, drive=drive(dc(), 0.2, l=4.66)),
+                    plate(11, 7, 8)],
+        supplies=[-1.2e5, -6e4, 6e4, 1.2e5], reference=[supply(11, 13, 1.2e5)], c=None)
 
 
 def tune_the_lens():
@@ -2435,6 +2521,13 @@ ARCS = [
         ]),
         ("Master", [
             ("rf_beam_line", rf_beam_line),
+        ]),
+    ]),
+    ("Circuits", [
+        ("Introduction", [
+            ("charging_a_plate", charging_a_plate),
+            ("chopper", chopper),
+            ("ringing_plate", ringing_plate),
         ]),
     ]),
     ("Beams", [

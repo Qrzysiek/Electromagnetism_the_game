@@ -458,6 +458,7 @@ fn pointer(
                                     radius,
                                     kappa,
                                     rate: 0.0,
+                                    drive: None,
                                 });
                             });
                         }

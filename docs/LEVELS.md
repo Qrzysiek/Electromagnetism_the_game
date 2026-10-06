@@ -67,50 +67,53 @@ verified reference solution for every shot and negligible radiation
 | 43 | Tune the RF | 4 Intermediate | choose the antenna frequency: bunches 4 apart meet it at phase difference ωΔt | ≤ 1 charge, ≤ 2 antennas | 1 |
 | 44 | Streak camera | 4 Intermediate | three bunches a third of a period apart to three spots | ≤ 2 charges, ≤ 2 antennas | 1 |
 | 45 | RF beam line | 4 Master | steer two bunches through a gate (±6°) with a stray field on and off, then separate them with RF | ≤ 5 charges, ≤ 3 antennas | 4 |
-| 46 | Space charge | 5 Introduction | 16 particles repel each other; ≥ 90 % must arrive, verified | ≤ 3 charges | 1 |
-| 47 | Stern–Gerlach beam | 5 Introduction | both spin states as spread beams, each to its own detector | ≤ 3 magnets | 1 |
-| 48 | Relativistic beam | 5 Introduction | a beam at 0.8c: magnetic attraction weakens space charge to 1/γ²; quasi-static interaction with radiation reaction | ≤ 3 charges | 1 |
-| 49 | Collimated beam | 5 Intermediate | the collimator for a spread, interacting beam (±3°) | ≤ 4 charges | 2 |
-| 50 | Velocity selector | 5 Intermediate | the Wien filter for a beam: three speeds, 8 ions each; the middle one leaves straight (±5°) | ≤ 4 charges | 2 |
-| 51 | Beam preparation | 5 Intermediate | two stages for a beam: collimate it through a gate (±4°), then steer it into the target | ≤ 5 charges | 3 |
-| 52 | Chromatic aberration | 5 Intermediate | the Einzel lens (9) built in; each ray becomes a beam with an 8 % energy spread | ≤ 3 charges | 1 |
-| 53 | Real analyser | 5 Intermediate | the hemispherical analyser (12) built in; the source emits into a cone (σ = 4°) | ≤ 3 charges | 1 |
-| 54 | Calutron at full current | 5 Intermediate | the calutron (33) built in; the isotope beams repel each other (5 ions each, radiation reaction) | ≤ 3 charges | 1 |
-| 55 | Soft landing, full current | 5 Intermediate | the soft landing (13) built in; space charge grows as the ions are braked | ≤ 3 charges | 1 |
-| 56 | Isotope separator | 5 Master | collimate an interacting two-isotope beam through a gate (±5°), then separate the isotopes with magnets | ≤ 5 charges, ≤ 4 magnets | 5 |
-| 57 | Jackson §12.3: E×B drift | 6 Introduction | crossed uniform fields: both signs drift with E×B/B² along the equipotentials | ≤ 3 charges | 1 |
-| 58 | Jackson Pr. 12.9: Van Allen equator | 6 Introduction | gradient drift around a dipole Earth, protons and electrons in opposite directions | ≤ 3 charges, ≤ 3 magnets | 1 |
-| 59 | Throw a charge | 6 Introduction | a new element: the free charge (pull its slingshot handle back); its field pushes the particle and recoils, momentum passing without contact | ≤ 3 free charges | 1 |
-| 60 | Jackson §5.15: Faraday's law | 6 Introduction | a ramped coil's induced field drives a charge at rest around the axis; the detector asks for energy only induction supplies | ≤ 3 charges | 1 |
-| 61 | Jackson Pr. 13.1: knock-on | 6 Intermediate | the player throws a heavy ion (a free charge) past a light particle at rest, which must reach its detector with T ≥ 0.08: forward for close passes, sideways for distant ones | ≤ 3 free charges (mass 40) | 1 |
-| 62 | Jackson §12.4: gradient drift | 6 Intermediate | drift along lines of equal \|B\|, opposite for the two signs; charges move both alike, magnets oppositely | ≤ 3 charges, ≤ 3 magnets | 2 |
-| 63 | Jackson Pr. 12.5: E×B runaway | 6 Intermediate | \|E\| > c\|B\|: no drift frame, the particle runs away; magnets make B strong enough to drift | ≤ 6 magnets | 2 |
-| 64 | Jackson §13.1: recoil at right angles | 6 Intermediate | the player throws a particle of equal mass at one at rest, which must reach its detector with T ≥ 0.1; the two leave at right angles | ≤ 3 free charges | 1 |
-| 65 | Jackson §12.1: Störmer's forbidden region | 6 Intermediate | canonical angular momentum in a dipole's equatorial plane keeps the particle 7 cells out; charges break the symmetry | ≤ 4 charges | 2 |
-| 66 | Jackson Ch. 12: magnetosphere | 6 Master | the solar wind's E×B drift steered up and down through two gates, then the gradient drift splits proton and electron around a dipole Earth | ≤ 6 charges, ≤ 5 magnets | 5 |
-| 67 | Jackson §2.2: its own image | 7 Introduction | a grounded sphere attracts every passing charge through its image −qR/d | ≤ 3 charges | 1 |
-| 68 | Jackson Pr. 2.6: two spheres | 7 Introduction | a charged and a neutral sphere image each other; the neutral one becomes a dipole | ≤ 3 charges | 1 |
-| 69 | Jackson §3.13: field through a hole | 7 Intermediate | a grounded wall screens a charge except through the slot, where its field leaks out | ≤ 3 charges | 2 |
-| 70 | Jackson Pr. 2.4: golden-ratio capture | 7 Intermediate | like charges attract inside 1.618 radii of an equally charged isolated sphere; go around it | ≤ 4 charges | 2 |
-| 71 | Jackson §4.1: multipoles | 7 Intermediate | bend a near beam into its detector while two far beams (11–21 cells away, along x and y) arrive within 0.05° of straight: a net charge or a dipole that bends the near beam turns them; a compact quadrupole (+q, −2q, +q) does not | ≤ 5 charges | 3 |
-| 72 | Jackson Ch. 2: sphere slalom | 7 Master | weave between three spheres carrying the particle's charge, through two gates, without being captured | ≤ 8 charges | 4 |
-| 73 | Jackson Pr. 16.2: the classical atom | 8 Introduction | a radiating electron spirals into the nucleus; the detector counts only an electron slowed by its radiation | ≤ 3 charges | 1 |
-| 74 | Jackson Pr. 16.3: orbits circularize | 8 Intermediate | a circular and an elliptic orbit of the same energy; the ellipse radiates most near the nucleus | ≤ 3 charges | 1 |
-| 75 | Jackson Ch. 16: three orbits | 8 Master | three electrons on different orbits, all slowed by radiation into the detector in time | ≤ 6 charges | 3 |
-| 76 | Jackson §16.7: a bound charge | 9 Introduction | an electron bound harmonically inside a charge cloud (Thomson's atom); pull it out | ≤ 3 charges | 1 |
-| 77 | Jackson §16.8: resonance | 9 Introduction | a weak drive grows the bound electron's swing only at ω₀; tune an antenna | ≤ 2 antennas | 1 |
-| 78 | Jackson Pr. 13.2: a kick for a bound charge | 9 Intermediate | the player throws a heavy negative ion past an atom; its field kicks the orbiting electron out into the detector | ≤ 3 free charges (mass 40) | 1 |
-| 79 | Jackson Ch. 16: spectroscopy | 9 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
-| 80 | Jackson §14.3: forward beaming | 10 Introduction | a radiation goal: a far receiver at 30° must collect ≥ 6e-4 per steradian; the radiation is beamed along the velocity (1/γ = 19°), so bend the particle while it heads for the receiver | ≤ 3 magnets | 1 |
-| 81 | Jackson §14.6: the critical frequency | 10 Introduction | the same arena and receiver as forward beaming, but only ω 80–160 counts (≥ 3e-3 per steradian): a tight bend's short flash reaches ~(3/2)γ³c/R; the previous level's moderate bend puts only 1.4e-4 there | ≤ 3 magnets | 1 |
-| 82 | Jackson Pr. 14.23: in step | 10 Introduction | a charge circles in crossed fields (ω₀ = 0.8) while its circle drifts into the detector; the receiver at 90° sees every particle: add a charge circling in step, whose field adds (four times the energy; ≥ 1.4e-4 per steradian in 0.6–1.0, the charge alone sends 4.84e-5) | ≤ 3 free charges | 1 |
-| 83 | Jackson §14.2: a quiet turn | 10 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
-| 84 | Jackson §14.8: Thomson scattering | 10 Intermediate | a light wave from the right (ω = 1) shakes the particle, which scatters it; the receiver at 30° counts 27–33, the Doppler-shifted line ω(1 + β cos φ)/(1 − β cos(θ − φ)) of a particle heading for it (≈ 4γ²ω head on) | ≤ 3 magnets (40, 80) | 1 |
-| 85 | Jackson §16.8: why the sky is blue | 10 Intermediate | a steady receiver: a plane wave (ω = 0.35) lights a Thomson atom (ω₀ = 0.5, c = 2: radiation damping Γ = ω₀²τ = 0.021); the receiver behind the light averages the backscattered power in 0.32–0.38 over t = 400–1100, and wants 3–6 times the bare atom's (σ = 0.92 σ_T on Rayleigh's side): soften the spring along the light's field (a charge on the line of the swing weakens it; ω_y² = ω₀² − 4Q/d³ for a pair) | ≤ 4 charges | 1 |
-| 86 | Jackson §15.2: braking radiation | 10 Intermediate | the target stops the particle abruptly; its flash ∝ sin²θ/(1 − β cos θ)² is zero straight ahead and largest at cos θ = β (≈ 20°): strike the target ~12–32° off the receiver's axis (band 100–200, ≥ 5e-3 per steradian) | ≤ 3 magnets (40, 80) | 1 |
-| 87 | Jackson Pr. 14.23: a quiet ring | 10 Intermediate | the same drifting circle, and the receiver must stay below 7e-6 per steradian in 0.6–1.0: a partner on the far side of the circle, circling in antiphase about the same drifting centre, cancels the fundamental | ≤ 3 free charges | 1 |
-| 88 | Jackson Pr. 14.23: a ring of four | 10 Intermediate | the band 0.6–2.6 holds ω₀, 2ω₀, 3ω₀ (below 1.3e-5 per steradian): a pair leaves 2ω₀, three at 120° leave 3ω₀; four evenly spaced radiate only at 4ω₀, outside the band | ≤ 5 free charges | 3 |
-| 89 | Jackson §14.7: undulator | 10 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
+| 46 | Charging a plate | 5 Introduction | a circuit: the plate charges through a resistor, `V(t) = V_s(1 − e^{−t/RC})` (τ = 7.9), while the ions pass; −60k, enough when charged at once, now falls short | 1 supply | 1 |
+| 47 | Chopper | 5 Introduction | a switch turns the deflector on between two launches: the first ion flies straight, the second must reach its own detector | 1 supply | 1 |
+| 48 | Ringing plate | 5 Introduction | an inductor in series: the plate rings (LC), its first swing at 1.8 times the supply as the ions pass; only +120k lands 6 cells down | 1 supply | 1 |
+| 49 | Space charge | 6 Introduction | 16 particles repel each other; ≥ 90 % must arrive, verified | ≤ 3 charges | 1 |
+| 50 | Stern–Gerlach beam | 6 Introduction | both spin states as spread beams, each to its own detector | ≤ 3 magnets | 1 |
+| 51 | Relativistic beam | 6 Introduction | a beam at 0.8c: magnetic attraction weakens space charge to 1/γ²; quasi-static interaction with radiation reaction | ≤ 3 charges | 1 |
+| 52 | Collimated beam | 6 Intermediate | the collimator for a spread, interacting beam (±3°) | ≤ 4 charges | 2 |
+| 53 | Velocity selector | 6 Intermediate | the Wien filter for a beam: three speeds, 8 ions each; the middle one leaves straight (±5°) | ≤ 4 charges | 2 |
+| 54 | Beam preparation | 6 Intermediate | two stages for a beam: collimate it through a gate (±4°), then steer it into the target | ≤ 5 charges | 3 |
+| 55 | Chromatic aberration | 6 Intermediate | the Einzel lens (9) built in; each ray becomes a beam with an 8 % energy spread | ≤ 3 charges | 1 |
+| 56 | Real analyser | 6 Intermediate | the hemispherical analyser (12) built in; the source emits into a cone (σ = 4°) | ≤ 3 charges | 1 |
+| 57 | Calutron at full current | 6 Intermediate | the calutron (33) built in; the isotope beams repel each other (5 ions each, radiation reaction) | ≤ 3 charges | 1 |
+| 58 | Soft landing, full current | 6 Intermediate | the soft landing (13) built in; space charge grows as the ions are braked | ≤ 3 charges | 1 |
+| 59 | Isotope separator | 6 Master | collimate an interacting two-isotope beam through a gate (±5°), then separate the isotopes with magnets | ≤ 5 charges, ≤ 4 magnets | 5 |
+| 60 | Jackson §12.3: E×B drift | 7 Introduction | crossed uniform fields: both signs drift with E×B/B² along the equipotentials | ≤ 3 charges | 1 |
+| 61 | Jackson Pr. 12.9: Van Allen equator | 7 Introduction | gradient drift around a dipole Earth, protons and electrons in opposite directions | ≤ 3 charges, ≤ 3 magnets | 1 |
+| 62 | Throw a charge | 7 Introduction | a new element: the free charge (pull its slingshot handle back); its field pushes the particle and recoils, momentum passing without contact | ≤ 3 free charges | 1 |
+| 63 | Jackson §5.15: Faraday's law | 7 Introduction | a ramped coil's induced field drives a charge at rest around the axis; the detector asks for energy only induction supplies | ≤ 3 charges | 1 |
+| 64 | Jackson Pr. 13.1: knock-on | 7 Intermediate | the player throws a heavy ion (a free charge) past a light particle at rest, which must reach its detector with T ≥ 0.08: forward for close passes, sideways for distant ones | ≤ 3 free charges (mass 40) | 1 |
+| 65 | Jackson §12.4: gradient drift | 7 Intermediate | drift along lines of equal \|B\|, opposite for the two signs; charges move both alike, magnets oppositely | ≤ 3 charges, ≤ 3 magnets | 2 |
+| 66 | Jackson Pr. 12.5: E×B runaway | 7 Intermediate | \|E\| > c\|B\|: no drift frame, the particle runs away; magnets make B strong enough to drift | ≤ 6 magnets | 2 |
+| 67 | Jackson §13.1: recoil at right angles | 7 Intermediate | the player throws a particle of equal mass at one at rest, which must reach its detector with T ≥ 0.1; the two leave at right angles | ≤ 3 free charges | 1 |
+| 68 | Jackson §12.1: Störmer's forbidden region | 7 Intermediate | canonical angular momentum in a dipole's equatorial plane keeps the particle 7 cells out; charges break the symmetry | ≤ 4 charges | 2 |
+| 69 | Jackson Ch. 12: magnetosphere | 7 Master | the solar wind's E×B drift steered up and down through two gates, then the gradient drift splits proton and electron around a dipole Earth | ≤ 6 charges, ≤ 5 magnets | 5 |
+| 70 | Jackson §2.2: its own image | 8 Introduction | a grounded sphere attracts every passing charge through its image −qR/d | ≤ 3 charges | 1 |
+| 71 | Jackson Pr. 2.6: two spheres | 8 Introduction | a charged and a neutral sphere image each other; the neutral one becomes a dipole | ≤ 3 charges | 1 |
+| 72 | Jackson §3.13: field through a hole | 8 Intermediate | a grounded wall screens a charge except through the slot, where its field leaks out | ≤ 3 charges | 2 |
+| 73 | Jackson Pr. 2.4: golden-ratio capture | 8 Intermediate | like charges attract inside 1.618 radii of an equally charged isolated sphere; go around it | ≤ 4 charges | 2 |
+| 74 | Jackson §4.1: multipoles | 8 Intermediate | bend a near beam into its detector while two far beams (11–21 cells away, along x and y) arrive within 0.05° of straight: a net charge or a dipole that bends the near beam turns them; a compact quadrupole (+q, −2q, +q) does not | ≤ 5 charges | 3 |
+| 75 | Jackson Ch. 2: sphere slalom | 8 Master | weave between three spheres carrying the particle's charge, through two gates, without being captured | ≤ 8 charges | 4 |
+| 76 | Jackson Pr. 16.2: the classical atom | 9 Introduction | a radiating electron spirals into the nucleus; the detector counts only an electron slowed by its radiation | ≤ 3 charges | 1 |
+| 77 | Jackson Pr. 16.3: orbits circularize | 9 Intermediate | a circular and an elliptic orbit of the same energy; the ellipse radiates most near the nucleus | ≤ 3 charges | 1 |
+| 78 | Jackson Ch. 16: three orbits | 9 Master | three electrons on different orbits, all slowed by radiation into the detector in time | ≤ 6 charges | 3 |
+| 79 | Jackson §16.7: a bound charge | 10 Introduction | an electron bound harmonically inside a charge cloud (Thomson's atom); pull it out | ≤ 3 charges | 1 |
+| 80 | Jackson §16.8: resonance | 10 Introduction | a weak drive grows the bound electron's swing only at ω₀; tune an antenna | ≤ 2 antennas | 1 |
+| 81 | Jackson Pr. 13.2: a kick for a bound charge | 10 Intermediate | the player throws a heavy negative ion past an atom; its field kicks the orbiting electron out into the detector | ≤ 3 free charges (mass 40) | 1 |
+| 82 | Jackson Ch. 16: spectroscopy | 10 Master | two atoms with different natural frequencies; drive each at its own resonance | ≤ 4 antennas, ≤ 2 charges | 2 |
+| 83 | Jackson §14.3: forward beaming | 11 Introduction | a radiation goal: a far receiver at 30° must collect ≥ 6e-4 per steradian; the radiation is beamed along the velocity (1/γ = 19°), so bend the particle while it heads for the receiver | ≤ 3 magnets | 1 |
+| 84 | Jackson §14.6: the critical frequency | 11 Introduction | the same arena and receiver as forward beaming, but only ω 80–160 counts (≥ 3e-3 per steradian): a tight bend's short flash reaches ~(3/2)γ³c/R; the previous level's moderate bend puts only 1.4e-4 there | ≤ 3 magnets | 1 |
+| 85 | Jackson Pr. 14.23: in step | 11 Introduction | a charge circles in crossed fields (ω₀ = 0.8) while its circle drifts into the detector; the receiver at 90° sees every particle: add a charge circling in step, whose field adds (four times the energy; ≥ 1.4e-4 per steradian in 0.6–1.0, the charge alone sends 4.84e-5) | ≤ 3 free charges | 1 |
+| 86 | Jackson §14.2: a quiet turn | 11 Intermediate | turn 90° into the top detector with at most 6e-3 per steradian at 45°: gentle turns are quiet (∝ 1/R), or loop the other way round so the velocity never points at the receiver | ≤ 5 magnets | 1 (loop) |
+| 87 | Jackson §14.8: Thomson scattering | 11 Intermediate | a light wave from the right (ω = 1) shakes the particle, which scatters it; the receiver at 30° counts 27–33, the Doppler-shifted line ω(1 + β cos φ)/(1 − β cos(θ − φ)) of a particle heading for it (≈ 4γ²ω head on) | ≤ 3 magnets (40, 80) | 1 |
+| 88 | Jackson §16.8: why the sky is blue | 11 Intermediate | a steady receiver: a plane wave (ω = 0.35) lights a Thomson atom (ω₀ = 0.5, c = 2: radiation damping Γ = ω₀²τ = 0.021); the receiver behind the light averages the backscattered power in 0.32–0.38 over t = 400–1100, and wants 3–6 times the bare atom's (σ = 0.92 σ_T on Rayleigh's side): soften the spring along the light's field (a charge on the line of the swing weakens it; ω_y² = ω₀² − 4Q/d³ for a pair) | ≤ 4 charges | 1 |
+| 89 | Jackson §15.2: braking radiation | 11 Intermediate | the target stops the particle abruptly; its flash ∝ sin²θ/(1 − β cos θ)² is zero straight ahead and largest at cos θ = β (≈ 20°): strike the target ~12–32° off the receiver's axis (band 100–200, ≥ 5e-3 per steradian) | ≤ 3 magnets (40, 80) | 1 |
+| 90 | Jackson Pr. 14.23: a quiet ring | 11 Intermediate | the same drifting circle, and the receiver must stay below 7e-6 per steradian in 0.6–1.0: a partner on the far side of the circle, circling in antiphase about the same drifting centre, cancels the fundamental | ≤ 3 free charges | 1 |
+| 91 | Jackson Pr. 14.23: a ring of four | 11 Intermediate | the band 0.6–2.6 holds ω₀, 2ω₀, 3ω₀ (below 1.3e-5 per steradian): a pair leaves 2ω₀, three at 120° leave 3ω₀; four evenly spaced radiate only at 4ω₀, outside the band | ≤ 5 free charges | 3 |
+| 92 | Jackson §14.7: undulator | 11 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 
 ## Automatic detectors
 
@@ -141,8 +144,8 @@ Columns:
   and a one-move neighbour. High means that attempts carry information.
 
 Measured 2026-09-28 after the curriculum restructure, with 1000 random samples and 16
-search runs of 400 evaluations per level; levels 57–88 (the Jackson series, added later)
-on 2026-10-05 with the same settings:
+search runs of 400 evaluations per level; levels 60–91 (the Jackson series, added later)
+on 2026-10-05 and levels 46–48 (the circuits) on 2026-10-06 with the same settings:
 
 | level | log10 configs | random solve rate | search success | mean evals | expected effort: search / guessing | smoothness |
 |---|---|---|---|---|---|---|
@@ -191,50 +194,53 @@ on 2026-10-05 with the same settings:
 | 43_tune_the_rf | 12.1 | 2.0e-3 | 15/16 | 63 | 89 / 500 | 0.72 |
 | 44_streak_camera | 14.2 | < 3.0e-3 | 7/16 | 194 | 708 / 333 | 0.85 |
 | 45_rf_beam_line | 28.7 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.90 |
-| 46_space_charge | 10.0 | 2.1e-2 | 15/16 | 59 | 86 / 48 | 0.80 |
-| 47_stern_gerlach_beam | 8.8 | 3.3e-2 | 14/16 | 17 | 74 / 30 | 0.82 |
-| 48_relativistic_beam | 10.4 | 2.8e-2 | 15/16 | 23 | 50 / 36 | 0.75 |
-| 49_collimated_beam | 11.1 | 1.0e-3 | 16/16 | 96 | 96 / 1000 | 0.88 |
-| 50_velocity_selector | 11.6 | < 3.0e-3 | 1/16 | 306 | 6306 / 333 | 0.68 |
-| 51_beam_preparation | 14.2 | < 3.0e-3 | 7/16 | 274 | 789 / 333 | 0.91 |
-| 52_chromatic_aberration | 9.8 | 6.0e-3 | 14/16 | 43 | 101 / 167 | 0.87 |
-| 53_real_analyzer | 8.6 | 1.3e-2 | 12/16 | 17 | 151 / 77 | 0.74 |
-| 54_calutron_space_charge | 9.7 | 1.0e-3 | 9/16 | 99 | 410 / 1000 | 0.81 |
-| 55_soft_landing_current | 9.1 | < 3.0e-3 | 12/16 | 200 | 334 / 333 | 0.74 |
-| 56_isotope_separator | 28.6 | < 3.0e-3 | 1/16 | 187 | 6187 / 333 | 0.91 |
-| 57_jackson_exb_drift | 10.4 | 3.0e-3 | 16/16 | 90 | 90 / 333 | 0.65 |
-| 58_jackson_van_allen | 20.7 | 3.0e-3 | 16/16 | 70 | 70 / 333 | 0.62 |
-| 59_throw_a_charge | 14.2 | 7.0e-3 | 16/16 | 92 | 92 / 143 | 0.84 |
-| 60_jackson_faraday | 7.8 | 8.0e-3 | 16/16 | 60 | 60 / 125 | 0.62 |
-| 61_jackson_knock_on | 11.6 | 2.0e-3 | 5/16 | 236 | 1116 / 500 | 0.90 |
-| 62_jackson_gradient_drift | 20.0 | 1.0e-3 | 12/16 | 147 | 281 / 1000 | 0.65 |
-| 63_jackson_runaway | 18.5 | < 3.0e-3 | 13/16 | 110 | 202 / 333 | 0.81 |
-| 64_jackson_recoil | 11.6 | 1.4e-2 | 15/16 | 131 | 158 / 71 | 0.84 |
-| 65_jackson_stormer | 13.5 | < 3.0e-3 | 9/16 | 229 | 540 / 333 | 0.71 |
-| 66_jackson_magnetosphere | 36.0 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.80 |
-| 67_jackson_own_image | 10.3 | 4.3e-2 | 16/16 | 18 | 18 / 23 | 0.84 |
-| 68_jackson_two_spheres | 9.8 | 8.0e-3 | 15/16 | 68 | 94 / 125 | 0.77 |
-| 69_jackson_slot | 9.0 | 2.0e-3 | 15/16 | 239 | 266 / 500 | 0.71 |
-| 70_jackson_golden_ratio | 13.4 | 1.0e-3 | 10/16 | 87 | 327 / 1000 | 0.66 |
-| 71_jackson_multipoles | 10.5 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.69 |
-| 72_jackson_sphere_slalom | 25.0 | < 3.0e-3 | 2/16 | 157 | 2957 / 333 | 0.77 |
-| 73_jackson_classical_atom | 10.1 | 5.1e-2 | 16/16 | 17 | 17 / 20 | 0.62 |
-| 74_jackson_circularization | 10.1 | < 3.0e-3 | 7/16 | 210 | 724 / 333 | 0.67 |
-| 75_jackson_three_orbits | 19.0 | < 3.0e-3 | 2/16 | 219 | 3019 / 333 | 0.71 |
-| 76_jackson_bound_charge | 10.1 | 8.0e-3 | 16/16 | 101 | 101 / 125 | 0.60 |
-| 77_jackson_resonance | 8.0 | 2.0e-3 | 16/16 | 97 | 97 / 500 | 0.86 |
-| 78_jackson_bound_knock | 11.6 | 7.0e-3 | 15/16 | 93 | 120 / 143 | 0.76 |
-| 79_jackson_spectroscopy | 25.5 | < 3.0e-3 | 14/16 | 194 | 251 / 333 | 0.75 |
-| 80_jackson_beaming | 10.1 | 5.1e-2 | 16/16 | 81 | 81 / 20 | 0.59 |
-| 81_jackson_critical_frequency | 10.1 | 1.4e-2 | 12/16 | 107 | 240 / 71 | 0.62 |
-| 82_jackson_in_step | 13.2 | 4.1e-1 | 16/16 | 9 | 9 / 2 | 0.78 |
-| 83_jackson_quiet_turn | 15.8 | 3.0e-3 | 12/16 | 165 | 298 / 333 | 0.79 |
-| 84_jackson_thomson | 9.2 | 2.2e-2 | 15/16 | 94 | 120 / 45 | 0.60 |
-| 85_jackson_cross_section | 13.2 | 2.8e-2 | 31/32 | 60 | 73 / 36 | 0.73 |
-| 86_jackson_braking | 9.2 | 6.4e-2 | 16/16 | 30 | 30 / 16 | 0.63 |
-| 87_jackson_quiet_ring | 13.2 | 3.0e-3 | 3/16 | 107 | 1840 / 333 | 0.82 |
-| 88_jackson_ring_of_four | 21.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.87 |
-| 89_jackson_undulator | 24.6 | < 3.0e-3 | 5/16 | 123 | 1003 / 333 | 0.52 |
+| 46_charging_a_plate | 0.7 | 2.4e-1 | 16/16 | 4 | 4 / 4 | -0.39 |
+| 47_chopper | 0.7 | 2.7e-1 | 16/16 | 4 | 4 / 4 | -0.42 |
+| 48_ringing_plate | 0.7 | 2.7e-1 | 16/16 | 4 | 4 / 4 | -0.42 |
+| 49_space_charge | 10.0 | 2.1e-2 | 15/16 | 59 | 86 / 48 | 0.80 |
+| 50_stern_gerlach_beam | 8.8 | 3.3e-2 | 14/16 | 17 | 74 / 30 | 0.82 |
+| 51_relativistic_beam | 10.4 | 2.8e-2 | 15/16 | 23 | 50 / 36 | 0.75 |
+| 52_collimated_beam | 11.1 | 1.0e-3 | 16/16 | 96 | 96 / 1000 | 0.88 |
+| 53_velocity_selector | 11.6 | < 3.0e-3 | 1/16 | 306 | 6306 / 333 | 0.68 |
+| 54_beam_preparation | 14.2 | < 3.0e-3 | 7/16 | 274 | 789 / 333 | 0.91 |
+| 55_chromatic_aberration | 9.8 | 6.0e-3 | 14/16 | 43 | 101 / 167 | 0.87 |
+| 56_real_analyzer | 8.6 | 1.3e-2 | 12/16 | 17 | 151 / 77 | 0.74 |
+| 57_calutron_space_charge | 9.7 | 1.0e-3 | 9/16 | 99 | 410 / 1000 | 0.81 |
+| 58_soft_landing_current | 9.1 | < 3.0e-3 | 12/16 | 200 | 334 / 333 | 0.74 |
+| 59_isotope_separator | 28.6 | < 3.0e-3 | 1/16 | 187 | 6187 / 333 | 0.91 |
+| 60_jackson_exb_drift | 10.4 | 3.0e-3 | 16/16 | 90 | 90 / 333 | 0.65 |
+| 61_jackson_van_allen | 20.7 | 3.0e-3 | 16/16 | 70 | 70 / 333 | 0.62 |
+| 62_throw_a_charge | 14.2 | 7.0e-3 | 16/16 | 92 | 92 / 143 | 0.84 |
+| 63_jackson_faraday | 7.8 | 8.0e-3 | 16/16 | 60 | 60 / 125 | 0.62 |
+| 64_jackson_knock_on | 11.6 | 2.0e-3 | 5/16 | 236 | 1116 / 500 | 0.90 |
+| 65_jackson_gradient_drift | 20.0 | 1.0e-3 | 12/16 | 147 | 281 / 1000 | 0.65 |
+| 66_jackson_runaway | 18.5 | < 3.0e-3 | 13/16 | 110 | 202 / 333 | 0.81 |
+| 67_jackson_recoil | 11.6 | 1.4e-2 | 15/16 | 131 | 158 / 71 | 0.84 |
+| 68_jackson_stormer | 13.5 | < 3.0e-3 | 9/16 | 229 | 540 / 333 | 0.71 |
+| 69_jackson_magnetosphere | 36.0 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.80 |
+| 70_jackson_own_image | 10.3 | 4.3e-2 | 16/16 | 18 | 18 / 23 | 0.84 |
+| 71_jackson_two_spheres | 9.8 | 8.0e-3 | 15/16 | 68 | 94 / 125 | 0.77 |
+| 72_jackson_slot | 9.0 | 2.0e-3 | 15/16 | 239 | 266 / 500 | 0.71 |
+| 73_jackson_golden_ratio | 13.4 | 1.0e-3 | 10/16 | 87 | 327 / 1000 | 0.66 |
+| 74_jackson_multipoles | 10.5 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.69 |
+| 75_jackson_sphere_slalom | 25.0 | < 3.0e-3 | 2/16 | 157 | 2957 / 333 | 0.77 |
+| 76_jackson_classical_atom | 10.1 | 5.1e-2 | 16/16 | 17 | 17 / 20 | 0.62 |
+| 77_jackson_circularization | 10.1 | < 3.0e-3 | 7/16 | 210 | 724 / 333 | 0.67 |
+| 78_jackson_three_orbits | 19.0 | < 3.0e-3 | 2/16 | 219 | 3019 / 333 | 0.71 |
+| 79_jackson_bound_charge | 10.1 | 8.0e-3 | 16/16 | 101 | 101 / 125 | 0.60 |
+| 80_jackson_resonance | 8.0 | 2.0e-3 | 16/16 | 97 | 97 / 500 | 0.86 |
+| 81_jackson_bound_knock | 11.6 | 7.0e-3 | 15/16 | 93 | 120 / 143 | 0.76 |
+| 82_jackson_spectroscopy | 25.5 | < 3.0e-3 | 14/16 | 194 | 251 / 333 | 0.75 |
+| 83_jackson_beaming | 10.1 | 5.1e-2 | 16/16 | 81 | 81 / 20 | 0.59 |
+| 84_jackson_critical_frequency | 10.1 | 1.4e-2 | 12/16 | 107 | 240 / 71 | 0.62 |
+| 85_jackson_in_step | 13.2 | 4.1e-1 | 16/16 | 9 | 9 / 2 | 0.78 |
+| 86_jackson_quiet_turn | 15.8 | 3.0e-3 | 12/16 | 165 | 298 / 333 | 0.79 |
+| 87_jackson_thomson | 9.2 | 2.2e-2 | 15/16 | 94 | 120 / 45 | 0.60 |
+| 88_jackson_cross_section | 13.2 | 2.8e-2 | 31/32 | 60 | 73 / 36 | 0.73 |
+| 89_jackson_braking | 9.2 | 6.4e-2 | 16/16 | 30 | 30 / 16 | 0.63 |
+| 90_jackson_quiet_ring | 13.2 | 3.0e-3 | 3/16 | 107 | 1840 / 333 | 0.82 |
+| 91_jackson_ring_of_four | 21.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.87 |
+| 92_jackson_undulator | 24.6 | < 3.0e-3 | 5/16 | 123 | 1003 / 333 | 0.52 |
 
 Reading the table by tier (levels 1–56): the introductions are solved by the search in
 15–16 of 16 runs within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
@@ -267,6 +273,12 @@ Notes:
   settings). The analysis caches the result of every distinct placement, so such levels
   cost only their distinct placements; before the cache (and before it knew about
   supplies), analysing them did not terminate.
+- The circuit levels (46–48) are knob levels on the plates of Power supply, with exactly
+  one solving setting each (the detectors were narrowed from the automatic ones, which
+  let two settings in or none needed): Charging a plate punishes the static answer
+  (−60k, which reaches 2 cells when charged at once, falls short at 1.2 while charging),
+  Ringing plate rewards the overshoot (+120k lands 6 cells down instead of the static 4),
+  and Chopper sends the first ion straight in any setting, before the switch closes.
 - Real instruments (Beam pipe, CRT in the Earth's field, Chromatic aberration, Real
   analyser, Calutron at full current, Soft landing at full current) build an earlier
   level's reference setup in as fixed elements and add one real effect the ideal design
@@ -357,7 +369,7 @@ Notes:
   - Bound electrons start on an orbit (radius 2, v = ω₀r), as an atom's electron does, not
     at rest at the atom's centre (the owner's review: at rest, the approaching ion set
     it moving before the kick, and the solutions used that).
-  - Radiation goals (arc 10, PHYSICS.md §3.4): a world at c = 2 with a charge of 1/40 at
+  - Radiation goals (arc 11, PHYSICS.md §3.4): a world at c = 2 with a charge of 1/40 at
     γ = 3, radiation reaction included. With a charge of 0.1 the tight bends radiated half
     the particle's energy and max |F_RR| / max |F_L| reached 0.19; at 1/40 (magnets ×4, the
     same trajectories) it is 0.018–0.022 and they radiate 6–8 %. Measured (analyze

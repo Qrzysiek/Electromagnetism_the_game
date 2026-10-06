@@ -94,9 +94,13 @@ pub struct Electrode {
     pub bias: ConductorBias,
     /// The player sets this electrode's potential with a power supply (an element of kind
     /// `Supply` on its centre, one of `limits.supply_voltages`); without one it keeps
-    /// `bias`.
+    /// `bias`. A driven electrode's supply sets its source's level instead (`Source::
+    /// with_level`); the bias is then its potential at t = 0.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub tunable: bool,
+    /// A circuit driving its potential (PHYSICS.md §2.10).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drive: Option<Drive>,
 }
 
 /// A charge cloud: a sphere of uniform charge density that particles fly through. Inside,
@@ -623,6 +627,17 @@ impl Coil {
             Coil::Circle { rate, .. } | Coil::Polygon { rate, .. } => *rate != 0.0,
         }
     }
+
+    /// Whether a circuit drives its current.
+    pub fn is_driven(&self) -> bool {
+        matches!(self, Coil::Circle { drive: Some(_), .. })
+    }
+
+    /// Whether its current changes in time (ramped or driven): time-dependent B and an
+    /// induced E.
+    pub fn is_time_dependent(&self) -> bool {
+        self.is_ramped() || self.is_driven()
+    }
 }
 
 /// A coil placed by the level, lying in the plane, with strength `kappa = μ₀ I / 4π`
@@ -639,6 +654,10 @@ pub enum Coil {
         /// field −∂A/∂t (quasi-static, PHYSICS.md §2.2). 0: a steady current.
         #[serde(default, skip_serializing_if = "is_zero")]
         rate: f64,
+        /// A circuit driving its current from `kappa` at t = 0 (PHYSICS.md §2.10; not with
+        /// a ramp).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        drive: Option<Drive>,
     },
     Polygon {
         vertices: Vec<Node>,
@@ -646,6 +665,173 @@ pub enum Coil {
         #[serde(default, skip_serializing_if = "is_zero")]
         rate: f64,
     },
+}
+
+/// A circuit driving a level electrode or a circular coil (PHYSICS.md §2.10, one way): a
+/// source through a series resistance into the element. An electrode's chain may have an
+/// inductance in series (an LC with the electrode's capacitance) or its resistance as a
+/// timed switch; a coil's may have a capacitance in series. The element starts from its
+/// static state (an electrode at its bias potential, a coil at its strength κ); the
+/// chain's own inductor and capacitor start empty.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Drive {
+    pub source: Source,
+    /// Series resistance (> 0).
+    pub resistance: f64,
+    /// Series inductance (electrodes only; 0: none).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub inductance: f64,
+    /// Series capacitance (coils only; 0: none).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub capacitance: f64,
+    /// The resistance is a switch toggling once (electrodes without an inductance).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub switch: Option<Switch>,
+}
+
+/// A timed switch: closed (or open) at first, toggling at lab time `at`.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Switch {
+    #[serde(default)]
+    pub closed: bool,
+    pub at: f64,
+}
+
+/// A source's voltage over lab time (PHYSICS.md §2.9).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Source {
+    /// Constant.
+    Dc { value: f64 },
+    /// `offset + amplitude sin(omega t + phase)`.
+    Sine {
+        #[serde(default, skip_serializing_if = "is_zero")]
+        offset: f64,
+        amplitude: f64,
+        omega: f64,
+        #[serde(default, skip_serializing_if = "is_zero")]
+        phase: f64,
+    },
+    /// A trapezoid: `low` until `delay`, rising over `rise` to `high`, held for `width`,
+    /// falling over `fall`; repeated every `period` if that is positive.
+    Pulse {
+        #[serde(default, skip_serializing_if = "is_zero")]
+        low: f64,
+        high: f64,
+        delay: f64,
+        rise: f64,
+        width: f64,
+        fall: f64,
+        #[serde(default, skip_serializing_if = "is_zero")]
+        period: f64,
+    },
+}
+
+impl Source {
+    pub fn waveform(&self) -> physics::circuit::Waveform {
+        use physics::circuit::Waveform;
+        match *self {
+            Source::Dc { value } => Waveform::Dc(value),
+            Source::Sine {
+                offset,
+                amplitude,
+                omega,
+                phase,
+            } => Waveform::Sine {
+                offset,
+                amplitude,
+                omega,
+                phase,
+            },
+            Source::Pulse {
+                low,
+                high,
+                delay,
+                rise,
+                width,
+                fall,
+                period,
+            } => Waveform::Pulse {
+                low,
+                high,
+                delay,
+                rise,
+                width,
+                fall,
+                period,
+            },
+        }
+    }
+
+    /// The source with its level set by a power supply: a constant's value, a sine's
+    /// amplitude, a pulse's top.
+    #[must_use]
+    pub fn with_level(mut self, v: f64) -> Self {
+        match &mut self {
+            Source::Dc { value } => *value = v,
+            Source::Sine { amplitude, .. } => *amplitude = v,
+            Source::Pulse { high, .. } => *high = v,
+        }
+        self
+    }
+
+    /// Whether every parameter is finite and the times and the frequency are not negative.
+    pub fn is_valid(&self) -> bool {
+        match *self {
+            Source::Dc { value } => value.is_finite(),
+            Source::Sine {
+                offset,
+                amplitude,
+                omega,
+                phase,
+            } => {
+                [offset, amplitude, phase].iter().all(|v| v.is_finite())
+                    && omega.is_finite()
+                    && omega >= 0.0
+            }
+            Source::Pulse {
+                low,
+                high,
+                delay,
+                rise,
+                width,
+                fall,
+                period,
+            } => {
+                low.is_finite()
+                    && high.is_finite()
+                    && [delay, rise, width, fall, period]
+                        .iter()
+                        .all(|v| v.is_finite() && *v >= 0.0)
+            }
+        }
+    }
+}
+
+impl Drive {
+    /// The chain of the physics (`physics::drive::Chain`) with this source.
+    pub fn chain(&self, source: Source) -> physics::drive::Chain {
+        physics::drive::Chain {
+            wave: source.waveform(),
+            r: self.resistance,
+            l: self.inductance,
+            c: self.capacitance,
+            switch: self.switch.map(|s| (s.closed, s.at)),
+        }
+    }
+
+    /// Whether the parameters are valid: a positive resistance, inductance and capacitance
+    /// not negative, a valid source, a switch time not negative.
+    pub fn is_valid(&self) -> bool {
+        self.resistance.is_finite()
+            && self.resistance > 0.0
+            && self.inductance.is_finite()
+            && self.inductance >= 0.0
+            && self.capacitance.is_finite()
+            && self.capacitance >= 0.0
+            && self.source.is_valid()
+            && self.switch.is_none_or(|s| s.at.is_finite() && s.at >= 0.0)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1279,9 +1465,8 @@ impl Level {
     pub fn all_box_electrodes(&self, player: &[Element]) -> Vec<physics::bem::BoxElectrode> {
         let mut boxes = self.box_electrodes();
         for (b, e) in boxes.iter_mut().zip(&self.electrodes) {
-            if let Some(s) = player
-                .iter()
-                .find(|s| s.kind == ElementKind::Supply && e.tunable && s.node == e.center)
+            if let Some(s) = self.supply_of(e, player)
+                && e.drive.is_none()
             {
                 b.bias = Bias::Potential(s.value);
             }
@@ -1293,6 +1478,168 @@ impl Level {
                 .map(|e| self.plate_box(e)),
         );
         boxes
+    }
+
+    /// The player's power supply of a tunable electrode, if placed.
+    fn supply_of<'a>(&self, e: &Electrode, player: &'a [Element]) -> Option<&'a Element> {
+        player
+            .iter()
+            .find(|s| s.kind == ElementKind::Supply && e.tunable && s.node == e.center)
+    }
+
+    /// Whether a circuit drives an electrode or a coil (PHYSICS.md §2.10).
+    pub fn has_drives(&self) -> bool {
+        self.electrodes.iter().any(|e| e.drive.is_some()) || self.coils.iter().any(Coil::is_driven)
+    }
+
+    /// The circuits driving the level's electrodes and circular coils, solved over every
+    /// flight's lab time (PHYSICS.md §2.10), for a field built by `field_at` (its
+    /// electrodes, the level's then the player's, and its loops, the circular coils in
+    /// order). None without drives.
+    pub fn drives_for(
+        &self,
+        player: &[Element],
+        field: &LevelField,
+    ) -> Result<Option<physics::drive::Drives>, physics::circuit::CircuitError> {
+        let electrodes: Vec<(usize, physics::drive::Chain)> = self
+            .electrodes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, e)| {
+                let d = e.drive?;
+                let source = match self.supply_of(e, player) {
+                    Some(s) => d.source.with_level(s.value),
+                    None => d.source,
+                };
+                Some((i, d.chain(source)))
+            })
+            .collect();
+        let loops: Vec<(usize, physics::drive::Chain)> = self
+            .coils
+            .iter()
+            .filter(|c| matches!(c, Coil::Circle { .. }))
+            .enumerate()
+            .filter_map(|(i, c)| match c {
+                Coil::Circle { drive: Some(d), .. } => Some((i, d.chain(d.source))),
+                _ => None,
+            })
+            .collect();
+        if electrodes.is_empty() && loops.is_empty() {
+            return Ok(None);
+        }
+        physics::drive::Drives::build(
+            &field.electrodes,
+            &electrodes,
+            &field.loops,
+            &loops,
+            self.c(),
+            self.drive_end(),
+        )
+        .map(Some)
+    }
+
+    /// The lab time the circuits are solved over: up to the last launch plus `t_max`.
+    pub fn drive_end(&self) -> f64 {
+        self.shots.iter().map(|s| s.launch.time).fold(0.0, f64::max) + self.physics.t_max
+    }
+
+    /// The largest magnitude each circuit quantity that drives the field reaches over the
+    /// circuit's time, sampled at 2001 times: `(electrode potentials, coil strengths κ)`,
+    /// in the order of `Drives::electrodes` and `Drives::loops`.
+    fn drive_scales(&self, d: &physics::drive::Drives) -> (Vec<f64>, Vec<f64>) {
+        let t_end = self.drive_end();
+        let peak = |f: &dyn Fn(f64) -> f64| {
+            (0..=2000)
+                .map(|k| f(t_end * f64::from(k) / 2000.0).abs())
+                .fold(0.0, f64::max)
+        };
+        (
+            d.electrodes
+                .iter()
+                .map(|&(_, n)| peak(&|t| d.solution.potential(n, t)))
+                .collect(),
+            d.loops
+                .iter()
+                .map(|&(_, k)| peak(&|t| d.solution.current(k, t)) * d.per_current)
+                .collect(),
+        )
+    }
+
+    /// A bound on the particles' neglected back-action on the circuits (one-way coupling,
+    /// PHYSICS.md §2.10), relative to the drive. A charge q induces at most |q| on a plate
+    /// of the circuit, changing its potential by at most |q|/C (C its coefficient of
+    /// capacitance), against the largest potential the circuit's plates reach. A charge
+    /// moving slower than c and kept a wire radius b from a driven coil of radius a links
+    /// at most the flux |q|·2πa/(c b) (its vector potential is |q|v/(c² r)), which changes
+    /// the coil's strength by at most that over its self-flux N (κ = I/c², L = N/c²),
+    /// against the largest κ of the driven coils. A circuit that stays at 0 drives
+    /// nothing: then only the charge the particle induces acts, which is its image force,
+    /// bounded separately (§2.7). 0 without circuits.
+    pub fn drive_back_action_bound(&self, player: &[Element]) -> f64 {
+        let (field, _) = self.field(player);
+        let Some(d) = &field.drives else {
+            return 0.0;
+        };
+        let q = self
+            .shots
+            .iter()
+            .map(|s| s.particle.charge.abs())
+            .fold(0.0, f64::max);
+        let (potentials, strengths) = self.drive_scales(d);
+        let v = potentials.iter().fold(0.0_f64, |m, v| m.max(*v));
+        let kappa = strengths.iter().fold(0.0_f64, |m, k| m.max(*k));
+        let mut bound: f64 = 0.0;
+        if let Some(cm) = field.electrodes.capacitance()
+            && v > 0.0
+        {
+            for &(e, _) in &d.electrodes {
+                bound = bound.max(q / (cm[e][e] * v));
+            }
+        }
+        if kappa > 0.0 {
+            for &(i, _) in &d.loops {
+                let l = &field.loops[i];
+                let n = physics::inductance::ring_self(l);
+                bound = bound.max(
+                    q * std::f64::consts::TAU * l.radius / (self.c() * l.wire_radius * n * kappa),
+                );
+            }
+        }
+        bound
+    }
+
+    /// The circuits' quasi-static parameter (PHYSICS.md §2.10): the light time across the
+    /// arena times the fastest relative rate of change of a driven potential or coil
+    /// strength (finite differences on 2000 intervals). 0 without circuits or for c = ∞.
+    pub fn drive_quasi_static_ratio(&self, player: &[Element]) -> f64 {
+        let (field, _) = self.field(player);
+        let Some(d) = &field.drives else {
+            return 0.0;
+        };
+        let t_end = self.drive_end();
+        let dt = t_end / 2000.0;
+        let (potentials, strengths) = self.drive_scales(d);
+        let rate = |f: &dyn Fn(f64) -> f64, scale: f64| {
+            (0..2000)
+                .map(|k| {
+                    let t = dt * f64::from(k);
+                    (f(t + dt) - f(t)).abs() / dt
+                })
+                .fold(0.0, f64::max)
+                / scale
+        };
+        let mut fastest: f64 = 0.0;
+        for (&(_, n), v) in d.electrodes.iter().zip(&potentials) {
+            if *v > 0.0 {
+                fastest = fastest.max(rate(&|t| d.solution.potential(n, t), *v));
+            }
+        }
+        for (&(_, k), kappa) in d.loops.iter().zip(&strengths) {
+            if *kappa > 0.0 {
+                fastest = fastest.max(rate(&|t| d.solution.current(k, t) * d.per_current, *kappa));
+            }
+        }
+        f64::from(self.grid.nx.max(self.grid.ny)) / self.c() * fastest
     }
 
     /// Whether a placement has metal (spheres, electrodes or player plates), whose model
@@ -1435,6 +1782,7 @@ impl Level {
 
     pub fn model_issues(&self) -> Vec<String> {
         let mut out = Vec::new();
+        self.drive_issues(&mut out);
         self.gate_issues(&mut out);
         self.radiation_goal_issues(&mut out);
         if self.has_beams() {
@@ -1549,10 +1897,10 @@ impl Level {
                 out.push("an element or launch point is inside or at an electrode".into());
             }
         }
-        // Ramped coils: their induced field is not conservative, which the metal model
-        // (electrostatic) cannot screen; and time-dependent B is not combined with
+        // Ramped and driven coils: their induced field is not conservative, which the metal
+        // model (electrostatic) cannot screen; and time-dependent B is not combined with
         // magnetic moments (like antennas and waves).
-        if self.coils.iter().any(Coil::is_ramped) {
+        if self.coils.iter().any(Coil::is_time_dependent) {
             if !self.conductors.is_empty()
                 || !self.electrodes.is_empty()
                 || self.limits.max_plates > 0
@@ -1693,6 +2041,7 @@ impl Level {
                     radius,
                     kappa,
                     rate,
+                    drive: _,
                 } => {
                     let l = CircularLoop {
                         center: self.grid.position(*center),
@@ -1763,7 +2112,7 @@ impl Level {
                 radius: 0.0,
             }))
             .collect();
-        let field = LevelField {
+        let mut field = LevelField {
             coulomb: Coulomb::with_clouds(&charges, &clouds),
             dipoles,
             loops,
@@ -1775,7 +2124,84 @@ impl Level {
             time_offset: 0.0,
             drives: None,
         };
+        // A circuit that cannot be solved is a model issue (`drive_issues`): the field is
+        // then without it.
+        field.drives = self
+            .drives_for(player, &field)
+            .ok()
+            .flatten()
+            .map(std::sync::Arc::new);
         (field, obstacles)
+    }
+
+    /// Circuits (PHYSICS.md §2.10): valid parameters, chains that fit their element, a
+    /// circuit that can be solved, and the flights' integration (the beam runner does not
+    /// stop at the circuit's breakpoints and knots).
+    fn drive_issues(&self, out: &mut Vec<String>) {
+        if !self.has_drives() {
+            return;
+        }
+        let before = out.len();
+        if self.has_beams() {
+            out.push("circuits are not combined with beams or free particles yet".into());
+        }
+        for e in &self.electrodes {
+            let Some(d) = e.drive else { continue };
+            if !d.is_valid() {
+                out.push(
+                    "a drive needs a positive resistance, valid source parameters and                      non-negative times, inductance and capacitance"
+                        .into(),
+                );
+            }
+            if matches!(e.bias, ConductorBias::Charge(_)) {
+                out.push("a driven electrode starts at a potential, not floating".into());
+            }
+            if d.capacitance != 0.0 {
+                out.push("an electrode's drive has no series capacitance (it is one)".into());
+            }
+            if d.switch.is_some() && d.inductance != 0.0 {
+                out.push(
+                    "a switch cannot open on an inductor's current (no inductance with a switch)"
+                        .into(),
+                );
+            }
+        }
+        for c in &self.coils {
+            let Coil::Circle {
+                drive: Some(d),
+                rate,
+                ..
+            } = c
+            else {
+                continue;
+            };
+            if !d.is_valid() {
+                out.push(
+                    "a drive needs a positive resistance, valid source parameters and                      non-negative times, inductance and capacitance"
+                        .into(),
+                );
+            }
+            if *rate != 0.0 {
+                out.push("a driven coil has no ramp".into());
+            }
+            if d.inductance != 0.0 || d.switch.is_some() {
+                out.push(
+                    "a coil's drive has no series inductance (it is one) and no switch".into(),
+                );
+            }
+        }
+        if self.coils.iter().any(Coil::is_driven) && self.physics.c.is_none() {
+            out.push("a driven coil needs a finite speed of light (its inductance is N/c²)".into());
+        }
+        if out.len() == before {
+            let (field, _) = self.field_at(&self.reference_solution, Resolution::Preview);
+            if let Err(e) = self.drives_for(&self.reference_solution, &field) {
+                out.push(format!(
+                    "the circuit cannot be solved ({e:?}: a loop of capacitors and sources, \
+                     or a switch on an inductor's current)"
+                ));
+            }
+        }
     }
 
     /// Gates: they must not overlap (each other) or contain a launch point.
@@ -2239,6 +2665,7 @@ mod tests {
                 radius: 8.0,
                 kappa: 0.5,
                 rate: 0.25,
+                drive: None,
             }],
             limits: Limits {
                 max_charges: 2,
@@ -2367,6 +2794,7 @@ mod tests {
             angle_deg: 0.0,
             bias: ConductorBias::Grounded,
             tunable: true,
+            drive: None,
         }];
         l
     }
@@ -2478,6 +2906,7 @@ mod tests {
             angle_deg: 90.0,
             bias: ConductorBias::Potential(1e4),
             tunable: false,
+            drive: None,
         });
         let (a, oa) = l.field(&player);
         let (b, ob) = fixed.field(&[]);
@@ -2493,6 +2922,106 @@ mod tests {
         assert!((c.sample(x, 0.0).phi - a.sample(x, 0.0).phi).abs() > 1e3);
         assert!(l.has_metal(&[]) && !sample_level().has_metal(&[]));
         assert!(sample_level().has_metal(&player[..1]));
+    }
+
+    /// A driven electrode (PHYSICS.md §2.10): the JSON round trip keeps the drive; the
+    /// circuit charges it from its bias towards the source's level, which a power supply
+    /// on a tunable electrode sets; and a drive's issues are listed.
+    #[test]
+    fn driven_electrodes() {
+        let mut l = plate_level();
+        l.electrodes[0].drive = Some(Drive {
+            source: Source::Dc { value: 1e4 },
+            resistance: 0.05,
+            inductance: 0.0,
+            capacitance: 0.0,
+            switch: None,
+        });
+        assert!(l.has_drives());
+        assert_eq!(Level::from_json(&l.to_json()).unwrap(), l);
+        let end = l.drive_end();
+        let potential = |player: &[Element]| {
+            let (f, _) = l.field(player);
+            let d = f.drives.clone().expect("driven");
+            let n = d
+                .electrodes
+                .iter()
+                .find(|&&(e, _)| e == 0)
+                .expect("in it")
+                .1;
+            (d.solution.potential(n, 0.0), d.solution.potential(n, end))
+        };
+        // From the grounded bias to the source's level (RC ≪ t_max).
+        let (v0, v1) = potential(&[]);
+        assert!(v0.abs() < 1e-6 && (v1 - 1e4).abs() < 1e-2, "{v0} {v1}");
+        // A supply sets the level; the bias stays the start.
+        let (v0, v1) = potential(&[Element::supply([5, 8, 0], -2e4)]);
+        assert!(v0.abs() < 1e-6 && (v1 + 2e4).abs() < 1e-2, "{v0} {v1}");
+        let drive_issue = |l: &Level, text: &str| l.model_issues().iter().any(|i| i.contains(text));
+        assert!(!drive_issue(&l, "drive") && !drive_issue(&l, "circuit"));
+        let bound = l.drive_back_action_bound(&[]);
+        assert!(bound > 0.0 && bound.is_finite(), "{bound}");
+        let mut bad = l.clone();
+        bad.electrodes[0].drive.as_mut().expect("driven").resistance = 0.0;
+        assert!(drive_issue(&bad, "positive resistance"));
+        let mut switched = l.clone();
+        {
+            let d = switched.electrodes[0].drive.as_mut().expect("driven");
+            d.inductance = 1.0;
+            d.switch = Some(Switch {
+                closed: false,
+                at: 1.0,
+            });
+        }
+        assert!(drive_issue(&switched, "switch cannot open"));
+        let mut floating = l.clone();
+        floating.electrodes[0].bias = ConductorBias::Charge(0.0);
+        assert!(drive_issue(&floating, "not floating"));
+    }
+
+    /// A driven coil (DC through R): from its strength κ at t = 0 towards the source's
+    /// current over c², as the RL circuit's closed form; it needs a finite c and no ramp.
+    #[test]
+    fn driven_coils() {
+        let mut l = sample_level();
+        l.free_particles.clear();
+        l.limits.max_free = 0;
+        let Coil::Circle { rate, drive, .. } = &mut l.coils[0] else {
+            unreachable!("a circle")
+        };
+        *rate = 0.0;
+        *drive = Some(Drive {
+            source: Source::Dc { value: 1.0 },
+            resistance: 1.0,
+            inductance: 0.0,
+            capacitance: 0.0,
+            switch: None,
+        });
+        assert_eq!(Level::from_json(&l.to_json()).unwrap(), l);
+        let c = l.physics.c.expect("finite c");
+        let (f, _) = l.field(&[]);
+        let d = f.drives.clone().expect("driven");
+        let (_, k) = d.loops[0];
+        let kappa = |t: f64| d.solution.current(k, t) * d.per_current;
+        // κ∞ + (κ₀ − κ∞) e^{−t/τ}: κ₀ = 0.5, κ∞ = (V/R)/c², τ = L/R with L its
+        // self-inductance over c².
+        let tau = physics::inductance::ring_self(&f.loops[0]) / (c * c);
+        let infinity = 1.0 / (c * c);
+        let end = l.drive_end();
+        for t in [0.0, 0.1 * end, 0.5 * end, end] {
+            let want = infinity + (0.5 - infinity) * libm::exp(-t / tau);
+            assert!((kappa(t) - want).abs() < 1e-9, "{t}: {} {want}", kappa(t));
+        }
+        let drive_issue = |l: &Level, text: &str| l.model_issues().iter().any(|i| i.contains(text));
+        assert!(!drive_issue(&l, "drive") && !drive_issue(&l, "circuit"));
+        let mut newtonian = l.clone();
+        newtonian.physics.c = None;
+        assert!(drive_issue(&newtonian, "finite speed of light"));
+        let mut ramped = l.clone();
+        if let Coil::Circle { rate, .. } = &mut ramped.coils[0] {
+            *rate = 0.1;
+        }
+        assert!(drive_issue(&ramped, "no ramp"));
     }
 
     /// Refining keeps metal in place too (metal sphere and electrode centres are nodes),

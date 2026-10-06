@@ -126,6 +126,19 @@
       ]
     },
     {
+      "name": "Circuits",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "charging_a_plate",
+            "chopper",
+            "ringing_plate"
+          ]
+        }
+      ]
+    },
+    {
       "name": "Beams",
       "tiers": [
         {

@@ -452,7 +452,19 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         // Opened for developer captures with EM_MODEL=1 (see `dev_capture`).
         .default_open(std::env::var("EM_MODEL").is_ok_and(|v| v == "1"))
         .show(ui, |ui| {
-            for n in level.model_notes(&game.editor.placement) {
+            // With circuits the notes need the solved circuit: the worker makes them.
+            let notes = if level.has_drives() {
+                match &game.circuit {
+                    Some((r, view)) if *r == game.sent_revision => view.notes.clone(),
+                    _ => {
+                        ui.label(egui::RichText::new("Solving the circuit…").small().weak());
+                        Vec::new()
+                    }
+                }
+            } else {
+                level.model_notes(&game.editor.placement)
+            };
+            for n in notes {
                 ui.horizontal_wrapped(|ui| {
                     if n.exact {
                         ui.colored_label(egui::Color32::from_rgb(110, 210, 120), "exact")
@@ -473,6 +485,49 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     .weak(),
             );
         });
+    if level.has_drives() {
+        egui::CollapsingHeader::new("Circuits")
+            .id_salt("circuits")
+            .default_open(true)
+            .show(ui, |ui| {
+                let launches: Vec<f64> = level.shots.iter().map(|s| s.launch.time).collect();
+                // Up to the end of the last flight (with a margin), once the previews are
+                // in: the flights are often a few % of the circuit's time.
+                let ends: Vec<f64> = game
+                    .flights
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, f)| {
+                        let p = f.preview.as_ref()?;
+                        Some(level.shots[level.flight_of(i).0].launch.time + p.flight_time)
+                    })
+                    .collect();
+                let window = (ends.len() == game.flights.len() && !ends.is_empty())
+                    .then(|| 1.15 * ends.iter().fold(0.0_f64, |m, t| m.max(*t)));
+                match &game.circuit {
+                    Some((r, view)) if *r == game.sent_revision => {
+                        for (label, samples) in &view.plots {
+                            ui.label(egui::RichText::new(label).small());
+                            let shown: Vec<(f64, f64)> = match window {
+                                Some(w) => samples.iter().copied().filter(|s| s.0 <= w).collect(),
+                                None => samples.clone(),
+                            };
+                            circuit_plot(ui, &shown, &launches);
+                        }
+                        ui.label(
+                            egui::RichText::new(
+                                "Over lab time, up to the end of the last flight; the yellow                                  lines are the launches.",
+                            )
+                            .small()
+                            .weak(),
+                        );
+                    }
+                    _ => {
+                        ui.label(egui::RichText::new("Solving the circuit…").small().weak());
+                    }
+                }
+            });
+    }
     ui.separator();
 
     // Palette.
@@ -768,8 +823,13 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 }
                 ui.label("energy error |ΔW|/T₀");
                 if p.energy_rel_error.is_nan() {
-                    // Time-dependent fields do work on the particle.
-                    ui.label("n/a (fields vary in time)");
+                    // Time-dependent fields do work on the particle. Short, with the reason
+                    // on hover: with the electrodes' long first column the row widened the
+                    // panel.
+                    ui.label("n/a").on_hover_text(
+                        "The fields vary in time and do work on the particle: its energy is \
+                         not conserved",
+                    );
                 } else {
                     ui.label(format!("{:.1e}", p.energy_rel_error));
                 }
@@ -988,7 +1048,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     }
     // Fields that change in time do work on the particle: no energy limit then.
     let (_, disturbance) = level.flight_of(game.active_flight());
-    let time_dependent = level.coils.iter().any(level::Coil::is_ramped)
+    let time_dependent = level.coils.iter().any(level::Coil::is_time_dependent)
+        || level.has_drives()
         || level
             .elements
             .iter()
@@ -1004,9 +1065,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     let legend = match game.map {
         Some(MapMode::Potential) if time_dependent => {
             "Red: uphill for this shot's particle, blue: downhill (the static part of the \
-             field). No dark region: the time-dependent fields (a ramped coil's induced \
-             field, antennas, waves) do work on the particle, so energy conservation \
-             forbids nothing here."
+             field; plates and coils driven by circuits as they are at t = 0). No dark \
+             region: the time-dependent fields (a ramped or driven coil's induced field, \
+             driven plates, antennas, waves) do work on the particle, so energy \
+             conservation forbids nothing here."
         }
         Some(MapMode::Potential) => {
             "Red: uphill for this shot's particle, blue: downhill; contours every T₀/4. \
@@ -2311,6 +2373,59 @@ fn radiation_goal(
             if goal.window.is_some() { ", over the window" } else { "" }
         ))
         .small(),
+    );
+}
+
+/// A small plot of a circuit quantity over lab time (PHYSICS.md §2.10), its range
+/// including 0, with lines at the times `marks` (the launches).
+fn circuit_plot(ui: &mut egui::Ui, samples: &[(f64, f64)], marks: &[f64]) {
+    let (Some(&(t0, _)), Some(&(t1, _))) = (samples.first(), samples.last()) else {
+        return;
+    };
+    let width = ui.available_width().min(280.0);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 54.0), egui::Sense::hover());
+    let painter = ui.painter_at(rect);
+    let (lo, hi) = samples
+        .iter()
+        .fold((0.0_f64, 0.0_f64), |(a, b), s| (a.min(s.1), b.max(s.1)));
+    let span = if hi > lo { hi - lo } else { 1.0 };
+    let duration = if t1 > t0 { t1 - t0 } else { 1.0 };
+    #[allow(clippy::cast_possible_truncation)]
+    let at = |t: f64, v: f64| {
+        egui::pos2(
+            rect.left() + ((t - t0) / duration) as f32 * rect.width(),
+            rect.bottom() - 2.0 - ((v - lo) / span) as f32 * (rect.height() - 14.0),
+        )
+    };
+    let text = ui.visuals().text_color();
+    painter.line_segment(
+        [at(t0, 0.0), at(t1, 0.0)],
+        egui::Stroke::new(1.0, egui::Color32::from_gray(90)),
+    );
+    for &m in marks {
+        if (t0..=t1).contains(&m) {
+            painter.line_segment(
+                [at(m, lo), at(m, hi)],
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(230, 200, 80)),
+            );
+        }
+    }
+    let points: Vec<egui::Pos2> = samples.iter().map(|&(t, v)| at(t, v)).collect();
+    painter.add(egui::Shape::line(
+        points,
+        egui::Stroke::new(1.5, egui::Color32::from_rgb(120, 200, 255)),
+    ));
+    painter.text(
+        rect.left_top(),
+        egui::Align2::LEFT_TOP,
+        format!(
+            "max {}   min {}   t ≤ {}",
+            fmt_si(hi),
+            fmt_si(lo),
+            fmt_si(t1)
+        ),
+        egui::FontId::proportional(10.0),
+        text,
     );
 }
 

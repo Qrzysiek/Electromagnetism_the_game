@@ -350,13 +350,14 @@ fn draw_coil(gizmos: &mut Gizmos, grid: Grid, coil: &Coil) {
             radius,
             kappa,
             rate,
+            drive,
         } => {
             let c = to_vec2(grid.position(*center));
             #[allow(clippy::cast_possible_truncation)]
             let r = *radius as f32;
             gizmos.circle_2d(c, r, copper).resolution(128);
-            // A ramped coil: a second, dashed ring (its current changes).
-            if *rate != 0.0 {
+            // A ramped or driven coil: a second, dashed ring (its current changes).
+            if *rate != 0.0 || drive.is_some() {
                 for k in (0..64).step_by(2) {
                     #[allow(clippy::cast_precision_loss)]
                     let (a0, a1) = (TAU * k as f32 / 64.0, TAU * (k + 1) as f32 / 64.0);

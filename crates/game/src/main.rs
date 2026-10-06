@@ -105,6 +105,9 @@ pub struct Game {
     /// Measured computational cost (sandbox resource meters) and the setup revision it
     /// belongs to; kept from the previous setup until the new one is measured.
     pub cost: Option<(u64, level::cost::Cost)>,
+    /// Levels with circuits: the circuit view (plots, model notes) and the setup revision
+    /// it belongs to.
+    pub circuit: Option<(u64, worker::CircuitView)>,
     /// (revision, active shot, active disturbance, all shots shown, mode, flight shown)
     /// the field map was computed for.
     pub map_key: (u64, usize, usize, bool, Option<MapMode>, bool),
@@ -179,6 +182,7 @@ impl Game {
             show_all_shots: true,
             sent_revision: 0,
             cost: None,
+            circuit: None,
             map_key: (0, 0, 0, false, None, false),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
@@ -1200,6 +1204,9 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
             }
             Response::Cost { revision, cost } if revision == current => {
                 game.cost = Some((revision, cost));
+            }
+            Response::Circuit { revision, view } if revision == current => {
+                game.circuit = Some((revision, view));
             }
             _ => {}
         }

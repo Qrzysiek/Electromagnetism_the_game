@@ -234,9 +234,14 @@ pub struct LevelField {
 }
 
 impl LevelField {
-    /// Build cost of the field's linear systems (metal spheres and electrodes).
+    /// Build cost of the field's linear systems (metal spheres, electrodes, circuits).
     pub fn setup_cost(&self) -> SetupCost {
-        self.conductors.setup_cost() + self.electrodes.setup_cost()
+        self.conductors.setup_cost()
+            + self.electrodes.setup_cost()
+            + self
+                .drives
+                .as_ref()
+                .map_or_else(SetupCost::default, |d| d.cost)
     }
 
     /// Magnetic field of the magnets and coils at t = 0.

@@ -47,6 +47,8 @@ pub struct Drives {
     pub loops: Vec<(usize, usize)>,
     /// A coil's strength per unit current: `μ₀/4π = 1/c²`.
     pub per_current: f64,
+    /// What building and solving the circuit took (for the sandbox's meters).
+    pub cost: crate::field::SetupCost,
 }
 
 impl Drives {
@@ -66,6 +68,7 @@ impl Drives {
         c_light: f64,
         t_end: f64,
     ) -> Result<Self, CircuitError> {
+        let started = std::time::Instant::now();
         let mut circuit = Circuit::default();
         // Initial node potentials (node k at k − 1) and the initial currents of the
         // components that carry one (inductors, sources), by component.
@@ -207,6 +210,14 @@ impl Drives {
             .fold(f64::INFINITY, f64::min);
         let scale = if scale.is_finite() { scale } else { 1.0 };
         let solution = circuit.solve(&x0, t_end, TOLERANCE, scale, t_end / 64.0)?;
+        let n = x0.len();
+        let cost = crate::field::SetupCost {
+            seconds: started.elapsed().as_secs_f64(),
+            // RADAU5's matrices (the Jacobian, the mass matrix, the real and the complex
+            // decomposition) and the dense outputs (four coefficients per unknown).
+            bytes: 8 * (5 * n * n + 4 * n * solution.steps()),
+            unknowns: n,
+        };
         Ok(Self {
             solution,
             initial: members
@@ -216,6 +227,7 @@ impl Drives {
             electrodes: members,
             loops: coil_loops,
             per_current,
+            cost,
         })
     }
 

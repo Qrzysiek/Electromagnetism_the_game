@@ -310,6 +310,21 @@ fn electrode_image_force_is_negligible() {
     }
 }
 
+/// Circuits drive plates and coils one way (PHYSICS.md §2.10): in every shipped level
+/// the bound on the particles' neglected back-action, `Level::drive_back_action_bound`,
+/// is below `IMAGE_FORCE_LIMIT` (1e-10), as for the neglected image force.
+#[test]
+fn drive_back_action_is_negligible() {
+    for (name, level) in shipped_levels() {
+        if !level.has_drives() {
+            continue;
+        }
+        let bound = level.drive_back_action_bound(&level.reference_solution);
+        println!("{name}: circuit back-action bound {bound:.1e}");
+        assert!(bound < level::IMAGE_FORCE_LIMIT, "{name}: {bound:.3e}");
+    }
+}
+
 /// Realistic iterations (chapter 15, SPEC §3) build an earlier level's idealised solution
 /// in and add a real effect that breaks it: on its own, without the player's elements,
 /// the built-in design must not solve the level (otherwise the effect is decoration).

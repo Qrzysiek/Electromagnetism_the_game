@@ -150,6 +150,66 @@ pub enum Response {
         revision: u64,
         cost: level::cost::Cost,
     },
+    /// Levels with circuits: the driven quantities over time and the model notes (which
+    /// need the solved circuit, so they are made here rather than on the render thread).
+    Circuit { revision: u64, view: CircuitView },
+}
+
+/// The circuits of a level (PHYSICS.md §2.10) for the panel.
+#[derive(Clone, Debug)]
+pub struct CircuitView {
+    /// Each driven electrode's potential and each driven coil's strength κ over the
+    /// circuit's lab time: (label, samples (t, value)).
+    pub plots: Vec<(String, Vec<(f64, f64)>)>,
+    pub notes: Vec<level::model::ModelNote>,
+}
+
+/// The circuit view of a placement, from its (preview) field.
+fn circuit_view(
+    level: &level::Level,
+    placement: &[level::Element],
+    field: &physics::field::LevelField,
+) -> CircuitView {
+    let mut plots = Vec::new();
+    if let Some(d) = &field.drives {
+        // Dense enough for the panel to zoom in on the flights (a few % of the circuit's
+        // time) with ~100 points.
+        let t_end = level.drive_end();
+        let times = || (0..=4000).map(move |k| t_end * f64::from(k) / 4000.0);
+        for &(e, node) in &d.electrodes {
+            let driven = level.electrodes.get(e).is_some_and(|el| el.drive.is_some());
+            plots.push((
+                format!(
+                    "Electrode {}{}: potential",
+                    e + 1,
+                    if driven { "" } else { " (floating)" }
+                ),
+                times()
+                    .map(|t| (t, d.solution.potential(node, t)))
+                    .collect(),
+            ));
+        }
+        for &(i, k) in &d.loops {
+            // Loop i is the i-th circular coil.
+            let coil = level
+                .coils
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| matches!(c, level::Coil::Circle { .. }))
+                .nth(i)
+                .map_or(i, |(j, _)| j);
+            plots.push((
+                format!("Coil {}: strength κ", coil + 1),
+                times()
+                    .map(|t| (t, d.solution.current(k, t) * d.per_current))
+                    .collect(),
+            ));
+        }
+    }
+    CircuitView {
+        plots,
+        notes: level.model_notes(placement),
+    }
 }
 
 pub struct Worker {
@@ -285,6 +345,7 @@ fn retag(r: Response, revision: u64) -> Response {
             run,
         },
         Response::Cost { cost, .. } => Response::Cost { revision, cost },
+        Response::Circuit { view, .. } => Response::Circuit { revision, view },
     }
 }
 
@@ -360,6 +421,22 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
         };
         if !send_cost(&cost) {
             return;
+        }
+        if req.level.has_drives() {
+            let Some(view) = unless_stale(newest, req.revision, || {
+                circuit_view(&req.level, &req.placement, &scenarios[0].field)
+            }) else {
+                continue 'requests;
+            };
+            if tx
+                .send(Response::Circuit {
+                    revision: req.revision,
+                    view,
+                })
+                .is_err()
+            {
+                return;
+            }
         }
 
         let mut previews: Vec<Trajectory> = Vec::new();
@@ -835,9 +912,8 @@ mod tests {
     /// and a screening cup's fade for every one that entered its detector.
     #[test]
     fn the_verdicts_exact_flight_is_sent_for_the_views() {
-        let path = crate::levels_dir().join("55_soft_landing_current.json");
-        let text = std::fs::read_to_string(path).expect("level 55");
-        let level = level::Level::from_json(&text).expect("valid level");
+        // By its slug: the curriculum renumbers the files.
+        let level = level::shipped("soft_landing_current");
         let (tx, rx) = channel();
         let sink = Sink {
             tx: &tx,

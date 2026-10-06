@@ -10,7 +10,7 @@ ratio", and the description cites the section or problem (planned level field `r
 
 ## Status (2026-10-05)
 
-- **Built:** five arcs, 32 levels (arcs 6–10, below), the book's validation tests listed
+- **Built:** five arcs, 32 levels (arcs 7–11, below), the book's validation tests listed
   after them (the latest: C5 Pr. 13.2–13.3 energy transfer to a bound charge; Z1–Z3
   §1.11–1.13 and §5.17, the circuits' groundwork; C3 §16.8 scattering by a bound charge,
   C4 Pr. 16.13 the dipole sum rule, R7 §14.8 radiation pressure, S8 Pr. 14.22, MS1 §13.6, S7 Pr. 15.10, R6
@@ -22,7 +22,7 @@ ratio", and the description cites the section or problem (planned level field `r
   some twenty orbits and an end to the flight: test S8), Pr. 16.12 (an average over
   random interruptions, which a deterministic flight does not realise).
 - **Built on 2026-10-05:** a level on §16.8's cross section, *Why the sky is blue*
-  (level 85; Rayleigh's ω⁴ through the resonance to Thomson's, test C3), with a new kind
+  (level 88; Rayleigh's ω⁴ through the resonance to Thomson's, test C3), with a new kind
   of radiation goal, the steady receiver (PHYSICS.md §3.4, test S10): a scattering bound
   electron stays bound, so the receiver averages the power it scatters over a window
   instead of waiting for it to arrive. Everything else needs a feature from the table below or 3D;
@@ -77,7 +77,7 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 
 ## Built levels
 
-Arc 6, "Jackson: charges in fields and collisions" (Ch. 12–13), `scripts/levels.py`:
+Arc 7, "Jackson: charges in fields and collisions" (Ch. 12–13), `scripts/levels.py`:
 
 - Jackson §12.3: E×B drift (introduction). Uniform crossed fields as a stray field; both
   signs drift with E×B/B² and their guiding centres follow the equipotentials.
@@ -101,7 +101,7 @@ Arc 6, "Jackson: charges in fields and collisions" (Ch. 12–13), `scripts/level
 - Jackson Ch. 12: magnetosphere (master). E×B steering through two gates, then gradient
   drift around a dipole Earth.
 
-Arc 7, "Jackson: electrostatics" (Ch. 2–4):
+Arc 8, "Jackson: electrostatics" (Ch. 2–4):
 
 - Jackson §2.2: its own image (introduction). A particle with charge 1 (Newtonian) passes a
   grounded sphere and is pulled by its image.
@@ -129,7 +129,7 @@ Arc 7, "Jackson: electrostatics" (Ch. 2–4):
   1.2 % and 0.1 % through, but their linear systems take 7.7 s and 27 s (budget 5 s) and
   168 and 360 MB. The slot level shows the screening that plates can do.
 
-Arc 8, "Jackson: radiation damping" (Ch. 16):
+Arc 9, "Jackson: radiation damping" (Ch. 16):
 
 - Jackson Pr. 16.2: the classical atom (introduction). Test R4 checks the r³ law (0.64 %
   at v/c = 0.056). The level makes radiation necessary with an energy window at the
@@ -138,7 +138,7 @@ Arc 8, "Jackson: radiation damping" (Ch. 16):
   of the same energy.
 - Jackson Ch. 16: three orbits (master).
 
-Arc 9, "Jackson: bound charges" (§16.7–16.8, Pr. 13.2), built on the new charge cloud
+Arc 10, "Jackson: bound charges" (§16.7–16.8, Pr. 13.2), built on the new charge cloud
 (F:bound, realised as Thomson's atom: an electron inside a sphere of uniform charge is
 bound harmonically, PHYSICS.md §2.1):
 
@@ -149,7 +149,7 @@ bound harmonically, PHYSICS.md §2.1):
   without the interaction the reference fails.
 - Jackson Ch. 16: spectroscopy (master). Two atoms, two resonances.
 
-Arc 10, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §3.4):
+Arc 11, "Jackson: radiation" (Ch. 14), on the new radiation goals (PHYSICS.md §3.4):
 
 - Jackson §14.3: forward beaming (introduction). The radiation follows the velocity
   within 1/γ: bend the particle while it heads for the receiver.
@@ -197,7 +197,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - Test: capacitance of a cube, Pr. 1.20b. The book's value is 0.655(4) (variational); the modern value is C = 0.66068 × 4πε₀a. NOW (BEM).
   - Test: the square plate C = 0.3667874 (see Pr. 3.21).
 - **§1.13 relaxation method.** Background for our BEM. Test only (compare with Pr. 1.22–1.24 examples).
-- **Pr. 1.1b shielding.** No field inside a closed conductor. A Faraday cage of plates was tried and set aside (Arc 7 above: walls open at the top and bottom screen only when tall, beyond the setup budget); it needs electrodes that close in z.
+- **Pr. 1.1b shielding.** No field inside a closed conductor. A Faraday cage of plates was tried and set aside (Arc 8 above: walls open at the top and bottom screen only when tall, beyond the setup budget); it needs electrodes that close in z.
 - **Pr. 1.12–1.13, induced charge between plates (Green reciprocity).** A charge between grounded plates. *Test Z1* (BEM, two unequal plates: the induced charges equal `−q φ_k(x)`, Pr. 1.13's fractional distance between them, and the symmetric coefficients of capacitance of §1.11; the circuits' Shockley–Ramo coupling). F:image-force for a level.
 
 ### Ch. 2: Boundary-value problems I
@@ -315,7 +315,7 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
   - A beam two-body level: knock the light charge into a detector.
   - A test against the impulse approximation.
   - NOW (beams with two species).
-- **Pr. 13.2/13.3 energy transfer to a harmonically bound charge.** Adiabatic cut-off for b > v/ω₀: slow collisions transfer nothing. Built: Pr. 13.2 as a level (arc 9); Pr. 13.3 as *test C5* (a relativistic pass, ξ = 0.3 to 4, against the K₀, K₁ formula within 6e-6; Brau §5.2.3 is the same problem).
+- **Pr. 13.2/13.3 energy transfer to a harmonically bound charge.** Adiabatic cut-off for b > v/ω₀: slow collisions transfer nothing. Built: Pr. 13.2 as a level (arc 10); Pr. 13.3 as *test C5* (a relativistic pass, ξ = 0.3 to 4, against the K₀, K₁ formula within 6e-6; Brau §5.2.3 is the same problem).
 - **§13.2–13.3 energy loss in matter, density effect.** The medium is OUT (statistical; the density effect needs a dielectric). Its per-atom part, the distant collisions summed over impact parameters with Bohr's adiabatic cut-off, is *test C7* (with Brau §7.3.1).
 - **§13.4 Cherenkov; §13.7 transition radiation.** OUT (media).
 - **§13.5 / Pr. 13.5 screened Coulomb scattering.** F:screened.
@@ -362,8 +362,8 @@ at Γ = ω₀²τ), L4 (Pr. 6.2, the fields in Heaviside's and Feynman's forms).
 - **§16.3–16.6 Abraham–Lorentz, runaways, preacceleration, classical electron models.**
   - Text only (LL avoids them).
   - Pr. 16.10–16.11 (gap acceleration with damping): *test R6*, LL against the integro-differential (exact non-runaway) solution, which in one dimension is exact for Lorentz–Dirac in the rapidity (Pr. 16.8); and the book's first-order results.
-- **Pr. 16.1, §16.7 radiating oscillator.** Level breadth: energy decays as e^{−Γt}, and the line width is Γ. Built (arc 9; test C2).
-- **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. Built: the resonance is a level of arc 9, and the cross section from Rayleigh to Thomson is *test C3* (the charge cloud in a plane wave, against (16.78); Jackson's (16.73) is the Landau–Lifshitz reduction). The level on the cross section: *Why the sky is blue* (85): the player softens the atom's spring along the light's field until a steady receiver counts 3–6 times the bare atom's backscatter.
+- **Pr. 16.1, §16.7 radiating oscillator.** Level breadth: energy decays as e^{−Γt}, and the line width is Γ. Built (arc 10; test C2).
+- **§16.8 scattering and absorption by an oscillator.** The resonance cross section, Thomson at high ω, Rayleigh (ω⁴) at low ω. Built: the resonance is a level of arc 10, and the cross section from Rayleigh to Thomson is *test C3* (the charge cloud in a plane wave, against (16.78); Jackson's (16.73) is the Landau–Lifshitz reduction). The level on the cross section: *Why the sky is blue* (85): the player softens the atom's spring along the light's field until a steady receiver counts 3–6 times the bare atom's backscatter.
 - **Pr. 16.12 collision broadening.** Set aside. Its spectrum is an average over an ensemble of wave trains cut at random, exponentially distributed times; the game's flights are deterministic and end once. One cut train is a finite flight of the radiation goals (the charge moves uniformly after its end): its line is the finite-time line of S1 (width 2π/T) on the decaying oscillator of C2, and Jackson's average over T is algebra on it. A test of the average through the game's measure would need the spectrum at thousands of cut times, because the counter-rotating part oscillates in T at 2ω₀, which a Gauss–Laguerre rule in T cannot average.
 - **Pr. 16.13 dipole sum rule.** *Test C4.* As stated it diverges for §16.8's own oscillator: its polarizability tends to `−(e²/mω²)(1 − iωτ)`, not the free value the problem assumes, so σ_t tends to σ_T. With σ_T subtracted it holds exactly up to the factor `1 − ω₀²τ²`, which the measured cross section resolves.
 
@@ -378,13 +378,13 @@ These combine several chapters; most come from the problems.
 5. **Ring of charges** (Pr. 14.23): radiation vanishing with N. NOW.
 6. **Undulator** (§14.7, Pr. 14.27): tune K for the radiation. NOW.
 7. **Knock-on** (Pr. 13.1): a heavy projectile kicks a light charge into a detector. NOW.
-8. **Quadrupole lens** (Pr. 2.20) + collimated beam (Collimated beam, Velocity selector). 3D (see Arc 7): in the plane its charges make a saddle, not a lens.
+8. **Quadrupole lens** (Pr. 2.20) + collimated beam (Collimated beam, Velocity selector). 3D (see Arc 8): in the plane its charges make a saddle, not a lens.
 9. **Betatron** (§5.15, §12.5): induction acceleration with the 2:1 condition. F:ramp.
 10. **g−2 ring** (Pr. 12.11–12.12, §11.11): spin tune. F:spin.
 11. **Λ decay reconstruction** (Pr. 11.20): decay in flight in a B field. F:decay.
 12. **Stark deflector** (Pr. 4.5): the electric Stern–Gerlach for polar molecules. F:polar.
 13. **RF cavity linac** (§8.7): phase stability with gates. F:cavity.
-14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built (arc 9; the cross section as test C3 and level 85).
+14. **Radiating oscillator** (§16.7–16.8): line width and resonance scattering of a plane wave. Built (arc 10; the cross section as test C3 and level 88).
 
 ## For the 3D simulation (future reference)
 
