@@ -9,9 +9,9 @@
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::{
-    Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Disturbance, Drive,
-    Electrode, Element, ElementKind, FreeParticle, Grid, Launch, Level, Limits, Node, ParticleSpec,
-    RadiationGoal, Region2, Shot, Source, Switch, TolerancesSpec, Wave, WorldPhysics,
+    Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric, Disturbance,
+    Drive, Electrode, Element, ElementKind, FreeParticle, Grid, Launch, Level, Limits, Node,
+    ParticleSpec, RadiationGoal, Region2, Shot, Source, Switch, TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -22,6 +22,9 @@ const GRID_CELLS: std::ops::RangeInclusive<u32> = 4..=200;
 const SUBDIVISION: std::ops::RangeInclusive<u32> = 1..=8;
 const MAX_POSITIVE: f64 = 1e12;
 const MIN_POSITIVE: f64 = 1e-12;
+/// Largest relative permittivity of a dielectric (water is 80; beyond 1e4 a dielectric is
+/// metal for every purpose here).
+const MAX_PERMITTIVITY: f64 = 1e4;
 const MAX_RADIUS: f64 = 5.0;
 /// Largest beam (particles; the interaction costs grow as N²).
 const MAX_BEAM: u32 = 200;
@@ -39,6 +42,7 @@ pub struct EditTexts {
     pub antenna_omegas: String,
     pub plate_voltages: String,
     pub supply_voltages: String,
+    pub coil_rates: String,
     pub free_charges: String,
     pub free_speeds: String,
 }
@@ -1032,10 +1036,15 @@ fn edit_coils(ui: &mut egui::Ui, coils: &mut Vec<Coil>, grid: &Grid) -> bool {
                     kappa,
                     rate,
                     drive,
+                    tunable,
                 } => {
                     ui.horizontal(|ui| {
                         ui.label("circle, centre");
                         focus |= node(ui, center, grid);
+                        ui.checkbox(tunable, "tunable").on_hover_text(
+                            "The player sets its ramp rate (a driven coil: its source's level) \
+                             with a power supply (Limits: coil ramp rates)",
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("radius");
@@ -1056,6 +1065,7 @@ fn edit_coils(ui: &mut egui::Ui, coils: &mut Vec<Coil>, grid: &Grid) -> bool {
                     vertices,
                     kappa,
                     rate,
+                    drive,
                 } => {
                     ui.horizontal(|ui| {
                         ui.label("polygon, κ");
@@ -1063,6 +1073,7 @@ fn edit_coils(ui: &mut egui::Ui, coils: &mut Vec<Coil>, grid: &Grid) -> bool {
                         ui.label("ramp dκ/dt");
                         focus |= si(ui, rate, 1.0);
                     });
+                    focus |= drive_editor(ui, ("coil drive", i), drive, false);
                     let mut drop = None;
                     for (k, v) in vertices.iter_mut().enumerate() {
                         ui.horizontal(|ui| {
@@ -1292,6 +1303,64 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
     focus
 }
 
+fn edit_dielectrics(ui: &mut egui::Ui, list: &mut Vec<Dielectric>, grid: &Grid) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, d) in list.iter_mut().enumerate() {
+        let Dielectric {
+            center,
+            length,
+            thickness,
+            height,
+            angle_deg,
+            permittivity,
+        } = d;
+        ui.push_id(("dielectric", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Dielectric {}", i + 1));
+                focus |= node(ui, center, grid);
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("L×T×H");
+                focus |= positive(ui, length, 0.05, MAX_POSITIVE);
+                focus |= positive(ui, thickness, 0.02, MAX_POSITIVE);
+                focus |= positive(ui, height, 0.05, MAX_POSITIVE);
+            });
+            ui.horizontal(|ui| {
+                focus |= ui
+                    .add(egui::DragValue::new(angle_deg).speed(1.0).suffix("°"))
+                    .has_focus();
+                ui.label("ε");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(permittivity)
+                            .speed(0.1)
+                            .range(1.0..=MAX_PERMITTIVITY),
+                    )
+                    .has_focus();
+            });
+        });
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize && ui.small_button("+ dielectric").clicked() {
+        let m = grid.max_node();
+        list.push(Dielectric {
+            center: [m[0] / 2, m[1] / 2, 0],
+            length: 4.0,
+            thickness: 2.0,
+            height: 4.0,
+            angle_deg: 0.0,
+            permittivity: 4.0,
+        });
+    }
+    focus
+}
+
 fn edit_disturbances(ui: &mut egui::Ui, list: &mut Vec<Disturbance>) -> bool {
     let mut focus = false;
     let mut remove = None;
@@ -1388,6 +1457,7 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         plate_voltages,
         plate,
         supply_voltages,
+        coil_rates,
         max_free,
         free_charges,
         free_speeds,
@@ -1480,6 +1550,18 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         }
         r.on_hover_text("Potentials of the power supplies of tunable electrodes (signed)")
             .has_focus()
+    });
+    focus |= row(ui, "Coil ramp rates dκ/dt", |ui| {
+        let r = ui.add(egui::TextEdit::singleline(&mut texts.coil_rates).desired_width(LIST_WIDTH));
+        if r.lost_focus() {
+            *coil_rates = parse_signed_list(&texts.coil_rates);
+            texts.coil_rates = list_to_text(coil_rates);
+        }
+        r.on_hover_text(
+            "Ramp rates of the power supplies of tunable coils (signed; a driven coil's \
+             supply sets its source's level from this list)",
+        )
+        .has_focus()
     });
     focus |= row(ui, "Player free charges (max)", |ui| {
         ui.add(egui::DragValue::new(max_free).range(0..=MAX_COUNT))
@@ -1580,6 +1662,7 @@ pub fn edit_level(
         clouds,
         free_particles,
         electrodes,
+        dielectrics,
         gates,
     } = level;
     let mut focus = false;
@@ -1624,6 +1707,13 @@ pub fn edit_level(
         .show(ui, |ui| focus |= edit_coils(ui, coils, &g));
     egui::CollapsingHeader::new(format!("Electrodes ({})", electrodes.len()))
         .show(ui, |ui| focus |= edit_electrodes(ui, electrodes, &g));
+    egui::CollapsingHeader::new(format!("Dielectrics ({})", dielectrics.len()))
+        .show(ui, |ui| focus |= edit_dielectrics(ui, dielectrics, &g))
+        .header_response
+        .on_hover_text(
+            "Insulating boxes of permittivity ε: their bound charge screens a field partly \
+             (metal screens it fully)",
+        );
     egui::CollapsingHeader::new(format!("Metal spheres ({})", conductors.len()))
         .show(ui, |ui| focus |= edit_conductors(ui, conductors, &g));
     egui::CollapsingHeader::new(format!("Charge clouds ({})", clouds.len()))
@@ -1676,6 +1766,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         clouds,
         free_particles,
         electrodes,
+        dielectrics,
         gates,
     } = level;
     if gates.len() > MAX_COUNT as usize {
@@ -1841,6 +1932,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                 kappa,
                 rate,
                 drive,
+                // A checkbox.
+                tunable: _,
             } => {
                 if !on_grid(center)
                     || !positive(*r)
@@ -1855,11 +1948,13 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                 vertices,
                 kappa,
                 rate,
+                drive,
             } => {
                 if vertices.len() < 3
                     || !vertices.iter().all(on_grid)
                     || !kappa.is_finite()
                     || !rate.is_finite()
+                    || !drive.as_ref().is_none_or(drive_editable)
                 {
                     return fail(
                         "polygon coil not reproducible (needs 3 or more vertices on the grid)",
@@ -1897,6 +1992,29 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             || !drive.as_ref().is_none_or(drive_editable)
         {
             return fail("electrode outside the editor's range");
+        }
+    }
+    if dielectrics.len() > MAX_COUNT as usize {
+        return fail("too many dielectrics");
+    }
+    for d in dielectrics {
+        let Dielectric {
+            center,
+            length,
+            thickness,
+            height,
+            angle_deg,
+            permittivity,
+        } = d;
+        let size_ok = [length, thickness, height]
+            .iter()
+            .all(|v| (MIN_POSITIVE..=MAX_POSITIVE).contains(*v));
+        if !on_grid(center)
+            || !size_ok
+            || !angle_deg.is_finite()
+            || !(1.0..=MAX_PERMITTIVITY).contains(permittivity)
+        {
+            return fail("dielectric outside the editor's range");
         }
     }
     if conductors.len() > MAX_COUNT as usize {
@@ -2012,6 +2130,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         plate_voltages,
         plate,
         supply_voltages,
+        coil_rates,
         max_free,
         free_charges,
         free_speeds,
@@ -2033,6 +2152,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         || !plate_voltages
             .iter()
             .chain(supply_voltages)
+            .chain(coil_rates)
             .all(|v| v.is_finite())
     {
         return fail("plate limits outside the editor's range");

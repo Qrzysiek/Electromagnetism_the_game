@@ -1,4 +1,4 @@
-//! Validation tests Z10–Z13 of circuits driving electrodes and coils (`drive.rs`,
+//! Validation tests Z10–Z13 and Z15 of circuits driving electrodes and coils (`drive.rs`,
 //! PHYSICS.md §2.10): the one-way coupling, against closed forms. Common requirement, set
 //! before measuring: within 1e-8 of the scale (the circuit's accuracy, tests Z4–Z9, with a
 //! margin for the flights' tolerance); the canonical angular momentum, an exact invariant,
@@ -17,7 +17,7 @@ use physics::circuit::Waveform;
 use physics::drive::{Chain, Drives};
 use physics::dynamics::Particle;
 use physics::field::{FieldSolver, LevelField};
-use physics::magnetic::CircularLoop;
+use physics::magnetic::{CircularLoop, PolygonCoil};
 use physics::trajectory::{RunSettings, Scenario, run};
 
 /// Preview panels (cells).
@@ -62,6 +62,8 @@ fn z10_plate_charged_through_a_resistor() {
     let drives = Drives::build(
         &electrodes,
         &[(0, rc(Waveform::Dc(v0), r))],
+        &[],
+        &[],
         &[],
         &[],
         f64::INFINITY,
@@ -141,6 +143,8 @@ fn z11_coil_driven_by_a_pulse() {
         &[],
         &[coil],
         &[(0, rc(wave, r))],
+        &[],
+        &[],
         c_light,
         t_end,
     )
@@ -250,6 +254,8 @@ fn z12_floating_plate_follows() {
         &[(0, rc(Waveform::Dc(v0), r))],
         &[],
         &[],
+        &[],
+        &[],
         f64::INFINITY,
         10.0 * tau,
     )
@@ -318,6 +324,8 @@ fn z13_impulse_of_a_charging_plate() {
         &[(0, rc(Waveform::Dc(v0), r))],
         &[],
         &[],
+        &[],
+        &[],
         f64::INFINITY,
         t2,
     )
@@ -362,4 +370,148 @@ fn z13_impulse_of_a_charging_plate() {
         tr.end.p.y, want.y, tr.outcome, tr.end.t
     );
     assert!(rel < 1e-8, "Z13 {rel:.3e}");
+}
+
+/// Z15: driven polygonal coils (c = 4). (a) A square coil (side 6, wire 0.1) switched onto
+/// DC V₀ = 8 through R = 2: its current `(V₀/R)(1 − e^{−t/τ})`, τ = L/R with L its
+/// self-inductance from the wire's surface flux (`polygon_self`, Z14), over `L/c²`.
+/// (b) The square and a ring beside it (radius 2, centre 7 from the square's), each in
+/// its own circuit (R = 2 and 3), DC only on the square: `𝐋 i̇ + 𝐑 i = (V₀, 0)` with the
+/// mutual inductance in 𝐋 (`mutual_polygon_circle`, Z14), whose solution is the steady
+/// currents plus two modes of `𝐋⁻¹𝐑` (closed form, the 2 × 2 eigen-decomposition): both
+/// currents within 1e-8 of `V₀/R`. And the field the driven square makes at a point
+/// against its exact field at the circuit's strength, and its induced field `−κ̇ A`.
+#[test]
+fn z15_driven_polygonal_coils() {
+    let c_light: f64 = 4.0;
+    let per = 1.0 / (c_light * c_light);
+    let square = PolygonCoil {
+        vertices: vec![
+            DVec3::new(-3.0, -3.0, 0.0),
+            DVec3::new(3.0, -3.0, 0.0),
+            DVec3::new(3.0, 3.0, 0.0),
+            DVec3::new(-3.0, 3.0, 0.0),
+        ],
+        kappa: 0.0,
+        wire_radius: 0.1,
+        rate: 0.0,
+    };
+    let (v0, r1) = (8.0, 2.0);
+    let t_end = 30.0;
+    // (a) Alone.
+    let l1 = physics::inductance::polygon_self(&square) * per;
+    let tau = l1 / r1;
+    let drives = Drives::build(
+        &Electrodes::default(),
+        &[],
+        &[],
+        &[],
+        std::slice::from_ref(&square),
+        &[(0, rc(Waveform::Dc(v0), r1))],
+        c_light,
+        t_end,
+    )
+    .expect("solves");
+    let worst_a = (0..=3000)
+        .map(|k| t_end * f64::from(k) / 3000.0)
+        .map(|t| {
+            let (kappa, _) = drives.polygon_strength(0, t).expect("driven");
+            (kappa / per - v0 / r1 * (1.0 - (-t / tau).exp())).abs() / (v0 / r1)
+        })
+        .fold(0.0, f64::max);
+    // (b) With a ring.
+    let ring = CircularLoop {
+        center: DVec3::new(7.0, 0.0, 0.0),
+        normal: DVec3::Z,
+        radius: 2.0,
+        kappa: 0.0,
+        wire_radius: 0.1,
+        rate: 0.0,
+    };
+    let r2 = 3.0;
+    let l2 = physics::inductance::ring_self(&ring) * per;
+    let m = physics::inductance::mutual_polygon_circle(&square, &ring) * per;
+    let drives = Drives::build(
+        &Electrodes::default(),
+        &[],
+        std::slice::from_ref(&ring),
+        &[(0, rc(Waveform::Dc(0.0), r2))],
+        std::slice::from_ref(&square),
+        &[(0, rc(Waveform::Dc(v0), r1))],
+        c_light,
+        t_end,
+    )
+    .expect("solves");
+    // 𝐋 i̇ = (V₀, 0) − 𝐑 i; i = i∞ + Σ a_k e^{−λ_k t} v_k with λ, v from 𝐀 = 𝐋⁻¹𝐑.
+    let det = l1 * l2 - m * m;
+    let a = [
+        [l2 * r1 / det, -m * r2 / det],
+        [-m * r1 / det, l1 * r2 / det],
+    ];
+    let tr = a[0][0] + a[1][1];
+    let dd = a[0][0] * a[1][1] - a[0][1] * a[1][0];
+    let disc = (tr * tr / 4.0 - dd).sqrt();
+    let lam = [tr / 2.0 + disc, tr / 2.0 - disc];
+    let vec_of = |l: f64| {
+        let v = [a[0][1], l - a[0][0]];
+        let n = (v[0] * v[0] + v[1] * v[1]).sqrt();
+        [v[0] / n, v[1] / n]
+    };
+    let (va, vb) = (vec_of(lam[0]), vec_of(lam[1]));
+    let inf = [v0 / r1, 0.0];
+    // i(0) = 0: a va + b vb = −i∞.
+    let d2 = va[0] * vb[1] - va[1] * vb[0];
+    let ca = (-inf[0] * vb[1] + inf[1] * vb[0]) / d2;
+    let cb = (va[0] * (-inf[1]) + va[1] * inf[0]) / d2;
+    let want = |t: f64| {
+        let (ea, eb) = ((-lam[0] * t).exp(), (-lam[1] * t).exp());
+        [
+            inf[0] + ca * ea * va[0] + cb * eb * vb[0],
+            inf[1] + ca * ea * va[1] + cb * eb * vb[1],
+        ]
+    };
+    let mut worst_b: f64 = 0.0;
+    for k in 0..=3000 {
+        let t = t_end * f64::from(k) / 3000.0;
+        let w = want(t);
+        let (ks, _) = drives.polygon_strength(0, t).expect("driven");
+        let (kr, _) = drives.loop_strength(0, t).expect("driven");
+        worst_b = worst_b
+            .max((ks / per - w[0]).abs() / inf[0])
+            .max((kr / per - w[1]).abs() / inf[0]);
+    }
+    // The field of the driven square at t = 1.3 and a point inside it.
+    let (t, x) = (1.3, DVec3::new(0.5, -1.0, 0.0));
+    let (kappa, rate) = drives.polygon_strength(0, t).expect("driven");
+    let field = LevelField {
+        loops: vec![ring],
+        polygons: vec![square.clone()],
+        drives: Some(Arc::new(drives)),
+        ..LevelField::default()
+    };
+    let sample = field.sample(x, t);
+    let (kr, rr) = field
+        .drives
+        .as_ref()
+        .expect("drives")
+        .loop_strength(0, t)
+        .expect("driven");
+    let b_want = PolygonCoil {
+        kappa,
+        ..square.clone()
+    }
+    .field(x)
+        + CircularLoop { kappa: kr, ..ring }.field(x);
+    let e_want = square.unit_vector_potential(x) * (-rate) + ring.unit_vector_potential(x) * (-rr);
+    let worst_f = ((sample.b - b_want).length() / b_want.length())
+        .max((sample.e - e_want).length() / e_want.length());
+    println!(
+        "Z15 square (L = {l1:.6}, τ = {tau:.6}): current within {worst_a:.1e} of V₀/R; with \
+         a ring (L = {l2:.6}, M = {m:.6}, modes {:.5} {:.5}): both currents within \
+         {worst_b:.1e}; the field within {worst_f:.1e}",
+        lam[0], lam[1]
+    );
+    assert!(worst_a < 1e-8, "Z15 (a) {worst_a:.3e}");
+    assert!(worst_b < 1e-8, "Z15 (b) {worst_b:.3e}");
+    assert!(worst_f < 1e-14, "Z15 field {worst_f:.3e}");
 }

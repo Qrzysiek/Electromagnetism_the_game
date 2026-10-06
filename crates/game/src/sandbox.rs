@@ -167,6 +167,7 @@ pub fn empty_level() -> Level {
             plate_voltages: vec![],
             plate: level::PlateSize::default(),
             supply_voltages: vec![],
+            coil_rates: vec![],
             max_free: 0,
             free_charges: vec![],
             free_speeds: vec![],
@@ -179,6 +180,7 @@ pub fn empty_level() -> Level {
         clouds: Vec::new(),
         free_particles: Vec::new(),
         electrodes: Vec::new(),
+        dielectrics: Vec::new(),
         gates: Vec::new(),
     }
 }
@@ -196,6 +198,7 @@ fn sync_texts(game: &mut Game) {
     game.sandbox.texts.antenna_omegas = list_to_text(&limits.antenna_omegas);
     game.sandbox.texts.plate_voltages = list_to_text(&limits.plate_voltages);
     game.sandbox.texts.supply_voltages = list_to_text(&limits.supply_voltages);
+    game.sandbox.texts.coil_rates = list_to_text(&limits.coil_rates);
     game.sandbox.texts.free_charges = list_to_text(&limits.free_charges);
     game.sandbox.texts.free_speeds = list_to_text(&limits.free_speeds);
 }
@@ -405,6 +408,7 @@ fn pointer(
                             vertices,
                             kappa,
                             rate: 0.0,
+                            drive: None,
                         });
                     });
                 } else if let Some(i) = coil_near(game.editor.base(), world) {
@@ -459,6 +463,7 @@ fn pointer(
                                     kappa,
                                     rate: 0.0,
                                     drive: None,
+                                    tunable: false,
                                 });
                             });
                         }
@@ -476,6 +481,7 @@ fn pointer(
                                 vertices,
                                 kappa,
                                 rate: 0.0,
+                                drive: None,
                             });
                         });
                     }

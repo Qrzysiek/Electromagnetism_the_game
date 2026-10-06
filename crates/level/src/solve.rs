@@ -99,10 +99,10 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
         }
     }
     let mut out = Vec::new();
-    // Power supplies sit on the centres of the tunable electrodes.
-    for e in level.electrodes.iter().filter(|e| e.tunable) {
-        for &v in &level.limits.supply_voltages {
-            let s = Element::supply(e.center, v);
+    // Power supplies sit on the centres of the tunable electrodes and coils.
+    for (centre, target) in level.supply_targets() {
+        for &v in level.supply_list(target) {
+            let s = Element::supply(centre, v);
             if level.check_placement(&[s]).is_ok() {
                 out.push(s);
             }

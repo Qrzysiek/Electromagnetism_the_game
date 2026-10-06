@@ -46,7 +46,8 @@
             "deflection_plates",
             "power_supply",
             "build_a_deflector",
-            "shielding"
+            "shielding",
+            "glass_screen"
           ]
         },
         {
@@ -103,6 +104,7 @@
           "levels": [
             "stray_field",
             "rf_kick",
+            "ramp_the_coil",
             "synchrotron_light"
           ]
         },

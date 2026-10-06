@@ -345,32 +345,47 @@ fn slider_ranges_hide_the_answer() {
     use level::ElementKind;
     for (name, level) in shipped_levels() {
         let l = &level.limits;
-        for (kind, list) in [
-            (ElementKind::Supply, &l.supply_voltages),
-            (ElementKind::Plate, &l.plate_voltages),
+        for (what, list) in [
+            ("supply voltages", &l.supply_voltages),
+            ("coil rates", &l.coil_rates),
+            ("plate voltages", &l.plate_voltages),
         ] {
-            let Some((lo, hi)) = level::value_range(list) else {
+            if let Some((lo, hi)) = level::value_range(list) {
+                // Exactly symmetric (a grounded-only list [0] has lo = 0 = -hi).
+                #[allow(clippy::float_cmp)]
+                let symmetric = lo == -hi;
+                assert!(
+                    symmetric,
+                    "{name}: {what} slider [{lo}, {hi}] not symmetric"
+                );
+            }
+        }
+        // Each reference value against its own slider: a plate's, or the list of what its
+        // power supply operates (an electrode's potentials, a coil's ramp rates).
+        let targets = level.supply_targets();
+        for e in &level.reference_solution {
+            let list: &[f64] = match e.kind {
+                ElementKind::Plate => &l.plate_voltages,
+                ElementKind::Supply => targets
+                    .iter()
+                    .find(|(c, _)| *c == e.node)
+                    .map_or(&[][..], |&(_, t)| level.supply_list(t)),
+                _ => continue,
+            };
+            let Some((_, hi)) = level::value_range(list) else {
                 continue;
             };
-            // Exactly symmetric (a grounded-only list [0] has lo = 0 = -hi).
-            #[allow(clippy::float_cmp)]
-            let symmetric = lo == -hi;
-            assert!(
-                symmetric,
-                "{name}: {kind:?} slider [{lo}, {hi}] not symmetric"
-            );
-            for e in level.reference_solution.iter().filter(|e| e.kind == kind) {
-                if hi == 0.0 {
-                    continue; // nothing to tune (grounded plates only)
-                }
-                let v = e.value.abs();
-                for p in [0.0, 0.5 * hi, hi] {
-                    assert!(
-                        (v - p).abs() >= 0.05 * hi,
-                        "{name}: {kind:?} {} near {p} on the slider ±{hi}",
-                        e.value
-                    );
-                }
+            if hi == 0.0 {
+                continue; // nothing to tune (grounded plates only)
+            }
+            let v = e.value.abs();
+            for p in [0.0, 0.5 * hi, hi] {
+                assert!(
+                    (v - p).abs() >= 0.05 * hi,
+                    "{name}: {:?} {} near {p} on the slider ±{hi}",
+                    e.kind,
+                    e.value
+                );
             }
         }
     }

@@ -89,8 +89,13 @@ fn window(level: &Level, steps: u32) {
     use level::ElementKind;
     let reference = &level.reference_solution;
     for (i, e) in reference.iter().enumerate() {
-        let list = match e.kind {
-            ElementKind::Supply => &level.limits.supply_voltages,
+        // A supply's own slider: an electrode's potentials or a coil's ramp rates.
+        let targets = level.supply_targets();
+        let list: &[f64] = match e.kind {
+            ElementKind::Supply => targets
+                .iter()
+                .find(|(c, _)| *c == e.node)
+                .map_or(&[][..], |&(_, t)| level.supply_list(t)),
             ElementKind::Plate => &level.limits.plate_voltages,
             _ => continue,
         };

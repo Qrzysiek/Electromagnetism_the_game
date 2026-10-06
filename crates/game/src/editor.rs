@@ -466,11 +466,14 @@ impl Editor {
             .position(|e| e.kind == ElementKind::Supply && e.node == centre)
     }
 
-    /// Centre node of the tunable level electrode under a node.
+    /// The supply node of the tunable level electrode under a node (its centre), or of the
+    /// tunable coil whose wire passes it (its terminal, `Coil::supply_node`; within
+    /// `PICK_MARGIN` plus a cell's half: clicking the ring).
     pub fn tunable_at(&self, node: Node) -> Option<Node> {
         let p = self.level.grid.position(node);
         let boxes = self.level.box_electrodes();
-        self.level
+        let electrode = self
+            .level
             .electrodes
             .iter()
             .zip(boxes)
@@ -478,20 +481,57 @@ impl Editor {
                 e.tunable
                     && physics::bem::Electrodes::shapes_only(vec![*b]).contains(p, PICK_MARGIN)
             })
-            .map(|(e, _)| e.center)
+            .map(|(e, _)| e.center);
+        electrode.or_else(|| {
+            let cell = 1.0 / f64::from(self.level.grid.subdivision.max(1));
+            self.level.coils.iter().find_map(|c| match c {
+                level::Coil::Circle { center, radius, .. } => {
+                    let d = (p - self.level.grid.position(*center)).length();
+                    if (d - radius).abs() <= PICK_MARGIN + 0.5 * cell {
+                        c.supply_node()
+                    } else {
+                        None
+                    }
+                }
+                level::Coil::Polygon { .. } => None,
+            })
+        })
     }
 
-    /// Switches on the power supply of the tunable electrode centred at `centre`, at the
-    /// electrode's own bias (within the supply's range).
+    /// The slider list of the supply on `centre` (a tunable electrode's potentials or a
+    /// tunable coil's ramp rates).
+    fn supply_list_at(&self, centre: Node) -> &[f64] {
+        self.level
+            .supply_targets()
+            .iter()
+            .find(|(c, _)| *c == centre)
+            .map_or(&self.level.limits.supply_voltages[..], |&(_, t)| {
+                self.level.supply_list(t)
+            })
+    }
+
+    /// Switches on the power supply of the tunable electrode or coil centred at `centre`,
+    /// at the electrode's own bias or the coil's own ramp rate (within the supply's range).
     fn add_supply(&mut self, centre: Node) -> Result<(), PlacementError> {
-        let Some(el) = self.level.electrodes.iter().find(|e| e.center == centre) else {
-            return Ok(());
+        let electrode = self.level.electrodes.iter().find(|e| e.center == centre);
+        let own = match electrode {
+            Some(el) => match el.bias {
+                ConductorBias::Potential(v) => v,
+                ConductorBias::Grounded | ConductorBias::Charge(_) => 0.0,
+            },
+            None => self
+                .level
+                .coils
+                .iter()
+                .find_map(|c| match c {
+                    level::Coil::Circle { rate, .. } if c.supply_node() == Some(centre) => {
+                        Some(*rate)
+                    }
+                    _ => None,
+                })
+                .unwrap_or(0.0),
         };
-        let own = match el.bias {
-            ConductorBias::Potential(v) => v,
-            ConductorBias::Grounded | ConductorBias::Charge(_) => 0.0,
-        };
-        let Some((lo, hi)) = value_range(&self.level.limits.supply_voltages) else {
+        let Some((lo, hi)) = value_range(self.supply_list_at(centre)) else {
             return Ok(());
         };
         let v = own.clamp(lo, hi);
@@ -669,7 +709,13 @@ impl Editor {
             return;
         }
         let kind = on.map_or(self.kind, |i| self.placement[i].kind);
-        let list = magnitudes(&self.level, kind).to_vec();
+        // A supply's slider list depends on what it operates (electrode or coil).
+        let list = match on {
+            Some(i) if kind == ElementKind::Supply => {
+                self.supply_list_at(self.placement[i].node).to_vec()
+            }
+            _ => magnitudes(&self.level, kind).to_vec(),
+        };
         let n = list.len();
         if n == 0 {
             return;

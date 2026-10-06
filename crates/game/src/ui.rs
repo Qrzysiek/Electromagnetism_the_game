@@ -1590,46 +1590,63 @@ fn plate_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     );
 }
 
-/// The power supplies of the level's tunable electrodes: off (the electrode keeps its
-/// own bias) or one of the listed potentials. Clicking an electrode on the map steps it.
+/// The power supplies of the level's tunable electrodes and coils: off (the electrode
+/// keeps its own bias, the coil its own ramp) or a value on its slider. Clicking an
+/// electrode, or a coil's ring, on the map switches it on and steps it.
 fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
-    let tunable: Vec<(usize, &level::Electrode)> = level
-        .electrodes
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| e.tunable)
-        .collect();
-    if tunable.is_empty() {
+    let targets = level.supply_targets();
+    if targets.is_empty() {
         return;
     }
     ui.label(egui::RichText::new("Power supplies").strong())
         .on_hover_text(
-            "Click a tunable electrode (yellow frame) to switch its supply on or to the next \
-             potential; S flips it, right click switches it off.",
+            "Click a tunable electrode (yellow frame) or a tunable coil's ring (yellow inner \
+             ring) to switch its supply on or to step it; S flips it, right click switches it \
+             off.",
         );
-    let list = level.limits.supply_voltages.clone();
-    for (i, e) in tunable {
-        let own = match e.bias {
-            level::ConductorBias::Grounded => "grounded".to_string(),
-            level::ConductorBias::Potential(v) => fmt_potential(v),
-            level::ConductorBias::Charge(q) => format!("charge {}", fmt_si(q)),
+    for (centre, target) in targets {
+        let (name, own) = match target {
+            level::SupplyTarget::Electrode(i) => {
+                let own = match level.electrodes[i].bias {
+                    level::ConductorBias::Grounded => "grounded".to_string(),
+                    level::ConductorBias::Potential(v) => fmt_potential(v),
+                    level::ConductorBias::Charge(q) => format!("charge {}", fmt_si(q)),
+                };
+                (
+                    format!("Electrode {}:", i + 1),
+                    format!("the electrode is {own}"),
+                )
+            }
+            level::SupplyTarget::Coil(i) => {
+                let own = match &level.coils[i] {
+                    level::Coil::Circle { drive: Some(_), .. } => {
+                        "its circuit keeps its own source".to_string()
+                    }
+                    level::Coil::Circle { rate, .. } => {
+                        format!("the coil ramps at dκ/dt = {}", fmt_si(*rate))
+                    }
+                    level::Coil::Polygon { .. } => String::new(),
+                };
+                (format!("Coil {} dκ/dt:", i + 1), own)
+            }
         };
-        let current = game.editor.supply(e.center);
+        let list = level.supply_list(target).to_vec();
+        let current = game.editor.supply(centre);
         ui.horizontal_wrapped(|ui| {
-            ui.label(format!("Electrode {}:", i + 1));
-            // A slider over the level's range, in every mode (the owner: voltages are
-            // tuned, not picked from a list whose ends give the answer away).
+            ui.label(name);
+            // A slider over the level's range, in every mode (the owner: values are tuned,
+            // not picked from a list whose ends give the answer away).
             let mut choice = current;
             let mut on = current.is_some();
             ui.checkbox(&mut on, "on")
-                .on_hover_text(format!("Off, the electrode is {own}"));
+                .on_hover_text(format!("Off, {own}"));
             if let Some((lo, hi)) = level::value_range(&list) {
                 let mut v = current.unwrap_or(lo.max(0.0_f64.min(hi)));
                 let r = ui.add_enabled(on, potential_slider(&mut v, lo, hi));
                 game.text_focus |= r.has_focus();
                 choice = on.then_some(v);
             }
-            game.editor.set_supply(e.center, choice);
+            game.editor.set_supply(centre, choice);
         });
     }
 }

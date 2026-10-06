@@ -228,8 +228,8 @@ pub struct LevelField {
     /// Added to the flight time before evaluating time-dependent sources: a particle
     /// launched at lab time `t₀` sees the fields at `t₀ + t`.
     pub time_offset: f64,
-    /// The circuit driving electrodes and circular coils (`drive.rs`), solved in lab time;
-    /// the driven coils' own `kappa` and `rate` are then not used.
+    /// The circuit driving electrodes and coils (`drive.rs`), solved in lab time; the
+    /// driven coils' own `kappa` and `rate` are then not used.
     pub drives: Option<Arc<Drives>>,
 }
 
@@ -262,8 +262,16 @@ impl LevelField {
                 None => l.field_at(x, t),
             };
         }
-        for p in &self.polygons {
-            b += p.field_at(x, t);
+        for (i, p) in self.polygons.iter().enumerate() {
+            b += match self.driven_polygon(i, t) {
+                Some((kappa, _)) => PolygonCoil {
+                    kappa,
+                    rate: 0.0,
+                    ..p.clone()
+                }
+                .field(x),
+                None => p.field_at(x, t),
+            };
         }
         b
     }
@@ -272,12 +280,20 @@ impl LevelField {
     pub fn has_ramps(&self) -> bool {
         self.loops.iter().any(|l| l.rate != 0.0)
             || self.polygons.iter().any(|p| p.rate != 0.0)
-            || self.drives.as_ref().is_some_and(|d| !d.loops.is_empty())
+            || self
+                .drives
+                .as_ref()
+                .is_some_and(|d| !d.loops.is_empty() || !d.polygons.is_empty())
     }
 
     /// The strength and rate of loop `i` at lab time `t` if a circuit drives it.
     fn driven_loop(&self, i: usize, t: f64) -> Option<(f64, f64)> {
         self.drives.as_ref()?.loop_strength(i, t)
+    }
+
+    /// The strength and rate of polygonal coil `i` at lab time `t` if a circuit drives it.
+    fn driven_polygon(&self, i: usize, t: f64) -> Option<(f64, f64)> {
+        self.drives.as_ref()?.polygon_strength(i, t)
     }
 }
 
@@ -309,8 +325,11 @@ impl FieldSolver for LevelField {
                 None => l.induced_e(x),
             };
         }
-        for p in &self.polygons {
-            s.e += p.induced_e(x);
+        for (i, p) in self.polygons.iter().enumerate() {
+            s.e += match self.driven_polygon(i, t_lab) {
+                Some((_, rate)) => p.unit_vector_potential(x) * (-rate),
+                None => p.induced_e(x),
+            };
         }
         for a in &self.antennas {
             let f = a.fields(x, t_lab);
@@ -385,8 +404,10 @@ impl FieldSolver for LevelField {
                 .grad_bz_in_plane(x)
             };
         }
-        for p in &self.polygons {
-            g += if p.rate == 0.0 {
+        for (i, p) in self.polygons.iter().enumerate() {
+            g += if let Some((kappa, _)) = self.driven_polygon(i, t_lab) {
+                PolygonCoil { kappa, ..p.clone() }.grad_bz_in_plane(x)
+            } else if p.rate == 0.0 {
                 p.grad_bz_in_plane(x)
             } else {
                 PolygonCoil {

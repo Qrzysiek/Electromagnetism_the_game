@@ -5,8 +5,9 @@
     python scripts/pairs.py --only sphere_grounded   # cases with this element only
 
 Every element the level format or the player can place (fixed charges, magnets, antennas,
-metal spheres of each bias, clouds, electrodes fixed, tunable and driven, coils steady,
-ramped, driven and polygonal, free particles at rest and thrown, gates, the launch, the
+metal spheres of each bias, clouds, electrodes fixed, tunable and driven, dielectrics,
+coils steady, ramped, driven, tunable (with a player's supply) and polygonal (also
+driven), free particles at rest and thrown, gates, the launch, the
 detector, a beam, player charges, magnets, antennas, plates and free charges, stray fields
 and waves) is put next to every other at several separations, from far to overlapping,
 in a Newtonian world and in a relativistic one with radiation reaction. A pair the game
@@ -170,6 +171,9 @@ ELEMENTS = {
     "electrode_driven": add("electrodes", lambda p, o, w: electrode(
         p, bias={"kind": "grounded"},
         drive={"source": {"kind": "dc", "value": 1.0}, "resistance": 3.0})),
+    "dielectric": add("dielectrics", lambda p, o, w: {
+        "center": node(p), "length": 3.0, "thickness": 1.0, "height": 3.0, "angle_deg": 90.0,
+        "permittivity": 4.0}),
     "coil": add("coils", lambda p, o, w: {"shape": "circle", "center": node(p), "radius": 2.5,
                                           "kappa": 0.2}),
     "coil_ramped": add("coils", lambda p, o, w: {"shape": "circle", "center": node(p),
@@ -180,6 +184,15 @@ ELEMENTS = {
     "coil_polygon": add("coils", lambda p, o, w: {"shape": "polygon", "kappa": 0.2, "vertices": [
         [p[0] - 2, p[1] - 2, 0], [p[0] + 2, p[1] - 2, 0], [p[0] + 2, p[1] + 2, 0],
         [p[0] - 2, p[1] + 2, 0]]}),
+    "coil_tunable": lambda lv, pl, p, o, w: (
+        lv.setdefault("coils", []).append({"shape": "circle", "center": node(p), "radius": 3.0,
+                                           "kappa": 0.1, "tunable": True}),
+        lv["limits"].update({"coil_rates": [-0.02, 0.02]}),
+        pl.append({"node": node((p[0] + 3, p[1])), "kind": "supply", "value": 0.013})),
+    "coil_polygon_driven": add("coils", lambda p, o, w: {
+        "shape": "polygon", "kappa": 0.0, "drive": coil_drive(w, 0.2), "vertices": [
+            [p[0] - 2, p[1] - 2, 0], [p[0] + 2, p[1] - 2, 0], [p[0] + 2, p[1] + 2, 0],
+            [p[0] - 2, p[1] + 2, 0]]}),
     "free_level": add("free_particles", lambda p, o, w: {
         "particle": {"charge": -1.0, "mass": 1.0, "radius": 0.3}, "node": node(p)}),
     "free_level_thrown": add("free_particles", lambda p, o, w: {

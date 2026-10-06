@@ -229,20 +229,14 @@ fn config_space_log10(level: &Level, options: &[Element]) -> f64 {
         count(ElementKind::Plate),
         u64::from(level.limits.max_plates),
     ) + subsets(count(ElementKind::Free), u64::from(level.limits.max_free));
-    // Each tunable electrode's supply: off or one of the listed potentials.
+    // Each supply: off or one of its listed values.
     #[allow(clippy::cast_precision_loss)]
-    let supplies = tunable_centres(level).len() as f64
-        * libm::log(level.limits.supply_voltages.len() as f64 + 1.0);
-    (ln + supplies) / std::f64::consts::LN_10
-}
-
-fn tunable_centres(level: &Level) -> Vec<crate::Node> {
-    level
-        .electrodes
+    let supplies: f64 = level
+        .supply_targets()
         .iter()
-        .filter(|e| e.tunable)
-        .map(|e| e.center)
-        .collect()
+        .map(|&(_, t)| libm::log(level.supply_list(t).len() as f64 + 1.0))
+        .sum();
+    (ln + supplies) / std::f64::consts::LN_10
 }
 
 /// A random valid placement: a random number of elements of each kind, each a random
@@ -262,8 +256,7 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
         by_kind(ElementKind::Plate),
         by_kind(ElementKind::Free),
     );
-    let centres = tunable_centres(level);
-    let volts = &level.limits.supply_voltages;
+    let targets = level.supply_targets();
     loop {
         let nc = rng.below(level.limits.max_charges as usize + 1);
         let nm = rng.below(level.limits.max_magnets as usize + 1);
@@ -271,10 +264,11 @@ fn random_placement(level: &Level, options: &[Element], rng: &mut Rng) -> Vec<El
         let np = rng.below(level.limits.max_plates as usize + 1);
         let nf = rng.below(level.limits.max_free as usize + 1);
         let mut p: Vec<Element> = Vec::new();
-        for &c in &centres {
-            let k = rng.below(volts.len() + 1);
+        for &(c, target) in &targets {
+            let values = level.supply_list(target);
+            let k = rng.below(values.len() + 1);
             if k > 0 {
-                p.push(Element::supply(c, volts[k - 1]));
+                p.push(Element::supply(c, values[k - 1]));
             }
         }
         if nc + nm + na + np + nf + p.len() == 0 {
@@ -395,9 +389,15 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
                             let list = if kind == ElementKind::Plate {
                                 &level.limits.plate_voltages
                             } else {
-                                &level.limits.supply_voltages
+                                level
+                                    .supply_targets()
+                                    .iter()
+                                    .find(|(c, _)| *c == t[i].node)
+                                    .map_or(&level.limits.supply_voltages[..], |&(_, target)| {
+                                        level.supply_list(target)
+                                    })
                             };
-                            let mut sorted = list.clone();
+                            let mut sorted = list.to_vec();
                             sorted.sort_by(f64::total_cmp);
                             let k = sorted
                                 .iter()

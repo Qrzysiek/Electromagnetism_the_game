@@ -255,7 +255,7 @@ pub struct PolygonCoil {
 /// `û ln((|rb| + rb·û) / (|ra| + ra·û))` with `ra = a − x`, `rb = b − x`. Behind the
 /// segment's start both terms of that ratio are tiny; the equal form
 /// `(|ra| − ra·û) / (|rb| − rb·û)` (both products are |r⊥|²) is used there.
-fn segment_potential(ra: DVec3, rb: DVec3) -> DVec3 {
+pub(crate) fn segment_potential(ra: DVec3, rb: DVec3) -> DVec3 {
     let d = rb - ra;
     let len = d.length();
     if len == 0.0 {

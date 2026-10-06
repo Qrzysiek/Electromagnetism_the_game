@@ -15,7 +15,9 @@ mod common;
 use std::f64::consts::PI;
 
 use physics::DVec3;
-use physics::inductance::{around_circle, mutual_circles, ring_self};
+use physics::inductance::{
+    around_circle, mutual_circles, mutual_polygon_circle, mutual_polygons, polygon_self, ring_self,
+};
 use physics::magnetic::{CircularLoop, PolygonCoil};
 
 /// A coil of the game's slice: in the plane z = 0, current counter-clockwise.
@@ -123,6 +125,101 @@ fn z2_mutual_inductance_of_coplanar_coils() {
     );
     worst = worst.max(e.abs());
     assert!(worst < 1e-12, "Z2 {worst:.3e}");
+}
+
+/// Z14: inductances of polygonal coils (driven polygons, PHYSICS.md §2.8). A polygon's
+/// self-inductance is taken as the ring's (Z3): its centre line's own flux through the
+/// closed curves on its wire's surface (the polygon offset in the plane by `b cos ψ`,
+/// corners mitred, at the height `b sin ψ`), averaged over ψ. (A partial-inductance sum,
+/// tried first, carried an end error of +2b per corner: about 1 % for the game's
+/// rectangles.) (a) A rectangle 4 × 3 of wire 0.1 against the same average taken by
+/// Wolfram Engine 14.2 at 30 digits (`scripts/wolfram/z14_polygon_self.wls`; 64 and 128
+/// angles agree to 20 digits): within 1e-12. (b) Mutual inductances both ways (a polygon
+/// and a circle, two polygons): within 1e-12 of each other. (c) Regular N-gons on a
+/// circle of radius 1 (wire 1e-3) tend to the ring (`ring_self`, an independent route:
+/// the circle's exact potential): each doubling of N divides the difference by 4 (the
+/// polygon's geometric 1/N²: required 3.5 to 4.5) and the Richardson extrapolation of
+/// successive pairs shrinks (by more than 3), so the limit is the ring.
+#[test]
+fn z14_inductances_of_polygonal_coils() {
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    const RECTANGLE: f64 = 77.967540376691715497;
+    let poly = |v: Vec<DVec3>, b: f64| PolygonCoil {
+        vertices: v,
+        kappa: 1.0,
+        wire_radius: b,
+        rate: 0.0,
+    };
+    let p = |x: f64, y: f64| DVec3::new(x, y, 0.0);
+    // (a) The rectangle.
+    let rect = poly(
+        vec![p(0.0, 0.0), p(4.0, 0.0), p(4.0, 3.0), p(0.0, 3.0)],
+        0.1,
+    );
+    let engine = polygon_self(&rect);
+    let ea = engine / RECTANGLE - 1.0;
+    println!(
+        "Z14 (a) rectangle 4 x 3, wire 0.1: {engine:.15e} (Wolfram {RECTANGLE:.15e}), {ea:.1e}"
+    );
+    // (b) Reciprocity.
+    let circle = ring(p(-3.0, 1.5), 1.5, 0.1);
+    let hexagon = poly(
+        (0..6)
+            .map(|k| {
+                let a = std::f64::consts::FRAC_PI_3 * f64::from(k);
+                p(8.0 + 2.0 * a.cos(), 1.5 + 2.0 * a.sin())
+            })
+            .collect(),
+        0.1,
+    );
+    let pc = mutual_polygon_circle(&rect, &circle);
+    let cp = around_circle(
+        |x| rect.unit_vector_potential(x),
+        circle.center,
+        DVec3::Z,
+        1.5,
+        4096,
+    );
+    let pq = mutual_polygons(&rect, &hexagon);
+    let qp = mutual_polygons(&hexagon, &rect);
+    let eb = (pc / cp - 1.0).abs().max((pq / qp - 1.0).abs());
+    println!(
+        "Z14 (b) rectangle-circle {pc:.15e} / {cp:.15e}, rectangle-hexagon {pq:.15e} / {qp:.15e}: {eb:.1e}"
+    );
+    // (c) N-gons to the ring.
+    let ring_l = ring_self(&ring(DVec3::ZERO, 1.0, 1e-3));
+    let mut errors = Vec::new();
+    for n in [16_u32, 32, 64] {
+        let ngon = poly(
+            (0..n)
+                .map(|k| {
+                    let a = std::f64::consts::TAU * f64::from(k) / f64::from(n);
+                    p(a.cos(), a.sin())
+                })
+                .collect(),
+            1e-3,
+        );
+        let l = polygon_self(&ngon);
+        let e = l / ring_l - 1.0;
+        println!("Z14 (c) {n}-gon, wire 1e-3: {l:.12e} (ring {ring_l:.12e}): {e:.3e}");
+        errors.push(e);
+    }
+    let ratios = [errors[0] / errors[1], errors[1] / errors[2]];
+    let rich = [
+        errors[1] - (errors[0] - errors[1]) / 3.0,
+        errors[2] - (errors[1] - errors[2]) / 3.0,
+    ];
+    println!(
+        "Z14 (c) ratios {ratios:.3?}, Richardson remainders {:.2e} {:.2e}",
+        rich[0], rich[1]
+    );
+    assert!(ea.abs() < 1e-12, "Z14 (a) {ea:.3e}");
+    assert!(eb < 1e-12, "Z14 (b) {eb:.3e}");
+    assert!(
+        ratios.iter().all(|r| (3.5..4.5).contains(r)),
+        "Z14 (c) {ratios:?}"
+    );
+    assert!(rich[0].abs() > 3.0 * rich[1].abs(), "Z14 (c) {rich:?}");
 }
 
 /// Z3, Jackson §5.17 B and Pr. 5.32: the self-inductance of a ring (radius a) of thin wire

@@ -191,15 +191,22 @@ fn circuit_view(
                     .collect(),
             ));
         }
-        for &(i, k) in &d.loops {
-            // Loop i is the i-th circular coil.
-            let coil = level
+        // Loop i is the i-th circular coil, polygon i the i-th polygonal one.
+        let nth = |circle: bool, i: usize| {
+            level
                 .coils
                 .iter()
                 .enumerate()
-                .filter(|(_, c)| matches!(c, level::Coil::Circle { .. }))
+                .filter(|(_, c)| matches!(c, level::Coil::Circle { .. }) == circle)
                 .nth(i)
-                .map_or(i, |(j, _)| j);
+                .map_or(i, |(j, _)| j)
+        };
+        let coils = d
+            .loops
+            .iter()
+            .map(|&(i, k)| (nth(true, i), k))
+            .chain(d.polygons.iter().map(|&(i, k)| (nth(false, i), k)));
+        for (coil, k) in coils {
             plots.push((
                 format!("Coil {}: strength κ", coil + 1),
                 times()

@@ -1,0 +1,100 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Ramp the coil",
+  "description": "The coil now has a power supply too (the yellow ring: click the coil, then set the slider). It does not set a fixed current: it sets how fast the current rises from zero. The ion crosses the coil a while after the start and meets the field the current has built by then: the faster the ramp, the more it is bent. (A rising field also induces an electric field around the axis, Faraday's law, which pushes the ion along a little.) Find the ramp that brings the ion into the detector.",
+  "grid": {
+    "nx": 30,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 100.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [
+    {
+      "particle": {
+        "charge": 1e-06,
+        "mass": 1.0,
+        "radius": 0.0
+      },
+      "launch": {
+        "node": [
+          0,
+          12,
+          0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "kinetic_energy": 0.5
+      },
+      "detector": {
+        "min": [
+          28,
+          7,
+          0
+        ],
+        "max": [
+          30,
+          9,
+          0
+        ]
+      }
+    }
+  ],
+  "elements": [],
+  "coils": [
+    {
+      "shape": "circle",
+      "center": [
+        15,
+        5,
+        0
+      ],
+      "radius": 4.0,
+      "kappa": 0.0,
+      "tunable": true
+    }
+  ],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "coil_rates": [
+      -21000.0,
+      -10000.0,
+      -5300.0,
+      -5000.0,
+      5000.0,
+      10000.0,
+      21000.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        19,
+        5,
+        0
+      ],
+      "kind": "supply",
+      "value": -5300.0
+    }
+  ]
+}

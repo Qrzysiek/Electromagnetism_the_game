@@ -74,7 +74,7 @@ Levels can contain real electrodes: metal plates, slabs and walls with finite si
 
 Some levels let you build or tune electrodes yourself:
 - **Plates:** select "plate" in the palette and click to place one. R turns it (along x or y), Q/E or the wheel changes its potential, and it can be dragged by its body. Plates keep 1 cell away from other metal and stay clear of elements, coils and detectors; an outline at the cursor shows whether a plate fits there.
-- **Power supplies:** electrodes with a yellow frame are tunable. Click one to switch its supply on (at the electrode's own potential) and set the potential with its slider in the "Power supplies" panel (the value can also be typed); Q/E or a click steps it, S flips it, right click switches it off. Player plates have a slider too.
+- **Power supplies:** electrodes with a yellow frame and coils with a yellow inner ring are tunable. Click one (a coil on its ring) to switch its supply on (at its own potential or ramp rate) and set the potential with its slider in the "Power supplies" panel (the value can also be typed); Q/E or a click steps it, S flips it, right click switches it off. Player plates have a slider too.
 - The flight details show a bound on the electrodes' neglected image force, with a warning if a flight passes so close to metal that it is no longer negligible.
 - In the sandbox: "Player plates", "Plate potentials", "Plate L×T×H" and "Supply voltages" in the limits, "tunable" on each electrode.
 

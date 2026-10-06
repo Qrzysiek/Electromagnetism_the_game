@@ -72,6 +72,10 @@ pub struct Level {
     /// Box electrodes (plates, slabs, walls) placed by the level (PHYSICS.md §2.7).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub electrodes: Vec<Electrode>,
+    /// Dielectric boxes placed by the level (PHYSICS.md §2.7): their bound charge screens
+    /// fields partially; particles do not enter them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dielectrics: Vec<Dielectric>,
     /// Stages of the instrument: boxes every flight must pass, in order, before its
     /// detector counts, each with optional conditions on the entering particle
     /// (PHYSICS.md §6.2).
@@ -101,6 +105,21 @@ pub struct Electrode {
     /// A circuit driving its potential (PHYSICS.md §2.10).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drive: Option<Drive>,
+}
+
+/// A dielectric box standing on the plane (symmetric about it), of relative permittivity
+/// `permittivity` (≥ 1; PHYSICS.md §2.7).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Dielectric {
+    /// Centre (grid node).
+    pub center: Node,
+    /// In-plane length along `angle_deg`, thickness across it, and height (z), in cells.
+    pub length: f64,
+    pub thickness: f64,
+    pub height: f64,
+    #[serde(default)]
+    pub angle_deg: f64,
+    pub permittivity: f64,
 }
 
 /// A charge cloud: a sphere of uniform charge density that particles fly through. Inside,
@@ -236,6 +255,8 @@ struct LevelFile {
     #[serde(default)]
     electrodes: Vec<Electrode>,
     #[serde(default)]
+    dielectrics: Vec<Dielectric>,
+    #[serde(default)]
     gates: Vec<Detector>,
 }
 
@@ -270,6 +291,7 @@ impl From<LevelFile> for Level {
             clouds: f.clouds,
             free_particles: f.free_particles,
             electrodes: f.electrodes,
+            dielectrics: f.dielectrics,
             gates: f.gates,
         }
     }
@@ -630,13 +652,35 @@ impl Coil {
 
     /// Whether a circuit drives its current.
     pub fn is_driven(&self) -> bool {
-        matches!(self, Coil::Circle { drive: Some(_), .. })
+        matches!(
+            self,
+            Coil::Circle { drive: Some(_), .. } | Coil::Polygon { drive: Some(_), .. }
+        )
     }
 
     /// Whether its current changes in time (ramped or driven): time-dependent B and an
     /// induced E.
     pub fn is_time_dependent(&self) -> bool {
         self.is_ramped() || self.is_driven()
+    }
+
+    /// The node a tunable circular coil's power supply sits on: its terminal, the node on
+    /// its wire due east of the centre (`(cx + round(r), cy)`), so that concentric coils
+    /// (a betatron's) have supplies of their own. None for other coils.
+    pub fn supply_node(&self) -> Option<Node> {
+        match self {
+            Coil::Circle {
+                center,
+                radius,
+                tunable: true,
+                ..
+            } => {
+                #[allow(clippy::cast_possible_truncation)]
+                let dx = libm::round(*radius) as i64;
+                Some([center[0] + dx, center[1], center[2]])
+            }
+            _ => None,
+        }
     }
 }
 
@@ -658,16 +702,25 @@ pub enum Coil {
         /// a ramp).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         drive: Option<Drive>,
+        /// The player sets its ramp rate with a power supply (an element of kind `Supply`
+        /// on its terminal, `Coil::supply_node`, on the slider of `limits.coil_rates`), or,
+        /// if a circuit drives it, its source's level; without one it keeps `rate`.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        tunable: bool,
     },
     Polygon {
         vertices: Vec<Node>,
         kappa: f64,
         #[serde(default, skip_serializing_if = "is_zero")]
         rate: f64,
+        /// A circuit driving its current, as for a circle (self-inductance by the wire's
+        /// surface flux, `inductance::polygon_self`; not with a ramp).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        drive: Option<Drive>,
     },
 }
 
-/// A circuit driving a level electrode or a circular coil (PHYSICS.md §2.10, one way): a
+/// A circuit driving a level electrode or a coil (PHYSICS.md §2.10, one way): a
 /// source through a series resistance into the element. An electrode's chain may have an
 /// inductance in series (an LC with the electrode's capacitance) or its resistance as a
 /// timed switch; a coil's may have a capacitance in series. The element starts from its
@@ -882,6 +935,11 @@ pub struct Limits {
     /// slider over the range of the list, like `plate_voltages`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supply_voltages: Vec<f64>,
+    /// Ramp rates dκ/dt the power supply of a tunable coil may be set to (signed): a
+    /// slider over the range of the list, like `supply_voltages` (for a driven coil, its
+    /// source's level).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub coil_rates: Vec<f64>,
     /// Maximum number of free charges the player may place (dynamic particles).
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub max_free: u32,
@@ -1052,6 +1110,14 @@ impl Limits {
     }
 }
 
+/// What a power supply operates (`Level::supply_targets`): an electrode or a coil, by
+/// its index in the level's list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SupplyTarget {
+    Electrode(usize),
+    Coil(usize),
+}
+
 /// A box of grid nodes, inclusive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Region2 {
@@ -1176,6 +1242,9 @@ impl Level {
         }
         for e in &mut self.electrodes {
             scale(&mut e.center);
+        }
+        for d in &mut self.dielectrics {
+            scale(&mut d.center);
         }
         for e in self
             .elements
@@ -1324,7 +1393,8 @@ impl Level {
     }
 
     /// Geometry the physics cannot compute, which the level editor's free fields allow:
-    /// metal spheres overlapping or touching each other or an electrode (the image
+    /// dielectrics touching metal or each other (the boundary elements assume separate
+    /// bodies), metal spheres overlapping or touching each other or an electrode (the image
     /// series and the boundary elements assume separate bodies; such setups failed or
     /// ran for minutes), and particles that start inside or touching metal or on a coil's
     /// wire (the field is singular there: NaN forces). Found by `scripts/pairs.py`. The
@@ -1348,6 +1418,31 @@ impl Level {
                 out.push(format!("Metal sphere {} touches an electrode.", i + 1));
             }
         }
+        // Dielectrics: apart from metal and from each other.
+        let dielectrics: Vec<physics::bem::BoxElectrode> =
+            self.box_dielectrics().iter().map(|d| d.shape).collect();
+        let metal_boxes = self.all_box_electrodes(player);
+        for (i, d) in dielectrics.iter().enumerate() {
+            let corners = rect_corners(d);
+            let touches = |o: &physics::bem::BoxElectrode| {
+                rect_distance(&corners, &rect_corners(o)) < CONTACT_DISTANCE
+            };
+            if metal_boxes.iter().any(touches) {
+                out.push(format!("Dielectric {} touches an electrode.", i + 1));
+            }
+            if dielectrics[i + 1..].iter().any(touches) {
+                out.push(format!("Dielectric {} touches another dielectric.", i + 1));
+            }
+            let one = physics::bem::Electrodes::shapes_only(vec![*d]);
+            if self
+                .conductors
+                .iter()
+                .any(|c| one.contains(pos(c.center), c.radius + CONTACT_DISTANCE))
+            {
+                out.push(format!("Dielectric {} touches a metal sphere.", i + 1));
+            }
+        }
+        let dielectric_shapes = physics::bem::Electrodes::shapes_only(dielectrics);
         let wire = self.physics.wire_radius + CONTACT_DISTANCE;
         let starts = self
             .shots
@@ -1383,6 +1478,9 @@ impl Level {
             if in_sphere || boxes.contains(p, radius + CONTACT_DISTANCE) {
                 out.push(format!("{who} starts inside or touching metal."));
             }
+            if dielectric_shapes.contains(p, radius + CONTACT_DISTANCE) {
+                out.push(format!("{who} starts inside or touching a dielectric."));
+            }
             if self
                 .coils
                 .iter()
@@ -1394,27 +1492,56 @@ impl Level {
         out
     }
 
-    /// Power supplies: each on the centre of a different tunable electrode, at an allowed
-    /// potential.
+    /// Power supplies: each on the centre of a different tunable electrode or coil, at a
+    /// value on its slider.
     fn check_supplies(&self, player: &[Element]) -> Result<(), PlacementError> {
+        let targets = self.supply_targets();
         let mut supplied: Vec<Node> = Vec::new();
         for e in player.iter().filter(|e| e.kind == ElementKind::Supply) {
-            if !self
-                .electrodes
-                .iter()
-                .any(|x| x.tunable && x.center == e.node)
-            {
+            let Some(&(_, target)) = targets.iter().find(|(c, _)| *c == e.node) else {
                 return Err(PlacementError::NoTunableElectrode(e.node));
-            }
+            };
             if supplied.contains(&e.node) {
                 return Err(PlacementError::Occupied(e.node));
             }
             supplied.push(e.node);
-            if !Limits::allows_potential(&self.limits.supply_voltages, e.value) {
+            if !Limits::allows_potential(self.supply_list(target), e.value) {
                 return Err(PlacementError::MagnitudeNotAllowed(e.value));
             }
         }
         Ok(())
+    }
+
+    /// What the player's power supplies operate: the tunable electrodes, each at its
+    /// centre, and the tunable circular coils, each at its terminal (`Coil::supply_node`).
+    pub fn supply_targets(&self) -> Vec<(Node, SupplyTarget)> {
+        let electrodes = self
+            .electrodes
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.tunable)
+            .map(|(i, e)| (e.center, SupplyTarget::Electrode(i)));
+        let coils = self
+            .coils
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| c.supply_node().map(|n| (n, SupplyTarget::Coil(i))));
+        electrodes.chain(coils).collect()
+    }
+
+    /// The slider list of a supply's target: potentials or ramp rates.
+    pub fn supply_list(&self, target: SupplyTarget) -> &[f64] {
+        match target {
+            SupplyTarget::Electrode(_) => &self.limits.supply_voltages,
+            SupplyTarget::Coil(_) => &self.limits.coil_rates,
+        }
+    }
+
+    /// The player's power supply on the centre `node`, if placed.
+    fn supply_at<'a>(&self, node: Node, player: &'a [Element]) -> Option<&'a Element> {
+        player
+            .iter()
+            .find(|s| s.kind == ElementKind::Supply && s.node == node)
     }
 
     /// Player plates: allowed orientation and potential, entirely inside the grid and the
@@ -1425,7 +1552,9 @@ impl Level {
         &self,
         player: &[Element],
     ) -> Result<Vec<physics::bem::BoxElectrode>, PlacementError> {
+        // Electrodes and dielectrics alike: plates keep clear of them, elements out.
         let mut boxes = self.box_electrodes();
+        boxes.extend(self.box_dielectrics().iter().map(|d| d.shape));
         let reach = self
             .physics
             .charge_radius
@@ -1604,9 +1733,9 @@ impl Level {
         self.electrodes.iter().any(|e| e.drive.is_some()) || self.coils.iter().any(Coil::is_driven)
     }
 
-    /// The circuits driving the level's electrodes and circular coils, solved over every
-    /// flight's lab time (PHYSICS.md §2.10), for a field built by `field_at` (its
-    /// electrodes, the level's then the player's, and its loops, the circular coils in
+    /// The circuits driving the level's electrodes and coils, solved over every flight's
+    /// lab time (PHYSICS.md §2.10), for a field built by `field_at` (its electrodes, the
+    /// level's then the player's, its loops and polygons, the coils of each shape in
     /// order). None without drives.
     pub fn drives_for(
         &self,
@@ -1632,11 +1761,27 @@ impl Level {
             .filter(|c| matches!(c, Coil::Circle { .. }))
             .enumerate()
             .filter_map(|(i, c)| match c {
-                Coil::Circle { drive: Some(d), .. } => Some((i, d.chain(d.source))),
+                Coil::Circle { drive: Some(d), .. } => {
+                    let source = match c.supply_node().and_then(|n| self.supply_at(n, player)) {
+                        Some(s) => d.source.with_level(s.value),
+                        None => d.source,
+                    };
+                    Some((i, d.chain(source)))
+                }
                 _ => None,
             })
             .collect();
-        if electrodes.is_empty() && loops.is_empty() {
+        let polygons: Vec<(usize, physics::drive::Chain)> = self
+            .coils
+            .iter()
+            .filter(|c| matches!(c, Coil::Polygon { .. }))
+            .enumerate()
+            .filter_map(|(i, c)| match c {
+                Coil::Polygon { drive: Some(d), .. } => Some((i, d.chain(d.source))),
+                _ => None,
+            })
+            .collect();
+        if electrodes.is_empty() && loops.is_empty() && polygons.is_empty() {
             return Ok(None);
         }
         physics::drive::Drives::build(
@@ -1644,6 +1789,8 @@ impl Level {
             &electrodes,
             &field.loops,
             &loops,
+            &field.polygons,
+            &polygons,
             self.c(),
             self.drive_end(),
         )
@@ -1657,7 +1804,8 @@ impl Level {
 
     /// The largest magnitude each circuit quantity that drives the field reaches over the
     /// circuit's time, sampled at 2001 times: `(electrode potentials, coil strengths κ)`,
-    /// in the order of `Drives::electrodes` and `Drives::loops`.
+    /// in the order of `Drives::electrodes`, then `Drives::loops` followed by
+    /// `Drives::polygons`.
     fn drive_scales(&self, d: &physics::drive::Drives) -> (Vec<f64>, Vec<f64>) {
         let t_end = self.drive_end();
         let peak = |f: &dyn Fn(f64) -> f64| {
@@ -1672,6 +1820,7 @@ impl Level {
                 .collect(),
             d.loops
                 .iter()
+                .chain(&d.polygons)
                 .map(|&(_, k)| peak(&|t| d.solution.current(k, t)) * d.per_current)
                 .collect(),
         )
@@ -1716,6 +1865,16 @@ impl Level {
                     q * std::f64::consts::TAU * l.radius / (self.c() * l.wire_radius * n * kappa),
                 );
             }
+            // A polygon: the same with its perimeter for the ring's 2πa.
+            for &(i, _) in &d.polygons {
+                let p = &field.polygons[i];
+                let n = physics::inductance::polygon_self(p);
+                let k = p.vertices.len();
+                let perimeter: f64 = (0..k)
+                    .map(|j| (p.vertices[(j + 1) % k] - p.vertices[j]).length())
+                    .sum();
+                bound = bound.max(q * perimeter / (self.c() * p.wire_radius * n * kappa));
+            }
         }
         bound
     }
@@ -1746,7 +1905,7 @@ impl Level {
                 fastest = fastest.max(rate(&|t| d.solution.potential(n, t), *v));
             }
         }
-        for (&(_, k), kappa) in d.loops.iter().zip(&strengths) {
+        for (&(_, k), kappa) in d.loops.iter().chain(&d.polygons).zip(&strengths) {
             if *kappa > 0.0 {
                 fastest = fastest.max(rate(&|t| d.solution.current(k, t) * d.per_current, *kappa));
             }
@@ -1759,6 +1918,7 @@ impl Level {
     pub fn has_metal(&self, player: &[Element]) -> bool {
         !self.conductors.is_empty()
             || !self.electrodes.is_empty()
+            || !self.dielectrics.is_empty()
             || player.iter().any(|e| e.kind == ElementKind::Plate)
     }
 
@@ -1984,8 +2144,16 @@ impl Level {
         if !tunable.is_empty() && self.limits.supply_voltages.is_empty() {
             out.push("tunable electrodes need at least one supply voltage".into());
         }
-        if (1..tunable.len()).any(|i| tunable[..i].contains(&tunable[i])) {
-            out.push("two tunable electrodes share a centre node".into());
+        let targets: Vec<Node> = self.supply_targets().iter().map(|t| t.0).collect();
+        if (1..targets.len()).any(|i| targets[..i].contains(&targets[i])) {
+            out.push("two tunable electrodes or coils share a centre node".into());
+        }
+        let tunable_coils = self
+            .coils
+            .iter()
+            .any(|c| matches!(c, Coil::Circle { tunable: true, .. }));
+        if tunable_coils && self.limits.coil_rates.is_empty() {
+            out.push("tunable coils need at least one ramp rate".into());
         }
         if !self.electrodes.is_empty() || self.limits.max_plates > 0 {
             if !self.conductors.is_empty() {
@@ -2153,15 +2321,23 @@ impl Level {
                     radius,
                     kappa,
                     rate,
-                    drive: _,
+                    drive,
+                    tunable: _,
                 } => {
+                    // A tunable coil's supply sets its ramp rate (a driven one's: its
+                    // source's level, `drives_for`).
+                    let supplied = coil.supply_node().and_then(|n| self.supply_at(n, player));
+                    let rate = match supplied {
+                        Some(s) if drive.is_none() => s.value,
+                        _ => *rate,
+                    };
                     let l = CircularLoop {
                         center: self.grid.position(*center),
                         normal: DVec3::Z,
                         radius: *radius,
                         kappa: *kappa,
                         wire_radius: wire,
-                        rate: *rate,
+                        rate,
                     };
                     obstacles.push(Shape::Torus(Torus {
                         center: l.center,
@@ -2175,6 +2351,7 @@ impl Level {
                     vertices,
                     kappa,
                     rate,
+                    drive: _,
                 } => {
                     let v: Vec<DVec3> = vertices.iter().map(|n| self.grid.position(*n)).collect();
                     for i in 0..v.len() {
@@ -2197,6 +2374,11 @@ impl Level {
         let boxes = self.all_box_electrodes(player);
         obstacles.extend(
             physics::bem::Electrodes::shapes_only(boxes.clone()).obstacles(CONTACT_DISTANCE),
+        );
+        let dielectrics = self.box_dielectrics();
+        obstacles.extend(
+            physics::bem::Electrodes::shapes_only(dielectrics.iter().map(|d| d.shape).collect())
+                .obstacles(CONTACT_DISTANCE),
         );
         for c in &self.conductors {
             obstacles.push(Shape::Sphere(Sphere {
@@ -2232,7 +2414,7 @@ impl Level {
             antennas,
             external: Vec::new(),
             conductors: self.conductors_for(&sources, resolution),
-            electrodes: electrodes_for(boxes, &sources, resolution),
+            electrodes: electrodes_for(boxes, dielectrics, &sources, resolution),
             time_offset: 0.0,
             drives: None,
         };
@@ -2279,11 +2461,16 @@ impl Level {
             }
         }
         for c in &self.coils {
-            let Coil::Circle {
+            let (Coil::Circle {
                 drive: Some(d),
                 rate,
                 ..
-            } = c
+            }
+            | Coil::Polygon {
+                drive: Some(d),
+                rate,
+                ..
+            }) = c
             else {
                 continue;
             };
@@ -2425,6 +2612,24 @@ impl Level {
         }
     }
 
+    /// The level's dielectric boxes for the physics.
+    pub fn box_dielectrics(&self) -> Vec<physics::bem::BoxDielectric> {
+        self.dielectrics
+            .iter()
+            .map(|d| physics::bem::BoxDielectric {
+                shape: physics::bem::BoxElectrode {
+                    center: self.grid.position(d.center),
+                    angle: d.angle_deg.to_radians(),
+                    half_length: d.length / 2.0,
+                    half_thickness: d.thickness / 2.0,
+                    half_height: d.height / 2.0,
+                    bias: Bias::Charge(0.0),
+                },
+                permittivity: d.permittivity,
+            })
+            .collect()
+    }
+
     /// The level's electrodes as physics boxes, at their own bias.
     pub fn box_electrodes(&self) -> Vec<physics::bem::BoxElectrode> {
         self.electrodes
@@ -2513,10 +2718,11 @@ pub const IMAGE_FORCE_LIMIT: f64 = 1e-10;
 /// Box electrodes with the surface charge the fixed charges induce on them.
 fn electrodes_for(
     boxes: Vec<physics::bem::BoxElectrode>,
+    dielectrics: Vec<physics::bem::BoxDielectric>,
     charges: &[FixedCharge],
     resolution: Resolution,
 ) -> physics::bem::Electrodes {
-    if boxes.is_empty() {
+    if boxes.is_empty() && dielectrics.is_empty() {
         return physics::bem::Electrodes::default();
     }
     let sources: Vec<(DVec3, f64)> = charges.iter().map(|c| (c.position, c.charge)).collect();
@@ -2525,7 +2731,7 @@ fn electrodes_for(
         Resolution::Verify => physics::bem::Resolution::Verify,
         Resolution::Display => physics::bem::Resolution::Display,
     };
-    physics::bem::Electrodes::new(boxes, &sources, res)
+    physics::bem::Electrodes::new_with_dielectrics(boxes, dielectrics, &sources, res)
 }
 
 /// In-plane corners of an electrode box (z = 0), counter-clockwise.
@@ -2778,6 +2984,7 @@ mod tests {
                 kappa: 0.5,
                 rate: 0.25,
                 drive: None,
+                tunable: false,
             }],
             limits: Limits {
                 max_charges: 2,
@@ -2799,6 +3006,7 @@ mod tests {
                     height: 2.0,
                 },
                 supply_voltages: vec![-1e4, 1e4],
+                coil_rates: vec![],
                 max_free: 2,
                 free_charges: vec![-1e-6, 2e-6],
                 free_speeds: vec![0.0, 0.7],
@@ -2839,6 +3047,7 @@ mod tests {
                 }),
             }],
             electrodes: vec![],
+            dielectrics: vec![],
             gates: vec![],
         }
     }
@@ -3138,6 +3347,65 @@ mod tests {
             *rate = 0.1;
         }
         assert!(drive_issue(&ramped, "no ramp"));
+    }
+
+    /// Coil supplies: a power supply on a tunable circular coil's terminal sets its ramp
+    /// rate (a value on `coil_rates`' slider), or, if a circuit drives it, its source's
+    /// level; not on an untunable coil, not beyond the slider.
+    #[test]
+    fn coil_supplies_set_the_ramp_or_the_source() {
+        let mut l = sample_level();
+        l.free_particles.clear();
+        l.limits.max_free = 0;
+        l.limits.coil_rates = vec![-0.5, 0.5];
+        // The coil (centre (10, 5), radius 8): its terminal at (18, 5).
+        let centre = [18, 5, 0];
+        let supply = |v: f64| [Element::supply(centre, v)];
+        // Not tunable yet: refused.
+        assert!(matches!(
+            l.check_placement(&supply(0.3)),
+            Err(PlacementError::NoTunableElectrode(_))
+        ));
+        let Coil::Circle { tunable, .. } = &mut l.coils[0] else {
+            unreachable!("a circle")
+        };
+        *tunable = true;
+        assert_eq!(Level::from_json(&l.to_json()).unwrap(), l);
+        assert_eq!(l.check_placement(&supply(0.3)), Ok(()));
+        assert!(matches!(
+            l.check_placement(&supply(0.7)),
+            Err(PlacementError::MagnitudeNotAllowed(_))
+        ));
+        // The ramp: the supply's rate, else the coil's own (0.25).
+        assert_eq!(
+            l.field(&supply(0.3)).0.loops[0].rate.to_bits(),
+            0.3f64.to_bits()
+        );
+        assert_eq!(l.field(&[]).0.loops[0].rate.to_bits(), 0.25f64.to_bits());
+        // Driven: the supply sets the DC source's value, κ∞ = (V/R)/c².
+        let Coil::Circle { rate, drive, .. } = &mut l.coils[0] else {
+            unreachable!("a circle")
+        };
+        *rate = 0.0;
+        *drive = Some(Drive {
+            source: Source::Dc { value: 1.0 },
+            resistance: 1.0,
+            inductance: 0.0,
+            capacitance: 0.0,
+            switch: None,
+        });
+        let c = l.physics.c.expect("finite c");
+        let end = l.drive_end();
+        for (placement, v) in [(&supply(0.4)[..], 0.4), (&[][..], 1.0)] {
+            let (f, _) = l.field(placement);
+            let d = f.drives.clone().expect("driven");
+            let (_, k) = d.loops[0];
+            let tau = physics::inductance::ring_self(&f.loops[0]) / (c * c);
+            let infinity = v / (c * c);
+            let want = infinity + (0.5 - infinity) * libm::exp(-end / tau);
+            let got = d.solution.current(k, end) * d.per_current;
+            assert!((got - want).abs() < 1e-9, "{v}: {got} {want}");
+        }
     }
 
     /// Refining keeps metal in place too (metal sphere and electrode centres are nodes),

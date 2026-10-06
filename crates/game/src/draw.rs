@@ -337,6 +337,38 @@ fn draw_box(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode) {
     gizmos.linestrip_2d(box_outline(b, 0.0), rim);
 }
 
+/// A dielectric: its cross-section hatched in teal (an insulator, unlike the grey metal).
+fn draw_dielectric(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode) {
+    let c = to_vec2(b.center);
+    #[allow(clippy::cast_possible_truncation)]
+    let (a, hl, ht) = (
+        b.angle as f32,
+        b.half_length as f32,
+        b.half_thickness as f32,
+    );
+    let u = Vec2::from_angle(a);
+    let v = u.perp();
+    let teal = Color::srgb(0.3, 0.75, 0.7);
+    // Diagonal hatching every 0.3 cells across the box.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let lines = ((2.0 * (hl + ht) / 0.3).ceil() as u32).max(2);
+    for k in 0..=lines {
+        #[allow(clippy::cast_precision_loss)]
+        let s = -(hl + ht) + 2.0 * (hl + ht) * k as f32 / lines as f32;
+        // The line x − y = s (box coordinates) clipped to the box.
+        let (x0, x1) = ((s - ht).max(-hl), (s + ht).min(hl));
+        if x0 < x1 {
+            seg(
+                gizmos,
+                c + u * x0 + v * (x0 - s),
+                c + u * x1 + v * (x1 - s),
+                teal.with_alpha(0.45),
+            );
+        }
+    }
+    gizmos.linestrip_2d(box_outline(b, 0.0), teal);
+}
+
 fn draw_coil(gizmos: &mut Gizmos, grid: Grid, coil: &Coil) {
     let copper = Color::srgb(0.95, 0.6, 0.3);
     let arrow = |gizmos: &mut Gizmos, at: Vec2, dir: Vec2| {
@@ -351,11 +383,18 @@ fn draw_coil(gizmos: &mut Gizmos, grid: Grid, coil: &Coil) {
             kappa,
             rate,
             drive,
+            tunable,
         } => {
             let c = to_vec2(grid.position(*center));
             #[allow(clippy::cast_possible_truncation)]
             let r = *radius as f32;
             gizmos.circle_2d(c, r, copper).resolution(128);
+            if *tunable {
+                // Its power supply: a yellow ring inside (click the coil to switch it).
+                gizmos
+                    .circle_2d(c, (r - 0.3).max(0.1), Color::srgb(1.0, 0.85, 0.3))
+                    .resolution(128);
+            }
             // A ramped or driven coil: a second, dashed ring (its current changes).
             if *rate != 0.0 || drive.is_some() {
                 for k in (0..64).step_by(2) {
@@ -380,15 +419,31 @@ fn draw_coil(gizmos: &mut Gizmos, grid: Grid, coil: &Coil) {
         Coil::Polygon {
             vertices,
             kappa,
-            rate: _,
+            rate,
+            drive,
         } => {
             let v: Vec<Vec2> = vertices
                 .iter()
                 .map(|n| to_vec2(grid.position(*n)))
                 .collect();
+            // A ramped or driven coil: its sides doubled by a dashed line (its current
+            // changes), as for a circle.
+            let changing = *rate != 0.0 || drive.is_some();
             for i in 0..v.len() {
                 let (a, b) = (v[i], v[(i + 1) % v.len()]);
                 gizmos.line_2d(a, b, copper);
+                if changing {
+                    let n = (b - a).perp().normalize_or_zero() * 0.25;
+                    for k in (0..16).step_by(2) {
+                        #[allow(clippy::cast_precision_loss)]
+                        let (s0, s1) = (k as f32 / 16.0, (k + 1) as f32 / 16.0);
+                        gizmos.line_2d(
+                            a + (b - a) * s0 + n,
+                            a + (b - a) * s1 + n,
+                            copper.with_alpha(0.7),
+                        );
+                    }
+                }
                 let dir = (b - a).normalize_or_zero() * if *kappa >= 0.0 { 1.0 } else { -1.0 };
                 arrow(gizmos, (a + b) * 0.5, dir);
             }
@@ -448,6 +503,11 @@ pub fn draw(
     // Coils.
     for coil in &level.coils {
         draw_coil(&mut gizmos, grid, coil);
+    }
+
+    // Dielectrics: translucent boxes with a teal rim (insulators, not metal).
+    for d in level.box_dielectrics() {
+        draw_dielectric(&mut gizmos, &d.shape);
     }
 
     // Electrodes: the level's (at the potentials of the player's power supplies), then

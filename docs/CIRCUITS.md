@@ -28,7 +28,7 @@ want to settle are marked **(owner)**.
   matrix with the floating electrodes, and circular coils, through their self- and
   mutual inductances; one-way coupling; the flights restart at the circuit's breakpoints
   and end their steps on its knots, so that the canonical angular momentum in a driven
-  coil holds to 3e-15. Polygonal coils are not drivable yet.
+  coil holds to 3e-15. Polygonal coils too (2026-10-06, tests Z14–Z15: their self-inductance as the wire's surface flux, as for the ring).
 - **Levels** (2026-10-06): the level format's `drive` on electrodes and circular coils,
   the sandbox editor's controls, the panel's plots, the model notes with the
   back-action bound and the quasi-static parameter; arc 5 "Circuits" with Charging a

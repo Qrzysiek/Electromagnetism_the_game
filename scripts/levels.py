@@ -209,16 +209,28 @@ def guessable(v, vmax):
 
 
 def slider_problems(lvl):
-    """The slider rules (see `slider`) on a built level: each potential list symmetric
-    about 0, and no reference potential at a guessable point."""
+    """The slider rules (see `slider`) on a built level: each list symmetric about 0, and
+    no reference value at a guessable point of its own slider (a plate's potentials, or
+    what its power supply operates: an electrode's potentials, a coil's ramp rates)."""
     out = []
-    lists = {"supply": lvl["limits"].get("supply_voltages", []),
-             "plate": lvl["limits"].get("plate_voltages", [])}
-    for kind, vals in lists.items():
+    limits = lvl["limits"]
+    lists = {"supply voltages": limits.get("supply_voltages", []),
+             "coil rates": limits.get("coil_rates", []),
+             "plate voltages": limits.get("plate_voltages", [])}
+    for what, vals in lists.items():
         if vals and min(vals) != -max(vals):
-            out.append(f"{kind} slider [{min(vals)}, {max(vals)}] not symmetric about 0")
+            out.append(f"{what} slider [{min(vals)}, {max(vals)}] not symmetric about 0")
+    # A tunable coil's supply sits on its terminal (`Coil::supply_node`).
+    coil_centres = [[c["center"][0] + math.floor(c["radius"] + 0.5), c["center"][1], c["center"][2]]
+                    for c in lvl.get("coils", [])
+                    if c.get("shape") == "circle" and c.get("tunable")]
     for e in lvl["reference_solution"]:
-        vals = lists.get(e["kind"])
+        if e["kind"] == "plate":
+            vals = lists["plate voltages"]
+        elif e["kind"] == "supply":
+            vals = lists["coil rates" if e["node"] in coil_centres else "supply voltages"]
+        else:
+            continue
         if vals and max(vals) > 0 and guessable(e["value"], max(vals)):
             out.append(f"{e['kind']} at {e['node'][:2]}: {e['value']:g} is guessable on "
                        f"the slider +-{max(vals):g}")
@@ -266,7 +278,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           amplitudes=(), rf_omega=0.0, radiation_reaction=False, omegas=(), conductors=(),
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
           beam_interaction=False, gates=(), clouds=(), free_particles=(), max_free=0,
-          free_charges=(), free_speeds=(), free_mass=1.0, free_radius=0.3):
+          free_charges=(), free_speeds=(), free_mass=1.0, free_radius=0.3, dielectrics=(),
+          coil_rates=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -284,6 +297,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
             limits["plate"] = dict(zip(("length", "thickness", "height"), plate_size))
     if supplies:
         limits["supply_voltages"] = list(supplies)
+    if coil_rates:
+        limits["coil_rates"] = list(coil_rates)
     if max_free:
         limits["max_free"] = max_free
         limits["free_charges"] = list(free_charges)
@@ -308,6 +323,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         **({"clouds": list(clouds)} if clouds else {}),
         **({"free_particles": list(free_particles)} if free_particles else {}),
         **({"electrodes": list(electrodes)} if electrodes else {}),
+        **({"dielectrics": list(dielectrics)} if dielectrics else {}),
         **({"gates": list(gates)} if gates else {}),
     }
 
@@ -1019,6 +1035,34 @@ def shielding():
         reference=[player_plate(15, 12, 0.0)])
 
 
+def glass(x, y, length, thickness, eps, height=4.0, angle_deg=0.0):
+    """A dielectric box of relative permittivity eps (PHYSICS.md 2.7)."""
+    return {"center": [x, y, 0], "length": length, "thickness": thickness, "height": height,
+            "angle_deg": angle_deg, "permittivity": eps}
+
+
+def glass_screen():
+    # Shielding's charge (2M at (15, 14)) behind a glass slab (eps = 4, 1.5 cells thick,
+    # 2 high, from x = 10 to 20) instead of a metal plate. The glass's bound charge
+    # weakens the field beyond it but does not cancel it, as metal does: the beam is still
+    # thrown off, less, and the player's charges must make up the rest. The build checks
+    # that the reference fails without the glass (NEEDS_DIELECTRIC): the glass matters
+    # (measured: the solver's one charge, -1M at (22, 2), brings the beam in with it; the
+    # beam crashes into that charge without it). Small and low (setup 0.8 s; a 12 x 2 x 4
+    # slab took 3.7 s).
+    return level(
+        "Glass screen",
+        "Shielding with glass instead of metal. A dielectric is an insulator: its charges "
+        "cannot flow, but its molecules polarize, and the bound charge on its surfaces "
+        "weakens the field that crosses it, here by roughly the permittivity ε = 4, never "
+        "to zero as metal does. The strong charge behind the glass still pushes the beam "
+        "off; place charges to bring it into the detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 8, 30, 12)))],
+        elements=[charge(15, 14, 2 * M)],
+        dielectrics=[glass(15, 12, 10, 1.5, 4.0, height=2.0)],
+        max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1)], region=(4, 1, 26, 9))
+
+
 def real_einzel_lens():
     # Three apertures (plate pairs with a gap of 4 cells around y = 10) at x = 10, 14,
     # 18; the outer ones grounded, the middle one at V. For positive ions a positive V
@@ -1661,6 +1705,33 @@ def jackson_recoil():
         shots=[shot(1.0, 1.0, (28, 9), 90.0, 1e-9, box((30, 0, 36, 2), kinetic=(0.1, 10.0)))],
         max_free=3, free_charges=[1.0], free_speeds=[0.5, 1.0, 1.5], region=(1, 1, 10, 19))
 
+def ramp_the_coil(rate=-5.3e3, rates=(-1e4, -5e3, 5e3, 1e4), vmax=2.1e4, detector=None):
+    # Coil supplies' introduction (the player sets a coil's ramp rate), as "Power supply"
+    # introduced the electrodes' supplies: a coil (radius 6) whose current rises from 0
+    # at the rate the player sets, and an ion crossing it from the left (T0 = 0.5, v = 1:
+    # inside the coil from t = 9 to 21). It meets the field the ramp has built by then
+    # (and the induced field -rate A), so the rate sets how far it is bent; the detector
+    # is placed around the reference's landing, and `generator window` keeps the slider's
+    # guessable points out of the solving interval. The supply sits on the coil's
+    # terminal (19, 5), its wire's node due east of the centre (`Coil::supply_node`).
+    coil = circle_coil(15, 5, 4.0, 0.0)
+    coil["tunable"] = True
+    detector = detector or Auto((28, 0, 30, 20), "x", 2)
+    return level(
+        "Ramp the coil",
+        "The coil now has a power supply too (the yellow ring: click the coil, then set "
+        "the slider). It does not set a fixed current: it sets how fast the current "
+        "rises from zero. The ion crosses the coil a while after the start and meets "
+        "the field the current has built by then: the faster the ramp, the more it is "
+        "bent. (A rising field also induces an electric field around the axis, "
+        "Faraday's law, which pushes the ion along a little.) Find the ramp that brings "
+        "the ion into the detector.",
+        shots=[shot(1e-6, 1.0, (0, 12), 0.0, 0.5, detector)],
+        coils=[coil], c=None, t_max=100.0,
+        coil_rates=slider(vmax, *rates, rate),
+        reference=[supply(19, 5, rate)])
+
+
 def jackson_faraday():
     # Jackson §5.15: a coil whose current rises linearly (kappa = 1e4 t) induces
     # E = -dA/dt, which drives a charge at rest around the coil's axis; as B grows the
@@ -2206,6 +2277,9 @@ FINALES = {"sorting_station": 4}
 MUST_FAIL_ALONE = {"chromatic_aberration", "real_analyzer", "crt_earth_field",
                    "calutron_space_charge", "beam_pipe", "soft_landing_current"}
 
+# Dielectric levels: their reference must fail without the dielectrics (they matter).
+NEEDS_DIELECTRIC = {"glass_screen"}
+
 # --- Jackson Ch. 14: radiation goals (PHYSICS.md §3.4) -------------------------------
 # A world at c = 2 with a charge of 1/40 at gamma = 3 (T0 = 8): it radiates noticeably (a
 # few per cent of its energy in a tight bend), so radiation reaction is included
@@ -2583,6 +2657,7 @@ ARCS = [
             ("power_supply", power_supply),
             ("build_a_deflector", build_a_deflector),
             ("shielding", shielding),
+            ("glass_screen", glass_screen),
         ]),
         ("Intermediate", [
             ("tune_the_lens", tune_the_lens),
@@ -2615,6 +2690,7 @@ ARCS = [
         ("Introduction", [
             ("stray_field", stray_field),
             ("rf_kick", rf_kick),
+            ("ramp_the_coil", ramp_the_coil),
             ("synchrotron_light", synchrotron_light),
         ]),
         ("Intermediate", [
@@ -2954,6 +3030,23 @@ def main():
         ok = "placement Ok" in report and all(
             "Arrived" in l and "Verified" in l for l in report.splitlines() if "shot " in l)
         print(f"{key}: reference {'verified' if ok else 'NOT VERIFIED'}", flush=True)
+        if slug in NEEDS_DIELECTRIC:
+            built = json.load(open(path, encoding="utf-8"))
+            vacuum = dict(built, dielectrics=[])
+            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                             encoding="utf-8") as f:
+                json.dump(vacuum, f)
+                probe_path = f.name
+            try:
+                alone = run_generator("check", probe_path)
+            finally:
+                os.unlink(probe_path)
+            works = all("Arrived" in l and "Verified" in l
+                        for l in alone.splitlines() if "shot " in l)
+            print(f"{key}: reference without the dielectrics: "
+                  f"{'WORKS (the dielectric does not matter)' if works else 'fails, as it should'}")
+            if works:
+                sys.exit(f"{key}: the reference works without its dielectrics")
         if not ok:
             print(report)
         for problem in slider_problems(json.load(open(path, encoding="utf-8"))):

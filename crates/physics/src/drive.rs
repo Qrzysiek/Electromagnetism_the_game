@@ -7,7 +7,7 @@
 use crate::bem::{Bias, Electrodes};
 use crate::circuit::{Circuit, CircuitError, CircuitSolution, Component, Waveform};
 use crate::inductance;
-use crate::magnetic::CircularLoop;
+use crate::magnetic::{CircularLoop, PolygonCoil};
 
 /// RADAU5's relative tolerance for driving circuits: their potentials and currents are
 /// then within about 1e-9 of their scale (tests Z4–Z9).
@@ -45,6 +45,8 @@ pub struct Drives {
     /// The driven circular coils: (index in `LevelField::loops`, the coil's inductor in
     /// the circuit).
     pub loops: Vec<(usize, usize)>,
+    /// The driven polygonal coils: (index in `LevelField::polygons`, the coil's inductor).
+    pub polygons: Vec<(usize, usize)>,
     /// A coil's strength per unit current: `μ₀/4π = 1/c²`.
     pub per_current: f64,
     /// What building and solving the circuit took (for the sandbox's meters).
@@ -53,18 +55,21 @@ pub struct Drives {
 
 impl Drives {
     /// Builds and solves the circuit of the driven electrodes (`(index, chain)`, with the
-    /// static solution `electrodes`) and coils (`(index in loops, chain)`) over `[0, t_end]`
-    /// (lab time). The electrodes' capacitances are the boundary-element Maxwell matrix;
+    /// static solution `electrodes`) and coils (`(index in loops or polygons, chain)`)
+    /// over `[0, t_end]` (lab time). The electrodes' capacitances are the boundary-element Maxwell matrix;
     /// a coil's self-inductance is that of a uniform surface current on its wire and the
     /// coils' mutual inductances their linked fluxes (`inductance.rs`), divided by `c²`
     /// (a coil in a circuit needs a finite c). At t = 0 the electrodes are at their
     /// static potentials, the coils carry their static strengths, and the chains' own
     /// inductors and capacitors are empty.
+    #[allow(clippy::too_many_arguments)]
     pub fn build(
         electrodes: &Electrodes,
         driven_electrodes: &[(usize, Chain)],
         loops: &[CircularLoop],
         driven_loops: &[(usize, Chain)],
+        polygons: &[PolygonCoil],
+        driven_polygons: &[(usize, Chain)],
         c_light: f64,
         t_end: f64,
     ) -> Result<Self, CircuitError> {
@@ -175,31 +180,53 @@ impl Drives {
         }
         // The coils: each an inductor from its node to ground.
         let per_current = 1.0 / (c_light * c_light);
-        let mut coil_loops: Vec<(usize, usize)> = Vec::new();
-        for (i, ch) in driven_loops {
+        let coils: Vec<(Coil<'_>, &Chain)> = driven_loops
+            .iter()
+            .map(|(i, ch)| (Coil::Circle(*i, &loops[*i]), ch))
+            .chain(
+                driven_polygons
+                    .iter()
+                    .map(|(i, ch)| (Coil::Polygon(*i, &polygons[*i]), ch)),
+            )
+            .collect();
+        // Each coil with its inductor's component index.
+        let mut inductors: Vec<(Coil<'_>, usize)> = Vec::new();
+        for &(coil, ch) in &coils {
             if ch.switch.is_some() {
                 return Err(CircuitError::Singular);
             }
-            let l = &loops[*i];
             let top = node(&mut circuit, &mut v0, 0.0);
-            let current = l.kappa / per_current;
+            let current = coil.kappa() / per_current;
             scale_i = scale_i.max(current.abs()).max(wave_scale(&ch.wave) / ch.r);
             scale_v = scale_v.max(wave_scale(&ch.wave));
-            coil_loops.push((*i, circuit.components.len()));
+            inductors.push((coil, circuit.components.len()));
             i0.push((circuit.components.len(), current));
             circuit.components.push(Component::Inductor {
                 a: top,
                 b: 0,
-                l: inductance::ring_self(l) * per_current,
+                l: coil.self_inductance() * per_current,
             });
             chain(&mut circuit, &mut v0, &mut i0, ch, top, 0.0, ch.c);
         }
-        for (a, &(ia, ka)) in coil_loops.iter().enumerate() {
-            for &(ib, kb) in &coil_loops[a + 1..] {
-                let m = inductance::mutual_circles(&loops[ia], &loops[ib]) * per_current;
-                circuit.mutual.push((ka, kb, m));
+        for (a, &(ca, ka)) in inductors.iter().enumerate() {
+            for &(cb, kb) in &inductors[a + 1..] {
+                circuit.mutual.push((ka, kb, ca.mutual(&cb) * per_current));
             }
         }
+        let coil_loops: Vec<(usize, usize)> = inductors
+            .iter()
+            .filter_map(|&(c, k)| match c {
+                Coil::Circle(i, _) => Some((i, k)),
+                Coil::Polygon(..) => None,
+            })
+            .collect();
+        let coil_polygons: Vec<(usize, usize)> = inductors
+            .iter()
+            .filter_map(|&(c, k)| match c {
+                Coil::Polygon(i, _) => Some((i, k)),
+                Coil::Circle(..) => None,
+            })
+            .collect();
         // The initial state: potentials, then the currents in the components' order.
         let mut x0 = v0;
         i0.sort_by_key(|&(k, _)| k);
@@ -226,6 +253,7 @@ impl Drives {
                 .collect(),
             electrodes: members,
             loops: coil_loops,
+            polygons: coil_polygons,
             per_current,
             cost,
         })
@@ -251,6 +279,16 @@ impl Drives {
         ))
     }
 
+    /// The strength `κ` of polygonal coil `i` and its rate `κ̇` at lab time `t`, if the
+    /// coil is driven.
+    pub fn polygon_strength(&self, i: usize, t: f64) -> Option<(f64, f64)> {
+        let &(_, k) = self.polygons.iter().find(|&&(p, _)| p == i)?;
+        Some((
+            self.solution.current(k, t) * self.per_current,
+            self.solution.current_rate(k, t) * self.per_current,
+        ))
+    }
+
     /// The times at which the drives change abruptly (lab time): switch toggles and pulse
     /// corners, where the integration of the flights restarts.
     pub fn breakpoints(&self) -> &[f64] {
@@ -266,5 +304,39 @@ fn wave_scale(w: &Waveform) -> f64 {
             offset, amplitude, ..
         } => offset.abs() + amplitude.abs(),
         Waveform::Pulse { low, high, .. } => low.abs().max(high.abs()),
+    }
+}
+
+/// A driven coil, with its index in its list.
+#[derive(Clone, Copy)]
+enum Coil<'a> {
+    Circle(usize, &'a CircularLoop),
+    Polygon(usize, &'a PolygonCoil),
+}
+
+impl Coil<'_> {
+    fn kappa(&self) -> f64 {
+        match self {
+            Coil::Circle(_, l) => l.kappa,
+            Coil::Polygon(_, p) => p.kappa,
+        }
+    }
+
+    /// Self-inductance in `μ₀/4π` units.
+    fn self_inductance(&self) -> f64 {
+        match self {
+            Coil::Circle(_, l) => inductance::ring_self(l),
+            Coil::Polygon(_, p) => inductance::polygon_self(p),
+        }
+    }
+
+    /// Mutual inductance with another coil, in `μ₀/4π` units.
+    fn mutual(&self, other: &Coil<'_>) -> f64 {
+        match (self, other) {
+            (Coil::Circle(_, a), Coil::Circle(_, b)) => inductance::mutual_circles(a, b),
+            (Coil::Polygon(_, p), Coil::Circle(_, c))
+            | (Coil::Circle(_, c), Coil::Polygon(_, p)) => inductance::mutual_polygon_circle(p, c),
+            (Coil::Polygon(_, p), Coil::Polygon(_, q)) => inductance::mutual_polygons(p, q),
+        }
     }
 }

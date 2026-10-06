@@ -24,6 +24,19 @@
 //! the verification of flights. The field of a given panel set is the exact field of a
 //! real charge distribution, so energy is conserved to integration accuracy.
 //!
+//! **Dielectrics.** Boxes of relative permittivity ε (`BoxDielectric`) are meshed the same
+//! way and solved in the same system: their panels carry the bound (polarization) charge,
+//! fixed by the continuity of the normal displacement across the surface. With
+//! `λ = (ε − 1)/(ε + 1)` and the average normal field `Eₙ` at the centroid (the panel's
+//! own charge contributing none there), `σ = (λ/2π) Eₙ` (k = 1; Jackson §4.4). The
+//! electrodes' unit systems and capacitance matrix then include the dielectrics' response.
+//! Each body's bound charge sums to zero exactly; the discretized equation alone does not
+//! ensure it (the net-charge mode, a free conductor charge, is nearly singular as ε grows:
+//! −0.6 % of a nearby charge at ε = 2, −48 % at ε = 10⁴). So each body adds that
+//! constraint and one unknown γ, a uniform normal field on its surface (the field of a
+//! monopole inside, which absorbs the inconsistency; tests N1–N3).
+//! Particles do not enter dielectrics (obstacles, as electrodes).
+//!
 //! **Evaluation.** Every panel uses the exact integrals, so the field is exactly the
 //! gradient of the potential of the panel charges: energy is conserved to integration
 //! accuracy. (A first version switched to a quadrature rule for distant panels; the
@@ -51,6 +64,14 @@ pub struct BoxElectrode {
     pub half_thickness: f64,
     pub half_height: f64,
     pub bias: Bias,
+}
+
+/// A dielectric box (same geometry as an electrode) of relative permittivity
+/// `permittivity` (≥ 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BoxDielectric {
+    pub shape: BoxElectrode,
+    pub permittivity: f64,
 }
 
 /// Mesh resolution: largest panel size relative to the electrode's smallest dimension is
@@ -246,9 +267,12 @@ struct Geometry {
     panels: Vec<Triangle>,
     /// Precomputed panels and their mirror images.
     pre: Vec<(Panel, Panel)>,
+    /// Per panel: `Some(λ)` for a dielectric's, None for an electrode's.
+    lambda: Vec<Option<f64>>,
     /// For pictures, per panel: centroid, squared radius of exact integration
     /// (`PICTURE_NEAR` sizes), the points of `PICTURE_RULE` and a third of the area.
     picture: Vec<PictureRule>,
+    /// The electrode each panel belongs to (`usize::MAX` for a dielectric's panel).
     owner: Vec<usize>,
     lu: Lu,
     unit: Vec<Vec<f64>>,
@@ -256,20 +280,24 @@ struct Geometry {
     cost: crate::field::SetupCost,
 }
 
-fn geometry_key(electrodes: &[BoxElectrode], size: f64) -> Vec<u64> {
-    let mut k: Vec<u64> = electrodes
-        .iter()
-        .flat_map(|e| {
-            [
-                e.center.x.to_bits(),
-                e.center.y.to_bits(),
-                e.angle.to_bits(),
-                e.half_length.to_bits(),
-                e.half_thickness.to_bits(),
-                e.half_height.to_bits(),
-            ]
-        })
-        .collect();
+fn geometry_key(electrodes: &[BoxElectrode], dielectrics: &[BoxDielectric], size: f64) -> Vec<u64> {
+    let shape = |e: &BoxElectrode| {
+        [
+            e.center.x.to_bits(),
+            e.center.y.to_bits(),
+            e.angle.to_bits(),
+            e.half_length.to_bits(),
+            e.half_thickness.to_bits(),
+            e.half_height.to_bits(),
+        ]
+    };
+    let mut k: Vec<u64> = electrodes.iter().flat_map(shape).collect();
+    for d in dielectrics {
+        // Marker, then the shape and the permittivity.
+        k.push(u64::MAX);
+        k.extend(shape(&d.shape));
+        k.push(d.permittivity.to_bits());
+    }
     k.push(size.to_bits());
     k
 }
@@ -295,9 +323,13 @@ impl PictureRule {
     }
 }
 
-fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
+fn cached_geometry(
+    electrodes: &[BoxElectrode],
+    dielectrics: &[BoxDielectric],
+    size: f64,
+) -> Arc<Geometry> {
     static CACHE: OnceLock<Mutex<HashMap<Vec<u64>, Arc<Geometry>>>> = OnceLock::new();
-    let key = geometry_key(electrodes, size);
+    let key = geometry_key(electrodes, dielectrics, size);
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(g) = cache.lock().expect("cache").get(&key) {
         return g.clone();
@@ -305,25 +337,77 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
     let start = std::time::Instant::now();
     let mut panels = Vec::new();
     let mut owner = Vec::new();
+    // Per panel: None for an electrode's (potential condition), Some(λ) for a
+    // dielectric's (normal displacement condition).
+    let mut lambda: Vec<Option<f64>> = Vec::new();
     for (i, e) in electrodes.iter().enumerate() {
         let m = e.mesh(size);
         owner.extend(std::iter::repeat_n(i, m.len()));
+        lambda.extend(std::iter::repeat_n(None, m.len()));
+        panels.extend(m);
+    }
+    // The dielectric body of each dielectric panel.
+    let mut body: Vec<usize> = Vec::new();
+    for (k, d) in dielectrics.iter().enumerate() {
+        let m = d.shape.mesh(size);
+        let l = (d.permittivity - 1.0) / (d.permittivity + 1.0);
+        owner.extend(std::iter::repeat_n(usize::MAX, m.len()));
+        lambda.extend(std::iter::repeat_n(Some(l), m.len()));
+        body.extend(std::iter::repeat_n(k, m.len()));
         panels.extend(m);
     }
     let n = panels.len();
+    let n_electrode_panels = n - body.len();
+    // The bordered system: the panels' densities, then one γ per dielectric body.
+    let big = n + dielectrics.len();
     let pre: Vec<(Panel, Panel)> = panels
         .iter()
         .map(|t| (Panel::new(*t), Panel::new(mirror(t))))
         .collect();
-    let mut a = vec![0.0; n * n];
+    let mut a = vec![0.0; big * big];
     for (i, pi) in panels.iter().enumerate() {
         crate::cancel::checkpoint();
         let x = pi.centroid();
-        for (j, (p, m)) in pre.iter().enumerate() {
-            a[i * n + j] = pair_integrals(p, m, x).0;
+        match lambda[i] {
+            None => {
+                for (j, (p, m)) in pre.iter().enumerate() {
+                    a[i * big + j] = pair_integrals(p, m, x).0;
+                }
+            }
+            Some(l) => {
+                // σᵢ − (λ/2π) Σⱼ σⱼ Eₙ,ⱼ(xᵢ) = (λ/2π) E_src·nᵢ, with the field of a unit
+                // density `−∫∇(1/R)`; the panel's own average normal field is 0 (on its
+                // centroid h is a rounding error, so its normal part is removed).
+                let normal = pi.normal();
+                // The condition averaged over the panel (its flux), by `DIELECTRIC_RULE`:
+                // centroid collocation alone converged slowly near the edges.
+                let points =
+                    DIELECTRIC_RULE.map(|([u, v, w], wt)| (pi.a * u + pi.b * v + pi.c * w, wt));
+                for (j, (p, m)) in pre.iter().enumerate() {
+                    let mut g = DVec3::ZERO;
+                    for &(y, wt) in &points {
+                        g += wt
+                            * if j == i {
+                                let (_, g1) = p.integrals(y);
+                                let (_, g2) = m.integrals(y);
+                                (g1 - normal * g1.dot(normal)) + g2
+                            } else {
+                                pair_integrals(p, m, y).1
+                            };
+                    }
+                    a[i * big + j] = l / std::f64::consts::TAU * g.dot(normal);
+                }
+                a[i * big + i] += 1.0;
+                // The body's γ: a uniform normal field on its surface.
+                a[i * big + n + body[i - n_electrode_panels]] = 1.0;
+            }
         }
     }
-    let lu = Lu::new(a, n);
+    // The constraints: each body's bound charge (both halves) sums to zero.
+    for (j, (t, &k)) in panels[n_electrode_panels..].iter().zip(&body).enumerate() {
+        a[(n + k) * big + n_electrode_panels + j] = 2.0 * t.area();
+    }
+    let lu = Lu::new(a, big);
     let m = electrodes.len();
     let unit: Vec<Vec<f64>> = (0..m)
         .map(|e| {
@@ -331,7 +415,7 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
                 .iter()
                 .map(|&o| if o == e { 1.0 } else { 0.0 })
                 .collect();
-            lu.solve(&b)
+            solve_bordered(&lu, &b, n)
         })
         .collect();
     let charge_on = |sigma: &[f64], e: usize| -> f64 {
@@ -356,6 +440,7 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
         panels,
         pre,
         picture,
+        lambda,
         owner,
         lu,
         unit,
@@ -370,10 +455,22 @@ fn cached_geometry(electrodes: &[BoxElectrode], size: f64) -> Arc<Geometry> {
     g
 }
 
+/// The panels' densities from the bordered system's factorization: the right side padded
+/// with the dielectric bodies' constraints (zero net charge), their γ dropped.
+fn solve_bordered(lu: &Lu, b: &[f64], n: usize) -> Vec<f64> {
+    let mut rhs = b.to_vec();
+    rhs.resize(lu.n, 0.0);
+    let mut x = lu.solve(&rhs);
+    x.truncate(n);
+    x
+}
+
 /// Box electrodes with their surface charge for given fixed sources.
 #[derive(Clone, Debug, Default)]
 pub struct Electrodes {
     pub electrodes: Vec<BoxElectrode>,
+    /// Dielectric boxes, solved with the electrodes (their panels after the electrodes').
+    pub dielectrics: Vec<BoxDielectric>,
     geometry: Option<Arc<Geometry>>,
     /// Surface charge density of each (upper) panel.
     pub sigma: Vec<f64>,
@@ -390,6 +487,23 @@ pub struct Electrodes {
 /// exact integrals (level 19, from 0.05 cells off the plates; with one point charge per
 /// panel it was 4.7e-2, and 1.1e-3 with the near ones exact).
 pub const PICTURE_NEAR: f64 = 2.0;
+
+/// The rule averaging a dielectric panel's condition: barycentric points and weights
+/// (Dunavant's degree-4 rule, 6 points).
+const DIELECTRIC_RULE: [([f64; 3], f64); 6] = {
+    const A: f64 = 0.445_948_490_915_965;
+    const WA: f64 = 0.223_381_589_678_011;
+    const B: f64 = 0.091_576_213_509_771;
+    const WB: f64 = 0.109_951_743_655_322;
+    [
+        ([A, A, 1.0 - 2.0 * A], WA),
+        ([A, 1.0 - 2.0 * A, A], WA),
+        ([1.0 - 2.0 * A, A, A], WA),
+        ([B, B, 1.0 - 2.0 * B], WB),
+        ([B, 1.0 - 2.0 * B, B], WB),
+        ([1.0 - 2.0 * B, B, B], WB),
+    ]
+};
 
 /// Barycentric points of the three-point rule on a triangle (degree 2, equal weights).
 pub const PICTURE_RULE: [[f64; 3]; 3] = [
@@ -416,30 +530,71 @@ impl Electrodes {
         e
     }
 
+    /// Electrodes and dielectric boxes at a resolution.
+    pub fn new_with_dielectrics(
+        electrodes: Vec<BoxElectrode>,
+        dielectrics: Vec<BoxDielectric>,
+        sources: &[(DVec3, f64)],
+        resolution: Resolution,
+    ) -> Self {
+        let mut e =
+            Self::with_dielectrics(electrodes, dielectrics, sources, resolution.panel_size());
+        e.picture = resolution == Resolution::Display;
+        e
+    }
+
     /// As `new`, with an explicit largest panel size (cells).
     pub fn with_panel_size(
         electrodes: Vec<BoxElectrode>,
         sources: &[(DVec3, f64)],
         size: f64,
     ) -> Self {
+        Self::with_dielectrics(electrodes, Vec::new(), sources, size)
+    }
+
+    /// Electrodes and dielectric boxes, with an explicit largest panel size (cells).
+    pub fn with_dielectrics(
+        electrodes: Vec<BoxElectrode>,
+        dielectrics: Vec<BoxDielectric>,
+        sources: &[(DVec3, f64)],
+        size: f64,
+    ) -> Self {
         let m = electrodes.len();
-        if m == 0 {
+        if m == 0 && dielectrics.is_empty() {
             return Self::default();
         }
-        let geo = cached_geometry(&electrodes, size);
-        // Source system: electrodes at 0, i.e. σ cancels the sources' potential.
+        let geo = cached_geometry(&electrodes, &dielectrics, size);
+        // Source system: electrodes at 0, i.e. σ cancels the sources' potential; on a
+        // dielectric's panel `(λ/2π) E_src·n`.
         let b: Vec<f64> = geo
             .panels
             .iter()
-            .map(|t| {
+            .zip(&geo.lambda)
+            .map(|(t, l)| {
                 let x = t.centroid();
-                -sources
-                    .iter()
-                    .map(|&(p, q)| q / (x - p).length())
-                    .sum::<f64>()
+                match l {
+                    None => -sources
+                        .iter()
+                        .map(|&(p, q)| q / (x - p).length())
+                        .sum::<f64>(),
+                    Some(l) => {
+                        // Averaged over the panel as the matrix's row.
+                        let e: DVec3 = DIELECTRIC_RULE
+                            .iter()
+                            .map(|([u, v, w], wt)| (t.a * *u + t.b * *v + t.c * *w, *wt))
+                            .flat_map(|(y, wt)| {
+                                sources.iter().map(move |&(p, q)| {
+                                    let r = y - p;
+                                    r * (wt * q / (r.length() * r.length_squared()))
+                                })
+                            })
+                            .sum::<DVec3>();
+                        l / std::f64::consts::TAU * e.dot(t.normal())
+                    }
+                }
             })
             .collect();
-        let mut sigma = geo.lu.solve(&b);
+        let mut sigma = solve_bordered(&geo.lu, &b, geo.panels.len());
         let charge_on = |sigma: &[f64], e: usize| -> f64 {
             geo.panels
                 .iter()
@@ -491,6 +646,7 @@ impl Electrodes {
         }
         Self {
             electrodes,
+            dielectrics,
             geometry: Some(geo),
             sigma,
             potentials: alpha,
@@ -499,7 +655,7 @@ impl Electrodes {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.electrodes.is_empty()
+        self.electrodes.is_empty() && self.dielectrics.is_empty()
     }
 
     /// Geometry only (no charges): for obstacles and containment tests.
