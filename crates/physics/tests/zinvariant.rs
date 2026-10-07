@@ -160,3 +160,86 @@ fn v3_line_charge_in_a_grounded_cylinder() {
         "V3 {errors:?}"
     );
 }
+
+/// V4: the space-charge-limited coaxial diode (cathode radius 1, grounded; anode radius
+/// 2 at potential 1; electrons, q/m = −1) against Langmuir & Blodgett: the current per
+/// unit length `(2/9) √(2|q/m|) V^{3/2} / (b β²)` with β² = 0.27926716071059 at b/a = 2
+/// (`scripts/wolfram/v4_langmuir_blodgett.wls`, the Langmuir–Blodgett equation solved at
+/// 30 digits; its series and Langmuir & Blodgett's table agree). Measured as the anode's
+/// collected charge per time over t = 4 to 8, after the flow has settled (two transit
+/// times), at a base resolution and a refined one (half the macroparticle weight, the
+/// step, the segments and the softening). The release half a segment out (tube.rs,
+/// `EMISSION_OFFSET`) makes the error first order in the resolution: required, the error
+/// shrinking at an observed order of at least 0.7 and the Richardson extrapolation
+/// (2 I_fine − I_coarse) within 2 % (measured 15 %, 7.8 %, extrapolated 0.5 %). The 2 %:
+/// the fine run collects ~2400 macroparticles in the window, so a Poisson bound on its
+/// counting noise is 1/√2400 = 2 % (the emission is deterministic, so the real noise is
+/// smaller).
+#[test]
+fn v4_coaxial_diode_langmuir_blodgett() {
+    use physics::tube::Tube;
+    let beta2 = 0.279_267_160_710_59;
+    let exact = 2.0 / 9.0 * 2f64.sqrt() / (2.0 * beta2);
+    let mut currents = Vec::new();
+    for (weight, dt, size) in [(2e-3, 0.01, 0.1), (1e-3, 0.005, 0.05)] {
+        let electrodes = Electrodes::new(
+            vec![
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: 1.0,
+                    },
+                    bias: Bias::Grounded,
+                },
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: 2.0,
+                    },
+                    bias: Bias::Potential(1.0),
+                },
+            ],
+            &[],
+            size,
+        );
+        let tube = Tube {
+            electrodes,
+            cathode: 0,
+            charge_per_mass: -1.0,
+            weight,
+            softening: 0.5 * size,
+            dt,
+        };
+        let mut s = tube.state();
+        let start = std::time::Instant::now();
+        let mut at4 = None;
+        while s.t < 8.0 {
+            tube.step(&mut s);
+            if at4.is_none() && s.t >= 4.0 {
+                at4 = Some((s.t, s.collected[1]));
+            }
+        }
+        let (t4, q4) = at4.expect("reached t = 4");
+        let current = (s.collected[1] - q4) / (s.t - t4);
+        println!(
+            "V4 weight {weight}, dt {dt}, segments {size}: I/L = {:.6} (Langmuir–Blodgett {exact:.6}), {:.2e}; {} particles in flight, {:.1} s",
+            -current,
+            -current / exact - 1.0,
+            s.x.len(),
+            start.elapsed().as_secs_f64()
+        );
+        currents.push(-current);
+    }
+    let (e0, e1) = (currents[0] / exact - 1.0, currents[1] / exact - 1.0);
+    let order = (e0.abs() / e1.abs()).ln() / 2f64.ln();
+    let extrapolated = 2.0 * currents[1] - currents[0];
+    println!(
+        "V4 observed order {order:.2}; extrapolated {extrapolated:.6}, {:.2e}",
+        extrapolated / exact - 1.0
+    );
+    assert!(e0.abs() > e1.abs() && order >= 0.7, "V4 {currents:?}");
+    assert!(
+        (extrapolated / exact - 1.0).abs() < 0.02,
+        "V4 extrapolated {extrapolated}"
+    );
+}

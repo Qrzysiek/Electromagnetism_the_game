@@ -152,3 +152,13 @@ Sources: Lau, "Simple theory for the two-dimensional Child–Langmuir law", PRL 
 dimensions" (2023, arXiv:2307.14552); Langmuir & Blodgett, Phys. Rev. 22, 347 (1923),
 the series as quoted by Greenwood et al. (2016) and Zhang et al., "100 years of the
 physics of diodes" (2017).
+
+## Progress
+
+- **Step 1 done:** z-invariant electrostatics (`physics::zinv`; tests V1–V3: segment
+  integrals, coaxial capacitance, image force, second order).
+- **Step 2 done (physics):** space-charge-limited emission with line-charge macroparticles
+  (`physics::tube`; test V4: the coaxial diode against Langmuir–Blodgett, first-order
+  convergence, Richardson-extrapolated 0.5 %). PHYSICS.md §2.11.
+- **Next:** planar Child–Langmuir and Lau's strip law; then the level mode and goals; then
+  circuit coupling.

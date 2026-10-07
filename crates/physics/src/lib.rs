@@ -24,6 +24,7 @@ pub mod panel;
 pub mod poynting;
 pub mod spectrum;
 pub mod trajectory;
+pub mod tube;
 pub mod units;
 pub mod verify;
 pub mod zinv;

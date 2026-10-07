@@ -297,6 +297,11 @@ impl Electrodes {
         self.lu.solve(&b)
     }
 
+    /// The electrode segment `j` belongs to.
+    pub fn owner_of(&self, j: usize) -> usize {
+        self.owner[j]
+    }
+
     /// The unit system of electrode `j` (its density with `j` at 1, the others at 0).
     pub fn unit(&self, j: usize) -> &[f64] {
         &self.unit[j]
