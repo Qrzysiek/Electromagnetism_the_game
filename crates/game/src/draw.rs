@@ -517,7 +517,11 @@ pub fn draw(
     if let Ok(mut v) = vis.get_mut(quad.entity) {
         *v = if matches!(
             game.map,
-            Some(crate::potential::MapMode::Potential | crate::potential::MapMode::Magnetic)
+            Some(
+                crate::potential::MapMode::Potential
+                    | crate::potential::MapMode::Magnetic
+                    | crate::potential::MapMode::Electric
+            )
         ) {
             Visibility::Visible
         } else {
@@ -1088,6 +1092,31 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
         Color::srgb(0.6, 0.85, 1.0).with_alpha(0.85 * stale_fade(*revision, game.sent_revision));
     for x in xs {
         gizmos.circle_2d(to_vec2(*x), 0.06, color);
+    }
+    // The electric field map's arrows: direction, faded with |E| over the map's 1.5
+    // decades (as its colours).
+    if game.map == Some(crate::potential::MapMode::Electric)
+        && let Some((_, scale, arrows)) = &game.tube_field
+    {
+        #[allow(clippy::cast_possible_truncation)]
+        let scale = *scale as f32;
+        for (p, e) in arrows {
+            let m = e.length();
+            if m <= 0.0 {
+                continue;
+            }
+            let decades = (m / scale).log10();
+            let a = ((decades + 1.5) / 1.5).clamp(0.0, 1.0);
+            if a <= 0.05 {
+                continue;
+            }
+            let d = *e / m * 0.8;
+            gizmos.arrow_2d(
+                *p - d * 0.5,
+                *p + d * 0.5,
+                Color::srgb(1.0, 0.9, 0.6).with_alpha(0.7 * a),
+            );
+        }
     }
 }
 

@@ -43,6 +43,8 @@ struct Params {
     // of line charges, after the electrode panels.
     line_segments: u32,
     line_charges: u32,
+    // Mode 2 (electric field): the |E| of the colour scale's top.
+    e_ref: f32,
 };
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
@@ -409,12 +411,38 @@ fn magnetic_colour(p: vec2<f32>) -> vec3<f32> {
     return acc / 16.0;
 }
 
+// Mode 2, electric field: |E| of the static sources (central differences of the
+// potential, h = 0.02 cells: f32 rounding of the potential gives ~1e-4 of the scale's top),
+// on a log scale over 1.5 decades below e_ref (2D fields fall off only as 1/r: over 2.5
+// decades the board was one colour), contours every quarter decade.
+fn electric_colour(p: vec2<f32>) -> vec3<f32> {
+    let h = 0.02;
+    let ex = -(potential(p + vec2<f32>(h, 0.0)) - potential(p - vec2<f32>(h, 0.0))) / (2.0 * h);
+    let ey = -(potential(p + vec2<f32>(0.0, h)) - potential(p - vec2<f32>(0.0, h))) / (2.0 * h);
+    let e = length(vec2<f32>(ex, ey)) / max(params.e_ref, 1e-30);
+    let l = log(max(e, 1e-6)) / log(10.0);
+    let s = clamp((l + 1.5) / 1.5, 0.0, 1.0);
+    let base = vec3<f32>(0.10, 0.11, 0.14);
+    var col = base + s * vec3<f32>(0.70, 0.50, 0.12);
+    let k = l * 4.0;
+    let fw_k = fwidth(k);
+    let fade = 1.0 - smoothstep(0.06, 0.25, fw_k);
+    if (fade > 0.0 && l > -1.5) {
+        let f = fract(k);
+        let d = min(f, 1.0 - f);
+        col = mix(col, col + vec3<f32>(0.08), line_cover(d, fw_k, 1.0) * fade);
+    }
+    return col;
+}
+
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let p = in.world_position.xy;
     var col: vec3<f32>;
     if (params.mode == 1u) {
         col = magnetic_colour(p);
+    } else if (params.mode == 2u) {
+        col = electric_colour(p);
     } else {
         col = potential_colour(p);
     }

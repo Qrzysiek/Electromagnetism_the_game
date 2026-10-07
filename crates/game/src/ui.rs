@@ -1033,8 +1033,25 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         ui.horizontal(|ui| {
             ui.label("Map:");
             ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential");
+            ui.selectable_value(&mut game.map, Some(MapMode::Electric), "electric field");
             ui.selectable_value(&mut game.map, None, "off");
         });
+        if game.map == Some(MapMode::Electric) {
+            ui.label(
+                egui::RichText::new(
+                    "|E| at the end of the preview, with the electrons' space charge: bright \
+                     where strong, on a log scale over 1.5 decades below the field at the 99th \
+                     percentile of the board; contours every quarter decade; arrows show its \
+                     direction (a force on electrons the opposite way). Inside metal it is 0. \
+                     Magnetic and Poynting maps need the circuit the tube's current returns \
+                     through, which comes with the circuit coupling.",
+                )
+                .small(),
+            );
+            ui.separator();
+            controls(ui);
+            return;
+        }
         ui.label(
             egui::RichText::new(
                 "The electrons' potential energy at the end of the preview, relative to the \
@@ -1217,7 +1234,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
              Colour: B perpendicular to the plane, on the chosen scale; arrows: E. Before \
              launch the particle is taken to move uniformly."
         }
-        None => "",
+        // Tube levels only (their own View section).
+        Some(MapMode::Electric) | None => "",
     };
     if !legend.is_empty() {
         ui.label(egui::RichText::new(legend).small());

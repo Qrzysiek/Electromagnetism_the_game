@@ -114,6 +114,9 @@ pub struct Game {
     /// preview is kept while the next one is computed).
     pub tube_preview: Option<(u64, std::sync::Arc<level::tube::TubeRun>)>,
     pub tube_verdict: Option<(u64, level::tube::TubeVerdict)>,
+    /// Tube levels: the electric field map's scale and arrows `(position, E)` of the
+    /// preview's final state (computed when it arrives), with its revision.
+    pub tube_field: Option<(u64, f64, TubeArrows)>,
     /// (revision, active shot, active disturbance, all shots shown, mode, flight shown)
     /// the field map was computed for.
     pub map_key: (u64, usize, usize, bool, Option<MapMode>, bool),
@@ -192,6 +195,7 @@ impl Game {
             setup_issues: None,
             tube_preview: None,
             tube_verdict: None,
+            tube_field: None,
             map_key: (0, 0, 0, false, None, false),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
@@ -235,6 +239,7 @@ impl Game {
         self.beams.clear();
         self.tube_preview = None;
         self.tube_verdict = None;
+        self.tube_field = None;
         self.active_shot = 0;
         self.active_disturbance = 0;
         self.anim_time = 0.0;
@@ -578,11 +583,16 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
         Some(MapMode::Waves),
         Some(MapMode::ParticleField),
         Some(MapMode::Total),
+        Some(MapMode::Electric),
         None,
     ];
+    // Tube levels: their potential and electric field only (the other views are the 3D
+    // slice's); the electric map only there.
     let available = |m: Option<MapMode>| match m {
+        _ if level.is_tube() => matches!(m, Some(MapMode::Potential | MapMode::Electric) | None),
         Some(MapMode::Waves) => radiation::waves_available(level),
         Some(MapMode::ParticleField) => radiation::particle_field_available(level),
+        Some(MapMode::Electric) => false,
         _ => true,
     };
     let i = order.iter().position(|&m| m == map).unwrap_or(0);
@@ -711,6 +721,7 @@ fn dev_capture(
                     "waves" => Some(MapMode::Waves),
                     "particle" => Some(MapMode::ParticleField),
                     "total" => Some(MapMode::Total),
+                    "electric" => Some(MapMode::Electric),
                     "off" => None,
                     _ => Some(MapMode::Potential),
                 };
@@ -1086,7 +1097,7 @@ fn update_map(
         return;
     }
     game.map_key = key;
-    let Some(mode @ (MapMode::Potential | MapMode::Magnetic)) = game.map else {
+    let Some(mode @ (MapMode::Potential | MapMode::Magnetic | MapMode::Electric)) = game.map else {
         return;
     };
     let level = &game.editor.level;
@@ -1106,10 +1117,15 @@ fn update_map(
         .tube
         .zip(game.tube_preview.as_ref().map(|t| t.1.clone()));
     if level.is_tube() || level.shots.is_empty() {
+        let e_ref = game.tube_field.as_ref().map_or(1.0, |f| f.1);
         let (params, items) = match tube {
-            Some((spec, run)) => {
-                potential::tube_params(&run, spec.cathode, spec.charge_per_mass.signum())
-            }
+            Some((spec, run)) => potential::tube_params(
+                &run,
+                spec.cathode,
+                spec.charge_per_mass.signum(),
+                mode == MapMode::Electric,
+                e_ref,
+            ),
             None => (potential::PotentialParams::default(), Vec::new()),
         };
         if let Some(mut m) = materials.get_mut(&quad.material) {
@@ -1288,6 +1304,8 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
                 game.setup_issues = Some((revision, issues));
             }
             Response::TubePreview { revision, run } if revision == current => {
+                let field = tube_field(&game.editor.level, &run);
+                game.tube_field = Some((revision, field.0, field.1));
                 game.tube_preview = Some((revision, run));
             }
             Response::TubeVerified { revision, verdict } if revision == current => {
@@ -1296,6 +1314,42 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
             _ => {}
         }
     }
+}
+
+/// Arrow spacing of the tube's electric field map (cells).
+const TUBE_ARROW_SPACING: usize = 2;
+
+/// Arrows `(position, E)` of a tube's electric field map.
+pub type TubeArrows = Vec<(Vec2, Vec2)>;
+
+/// The scale of a tube's electric field map, and its arrows: E at every
+/// `TUBE_ARROW_SPACING`-th node. The scale is the 99th percentile of |E| over the nodes
+/// (not the maximum: the singular corners would wash out the colours; the 90th
+/// saturated most of the board).
+fn tube_field(level: &Level, run: &level::tube::TubeRun) -> (f64, TubeArrows) {
+    let m = level.grid.max_node();
+    let mut arrows = Vec::new();
+    let mut magnitudes = Vec::new();
+    for y in (0..=m[1]).step_by(TUBE_ARROW_SPACING) {
+        for x in (0..=m[0]).step_by(TUBE_ARROW_SPACING) {
+            let p = level.grid.position([x, y, 0]);
+            let e = run.field_at(p).1;
+            magnitudes.push(e.length());
+            arrows.push((draw::to_vec2(p), draw::to_vec2(e)));
+        }
+    }
+    magnitudes.sort_by(f64::total_cmp);
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    let scale = magnitudes
+        .get((0.99 * magnitudes.len() as f64) as usize)
+        .copied()
+        .unwrap_or(1.0)
+        .max(1e-30);
+    (scale, arrows)
 }
 
 fn animate(time: Res<Time>, mut game: ResMut<Game>) {

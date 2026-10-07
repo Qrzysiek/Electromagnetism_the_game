@@ -90,6 +90,29 @@ pub struct TubeRun {
     pub potentials: Vec<f64>,
 }
 
+impl TubeRun {
+    /// The final state's potential and field at `x`, as the maps show them: the
+    /// segments' charge exactly, the particles as line charges softened over
+    /// `PREVIEW_SEGMENT` (the preview's resolution of its space charge).
+    pub fn field_at(&self, x: DVec3) -> (f64, DVec3) {
+        let (mut phi, mut e) = (0.0, DVec3::ZERO);
+        for ((a, b), s) in self.segments.iter().zip(&self.sigma) {
+            let (f, g) = physics::zinv::segment_integrals(*a, *b, x);
+            phi += s * f;
+            e += g * *s;
+        }
+        let eps2 = PREVIEW_SEGMENT * PREVIEW_SEGMENT;
+        let lambda = self.particle_charge;
+        for p in self.frames.last().map_or(&[][..], |f| f.1.as_slice()) {
+            let r = DVec3::new(x.x - p.x, x.y - p.y, 0.0);
+            let r2 = r.x * r.x + r.y * r.y + eps2;
+            phi -= lambda * libm::log(r2);
+            e += r * (2.0 * lambda / r2);
+        }
+        (phi, e)
+    }
+}
+
 /// A tube level's verdict.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TubeStatus {

@@ -27,6 +27,8 @@ pub enum MapMode {
     /// Everything at once: static sources, antennas, waves, disturbances and the
     /// particle's own field, at the animation time (`radiation.rs`).
     Total,
+    /// Tube levels: |E| of the preview's final state, with arrows.
+    Electric,
 }
 
 /// Uniform parameters of the maps. The sources themselves are in the storage buffer
@@ -54,6 +56,8 @@ pub struct PotentialParams {
     /// Tube levels: numbers of charged segments and of line charges.
     pub line_segments: u32,
     pub line_charges: u32,
+    /// Electric field map: |E| at the top of its colour scale.
+    pub e_ref: f32,
 }
 
 impl Default for PotentialParams {
@@ -71,6 +75,7 @@ impl Default for PotentialParams {
             moment_weight: 0.0,
             line_segments: 0,
             line_charges: 0,
+            e_ref: 1.0,
         }
     }
 }
@@ -153,6 +158,8 @@ pub fn tube_params(
     run: &level::tube::TubeRun,
     cathode: usize,
     sign: f64,
+    electric: bool,
+    e_ref: f64,
 ) -> (PotentialParams, Vec<[f32; 4]>) {
     let vc = run.potentials.get(cathode).copied().unwrap_or(0.0);
     let scale = run
@@ -176,6 +183,8 @@ pub fn tube_params(
         u_a: (sign * vc / scale) as f32,
         line_segments: count(run.segments.len()),
         line_charges: count(particles.len()),
+        mode: u32::from(electric) * 2,
+        e_ref: e_ref as f32,
         ..PotentialParams::default()
     };
     (out, items)
@@ -248,6 +257,7 @@ pub fn params(
         mode: match mode {
             MapMode::Potential => 0,
             MapMode::Magnetic | MapMode::Waves | MapMode::ParticleField | MapMode::Total => 1,
+            MapMode::Electric => 2,
         },
         uniform: Vec4::new(e_u.x as f32, e_u.y as f32, (b_u / b_ref) as f32, 0.0),
         origin: Vec4::new(
