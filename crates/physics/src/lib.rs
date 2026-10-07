@@ -26,5 +26,6 @@ pub mod spectrum;
 pub mod trajectory;
 pub mod units;
 pub mod verify;
+pub mod zinv;
 
 pub use glam::DVec3;

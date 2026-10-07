@@ -316,7 +316,7 @@ fn pair_integrals(t: &Panel, mirror_panel: &Panel, x: DVec3) -> (f64, DVec3) {
 
 /// LU factorization with partial pivoting (row-major, in place).
 #[derive(Debug)]
-struct Lu {
+pub(crate) struct Lu {
     n: usize,
     a: Vec<f64>,
     perm: Vec<usize>,
@@ -324,7 +324,7 @@ struct Lu {
 
 impl Lu {
     #[allow(clippy::needless_range_loop)] // index form mirrors the algorithm
-    fn new(mut a: Vec<f64>, n: usize) -> Self {
+    pub(crate) fn new(mut a: Vec<f64>, n: usize) -> Self {
         let mut perm: Vec<usize> = (0..n).collect();
         for k in 0..n {
             crate::cancel::checkpoint();
@@ -355,7 +355,7 @@ impl Lu {
     }
 
     #[allow(clippy::needless_range_loop)] // index form mirrors the algorithm
-    fn solve(&self, b: &[f64]) -> Vec<f64> {
+    pub(crate) fn solve(&self, b: &[f64]) -> Vec<f64> {
         let n = self.n;
         let mut x: Vec<f64> = self.perm.iter().map(|&i| b[i]).collect();
         for i in 0..n {

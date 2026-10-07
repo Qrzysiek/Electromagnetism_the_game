@@ -284,6 +284,16 @@ Circuits drive the electrodes' potentials and the coils' currents, circular and 
 - **Neglected back-action, bounded.** `Level::drive_back_action_bound`: a charge q induces at most |q| on a plate, changing its potential by at most |q|/C against the largest potential the circuit's plates reach; a charge slower than c kept a wire radius b from a coil of radius a links at most the flux |q|·2πa/(c b), against the coil's self-flux N times the largest κ. The level test `drive_back_action_is_negligible` requires it below 1e-10 (as the image force); measured on the shipped circuit levels: 1.8e-12 to 3.2e-12 on the plates; on the coil of Induction kick 1.1e-16. The model notes show it, and the quasi-static parameter (the light time across the arena times the drives' fastest relative rate). The plate levels are Newtonian, where the quasi-static model is exact (0); the coil level needs a finite c and has c = 1e4, where it is 1.5e-4 (its corrections are of the square of the parameter, as the first-order retardation of a closed current vanishes).
 - **In the game.** The worker solves the circuit with the preview field and sends its view: each driven potential and coil strength over lab time, plotted in the panel up to the end of the last flight with the launches marked, and the model notes (which need the solved circuit). The potential map and the field lines show driven plates and coils as they are at t = 0, without a dark region (the fields do work); the legend says so.
 
+
+## 2.11 The z-invariant world — *in progress* (`crates/physics/src/zinv.rs`, tests V1–V3; the tubes, docs/TUBES.md)
+
+For the vacuum tubes (the owner's decision, docs/TUBES.md): levels whose every source is translation-invariant along z. The plane is then a cross-section of the whole, and the fields are exactly those of line charges: real 3D electrostatics restricted by a symmetry, the one the textbook diode laws assume. A line charge λ (per unit length) has `φ = −2λ ln r`, `E = 2λ r̂/r` (k = 1).
+
+- **Electrodes** are prisms along z; their cross-sections (rectangles, circles as polygons) are cut into segments of constant surface density, collocated at the midpoints, with exact segment integrals (V1: against quadrature to 2.6e-15; on a segment the normal field's average, 0). Bias, unit systems and the capacitance matrix per unit length as in §2.7.
+- **Reference.** A net line charge's potential grows like `−2Q ln r`: potentials are relative to the logarithm's zero (unit radius). Enclosed setups (a grounded or driven outer electrode, or zero net charge) do not depend on it; the validation uses only such.
+- **Accuracy (V2, V3):** the coaxial capacitance per unit length `1/(2 ln(b/a))` and the image force on a line charge inside a grounded cylinder (the image −λ at R²/e) converge at second order: 2.1e-4 and 1.5e-4 off with segments of 0.05. The enclosure's net charge (0 in the continuum) is enforced only approximately by the collocation and shrinks at the same rate (V2; a first version of the test expected it exact).
+- **Next** (docs/TUBES.md): line-charge particles with the electrodes' induced charge at every step, space-charge-limited emission, and the coaxial diode against Langmuir–Blodgett.
+
 ## 3. Equation of motion — *validated* (`crates/physics/src/dynamics.rs`)
 
 State `y = (x, p)`, with:
