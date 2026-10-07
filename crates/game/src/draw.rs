@@ -369,6 +369,33 @@ fn draw_dielectric(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode) {
     gizmos.linestrip_2d(box_outline(b, 0.0), teal);
 }
 
+/// A ferrite: its cross-section filled dark slate with a violet-grey rim (a magnetic
+/// insulator: neither metal grey nor dielectric teal).
+fn draw_ferrite(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode) {
+    let c = to_vec2(b.center);
+    #[allow(clippy::cast_possible_truncation)]
+    let (a, hl, ht) = (
+        b.angle as f32,
+        b.half_length as f32,
+        b.half_thickness as f32,
+    );
+    let u = Vec2::from_angle(a);
+    let v = u.perp();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let strips = ((2.0 * ht / 0.05).ceil() as u32).max(2);
+    for k in 0..=strips {
+        #[allow(clippy::cast_precision_loss)]
+        let t = -ht + 2.0 * ht * k as f32 / strips as f32;
+        seg(
+            gizmos,
+            c - u * hl + v * t,
+            c + u * hl + v * t,
+            Color::srgb(0.22, 0.2, 0.28),
+        );
+    }
+    gizmos.linestrip_2d(box_outline(b, 0.0), Color::srgb(0.62, 0.55, 0.75));
+}
+
 /// A dielectric sphere: its cross-section hatched in teal, as a dielectric box.
 fn draw_dielectric_sphere(gizmos: &mut Gizmos, c: Vec2, radius: f64) {
     #[allow(clippy::cast_possible_truncation)]
@@ -534,6 +561,9 @@ pub fn draw(
     // Dielectrics: translucent boxes with a teal rim (insulators, not metal).
     for b in level.dielectric_boxes() {
         draw_dielectric(&mut gizmos, &b);
+    }
+    for b in level.ferrite_boxes() {
+        draw_ferrite(&mut gizmos, &b);
     }
     for d in &level.dielectric_spheres {
         draw_dielectric_sphere(&mut gizmos, to_vec2(grid.position(d.center)), d.radius);

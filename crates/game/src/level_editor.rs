@@ -10,9 +10,9 @@ use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
-    DielectricSphere, Disturbance, Drive, Electrode, Element, ElementKind, FreeParticle, Grid,
-    Launch, Level, Limits, Node, ParticleSpec, RadiationGoal, Region2, Shot, Source, Switch,
-    TolerancesSpec, Wave, WorldPhysics,
+    DielectricSphere, Disturbance, Drive, Electrode, Element, ElementKind, FerritePlate,
+    FreeParticle, Grid, Launch, Level, Limits, Node, ParticleSpec, RadiationGoal, Region2, Shot,
+    Source, Switch, TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -24,7 +24,8 @@ const SUBDIVISION: std::ops::RangeInclusive<u32> = 1..=8;
 const MAX_POSITIVE: f64 = 1e12;
 const MIN_POSITIVE: f64 = 1e-12;
 /// Largest relative permittivity of a dielectric (water is 80; beyond 1e4 a dielectric is
-/// metal for every purpose here).
+/// metal for every purpose here), and permeability of a ferrite (soft ferrites reach
+/// thousands).
 const MAX_PERMITTIVITY: f64 = 1e4;
 const MAX_RADIUS: f64 = 5.0;
 /// Largest beam (particles; the interaction costs grow as N²).
@@ -1411,6 +1412,64 @@ fn edit_dielectric_spheres(
     focus
 }
 
+fn edit_ferrites(ui: &mut egui::Ui, list: &mut Vec<FerritePlate>, grid: &Grid) -> bool {
+    let mut focus = false;
+    let mut remove = None;
+    for (i, f) in list.iter_mut().enumerate() {
+        let FerritePlate {
+            center,
+            length,
+            thickness,
+            height,
+            angle_deg,
+            permeability,
+        } = f;
+        ui.push_id(("ferrite", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Ferrite {}", i + 1));
+                focus |= node(ui, center, grid);
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("L×T×H");
+                focus |= positive(ui, length, 0.05, MAX_POSITIVE);
+                focus |= positive(ui, thickness, 0.02, MAX_POSITIVE);
+                focus |= positive(ui, height, 0.05, MAX_POSITIVE);
+            });
+            ui.horizontal(|ui| {
+                focus |= ui
+                    .add(egui::DragValue::new(angle_deg).speed(1.0).suffix("°"))
+                    .has_focus();
+                ui.label("μ");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(permeability)
+                            .speed(1.0)
+                            .range(1.0..=MAX_PERMITTIVITY),
+                    )
+                    .has_focus();
+            });
+        });
+    }
+    if let Some(i) = remove {
+        list.remove(i);
+    }
+    if list.len() < MAX_COUNT as usize && ui.small_button("+ ferrite").clicked() {
+        let m = grid.max_node();
+        list.push(FerritePlate {
+            center: [m[0] / 2, m[1] / 2, 0],
+            length: 6.0,
+            thickness: 1.0,
+            height: 4.0,
+            angle_deg: 0.0,
+            permeability: 1000.0,
+        });
+    }
+    focus
+}
+
 fn edit_disturbances(ui: &mut egui::Ui, list: &mut Vec<Disturbance>) -> bool {
     let mut focus = false;
     let mut remove = None;
@@ -1714,6 +1773,7 @@ pub fn edit_level(
         electrodes,
         dielectrics,
         dielectric_spheres,
+        ferrites,
         gates,
     } = level;
     let mut focus = false;
@@ -1767,6 +1827,13 @@ pub fn edit_level(
         .on_hover_text(
             "Insulating boxes of permittivity ε: their bound charge screens a field partly \
              (metal screens it fully)",
+        );
+    egui::CollapsingHeader::new(format!("Ferrites ({})", ferrites.len()))
+        .show(ui, |ui| focus |= edit_ferrites(ui, ferrites, &g))
+        .header_response
+        .on_hover_text(
+            "Magnetically soft insulating boxes of permeability μ: they draw in and bend \
+             magnetic fields (from magnets and steady coils), not electric ones",
         );
     egui::CollapsingHeader::new(format!("Metal spheres ({})", conductors.len()))
         .show(ui, |ui| focus |= edit_conductors(ui, conductors, &g));
@@ -1822,6 +1889,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         electrodes,
         dielectrics,
         dielectric_spheres,
+        ferrites,
         gates,
     } = level;
     if gates.len() > MAX_COUNT as usize {
@@ -2070,6 +2138,29 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             || !(1.0..=MAX_PERMITTIVITY).contains(permittivity)
         {
             return fail("dielectric outside the editor's range");
+        }
+    }
+    if ferrites.len() > MAX_COUNT as usize {
+        return fail("too many ferrites");
+    }
+    for f in ferrites {
+        let FerritePlate {
+            center,
+            length,
+            thickness,
+            height,
+            angle_deg,
+            permeability,
+        } = f;
+        let size_ok = [length, thickness, height]
+            .iter()
+            .all(|v| (MIN_POSITIVE..=MAX_POSITIVE).contains(*v));
+        if !on_grid(center)
+            || !size_ok
+            || !angle_deg.is_finite()
+            || !(1.0..=MAX_PERMITTIVITY).contains(permeability)
+        {
+            return fail("ferrite outside the editor's range");
         }
     }
     if dielectric_spheres.len() > MAX_COUNT as usize {

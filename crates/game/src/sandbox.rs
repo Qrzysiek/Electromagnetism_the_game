@@ -182,6 +182,7 @@ pub fn empty_level() -> Level {
         electrodes: Vec::new(),
         dielectrics: Vec::new(),
         dielectric_spheres: Vec::new(),
+        ferrites: Vec::new(),
         gates: Vec::new(),
     }
 }

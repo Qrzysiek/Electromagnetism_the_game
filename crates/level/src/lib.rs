@@ -79,6 +79,10 @@ pub struct Level {
     /// Dielectric spheres placed by the level (PHYSICS.md §2.7), as the boxes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dielectric_spheres: Vec<DielectricSphere>,
+    /// Ferrite plates (high-μ insulators) placed by the level (PHYSICS.md §2.7): they
+    /// bend magnetic fields only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ferrites: Vec<FerritePlate>,
     /// Stages of the instrument: boxes every flight must pass, in order, before its
     /// detector counts, each with optional conditions on the entering particle
     /// (PHYSICS.md §6.2).
@@ -123,6 +127,19 @@ pub struct Dielectric {
     #[serde(default)]
     pub angle_deg: f64,
     pub permittivity: f64,
+}
+
+/// A ferrite box standing on the plane (symmetric about it): magnetically soft, of
+/// relative permeability `permeability` (≥ 1), electrically an insulator.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FerritePlate {
+    pub center: Node,
+    pub length: f64,
+    pub thickness: f64,
+    pub height: f64,
+    #[serde(default)]
+    pub angle_deg: f64,
+    pub permeability: f64,
 }
 
 /// A dielectric sphere centred in the plane, of relative permittivity `permittivity`
@@ -272,6 +289,8 @@ struct LevelFile {
     #[serde(default)]
     dielectric_spheres: Vec<DielectricSphere>,
     #[serde(default)]
+    ferrites: Vec<FerritePlate>,
+    #[serde(default)]
     gates: Vec<Detector>,
 }
 
@@ -308,6 +327,7 @@ impl From<LevelFile> for Level {
             electrodes: f.electrodes,
             dielectrics: f.dielectrics,
             dielectric_spheres: f.dielectric_spheres,
+            ferrites: f.ferrites,
             gates: f.gates,
         }
     }
@@ -1266,6 +1286,9 @@ impl Level {
         for d in &mut self.dielectric_spheres {
             scale(&mut d.center);
         }
+        for f in &mut self.ferrites {
+            scale(&mut f.center);
+        }
         for e in self
             .elements
             .iter_mut()
@@ -1444,7 +1467,7 @@ impl Level {
             }
         }
         // Dielectrics: apart from metal and from each other.
-        let dielectrics = self.dielectric_boxes();
+        let dielectrics = self.body_boxes();
         let metal_boxes = self.all_box_electrodes(player);
         for (i, d) in dielectrics.iter().enumerate() {
             let corners = rect_corners(d);
@@ -1607,7 +1630,7 @@ impl Level {
     ) -> Result<Vec<physics::bem::BoxElectrode>, PlacementError> {
         // Electrodes and dielectrics alike: plates keep clear of them, elements out.
         let mut boxes = self.box_electrodes();
-        boxes.extend(self.dielectric_boxes());
+        boxes.extend(self.body_boxes());
         let reach = self
             .physics
             .charge_radius
@@ -1973,6 +1996,7 @@ impl Level {
             || !self.electrodes.is_empty()
             || !self.dielectrics.is_empty()
             || !self.dielectric_spheres.is_empty()
+            || !self.ferrites.is_empty()
             || player.iter().any(|e| e.kind == ElementKind::Plate)
     }
 
@@ -2213,6 +2237,24 @@ impl Level {
         if tunable(true) && self.limits.supply_voltages.is_empty() {
             out.push("tunable driven coils need at least one supply voltage".into());
         }
+        if !self.ferrites.is_empty() {
+            // Magnetized by the static fields only; a changing magnetization would also
+            // induce an electric field, not modelled yet.
+            if self.coils.iter().any(Coil::is_time_dependent) {
+                out.push(
+                    "ferrites respond to static magnets and coils only: no ramped or driven coils"
+                        .into(),
+                );
+            }
+            if !self.disturbances.is_empty() {
+                out.push("ferrites do not respond to outside fields yet".into());
+            }
+            let moments = self.shots.iter().any(|s| s.particle.moment != 0.0)
+                || self.free_particles.iter().any(|f| f.particle.moment != 0.0);
+            if moments {
+                out.push("ferrites and magnetic moments are not yet solved together".into());
+            }
+        }
         let dielectric = !self.dielectrics.is_empty() || !self.dielectric_spheres.is_empty();
         if dielectric {
             // The bound charge answers the fixed charges (as the electrodes' surface charge
@@ -2451,8 +2493,7 @@ impl Level {
             physics::bem::Electrodes::shapes_only(boxes.clone()).obstacles(CONTACT_DISTANCE),
         );
         obstacles.extend(
-            physics::bem::Electrodes::shapes_only(self.dielectric_boxes())
-                .obstacles(CONTACT_DISTANCE),
+            physics::bem::Electrodes::shapes_only(self.body_boxes()).obstacles(CONTACT_DISTANCE),
         );
         for d in &self.dielectric_spheres {
             obstacles.push(Shape::Sphere(Sphere {
@@ -2498,7 +2539,21 @@ impl Level {
             electrodes: electrodes_for(boxes, dielectrics, &sources, resolution),
             time_offset: 0.0,
             drives: None,
+            ferrites: physics::bem::Ferrites::default(),
         };
+        // Ferrites, magnetized by the static magnets and coils (time-dependent coils,
+        // outside fields and moments are refused with them: `model_issues`).
+        if !self.ferrites.is_empty() {
+            let size = match resolution {
+                Resolution::Preview => physics::bem::Resolution::Preview,
+                Resolution::Verify => physics::bem::Resolution::Verify,
+                Resolution::Display => physics::bem::Resolution::Display,
+            }
+            .panel_size();
+            let ferrites =
+                physics::bem::Ferrites::new(self.physics_ferrites(), |x| field.magnetic(x), size);
+            field.ferrites = ferrites;
+        }
         // A circuit that cannot be solved is a model issue (`drive_issues`): the field is
         // then without it.
         field.drives = self
@@ -2704,6 +2759,41 @@ impl Level {
                 half_thickness: d.thickness / 2.0,
                 half_height: d.height / 2.0,
                 bias: Bias::Charge(0.0),
+            })
+            .collect()
+    }
+
+    /// The level's ferrite plates as boxes.
+    pub fn ferrite_boxes(&self) -> Vec<physics::bem::BoxElectrode> {
+        self.ferrites
+            .iter()
+            .map(|f| physics::bem::BoxElectrode {
+                center: self.grid.position(f.center),
+                angle: f.angle_deg.to_radians(),
+                half_length: f.length / 2.0,
+                half_thickness: f.thickness / 2.0,
+                half_height: f.height / 2.0,
+                bias: Bias::Charge(0.0),
+            })
+            .collect()
+    }
+
+    /// The boxes of the insulating bodies, dielectric and ferrite (for geometry:
+    /// obstacles, clearances, contacts).
+    pub fn body_boxes(&self) -> Vec<physics::bem::BoxElectrode> {
+        let mut b = self.dielectric_boxes();
+        b.extend(self.ferrite_boxes());
+        b
+    }
+
+    /// The level's ferrites for the physics.
+    pub fn physics_ferrites(&self) -> Vec<physics::bem::Ferrite> {
+        self.ferrite_boxes()
+            .into_iter()
+            .zip(&self.ferrites)
+            .map(|(b, f)| physics::bem::Ferrite {
+                shape: physics::bem::BodyShape::Box(b),
+                permeability: f.permeability,
             })
             .collect()
     }
@@ -3150,6 +3240,7 @@ mod tests {
             electrodes: vec![],
             dielectrics: vec![],
             dielectric_spheres: vec![],
+            ferrites: vec![],
             gates: vec![],
         }
     }

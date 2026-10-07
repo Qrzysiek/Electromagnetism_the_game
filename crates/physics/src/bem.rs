@@ -201,7 +201,7 @@ pub enum Resolution {
 
 impl Resolution {
     /// Target panel size in cells (upper bound; faces get at least 2 divisions).
-    fn panel_size(self) -> f64 {
+    pub fn panel_size(self) -> f64 {
         match self {
             Resolution::Preview => 0.5,
             Resolution::Verify => 0.35,
@@ -925,5 +925,183 @@ impl Electrodes {
 impl FieldSolver for Electrodes {
     fn sample(&self, x: DVec3, _t: f64) -> FieldSample {
         self.sample_densities(x, |i| self.sigma[i])
+    }
+}
+
+/// A ferrite body: magnetically soft (relative permeability `permeability`), electrically
+/// an insulator, so it bends magnetic fields only (PHYSICS.md §2.7, "Ferrites").
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ferrite {
+    pub shape: BodyShape,
+    pub permeability: f64,
+}
+
+/// The geometry-dependent part of the ferrites: panels, their mirrors, the LU of the
+/// collocation matrix and each panel's λ.
+#[derive(Debug)]
+struct FerriteGeometry {
+    panels: Vec<Triangle>,
+    pre: Vec<(Panel, Panel)>,
+    lambda: Vec<f64>,
+    lu: Lu,
+    cost: crate::field::SetupCost,
+}
+
+/// Field integrals of a panel and its mirror image for a density odd under the mirror
+/// (z → −z): the mirror's charge has the opposite sign. In the plane z = 0 the in-plane
+/// components cancel exactly and B_z doubles.
+fn odd_pair_gradient(t: &Panel, mirror_panel: &Panel, x: DVec3) -> DVec3 {
+    let (_, g1) = t.integrals(x);
+    if x.z == 0.0 {
+        DVec3::new(0.0, 0.0, 2.0 * g1.z)
+    } else {
+        let (_, g2) = mirror_panel.integrals(x);
+        g1 - g2
+    }
+}
+
+fn ferrite_geometry(bodies: &[Ferrite], size: f64) -> Arc<FerriteGeometry> {
+    static CACHE: OnceLock<Mutex<HashMap<Vec<u64>, Arc<FerriteGeometry>>>> = OnceLock::new();
+    let mut key: Vec<u64> = bodies
+        .iter()
+        .flat_map(|b| {
+            let mut k = b.shape.key();
+            k.push(b.permeability.to_bits());
+            k
+        })
+        .collect();
+    key.push(size.to_bits());
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(g) = cache.lock().expect("cache").get(&key) {
+        return g.clone();
+    }
+    let start = std::time::Instant::now();
+    let mut panels = Vec::new();
+    let mut lambda = Vec::new();
+    for b in bodies {
+        let m = b.shape.mesh(size);
+        let l = (b.permeability - 1.0) / (b.permeability + 1.0);
+        lambda.extend(std::iter::repeat_n(l, m.len()));
+        panels.extend(m);
+    }
+    let n = panels.len();
+    let pre: Vec<(Panel, Panel)> = panels
+        .iter()
+        .map(|t| (Panel::new(*t), Panel::new(mirror(t))))
+        .collect();
+    let mut a = vec![0.0; n * n];
+    for (i, pi) in panels.iter().enumerate() {
+        crate::cancel::checkpoint();
+        let normal = pi.normal();
+        let points = DIELECTRIC_RULE.map(|([u, v, w], wt)| (pi.a * u + pi.b * v + pi.c * w, wt));
+        for (j, (p, m)) in pre.iter().enumerate() {
+            let mut g = DVec3::ZERO;
+            for &(y, wt) in &points {
+                g += wt
+                    * if j == i {
+                        // The panel's own average normal field is 0 (its points lie on
+                        // it up to rounding).
+                        let (_, g1) = p.integrals(y);
+                        let (_, g2) = m.integrals(y);
+                        (g1 - normal * g1.dot(normal)) - g2
+                    } else {
+                        odd_pair_gradient(p, m, y)
+                    };
+            }
+            a[i * n + j] = lambda[i] / std::f64::consts::TAU * g.dot(normal);
+        }
+        a[i * n + i] += 1.0;
+    }
+    let lu = Lu::new(a, n);
+    let cost = crate::field::SetupCost {
+        seconds: start.elapsed().as_secs_f64(),
+        bytes: 8 * lu.a.len(),
+        unknowns: n,
+    };
+    let g = Arc::new(FerriteGeometry {
+        panels,
+        pre,
+        lambda,
+        lu,
+        cost,
+    });
+    let mut c = cache.lock().expect("cache");
+    if c.len() > 32 {
+        c.clear();
+    }
+    c.insert(key, g.clone());
+    g
+}
+
+/// Ferrite bodies magnetized by static external fields: their bound magnetic surface
+/// charge, from the continuity of the normal B (`σ = (λ/2π) H̄ₙ`, λ = (μ − 1)/(μ + 1),
+/// the dielectric's equation with H for E), odd under the mirror z → −z because the
+/// sources of the slice (in-plane coils, magnets along z) give B along z in the plane.
+/// The total magnetic charge of a body is then zero by symmetry (no monopoles), and
+/// the net-charge mode that the dielectrics needed bordering for does not exist.
+#[derive(Clone, Debug, Default)]
+pub struct Ferrites {
+    pub bodies: Vec<Ferrite>,
+    geometry: Option<Arc<FerriteGeometry>>,
+    /// Magnetic surface charge density of each (upper) panel; the mirror carries −σ.
+    pub sigma: Vec<f64>,
+}
+
+impl Ferrites {
+    /// The bodies magnetized by the static field `b_ext`, with panels of at most `size`.
+    pub fn new(bodies: Vec<Ferrite>, b_ext: impl Fn(DVec3) -> DVec3, size: f64) -> Self {
+        if bodies.is_empty() {
+            return Self::default();
+        }
+        let geo = ferrite_geometry(&bodies, size);
+        let b: Vec<f64> = geo
+            .panels
+            .iter()
+            .zip(&geo.lambda)
+            .map(|(t, l)| {
+                let h: DVec3 = DIELECTRIC_RULE
+                    .iter()
+                    .map(|([u, v, w], wt)| b_ext(t.a * *u + t.b * *v + t.c * *w) * *wt)
+                    .sum();
+                l / std::f64::consts::TAU * h.dot(t.normal())
+            })
+            .collect();
+        let sigma = geo.lu.solve(&b);
+        Self {
+            bodies,
+            geometry: Some(geo),
+            sigma,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bodies.is_empty()
+    }
+
+    /// Build cost of the factorization.
+    pub fn setup_cost(&self) -> crate::field::SetupCost {
+        self.geometry
+            .as_ref()
+            .map_or_else(Default::default, |g| g.cost)
+    }
+
+    /// Panels (upper halves) with their densities (the mirror carries the opposite).
+    pub fn panels(&self) -> impl Iterator<Item = (&Triangle, f64)> + '_ {
+        self.geometry
+            .iter()
+            .flat_map(|g| g.panels.iter())
+            .zip(self.sigma.iter().copied())
+    }
+
+    /// The bodies' magnetic field at `x` (exact panel integrals).
+    pub fn field(&self, x: DVec3) -> DVec3 {
+        let Some(geo) = &self.geometry else {
+            return DVec3::ZERO;
+        };
+        let mut b = DVec3::ZERO;
+        for ((p, m), s) in geo.pre.iter().zip(&self.sigma) {
+            b -= odd_pair_gradient(p, m, x) * *s;
+        }
+        b
     }
 }

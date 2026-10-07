@@ -243,6 +243,14 @@ impl Level {
                  is neglected; its bound is shown in the flight details.",
             ));
         }
+        if !self.ferrites.is_empty() {
+            out.push(note(
+                false,
+                "Ferrites: bound magnetic charge on flat triangles from the continuity of the \
+                 normal B, as for the dielectrics (the same accuracy); magnetized by the static \
+                 magnets and coils only (PHYSICS.md §2.7).",
+            ));
+        }
         if !self.dielectrics.is_empty() || !self.dielectric_spheres.is_empty() {
             out.push(note(
                 false,

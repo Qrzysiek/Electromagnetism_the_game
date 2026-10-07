@@ -5,7 +5,7 @@
     python scripts/pairs.py --only sphere_grounded   # cases with this element only
 
 Every element the level format or the player can place (fixed charges, magnets, antennas,
-metal spheres of each bias, clouds, electrodes fixed, tunable and driven, dielectric boxes and spheres,
+metal spheres of each bias, clouds, electrodes fixed, tunable and driven, dielectric boxes and spheres, ferrites,
 coils steady, ramped, driven, tunable (with a player's supply) and polygonal (also
 driven), free particles at rest and thrown, gates, the launch, the
 detector, a beam, player charges, magnets, antennas, plates and free charges, stray fields
@@ -176,6 +176,9 @@ ELEMENTS = {
         "permittivity": 4.0}),
     "dielectric_sphere": add("dielectric_spheres", lambda p, o, w: {
         "center": node(p), "radius": 1.5, "permittivity": 4.0}),
+    "ferrite": add("ferrites", lambda p, o, w: {
+        "center": node(p), "length": 3.0, "thickness": 1.0, "height": 3.0, "angle_deg": 90.0,
+        "permeability": 1000.0}),
     "coil": add("coils", lambda p, o, w: {"shape": "circle", "center": node(p), "radius": 2.5,
                                           "kappa": 0.2}),
     "coil_ramped": add("coils", lambda p, o, w: {"shape": "circle", "center": node(p),

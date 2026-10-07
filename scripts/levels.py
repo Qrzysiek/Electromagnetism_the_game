@@ -280,7 +280,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
           beam_interaction=False, gates=(), clouds=(), free_particles=(), max_free=0,
           free_charges=(), free_speeds=(), free_mass=1.0, free_radius=0.3, dielectrics=(),
-          coil_rates=()):
+          coil_rates=(), ferrites=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -325,6 +325,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         **({"free_particles": list(free_particles)} if free_particles else {}),
         **({"electrodes": list(electrodes)} if electrodes else {}),
         **({"dielectrics": list(dielectrics)} if dielectrics else {}),
+        **({"ferrites": list(ferrites)} if ferrites else {}),
         **({"gates": list(gates)} if gates else {}),
     }
 
@@ -1100,12 +1101,41 @@ def glass(x, y, length, thickness, eps, height=4.0, angle_deg=0.0):
             "angle_deg": angle_deg, "permittivity": eps}
 
 
+def ferrite(x, y, length, thickness, mu, height=4.0, angle_deg=0.0):
+    """A ferrite box (high-mu insulator) of relative permeability mu (PHYSICS.md 2.7)."""
+    return {"center": [x, y, 0], "length": length, "thickness": thickness, "height": height,
+            "angle_deg": angle_deg, "permeability": mu}
+
+
+def ferrite_shield():
+    # Ferrites' introduction: a strong magnet (2M at (15, 15)) beside the beam line,
+    # behind a ferrite plate (mu = 1000, 1.5 cells thick, 2 high, from x = 10 to 20).
+    # Measured (generator check): without the plate the magnet bends the beam 2.27 cells
+    # up at the right edge; with it 0.98 (a taller plate shields more: 0.50 at height 4;
+    # mu = 5 still 1.50). The detector (one cell) is placed around the reference's landing
+    # with the plate; without it the beam lands ~1.3 cells higher, which the build checks
+    # (NEEDS_BODY: the reference fails without the ferrite).
+    return level(
+        "Ferrite shield",
+        "A ferrite is a magnetically soft insulator: it carries no current, but its "
+        "magnetic domains line up with a field and draw the field lines into it, so "
+        "behind a ferrite plate a magnet's field is much weaker (a magnetic shield; "
+        "electric fields pass, as through any insulator). The strong magnet behind the "
+        "plate still nudges the beam a little. Place magnets to bring it into the "
+        "detector.",
+        shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, Auto((28, 0, 30, 20), "x", 1))],
+        elements=[magnet(15, 15, 2 * M)],
+        ferrites=[ferrite(15, 12, 10, 1.5, 1000.0, height=2.0)],
+        max_magnets=3, strengths=[m * M for m in (0.5, 1, 2)], region=(4, 1, 26, 9),
+        reference=[magnet(17, 7, -1 * M)])
+
+
 def glass_screen():
     # Shielding's charge (2M at (15, 14)) behind a glass slab (eps = 4, 1.5 cells thick,
     # 2 high, from x = 10 to 20) instead of a metal plate. The glass's bound charge
     # weakens the field beyond it but does not cancel it, as metal does: the beam is still
     # thrown off, less, and the player's charges must make up the rest. The build checks
-    # that the reference fails without the glass (NEEDS_DIELECTRIC): the glass matters
+    # that the reference fails without the glass (NEEDS_BODY): the glass matters
     # (measured: the solver's one charge, -1M at (22, 2), brings the beam in with it; the
     # beam crashes into that charge without it). Small and low (setup 0.8 s; a 12 x 2 x 4
     # slab took 3.7 s).
@@ -2336,8 +2366,9 @@ FINALES = {"sorting_station": 4}
 MUST_FAIL_ALONE = {"chromatic_aberration", "real_analyzer", "crt_earth_field",
                    "calutron_space_charge", "beam_pipe", "soft_landing_current"}
 
-# Dielectric levels: their reference must fail without the dielectrics (they matter).
-NEEDS_DIELECTRIC = {"glass_screen"}
+# Levels with insulating bodies (dielectrics, ferrites): their reference must fail
+# without them (they matter).
+NEEDS_BODY = {"glass_screen", "ferrite_shield"}
 
 # --- Jackson Ch. 14: radiation goals (PHYSICS.md §3.4) -------------------------------
 # A world at c = 2 with a charge of 1/40 at gamma = 3 (T0 = 8): it radiates noticeably (a
@@ -2732,6 +2763,7 @@ ARCS = [
             ("fast_lane", fast_lane),
             ("first_coil", first_coil),
             ("first_magnet", first_magnet),
+            ("ferrite_shield", ferrite_shield),
             ("stern_gerlach", stern_gerlach),
         ]),
         ("Intermediate", [
@@ -3090,9 +3122,9 @@ def main():
         ok = "placement Ok" in report and all(
             "Arrived" in l and "Verified" in l for l in report.splitlines() if "shot " in l)
         print(f"{key}: reference {'verified' if ok else 'NOT VERIFIED'}", flush=True)
-        if slug in NEEDS_DIELECTRIC:
+        if slug in NEEDS_BODY:
             built = json.load(open(path, encoding="utf-8"))
-            vacuum = dict(built, dielectrics=[])
+            vacuum = dict(built, dielectrics=[], dielectric_spheres=[], ferrites=[])
             with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
                                              encoding="utf-8") as f:
                 json.dump(vacuum, f)
@@ -3103,10 +3135,10 @@ def main():
                 os.unlink(probe_path)
             works = all("Arrived" in l and "Verified" in l
                         for l in alone.splitlines() if "shot " in l)
-            print(f"{key}: reference without the dielectrics: "
-                  f"{'WORKS (the dielectric does not matter)' if works else 'fails, as it should'}")
+            print(f"{key}: reference without the dielectrics and ferrites: "
+                  f"{'WORKS (the body does not matter)' if works else 'fails, as it should'}")
             if works:
-                sys.exit(f"{key}: the reference works without its dielectrics")
+                sys.exit(f"{key}: the reference works without its dielectrics and ferrites")
         if not ok:
             print(report)
         for problem in slider_problems(json.load(open(path, encoding="utf-8"))):

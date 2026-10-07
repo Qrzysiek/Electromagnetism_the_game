@@ -231,6 +231,8 @@ pub struct LevelField {
     /// The circuit driving electrodes and coils (`drive.rs`), solved in lab time; the
     /// driven coils' own `kappa` and `rate` are then not used.
     pub drives: Option<Arc<Drives>>,
+    /// Ferrite bodies, magnetized by the static magnets and coils (`bem::Ferrites`).
+    pub ferrites: crate::bem::Ferrites,
 }
 
 impl LevelField {
@@ -238,6 +240,7 @@ impl LevelField {
     pub fn setup_cost(&self) -> SetupCost {
         self.conductors.setup_cost()
             + self.electrodes.setup_cost()
+            + self.ferrites.setup_cost()
             + self
                 .drives
                 .as_ref()
@@ -272,6 +275,9 @@ impl LevelField {
                 .field(x),
                 None => p.field_at(x, t),
             };
+        }
+        if !self.ferrites.is_empty() {
+            b += self.ferrites.field(x);
         }
         b
     }

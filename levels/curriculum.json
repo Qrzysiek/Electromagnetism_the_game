@@ -75,6 +75,7 @@
             "fast_lane",
             "first_coil",
             "first_magnet",
+            "ferrite_shield",
             "stern_gerlach"
           ]
         },
