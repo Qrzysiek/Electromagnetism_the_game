@@ -57,8 +57,10 @@ pub const PREVIEW_STEPS: u32 = 600;
 /// steady state the space charge in flight is of the order of that charge (the planar
 /// diode's is 4/3 of it), so this sets the number of particles in flight.
 pub const PREVIEW_PARTICLES: f64 = 150.0;
-/// Frames of the particles kept for display, over the run.
-pub const FRAMES: u32 = 150;
+/// Frames of the particles kept for display, over the run: every preview step, so that
+/// slow playback stays smooth (150 looked jerky at the tube's playback rate; 600 frames
+/// of ~200 particles are ~3 MB).
+pub const FRAMES: u32 = PREVIEW_STEPS;
 /// The fine run's error as a multiple of the two runs' difference. At first order the
 /// error equals the difference; measured: V4 (order 0.95) 1.08×, the game-scale planar
 /// diode at V = 40 0.15× (`tests/tubes.rs`, `planar_diode_convergence`, against

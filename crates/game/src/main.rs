@@ -1341,8 +1341,11 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
         }
         _ => end,
     };
-    // Playback in internal time units per second, with a pause at the end.
-    game.anim_time += time.delta_secs_f64() * game.playback_speed * 4.0;
+    // Playback in internal time units per second, with a pause at the end. Tube levels
+    // play at 1 unit per second (a run of 20 takes 20 s at speed 1; at 4 units per second
+    // it was over before the flow could be watched).
+    let rate = if level.is_tube() { 1.0 } else { 4.0 };
+    game.anim_time += time.delta_secs_f64() * game.playback_speed * rate;
     if game.anim_time > end + 2.0 * game.playback_speed.max(0.25) {
         game.anim_time = 0.0;
     }

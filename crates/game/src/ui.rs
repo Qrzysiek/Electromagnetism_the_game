@@ -1277,8 +1277,21 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         return;
     };
     let g = spec.goal;
-    ui.checkbox(&mut game.animate, "Animate (A)")
-        .on_hover_text("Play the preview: the electrons leave the cathode and fly");
+    ui.horizontal(|ui| {
+        ui.checkbox(&mut game.animate, "Animate (A)")
+            .on_hover_text("Play the preview: the electrons leave the cathode and fly");
+        ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"))
+            .on_hover_text("Playback speed: 1 plays 1 time unit per second");
+    });
+    if let Some(t) = game
+        .tube_preview
+        .as_ref()
+        .and_then(|(_, r)| r.frames.last().map(|f| f.0))
+    {
+        ui.label(
+            egui::RichText::new(format!("t = {:.1} of {t:.0}", game.anim_time.min(t))).small(),
+        );
+    }
     ui.label(egui::RichText::new("Result").strong());
     if game.solved() {
         ui.label(
@@ -1305,6 +1318,15 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             ));
             ui.label(egui::RichText::new("Charge collected by the goal electrode:").small());
             circuit_plot(ui, &run.collected, &[g.start, g.end]);
+            if run.frames.iter().all(|f| f.1.is_empty()) {
+                ui.label(
+                    egui::RichText::new(
+                        "No electrons leave the cathode: the field at its face pushes them \
+                         back. A diode conducts one way only.",
+                    )
+                    .color(egui::Color32::from_rgb(255, 210, 120)),
+                );
+            }
         }
         _ => {
             ui.label("Preview: computing…");
