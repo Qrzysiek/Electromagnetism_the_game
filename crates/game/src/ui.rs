@@ -412,46 +412,74 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         );
     }
     let shot_index = game.active_shot.min(n_shots.saturating_sub(1));
-    let shot = level.shots[shot_index];
-
-    // Launch of the active shot.
-    let kin = physics::dynamics::Kinematics::new(shot.particle.mass, level.c());
-    let p0 = level.launch_momentum(shot_index);
-    let gamma0 = kin.gamma(p0);
-    let v0 = kin.velocity(p0).length();
+    // A level without shots (a tube level) has no launch; a neutral placeholder keeps
+    // the sections below (which show nothing for it) simple.
+    let shot = level.shots.get(shot_index).copied().unwrap_or(level::Shot {
+        particle: level::ParticleSpec {
+            charge: 0.0,
+            mass: 1.0,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        launch: level::Launch {
+            node: [0, 0, 0],
+            direction: [1.0, 0.0, 0.0],
+            kinetic_energy: 1.0,
+            time: 0.0,
+        },
+        detector: level::Detector {
+            min: [0, 0, 0],
+            max: [0, 0, 0],
+            acceptance: None,
+        },
+        beam: None,
+    });
     let t0 = shot.launch.kinetic_energy;
-    ui.label(match level.physics.c {
-        Some(c) => format!(
-            "Launch: T₀ = {}, v₀ = {:.3} c, γ₀ = {gamma0:.4}   (c = {c})",
-            energy_text(t0),
-            v0 / c
-        ),
-        None => format!("Launch: T₀ = {}, v₀ = {v0:.3} (Newtonian)", energy_text(t0)),
-    });
-    ui.label(if shot.particle.moment == 0.0 {
-        format!(
-            "Particle: q = {}, m = {}",
-            fmt_si(shot.particle.charge),
-            fmt_si(shot.particle.mass)
-        )
-    } else {
-        format!(
-            "Particle: q = {}, m = {}, magnetic moment along {} of {} (spin {})",
-            fmt_si(shot.particle.charge),
-            fmt_si(shot.particle.mass),
-            if shot.particle.moment > 0.0 {
-                "+z"
-            } else {
-                "−z"
-            },
-            fmt_si(shot.particle.moment.abs()),
-            if shot.particle.moment > 0.0 {
-                "up"
-            } else {
-                "down"
-            }
-        )
-    });
+    if !level.shots.is_empty() {
+        // Launch of the active shot.
+        let kin = physics::dynamics::Kinematics::new(shot.particle.mass, level.c());
+        let p0 = level.launch_momentum(shot_index);
+        let gamma0 = kin.gamma(p0);
+        let v0 = kin.velocity(p0).length();
+        ui.label(match level.physics.c {
+            Some(c) => format!(
+                "Launch: T₀ = {}, v₀ = {:.3} c, γ₀ = {gamma0:.4}   (c = {c})",
+                energy_text(t0),
+                v0 / c
+            ),
+            None => format!("Launch: T₀ = {}, v₀ = {v0:.3} (Newtonian)", energy_text(t0)),
+        });
+        ui.label(if shot.particle.moment == 0.0 {
+            format!(
+                "Particle: q = {}, m = {}",
+                fmt_si(shot.particle.charge),
+                fmt_si(shot.particle.mass)
+            )
+        } else {
+            format!(
+                "Particle: q = {}, m = {}, magnetic moment along {} of {} (spin {})",
+                fmt_si(shot.particle.charge),
+                fmt_si(shot.particle.mass),
+                if shot.particle.moment > 0.0 {
+                    "+z"
+                } else {
+                    "−z"
+                },
+                fmt_si(shot.particle.moment.abs()),
+                if shot.particle.moment > 0.0 {
+                    "up"
+                } else {
+                    "down"
+                }
+            )
+        });
+    } else if let Some(t) = level.tube {
+        ui.label(format!(
+            "Carriers: q/m = {} (electrons; Newtonian), emitted by electrode {}",
+            fmt_si(t.charge_per_mass),
+            t.cathode + 1
+        ));
+    }
     egui::CollapsingHeader::new("Physics model and its limits")
         .id_salt("model_notes")
         // Opened for developer captures with EM_MODEL=1 (see `dev_capture`).
@@ -521,7 +549,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                         }
                         ui.label(
                             egui::RichText::new(
-                                "Over lab time, up to the end of the last flight; the yellow                                  lines are the launches.",
+                                "Over lab time, up to the end of the last flight; the yellow \
+                                 lines are the launches.",
                             )
                             .small()
                             .weak(),
@@ -720,6 +749,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             )
             .small(),
         );
+    } else if level.is_tube() {
+        tube_result(ui, game, &level);
     } else if level.has_beams() {
         beam_result(ui, game, &level);
     } else {
@@ -996,6 +1027,29 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         ui.separator();
     }
     ui.label(egui::RichText::new("View").strong());
+    if level.is_tube() {
+        // The z-invariant field: only its potential map (the field lines and the other
+        // maps are the 3D slice's).
+        ui.horizontal(|ui| {
+            ui.label("Map:");
+            ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential");
+            ui.selectable_value(&mut game.map, None, "off");
+        });
+        ui.label(
+            egui::RichText::new(
+                "The electrons' potential energy at the end of the preview, relative to the \
+                 cathode, in units of the largest voltage: blue downhill (towards the \
+                 anode), red uphill; contours every quarter. It includes the electrons' \
+                 own space charge and the charge it induces on the electrodes: the flat \
+                 region in front of the cathode, where the field is pulled down to zero, \
+                 is the space charge that limits the current.",
+            )
+            .small(),
+        );
+        ui.separator();
+        controls(ui);
+        return;
+    }
     ui.horizontal_wrapped(|ui| {
         ui.label("Map (V):")
             .on_hover_text("What the background shows; V cycles through the maps");
@@ -1006,7 +1060,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             );
         ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B")
             .on_hover_text(
-                "The static magnetic field of magnets, coils and the stray field of the \n                 disturbance shown (perpendicular to the plane)",
+                "The static magnetic field of magnets, coils and the stray field of the \
+                 disturbance shown (perpendicular to the plane)",
             );
         if crate::radiation::waves_available(&level) {
             ui.selectable_value(&mut game.map, Some(MapMode::Waves), "waves")
@@ -1183,7 +1238,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     }
     ui.checkbox(&mut game.show_field_lines, "Electric field lines (F)")
         .on_hover_text(
-            "Lines along the static electric field (with the stray field of the disturbance \n             shown)",
+            "Lines along the static electric field (with the stray field of the disturbance \
+             shown)",
         );
     ui.add(egui::Slider::new(&mut game.field_line_spacing, 0.5..=4.0).text("spacing (cells)"))
         .on_hover_text("Smallest distance between neighbouring field lines");
@@ -1197,6 +1253,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     );
     ui.separator();
 
+    controls(ui);
+}
+
+fn controls(ui: &mut egui::Ui) {
     ui.collapsing("Controls", |ui| {
         ui.label("Mouse: left click place, right click remove, wheel changes magnitude.");
         ui.label("Arrows move the cursor (Shift: ×5). Space/Enter place, Del/X remove.");
@@ -1207,6 +1267,76 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         ui.label("Drag your elements with the mouse, or G to grab / drop and Esc to cancel.");
         ui.label("Hardcore (checkbox): sliders instead of fixed values; Q/E and W step ×1.1.");
     });
+}
+
+/// Tube levels: the goal electrode's current, preview and verified, against the goal,
+/// and its collected charge over time (the window's ends marked).
+fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
+    use level::tube::TubeStatus;
+    let Some(spec) = level.tube else {
+        return;
+    };
+    let g = spec.goal;
+    ui.checkbox(&mut game.animate, "Animate (A)")
+        .on_hover_text("Play the preview: the electrons leave the cathode and fly");
+    ui.label(egui::RichText::new("Result").strong());
+    if game.solved() {
+        ui.label(
+            egui::RichText::new("✔ SOLVED: the current is in range (verified)")
+                .color(egui::Color32::from_rgb(90, 240, 110))
+                .size(18.0),
+        );
+    }
+    ui.label(format!(
+        "Goal: the current into electrode {} between {} and {}, averaged over t = {} to {}",
+        g.electrode + 1,
+        fmt_si(g.min),
+        fmt_si(g.max),
+        fmt_si(g.start),
+        fmt_si(g.end)
+    ));
+    let current = game.sent_revision;
+    match &game.tube_preview {
+        Some((r, run)) if *r == current => {
+            ui.label(format!(
+                "Preview: {}   ({} electrons in flight at the end)",
+                fmt_si(run.current),
+                run.in_flight
+            ));
+            ui.label(egui::RichText::new("Charge collected by the goal electrode:").small());
+            circuit_plot(ui, &run.collected, &[g.start, g.end]);
+        }
+        _ => {
+            ui.label("Preview: computing…");
+        }
+    }
+    match &game.tube_verdict {
+        Some((r, v)) if *r == current => {
+            let (text, color) = match v.status {
+                TubeStatus::Met => ("in range ✔", egui::Color32::from_rgb(90, 240, 110)),
+                TubeStatus::Missed => ("out of range ✖", egui::Color32::from_rgb(255, 120, 90)),
+                TubeStatus::Uncertain => (
+                    "too close to a bound to tell ✖",
+                    egui::Color32::from_rgb(255, 210, 90),
+                ),
+            };
+            ui.colored_label(
+                color,
+                format!("Verified: {} ± {}: {text}", fmt_si(v.fine), fmt_si(v.error)),
+            );
+        }
+        _ => {
+            ui.label("Verified: computing…");
+        }
+    }
+    ui.label(
+        egui::RichText::new(
+            "A z-invariant tube: every electrode is a long prism, the electrons are long \
+             lines of charge, and the current is per unit length. The cathode emits as \
+             much as its field allows: the electrons' own charge limits the current.",
+        )
+        .small(),
+    );
 }
 
 /// Beam levels: verified transmission of every beam shot in every flight against its

@@ -17,6 +17,7 @@ pub mod beam;
 pub mod cost;
 pub mod model;
 pub mod solve;
+pub mod tube;
 
 use physics::DVec3;
 use physics::antenna::OscillatingDipole;
@@ -88,6 +89,9 @@ pub struct Level {
     /// (PHYSICS.md §6.2).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gates: Vec<Detector>,
+    /// A tube level (z-invariant; `tube.rs`, docs/TUBES.md): its cathode and current goal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tube: Option<tube::TubeSpec>,
 }
 
 /// A rectangular metal box standing on the plane (symmetric about it): a plate, slab or
@@ -292,6 +296,8 @@ struct LevelFile {
     ferrites: Vec<FerritePlate>,
     #[serde(default)]
     gates: Vec<Detector>,
+    #[serde(default)]
+    tube: Option<tube::TubeSpec>,
 }
 
 impl From<LevelFile> for Level {
@@ -329,6 +335,7 @@ impl From<LevelFile> for Level {
             dielectric_spheres: f.dielectric_spheres,
             ferrites: f.ferrites,
             gates: f.gates,
+            tube: f.tube,
         }
     }
 }
@@ -1563,6 +1570,7 @@ impl Level {
                 out.push(format!("{who} starts on a coil's wire."));
             }
         }
+        self.tube_issues(player, &mut out);
         out
     }
 
@@ -3242,6 +3250,7 @@ mod tests {
             dielectric_spheres: vec![],
             ferrites: vec![],
             gates: vec![],
+            tube: None,
         }
     }
 

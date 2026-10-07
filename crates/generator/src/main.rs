@@ -291,6 +291,26 @@ fn main() {
                 level.name,
                 level.check_placement(placement)
             );
+            if let Some(spec) = level.tube {
+                // Tube levels: the verified current against the goal (printed like a
+                // shot, so the tools check it too).
+                let v = level.tube_verdict(placement);
+                let g = spec.goal;
+                println!(
+                    "  shot tube: current {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
+                    v.fine,
+                    v.error,
+                    v.preview,
+                    g.min,
+                    g.max,
+                    v.status,
+                    if v.status == level::tube::TubeStatus::Met {
+                        "outcome Arrived, status Verified"
+                    } else {
+                        "outcome Rejected, status NotVerified"
+                    }
+                );
+            }
             if level.has_beams() {
                 // Beam levels: the verified transmission of every beam shot per flight.
                 for (d, v) in level.verify_beams(placement).iter().enumerate() {

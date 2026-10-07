@@ -1,0 +1,96 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Vacuum diode",
+  "description": "Inside a vacuum tube. The left plate is a hot cathode: its right face emits electrons (blue dots), as many as its field pulls off. The right plate, the anode, is on your power supply. Set its voltage so that a current between 1.0 and 1.4 reaches the anode (averaged over $t = 10$ to $20$). The electrons in flight repel the ones behind them: this space charge chokes the current, which grows as $I \\propto V^{3/2}$ (Child and Langmuir), faster than in proportion to the voltage. The potential map shows the space charge as a flat region in front of the cathode, where the field is pulled down to zero.",
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 20.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -70.0,
+      12.0,
+      24.0,
+      48.0,
+      70.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        16,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": 24.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        8,
+        8,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        16,
+        8,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goal": {
+      "electrode": 1,
+      "min": 1.0,
+      "max": 1.4,
+      "start": 10.0,
+      "end": 20.0
+    },
+    "emit_toward_deg": 0.0
+  }
+}

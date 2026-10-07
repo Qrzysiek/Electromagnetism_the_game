@@ -120,6 +120,7 @@ verified reference solution for every shot and negligible radiation
 | 96 | Jackson Pr. 14.23: a quiet ring | 11 Intermediate | the same drifting circle, and the receiver must stay below 7e-6 per steradian in 0.6–1.0: a partner on the far side of the circle, circling in antiphase about the same drifting centre, cancels the fundamental | ≤ 3 free charges | 1 |
 | 97 | Jackson Pr. 14.23: a ring of four | 11 Intermediate | the band 0.6–2.6 holds ω₀, 2ω₀, 3ω₀ (below 1.3e-5 per steradian): a pair leaves 2ω₀, three at 120° leave 3ω₀; four evenly spaced radiate only at 4ω₀, outside the band | ≤ 5 free charges | 3 |
 | 98 | Jackson §14.7: undulator | 11 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
+| 99 | Vacuum diode | 12 Introduction | a z-invariant tube (PHYSICS.md §2.11): the cathode emits under the space-charge limit; set the anode's supply so that 1.0–1.4 reaches it (verified 1.20 ± 0.07 at 24; solves for 21–25.7 of the slider ±70): the current grows as V^{3/2} | 1 supply (anode) | 1 |
 
 ## Automatic detectors
 
@@ -248,6 +249,7 @@ on 2026-10-05 and levels 46–49 (the circuits) on 2026-10-06 with the same sett
 | 91_jackson_quiet_ring | 13.2 | 3.0e-3 | 3/16 | 107 | 1840 / 333 | 0.82 |
 | 92_jackson_ring_of_four | 21.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.87 |
 | 93_jackson_undulator | 24.6 | < 3.0e-3 | 5/16 | 123 | 1003 / 333 | 0.52 |
+| 99_vacuum_diode | 0.8 | 1.9e-1 | 16/16 | 6 | 6 / 5 | 0.24 |
 
 Reading the table by tier (levels 1–56): the introductions are solved by the search in
 15–16 of 16 runs within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
@@ -442,6 +444,10 @@ Notes:
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.
+- Vacuum diode (2026-10-07, same settings): the search tries the slider's candidate
+  voltages only (±70, 12, 24, 48), so the table counts five configurations; on the
+  continuous slider the solving interval is 21–25.7, 3.3 % of the range
+  (`generator window`). An introduction: the player learns the V^{3/2} law by trying.
 - `analyze --fewest` adds the fewest elements that solve a level: the reference solution's
   count, unless the search finds a verified solution with fewer (exhaustive for one
   element, annealing with 64 restarts of 600 iterations for 2 up to the reference count

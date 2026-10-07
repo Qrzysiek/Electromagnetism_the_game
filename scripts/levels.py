@@ -238,6 +238,18 @@ def slider_problems(lvl):
     return out
 
 
+def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0):
+    """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
+    (from its faces toward `emit_toward_deg` only, if given); the goal is the current into
+    `electrode`, averaged over t = start..end, between lo and hi. Tube levels are
+    Newtonian (pass c=None to `level`)."""
+    t = {"cathode": cathode, "charge_per_mass": q_over_m,
+         "goal": {"electrode": electrode, "min": lo, "max": hi, "start": start, "end": end}}
+    if emit_toward_deg is not None:
+        t["emit_toward_deg"] = emit_toward_deg
+    return t
+
+
 def player_plate(x, y, v, angle_deg=0.0):
     """A plate placed by the player (limits.plate size) at potential v."""
     e = {"node": [x, y, 0], "kind": "plate", "value": v}
@@ -280,7 +292,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
           beam_interaction=False, gates=(), clouds=(), free_particles=(), max_free=0,
           free_charges=(), free_speeds=(), free_mass=1.0, free_radius=0.3, dielectrics=(),
-          coil_rates=(), ferrites=()):
+          coil_rates=(), ferrites=(), tube=None):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -327,6 +339,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         **({"dielectrics": list(dielectrics)} if dielectrics else {}),
         **({"ferrites": list(ferrites)} if ferrites else {}),
         **({"gates": list(gates)} if gates else {}),
+        **({"tube": tube} if tube else {}),
     }
 
 
@@ -2903,6 +2916,39 @@ ARCS = [
         ]),
     ]),
 ]
+
+# Inside the components: vacuum tubes (docs/TUBES.md, PHYSICS.md 2.11). z-invariant:
+# the electrodes are long prisms, the electrons long lines of charge, the currents per
+# unit length; Newtonian (tube voltages give v ~ 0.03 c in SI; here c is infinite).
+
+def vacuum_diode():
+    # The planar diode of crates/level/tests/tubes.rs: plates 10 long, 1 thick, faces 7
+    # apart. Verified currents: 0.321 at 10, 2.55 at 40 (I ~ V^1.5 to 1 %), so the goal
+    # 1.0 to 1.4 asks for about 21 to 27; the reference 24 (current ~1.2) sits in the
+    # middle, clear of the verdict's error (~5 %).
+    return level(
+        "Vacuum diode",
+        "Inside a vacuum tube. The left plate is a hot cathode: its right face emits "
+        "electrons (blue dots), as many as its field pulls off. The right plate, the "
+        "anode, is on your power supply. Set its voltage so that a current between 1.0 "
+        "and 1.4 reaches the anode (averaged over $t = 10$ to $20$). The electrons in "
+        "flight repel the ones behind them: this space charge chokes the current, which "
+        "grows as $I \\propto V^{3/2}$ (Child and Langmuir), faster than in proportion "
+        "to the voltage. The potential map shows the space charge as a flat region in "
+        "front of the cathode, where the field is pulled down to zero.",
+        grid=(24, 16), c=None, t_max=20.0,
+        electrodes=[plate(8, 8, 10, thickness=1.0, angle_deg=90.0),
+                    plate(16, 8, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
+        supplies=slider(70.0, 12.0, 24.0, 48.0),
+        tube=tube(0, 1, 1.0, 1.4, 10.0, 20.0, emit_toward_deg=0.0),
+        reference=[supply(16, 8, 24.0)])
+
+
+ARCS.append(("Inside the components: vacuum tubes", [
+    ("Introduction", [
+        ("vacuum_diode", vacuum_diode),
+    ]),
+]))
 
 LEVELS = [lv for _, tiers in ARCS for _, lvls in tiers for lv in lvls]
 

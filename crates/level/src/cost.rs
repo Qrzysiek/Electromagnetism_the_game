@@ -40,7 +40,12 @@ pub struct Cost {
 impl Cost {
     pub fn new(level: &Level) -> Self {
         Self {
-            flights: level.flight_count(),
+            // A tube level has one run per resolution (its current), not flights.
+            flights: if level.is_tube() {
+                1
+            } else {
+                level.flight_count()
+            },
             setup: SetupCost::default(),
             preview_seconds: 0.0,
             previews: 0,
@@ -72,6 +77,28 @@ impl Cost {
         self.previews += 1;
         self.evaluations += traj.stats.n_fcn;
         self.max_steps = self.max_steps.max(traj.stats.n_step);
+    }
+
+    /// A tube level's run (`Level::tube_run`): its wall time (which includes building its
+    /// segments' linear system), its steps, and that system (a dense n × n
+    /// factorization, 8n² bytes).
+    pub fn add_tube_run(&mut self, seconds: f64, run: &crate::tube::TubeRun, verification: bool) {
+        let n = run.segments.len();
+        self.setup = self.setup
+            + SetupCost {
+                seconds: 0.0,
+                bytes: 8 * n * n,
+                unknowns: n,
+            };
+        self.max_steps = self.max_steps.max(u64::from(run.steps));
+        if verification {
+            self.verify_seconds += seconds;
+            self.verifications += 1;
+        } else {
+            self.preview_seconds += seconds;
+            self.previews += 1;
+            self.evaluations += u64::from(run.steps);
+        }
     }
 
     pub fn add_verification(&mut self, seconds: f64, traj: &Trajectory) {
@@ -291,6 +318,14 @@ impl Level {
         let mut cost = Cost::new(self);
         let tol = self.tolerances();
         let metal = self.has_metal(player);
+        if self.is_tube() {
+            for refine in [1, 2] {
+                let t = Instant::now();
+                let run = self.tube_run(player, refine, |_| {});
+                cost.add_tube_run(t.elapsed().as_secs_f64(), &run, refine == 2);
+            }
+            return cost;
+        }
         if self.has_beams() {
             return self.measure_beam_cost(player, cost);
         }

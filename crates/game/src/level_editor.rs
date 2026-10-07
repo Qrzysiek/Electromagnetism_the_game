@@ -8,6 +8,7 @@
 
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
+use level::tube::{CurrentGoal, TubeSpec};
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
     DielectricSphere, Disturbance, Drive, Electrode, Element, ElementKind, FerritePlate,
@@ -1470,6 +1471,121 @@ fn edit_ferrites(ui: &mut egui::Ui, list: &mut Vec<FerritePlate>, grid: &Grid) -
     focus
 }
 
+fn edit_tube(ui: &mut egui::Ui, tube: &mut Option<TubeSpec>, electrodes: usize) -> bool {
+    let mut focus = false;
+    let mut on = tube.is_some();
+    if ui
+        .checkbox(&mut on, "Tube level (z-invariant)")
+        .on_hover_text("Needs two electrodes: a cathode and the goal's electrode")
+        .changed()
+    {
+        *tube = on.then_some(TubeSpec {
+            cathode: 0,
+            charge_per_mass: -1.0,
+            emit_toward_deg: None,
+            goal: CurrentGoal {
+                electrode: 1,
+                min: 0.0,
+                max: 1.0,
+                start: 10.0,
+                end: 20.0,
+            },
+        });
+    }
+    let Some(TubeSpec {
+        cathode,
+        charge_per_mass,
+        emit_toward_deg,
+        goal:
+            CurrentGoal {
+                electrode,
+                min,
+                max,
+                start,
+                end,
+            },
+    }) = tube
+    else {
+        return focus;
+    };
+    let last = electrodes.max(1) - 1;
+    // Electrodes are numbered from 1 in the editor, as in their section.
+    let index = |ui: &mut egui::Ui, label: &str, i: &mut usize| {
+        ui.horizontal(|ui| {
+            ui.label(label);
+            let mut k = *i + 1;
+            let r = ui.add(egui::DragValue::new(&mut k).range(1..=last + 1));
+            *i = (k - 1).min(last);
+            r.has_focus()
+        })
+        .inner
+    };
+    focus |= index(ui, "Cathode: electrode", cathode);
+    focus |= index(ui, "Goal: current into electrode", electrode);
+    ui.horizontal(|ui| {
+        ui.label("Carriers' q/m");
+        focus |= ui
+            .add(
+                egui::DragValue::new(charge_per_mass)
+                    .speed(0.01)
+                    .range(-MAX_POSITIVE..=MAX_POSITIVE),
+            )
+            .has_focus();
+        if *charge_per_mass == 0.0 {
+            *charge_per_mass = -1.0;
+        }
+    });
+    ui.horizontal(|ui| {
+        let mut one_face = emit_toward_deg.is_some();
+        ui.checkbox(&mut one_face, "Coated face toward")
+            .on_hover_text("Only the cathode's faces facing this direction (within 60°) emit");
+        if one_face {
+            let a = emit_toward_deg.get_or_insert(0.0);
+            focus |= ui
+                .add(
+                    egui::DragValue::new(a)
+                        .speed(1.0)
+                        .range(-360.0..=360.0)
+                        .suffix("°"),
+                )
+                .has_focus();
+        } else {
+            *emit_toward_deg = None;
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label("Current from");
+        focus |= ui
+            .add(
+                egui::DragValue::new(min)
+                    .speed(0.01)
+                    .range(0.0..=MAX_POSITIVE),
+            )
+            .has_focus();
+        ui.label("to");
+        focus |= ui
+            .add(
+                egui::DragValue::new(max)
+                    .speed(0.01)
+                    .range(0.0..=MAX_POSITIVE),
+            )
+            .has_focus();
+    });
+    ui.horizontal(|ui| {
+        ui.label("Averaged over t");
+        focus |= ui
+            .add(
+                egui::DragValue::new(start)
+                    .speed(0.1)
+                    .range(0.0..=MAX_POSITIVE),
+            )
+            .has_focus();
+        ui.label("to");
+        focus |= positive(ui, end, 0.1, MAX_POSITIVE);
+    });
+    focus
+}
+
 fn edit_disturbances(ui: &mut egui::Ui, list: &mut Vec<Disturbance>) -> bool {
     let mut focus = false;
     let mut remove = None;
@@ -1775,6 +1891,7 @@ pub fn edit_level(
         dielectric_spheres,
         ferrites,
         gates,
+        tube,
     } = level;
     let mut focus = false;
     let mut refine_by = None;
@@ -1854,6 +1971,14 @@ pub fn edit_level(
         .show(ui, |ui| focus |= edit_gates(ui, gates, &g))
         .header_response
         .on_hover_text("Stages every flight must pass, in order, before its detector counts");
+    let n_electrodes = electrodes.len();
+    egui::CollapsingHeader::new(if tube.is_some() { "Tube (on)" } else { "Tube" })
+        .show(ui, |ui| focus |= edit_tube(ui, tube, n_electrodes))
+        .header_response
+        .on_hover_text(
+            "A z-invariant vacuum tube: the electrodes are prisms along z, the cathode emits \
+             electrons under the space-charge limit, the goal is an electrode's current",
+        );
     egui::CollapsingHeader::new("Player limits")
         .default_open(true)
         .show(ui, |ui| {
@@ -1891,7 +2016,33 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         dielectric_spheres,
         ferrites,
         gates,
+        tube,
     } = level;
+    if let Some(t) = tube {
+        let TubeSpec {
+            cathode,
+            charge_per_mass,
+            emit_toward_deg,
+            goal:
+                CurrentGoal {
+                    electrode,
+                    min,
+                    max,
+                    start,
+                    end,
+                },
+        } = t;
+        let n = electrodes.len();
+        let ratio_ok = (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass.abs());
+        let goal_ok = (0.0..=MAX_POSITIVE).contains(min)
+            && (0.0..=MAX_POSITIVE).contains(max)
+            && (0.0..=MAX_POSITIVE).contains(start)
+            && (MIN_POSITIVE..=MAX_POSITIVE).contains(end);
+        let face_ok = emit_toward_deg.is_none_or(|a| (-360.0..=360.0).contains(&a));
+        if *cathode >= n || *electrode >= n || !ratio_ok || !goal_ok || !face_ok {
+            return Err("tube value outside the editor's range".into());
+        }
+    }
     if gates.len() > MAX_COUNT as usize {
         return Err("too many gates".into());
     }

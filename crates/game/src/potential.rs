@@ -51,6 +51,9 @@ pub struct PotentialParams {
     pub u_a: f32,
     pub mode: u32,
     pub moment_weight: f32,
+    /// Tube levels: numbers of charged segments and of line charges.
+    pub line_segments: u32,
+    pub line_charges: u32,
 }
 
 impl Default for PotentialParams {
@@ -66,6 +69,8 @@ impl Default for PotentialParams {
             u_a: 0.0,
             mode: 0,
             moment_weight: 0.0,
+            line_segments: 0,
+            line_charges: 0,
         }
     }
 }
@@ -133,6 +138,47 @@ pub fn static_part(field: &LevelField) -> LevelField {
 ///   for pictures (test E6).
 struct Items {
     out: Vec<[f32; 4]>,
+}
+
+/// Softening of the particles' line charges on the tube map (cells): the preview's
+/// segment length, the resolution of its space charge.
+const TUBE_MAP_SOFTENING: f64 = level::tube::PREVIEW_SEGMENT;
+
+/// Shader parameters and sources for a tube level's map (z-invariant): the potential of
+/// the preview's final state (the electrodes' surface charge, applied and induced, and
+/// the particles' space charge), as the carriers' energy relative to the cathode in
+/// units of `|q|` times the largest potential difference to it (contours every quarter).
+#[allow(clippy::cast_possible_truncation)]
+pub fn tube_params(
+    run: &level::tube::TubeRun,
+    cathode: usize,
+    sign: f64,
+) -> (PotentialParams, Vec<[f32; 4]>) {
+    let vc = run.potentials.get(cathode).copied().unwrap_or(0.0);
+    let scale = run
+        .potentials
+        .iter()
+        .map(|v| (v - vc).abs())
+        .fold(0.0, f64::max)
+        .max(1e-300);
+    let mut items = Vec::new();
+    for ((a, b), s) in run.segments.iter().zip(&run.sigma) {
+        items.push(v4(a.x, a.y, b.x, b.y));
+        items.push(v4(*s, 0.0, 0.0, 0.0));
+    }
+    let particles = run.frames.last().map_or(&[][..], |f| f.1.as_slice());
+    let eps2 = TUBE_MAP_SOFTENING * TUBE_MAP_SOFTENING;
+    for x in particles {
+        items.push(v4(x.x, x.y, run.particle_charge, eps2));
+    }
+    let out = PotentialParams {
+        phi_weight: (sign / scale) as f32,
+        u_a: (sign * vc / scale) as f32,
+        line_segments: count(run.segments.len()),
+        line_charges: count(particles.len()),
+        ..PotentialParams::default()
+    };
+    (out, items)
 }
 
 #[allow(clippy::cast_possible_truncation)]

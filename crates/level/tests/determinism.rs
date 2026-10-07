@@ -72,7 +72,24 @@ fn level_hashes() -> BTreeMap<String, String> {
     for p in paths {
         let level = Level::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();
         let mut h = Hasher::new();
-        if level.has_beams() {
+        if level.is_tube() {
+            // Tube levels: both runs, every frame's particles and the currents.
+            for refine in [1, 2] {
+                let run = level.tube_run(&level.reference_solution, refine, |_| {});
+                for (t, xs) in &run.frames {
+                    h.f64(*t);
+                    for x in xs {
+                        h.f64(x.x);
+                        h.f64(x.y);
+                    }
+                }
+                for (t, q) in &run.collected {
+                    h.f64(*t);
+                    h.f64(*q);
+                }
+                h.f64(run.current);
+            }
+        } else if level.has_beams() {
             // Beam levels: every particle of every flight.
             for v in level.verify_beams(&level.reference_solution) {
                 for t in v

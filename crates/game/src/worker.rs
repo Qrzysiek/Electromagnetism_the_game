@@ -155,6 +155,16 @@ pub enum Response {
     Circuit { revision: u64, view: CircuitView },
     /// A setup the physics cannot compute (`Level::setup_issues`): nothing is flown.
     Invalid { revision: u64, issues: Vec<String> },
+    /// Tube levels (`level::tube`): the preview run (frames and current).
+    TubePreview {
+        revision: u64,
+        run: std::sync::Arc<level::tube::TubeRun>,
+    },
+    /// Tube levels: the verification's verdict.
+    TubeVerified {
+        revision: u64,
+        verdict: level::tube::TubeVerdict,
+    },
 }
 
 /// The circuits of a level (PHYSICS.md §2.10) for the panel.
@@ -356,6 +366,8 @@ fn retag(r: Response, revision: u64) -> Response {
         Response::Cost { cost, .. } => Response::Cost { revision, cost },
         Response::Circuit { view, .. } => Response::Circuit { revision, view },
         Response::Invalid { issues, .. } => Response::Invalid { revision, issues },
+        Response::TubePreview { run, .. } => Response::TubePreview { revision, run },
+        Response::TubeVerified { verdict, .. } => Response::TubeVerified { revision, verdict },
     }
 }
 
@@ -405,6 +417,15 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
                 return;
             }
             cache.put(key, sink.record.into_inner());
+            continue 'requests;
+        }
+        if req.level.is_tube() {
+            if !tube_request(&req, tx, newest) {
+                return;
+            }
+            if current(req.revision) {
+                cache.put(key, sink.record.into_inner());
+            }
             continue 'requests;
         }
         if req.level.has_beams() {
@@ -535,6 +556,55 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
             cache.put(key, sink.record.into_inner());
         }
     }
+}
+
+/// A tube level: the preview run, then the verification run and the verdict, each
+/// abandoned when the setup changes. Returns `false` if the game has gone away.
+fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
+    let Some(goal) = req.level.tube.map(|t| t.goal) else {
+        return true;
+    };
+    let mut cost = level::cost::Cost::new(&req.level);
+    let start = Instant::now();
+    let Some(preview) = unless_stale(newest, req.revision, || {
+        req.level.tube_run(&req.placement, 1, |_| {})
+    }) else {
+        return true;
+    };
+    cost.add_tube_run(start.elapsed().as_secs_f64(), &preview, false);
+    let send_cost = |cost: &level::cost::Cost| {
+        tx.send(Response::Cost {
+            revision: req.revision,
+            cost: *cost,
+        })
+        .is_ok()
+    };
+    if !send_cost(&cost) {
+        return false;
+    }
+    let coarse = preview.current;
+    let msg = Response::TubePreview {
+        revision: req.revision,
+        run: Arc::new(preview),
+    };
+    if tx.send(msg).is_err() {
+        return false;
+    }
+    let start = Instant::now();
+    let Some(fine) = unless_stale(newest, req.revision, || {
+        req.level.tube_run(&req.placement, 2, |_| {})
+    }) else {
+        return true;
+    };
+    cost.add_tube_run(start.elapsed().as_secs_f64(), &fine, true);
+    if !send_cost(&cost) {
+        return false;
+    }
+    tx.send(Response::TubeVerified {
+        revision: req.revision,
+        verdict: level::tube::TubeVerdict::new(coarse, fine.current, &goal),
+    })
+    .is_ok()
 }
 
 /// A beam level: per flight the preview (every particle's path), then the per-particle
@@ -1060,7 +1130,12 @@ mod tests {
         if let Err(e) = level.check_placement(&placement) {
             return (name, "rejected", crate::editor::describe(&e));
         }
-        let flights = level.flight_count();
+        // A tube level has one verdict (its current), not flights.
+        let flights = if level.is_tube() {
+            1
+        } else {
+            level.flight_count()
+        };
         let (req_tx, req_rx) = channel::<Request>();
         let (out_tx, out_rx) = channel::<Response>();
         let newest = Arc::new(AtomicU64::new(1));
@@ -1136,6 +1211,20 @@ mod tests {
                 Ok(Response::Cost { .. }) => {}
                 Ok(Response::Invalid { issues, .. }) => {
                     return (name, "rejected", issues.join(" "));
+                }
+                Ok(Response::TubePreview { run, .. }) => {
+                    let bad = run.frames.iter().flat_map(|f| &f.1).any(|x| !x.is_finite())
+                        || !run.current.is_finite()
+                        || run.sigma.iter().any(|s| !s.is_finite());
+                    if bad {
+                        problem.get_or_insert(("nonfinite", "tube preview".into()));
+                    }
+                }
+                Ok(Response::TubeVerified { verdict, .. }) => {
+                    verdicts += 1;
+                    if !(verdict.fine.is_finite() && verdict.error.is_finite()) {
+                        problem.get_or_insert(("nonfinite", "tube verdict".into()));
+                    }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Abandon it (the loop checks the revision) and report.

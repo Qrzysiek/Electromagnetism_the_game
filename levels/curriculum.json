@@ -317,6 +317,17 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Inside the components: vacuum tubes",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "vacuum_diode"
+          ]
+        }
+      ]
     }
   ]
 }

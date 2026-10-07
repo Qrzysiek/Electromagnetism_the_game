@@ -39,6 +39,10 @@ struct Params {
     mode: u32,
     // -m b_ref / T0: weight of B_z / b_ref in U / T0 (0 without a magnetic moment).
     moment_weight: f32,
+    // Tube levels (z-invariant): numbers of charged segments (prism cross-sections) and
+    // of line charges, after the electrode panels.
+    line_segments: u32,
+    line_charges: u32,
 };
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
@@ -46,7 +50,9 @@ struct Params {
 // (x, y, Q, radius), clouds (x, y, Q, R), induced charges (x, y, Q, z), magnets
 // (x, y, mu / b_ref, radius), coils (x, y, radius, kappa / b_ref), segments (two each:
 // (ax, ay, bx, by), (kappa / b_ref, 0, 0, 0)), static antennas (x, y, px, py), electrode
-// panels (three each: (a, sigma), (b, size), (c, area)).
+// panels (three each: (a, sigma), (b, size), (c, area)), charged segments of a
+// z-invariant level (two each: (ax, ay, bx, by), (sigma, 0, 0, 0)), line charges
+// (x, y, lambda, epsilon^2: softening).
 @group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> items: array<vec4<f32>>;
 
 fn first_cloud() -> u32 {
@@ -69,6 +75,35 @@ fn first_antenna() -> u32 {
 }
 fn first_panel() -> u32 {
     return first_antenna() + params.counts2.z;
+}
+fn first_line_segment() -> u32 {
+    return first_panel() + 3u * params.counts2.w;
+}
+fn first_line_charge() -> u32 {
+    return first_line_segment() + 2u * params.line_segments;
+}
+
+// Potential of a segment of unit surface density in the z-invariant world (as
+// physics::zinv::segment_integrals): -[G(u) - G(u - L)], G(w) = w ln(w^2 + v^2) - 2w
+// + 2v atan(w / v).
+fn line_segment_potential(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
+    let d = b - a;
+    let l = length(d);
+    let t = d / l;
+    let r = p - a;
+    let u = dot(r, t);
+    let v = r.x * -t.y + r.y * t.x;
+    let w0 = u;
+    let w1 = u - l;
+    let s0 = max(w0 * w0 + v * v, 1e-12);
+    let s1 = max(w1 * w1 + v * v, 1e-12);
+    var g0 = w0 * log(s0) - 2.0 * w0;
+    var g1 = w1 * log(s1) - 2.0 * w1;
+    if (abs(v) > 1e-9) {
+        g0 = g0 + 2.0 * v * atan(w0 / v);
+        g1 = g1 + 2.0 * v * atan(w1 / v);
+    }
+    return -(g0 - g1);
 }
 
 fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
@@ -222,6 +257,19 @@ fn potential(p: vec2<f32>) -> f32 {
             let s = 1.0 / distance(r3, y1) + 1.0 / distance(r3, y2) + 1.0 / distance(r3, y3);
             phi = phi + 2.0 * ta.w * tc.w * s / 3.0;
         }
+    }
+    // Tube levels: charged segments and line charges (potential -2 lambda ln r).
+    for (var i = 0u; i < params.line_segments; i = i + 1u) {
+        let k = first_line_segment() + 2u * i;
+        let s = items[k];
+        phi = phi + items[k + 1u].x * line_segment_potential(p, s.xy, s.zw);
+    }
+    for (var i = 0u; i < params.line_charges; i = i + 1u) {
+        let c = items[first_line_charge() + i];
+        let d = p - c.xy;
+        // Softened by w = epsilon^2 (the map shows the space charge, not each
+        // macroparticle).
+        phi = phi - c.z * log(dot(d, d) + c.w);
     }
     // The uniform stray field.
     return phi - dot(params.uniform_field.xy, p - params.origin.xy);

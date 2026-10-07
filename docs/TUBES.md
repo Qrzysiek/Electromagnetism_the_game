@@ -160,5 +160,10 @@ physics of diodes" (2017).
 - **Step 2 done (physics):** space-charge-limited emission with line-charge macroparticles
   (`physics::tube`; test V4: the coaxial diode against Langmuir–Blodgett, first-order
   convergence, Richardson-extrapolated 0.5 %). PHYSICS.md §2.11.
-- **Next:** planar Child–Langmuir and Lau's strip law; then the level mode and goals; then
-  circuit coupling.
+- **Step 3 done:** Ramo currents (test V5, second order).
+- **Step 4, first part, done:** the level mode (`level::tube`: format, setup checks,
+  preview and verified runs, verdict, cost; game: worker, panel, particles, potential map
+  with space charge; sandbox: the Tube section; generator: check, solve, window) and the
+  first level, Vacuum diode (V^{3/2}). PHYSICS.md §2.11.
+- **Next:** the rectifier (AC anode: a driven electrode in a tube), the triode (a grid of
+  small electrodes), then the circuit coupling (the anode current through a load).

@@ -110,6 +110,10 @@ pub struct Game {
     pub circuit: Option<(u64, worker::CircuitView)>,
     /// A setup the physics cannot compute (`Level::setup_issues`) and its revision.
     pub setup_issues: Option<(u64, Vec<String>)>,
+    /// Tube levels: the latest preview run and verdict, with their revisions (the
+    /// preview is kept while the next one is computed).
+    pub tube_preview: Option<(u64, std::sync::Arc<level::tube::TubeRun>)>,
+    pub tube_verdict: Option<(u64, level::tube::TubeVerdict)>,
     /// (revision, active shot, active disturbance, all shots shown, mode, flight shown)
     /// the field map was computed for.
     pub map_key: (u64, usize, usize, bool, Option<MapMode>, bool),
@@ -186,6 +190,8 @@ impl Game {
             cost: None,
             circuit: None,
             setup_issues: None,
+            tube_preview: None,
+            tube_verdict: None,
             map_key: (0, 0, 0, false, None, false),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
@@ -227,6 +233,8 @@ impl Game {
         self.arrow_drag = None;
         self.flights.clear();
         self.beams.clear();
+        self.tube_preview = None;
+        self.tube_verdict = None;
         self.active_shot = 0;
         self.active_disturbance = 0;
         self.anim_time = 0.0;
@@ -299,7 +307,16 @@ impl Game {
         if self.invalid_setup().is_some() {
             return Progress::Done;
         }
-        let (stale, verifying) = if self.editor.level.has_beams() {
+        let (stale, verifying) = if self.editor.level.is_tube() {
+            (
+                self.tube_preview
+                    .as_ref()
+                    .is_none_or(|(r, _)| *r != current),
+                self.tube_verdict
+                    .as_ref()
+                    .is_none_or(|(r, _)| *r != current),
+            )
+        } else if self.editor.level.has_beams() {
             (
                 self.beams.iter().any(|b| b.preview_revision != current),
                 self.beams.iter().any(|b| b.verified.is_none()),
@@ -385,6 +402,11 @@ impl Game {
     /// verified transmission in every flight).
     pub fn solved(&self) -> bool {
         let level = &self.editor.level;
+        if level.is_tube() {
+            return self.tube_verdict.as_ref().is_some_and(|(r, v)| {
+                *r == self.sent_revision && v.status == level::tube::TubeStatus::Met
+            });
+        }
         if level.has_beams() {
             return !self.beams.is_empty()
                 && (0..self.beams.len()).all(|d| {
@@ -486,11 +508,12 @@ fn load_levels() -> (Vec<Level>, Vec<PathBuf>) {
             continue;
         };
         match Level::from_json(&text) {
-            Ok(l) if !l.shots.is_empty() => {
+            // Playable: shots to deliver, or a tube level (its goal is a current).
+            Ok(l) if !l.shots.is_empty() || l.is_tube() => {
                 levels.push(l);
                 paths.push(p);
             }
-            Ok(_) => eprintln!("skipping {}: no shots", p.display()),
+            Ok(_) => eprintln!("skipping {}: no shots and no tube", p.display()),
             Err(e) => eprintln!("skipping {}: {e}", p.display()),
         }
     }
@@ -1038,10 +1061,16 @@ fn update_map(
 ) {
     // The energy unit depends on the flight (particles launched at rest): redraw when it
     // arrives.
-    let has_flight = game
-        .flights
-        .get(game.active_flight())
-        .is_some_and(|f| f.preview_revision == game.sent_revision && f.preview.is_some());
+    let has_flight = if game.editor.level.is_tube() {
+        // Tube levels: the map is the preview's final state.
+        game.tube_preview
+            .as_ref()
+            .is_some_and(|(r, _)| *r == game.sent_revision)
+    } else {
+        game.flights
+            .get(game.active_flight())
+            .is_some_and(|f| f.preview_revision == game.sent_revision && f.preview.is_some())
+    };
     let disturbance = game
         .active_disturbance
         .min(game.editor.level.flights_per_shot() - 1);
@@ -1061,7 +1090,34 @@ fn update_map(
         return;
     };
     let level = &game.editor.level;
-    if level.shots.is_empty() {
+    let bounds = level.bounds();
+    if let Ok(mut t) = transforms.get_mut(quad.entity) {
+        let size = bounds.max - bounds.min;
+        let center = (bounds.max + bounds.min) * 0.5;
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            t.scale = Vec3::new(size.x as f32, size.y as f32, 1.0);
+            t.translation = Vec3::new(center.x as f32, center.y as f32, -10.0);
+        }
+    }
+    // Tube levels: the preview's final state; nothing (a blank map) until it arrives,
+    // and a level without shots shows a blank map (not the previous level's).
+    let tube = level
+        .tube
+        .zip(game.tube_preview.as_ref().map(|t| t.1.clone()));
+    if level.is_tube() || level.shots.is_empty() {
+        let (params, items) = match tube {
+            Some((spec, run)) => {
+                potential::tube_params(&run, spec.cathode, spec.charge_per_mass.signum())
+            }
+            None => (potential::PotentialParams::default(), Vec::new()),
+        };
+        if let Some(mut m) = materials.get_mut(&quad.material) {
+            m.params = params;
+            if let Some(mut b) = buffers.get_mut(&m.items) {
+                *b = potential::buffer(items);
+            }
+        }
         return;
     }
     // The active flight's field: its shot under its disturbance.
@@ -1098,16 +1154,6 @@ fn update_map(
             *b = potential::buffer(items);
         }
     }
-    let bounds = level.bounds();
-    if let Ok(mut t) = transforms.get_mut(quad.entity) {
-        let size = bounds.max - bounds.min;
-        let center = (bounds.max + bounds.min) * 0.5;
-        #[allow(clippy::cast_possible_truncation)]
-        {
-            t.scale = Vec3::new(size.x as f32, size.y as f32, 1.0);
-            t.translation = Vec3::new(center.x as f32, center.y as f32, -10.0);
-        }
-    }
 }
 
 /// Recomputes the field lines (the electric field does not depend on the shot, but on the
@@ -1132,7 +1178,13 @@ fn update_field_lines(mut game: ResMut<Game>) {
         game.field_lines = lines;
         game.field_lines_job = None;
     }
-    if !game.show_field_lines || key == game.field_lines_key || game.shot_count() == 0 {
+    if game.shot_count() == 0 {
+        // No shots (a tube level): the 3D slice's field lines do not apply; drop any left
+        // from the previous level.
+        game.field_lines.clear();
+        return;
+    }
+    if !game.show_field_lines || key == game.field_lines_key {
         return;
     }
     game.field_lines_key = key;
@@ -1235,6 +1287,12 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
             Response::Invalid { revision, issues } if revision == current => {
                 game.setup_issues = Some((revision, issues));
             }
+            Response::TubePreview { revision, run } if revision == current => {
+                game.tube_preview = Some((revision, run));
+            }
+            Response::TubeVerified { revision, verdict } if revision == current => {
+                game.tube_verdict = Some((revision, verdict));
+            }
             _ => {}
         }
     }
@@ -1264,6 +1322,12 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
                 .filter_map(|path| path.last().map(|(t, _)| *t))
         })
         .fold(end, f64::max);
+    // Tube levels: the preview run's end.
+    let end = game
+        .tube_preview
+        .as_ref()
+        .and_then(|(_, r)| r.frames.last().map(|f| f.0))
+        .map_or(end, |t| end.max(t));
     if end <= 0.0 {
         return;
     }

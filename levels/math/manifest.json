@@ -1,4 +1,10 @@
 {
+ "20": {
+  "file": "f5ca38f748a1d6ea.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
  "-\\mathbf{m}\\cdot\\mathbf{B}": {
   "file": "2c62d75344a288cb.svg",
   "width_ex": 7.413,
@@ -52,6 +58,12 @@
   "width_ex": 3.526,
   "height_ex": 1.879,
   "baseline_ex": 0.375
+ },
+ "I \\propto V^{3/2}": {
+  "file": "469a7992512c8efb.svg",
+  "width_ex": 8.619,
+  "height_ex": 2.071,
+  "baseline_ex": 0.05
  },
  "I(t) = (V/R)(1 - e^{-t/\\tau})": {
   "file": "698d2c5fb3001038.svg",
@@ -286,6 +298,12 @@
   "width_ex": 19.259,
   "height_ex": 2.607,
   "baseline_ex": 0.708
+ },
+ "t = 10": {
+  "file": "a66f36481e6456f4.svg",
+  "width_ex": 6.096,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
  },
  "v = E/B": {
   "file": "043272337bd0ba9e.svg",

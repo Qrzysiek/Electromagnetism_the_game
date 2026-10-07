@@ -55,6 +55,13 @@ pub struct Tube {
     pub softening: f64,
     /// Time step.
     pub dt: f64,
+    /// The emitting face (a cathode's coating): only segments whose outward normal is
+    /// within 60° of this unit direction emit. None: every face.
+    pub emit_toward: Option<DVec3>,
+    /// The arena `(min, max)` corners: a particle that leaves it is lost (it flies off
+    /// to infinity in the open tube; in the z-invariant world nothing brings it back
+    /// unless an electrode encloses the arena, and then it never leaves). None: no bound.
+    pub arena: Option<(DVec3, DVec3)>,
 }
 
 /// The particles and the bookkeeping of a running tube.
@@ -72,6 +79,8 @@ pub struct TubeState {
     emitted: u64,
     /// Charge per unit length collected by each electrode so far.
     pub collected: Vec<f64>,
+    /// Charge per unit length that left the arena.
+    pub lost: f64,
 }
 
 /// Whether `x` lies inside the section.
@@ -177,6 +186,11 @@ impl Tube {
                 } else {
                     n
                 };
+                if self.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
+                    // Not the coated face: its charge stays (pending is dropped below).
+                    s.pending[k] = 0.0;
+                    break;
+                }
                 let delta = EMISSION_OFFSET * (b - a).length();
                 let x = mid + out * delta;
                 s.x.push(x);
@@ -191,6 +205,7 @@ impl Tube {
                 );
             }
         }
+        crate::cancel::checkpoint();
         // Kick and drift.
         let sigma = self.surface_density(s);
         let accel: Vec<DVec3> = (0..s.x.len())
@@ -206,8 +221,15 @@ impl Tube {
         while k < s.x.len() {
             let hit = (0..n_el)
                 .find(|&e| inside(&self.electrodes.electrodes[e].section, s.x[k]) != s.side[k][e]);
-            if let Some(e) = hit {
-                s.collected[e] += s.charge[k];
+            let out = self.arena.is_some_and(|(lo, hi)| {
+                let x = s.x[k];
+                x.x < lo.x || x.y < lo.y || x.x > hi.x || x.y > hi.y
+            });
+            if hit.is_some() || out {
+                match hit {
+                    Some(e) => s.collected[e] += s.charge[k],
+                    None => s.lost += s.charge[k],
+                }
                 s.x.swap_remove(k);
                 s.v.swap_remove(k);
                 s.charge.swap_remove(k);

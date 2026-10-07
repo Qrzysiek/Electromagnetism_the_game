@@ -209,6 +209,8 @@ fn v4_coaxial_diode_langmuir_blodgett() {
             weight,
             softening: 0.5 * size,
             dt,
+            arena: None,
+            emit_toward: None,
         };
         let mut s = tube.state();
         let start = std::time::Instant::now();

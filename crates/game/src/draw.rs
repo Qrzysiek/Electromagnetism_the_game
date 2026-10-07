@@ -976,6 +976,7 @@ pub fn draw(
     }
 
     draw_beams(&mut gizmos, &game);
+    draw_tube(&mut gizmos, &game);
 }
 
 /// Position along a sampled path at time `t` (linear between samples); `None` outside it.
@@ -1062,6 +1063,31 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
                 }
             }
         }
+    }
+}
+
+/// Tube levels: the preview's particles at the animation time (the frame at or before
+/// it; all frames when not animating: the last one), faded while a new setup computes.
+fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
+    let Some((revision, run)) = &game.tube_preview else {
+        return;
+    };
+    if !game.editor.level.is_tube() {
+        return;
+    }
+    let frame = if game.animate {
+        let k = run.frames.partition_point(|f| f.0 <= game.anim_time);
+        run.frames.get(k.saturating_sub(1))
+    } else {
+        run.frames.last()
+    };
+    let Some((_, xs)) = frame else {
+        return;
+    };
+    let color =
+        Color::srgb(0.6, 0.85, 1.0).with_alpha(0.85 * stale_fade(*revision, game.sent_revision));
+    for x in xs {
+        gizmos.circle_2d(to_vec2(*x), 0.06, color);
     }
 }
 

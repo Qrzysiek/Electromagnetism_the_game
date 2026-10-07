@@ -144,6 +144,9 @@ pub fn objective(level: &Level, placement: &[Element]) -> (f64, Outcome) {
     {
         rs.max_steps = crate::cost::STEPS_LIMIT as u64;
     }
+    if level.is_tube() {
+        return level.tube_objective(placement);
+    }
     if level.has_beams() {
         return beam_objective(level, placement, &rs);
     }

@@ -35,6 +35,16 @@ fn reference_solutions_are_verified() {
             Ok(()),
             "{name}"
         );
+        if level.is_tube() {
+            // Tube levels: the verified current meets the goal (`level::tube`).
+            let v = level.tube_verdict(&level.reference_solution);
+            println!(
+                "{name}: tube current {:.4} ± {:.4} (preview {:.4}): {:?}",
+                v.fine, v.error, v.preview, v.status
+            );
+            assert_eq!(v.status, level::tube::TubeStatus::Met, "{name}");
+            continue;
+        }
         if level.has_beams() {
             // Every beam shot reaches its verified transmission in every flight.
             let v = level.verify_beams(&level.reference_solution);
@@ -280,7 +290,8 @@ fn metal_levels_are_accurate_and_consistent() {
 #[test]
 fn electrode_image_force_is_negligible() {
     for (name, level) in shipped_levels() {
-        if !level.has_metal(&level.reference_solution) {
+        // Tube levels include the particles' induced charge (PHYSICS.md §2.11).
+        if !level.has_metal(&level.reference_solution) || level.is_tube() {
             continue;
         }
         let (field, _) = level.field_at(
