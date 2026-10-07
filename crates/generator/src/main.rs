@@ -291,25 +291,36 @@ fn main() {
                 level.name,
                 level.check_placement(placement)
             );
-            if let Some(spec) = level.tube {
-                // Tube levels: the verified current against the goal (printed like a
-                // shot, so the tools check it too).
+            if let Some(spec) = &level.tube {
+                // Tube levels: the verified current against the goal and the projectiles'
+                // arrivals (printed like shots, so the tools check them too).
                 let v = level.tube_verdict(placement);
-                let g = spec.goal;
-                println!(
-                    "  shot tube: current {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
-                    v.fine,
-                    v.error,
-                    v.preview,
-                    g.min,
-                    g.max,
-                    v.status,
-                    if v.status == level::tube::TubeStatus::Met {
+                let verdict = |s: level::tube::TubeStatus| {
+                    if s == level::tube::TubeStatus::Met {
                         "outcome Arrived, status Verified"
                     } else {
                         "outcome Rejected, status NotVerified"
                     }
-                );
+                };
+                if let (Some(c), Some(g)) = (v.current, spec.goal) {
+                    println!(
+                        "  shot tube: current {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
+                        c.fine,
+                        c.error,
+                        c.preview,
+                        g.min,
+                        g.max,
+                        c.status,
+                        verdict(c.status)
+                    );
+                }
+                for (j, a, b, s) in &v.arrivals {
+                    println!(
+                        "  shot projectile {}: arrives at {a:?} (preview), {b:?} (verification): {s:?}: {}",
+                        j + 1,
+                        verdict(*s)
+                    );
+                }
             }
             if level.has_beams() {
                 // Beam levels: the verified transmission of every beam shot per flight.

@@ -1082,15 +1082,57 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     let Some(frame) = game.tube_frame().and_then(|k| view.run.frames.get(k)) else {
         return;
     };
-    // Negative carriers (electrons) blue, positive (ions) orange.
+    // Negative carriers (electrons) blue, positive (ions) orange; projectiles from their
+    // tracks below.
     let fade = 0.85 * stale_fade(view.revision, game.sent_revision);
-    for (x, q) in frame.x.iter().zip(&frame.q) {
-        let color = if *q < 0.0 {
-            Color::srgb(0.6, 0.85, 1.0)
-        } else {
-            Color::srgb(1.0, 0.7, 0.4)
+    for (x, kind) in frame.x.iter().zip(&frame.kind) {
+        let color = match *kind {
+            level::tube::KIND_NEGATIVE => Color::srgb(0.6, 0.85, 1.0),
+            level::tube::KIND_POSITIVE => Color::srgb(1.0, 0.7, 0.4),
+            _ => continue,
         };
         gizmos.circle_2d(Vec2::new(x[0], x[1]), 0.06, color.with_alpha(fade));
+    }
+    // Projectiles: their detectors, their tracks so far and where they are now.
+    let level = &game.editor.level;
+    if let Some(spec) = &level.tube {
+        let t = frame.t;
+        for (j, p) in spec.projectiles.iter().enumerate() {
+            let color = free_goal_color(j);
+            if let Some([a, b]) = p.detector {
+                let (a, b) = (
+                    to_vec2(level.grid.position(a)),
+                    to_vec2(level.grid.position(b)),
+                );
+                let arrived = view
+                    .run
+                    .arrivals
+                    .get(j)
+                    .copied()
+                    .flatten()
+                    .is_some_and(|ta| ta <= t);
+                gizmos.rect_2d(
+                    (a + b) * 0.5,
+                    (b - a).abs(),
+                    color.with_alpha(if arrived { 1.0 } else { 0.6 }),
+                );
+            }
+            let Some(track) = view.run.tracks.get(j) else {
+                continue;
+            };
+            let k = track.partition_point(|(tk, _)| *tk <= t);
+            if k >= 2 {
+                gizmos.linestrip_2d(
+                    track[..k].iter().map(|(_, x)| Vec2::new(x[0], x[1])),
+                    color.with_alpha(0.7 * fade),
+                );
+            }
+            // In flight at the frame's time (its track continues past it).
+            if k >= 1 && k < track.len() || track.last().is_some_and(|l| (l.0 - t).abs() < 1e-9) {
+                let x = track[k - 1].1;
+                gizmos.circle_2d(Vec2::new(x[0], x[1]), 0.18, color.with_alpha(fade));
+            }
+        }
     }
     // The electric field map's arrows: direction, faded with |E| over the map's 1.5
     // decades (as its colours).

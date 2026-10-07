@@ -3,7 +3,7 @@
 
 #![allow(clippy::disallowed_methods)] // reference values; the engine uses libm (clippy.toml)
 
-use level::tube::{CurrentGoal, TubeSpec, TubeVerdict};
+use level::tube::{CurrentGoal, CurrentVerdict, TubeSpec};
 use level::{ConductorBias, Electrode, Level};
 
 /// A planar diode on a 24 × 16 board: cathode and anode plates 10 long, 1 thick, their
@@ -36,13 +36,17 @@ pub fn diode(v: f64) -> Level {
         cathode: 0,
         charge_per_mass: -1.0,
         emit_toward_deg: None,
-        goal: CurrentGoal {
+        ions: None,
+        projectiles: Vec::new(),
+        b_z: 0.0,
+        step: level::tube::DEFAULT_STEP,
+        goal: Some(CurrentGoal {
             electrode: 1,
             min: 0.0,
             max: 1.0,
             start: 10.0,
             end: 20.0,
-        },
+        }),
     });
     level
 }
@@ -64,13 +68,14 @@ fn planar_diode_runs() {
             level.setup_issues(&[])
         );
         let start = std::time::Instant::now();
-        let end = level.tube.unwrap().goal.end;
+        let goal = level.tube.as_ref().unwrap().goal.unwrap();
+        let end = goal.end;
         let coarse = level.tube_run(&[], 1, end);
         let t1 = start.elapsed().as_secs_f64();
         let fine = level.tube_run(&[], 2, end);
         let t2 = start.elapsed().as_secs_f64() - t1;
         let (ic, i_f) = (coarse.current.unwrap(), fine.current.unwrap());
-        let verdict = TubeVerdict::new(ic, i_f, &level.tube.unwrap().goal);
+        let verdict = CurrentVerdict::new(ic, i_f, &goal);
         // 1D Child–Langmuir (k = 1): J = (√2/9π) √|q/m| V^{3/2}/d², times the width.
         let cl = 2f64.sqrt() / (9.0 * std::f64::consts::PI) * v.powf(1.5) / 49.0 * 10.0;
         println!(
@@ -98,7 +103,7 @@ fn planar_diode_convergence() {
         .iter()
         .map(|&r| {
             let start = std::time::Instant::now();
-            let c = level.tube_sim_current(&[], r);
+            let c = level.tube_results(&[], r).0.unwrap();
             println!(
                 "refine {r}: {c:.5} ({:.1} s)",
                 start.elapsed().as_secs_f64()
@@ -135,7 +140,14 @@ fn tube_levels_refuse_what_breaks_the_symmetry() {
             .any(|s| s.contains("shots"))
     );
     let mut bad_goal = level.clone();
-    bad_goal.tube.as_mut().unwrap().goal.electrode = 0;
+    bad_goal
+        .tube
+        .as_mut()
+        .unwrap()
+        .goal
+        .as_mut()
+        .unwrap()
+        .electrode = 0;
     assert!(
         bad_goal
             .setup_issues(&[])

@@ -76,8 +76,16 @@ pub enum Section {
         half_length: f64,
         half_thickness: f64,
     },
-    /// A circle (a wire or a tube's wall seen end-on), as a regular polygon.
+    /// A circle (a wire, a solid cylinder seen end-on), as a regular polygon.
     Circle { center: DVec3, radius: f64 },
+    /// A tube's wall seen end-on: the annulus between `radius ∓ thickness/2` (both
+    /// faces meshed). Unlike a `Circle`, its inside is open: particles fly there, and it
+    /// emits from its inner face into it (a coaxial anode; V6).
+    Ring {
+        center: DVec3,
+        radius: f64,
+        thickness: f64,
+    },
 }
 
 impl Section {
@@ -116,18 +124,30 @@ impl Section {
                 }
                 out
             }
-            Section::Circle { center, radius } => {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let n = ((std::f64::consts::TAU * radius / size).ceil() as usize).max(8);
-                #[allow(clippy::cast_precision_loss)]
-                let at = |i: usize| {
-                    let a = std::f64::consts::TAU * i as f64 / n as f64;
-                    center + DVec3::new(libm::cos(a), libm::sin(a), 0.0) * radius
-                };
-                (0..n).map(|i| (at(i), at(i + 1))).collect()
+            Section::Circle { center, radius } => circle(center, radius, size),
+            Section::Ring {
+                center,
+                radius,
+                thickness,
+            } => {
+                let mut out = circle(center, radius + 0.5 * thickness, size);
+                out.extend(circle(center, radius - 0.5 * thickness, size));
+                out
             }
         }
     }
+}
+
+/// A circle as a regular polygon of sides no longer than `size` (at least 8).
+fn circle(center: DVec3, radius: f64, size: f64) -> Vec<(DVec3, DVec3)> {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let n = ((std::f64::consts::TAU * radius / size).ceil() as usize).max(8);
+    #[allow(clippy::cast_precision_loss)]
+    let at = |i: usize| {
+        let a = std::f64::consts::TAU * i as f64 / n as f64;
+        center + DVec3::new(libm::cos(a), libm::sin(a), 0.0) * radius
+    };
+    (0..n).map(|i| (at(i), at(i + 1))).collect()
 }
 
 /// An electrode prism along z: its cross-section and how it is held.

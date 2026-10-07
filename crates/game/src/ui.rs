@@ -473,7 +473,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 }
             )
         });
-    } else if let Some(t) = level.tube {
+    } else if let Some(t) = &level.tube {
         ui.label(format!(
             "Carriers: q/m = {} (electrons; Newtonian), emitted by electrode {}",
             fmt_si(t.charge_per_mass),
@@ -1291,13 +1291,12 @@ fn controls(ui: &mut egui::Ui) {
 /// and its collected charge over time (the window's ends marked).
 fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     use level::tube::TubeStatus;
-    let Some(spec) = level.tube else {
+    let Some(spec) = &level.tube else {
         return;
     };
-    let g = spec.goal;
     ui.horizontal(|ui| {
         ui.checkbox(&mut game.animate, "Animate (A)")
-            .on_hover_text("Play the preview: the electrons leave the cathode and fly");
+            .on_hover_text("Play the preview: the particles leave the electrodes and fly");
         ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"))
             .on_hover_text("Playback speed: 1 plays 1 time unit per second");
     });
@@ -1321,30 +1320,37 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     ui.label(egui::RichText::new("Result").strong());
     if game.solved() {
         ui.label(
-            egui::RichText::new("✔ SOLVED: the current is in range (verified)")
+            egui::RichText::new("✔ SOLVED: every goal is met (verified)")
                 .color(egui::Color32::from_rgb(90, 240, 110))
                 .size(18.0),
         );
     }
-    ui.label(format!(
-        "Goal: the current into electrode {} between {} and {}, averaged over t = {} to {}",
-        g.electrode + 1,
-        fmt_si(g.min),
-        fmt_si(g.max),
-        fmt_si(g.start),
-        fmt_si(g.end)
-    ));
+    let colour = |s: TubeStatus| match s {
+        TubeStatus::Met => (egui::Color32::from_rgb(90, 240, 110), "✔"),
+        TubeStatus::Missed => (egui::Color32::from_rgb(255, 120, 90), "✖"),
+        TubeStatus::Uncertain => (egui::Color32::from_rgb(255, 210, 90), "? too close to tell"),
+    };
     let current = game.sent_revision;
-    match &game.tube_preview {
-        Some(v) if v.revision == current => {
+    let view = game.tube_preview.as_ref().filter(|v| v.revision == current);
+    let verdict = game
+        .tube_verdict
+        .as_ref()
+        .filter(|(r, _)| *r == current)
+        .map(|(_, v)| v);
+    if let Some(g) = spec.goal {
+        ui.label(format!(
+            "Goal: the current into electrode {} between {} and {}, averaged over t = {} to {}",
+            g.electrode + 1,
+            fmt_si(g.min),
+            fmt_si(g.max),
+            fmt_si(g.start),
+            fmt_si(g.end)
+        ));
+        if let Some(v) = view {
             let run = &v.run;
-            let shown = game
-                .tube_frame()
-                .and_then(|k| run.frames.get(k))
-                .map_or(0, |f| f.x.len());
             ui.label(match run.current {
-                Some(c) => format!("Preview: {}   ({shown} particles in flight now)", fmt_si(c)),
-                None => format!("Preview: computing…   ({shown} particles in flight now)"),
+                Some(c) => format!("Preview: {}", fmt_si(c)),
+                None => "Preview: computing…".into(),
             });
             ui.label(egui::RichText::new("Charge collected by the goal electrode:").small());
             circuit_plot(ui, &run.collected, &[g.start, g.end]);
@@ -1353,7 +1359,7 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                     .frames
                     .iter()
                     .take_while(|f| f.t <= g.end)
-                    .all(|f| f.x.is_empty());
+                    .all(|f| !f.kind.contains(&level::tube::KIND_NEGATIVE));
             if quiet {
                 ui.label(
                     egui::RichText::new(
@@ -1364,34 +1370,63 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 );
             }
         }
-        _ => {
-            ui.label("Preview: computing…");
+        match verdict.and_then(|v| v.current) {
+            Some(c) => {
+                let (col, mark) = colour(c.status);
+                ui.colored_label(
+                    col,
+                    format!("Verified: {} ± {} {mark}", fmt_si(c.fine), fmt_si(c.error)),
+                );
+            }
+            None => {
+                ui.label("Verified: computing…");
+            }
         }
     }
-    match &game.tube_verdict {
-        Some((r, v)) if *r == current => {
-            let (text, color) = match v.status {
-                TubeStatus::Met => ("in range ✔", egui::Color32::from_rgb(90, 240, 110)),
-                TubeStatus::Missed => ("out of range ✖", egui::Color32::from_rgb(255, 120, 90)),
-                TubeStatus::Uncertain => (
-                    "too close to a bound to tell ✖",
-                    egui::Color32::from_rgb(255, 210, 90),
+    for (j, p) in spec.projectiles.iter().enumerate() {
+        if p.detector.is_none() {
+            continue;
+        }
+        let preview = view.and_then(|v| v.run.arrivals.get(j).copied().flatten());
+        let text = match verdict.and_then(|v| v.arrivals.iter().find(|a| a.0 == j)) {
+            Some((_, _, fine, s)) => {
+                let (col, mark) = colour(*s);
+                ui.colored_label(
+                    col,
+                    format!(
+                        "Projectile {}: {} {mark}",
+                        j + 1,
+                        match fine {
+                            Some(t) => format!("reaches its detector at t = {t:.1} (verified)"),
+                            None => "does not reach its detector (verified)".into(),
+                        }
+                    ),
+                );
+                continue;
+            }
+            None => match preview {
+                Some(t) => format!(
+                    "Projectile {}: reaches its detector at t = {t:.1}; verifying…",
+                    j + 1
                 ),
-            };
-            ui.colored_label(
-                color,
-                format!("Verified: {} ± {}: {text}", fmt_si(v.fine), fmt_si(v.error)),
-            );
-        }
-        _ => {
-            ui.label("Verified: computing…");
-        }
+                None => format!("Projectile {}: computing…", j + 1),
+            },
+        };
+        ui.label(text);
+    }
+    if let Some(v) = view {
+        let shown = game
+            .tube_frame()
+            .and_then(|k| v.run.frames.get(k))
+            .map_or(0, |f| f.x.len());
+        ui.label(egui::RichText::new(format!("{shown} particles in flight now")).small());
     }
     ui.label(
         egui::RichText::new(
-            "A z-invariant tube: every electrode is a long prism, the electrons are long \
-             lines of charge, and the current is per unit length. The cathode emits as \
-             much as its field allows: the electrons' own charge limits the current.",
+            "A z-invariant tube: every electrode is a long prism, the electrons (blue), ions \
+             (orange) and projectiles (large) are long lines of charge, and currents are per \
+             unit length. Emitters release as much as their field allows: the particles' own \
+             charge limits the current.",
         )
         .small(),
     );

@@ -38,10 +38,7 @@ fn reference_solutions_are_verified() {
         if level.is_tube() {
             // Tube levels: the verified current meets the goal (`level::tube`).
             let v = level.tube_verdict(&level.reference_solution);
-            println!(
-                "{name}: tube current {:.4} ± {:.4} (preview {:.4}): {:?}",
-                v.fine, v.error, v.preview, v.status
-            );
+            println!("{name}: tube verdict {v:?}");
             assert_eq!(v.status, level::tube::TubeStatus::Met, "{name}");
             continue;
         }

@@ -20,7 +20,11 @@
 //! - **Absorption**: a particle that crosses an electrode's boundary (any change of
 //!   which side of it the particle is on) is collected by that electrode, which records
 //!   the charge; the current is the collected charge per time.
-//! - **Push**: leapfrog (kick-drift) with a fixed step, symplectic; the emission adds
+//! - **Species**: several emitters (an electron cathode, an ion-emitting anode: the
+//!   bipolar diode), and projectiles, single line charges launched at given times that
+//!   interact with everything and are absorbed where they hit.
+//! - **Push**: Boris with a fixed step (a uniform B along z rotates the velocity; with
+//!   B = 0 it is the kick-drift leapfrog), symplectic; launches and emission add
 //!   particles at the start of a step.
 
 use glam::DVec3;
@@ -40,28 +44,62 @@ use crate::zinv::{Electrodes, Section, line_charge, segment_integrals};
 /// emitted more (+111 %, +67 %): rejected.
 pub const EMISSION_OFFSET: f64 = 0.5;
 
+/// A space-charge-limited emitter: an electrode (or one coated face of it) releasing
+/// carriers of one kind.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Emitter {
+    pub electrode: usize,
+    /// Charge-to-mass ratio of its carriers (electrons negative, ions positive).
+    pub charge_per_mass: f64,
+    /// Charge per unit length of a macroparticle (its magnitude).
+    pub weight: f64,
+    /// The emitting face (a coating): only segments whose outward normal is within 60°
+    /// of this unit direction emit. None: every face.
+    pub emit_toward: Option<DVec3>,
+}
+
+/// A projectile: one line charge (not a macroparticle) launched at a time, with its own
+/// charge and mass per unit length; it interacts with everything and is absorbed by the
+/// electrode it hits.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Projectile {
+    pub x0: DVec3,
+    pub v0: DVec3,
+    pub launch: f64,
+    pub charge: f64,
+    pub mass: f64,
+}
+
+/// Where a projectile ended.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Fate {
+    /// Hit electrode `electrode` at time `t`, point `x`.
+    Absorbed { electrode: usize, t: f64, x: DVec3 },
+    /// Left the arena.
+    Lost { t: f64, x: DVec3 },
+}
+
+/// Tag of projectile `j` (`TubeState::tag`); emitted carriers carry their emitter's
+/// index.
+pub const PROJECTILE_TAG: u32 = 1 << 16;
+
 /// The tube's setup.
 #[derive(Debug)]
 pub struct Tube {
     /// The electrodes at their potentials (the static solution).
     pub electrodes: Electrodes,
-    /// The emitting electrode (the cathode).
-    pub cathode: usize,
-    /// Charge-to-mass ratio of the carriers (negative for electrons).
-    pub charge_per_mass: f64,
-    /// Charge per unit length of a macroparticle (its magnitude).
-    pub weight: f64,
+    pub emitters: Vec<Emitter>,
+    pub projectiles: Vec<Projectile>,
     /// Softening length of the particles' mutual force.
     pub softening: f64,
     /// Time step.
     pub dt: f64,
-    /// The emitting face (a cathode's coating): only segments whose outward normal is
-    /// within 60° of this unit direction emit. None: every face.
-    pub emit_toward: Option<DVec3>,
     /// The arena `(min, max)` corners: a particle that leaves it is lost (it flies off
     /// to infinity in the open tube; in the z-invariant world nothing brings it back
     /// unless an electrode encloses the arena, and then it never leaves). None: no bound.
     pub arena: Option<(DVec3, DVec3)>,
+    /// A uniform magnetic field along z (a long solenoid around the tube: z-invariant).
+    pub b_z: f64,
 }
 
 /// The particles and the bookkeeping of a running tube.
@@ -71,16 +109,32 @@ pub struct TubeState {
     pub x: Vec<DVec3>,
     pub v: Vec<DVec3>,
     pub charge: Vec<f64>,
+    /// Charge-to-mass ratio of each particle.
+    pub qm: Vec<f64>,
+    /// Emitter index, or `PROJECTILE_TAG + j` for projectile j.
+    pub tag: Vec<u32>,
     /// For each particle, per electrode, whether it is inside the electrode's section.
     side: Vec<Vec<bool>>,
-    /// Per cathode segment, charge owed but not yet emitted (less than a macroparticle).
-    pending: Vec<f64>,
+    /// Per emitter, per segment of its electrode, charge owed but not yet emitted (less
+    /// than a macroparticle).
+    pending: Vec<Vec<f64>>,
     /// Counter of the emission sequence.
     emitted: u64,
-    /// Charge per unit length collected by each electrode so far.
-    pub collected: Vec<f64>,
+    /// Charge per unit length collected by each electrode so far, per emitter.
+    pub collected: Vec<Vec<f64>>,
     /// Charge per unit length that left the arena.
     pub lost: f64,
+    /// Which projectiles have been launched, and where each ended.
+    launched: Vec<bool>,
+    pub fates: Vec<Option<Fate>>,
+}
+
+impl TubeState {
+    /// Where projectile `j` is (None before its launch and after its end).
+    pub fn projectile(&self, j: usize) -> Option<DVec3> {
+        let tag = PROJECTILE_TAG + u32::try_from(j).ok()?;
+        self.tag.iter().position(|&t| t == tag).map(|k| self.x[k])
+    }
 }
 
 /// Whether `x` lies inside the section.
@@ -100,25 +154,37 @@ fn inside(section: &Section, x: DVec3) -> bool {
             let d = x - center;
             d.x * d.x + d.y * d.y < radius * radius
         }
+        Section::Ring {
+            center,
+            radius,
+            thickness,
+        } => {
+            let d = x - center;
+            let r = libm::sqrt(d.x * d.x + d.y * d.y);
+            (r - radius).abs() < 0.5 * thickness
+        }
     }
 }
 
 impl Tube {
     pub fn state(&self) -> TubeState {
-        let cathode_segments = self.cathode_segments().count();
+        let n_el = self.electrodes.electrodes.len();
         TubeState {
-            pending: vec![0.0; cathode_segments],
-            collected: vec![0.0; self.electrodes.electrodes.len()],
+            pending: self
+                .emitters
+                .iter()
+                .map(|e| vec![0.0; self.segments_of(e.electrode).count()])
+                .collect(),
+            collected: vec![vec![0.0; self.emitters.len()]; n_el],
+            launched: vec![false; self.projectiles.len()],
+            fates: vec![None; self.projectiles.len()],
             ..TubeState::default()
         }
     }
 
-    fn cathode_segments(&self) -> impl Iterator<Item = usize> + '_ {
-        (0..self.electrodes.segments.len()).filter(|&j| self.owner(j) == self.cathode)
-    }
-
-    fn owner(&self, j: usize) -> usize {
-        self.electrodes.owner_of(j)
+    fn segments_of(&self, electrode: usize) -> impl Iterator<Item = usize> + '_ {
+        (0..self.electrodes.segments.len())
+            .filter(move |&j| self.electrodes.owner_of(j) == electrode)
     }
 
     /// The total surface density: the static solution plus the particles' induced one.
@@ -155,68 +221,94 @@ impl Tube {
         e
     }
 
-    /// One step: emission, push, absorption.
-    pub fn step(&self, s: &mut TubeState) {
-        let sign = self.charge_per_mass.signum();
-        // Emission from the cathode under the space-charge limit.
+    fn add(&self, s: &mut TubeState, x: DVec3, v: DVec3, charge: f64, qm: f64, tag: u32) {
+        s.x.push(x);
+        s.v.push(v);
+        s.charge.push(charge);
+        s.qm.push(qm);
+        s.tag.push(tag);
+        s.side.push(
+            self.electrodes
+                .electrodes
+                .iter()
+                .map(|e| inside(&e.section, x))
+                .collect(),
+        );
+    }
+
+    /// Space-charge-limited emission of every emitter: each segment of its electrode
+    /// whose surface density has its carriers' sign releases that charge.
+    fn emit(&self, s: &mut TubeState) {
         let sigma = self.surface_density(s);
-        let segs: Vec<usize> = self.cathode_segments().collect();
-        let n_el = self.electrodes.electrodes.len();
-        for (k, &j) in segs.iter().enumerate() {
-            let (a, b) = self.electrodes.segments[j];
-            let charge = sigma[j] * (b - a).length();
-            if charge * sign > 0.0 {
-                s.pending[k] += charge.abs();
-            }
-            while s.pending[k] >= self.weight {
-                s.pending[k] -= self.weight;
-                // Low-discrepancy point along the segment (golden ratio), just outside.
-                s.emitted += 1;
-                #[allow(clippy::cast_precision_loss)]
-                let f = (s.emitted as f64 * 0.618_033_988_749_894_9).fract();
-                let t = (b - a).normalize();
-                let n = DVec3::new(-t.y, t.x, 0.0);
-                let mid = a + (b - a) * f;
-                // Outward: the side away from the cathode's section.
-                let out = if inside(
-                    &self.electrodes.electrodes[self.cathode].section,
-                    mid + n * 1e-6,
-                ) {
-                    -n
-                } else {
-                    n
-                };
-                if self.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
-                    // Not the coated face: its charge stays (pending is dropped below).
-                    s.pending[k] = 0.0;
-                    break;
+        for (i, em) in self.emitters.iter().enumerate() {
+            let sign = em.charge_per_mass.signum();
+            let segs: Vec<usize> = self.segments_of(em.electrode).collect();
+            for (k, &j) in segs.iter().enumerate() {
+                let (a, b) = self.electrodes.segments[j];
+                let charge = sigma[j] * (b - a).length();
+                if charge * sign > 0.0 {
+                    s.pending[i][k] += charge.abs();
                 }
-                let delta = EMISSION_OFFSET * (b - a).length();
-                let x = mid + out * delta;
-                s.x.push(x);
-                s.v.push(DVec3::ZERO);
-                s.charge.push(sign * self.weight);
-                s.side.push(
-                    self.electrodes
-                        .electrodes
-                        .iter()
-                        .map(|e| inside(&e.section, x))
-                        .collect(),
-                );
+                while s.pending[i][k] >= em.weight {
+                    s.pending[i][k] -= em.weight;
+                    // Low-discrepancy point along the segment (golden ratio).
+                    s.emitted += 1;
+                    #[allow(clippy::cast_precision_loss)]
+                    let f = (s.emitted as f64 * 0.618_033_988_749_894_9).fract();
+                    let t = (b - a).normalize();
+                    let n = DVec3::new(-t.y, t.x, 0.0);
+                    let mid = a + (b - a) * f;
+                    // Outward: the side away from the electrode's section.
+                    let out = if inside(
+                        &self.electrodes.electrodes[em.electrode].section,
+                        mid + n * 1e-6,
+                    ) {
+                        -n
+                    } else {
+                        n
+                    };
+                    if em.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
+                        // Not the coated face: its charge stays.
+                        s.pending[i][k] = 0.0;
+                        break;
+                    }
+                    let x = mid + out * (EMISSION_OFFSET * (b - a).length());
+                    let tag = u32::try_from(i).unwrap_or(u32::MAX);
+                    self.add(s, x, DVec3::ZERO, sign * em.weight, em.charge_per_mass, tag);
+                }
             }
         }
+    }
+
+    /// One step: launches, emission, push (Boris: with B = 0 the kick-drift
+    /// leapfrog), absorption.
+    pub fn step(&self, s: &mut TubeState) {
+        for (j, p) in self.projectiles.iter().enumerate() {
+            if !s.launched[j] && s.t >= p.launch - 0.5 * self.dt {
+                s.launched[j] = true;
+                let tag = PROJECTILE_TAG + u32::try_from(j).unwrap_or(0);
+                self.add(s, p.x0, p.v0, p.charge, p.charge / p.mass, tag);
+            }
+        }
+        self.emit(s);
         crate::cancel::checkpoint();
-        // Kick and drift.
         let sigma = self.surface_density(s);
-        let accel: Vec<DVec3> = (0..s.x.len())
-            .map(|k| self.field(s, &sigma, s.x[k], Some(k)) * self.charge_per_mass)
+        let fields: Vec<DVec3> = (0..s.x.len())
+            .map(|k| self.field(s, &sigma, s.x[k], Some(k)))
             .collect();
-        for ((x, v), a) in s.x.iter_mut().zip(&mut s.v).zip(&accel) {
-            *v += *a * self.dt;
+        for (((x, v), qm), e) in s.x.iter_mut().zip(&mut s.v).zip(&s.qm).zip(&fields) {
+            let h = 0.5 * self.dt * qm;
+            let minus = *v + *e * h;
+            // Rotation about z by the magnetic field (Boris).
+            let t = DVec3::new(0.0, 0.0, h * self.b_z);
+            let prime = minus + minus.cross(t);
+            let plus = minus + prime.cross(t * (2.0 / (1.0 + t.z * t.z)));
+            *v = plus + *e * h;
             *x += *v * self.dt;
         }
         s.t += self.dt;
-        // Absorption: a particle that crossed an electrode's boundary.
+        // Absorption: a particle that crossed an electrode's boundary, or left.
+        let n_el = self.electrodes.electrodes.len();
         let mut k = 0;
         while k < s.x.len() {
             let hit = (0..n_el)
@@ -226,13 +318,28 @@ impl Tube {
                 x.x < lo.x || x.y < lo.y || x.x > hi.x || x.y > hi.y
             });
             if hit.is_some() || out {
-                match hit {
-                    Some(e) => s.collected[e] += s.charge[k],
-                    None => s.lost += s.charge[k],
+                let tag = s.tag[k];
+                if tag >= PROJECTILE_TAG {
+                    let j = (tag - PROJECTILE_TAG) as usize;
+                    s.fates[j] = Some(match hit {
+                        Some(electrode) => Fate::Absorbed {
+                            electrode,
+                            t: s.t,
+                            x: s.x[k],
+                        },
+                        None => Fate::Lost { t: s.t, x: s.x[k] },
+                    });
+                } else if let Some(e) = hit {
+                    s.collected[e][tag as usize] += s.charge[k];
+                }
+                if hit.is_none() {
+                    s.lost += s.charge[k];
                 }
                 s.x.swap_remove(k);
                 s.v.swap_remove(k);
                 s.charge.swap_remove(k);
+                s.qm.swap_remove(k);
+                s.tag.swap_remove(k);
                 s.side.swap_remove(k);
             } else {
                 k += 1;

@@ -8,7 +8,7 @@
 
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
-use level::tube::{CurrentGoal, TubeSpec};
+use level::tube::{CurrentGoal, DEFAULT_STEP, IonSource, ProjectileSpec, TubeSpec};
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
     DielectricSphere, Disturbance, Drive, Electrode, Element, ElementKind, FerritePlate,
@@ -1471,7 +1471,13 @@ fn edit_ferrites(ui: &mut egui::Ui, list: &mut Vec<FerritePlate>, grid: &Grid) -
     focus
 }
 
-fn edit_tube(ui: &mut egui::Ui, tube: &mut Option<TubeSpec>, electrodes: usize) -> bool {
+#[allow(clippy::too_many_lines)]
+fn edit_tube(
+    ui: &mut egui::Ui,
+    tube: &mut Option<TubeSpec>,
+    electrodes: usize,
+    grid: &Grid,
+) -> bool {
     let mut focus = false;
     let mut on = tube.is_some();
     if ui
@@ -1479,31 +1485,32 @@ fn edit_tube(ui: &mut egui::Ui, tube: &mut Option<TubeSpec>, electrodes: usize) 
         .on_hover_text("Needs two electrodes: a cathode and the goal's electrode")
         .changed()
     {
-        *tube = on.then_some(TubeSpec {
+        *tube = on.then(|| TubeSpec {
             cathode: 0,
             charge_per_mass: -1.0,
             emit_toward_deg: None,
-            goal: CurrentGoal {
+            ions: None,
+            projectiles: Vec::new(),
+            b_z: 0.0,
+            step: DEFAULT_STEP,
+            goal: Some(CurrentGoal {
                 electrode: 1,
                 min: 0.0,
                 max: 1.0,
                 start: 10.0,
                 end: 20.0,
-            },
+            }),
         });
     }
     let Some(TubeSpec {
         cathode,
         charge_per_mass,
         emit_toward_deg,
-        goal:
-            CurrentGoal {
-                electrode,
-                min,
-                max,
-                start,
-                end,
-            },
+        ions,
+        projectiles,
+        b_z,
+        step,
+        goal,
     }) = tube
     else {
         return focus;
@@ -1520,69 +1527,200 @@ fn edit_tube(ui: &mut egui::Ui, tube: &mut Option<TubeSpec>, electrodes: usize) 
         })
         .inner
     };
+    let face = |ui: &mut egui::Ui, a: &mut Option<f64>, what: &str| {
+        let mut focus = false;
+        ui.horizontal(|ui| {
+            let mut one_face = a.is_some();
+            ui.checkbox(&mut one_face, "Coated face toward")
+                .on_hover_text(format!(
+                    "Only the {what}'s faces facing this direction (within 60°) emit"
+                ));
+            if one_face {
+                let v = a.get_or_insert(0.0);
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(v)
+                            .speed(1.0)
+                            .range(-360.0..=360.0)
+                            .suffix("°"),
+                    )
+                    .has_focus();
+            } else {
+                *a = None;
+            }
+        });
+        focus
+    };
+    let ratio = |ui: &mut egui::Ui, label: &str, v: &mut f64, positive: bool| {
+        ui.horizontal(|ui| {
+            ui.label(label);
+            let lo = if positive {
+                MIN_POSITIVE
+            } else {
+                -MAX_POSITIVE
+            };
+            let r = ui
+                .add(egui::DragValue::new(v).speed(0.01).range(lo..=MAX_POSITIVE))
+                .has_focus();
+            if *v == 0.0 {
+                *v = if positive { 1.0 } else { -1.0 };
+            }
+            r
+        })
+        .inner
+    };
+    let free = |ui: &mut egui::Ui, v: &mut f64, speed: f64| {
+        ui.add(
+            egui::DragValue::new(v)
+                .speed(speed)
+                .range(-MAX_POSITIVE..=MAX_POSITIVE),
+        )
+        .has_focus()
+    };
     focus |= index(ui, "Cathode: electrode", cathode);
-    focus |= index(ui, "Goal: current into electrode", electrode);
+    focus |= ratio(ui, "Carriers' q/m", charge_per_mass, false);
+    focus |= face(ui, emit_toward_deg, "cathode");
+    // Ion source.
+    let mut has_ions = ions.is_some();
+    ui.checkbox(&mut has_ions, "Ion source (bipolar)")
+        .on_hover_text("An electrode emitting positive ions under the space-charge limit");
+    if has_ions {
+        let src = ions.get_or_insert(IonSource {
+            electrode: last.min(1),
+            charge_per_mass: 0.01,
+            emit_toward_deg: None,
+        });
+        focus |= index(ui, "  Ions from electrode", &mut src.electrode);
+        focus |= ratio(ui, "  Ions' q/m", &mut src.charge_per_mass, true);
+        focus |= face(ui, &mut src.emit_toward_deg, "ion source");
+    } else {
+        *ions = None;
+    }
     ui.horizontal(|ui| {
-        ui.label("Carriers' q/m");
-        focus |= ui
-            .add(
-                egui::DragValue::new(charge_per_mass)
-                    .speed(0.01)
-                    .range(-MAX_POSITIVE..=MAX_POSITIVE),
-            )
-            .has_focus();
-        if *charge_per_mass == 0.0 {
-            *charge_per_mass = -1.0;
-        }
+        ui.label("B along z");
+        focus |= free(ui, b_z, 0.01);
+        ui.label("step");
+        focus |= positive(ui, step, 0.001, MAX_POSITIVE);
     });
-    ui.horizontal(|ui| {
-        let mut one_face = emit_toward_deg.is_some();
-        ui.checkbox(&mut one_face, "Coated face toward")
-            .on_hover_text("Only the cathode's faces facing this direction (within 60°) emit");
-        if one_face {
-            let a = emit_toward_deg.get_or_insert(0.0);
+    // Current goal.
+    let mut has_goal = goal.is_some();
+    ui.checkbox(&mut has_goal, "Current goal");
+    if has_goal {
+        let g = goal.get_or_insert(CurrentGoal {
+            electrode: last.min(1),
+            min: 0.0,
+            max: 1.0,
+            start: 10.0,
+            end: 20.0,
+        });
+        focus |= index(ui, "  Current into electrode", &mut g.electrode);
+        ui.horizontal(|ui| {
+            ui.label("  from");
             focus |= ui
                 .add(
-                    egui::DragValue::new(a)
-                        .speed(1.0)
-                        .range(-360.0..=360.0)
-                        .suffix("°"),
+                    egui::DragValue::new(&mut g.min)
+                        .speed(0.01)
+                        .range(0.0..=MAX_POSITIVE),
                 )
                 .has_focus();
-        } else {
-            *emit_toward_deg = None;
-        }
-    });
-    ui.horizontal(|ui| {
-        ui.label("Current from");
-        focus |= ui
-            .add(
-                egui::DragValue::new(min)
-                    .speed(0.01)
-                    .range(0.0..=MAX_POSITIVE),
-            )
-            .has_focus();
-        ui.label("to");
-        focus |= ui
-            .add(
-                egui::DragValue::new(max)
-                    .speed(0.01)
-                    .range(0.0..=MAX_POSITIVE),
-            )
-            .has_focus();
-    });
-    ui.horizontal(|ui| {
-        ui.label("Averaged over t");
-        focus |= ui
-            .add(
-                egui::DragValue::new(start)
-                    .speed(0.1)
-                    .range(0.0..=MAX_POSITIVE),
-            )
-            .has_focus();
-        ui.label("to");
-        focus |= positive(ui, end, 0.1, MAX_POSITIVE);
-    });
+            ui.label("to");
+            focus |= ui
+                .add(
+                    egui::DragValue::new(&mut g.max)
+                        .speed(0.01)
+                        .range(0.0..=MAX_POSITIVE),
+                )
+                .has_focus();
+        });
+        ui.horizontal(|ui| {
+            ui.label("  averaged over t");
+            focus |= ui
+                .add(
+                    egui::DragValue::new(&mut g.start)
+                        .speed(0.1)
+                        .range(0.0..=MAX_POSITIVE),
+                )
+                .has_focus();
+            ui.label("to");
+            focus |= positive(ui, &mut g.end, 0.1, MAX_POSITIVE);
+        });
+    } else {
+        *goal = None;
+    }
+    // Projectiles.
+    let mut remove = None;
+    for (j, p) in projectiles.iter_mut().enumerate() {
+        let ProjectileSpec {
+            node: start,
+            direction_deg,
+            speed,
+            launch,
+            charge,
+            mass,
+            detector,
+        } = p;
+        ui.push_id(("projectile", j), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Projectile {}", j + 1));
+                focus |= node(ui, start, grid);
+                if ui.small_button("×").clicked() {
+                    remove = Some(j);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("q");
+                focus |= free(ui, charge, 0.01);
+                ui.label("m");
+                focus |= positive(ui, mass, 0.01, MAX_POSITIVE);
+            });
+            ui.horizontal(|ui| {
+                focus |= ui
+                    .add(egui::DragValue::new(direction_deg).speed(1.0).suffix("°"))
+                    .has_focus();
+                ui.label("speed");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(speed)
+                            .speed(0.01)
+                            .range(0.0..=MAX_POSITIVE),
+                    )
+                    .has_focus();
+                ui.label("at t");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(launch)
+                            .speed(0.1)
+                            .range(0.0..=MAX_POSITIVE),
+                    )
+                    .has_focus();
+            });
+            let mut has_detector = detector.is_some();
+            ui.checkbox(&mut has_detector, "Detector (goal)");
+            if has_detector {
+                let m = grid.max_node();
+                let d = detector.get_or_insert([[m[0] - 2, 0, 0], [m[0], 2, 0]]);
+                focus |= node(ui, &mut d[0], grid);
+                focus |= node(ui, &mut d[1], grid);
+            } else {
+                *detector = None;
+            }
+        });
+    }
+    if let Some(j) = remove {
+        projectiles.remove(j);
+    }
+    if projectiles.len() < MAX_COUNT as usize && ui.small_button("+ projectile").clicked() {
+        let m = grid.max_node();
+        projectiles.push(ProjectileSpec {
+            node: [0, m[1] / 2, 0],
+            direction_deg: 0.0,
+            speed: 1.0,
+            launch: 0.0,
+            charge: 0.1,
+            mass: 1.0,
+            detector: None,
+        });
+    }
     focus
 }
 
@@ -1973,7 +2111,7 @@ pub fn edit_level(
         .on_hover_text("Stages every flight must pass, in order, before its detector counts");
     let n_electrodes = electrodes.len();
     egui::CollapsingHeader::new(if tube.is_some() { "Tube (on)" } else { "Tube" })
-        .show(ui, |ui| focus |= edit_tube(ui, tube, n_electrodes))
+        .show(ui, |ui| focus |= edit_tube(ui, tube, n_electrodes, &g))
         .header_response
         .on_hover_text(
             "A z-invariant vacuum tube: the electrodes are prisms along z, the cathode emits \
@@ -2023,23 +2161,69 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             cathode,
             charge_per_mass,
             emit_toward_deg,
-            goal:
-                CurrentGoal {
-                    electrode,
-                    min,
-                    max,
-                    start,
-                    end,
-                },
+            ions,
+            projectiles,
+            b_z,
+            step,
+            goal,
         } = t;
         let n = electrodes.len();
+        let any = |v: f64| (-MAX_POSITIVE..=MAX_POSITIVE).contains(&v);
+        let nonneg = |v: f64| (0.0..=MAX_POSITIVE).contains(&v);
+        let angle = |a: &Option<f64>| a.is_none_or(|a| (-360.0..=360.0).contains(&a));
         let ratio_ok = (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass.abs());
-        let goal_ok = (0.0..=MAX_POSITIVE).contains(min)
-            && (0.0..=MAX_POSITIVE).contains(max)
-            && (0.0..=MAX_POSITIVE).contains(start)
-            && (MIN_POSITIVE..=MAX_POSITIVE).contains(end);
-        let face_ok = emit_toward_deg.is_none_or(|a| (-360.0..=360.0).contains(&a));
-        if *cathode >= n || *electrode >= n || !ratio_ok || !goal_ok || !face_ok {
+        let goal_ok = goal.is_none_or(|g| {
+            let CurrentGoal {
+                electrode,
+                min,
+                max,
+                start,
+                end,
+            } = g;
+            electrode < n
+                && nonneg(min)
+                && nonneg(max)
+                && nonneg(start)
+                && (MIN_POSITIVE..=MAX_POSITIVE).contains(&end)
+        });
+        let ions_ok = ions.is_none_or(|i| {
+            let IonSource {
+                electrode,
+                charge_per_mass,
+                emit_toward_deg,
+            } = i;
+            electrode < n
+                && (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass)
+                && angle(&emit_toward_deg)
+        });
+        let projectiles_ok = projectiles.len() <= MAX_COUNT as usize
+            && projectiles.iter().all(|p| {
+                let ProjectileSpec {
+                    node,
+                    direction_deg,
+                    speed,
+                    launch,
+                    charge,
+                    mass,
+                    detector,
+                } = p;
+                grid.contains(*node)
+                    && any(*direction_deg)
+                    && nonneg(*speed)
+                    && nonneg(*launch)
+                    && any(*charge)
+                    && (MIN_POSITIVE..=MAX_POSITIVE).contains(mass)
+                    && detector.is_none_or(|[a, b]| grid.contains(a) && grid.contains(b))
+            });
+        let field_ok = any(*b_z) && (MIN_POSITIVE..=MAX_POSITIVE).contains(step);
+        if *cathode >= n
+            || !ratio_ok
+            || !goal_ok
+            || !angle(emit_toward_deg)
+            || !ions_ok
+            || !projectiles_ok
+            || !field_ok
+        {
             return Err("tube value outside the editor's range".into());
         }
     }

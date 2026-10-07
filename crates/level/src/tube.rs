@@ -1,25 +1,29 @@
 //! Tube levels (docs/TUBES.md; physics in PHYSICS.md §2.11): the level is z-invariant.
 //! Its electrodes are prisms along z (their `height` is ignored), the cathode emits
-//! electrons under the space-charge limit, and the goal is the current collected by an
-//! electrode, averaged over a time window. Shots, charges, magnets, coils and the other
-//! bodies break the symmetry and are refused (`Level::tube_issues`).
+//! electrons under the space-charge limit, optionally an electrode emits ions (the
+//! bipolar diode), projectiles (single line charges) may be fired through, and a
+//! uniform magnetic field along z may thread it all. The goals: the current collected
+//! by an electrode, averaged over a time window, and each projectile with a detector
+//! arriving there. Shots, charges, magnets, coils and the other bodies break the
+//! symmetry and are refused (`Level::tube_issues`).
 //!
 //! **Resolutions.** The preview is a coarse run; the verification halves every scale of
 //! it (segments, macroparticle weight, step, softening). The verdict takes the fine
-//! run's current with an error of `ERROR_FACTOR` times the two runs' difference.
-//! Richardson extrapolation was tried and rejected: it assumes first order, which V4
-//! (the coaxial diode) showed but the game-scale planar diode does not yet (the runs'
-//! differences shrink 7.9× from refine 1→2 to 2→4), where it overshot by 4 %.
+//! run's current with an error of `ERROR_FACTOR` times the two runs' difference, and a
+//! projectile arrives when it does in both runs. Richardson extrapolation was tried and
+//! rejected: it assumes first order, which V4 (the coaxial diode) showed but the
+//! game-scale planar diode does not yet (the runs' differences shrink 7.9× from
+//! refine 1→2 to 2→4), where it overshot by 4 %.
 
 use physics::DVec3;
-use physics::tube::{Tube, TubeState};
+use physics::tube::{Emitter, PROJECTILE_TAG, Projectile, Tube, TubeState};
 use physics::zinv::{Electrode as Prism, Electrodes as Prisms, Section};
 use serde::{Deserialize, Serialize};
 
-use crate::{Element, ElementKind, Level};
+use crate::{Element, ElementKind, Level, Node};
 
-/// A tube level's emitter and goal.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+/// A tube level's emitters, projectiles, field and goal.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TubeSpec {
     /// The emitting electrode (an index into the level's `electrodes`).
     pub cathode: usize,
@@ -30,11 +34,63 @@ pub struct TubeSpec {
     /// this direction (degrees, in the plane) emit. None: every face.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emit_toward_deg: Option<f64>,
-    pub goal: CurrentGoal,
+    /// An electrode that emits positive ions under the space-charge limit (the bipolar
+    /// diode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ions: Option<IonSource>,
+    /// Line charges fired through the tube.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub projectiles: Vec<ProjectileSpec>,
+    /// A uniform magnetic field along z (a solenoid around the tube).
+    #[serde(default, skip_serializing_if = "crate::is_zero")]
+    pub b_z: f64,
+    /// The preview's time step (the verification's is half).
+    #[serde(default = "default_step", skip_serializing_if = "is_default_step")]
+    pub step: f64,
+    /// The current goal, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub goal: Option<CurrentGoal>,
 }
 
 fn electron_ratio() -> f64 {
     -1.0
+}
+
+/// The preview's default time step: 1/30 (the first tube levels' 600 steps over 20).
+pub const DEFAULT_STEP: f64 = 1.0 / 30.0;
+
+fn default_step() -> f64 {
+    DEFAULT_STEP
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref, clippy::float_cmp)]
+fn is_default_step(v: &f64) -> bool {
+    *v == DEFAULT_STEP
+}
+
+/// An ion emitter.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct IonSource {
+    pub electrode: usize,
+    /// Charge-to-mass ratio of the ions (positive).
+    pub charge_per_mass: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emit_toward_deg: Option<f64>,
+}
+
+/// A projectile: one line charge (charge and mass per unit length) launched from a node.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ProjectileSpec {
+    pub node: Node,
+    pub direction_deg: f64,
+    pub speed: f64,
+    #[serde(default, skip_serializing_if = "crate::is_zero")]
+    pub launch: f64,
+    pub charge: f64,
+    pub mass: f64,
+    /// It must arrive in the box spanned by these nodes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detector: Option<[Node; 2]>,
 }
 
 /// The current (charge per unit length per time, positive for carriers arriving)
@@ -51,9 +107,7 @@ pub struct CurrentGoal {
 
 /// Preview resolution: segment length (cells).
 pub const PREVIEW_SEGMENT: f64 = 0.5;
-/// Preview resolution: steps over the run (to the goal's `end`).
-pub const PREVIEW_STEPS: u32 = 600;
-/// Preview resolution: macroparticles per the cathode's charge before emission. In
+/// Preview resolution: macroparticles per the emitter's charge before emission. In
 /// steady state the space charge in flight is of the order of that charge (the planar
 /// diode's is 4/3 of it), so this sets the number of particles in flight.
 pub const PREVIEW_PARTICLES: f64 = 150.0;
@@ -63,14 +117,20 @@ pub const PREVIEW_PARTICLES: f64 = 150.0;
 /// refine 4). 1.5 covers the first with a margin for orders down to about 0.6.
 pub const ERROR_FACTOR: f64 = 1.5;
 
-/// One displayed frame of a tube run: the particles (positions and charges per unit
-/// length, f32: display only) and the electrodes' total surface density (applied and
+/// What a displayed particle is.
+pub const KIND_NEGATIVE: u8 = 0;
+pub const KIND_POSITIVE: u8 = 1;
+pub const KIND_PROJECTILE: u8 = 2;
+
+/// One displayed frame of a tube run: the particles (positions, charges per unit length
+/// and kinds, f32: display only) and the electrodes' total surface density (applied and
 /// induced), so that the maps can show the field at any frame.
 #[derive(Clone, Debug, Default)]
 pub struct TubeFrame {
     pub t: f64,
     pub x: Vec<[f32; 2]>,
     pub q: Vec<f32>,
+    pub kind: Vec<u8>,
     pub sigma: Vec<f32>,
 }
 
@@ -83,6 +143,10 @@ pub struct TubeRun {
     pub collected: Vec<(f64, f64)>,
     /// The goal's average current over its window, once the run has passed its end.
     pub current: Option<f64>,
+    /// Per projectile: its track `(t, x)` while in flight, and when it reached its
+    /// detector.
+    pub tracks: Vec<Vec<(f64, [f32; 2])>>,
+    pub arrivals: Vec<Option<f64>>,
     /// Particles in flight at the last frame.
     pub in_flight: usize,
     /// Time steps taken.
@@ -99,6 +163,18 @@ impl TubeRun {
         self.frames.extend(chunk.frames);
         self.collected.extend(chunk.collected);
         self.current = self.current.or(chunk.current);
+        if self.tracks.len() < chunk.tracks.len() {
+            self.tracks.resize(chunk.tracks.len(), Vec::new());
+        }
+        for (t, c) in self.tracks.iter_mut().zip(chunk.tracks) {
+            t.extend(c);
+        }
+        if self.arrivals.len() < chunk.arrivals.len() {
+            self.arrivals.resize(chunk.arrivals.len(), None);
+        }
+        for (a, c) in self.arrivals.iter_mut().zip(chunk.arrivals) {
+            *a = a.or(c);
+        }
         self.in_flight = chunk.in_flight;
         self.steps = chunk.steps;
         if self.segments.is_empty() {
@@ -141,13 +217,23 @@ pub struct TubeSim {
     tube: Tube,
     state: TubeState,
     spec: TubeSpec,
+    /// Each projectile's detector box (world coordinates).
+    detectors: Vec<Option<(DVec3, DVec3)>>,
     at_start: Option<(f64, f64)>,
     /// What has not been taken yet.
     pending: TubeRun,
-    /// The run's end so far: steps, the last collected sample.
     steps: u32,
-    last: (f64, f64),
     current: Option<f64>,
+    arrivals: Vec<Option<f64>>,
+    /// Per projectile with a detector: its closest approach to the detector so far.
+    closest: Vec<f64>,
+}
+
+/// Distance from `x` to the box `(lo, hi)` (0 inside).
+fn box_distance(x: DVec3, (lo, hi): (DVec3, DVec3)) -> f64 {
+    let dx = (lo.x - x.x).max(x.x - hi.x).max(0.0);
+    let dy = (lo.y - x.y).max(x.y - hi.y).max(0.0);
+    libm::sqrt(dx * dx + dy * dy)
 }
 
 impl TubeSim {
@@ -169,32 +255,79 @@ impl TubeSim {
         self.current
     }
 
+    /// When each projectile reached its detector (None: not, or no detector).
+    pub fn arrivals(&self) -> &[Option<f64>] {
+        &self.arrivals
+    }
+
+    /// Each projectile's closest approach to its detector so far (0: arrived; infinite
+    /// without a detector).
+    pub fn closest(&self) -> &[f64] {
+        &self.closest
+    }
+
     /// Advances to time `t_end` (whole steps), recording a frame every step.
     pub fn advance_to(&mut self, t_end: f64) {
         let sign = self.spec.charge_per_mass.signum();
-        let g = self.spec.goal;
+        let n_proj = self.spec.projectiles.len();
         while self.state.t < t_end - 0.5 * self.tube.dt {
             self.tube.step(&mut self.state);
             self.steps += 1;
             let s = &self.state;
-            let collected = sign * s.collected[g.electrode];
-            if self.at_start.is_none() && s.t >= g.start {
-                self.at_start = Some((s.t, collected));
+            let collected = self
+                .spec
+                .goal
+                .map_or(0.0, |g| sign * s.collected[g.electrode][0]);
+            if let Some(g) = self.spec.goal {
+                if self.at_start.is_none() && s.t >= g.start {
+                    self.at_start = Some((s.t, collected));
+                }
+                if self.current.is_none() && s.t >= g.end - 0.5 * self.tube.dt {
+                    let (t0, q0) = self.at_start.unwrap_or((0.0, 0.0));
+                    self.current = Some(if s.t > t0 {
+                        (collected - q0) / (s.t - t0)
+                    } else {
+                        0.0
+                    });
+                    self.pending.current = self.current;
+                }
             }
-            if self.current.is_none() && s.t >= g.end - 0.5 * self.tube.dt {
-                let (t0, q0) = self.at_start.unwrap_or((0.0, 0.0));
-                self.current = Some(if s.t > t0 {
-                    (collected - q0) / (s.t - t0)
-                } else {
-                    0.0
-                });
-                self.pending.current = self.current;
+            if self.pending.tracks.len() < n_proj {
+                self.pending.tracks.resize(n_proj, Vec::new());
+                self.pending.arrivals.resize(n_proj, None);
+            }
+            for j in 0..n_proj {
+                let Some(x) = s.projectile(j) else { continue };
+                #[allow(clippy::cast_possible_truncation)]
+                self.pending.tracks[j].push((s.t, [x.x as f32, x.y as f32]));
+                if let Some(d) = self.detectors[j] {
+                    let dist = box_distance(x, d);
+                    self.closest[j] = self.closest[j].min(dist);
+                    if dist == 0.0 && self.arrivals[j].is_none() {
+                        self.arrivals[j] = Some(s.t);
+                        self.pending.arrivals[j] = Some(s.t);
+                    }
+                }
             }
             #[allow(clippy::cast_possible_truncation)]
             let frame = TubeFrame {
                 t: s.t,
                 x: s.x.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
                 q: s.charge.iter().map(|q| *q as f32).collect(),
+                kind: s
+                    .tag
+                    .iter()
+                    .zip(&s.charge)
+                    .map(|(t, q)| {
+                        if *t >= PROJECTILE_TAG {
+                            KIND_PROJECTILE
+                        } else if *q < 0.0 {
+                            KIND_NEGATIVE
+                        } else {
+                            KIND_POSITIVE
+                        }
+                    })
+                    .collect(),
                 sigma: self
                     .tube
                     .surface_density(s)
@@ -204,7 +337,6 @@ impl TubeSim {
             };
             self.pending.frames.push(frame);
             self.pending.collected.push((s.t, collected));
-            self.last = (s.t, collected);
         }
         self.pending.in_flight = self.state.x.len();
         self.pending.steps = self.steps;
@@ -213,28 +345,24 @@ impl TubeSim {
     /// The frames and samples made since the last call (the first chunk also carries the
     /// segments and potentials).
     pub fn take_chunk(&mut self) -> TubeRun {
-        let segments = std::mem::take(&mut self.pending.segments);
-        let potentials = std::mem::take(&mut self.pending.potentials);
-        let mut chunk = std::mem::take(&mut self.pending);
-        chunk.segments = segments;
-        chunk.potentials = potentials;
-        chunk
+        std::mem::take(&mut self.pending)
     }
 }
 
-/// A tube level's verdict.
+/// A tube level's verdict on one goal, or on all of them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TubeStatus {
-    /// The current, within its error, lies in the goal's range.
+    /// Met within the error (the current in range; the projectile arrives in both runs).
     Met,
-    /// It lies outside, within its error.
+    /// Missed within the error.
     Missed,
-    /// The error straddles a bound of the range.
+    /// The error straddles a bound of the range, or the runs disagree on an arrival.
     Uncertain,
 }
 
+/// The current goal's verdict.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TubeVerdict {
+pub struct CurrentVerdict {
     pub preview: f64,
     /// The verification's current: the verdict's value.
     pub fine: f64,
@@ -242,7 +370,7 @@ pub struct TubeVerdict {
     pub status: TubeStatus,
 }
 
-impl TubeVerdict {
+impl CurrentVerdict {
     pub fn new(preview: f64, fine: f64, goal: &CurrentGoal) -> Self {
         let error = ERROR_FACTOR * (fine - preview).abs();
         let (lo, hi) = (fine - error, fine + error);
@@ -257,6 +385,64 @@ impl TubeVerdict {
             preview,
             fine,
             error,
+            status,
+        }
+    }
+}
+
+/// The verdict on a placement: each goal's and the whole's.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TubeVerdict {
+    pub current: Option<CurrentVerdict>,
+    /// Per projectile with a detector: (projectile, preview arrival, verification
+    /// arrival, status).
+    pub arrivals: Vec<(usize, Option<f64>, Option<f64>, TubeStatus)>,
+    pub status: TubeStatus,
+}
+
+impl TubeVerdict {
+    /// From the two runs' results `(current, arrivals)`.
+    pub fn new(
+        spec: &TubeSpec,
+        preview: &(Option<f64>, Vec<Option<f64>>),
+        fine: &(Option<f64>, Vec<Option<f64>>),
+    ) -> Self {
+        let current = spec
+            .goal
+            .map(|g| CurrentVerdict::new(preview.0.unwrap_or(0.0), fine.0.unwrap_or(0.0), &g));
+        let arrivals: Vec<_> = spec
+            .projectiles
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.detector.is_some())
+            .map(|(j, _)| {
+                let (a, b) = (
+                    preview.1.get(j).copied().flatten(),
+                    fine.1.get(j).copied().flatten(),
+                );
+                let status = match (a.is_some(), b.is_some()) {
+                    (true, true) => TubeStatus::Met,
+                    (false, false) => TubeStatus::Missed,
+                    _ => TubeStatus::Uncertain,
+                };
+                (j, a, b, status)
+            })
+            .collect();
+        let all = current
+            .iter()
+            .map(|c| c.status)
+            .chain(arrivals.iter().map(|a| a.3));
+        let mut status = TubeStatus::Met;
+        for s in all {
+            status = match (status, s) {
+                (TubeStatus::Missed, _) | (_, TubeStatus::Missed) => TubeStatus::Missed,
+                (TubeStatus::Uncertain, _) | (_, TubeStatus::Uncertain) => TubeStatus::Uncertain,
+                _ => TubeStatus::Met,
+            };
+        }
+        Self {
+            current,
+            arrivals,
             status,
         }
     }
@@ -290,24 +476,63 @@ impl Level {
     /// # Panics
     /// If the level is not a tube level.
     pub fn tube_sim(&self, player: &[Element], refine: u32) -> TubeSim {
-        let spec = self.tube.expect("a tube level");
+        let spec = self.tube.clone().expect("a tube level");
         let r = f64::from(refine);
         let size = PREVIEW_SEGMENT / r;
         let prisms = Prisms::new(self.tube_prisms(player), &[], size);
-        let q0 = prisms.charge(spec.cathode).abs().max(1e-300);
+        let toward = |a: Option<f64>| {
+            a.map(|a| {
+                let (s, c) = libm::sincos(a.to_radians());
+                DVec3::new(c, s, 0.0)
+            })
+        };
+        let weight = |e: usize| prisms.charge(e).abs().max(1e-300) / (PREVIEW_PARTICLES * r);
+        let mut emitters = vec![Emitter {
+            electrode: spec.cathode,
+            charge_per_mass: spec.charge_per_mass,
+            weight: weight(spec.cathode),
+            emit_toward: toward(spec.emit_toward_deg),
+        }];
+        if let Some(ions) = spec.ions {
+            emitters.push(Emitter {
+                electrode: ions.electrode,
+                charge_per_mass: ions.charge_per_mass,
+                weight: weight(ions.electrode),
+                emit_toward: toward(ions.emit_toward_deg),
+            });
+        }
+        let projectiles = spec
+            .projectiles
+            .iter()
+            .map(|p| {
+                let (s, c) = libm::sincos(p.direction_deg.to_radians());
+                Projectile {
+                    x0: self.grid.position(p.node),
+                    v0: DVec3::new(c, s, 0.0) * p.speed,
+                    launch: p.launch,
+                    charge: p.charge,
+                    mass: p.mass,
+                }
+            })
+            .collect();
+        let detectors: Vec<_> = spec
+            .projectiles
+            .iter()
+            .map(|p| {
+                p.detector
+                    .map(|[a, b]| (self.grid.position(a), self.grid.position(b)))
+            })
+            .collect();
+        let n_proj = detectors.len();
         let max = self.grid.position(self.grid.max_node());
         let tube = Tube {
             electrodes: prisms,
-            cathode: spec.cathode,
-            charge_per_mass: spec.charge_per_mass,
-            weight: q0 / (PREVIEW_PARTICLES * r),
+            emitters,
+            projectiles,
             softening: 0.5 * size,
-            dt: spec.goal.end / f64::from(PREVIEW_STEPS * refine),
+            dt: spec.step / r,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
-            emit_toward: spec.emit_toward_deg.map(|a| {
-                let (s, c) = libm::sincos(a.to_radians());
-                DVec3::new(c, s, 0.0)
-            }),
+            b_z: spec.b_z,
         };
         let state = tube.state();
         let pending = TubeRun {
@@ -319,18 +544,32 @@ impl Level {
             tube,
             state,
             spec,
+            detectors,
             at_start: None,
             pending,
             steps: 0,
-            last: (0.0, 0.0),
             current: None,
+            arrivals: vec![None; n_proj],
+            closest: vec![f64::INFINITY; n_proj],
         }
     }
 
-    /// The end of a tube level's display run: its `t_max`, at least the goal's end.
+    /// The end of a tube level's verification runs: the current goal's window end, and
+    /// with projectile detectors the level's `t_max` (they must arrive by then).
+    pub fn tube_verify_end(&self) -> f64 {
+        self.tube.as_ref().map_or(0.0, |t| {
+            let goal = t.goal.map_or(0.0, |g| g.end);
+            if t.projectiles.iter().any(|p| p.detector.is_some()) {
+                goal.max(self.physics.t_max)
+            } else {
+                goal
+            }
+        })
+    }
+
+    /// The end of a tube level's display run: its `t_max`, at least the verification's.
     pub fn tube_display_end(&self) -> f64 {
-        self.tube
-            .map_or(0.0, |t| t.goal.end.max(self.physics.t_max))
+        self.tube_verify_end().max(self.physics.t_max)
     }
 
     /// Runs the tube at `refine` to `t_end` (whole), as one run.
@@ -343,64 +582,109 @@ impl Level {
         sim.take_chunk()
     }
 
+    /// The results a verdict needs from a run at `refine`: the goal's current and the
+    /// projectiles' arrivals, run to `tube_verify_end`.
+    ///
+    /// # Panics
+    /// If the level is not a tube level.
+    pub fn tube_results(&self, player: &[Element], refine: u32) -> (Option<f64>, Vec<Option<f64>>) {
+        let mut sim = self.tube_sim(player, refine);
+        sim.advance_to(self.tube_verify_end());
+        (sim.current(), sim.arrivals().to_vec())
+    }
+
     /// The verdict of a placement: the preview and the verification run.
     ///
     /// # Panics
     /// If the level is not a tube level.
     pub fn tube_verdict(&self, player: &[Element]) -> TubeVerdict {
-        let goal = self.tube.expect("a tube level").goal;
-        let coarse = self.tube_sim_current(player, 1);
-        let fine = self.tube_sim_current(player, 2);
-        TubeVerdict::new(coarse, fine, &goal)
-    }
-
-    /// The goal's current of a run at `refine` (run to the goal's end only, without
-    /// keeping frames beyond what it needs).
-    ///
-    /// # Panics
-    /// If the level is not a tube level.
-    pub fn tube_sim_current(&self, player: &[Element], refine: u32) -> f64 {
-        let mut sim = self.tube_sim(player, refine);
-        sim.advance_to(self.tube.expect("a tube level").goal.end);
-        sim.current().unwrap_or(0.0)
+        let spec = self.tube.as_ref().expect("a tube level");
+        TubeVerdict::new(
+            spec,
+            &self.tube_results(player, 1),
+            &self.tube_results(player, 2),
+        )
     }
 
     /// The search objective (`solve::objective`) of a tube level, from the preview: the
-    /// current's distance outside the goal's range in units of its width (0 inside), and
-    /// `Arrived` inside, else `Rejected` (as a particle in its detector outside the
-    /// detector's acceptance).
+    /// current's distance outside the goal's range in units of its width (0 inside), plus
+    /// each projectile's closest approach to its detector (cells), and `Arrived` when all
+    /// are 0, else `Rejected` (as a particle in its detector outside its acceptance).
     ///
     /// # Panics
     /// If the level is not a tube level.
     pub fn tube_objective(&self, player: &[Element]) -> (f64, physics::trajectory::Outcome) {
         use physics::trajectory::Outcome;
-        let g = self.tube.expect("a tube level").goal;
-        let i = self.tube_sim_current(player, 1);
-        let outside = (g.min - i).max(i - g.max).max(0.0);
-        if outside == 0.0 {
+        let spec = self.tube.as_ref().expect("a tube level");
+        let mut sim = self.tube_sim(player, 1);
+        sim.advance_to(self.tube_verify_end());
+        let mut score = 0.0;
+        if let Some(g) = spec.goal {
+            let i = sim.current().unwrap_or(0.0);
+            score += (g.min - i).max(i - g.max).max(0.0) / (g.max - g.min).max(1e-300);
+        }
+        score += sim.closest().iter().filter(|d| d.is_finite()).sum::<f64>();
+        if score == 0.0 {
             (0.0, Outcome::Arrived)
         } else {
-            (outside / (g.max - g.min).max(1e-300), Outcome::Rejected)
+            (score, Outcome::Rejected)
         }
     }
 
     /// What a tube level refuses: everything that breaks z-invariance, and an
     /// inconsistent spec.
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn tube_issues(&self, player: &[Element], out: &mut Vec<String>) {
-        let Some(spec) = self.tube else { return };
+        let Some(spec) = &self.tube else { return };
         let n = self.electrodes.len();
         if spec.cathode >= n {
             out.push("Tube: the cathode is not one of the level's electrodes.".into());
         }
-        let g = spec.goal;
-        if g.electrode >= n || g.electrode == spec.cathode {
-            out.push("Tube: the goal must be an electrode other than the cathode.".into());
-        }
-        if !(g.min < g.max && 0.0 <= g.start && g.start < g.end && g.end.is_finite()) {
-            out.push("Tube: the goal needs min < max and 0 ≤ start < end.".into());
+        if let Some(g) = spec.goal {
+            if g.electrode >= n || g.electrode == spec.cathode {
+                out.push("Tube: the goal must be an electrode other than the cathode.".into());
+            }
+            if !(g.min < g.max && 0.0 <= g.start && g.start < g.end && g.end.is_finite()) {
+                out.push("Tube: the goal needs min < max and 0 ≤ start < end.".into());
+            }
+        } else if !spec.projectiles.iter().any(|p| p.detector.is_some()) {
+            out.push("Tube: no goal (a current goal or a projectile with a detector).".into());
         }
         if !(spec.charge_per_mass.is_finite() && spec.charge_per_mass != 0.0) {
             out.push("Tube: the carriers' charge-to-mass ratio must be finite and nonzero.".into());
+        }
+        if let Some(ions) = spec.ions
+            && (ions.electrode >= n
+                || ions.electrode == spec.cathode
+                || !(ions.charge_per_mass.is_finite() && ions.charge_per_mass > 0.0))
+        {
+            out.push(
+                "Tube: the ion source must be another electrode, with a positive charge-to-mass \
+                 ratio."
+                    .into(),
+            );
+        }
+        if !(spec.b_z.is_finite() && spec.step.is_finite() && spec.step > 0.0) {
+            out.push("Tube: B_z must be finite and the step positive.".into());
+        }
+        for (j, p) in spec.projectiles.iter().enumerate() {
+            let inside = self.grid.contains(p.node)
+                && p.detector
+                    .is_none_or(|[a, b]| self.grid.contains(a) && self.grid.contains(b));
+            let sane = p.mass > 0.0
+                && p.mass.is_finite()
+                && p.charge.is_finite()
+                && p.speed.is_finite()
+                && p.speed >= 0.0
+                && p.launch.is_finite()
+                && p.launch >= 0.0;
+            if !(inside && sane) {
+                out.push(format!(
+                    "Tube: projectile {} needs a node and detector on the board, a positive \
+                     mass and a finite charge, speed and launch time.",
+                    j + 1
+                ));
+            }
         }
         let breaks = [
             (!self.shots.is_empty(), "shots"),
@@ -430,25 +714,34 @@ impl Level {
                 "placed elements other than plates and supplies",
             ),
         ];
-        // Newtonian: the fastest carrier (falling through the largest potential
-        // difference to the cathode) below 0.1 c, where the neglected v²/c² corrections
-        // (1 %) are below the macroparticles' error (5–8 % between the two runs).
+        // Newtonian: every carrier (falling through the largest potential difference)
+        // and projectile (its launch speed plus that fall) below 0.1 c, where the
+        // neglected v²/c² corrections (1 %) are below the macroparticles' error (5–8 %
+        // between the two runs).
         let potential = |b: &physics::bem::BoxElectrode| match b.bias {
             physics::conductor::Bias::Potential(v) => v,
             _ => 0.0,
         };
         let boxes = self.all_box_electrodes(player);
-        if let (Some(c), Some(cathode)) = (self.physics.c, boxes.get(spec.cathode)) {
-            let vc = potential(cathode);
-            let dv = boxes
+        if let Some(c) = self.physics.c {
+            let (lo, hi) = boxes
                 .iter()
-                .map(|b| (potential(b) - vc).abs())
-                .fold(0.0, f64::max);
-            let v = libm::sqrt(2.0 * spec.charge_per_mass.abs() * dv);
+                .map(potential)
+                .fold((0.0_f64, 0.0_f64), |(a, b), v| (a.min(v), b.max(v)));
+            let dv = hi - lo;
+            let ions = spec.ions.map_or(0.0, |i| i.charge_per_mass);
+            let ratios = spec
+                .projectiles
+                .iter()
+                .map(|p| (p.charge / p.mass).abs())
+                .chain([spec.charge_per_mass.abs(), ions]);
+            let fall = ratios.fold(0.0_f64, f64::max);
+            let launch = spec.projectiles.iter().map(|p| p.speed).fold(0.0, f64::max);
+            let v = libm::sqrt(2.0 * fall * dv + launch * launch);
             if v > 0.1 * c {
                 out.push(format!(
-                    "Tube: the electrons would reach {:.2} c; the tube model is Newtonian \
-                     (up to 0.1 c): lower the voltages or leave c infinite.",
+                    "Tube: the particles would reach {:.2} c; the tube model is Newtonian \
+                     (up to 0.1 c): lower the voltages and speeds or leave c infinite.",
                     v / c
                 ));
             }
@@ -466,6 +759,13 @@ impl Level {
                         j + 1
                     ));
                 }
+            }
+        }
+        // A projectile starting inside metal.
+        let shapes = physics::bem::Electrodes::shapes_only(boxes);
+        for (j, p) in spec.projectiles.iter().enumerate() {
+            if shapes.contains(self.grid.position(p.node), crate::CONTACT_DISTANCE) {
+                out.push(format!("Tube: projectile {} starts in metal.", j + 1));
             }
         }
         for (bad, what) in breaks {

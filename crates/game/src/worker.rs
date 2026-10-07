@@ -571,9 +571,10 @@ const TUBE_CHUNK: f64 = 1.0;
 /// the verdict, then the rest of the display run streamed to `tube_display_end`; each
 /// piece abandoned when the setup changes. Returns `false` if the game has gone away.
 fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
-    let Some(spec) = req.level.tube else {
+    let Some(spec) = req.level.tube.clone() else {
         return true;
     };
+    let verify_end = req.level.tube_verify_end();
     let rev = req.revision;
     let mut cost = level::cost::Cost::new(&req.level);
     let send_cost = |cost: &level::cost::Cost| {
@@ -607,7 +608,7 @@ fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
             }
         }
     };
-    match stream(&mut sim, spec.goal.end, false) {
+    match stream(&mut sim, verify_end, false) {
         None => return true,
         Some(false) => return false,
         Some(true) => {}
@@ -621,27 +622,27 @@ fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
     if !send_cost(&cost) {
         return false;
     }
-    let coarse = sim.current().unwrap_or(0.0);
+    let coarse = (sim.current(), sim.arrivals().to_vec());
     let start = Instant::now();
-    let Some(fine) = unless_stale(newest, rev, || {
+    let Some((fine, segments, steps)) = unless_stale(newest, rev, || {
         let mut fine = req.level.tube_sim(&req.placement, 2);
-        fine.advance_to(spec.goal.end);
+        fine.advance_to(verify_end);
         (
-            fine.current().unwrap_or(0.0),
+            (fine.current(), fine.arrivals().to_vec()),
             fine.segment_count(),
             fine.steps(),
         )
     }) else {
         return true;
     };
-    cost.add_tube_run(start.elapsed().as_secs_f64(), fine.1, fine.2, true);
+    cost.add_tube_run(start.elapsed().as_secs_f64(), segments, steps, true);
     if !send_cost(&cost) {
         return false;
     }
     if tx
         .send(Response::TubeVerified {
             revision: rev,
-            verdict: level::tube::TubeVerdict::new(coarse, fine.0, &spec.goal),
+            verdict: level::tube::TubeVerdict::new(&spec, &coarse, &fine),
         })
         .is_err()
     {
@@ -1278,7 +1279,10 @@ mod tests {
                 }
                 Ok(Response::TubeVerified { verdict, .. }) => {
                     verdicts += 1;
-                    if !(verdict.fine.is_finite() && verdict.error.is_finite()) {
+                    if verdict
+                        .current
+                        .is_some_and(|c| !(c.fine.is_finite() && c.error.is_finite()))
+                    {
                         problem.get_or_insert(("nonfinite", "tube verdict".into()));
                     }
                 }

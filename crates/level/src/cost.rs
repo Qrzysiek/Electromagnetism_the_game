@@ -322,7 +322,7 @@ impl Level {
             for refine in [1, 2] {
                 let t = Instant::now();
                 let mut sim = self.tube_sim(player, refine);
-                sim.advance_to(self.tube.map_or(0.0, |s| s.goal.end));
+                sim.advance_to(self.tube_verify_end());
                 cost.add_tube_run(
                     t.elapsed().as_secs_f64(),
                     sim.segment_count(),

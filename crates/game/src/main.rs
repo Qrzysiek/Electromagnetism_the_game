@@ -1162,7 +1162,7 @@ fn update_map(
     // previous level's).
     if level.is_tube() || level.shots.is_empty() {
         let shown = game.tube_frame();
-        let field = match (level.tube, &game.tube_preview, shown) {
+        let field = match (&level.tube, &game.tube_preview, shown) {
             (Some(spec), Some(v), Some(k)) if v.revision == game.sent_revision => {
                 let run = &v.run;
                 let old = game
@@ -1171,7 +1171,12 @@ fn update_map(
                     .filter(|f| f.revision == v.revision);
                 let (scale, scale_final) = match old {
                     Some(f) if f.scale_final => (f.scale, true),
-                    _ => match run.current.and_then(|_| run.frame_at(spec.goal.end)) {
+                    _ => match run
+                        .frames
+                        .last()
+                        .filter(|f| f.t >= level.tube_verify_end())
+                        .and_then(|_| run.frame_at(level.tube_verify_end()))
+                    {
                         Some(f) => (tube_field(level, run, f).0, true),
                         None => (tube_field(level, run, &run.frames[k]).0, false),
                     },
