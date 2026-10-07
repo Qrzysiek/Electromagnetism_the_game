@@ -75,19 +75,24 @@ fn level_hashes() -> BTreeMap<String, String> {
         if level.is_tube() {
             // Tube levels: both runs, every frame's particles and the currents.
             for refine in [1, 2] {
-                let run = level.tube_run(&level.reference_solution, refine, |_| {});
-                for (t, xs) in &run.frames {
-                    h.f64(*t);
-                    for x in xs {
-                        h.f64(x.x);
-                        h.f64(x.y);
+                let end = level.tube.map_or(0.0, |t| t.goal.end);
+                let run = level.tube_run(&level.reference_solution, refine, end);
+                for f in &run.frames {
+                    h.f64(f.t);
+                    for (x, q) in f.x.iter().zip(&f.q) {
+                        h.u64(u64::from(x[0].to_bits()));
+                        h.u64(u64::from(x[1].to_bits()));
+                        h.u64(u64::from(q.to_bits()));
+                    }
+                    for s in &f.sigma {
+                        h.u64(u64::from(s.to_bits()));
                     }
                 }
                 for (t, q) in &run.collected {
                     h.f64(*t);
                     h.f64(*q);
                 }
-                h.f64(run.current);
+                h.f64(run.current.unwrap_or(f64::NAN));
             }
         } else if level.has_beams() {
             // Beam levels: every particle of every flight.

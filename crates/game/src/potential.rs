@@ -156,6 +156,7 @@ const TUBE_MAP_SOFTENING: f64 = level::tube::PREVIEW_SEGMENT;
 #[allow(clippy::cast_possible_truncation)]
 pub fn tube_params(
     run: &level::tube::TubeRun,
+    frame: &level::tube::TubeFrame,
     cathode: usize,
     sign: f64,
     electric: bool,
@@ -169,15 +170,16 @@ pub fn tube_params(
         .fold(0.0, f64::max)
         .max(1e-300);
     let mut items = Vec::new();
-    for ((a, b), s) in run.segments.iter().zip(&run.sigma) {
+    for ((a, b), s) in run.segments.iter().zip(&frame.sigma) {
         items.push(v4(a.x, a.y, b.x, b.y));
-        items.push(v4(*s, 0.0, 0.0, 0.0));
+        items.push(v4(f64::from(*s), 0.0, 0.0, 0.0));
     }
-    let particles = run.frames.last().map_or(&[][..], |f| f.1.as_slice());
     let eps2 = TUBE_MAP_SOFTENING * TUBE_MAP_SOFTENING;
-    for x in particles {
-        items.push(v4(x.x, x.y, run.particle_charge, eps2));
+    #[allow(clippy::cast_possible_truncation)]
+    for (x, q) in frame.x.iter().zip(&frame.q) {
+        items.push([x[0], x[1], *q, eps2 as f32]);
     }
+    let particles = &frame.x;
     let out = PotentialParams {
         phi_weight: (sign / scale) as f32,
         u_a: (sign * vc / scale) as f32,

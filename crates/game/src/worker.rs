@@ -155,10 +155,13 @@ pub enum Response {
     Circuit { revision: u64, view: CircuitView },
     /// A setup the physics cannot compute (`Level::setup_issues`): nothing is flown.
     Invalid { revision: u64, issues: Vec<String> },
-    /// Tube levels (`level::tube`): the preview run (frames and current).
-    TubePreview {
+    /// Tube levels (`level::tube`): the next piece of the streamed preview run (its
+    /// frames; the first also carries the segments; the goal's current once the run has
+    /// passed the goal window), and whether the run is complete.
+    TubeChunk {
         revision: u64,
-        run: std::sync::Arc<level::tube::TubeRun>,
+        chunk: std::sync::Arc<level::tube::TubeRun>,
+        done: bool,
     },
     /// Tube levels: the verification's verdict.
     TubeVerified {
@@ -366,7 +369,11 @@ fn retag(r: Response, revision: u64) -> Response {
         Response::Cost { cost, .. } => Response::Cost { revision, cost },
         Response::Circuit { view, .. } => Response::Circuit { revision, view },
         Response::Invalid { issues, .. } => Response::Invalid { revision, issues },
-        Response::TubePreview { run, .. } => Response::TubePreview { revision, run },
+        Response::TubeChunk { chunk, done, .. } => Response::TubeChunk {
+            revision,
+            chunk,
+            done,
+        },
         Response::TubeVerified { verdict, .. } => Response::TubeVerified { revision, verdict },
     }
 }
@@ -423,9 +430,7 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
             if !tube_request(&req, tx, newest) {
                 return;
             }
-            if current(req.revision) {
-                cache.put(key, sink.record.into_inner());
-            }
+            // Not cached: a streamed display run holds ~10 MB of frames.
             continue 'requests;
         }
         if req.level.has_beams() {
@@ -558,53 +563,103 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
     }
 }
 
-/// A tube level: the preview run, then the verification run and the verdict, each
-/// abandoned when the setup changes. Returns `false` if the game has gone away.
+/// Time between streamed chunks of a tube's preview (internal time units): at the
+/// tube's playback rate (1 unit per second at speed 1) one chunk per second of play.
+const TUBE_CHUNK: f64 = 1.0;
+
+/// A tube level: the preview streamed to the goal window's end, the verification run and
+/// the verdict, then the rest of the display run streamed to `tube_display_end`; each
+/// piece abandoned when the setup changes. Returns `false` if the game has gone away.
 fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
-    let Some(goal) = req.level.tube.map(|t| t.goal) else {
+    let Some(spec) = req.level.tube else {
         return true;
     };
+    let rev = req.revision;
     let mut cost = level::cost::Cost::new(&req.level);
-    let start = Instant::now();
-    let Some(preview) = unless_stale(newest, req.revision, || {
-        req.level.tube_run(&req.placement, 1, |_| {})
-    }) else {
-        return true;
-    };
-    cost.add_tube_run(start.elapsed().as_secs_f64(), &preview, false);
     let send_cost = |cost: &level::cost::Cost| {
         tx.send(Response::Cost {
-            revision: req.revision,
+            revision: rev,
             cost: *cost,
         })
         .is_ok()
     };
+    let start = Instant::now();
+    let Some(mut sim) = unless_stale(newest, rev, || req.level.tube_sim(&req.placement, 1)) else {
+        return true;
+    };
+    // Streams the preview to `until`: Some(true) done, Some(false) the game has gone,
+    // None abandoned.
+    let stream = |sim: &mut level::tube::TubeSim, until: f64, last: bool| -> Option<bool> {
+        loop {
+            let next = (sim.t() + TUBE_CHUNK).min(until);
+            unless_stale(newest, rev, || sim.advance_to(next))?;
+            let finished = sim.t() >= until - 1e-9 * until.abs().max(1.0) || next >= until;
+            let msg = Response::TubeChunk {
+                revision: rev,
+                chunk: Arc::new(sim.take_chunk()),
+                done: last && finished,
+            };
+            if tx.send(msg).is_err() {
+                return Some(false);
+            }
+            if finished {
+                return Some(true);
+            }
+        }
+    };
+    match stream(&mut sim, spec.goal.end, false) {
+        None => return true,
+        Some(false) => return false,
+        Some(true) => {}
+    }
+    cost.add_tube_run(
+        start.elapsed().as_secs_f64(),
+        sim.segment_count(),
+        sim.steps(),
+        false,
+    );
     if !send_cost(&cost) {
         return false;
     }
-    let coarse = preview.current;
-    let msg = Response::TubePreview {
-        revision: req.revision,
-        run: Arc::new(preview),
-    };
-    if tx.send(msg).is_err() {
-        return false;
-    }
+    let coarse = sim.current().unwrap_or(0.0);
     let start = Instant::now();
-    let Some(fine) = unless_stale(newest, req.revision, || {
-        req.level.tube_run(&req.placement, 2, |_| {})
+    let Some(fine) = unless_stale(newest, rev, || {
+        let mut fine = req.level.tube_sim(&req.placement, 2);
+        fine.advance_to(spec.goal.end);
+        (
+            fine.current().unwrap_or(0.0),
+            fine.segment_count(),
+            fine.steps(),
+        )
     }) else {
         return true;
     };
-    cost.add_tube_run(start.elapsed().as_secs_f64(), &fine, true);
+    cost.add_tube_run(start.elapsed().as_secs_f64(), fine.1, fine.2, true);
     if !send_cost(&cost) {
         return false;
     }
-    tx.send(Response::TubeVerified {
-        revision: req.revision,
-        verdict: level::tube::TubeVerdict::new(coarse, fine.current, &goal),
-    })
-    .is_ok()
+    if tx
+        .send(Response::TubeVerified {
+            revision: rev,
+            verdict: level::tube::TubeVerdict::new(coarse, fine.0, &spec.goal),
+        })
+        .is_err()
+    {
+        return false;
+    }
+    // The rest of the display run (the last chunk is marked done even when the goal's
+    // end is the display's end).
+    let end = req.level.tube_display_end();
+    if sim.t() >= end - 1e-9 * end.max(1.0) {
+        return tx
+            .send(Response::TubeChunk {
+                revision: rev,
+                chunk: Arc::new(sim.take_chunk()),
+                done: true,
+            })
+            .is_ok();
+    }
+    !matches!(stream(&mut sim, end, true), Some(false))
 }
 
 /// A beam level: per flight the preview (every particle's path), then the per-particle
@@ -1212,10 +1267,11 @@ mod tests {
                 Ok(Response::Invalid { issues, .. }) => {
                     return (name, "rejected", issues.join(" "));
                 }
-                Ok(Response::TubePreview { run, .. }) => {
-                    let bad = run.frames.iter().flat_map(|f| &f.1).any(|x| !x.is_finite())
-                        || !run.current.is_finite()
-                        || run.sigma.iter().any(|s| !s.is_finite());
+                Ok(Response::TubeChunk { chunk, .. }) => {
+                    let bad = chunk.frames.iter().any(|f| {
+                        f.x.iter().flatten().any(|v| !v.is_finite())
+                            || f.sigma.iter().any(|s| !s.is_finite())
+                    }) || chunk.current.is_some_and(|c| !c.is_finite());
                     if bad {
                         problem.get_or_insert(("nonfinite", "tube preview".into()));
                     }

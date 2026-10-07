@@ -57,59 +57,168 @@ pub const PREVIEW_STEPS: u32 = 600;
 /// steady state the space charge in flight is of the order of that charge (the planar
 /// diode's is 4/3 of it), so this sets the number of particles in flight.
 pub const PREVIEW_PARTICLES: f64 = 150.0;
-/// Frames of the particles kept for display, over the run: every preview step, so that
-/// slow playback stays smooth (150 looked jerky at the tube's playback rate; 600 frames
-/// of ~200 particles are ~3 MB).
-pub const FRAMES: u32 = PREVIEW_STEPS;
 /// The fine run's error as a multiple of the two runs' difference. At first order the
 /// error equals the difference; measured: V4 (order 0.95) 1.08×, the game-scale planar
 /// diode at V = 40 0.15× (`tests/tubes.rs`, `planar_diode_convergence`, against
 /// refine 4). 1.5 covers the first with a margin for orders down to about 0.6.
 pub const ERROR_FACTOR: f64 = 1.5;
 
-/// One run of a tube level.
+/// One displayed frame of a tube run: the particles (positions and charges per unit
+/// length, f32: display only) and the electrodes' total surface density (applied and
+/// induced), so that the maps can show the field at any frame.
+#[derive(Clone, Debug, Default)]
+pub struct TubeFrame {
+    pub t: f64,
+    pub x: Vec<[f32; 2]>,
+    pub q: Vec<f32>,
+    pub sigma: Vec<f32>,
+}
+
+/// One run of a tube level (or a chunk of one being streamed: `TubeSim::take_chunk`).
 #[derive(Clone, Debug, Default)]
 pub struct TubeRun {
-    /// Particle positions every few steps `(t, positions)`.
-    pub frames: Vec<(f64, Vec<DVec3>)>,
+    /// A frame every step.
+    pub frames: Vec<TubeFrame>,
     /// The goal electrode's collected carrier charge (positive for arrivals) over time.
     pub collected: Vec<(f64, f64)>,
-    /// The goal's average current over its window.
-    pub current: f64,
-    /// Particles in flight at the end.
+    /// The goal's average current over its window, once the run has passed its end.
+    pub current: Option<f64>,
+    /// Particles in flight at the last frame.
     pub in_flight: usize,
     /// Time steps taken.
     pub steps: u32,
-    /// The final state, for the potential map: the segments `(start, end)` with their
-    /// total surface density (the electrodes' and the induced), and every particle's
-    /// line charge (the last frame's positions, each `particle_charge`).
+    /// The segments `(start, end)` the frames' densities belong to.
     pub segments: Vec<(DVec3, DVec3)>,
-    pub sigma: Vec<f64>,
-    pub particle_charge: f64,
     /// Each prism's potential.
     pub potentials: Vec<f64>,
 }
 
 impl TubeRun {
-    /// The final state's potential and field at `x`, as the maps show them: the
-    /// segments' charge exactly, the particles as line charges softened over
-    /// `PREVIEW_SEGMENT` (the preview's resolution of its space charge).
-    pub fn field_at(&self, x: DVec3) -> (f64, DVec3) {
+    /// Appends a streamed chunk (its frames and samples follow this run's).
+    pub fn extend(&mut self, chunk: TubeRun) {
+        self.frames.extend(chunk.frames);
+        self.collected.extend(chunk.collected);
+        self.current = self.current.or(chunk.current);
+        self.in_flight = chunk.in_flight;
+        self.steps = chunk.steps;
+        if self.segments.is_empty() {
+            self.segments = chunk.segments;
+            self.potentials = chunk.potentials;
+        }
+    }
+
+    /// The frame at time `t` (the last one at or before it; the first before it).
+    pub fn frame_at(&self, t: f64) -> Option<&TubeFrame> {
+        let k = self.frames.partition_point(|f| f.t <= t);
+        self.frames.get(k.saturating_sub(1))
+    }
+
+    /// The potential and field of a frame at `x`, as the maps show them: the segments'
+    /// charge exactly, the particles as line charges softened over `PREVIEW_SEGMENT` (the
+    /// preview's resolution of its space charge).
+    pub fn field_at(&self, frame: &TubeFrame, x: DVec3) -> (f64, DVec3) {
         let (mut phi, mut e) = (0.0, DVec3::ZERO);
-        for ((a, b), s) in self.segments.iter().zip(&self.sigma) {
+        for ((a, b), s) in self.segments.iter().zip(&frame.sigma) {
             let (f, g) = physics::zinv::segment_integrals(*a, *b, x);
-            phi += s * f;
-            e += g * *s;
+            phi += f64::from(*s) * f;
+            e += g * f64::from(*s);
         }
         let eps2 = PREVIEW_SEGMENT * PREVIEW_SEGMENT;
-        let lambda = self.particle_charge;
-        for p in self.frames.last().map_or(&[][..], |f| f.1.as_slice()) {
-            let r = DVec3::new(x.x - p.x, x.y - p.y, 0.0);
+        for (p, q) in frame.x.iter().zip(&frame.q) {
+            let r = DVec3::new(x.x - f64::from(p[0]), x.y - f64::from(p[1]), 0.0);
             let r2 = r.x * r.x + r.y * r.y + eps2;
+            let lambda = f64::from(*q);
             phi -= lambda * libm::log(r2);
             e += r * (2.0 * lambda / r2);
         }
         (phi, e)
+    }
+}
+
+/// A tube run in progress: advanced in pieces (`advance_to`), its frames taken as they
+/// are made (`take_chunk`), so that a long display run can be streamed.
+pub struct TubeSim {
+    tube: Tube,
+    state: TubeState,
+    spec: TubeSpec,
+    at_start: Option<(f64, f64)>,
+    /// What has not been taken yet.
+    pending: TubeRun,
+    /// The run's end so far: steps, the last collected sample.
+    steps: u32,
+    last: (f64, f64),
+    current: Option<f64>,
+}
+
+impl TubeSim {
+    pub fn t(&self) -> f64 {
+        self.state.t
+    }
+
+    /// Steps taken and the segments of its linear system (for the cost meters).
+    pub fn steps(&self) -> u32 {
+        self.steps
+    }
+
+    pub fn segment_count(&self) -> usize {
+        self.tube.electrodes.segments.len()
+    }
+
+    /// The goal's current, once the run has passed the goal window's end.
+    pub fn current(&self) -> Option<f64> {
+        self.current
+    }
+
+    /// Advances to time `t_end` (whole steps), recording a frame every step.
+    pub fn advance_to(&mut self, t_end: f64) {
+        let sign = self.spec.charge_per_mass.signum();
+        let g = self.spec.goal;
+        while self.state.t < t_end - 0.5 * self.tube.dt {
+            self.tube.step(&mut self.state);
+            self.steps += 1;
+            let s = &self.state;
+            let collected = sign * s.collected[g.electrode];
+            if self.at_start.is_none() && s.t >= g.start {
+                self.at_start = Some((s.t, collected));
+            }
+            if self.current.is_none() && s.t >= g.end - 0.5 * self.tube.dt {
+                let (t0, q0) = self.at_start.unwrap_or((0.0, 0.0));
+                self.current = Some(if s.t > t0 {
+                    (collected - q0) / (s.t - t0)
+                } else {
+                    0.0
+                });
+                self.pending.current = self.current;
+            }
+            #[allow(clippy::cast_possible_truncation)]
+            let frame = TubeFrame {
+                t: s.t,
+                x: s.x.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
+                q: s.charge.iter().map(|q| *q as f32).collect(),
+                sigma: self
+                    .tube
+                    .surface_density(s)
+                    .iter()
+                    .map(|v| *v as f32)
+                    .collect(),
+            };
+            self.pending.frames.push(frame);
+            self.pending.collected.push((s.t, collected));
+            self.last = (s.t, collected);
+        }
+        self.pending.in_flight = self.state.x.len();
+        self.pending.steps = self.steps;
+    }
+
+    /// The frames and samples made since the last call (the first chunk also carries the
+    /// segments and potentials).
+    pub fn take_chunk(&mut self) -> TubeRun {
+        let segments = std::mem::take(&mut self.pending.segments);
+        let potentials = std::mem::take(&mut self.pending.potentials);
+        let mut chunk = std::mem::take(&mut self.pending);
+        chunk.segments = segments;
+        chunk.potentials = potentials;
+        chunk
     }
 }
 
@@ -176,64 +285,62 @@ impl Level {
             .collect()
     }
 
-    /// Runs the tube at `refine` = 1 (preview) or 2 (verification), calling `frame` with
-    /// each displayed frame as it is made.
+    /// A tube run at `refine` = 1 (preview) or 2 (verification), at t = 0.
     ///
     /// # Panics
     /// If the level is not a tube level.
-    pub fn tube_run(
-        &self,
-        player: &[Element],
-        refine: u32,
-        mut frame: impl FnMut(&TubeRun),
-    ) -> TubeRun {
+    pub fn tube_sim(&self, player: &[Element], refine: u32) -> TubeSim {
         let spec = self.tube.expect("a tube level");
         let r = f64::from(refine);
         let size = PREVIEW_SEGMENT / r;
         let prisms = Prisms::new(self.tube_prisms(player), &[], size);
         let q0 = prisms.charge(spec.cathode).abs().max(1e-300);
         let max = self.grid.position(self.grid.max_node());
-        let steps = PREVIEW_STEPS * refine;
         let tube = Tube {
             electrodes: prisms,
             cathode: spec.cathode,
             charge_per_mass: spec.charge_per_mass,
             weight: q0 / (PREVIEW_PARTICLES * r),
             softening: 0.5 * size,
-            dt: spec.goal.end / f64::from(steps),
+            dt: spec.goal.end / f64::from(PREVIEW_STEPS * refine),
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             emit_toward: spec.emit_toward_deg.map(|a| {
                 let (s, c) = libm::sincos(a.to_radians());
                 DVec3::new(c, s, 0.0)
             }),
         };
-        let sign = spec.charge_per_mass.signum();
-        let mut s: TubeState = tube.state();
-        let mut run = TubeRun::default();
-        let every = (steps / FRAMES).max(1);
-        let mut at_start = None;
-        for k in 1..=steps {
-            tube.step(&mut s);
-            let collected = sign * s.collected[spec.goal.electrode];
-            if at_start.is_none() && s.t >= spec.goal.start {
-                at_start = Some((s.t, collected));
-            }
-            if k % every == 0 || k == steps {
-                run.frames.push((s.t, s.x.clone()));
-                run.collected.push((s.t, collected));
-                frame(&run);
-            }
+        let state = tube.state();
+        let pending = TubeRun {
+            segments: tube.electrodes.segments.clone(),
+            potentials: tube.electrodes.potentials.clone(),
+            ..TubeRun::default()
+        };
+        TubeSim {
+            tube,
+            state,
+            spec,
+            at_start: None,
+            pending,
+            steps: 0,
+            last: (0.0, 0.0),
+            current: None,
         }
-        let (t0, q0) = at_start.unwrap_or((0.0, 0.0));
-        let (t1, q1) = *run.collected.last().unwrap_or(&(0.0, 0.0));
-        run.current = if t1 > t0 { (q1 - q0) / (t1 - t0) } else { 0.0 };
-        run.in_flight = s.x.len();
-        run.steps = steps;
-        run.sigma = tube.surface_density(&s);
-        run.segments = tube.electrodes.segments.clone();
-        run.particle_charge = sign * tube.weight;
-        run.potentials = tube.electrodes.potentials.clone();
-        run
+    }
+
+    /// The end of a tube level's display run: its `t_max`, at least the goal's end.
+    pub fn tube_display_end(&self) -> f64 {
+        self.tube
+            .map_or(0.0, |t| t.goal.end.max(self.physics.t_max))
+    }
+
+    /// Runs the tube at `refine` to `t_end` (whole), as one run.
+    ///
+    /// # Panics
+    /// If the level is not a tube level.
+    pub fn tube_run(&self, player: &[Element], refine: u32, t_end: f64) -> TubeRun {
+        let mut sim = self.tube_sim(player, refine);
+        sim.advance_to(t_end);
+        sim.take_chunk()
     }
 
     /// The verdict of a placement: the preview and the verification run.
@@ -242,9 +349,20 @@ impl Level {
     /// If the level is not a tube level.
     pub fn tube_verdict(&self, player: &[Element]) -> TubeVerdict {
         let goal = self.tube.expect("a tube level").goal;
-        let coarse = self.tube_run(player, 1, |_| {}).current;
-        let fine = self.tube_run(player, 2, |_| {}).current;
+        let coarse = self.tube_sim_current(player, 1);
+        let fine = self.tube_sim_current(player, 2);
         TubeVerdict::new(coarse, fine, &goal)
+    }
+
+    /// The goal's current of a run at `refine` (run to the goal's end only, without
+    /// keeping frames beyond what it needs).
+    ///
+    /// # Panics
+    /// If the level is not a tube level.
+    pub fn tube_sim_current(&self, player: &[Element], refine: u32) -> f64 {
+        let mut sim = self.tube_sim(player, refine);
+        sim.advance_to(self.tube.expect("a tube level").goal.end);
+        sim.current().unwrap_or(0.0)
     }
 
     /// The search objective (`solve::objective`) of a tube level, from the preview: the
@@ -257,7 +375,7 @@ impl Level {
     pub fn tube_objective(&self, player: &[Element]) -> (f64, physics::trajectory::Outcome) {
         use physics::trajectory::Outcome;
         let g = self.tube.expect("a tube level").goal;
-        let i = self.tube_run(player, 1, |_| {}).current;
+        let i = self.tube_sim_current(player, 1);
         let outside = (g.min - i).max(i - g.max).max(0.0);
         if outside == 0.0 {
             (0.0, Outcome::Arrived)

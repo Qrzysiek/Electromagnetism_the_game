@@ -1039,7 +1039,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         if game.map == Some(MapMode::Electric) {
             ui.label(
                 egui::RichText::new(
-                    "|E| at the end of the preview, with the electrons' space charge: bright \
+                    "|E| at the time shown (live while animating), with the electrons' space charge: bright \
                      where strong, on a log scale over 1.5 decades below the field at the 99th \
                      percentile of the board; contours every quarter decade; arrows show its \
                      direction (a force on electrons the opposite way). Inside metal it is 0. \
@@ -1054,7 +1054,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         }
         ui.label(
             egui::RichText::new(
-                "The electrons' potential energy at the end of the preview, relative to the \
+                "The electrons' potential energy at the time shown (live), relative to the \
                  cathode, in units of the largest voltage: blue downhill (towards the \
                  anode), red uphill; contours every quarter. It includes the electrons' \
                  own space charge and the charge it induces on the electrodes: the flat \
@@ -1301,13 +1301,21 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         ui.add(egui::Slider::new(&mut game.playback_speed, 0.05..=4.0).text("speed"))
             .on_hover_text("Playback speed: 1 plays 1 time unit per second");
     });
-    if let Some(t) = game
-        .tube_preview
-        .as_ref()
-        .and_then(|(_, r)| r.frames.last().map(|f| f.0))
+    if let Some(v) = &game.tube_preview
+        && let Some(last) = v.run.frames.last()
     {
+        let end = level.tube_display_end();
         ui.label(
-            egui::RichText::new(format!("t = {:.1} of {t:.0}", game.anim_time.min(t))).small(),
+            egui::RichText::new(if v.done {
+                format!("t = {:.1} of {end:.0}", game.anim_time.min(last.t))
+            } else {
+                format!(
+                    "t = {:.1} of {end:.0} (computed to {:.0}; playback waits for it)",
+                    game.anim_time.min(last.t),
+                    last.t
+                )
+            })
+            .small(),
         );
     }
     ui.label(egui::RichText::new("Result").strong());
@@ -1328,15 +1336,25 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     ));
     let current = game.sent_revision;
     match &game.tube_preview {
-        Some((r, run)) if *r == current => {
-            ui.label(format!(
-                "Preview: {}   ({} electrons in flight at the end)",
-                fmt_si(run.current),
-                run.in_flight
-            ));
+        Some(v) if v.revision == current => {
+            let run = &v.run;
+            let shown = game
+                .tube_frame()
+                .and_then(|k| run.frames.get(k))
+                .map_or(0, |f| f.x.len());
+            ui.label(match run.current {
+                Some(c) => format!("Preview: {}   ({shown} particles in flight now)", fmt_si(c)),
+                None => format!("Preview: computing…   ({shown} particles in flight now)"),
+            });
             ui.label(egui::RichText::new("Charge collected by the goal electrode:").small());
             circuit_plot(ui, &run.collected, &[g.start, g.end]);
-            if run.frames.iter().all(|f| f.1.is_empty()) {
+            let quiet = run.current.is_some()
+                && run
+                    .frames
+                    .iter()
+                    .take_while(|f| f.t <= g.end)
+                    .all(|f| f.x.is_empty());
+            if quiet {
                 ui.label(
                     egui::RichText::new(
                         "No electrons leave the cathode: the field at its face pushes them \

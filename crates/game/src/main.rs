@@ -83,6 +83,25 @@ pub struct FlightView {
     pub verdict: Option<(Status, Outcome)>,
 }
 
+/// Tube levels: the preview run as it streams in, for one setup revision.
+pub struct TubeView {
+    pub revision: u64,
+    pub run: level::tube::TubeRun,
+    /// The whole display run has arrived.
+    pub done: bool,
+}
+
+/// Tube levels: the electric field map's colour scale and the arrows of the frame shown.
+/// The scale is fixed from the frame at the goal window's end once it has arrived (so
+/// that the colours do not flicker from frame to frame); before, from the frame shown.
+pub struct TubeField {
+    pub revision: u64,
+    pub frame: usize,
+    pub scale: f64,
+    pub scale_final: bool,
+    pub arrows: TubeArrows,
+}
+
 #[derive(Resource)]
 pub struct Game {
     pub levels: Vec<Level>,
@@ -112,14 +131,14 @@ pub struct Game {
     pub setup_issues: Option<(u64, Vec<String>)>,
     /// Tube levels: the latest preview run and verdict, with their revisions (the
     /// preview is kept while the next one is computed).
-    pub tube_preview: Option<(u64, std::sync::Arc<level::tube::TubeRun>)>,
+    pub tube_preview: Option<TubeView>,
     pub tube_verdict: Option<(u64, level::tube::TubeVerdict)>,
     /// Tube levels: the electric field map's scale and arrows `(position, E)` of the
     /// preview's final state (computed when it arrives), with its revision.
-    pub tube_field: Option<(u64, f64, TubeArrows)>,
+    pub tube_field: Option<TubeField>,
     /// (revision, active shot, active disturbance, all shots shown, mode, flight shown)
     /// the field map was computed for.
-    pub map_key: (u64, usize, usize, bool, Option<MapMode>, bool),
+    pub map_key: (u64, usize, usize, bool, Option<MapMode>, bool, usize),
     pub field_lines: Vec<DrawnFieldLine>,
     /// Distance between neighbouring field lines, in cells.
     pub field_line_spacing: f64,
@@ -196,7 +215,7 @@ impl Game {
             tube_preview: None,
             tube_verdict: None,
             tube_field: None,
-            map_key: (0, 0, 0, false, None, false),
+            map_key: (0, 0, 0, false, None, false, 0),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
             field_line_opacity: 0.2,
@@ -307,6 +326,24 @@ impl Game {
             .map(|(_, i)| i.as_slice())
     }
 
+    /// Tube levels: the index of the frame shown, at the animation time (the last one
+    /// when not animating).
+    pub fn tube_frame(&self) -> Option<usize> {
+        let v = self.tube_preview.as_ref()?;
+        let n = v.run.frames.len();
+        if n == 0 {
+            return None;
+        }
+        Some(if self.animate {
+            v.run
+                .frames
+                .partition_point(|f| f.t <= self.anim_time)
+                .saturating_sub(1)
+        } else {
+            n - 1
+        })
+    }
+
     pub fn progress(&self) -> Progress {
         let current = self.sent_revision;
         if self.invalid_setup().is_some() {
@@ -316,7 +353,7 @@ impl Game {
             (
                 self.tube_preview
                     .as_ref()
-                    .is_none_or(|(r, _)| *r != current),
+                    .is_none_or(|v| v.revision != current),
                 self.tube_verdict
                     .as_ref()
                     .is_none_or(|(r, _)| *r != current),
@@ -627,7 +664,11 @@ fn dev_capture(
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(120);
     let wait = std::env::var("EM_WAIT").is_ok_and(|v| v == "1");
-    if shot_at.is_none() && *frame >= shot && (!wait || game.progress() == Progress::Done) {
+    // Tube levels: also the whole streamed display run.
+    let streamed =
+        !game.editor.level.is_tube() || game.tube_preview.as_ref().is_some_and(|v| v.done);
+    let settled = game.progress() == Progress::Done && streamed;
+    if shot_at.is_none() && *frame >= shot && (!wait || settled) {
         *shot_at = Some(*frame);
         commands
             .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
@@ -1073,10 +1114,10 @@ fn update_map(
     // The energy unit depends on the flight (particles launched at rest): redraw when it
     // arrives.
     let has_flight = if game.editor.level.is_tube() {
-        // Tube levels: the map is the preview's final state.
+        // Tube levels: the map follows the preview's frames.
         game.tube_preview
             .as_ref()
-            .is_some_and(|(r, _)| *r == game.sent_revision)
+            .is_some_and(|v| v.revision == game.sent_revision)
     } else {
         game.flights
             .get(game.active_flight())
@@ -1092,6 +1133,11 @@ fn update_map(
         game.show_all_shots,
         game.map,
         has_flight,
+        if game.editor.level.is_tube() {
+            game.tube_frame().unwrap_or(0)
+        } else {
+            0
+        },
     );
     if key == game.map_key {
         return;
@@ -1111,21 +1157,57 @@ fn update_map(
             t.translation = Vec3::new(center.x as f32, center.y as f32, -10.0);
         }
     }
-    // Tube levels: the preview's final state; nothing (a blank map) until it arrives,
-    // and a level without shots shows a blank map (not the previous level's).
-    let tube = level
-        .tube
-        .zip(game.tube_preview.as_ref().map(|t| t.1.clone()));
+    // Tube levels: the frame shown (live while animating); nothing (a blank map) until
+    // the preview arrives, and a level without shots shows a blank map (not the
+    // previous level's).
     if level.is_tube() || level.shots.is_empty() {
-        let e_ref = game.tube_field.as_ref().map_or(1.0, |f| f.1);
-        let (params, items) = match tube {
-            Some((spec, run)) => potential::tube_params(
-                &run,
-                spec.cathode,
-                spec.charge_per_mass.signum(),
-                mode == MapMode::Electric,
-                e_ref,
-            ),
+        let shown = game.tube_frame();
+        let field = match (level.tube, &game.tube_preview, shown) {
+            (Some(spec), Some(v), Some(k)) if v.revision == game.sent_revision => {
+                let run = &v.run;
+                let old = game
+                    .tube_field
+                    .as_ref()
+                    .filter(|f| f.revision == v.revision);
+                let (scale, scale_final) = match old {
+                    Some(f) if f.scale_final => (f.scale, true),
+                    _ => match run.current.and_then(|_| run.frame_at(spec.goal.end)) {
+                        Some(f) => (tube_field(level, run, f).0, true),
+                        None => (tube_field(level, run, &run.frames[k]).0, false),
+                    },
+                };
+                let arrows = if mode == MapMode::Electric {
+                    tube_field(level, run, &run.frames[k]).1
+                } else {
+                    Vec::new()
+                };
+                let (params, items) = potential::tube_params(
+                    run,
+                    &run.frames[k],
+                    spec.cathode,
+                    spec.charge_per_mass.signum(),
+                    mode == MapMode::Electric,
+                    scale,
+                );
+                Some((
+                    TubeField {
+                        revision: v.revision,
+                        frame: k,
+                        scale,
+                        scale_final,
+                        arrows,
+                    },
+                    params,
+                    items,
+                ))
+            }
+            _ => None,
+        };
+        let (params, items) = match field {
+            Some((f, params, items)) => {
+                game.tube_field = Some(f);
+                (params, items)
+            }
             None => (potential::PotentialParams::default(), Vec::new()),
         };
         if let Some(mut m) = materials.get_mut(&quad.material) {
@@ -1303,10 +1385,25 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
             Response::Invalid { revision, issues } if revision == current => {
                 game.setup_issues = Some((revision, issues));
             }
-            Response::TubePreview { revision, run } if revision == current => {
-                let field = tube_field(&game.editor.level, &run);
-                game.tube_field = Some((revision, field.0, field.1));
-                game.tube_preview = Some((revision, run));
+            Response::TubeChunk {
+                revision,
+                chunk,
+                done,
+            } if revision == current => {
+                let chunk = std::sync::Arc::try_unwrap(chunk).unwrap_or_else(|a| (*a).clone());
+                match &mut game.tube_preview {
+                    Some(v) if v.revision == revision => {
+                        v.run.extend(chunk);
+                        v.done = done;
+                    }
+                    _ => {
+                        game.tube_preview = Some(TubeView {
+                            revision,
+                            run: chunk,
+                            done,
+                        });
+                    }
+                }
             }
             Response::TubeVerified { revision, verdict } if revision == current => {
                 game.tube_verdict = Some((revision, verdict));
@@ -1326,14 +1423,18 @@ pub type TubeArrows = Vec<(Vec2, Vec2)>;
 /// `TUBE_ARROW_SPACING`-th node. The scale is the 99th percentile of |E| over the nodes
 /// (not the maximum: the singular corners would wash out the colours; the 90th
 /// saturated most of the board).
-fn tube_field(level: &Level, run: &level::tube::TubeRun) -> (f64, TubeArrows) {
+fn tube_field(
+    level: &Level,
+    run: &level::tube::TubeRun,
+    frame: &level::tube::TubeFrame,
+) -> (f64, TubeArrows) {
     let m = level.grid.max_node();
     let mut arrows = Vec::new();
     let mut magnitudes = Vec::new();
     for y in (0..=m[1]).step_by(TUBE_ARROW_SPACING) {
         for x in (0..=m[0]).step_by(TUBE_ARROW_SPACING) {
             let p = level.grid.position([x, y, 0]);
-            let e = run.field_at(p).1;
+            let e = run.field_at(frame, p).1;
             magnitudes.push(e.length());
             arrows.push((draw::to_vec2(p), draw::to_vec2(e)));
         }
@@ -1376,12 +1477,14 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
                 .filter_map(|path| path.last().map(|(t, _)| *t))
         })
         .fold(end, f64::max);
-    // Tube levels: the preview run's end.
+    // Tube levels: the preview run's end so far.
     let end = game
         .tube_preview
         .as_ref()
-        .and_then(|(_, r)| r.frames.last().map(|f| f.0))
+        .and_then(|v| v.run.frames.last().map(|f| f.t))
         .map_or(end, |t| end.max(t));
+    // While it streams in, playback waits at its last frame (no loop yet).
+    let streaming = game.tube_preview.as_ref().is_some_and(|v| !v.done);
     if end <= 0.0 {
         return;
     }
@@ -1400,7 +1503,9 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
     // it was over before the flow could be watched).
     let rate = if level.is_tube() { 1.0 } else { 4.0 };
     game.anim_time += time.delta_secs_f64() * game.playback_speed * rate;
-    if game.anim_time > end + 2.0 * game.playback_speed.max(0.25) {
+    if streaming {
+        game.anim_time = game.anim_time.min(end);
+    } else if game.anim_time > end + 2.0 * game.playback_speed.max(0.25) {
         game.anim_time = 0.0;
     }
 }

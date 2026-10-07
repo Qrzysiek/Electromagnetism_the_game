@@ -1073,34 +1073,33 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
 /// Tube levels: the preview's particles at the animation time (the frame at or before
 /// it; all frames when not animating: the last one), faded while a new setup computes.
 fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
-    let Some((revision, run)) = &game.tube_preview else {
+    let Some(view) = &game.tube_preview else {
         return;
     };
     if !game.editor.level.is_tube() {
         return;
     }
-    let frame = if game.animate {
-        let k = run.frames.partition_point(|f| f.0 <= game.anim_time);
-        run.frames.get(k.saturating_sub(1))
-    } else {
-        run.frames.last()
-    };
-    let Some((_, xs)) = frame else {
+    let Some(frame) = game.tube_frame().and_then(|k| view.run.frames.get(k)) else {
         return;
     };
-    let color =
-        Color::srgb(0.6, 0.85, 1.0).with_alpha(0.85 * stale_fade(*revision, game.sent_revision));
-    for x in xs {
-        gizmos.circle_2d(to_vec2(*x), 0.06, color);
+    // Negative carriers (electrons) blue, positive (ions) orange.
+    let fade = 0.85 * stale_fade(view.revision, game.sent_revision);
+    for (x, q) in frame.x.iter().zip(&frame.q) {
+        let color = if *q < 0.0 {
+            Color::srgb(0.6, 0.85, 1.0)
+        } else {
+            Color::srgb(1.0, 0.7, 0.4)
+        };
+        gizmos.circle_2d(Vec2::new(x[0], x[1]), 0.06, color.with_alpha(fade));
     }
     // The electric field map's arrows: direction, faded with |E| over the map's 1.5
     // decades (as its colours).
     if game.map == Some(crate::potential::MapMode::Electric)
-        && let Some((_, scale, arrows)) = &game.tube_field
+        && let Some(field) = &game.tube_field
     {
         #[allow(clippy::cast_possible_truncation)]
-        let scale = *scale as f32;
-        for (p, e) in arrows {
+        let scale = field.scale as f32;
+        for (p, e) in &field.arrows {
             let m = e.length();
             if m <= 0.0 {
                 continue;

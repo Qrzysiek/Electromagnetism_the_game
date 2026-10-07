@@ -82,22 +82,22 @@ impl Cost {
     /// A tube level's run (`Level::tube_run`): its wall time (which includes building its
     /// segments' linear system), its steps, and that system (a dense n × n
     /// factorization, 8n² bytes).
-    pub fn add_tube_run(&mut self, seconds: f64, run: &crate::tube::TubeRun, verification: bool) {
-        let n = run.segments.len();
+    pub fn add_tube_run(&mut self, seconds: f64, segments: usize, steps: u32, verification: bool) {
+        let n = segments;
         self.setup = self.setup
             + SetupCost {
                 seconds: 0.0,
                 bytes: 8 * n * n,
                 unknowns: n,
             };
-        self.max_steps = self.max_steps.max(u64::from(run.steps));
+        self.max_steps = self.max_steps.max(u64::from(steps));
         if verification {
             self.verify_seconds += seconds;
             self.verifications += 1;
         } else {
             self.preview_seconds += seconds;
             self.previews += 1;
-            self.evaluations += u64::from(run.steps);
+            self.evaluations += u64::from(steps);
         }
     }
 
@@ -321,8 +321,14 @@ impl Level {
         if self.is_tube() {
             for refine in [1, 2] {
                 let t = Instant::now();
-                let run = self.tube_run(player, refine, |_| {});
-                cost.add_tube_run(t.elapsed().as_secs_f64(), &run, refine == 2);
+                let mut sim = self.tube_sim(player, refine);
+                sim.advance_to(self.tube.map_or(0.0, |s| s.goal.end));
+                cost.add_tube_run(
+                    t.elapsed().as_secs_f64(),
+                    sim.segment_count(),
+                    sim.steps(),
+                    refine == 2,
+                );
             }
             return cost;
         }

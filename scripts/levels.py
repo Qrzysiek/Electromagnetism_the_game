@@ -2936,7 +2936,7 @@ def vacuum_diode():
         "grows as $I \\propto V^{3/2}$ (Child and Langmuir), faster than in proportion "
         "to the voltage. The potential map shows the space charge as a flat region in "
         "front of the cathode, where the field is pulled down to zero.",
-        grid=(24, 16), c=None, t_max=20.0,
+        grid=(24, 16), c=None, t_max=200.0,
         electrodes=[plate(8, 8, 10, thickness=1.0, angle_deg=90.0),
                     plate(16, 8, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
         supplies=slider(70.0, 12.0, 24.0, 48.0),

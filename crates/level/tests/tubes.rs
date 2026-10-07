@@ -64,21 +64,18 @@ fn planar_diode_runs() {
             level.setup_issues(&[])
         );
         let start = std::time::Instant::now();
-        let coarse = level.tube_run(&[], 1, |_| {});
+        let end = level.tube.unwrap().goal.end;
+        let coarse = level.tube_run(&[], 1, end);
         let t1 = start.elapsed().as_secs_f64();
-        let fine = level.tube_run(&[], 2, |_| {});
+        let fine = level.tube_run(&[], 2, end);
         let t2 = start.elapsed().as_secs_f64() - t1;
-        let verdict = TubeVerdict::new(coarse.current, fine.current, &level.tube.unwrap().goal);
+        let (ic, i_f) = (coarse.current.unwrap(), fine.current.unwrap());
+        let verdict = TubeVerdict::new(ic, i_f, &level.tube.unwrap().goal);
         // 1D Child–Langmuir (k = 1): J = (√2/9π) √|q/m| V^{3/2}/d², times the width.
         let cl = 2f64.sqrt() / (9.0 * std::f64::consts::PI) * v.powf(1.5) / 49.0 * 10.0;
         println!(
             "V = {v}: preview {:.5} ({} in flight, {t1:.1} s), fine {:.5} ({} in flight, {t2:.1} s), verdict {:.5} ± {:.5}; 1D CL × width {cl:.5}",
-            coarse.current,
-            coarse.in_flight,
-            fine.current,
-            fine.in_flight,
-            verdict.fine,
-            verdict.error
+            ic, coarse.in_flight, i_f, fine.in_flight, verdict.fine, verdict.error
         );
         currents.push((verdict.fine, verdict.error));
     }
@@ -101,7 +98,7 @@ fn planar_diode_convergence() {
         .iter()
         .map(|&r| {
             let start = std::time::Instant::now();
-            let c = level.tube_run(&[], r, |_| {}).current;
+            let c = level.tube_sim_current(&[], r);
             println!(
                 "refine {r}: {c:.5} ({:.1} s)",
                 start.elapsed().as_secs_f64()
