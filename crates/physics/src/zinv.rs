@@ -277,13 +277,17 @@ impl Electrodes {
 
     /// Net charge per unit length on electrode `i`.
     pub fn charge(&self, i: usize) -> f64 {
-        self.segments
-            .iter()
-            .zip(&self.sigma)
-            .zip(&self.owner)
-            .filter(|(_, o)| **o == i)
-            .map(|(((p, q), s), _)| s * (*q - *p).length())
-            .sum()
+        self.charges_of(&self.sigma)[i]
+    }
+
+    /// Each electrode's charge per unit length for the surface density `sigma` (e.g. the
+    /// induced one; its rate of change is the electrode's Ramo current).
+    pub fn charges_of(&self, sigma: &[f64]) -> Vec<f64> {
+        let mut q = vec![0.0; self.electrodes.len()];
+        for (((p, r), s), &o) in self.segments.iter().zip(sigma).zip(&self.owner) {
+            q[o] += s * (*r - *p).length();
+        }
+        q
     }
 
     /// The surface charge that cancels the potential `phi_at(midpoint)` of other sources

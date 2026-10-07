@@ -243,3 +243,68 @@ fn v4_coaxial_diode_langmuir_blodgett() {
         "V4 extrapolated {extrapolated}"
     );
 }
+
+/// V5: Ramo's theorem. A line charge λ = 1 between grounded coaxial cylinders (radii 1 and
+/// 3) at radius r induces `Q_a = −λ ln(b/r)/ln(b/a)` on the inner one (exact, from the
+/// potential's logarithmic profile), so moving outward at speed v it drives the current
+/// `dQ_a/dt = λ v/(r ln(b/a))` into it (the same for any path: only the radial speed
+/// counts). Measured: the induced charge (`induced_by`, `charges_of`) at r = 1.7 and its
+/// derivative by central differences (h = 1e-4: truncation ~h² ≈ 1e-8, far below the
+/// mesh error), with segments 0.1 and 0.05. Required as V2: second-order convergence
+/// (order ≥ 1) and the two cylinders' induced charges summing to −λ within the error.
+#[test]
+fn v5_ramo_current_in_a_coaxial_gap() {
+    let (a, b, r): (f64, f64, f64) = (1.0, 3.0, 1.7);
+    let ln_ba = (b / a).ln();
+    let q_exact = -(b / r).ln() / ln_ba;
+    let i_exact = 1.0 / (r * ln_ba);
+    let mut errors = Vec::new();
+    for size in [0.1, 0.05, 0.025] {
+        let e = Electrodes::new(
+            vec![
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: a,
+                    },
+                    bias: Bias::Grounded,
+                },
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: b,
+                    },
+                    bias: Bias::Grounded,
+                },
+            ],
+            &[],
+            size,
+        );
+        // Off a symmetry axis of the polygons, so the mesh's discreteness shows.
+        let dir = DVec3::new(0.6, 0.8, 0.0);
+        let q_at = |r: f64| {
+            let p = dir * r;
+            e.charges_of(&e.induced_by(|y| physics::zinv::line_charge(p, 1.0, y).0))
+        };
+        let q = q_at(r);
+        let h = 1e-4;
+        let i = (q_at(r + h)[0] - q_at(r - h)[0]) / (2.0 * h);
+        let (eq, ei) = (q[0] / q_exact - 1.0, i / i_exact - 1.0);
+        println!(
+            "V5 segments {size}: Q_a {:.10} (exact {q_exact:.10}) {eq:.2e}, I_a {i:.10} (exact {i_exact:.10}) {ei:.2e}, total {:.10}",
+            q[0],
+            q[0] + q[1]
+        );
+        assert!(
+            (q[0] + q[1] + 1.0).abs() < 10.0 * eq.abs().max(ei.abs()),
+            "V5 total"
+        );
+        errors.push(eq.abs().max(ei.abs()));
+    }
+    let order = (errors[1] / errors[2]).ln() / 2f64.ln();
+    println!("V5 observed order {order:.2}");
+    assert!(
+        errors[0] > errors[1] && errors[1] > errors[2] && order >= 1.0,
+        "V5 {errors:?}"
+    );
+}
