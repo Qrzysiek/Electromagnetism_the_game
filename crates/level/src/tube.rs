@@ -92,6 +92,14 @@ pub struct TubeCircuit {
     /// Further electrodes on the same ideal source (resistance 0 only): a grid's wires.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub linked: Vec<usize>,
+    /// An inductance in series with the resistance (`physics::tube::Circuit`): a tank's
+    /// coil. 0: none.
+    #[serde(default, skip_serializing_if = "crate::is_zero")]
+    pub inductance: f64,
+    /// The branch's other end: this electrode instead of ground (a tank between two
+    /// electrodes).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_to: Option<usize>,
 }
 
 /// What a potential goal measures over its window.
@@ -1081,6 +1089,8 @@ impl Level {
                     source: source.waveform(),
                     resistance: c.resistance.unwrap_or(f64::INFINITY),
                     capacitance: c.capacitance,
+                    inductance: c.inductance,
+                    to: c.return_to,
                 };
                 // Linked electrodes follow the same ideal source.
                 std::iter::once(primary).chain(c.linked.iter().map(move |&e| {
@@ -1287,7 +1297,19 @@ impl Level {
                 .iter()
                 .enumerate()
                 .any(|(i, e)| taken.contains(e) || mine[..i].contains(e) || *e >= n)
-                || (!c.linked.is_empty() && c.resistance != Some(0.0));
+                || (!c.linked.is_empty() && (c.resistance != Some(0.0) || c.inductance != 0.0));
+            // A coil needs a finite resistance (an open branch carries no current), and a
+            // branch to another electrode a resistance or a coil (an ideal source has no
+            // branch).
+            let coil_ok = c.inductance.is_finite()
+                && c.inductance >= 0.0
+                && (c.inductance == 0.0 || c.resistance.is_some_and(f64::is_finite));
+            let return_ok = c.return_to.is_none_or(|r| {
+                r < n
+                    && r != c.electrode
+                    && (c.inductance > 0.0
+                        || c.resistance.is_some_and(|x| x > 0.0 && x.is_finite()))
+            });
             taken.extend(mine);
             let sane = c.electrode < n
                 && !twice
@@ -1295,12 +1317,16 @@ impl Level {
                 && c.resistance.is_none_or(|r| r.is_finite() && r >= 0.0)
                 && c.capacitance.is_finite()
                 && c.capacitance >= 0.0
-                && (!c.supply_offset || matches!(c.source, crate::Source::Sine { .. }));
+                && (!c.supply_offset || matches!(c.source, crate::Source::Sine { .. }))
+                && coil_ok
+                && return_ok;
             if !sane {
                 out.push(format!(
                     "Tube: circuit {} needs electrodes of its own, a valid source, a \
-                     resistance and capacitance that are not negative (an offset supply needs a \
-                     sine; linked electrodes an ideal source, resistance 0).",
+                     resistance, capacitance and inductance that are not negative (an offset \
+                     supply needs a sine; linked electrodes an ideal source, resistance 0 and no \
+                     coil; a coil a finite resistance; a return to another electrode a \
+                     resistance or a coil).",
                     k + 1
                 ));
             }

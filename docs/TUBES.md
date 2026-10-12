@@ -291,3 +291,10 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   charge, not the paths or the factor 1.86) the ions cross five times faster than the
   electrons, and the ion current into the cathode came to 0.21 of the electrons' (the
   planar law: √(m_e/m_i) = 0.2).
+- **Inductors done (2026-10-13):** a tube circuit's branch may have a coil in series with
+  its resistance and may return to another electrode instead of ground (`inductance`,
+  `return_to`; editor, setup checks, pairs.py `tube_tank`). Coil branches by the
+  trapezoidal rule (with the nodes' charge balance the implicit midpoint rule: an LC tank
+  keeps its energy and is only detuned by (ω dt)²/12), resistive ones by backward Euler as
+  before (no level changed). V17 (an LC tank to rounding), V18 (a tank between two
+  electrodes), V16 with a coil (PHYSICS.md §2.11).

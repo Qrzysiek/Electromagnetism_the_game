@@ -216,3 +216,48 @@ fn current_goals_per_carrier() {
     alone.advance_to(20.0);
     assert_eq!(alone.currents()[0], Some(electrons));
 }
+
+/// Coils in tube circuits: a coil needs a finite resistance (an open branch carries
+/// nothing), a branch may not return to its own electrode, and a tank (the anode through R
+/// and L to its supply) is accepted and runs.
+#[test]
+fn coils_in_tube_circuits() {
+    let mut level = diode(10.0);
+    let tank = level::tube::TubeCircuit {
+        electrode: 1,
+        source: level::Source::Dc { value: 10.0 },
+        resistance: Some(1.0),
+        capacitance: 1.0,
+        supply_offset: false,
+        linked: Vec::new(),
+        inductance: 2.0,
+        return_to: None,
+    };
+    let refused = |level: &Level, c: level::tube::TubeCircuit| {
+        let mut l = level.clone();
+        l.tube.as_mut().unwrap().circuits = vec![c];
+        l.setup_issues(&[]).iter().any(|s| s.contains("circuit 1"))
+    };
+    assert!(refused(
+        &level,
+        level::tube::TubeCircuit {
+            resistance: None,
+            ..tank.clone()
+        }
+    ));
+    assert!(refused(
+        &level,
+        level::tube::TubeCircuit {
+            return_to: Some(1),
+            ..tank.clone()
+        }
+    ));
+    assert!(!refused(&level, tank.clone()));
+    level.tube.as_mut().unwrap().circuits = vec![tank];
+    let run = level.tube_run(&[], 1, 5.0);
+    assert!(
+        run.frames
+            .iter()
+            .all(|f| f.potentials.iter().all(|v| v.is_finite()))
+    );
+}

@@ -110,24 +110,47 @@ pub struct Projectile {
     pub mass: f64,
 }
 
-/// An electrode's external circuit, per unit length along z: a source through a
-/// resistance into the electrode, and a capacitance from it to ground.
+/// An electrode's external circuit, per unit length along z: a branch of a source, a
+/// resistance and an inductance in series, from ground (or from another electrode, `to`)
+/// into the electrode, and a capacitance from the electrode to ground.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Circuit {
     pub electrode: usize,
     pub source: Waveform,
-    /// Resistance per unit length (potential × time / charge per unit length): 0 is an
-    /// ideal source (the electrode follows it), infinite no source (floating).
+    /// Resistance per unit length (potential × time / charge per unit length): 0 without
+    /// an inductance is an ideal source (the electrode follows it), infinite no source
+    /// (floating).
     pub resistance: f64,
     /// External capacitance per unit length to ground (charge per unit length / potential).
     pub capacitance: f64,
+    /// Inductance in series with the resistance (potential × time² / charge per unit
+    /// length): 0 none. A branch with one is integrated by the trapezoidal rule (an LC
+    /// tank keeps its energy); one without, by backward Euler.
+    pub inductance: f64,
+    /// The branch's other end: this electrode instead of ground (a tank between two
+    /// electrodes). Its source's voltage adds to that electrode's potential.
+    pub to: Option<usize>,
+}
+
+impl Circuit {
+    /// An ideal source: the electrode follows it.
+    fn is_ideal(&self) -> bool {
+        self.resistance == 0.0 && self.inductance == 0.0
+    }
+
+    /// A branch with an inductance (and a finite resistance: an infinite one carries no
+    /// current, whatever its inductance).
+    fn is_inductive(&self) -> bool {
+        self.inductance > 0.0 && self.resistance.is_finite()
+    }
 }
 
 /// A circuit node: an electrode whose potential follows from its charge.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Node {
     electrode: usize,
-    /// Step over resistance (0 without a source).
+    /// Step over resistance of its own resistive branch (0 without one, or with an
+    /// inductive branch, which has its own unknown).
     conductance_dt: f64,
     capacitance: f64,
     source: Waveform,
@@ -211,6 +234,8 @@ pub struct TubeState {
     /// electrode over the last step (0 for an ideal source, whose current is not
     /// tracked).
     pub circuit_current: Vec<f64>,
+    /// Per circuit: its inductance's current now (0 without one).
+    pub inductor_current: Vec<f64>,
     /// The particles' induced surface density now (all electrodes grounded), kept from
     /// the end of the last step: the next step's emission and the display reuse it.
     induced: Vec<f64>,
@@ -310,7 +335,7 @@ impl Tube {
         // solved), ideal sources at their value.
         let mut potentials = self.electrodes.potentials.clone();
         for c in &self.circuits {
-            if c.resistance == 0.0 {
+            if c.is_ideal() {
                 potentials[c.electrode] = c.source.value(0.0);
             }
         }
@@ -336,21 +361,22 @@ impl Tube {
             potentials,
             node_charge,
             circuit_current: vec![0.0; self.circuits.len()],
+            inductor_current: vec![0.0; self.circuits.len()],
             induced: vec![0.0; self.electrodes.segments.len()],
             ..TubeState::default()
         }
     }
 
-    /// The circuit nodes: electrodes with a circuit through a resistance (not an ideal
-    /// source), then floating electrodes (a fixed charge) without a circuit.
+    /// The circuit nodes: electrodes with a circuit through a resistance or an inductance
+    /// (not an ideal source), then floating electrodes (a fixed charge) without a circuit.
     fn nodes(&self) -> Vec<Node> {
         let mut out: Vec<Node> = self
             .circuits
             .iter()
-            .filter(|c| c.resistance != 0.0)
+            .filter(|c| !c.is_ideal())
             .map(|c| Node {
                 electrode: c.electrode,
-                conductance_dt: if c.resistance.is_finite() {
+                conductance_dt: if c.resistance.is_finite() && !c.is_inductive() {
                     self.dt / c.resistance
                 } else {
                     0.0
@@ -379,11 +405,18 @@ impl Tube {
     }
 
     /// The potentials at time `t`: ideal sources at their value, the nodes solved from
-    /// their charges (backward Euler in the resistors, whose charge over the step is added
-    /// to the nodes), with the particles' induced charge `q_ind` per electrode.
+    /// their charges, with the particles' induced charge `q_ind` per electrode. A
+    /// resistive branch delivers `dt (S + V_to − V)/R` over the step (backward Euler, at
+    /// the step's end); an inductive one `dt (I₀ + I₁)/2`, its current from
+    /// `L (I₁ − I₀) = dt/2 [(S + V_to − V − R I)₀ + (S + V_to − V − R I)₁]` (the trapezoidal
+    /// rule: with the capacitances, the implicit midpoint rule, which keeps an LC tank's
+    /// energy exactly). The unknowns are the nodes' potentials and the inductive branches'
+    /// currents at `t`, from one linear system.
+    #[allow(clippy::too_many_lines)]
     fn update_potentials(&self, s: &mut TubeState, t: f64, q_ind: &[f64]) {
+        let old = s.potentials.clone();
         for c in &self.circuits {
-            if c.resistance == 0.0 {
+            if c.is_ideal() {
                 s.potentials[c.electrode] = c.source.value(t);
             }
         }
@@ -392,34 +425,111 @@ impl Tube {
             return;
         }
         let k = nodes.len();
+        let inductive: Vec<usize> = (0..self.circuits.len())
+            .filter(|&c| self.circuits[c].is_inductive())
+            .collect();
+        let size = k + inductive.len();
         let n_el = self.electrodes.electrodes.len();
         let cap = &self.electrodes.capacitance;
-        let mut a = vec![0.0; k * k];
-        let mut b = vec![0.0; k];
+        let mut a = vec![0.0; size * size];
+        let mut b = vec![0.0; size];
+        // Charge balance of each node (its own resistive branch to ground as before).
         for (r, n) in nodes.iter().enumerate() {
             let i = n.electrode;
             for (c, m) in nodes.iter().enumerate() {
-                a[r * k + c] = cap[i][m.electrode];
+                a[r * size + c] = cap[i][m.electrode];
             }
-            a[r * k + r] += n.capacitance + n.conductance_dt;
+            a[r * size + r] += n.capacitance + n.conductance_dt;
             let fixed: f64 = (0..n_el)
                 .filter(|&j| Self::node_of(&nodes, j).is_none())
                 .map(|j| cap[i][j] * s.potentials[j])
                 .sum();
             b[r] = s.node_charge[r] + n.conductance_dt * n.source.value(t) - fixed - q_ind[i];
         }
-        let v = Lu::new(a, k).solve(&b);
+        // A resistive branch returning to another electrode: its potential in the
+        // branch's drop, and the charge out of it if it is a node.
+        for c in &self.circuits {
+            let Some(to) = c.to else { continue };
+            if c.is_ideal() || c.is_inductive() || !c.resistance.is_finite() {
+                continue;
+            }
+            let g = self.dt / c.resistance;
+            let r = Self::node_of(&nodes, c.electrode).expect("a circuit's electrode is a node");
+            match Self::node_of(&nodes, to) {
+                Some(q) => {
+                    a[r * size + q] -= g;
+                    a[q * size + q] += g;
+                    a[q * size + r] -= g;
+                    b[q] -= g * c.source.value(t);
+                }
+                None => b[r] += g * s.potentials[to],
+            }
+        }
+        // The inductive branches: their charge into (and out of) the nodes, and their
+        // own equations.
+        let h = 0.5 * self.dt;
+        for (j, &ci) in inductive.iter().enumerate() {
+            let c = &self.circuits[ci];
+            let u = k + j;
+            let i0 = s.inductor_current[ci];
+            let r = Self::node_of(&nodes, c.electrode).expect("a circuit's electrode is a node");
+            a[r * size + u] -= h;
+            b[r] += h * i0;
+            let (q, v_to0, v_to1) = match c.to {
+                Some(to) => (Self::node_of(&nodes, to), old[to], s.potentials[to]),
+                None => (None, 0.0, 0.0),
+            };
+            if let Some(q) = q {
+                a[q * size + u] += h;
+                b[q] -= h * i0;
+                a[u * size + q] -= h;
+            } else {
+                b[u] += h * v_to1;
+            }
+            a[u * size + u] = c.inductance + h * c.resistance;
+            a[u * size + r] += h;
+            b[u] += c.inductance * i0
+                + h * (c.source.value(t - self.dt) + v_to0 - old[c.electrode] - c.resistance * i0)
+                + h * c.source.value(t);
+        }
+        let x = Lu::new(a, size).solve(&b);
         for (r, n) in nodes.iter().enumerate() {
-            s.potentials[n.electrode] = v[r];
-            let delivered = n.conductance_dt * (n.source.value(t) - v[r]);
-            s.node_charge[r] += delivered;
-            if let Some(c) = self
+            s.potentials[n.electrode] = x[r];
+        }
+        // The charges the branches delivered.
+        for (r, n) in nodes.iter().enumerate() {
+            if n.conductance_dt == 0.0 {
+                continue;
+            }
+            let Some(c) = self
                 .circuits
                 .iter()
-                .position(|c| c.electrode == n.electrode && c.resistance != 0.0)
-            {
-                s.circuit_current[c] = delivered / self.dt;
+                .position(|c| c.electrode == n.electrode && !c.is_ideal())
+            else {
+                continue;
+            };
+            let circuit = &self.circuits[c];
+            let delivered = match circuit.to {
+                None => n.conductance_dt * (n.source.value(t) - x[r]),
+                Some(to) => n.conductance_dt * (n.source.value(t) + s.potentials[to] - x[r]),
+            };
+            s.node_charge[r] += delivered;
+            if let Some(q) = circuit.to.and_then(|to| Self::node_of(&nodes, to)) {
+                s.node_charge[q] -= delivered;
             }
+            s.circuit_current[c] = delivered / self.dt;
+        }
+        for (j, &ci) in inductive.iter().enumerate() {
+            let c = &self.circuits[ci];
+            let i1 = x[k + j];
+            let delivered = h * (s.inductor_current[ci] + i1);
+            let r = Self::node_of(&nodes, c.electrode).expect("a circuit's electrode is a node");
+            s.node_charge[r] += delivered;
+            if let Some(q) = c.to.and_then(|to| Self::node_of(&nodes, to)) {
+                s.node_charge[q] -= delivered;
+            }
+            s.inductor_current[ci] = i1;
+            s.circuit_current[ci] = delivered / self.dt;
         }
     }
 

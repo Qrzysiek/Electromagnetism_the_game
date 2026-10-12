@@ -776,6 +776,8 @@ fn v10_circuit_node_discharges() {
             source: Waveform::Dc(0.0),
             resistance: r,
             capacitance: c_ext,
+            inductance: 0.0,
+            to: None,
         }],
     };
     let mut s = tube.state();
@@ -830,6 +832,8 @@ fn v11_beam_charges_a_floating_collector() {
             source: Waveform::Dc(0.0),
             resistance: f64::INFINITY,
             capacitance: c_ext,
+            inductance: 0.0,
+            to: None,
         }],
     };
     let mut s = tube.state();
@@ -1290,6 +1294,20 @@ fn v15_finer_emitter_mesh() {
 /// first order: at least 1.6 times smaller than at dt = 0.004.
 #[test]
 fn v16_circuit_energy_balance() {
+    energy_balance(0.0);
+}
+
+/// V16 with a coil (L = 5) in series with the outer conductor's resistance: the circuit is
+/// a damped LC tank (its period about 20, Q ≈ 0.75), integrated by the trapezoidal rule,
+/// and the balance gains the coil's energy `½ L I²`. The same requirements as V16.
+#[test]
+fn v16_circuit_energy_balance_with_a_coil() {
+    energy_balance(5.0);
+}
+
+/// V16's balance with inductance `l` in the outer conductor's branch.
+#[allow(clippy::too_many_lines)]
+fn energy_balance(l: f64) {
     use physics::circuit::Waveform;
     use physics::tube::{Circuit, Projectile, Tube};
     use physics::zinv::segment_integrals;
@@ -1337,10 +1355,12 @@ fn v16_circuit_energy_balance() {
                 source: Waveform::Dc(0.0),
                 resistance: r_load,
                 capacitance: 1.0,
+                inductance: l,
+                to: None,
             }],
         };
         let mut s = tube.state();
-        // The energy now: kinetic, field, capacitor.
+        // The energy now: kinetic, field, capacitor, coil.
         let energy = |s: &physics::tube::TubeState| -> (f64, f64) {
             let sigma = tube.surface_density(s);
             let q = tube.electrodes.charges_of(&sigma);
@@ -1368,8 +1388,9 @@ fn v16_circuit_energy_balance() {
                     .zip(s.charge.iter().zip(&s.qm))
                     .map(|(v, (l, qm))| 0.5 * (l / qm) * v.length_squared())
                     .sum();
+            let coil = 0.5 * l * s.inductor_current[0] * s.inductor_current[0];
             (
-                kinetic + field + 0.5 * 1.0 * s.potentials[1] * s.potentials[1],
+                kinetic + field + 0.5 * 1.0 * s.potentials[1] * s.potentials[1] + coil,
                 q[0],
             )
         };
@@ -1390,7 +1411,7 @@ fn v16_circuit_energy_balance() {
         let (e1, _) = energy(&s);
         let residual = (e1 + joule - work) - e0;
         println!(
-            "V16 dt {dt}: E {e0:.8} -> {e1:.8}, Joule {joule:.6e}, source work {work:.6e}, residual {residual:.3e} ({:.2e} of the Joule heat); r in {:.3}..{:.3}",
+            "V16 L {l} dt {dt}: E {e0:.8} -> {e1:.8}, Joule {joule:.6e}, source work {work:.6e}, residual {residual:.3e} ({:.2e} of the Joule heat); r in {:.3}..{:.3}",
             residual / joule,
             r_range.0,
             r_range.1
@@ -1399,10 +1420,140 @@ fn v16_circuit_energy_balance() {
         residuals.push((residual, joule));
     }
     let ((r0, _), (r1, j1)) = (residuals[0], residuals[1]);
-    println!("V16: residual ratio {:.2}", r0.abs() / r1.abs());
+    println!("V16 L {l}: residual ratio {:.2}", r0.abs() / r1.abs());
     assert!(r1.abs() < 0.02 * j1, "V16 residual {r1} vs Joule {j1}");
     assert!(
         r0.abs() >= 1.6 * r1.abs(),
         "V16 not first order: {r0} then {r1}"
     );
+}
+
+/// V17: an LC tank. The inner cylinder of the coaxial pair (outer grounded) starts at
+/// potential 1 with no current, through a coil L = 1 (no resistance) to ground, with
+/// C = 0.5 to ground: `C = C₁₁ + 0.5`, `ω = 1/√(LC)`. The trapezoidal rule on the coil's
+/// branch with the node's charge balance is the implicit midpoint rule, which maps
+/// `(√C V, √L I)` by a rotation through `θ = 2 atan(ω Δt/2)` each step: the run must give
+/// `V_n = cos(nθ)` and keep `½ C V² + ½ L I²` to rounding (required 1e-11 over 4000
+/// steps, 6 periods). Its frequency `θ/Δt` is then low by `(ω Δt)²/12` (printed): an LC
+/// tank's only error is a small detuning, never a numerical loss (backward Euler would
+/// damp it by `e^{−ω² Δt t/2}`, 15 % of the amplitude over these 6 periods).
+#[test]
+fn v17_lc_tank_keeps_its_energy() {
+    use physics::circuit::Waveform;
+    use physics::tube::{Circuit, Tube};
+    let (l, c_ext, dt) = (1.0, 0.5, 0.01);
+    let electrodes = coax(1.0, 0.0);
+    let c = electrodes.capacitance[0][0] + c_ext;
+    let omega = 1.0 / (l * c).sqrt();
+    let theta = 2.0 * (0.5 * omega * dt).atan();
+    let tube = Tube {
+        electrodes,
+        emitters: Vec::new(),
+        projectiles: Vec::new(),
+        softening: 0.05,
+        dt,
+        arena: None,
+        b_z: 0.0,
+        circuits: vec![Circuit {
+            electrode: 0,
+            source: Waveform::Dc(0.0),
+            resistance: 0.0,
+            capacitance: c_ext,
+            inductance: l,
+            to: None,
+        }],
+    };
+    let mut s = tube.state();
+    let e0 = 0.5 * c;
+    let (mut worst_v, mut worst_e) = (0.0_f64, 0.0_f64);
+    for n in 1..=4000 {
+        tube.step(&mut s);
+        let (v, i) = (s.potentials[0], s.inductor_current[0]);
+        worst_v = worst_v.max((v - (f64::from(n) * theta).cos()).abs());
+        worst_e = worst_e.max(((0.5 * c * v * v + 0.5 * l * i * i) / e0 - 1.0).abs());
+    }
+    println!(
+        "V17: C = {c:.6}, omega = {omega:.6}; V against cos(n theta) to {worst_v:.1e}, energy to {worst_e:.1e}; frequency {:+.3e} (-(omega dt)^2/12 = {:+.3e})",
+        theta / dt / omega - 1.0,
+        -(omega * dt).powi(2) / 12.0
+    );
+    assert!(worst_v < 1e-11, "V17 V {worst_v:.3e}");
+    assert!(worst_e < 1e-11, "V17 energy {worst_e:.3e}");
+}
+
+/// V18: a tank between two electrodes (a branch returning to another electrode, as between
+/// a magnetron's vanes). Two wires (radius 0.5, centres 2.4 apart) in a grounded cylinder
+/// (radius 3): wire A starts at potential 1, wire B floats with no charge, and a coil
+/// L = 2 joins them. Charge moves between them only, so `D = V_B − V_A` obeys
+/// `L C_eff D'' = −D` with `1/C_eff = eᵀ C⁻¹ e`, `e = (1, −1)`, `C` the wires' 2 × 2 block of
+/// the capacitance matrix (the boundary elements'): the run must give `D_n = D₀ cos(nθ)`,
+/// `θ = 2 atan(ω Δt/2)`, and keep `Q_A + Q_B` (required 1e-11 over 4000 steps).
+#[test]
+fn v18_tank_between_two_electrodes() {
+    use physics::circuit::Waveform;
+    use physics::tube::{Circuit, Tube};
+    let (l, dt) = (2.0, 0.01);
+    let wire = |x: f64, bias: Bias| Electrode {
+        section: Section::Circle {
+            center: DVec3::new(x, 0.0, 0.0),
+            radius: 0.5,
+        },
+        bias,
+    };
+    let electrodes = Electrodes::new(
+        vec![
+            wire(-1.2, Bias::Potential(1.0)),
+            wire(1.2, Bias::Charge(0.0)),
+            Electrode {
+                section: Section::Circle {
+                    center: DVec3::ZERO,
+                    radius: 3.0,
+                },
+                bias: Bias::Grounded,
+            },
+        ],
+        &[],
+        0.1,
+    );
+    let m = &electrodes.capacitance;
+    let det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+    let inv_c_eff = (m[1][1] + m[0][1] + m[1][0] + m[0][0]) / det;
+    let omega = (inv_c_eff / l).sqrt();
+    let theta = 2.0 * (0.5 * omega * dt).atan();
+    let tube = Tube {
+        electrodes,
+        emitters: Vec::new(),
+        projectiles: Vec::new(),
+        softening: 0.05,
+        dt,
+        arena: None,
+        b_z: 0.0,
+        circuits: vec![Circuit {
+            electrode: 0,
+            source: Waveform::Dc(0.0),
+            resistance: 0.0,
+            capacitance: 0.0,
+            inductance: l,
+            to: Some(1),
+        }],
+    };
+    let mut s = tube.state();
+    let d0 = s.potentials[1] - s.potentials[0];
+    let total = |s: &physics::tube::TubeState| {
+        let q = tube.electrodes.charges_of(&tube.surface_density(s));
+        q[0] + q[1]
+    };
+    let q0 = total(&s);
+    let (mut worst_d, mut worst_q) = (0.0_f64, 0.0_f64);
+    for n in 1..=4000 {
+        tube.step(&mut s);
+        let d = s.potentials[1] - s.potentials[0];
+        worst_d = worst_d.max((d - d0 * (f64::from(n) * theta).cos()).abs() / d0.abs());
+        worst_q = worst_q.max((total(&s) - q0).abs());
+    }
+    println!(
+        "V18: D0 = {d0:.6}, 1/C_eff = {inv_c_eff:.6}, omega = {omega:.6}; D against D0 cos(n theta) to {worst_d:.1e}, Q_A + Q_B to {worst_q:.1e}"
+    );
+    assert!(worst_d < 1e-11, "V18 D {worst_d:.3e}");
+    assert!(worst_q < 1e-11, "V18 charge {worst_q:.3e}");
 }

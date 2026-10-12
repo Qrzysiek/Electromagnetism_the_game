@@ -190,6 +190,25 @@ def make_tube_circuit(lv, pl, p, o, w):
     ]
 
 
+def make_tube_tank(lv, pl, p, o, w):
+    """A tube level (`make_tube`) whose anode is an LC tank biased by its supply (a DC
+    source through R and a coil, C to ground: a cavity), with a second electrode joined to
+    it by a coil (a tank between two electrodes): the inductors of PHYSICS.md 2.11."""
+    make_tube(lv, pl, p, o, w)
+    k = lv["tube"]["cathode"]
+    lv["electrodes"].append(electrode((p[0] - 3, p[1] + 2), length=0.6, thickness=0.5))
+    lv["tube"]["circuits"] = [
+        {"electrode": k + 1, "source": {"kind": "dc", "value": 1.0}, "resistance": 1.0,
+         "capacitance": 1.0, "inductance": 2.0},
+        {"electrode": k + 2, "source": {"kind": "dc", "value": 0.0}, "resistance": 0.5,
+         "inductance": 1.0, "return_to": k + 1},
+    ]
+    lv["tube"]["potential_goals"] = [
+        {"electrode": k + 1, "measure": "amplitude", "omega": 0.5, "min": 0.0, "max": 10.0,
+         "start": 5.0, "end": 10.0},
+    ]
+
+
 def make_tube(lv, pl, p, o, w):
     """Makes the case a tube level (PHYSICS.md 2.11): no shots; a grounded cathode six
     cells left of p emitting toward +x and an anode at p (1 V) collecting the goal's
@@ -264,6 +283,7 @@ ELEMENTS = {
     "tube": make_tube,
     "tube_solenoid": make_tube_solenoid,
     "tube_circuit": make_tube_circuit,
+    "tube_tank": make_tube_tank,
     "player_charge": player(lambda p, o, w: {"node": node(p), "kind": "charge", "value": -1.0}),
     "player_magnet": player(lambda p, o, w: {"node": node(p), "kind": "magnet", "value": 2.0}),
     "player_antenna": player(lambda p, o, w: {"node": node(p), "kind": "antenna", "value": 1.0,

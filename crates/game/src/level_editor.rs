@@ -1812,6 +1812,8 @@ fn edit_tube(
             capacitance,
             supply_offset,
             linked,
+            inductance,
+            return_to,
         } = c;
         ui.push_id(("tube_circuit", k), |ui| {
             ui.horizontal(|ui| {
@@ -1849,6 +1851,40 @@ fn edit_tube(
                     )
                     .has_focus();
             });
+            // A coil in the branch, and where the branch returns (not for a floating
+            // electrode, whose branch carries nothing).
+            if resistance.is_some() {
+                ui.horizontal(|ui| {
+                    ui.label("L").on_hover_text(
+                        "A coil in series with R (a tank's): 0 none. Integrated so that an LC \
+                         tank keeps its energy",
+                    );
+                    focus |= ui
+                        .add(
+                            egui::DragValue::new(inductance)
+                                .speed(0.01)
+                                .range(0.0..=MAX_POSITIVE),
+                        )
+                        .has_focus();
+                    let mut back = return_to.is_some();
+                    ui.checkbox(&mut back, "returns to another electrode")
+                        .on_hover_text(
+                            "The branch ends on another electrode instead of ground (a tank \
+                             between two electrodes)",
+                        );
+                    if !back {
+                        *return_to = None;
+                    } else if return_to.is_none() {
+                        *return_to = Some(if *electrode == 0 { 1.min(last) } else { 0 });
+                    }
+                });
+                if let Some(r) = return_to {
+                    focus |= index(ui, "  returns to electrode", r);
+                }
+            } else {
+                *inductance = 0.0;
+                *return_to = None;
+            }
             if matches!(source, Source::Sine { .. }) {
                 ui.checkbox(supply_offset, "the supply sets the offset (a bias)");
             } else {
@@ -1890,6 +1926,8 @@ fn edit_tube(
             capacitance: 1.0,
             supply_offset: false,
             linked: Vec::new(),
+            inductance: 0.0,
+            return_to: None,
         });
     }
     // Potential goals.
@@ -2474,12 +2512,16 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     capacitance,
                     supply_offset: _,
                     linked,
+                    inductance,
+                    return_to,
                 } = c;
                 *electrode < n
                     && linked.iter().all(|e| *e < n)
                     && source_editable(source)
                     && resistance.is_none_or(&nonneg)
                     && nonneg(*capacitance)
+                    && nonneg(*inductance)
+                    && return_to.is_none_or(|e| e < n)
             });
         let potential_ok = potential_goals.len() <= MAX_COUNT as usize
             && potential_goals.iter().all(|g| {
