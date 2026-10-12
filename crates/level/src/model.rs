@@ -24,6 +24,9 @@ fn note(exact: bool, text: &str) -> ModelNote {
 impl Level {
     /// The model of this level with a placement, exact parts first.
     pub fn model_notes(&self, player: &[Element]) -> Vec<ModelNote> {
+        if let Some(spec) = &self.tube {
+            return tube_notes(spec);
+        }
         let all = || self.elements.iter().chain(player);
         let has = |k: ElementKind| all().any(|e| e.kind == k);
         let antennas = has(ElementKind::Antenna) || self.limits.max_antennas > 0;
@@ -365,6 +368,104 @@ impl Level {
     }
 }
 
+/// A tube level's model (PHYSICS.md §2.11): its own world, z-invariant, with its own
+/// approximations.
+fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
+    let mut out = vec![
+        note(
+            true,
+            "A z-invariant tube: every electrode, carrier and field is the same along z \
+             (long prisms and lines of charge), the symmetry the textbook diode laws assume. \
+             Its fields are exact 2D electrostatics: a line charge's potential is −2λ ln r.",
+        ),
+        note(
+            false,
+            "Newtonian motion (carriers below 0.1 c; at tube energies about 0.03 c): the \
+             magnetic forces between carriers and retardation, of order v²/c², are left out.",
+        ),
+        note(
+            false,
+            "Electrodes: surface charge on straight segments (boundary elements), the \
+             emitters meshed four times finer. The verification halves every scale \
+             (segments, time step, macroparticle weight, softening); its error bar is 1.5 \
+             times its difference to the preview.",
+        ),
+        note(
+            false,
+            "Carriers are macroparticles: each a line of many carriers following one \
+             carrier's path. Only the graininess of the space charge depends on their weight \
+             (1/150 of the charge the emitting face holds, in the preview); their mutual \
+             force is softened within an eighth of a segment.",
+        ),
+        note(
+            false,
+            "Space-charge-limited emission: each step a segment emits the charge its surface \
+             holds, released at rest half a segment out. Skipping that first layer makes the \
+             current high by an error of first order in the resolution (a few per cent at \
+             the verification's), which the error bar covers. A carrier coming back is \
+             absorbed by its emitter on reaching the layer it was released from.",
+        ),
+        note(
+            false,
+            "A grounded envelope half a cell outside the board encloses the tube: what \
+             leaves the board ends on it (counted as lost).",
+        ),
+        note(
+            false,
+            "Many interacting carriers make a run chaotic: a change at the level of rounding \
+             moved verified results by up to 0.7 %, inside the error bars (the \
+             macroparticles' noise).",
+        ),
+        note(
+            false,
+            "Metal responds electrostatically (instantly): valid for carriers slow compared \
+             with light crossing the tube.",
+        ),
+    ];
+    if spec.b_z != 0.0 || spec.solenoid.is_some() {
+        out.push(note(
+            true,
+            "A uniform magnetic field along z (a long solenoid around the tube): the \
+             carriers' gyration is exact (Boris rotation).",
+        ));
+    }
+    if spec.saturation.is_some() {
+        out.push(note(
+            false,
+            "Temperature-limited cathode: it emits at most its saturation current (the \
+             Richardson current of its temperature), whatever the field.",
+        ));
+    }
+    if spec.ions.is_some() {
+        out.push(note(
+            false,
+            "Ions: lighter per charge than real ones (real ions are at least 1836 times \
+             heavier than electrons per charge). In a static field the mass changes neither \
+             the paths nor the electrons' gain from the ions' space charge, only the time \
+             scale and the ion current (√(m_e/m_i) of the electrons' in a planar diode).",
+        ));
+    }
+    if !spec.circuits.is_empty() {
+        let coils = spec.circuits.iter().any(|c| c.inductance > 0.0);
+        out.push(note(
+            false,
+            if coils {
+                "Circuits: lumped, per unit length along z, acting on the carriers and acted \
+                 on through the charge they induce (Ramo). Resistive branches are integrated \
+                 by backward Euler (first order in the step); coils by the trapezoidal rule, \
+                 so an LC tank keeps its energy and is only detuned, by (ω Δt)²/12 of its \
+                 frequency."
+            } else {
+                "Circuits: lumped, per unit length along z, acting on the carriers and acted \
+                 on through the charge they induce (Ramo); integrated by backward Euler \
+                 (first order in the step)."
+            },
+        ));
+    }
+    out.sort_by_key(|n| !n.exact);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,6 +477,12 @@ mod tests {
             |l: &Level, p: &[Element], s: &str| l.model_notes(p).iter().any(|n| n.text.contains(s));
         let bend = crate::shipped("first_bend");
         assert!(!has(&bend, &[], "Electrodes"));
+        // A tube is its own world: z-invariant, not the plane of a 3D one.
+        let diode = crate::shipped("vacuum_diode");
+        assert!(has(&diode, &[], "z-invariant") && !has(&diode, &[], "3D world"));
+        assert!(!has(&diode, &[], "Circuits"));
+        let rectifier = crate::shipped("rectifier");
+        assert!(has(&rectifier, &[], "backward Euler") && !has(&rectifier, &[], "coils by"));
         let plates = crate::shipped("build_a_deflector");
         assert!(has(&plates, &[], "image force"));
         assert!(has(&plates, &[], "Radiation is neglected"));
