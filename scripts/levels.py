@@ -297,11 +297,15 @@ def sine(amplitude, omega, offset=0.0, phase=0.0):
     return s
 
 
-def potential_goal(electrode, measure, lo, hi, start, end):
-    """A tube level's goal on an electrode's potential over t = start..end: its "mean" or
-    its "swing" (half the peak-to-peak) between lo and hi."""
-    return {"electrode": electrode, "measure": measure, "min": lo, "max": hi,
-            "start": start, "end": end}
+def potential_goal(electrode, measure, lo, hi, start, end, omega=None):
+    """A tube level's goal on an electrode's potential over t = start..end: its "mean", its
+    "swing" (half the peak-to-peak) or its oscillation's "amplitude" at `omega` (a drift
+    removed) between lo and hi."""
+    g = {"electrode": electrode, "measure": measure, "min": lo, "max": hi,
+         "start": start, "end": end}
+    if omega is not None:
+        g["omega"] = omega
+    return g
 
 
 def projectile(x, y, direction_deg, speed, charge, mass, launch=0.0, detector=None):
@@ -2992,15 +2996,18 @@ ARCS = [
 
 def vacuum_diode():
     # The planar diode of crates/level/tests/tubes.rs: plates 10 long, 1 thick, faces 7
-    # apart. Verified currents: 0.321 at 10, 2.55 at 40 (I ~ V^1.5 to 1 %), so the goal
-    # 1.0 to 1.4 asks for about 21 to 27; the reference 24 (current ~1.2) sits in the
-    # middle, clear of the verdict's error (~5 %).
+    # apart, inside the tube's grounded envelope (PHYSICS.md 2.11). Preview currents
+    # (`generator tube-scan`): 1.00 at 22, 1.15 at 24, 1.29 at 26, 1.45 at 28; the
+    # verification's are ~7 % lower (I ~ V^1.5) with an error of ~10 % (the envelope made
+    # the convergence first order, PHYSICS.md 2.11). The goal 0.9 to 1.5 is verified for
+    # about 23.6 to 28 (1.0 to 1.4 left only 25.3 to 26.9); the reference 26: 1.203 +-
+    # 0.124.
     return level(
         "Vacuum diode",
         "Inside a vacuum tube. The left plate is a hot cathode: its right face emits "
         "electrons (blue dots), as many as its field pulls off. The right plate, the "
-        "anode, is on your power supply. Set its voltage so that a current between 1.0 "
-        "and 1.4 reaches the anode (averaged over $t = 10$ to $20$). The electrons in "
+        "anode, is on your power supply. Set its voltage so that a current between 0.9 "
+        "and 1.5 reaches the anode (averaged over $t = 10$ to $20$). The electrons in "
         "flight repel the ones behind them: this space charge chokes the current, which "
         "grows as $I \\propto V^{3/2}$ (Child and Langmuir), faster than in proportion "
         "to the voltage. The potential map shows the space charge as a flat region in "
@@ -3008,20 +3015,22 @@ def vacuum_diode():
         grid=(24, 16), c=None, t_max=200.0,
         electrodes=[plate(8, 8, 10, thickness=1.0, angle_deg=90.0),
                     plate(16, 8, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
-        supplies=slider(70.0, 12.0, 24.0, 48.0),
-        tube=tube(0, 1, 1.0, 1.4, 10.0, 20.0, emit_toward_deg=0.0),
-        reference=[supply(16, 8, 24.0)])
+        supplies=slider(70.0, 13.0, 26.0, 52.0),
+        tube=tube(0, 1, 0.9, 1.5, 10.0, 20.0, emit_toward_deg=0.0),
+        reference=[supply(16, 8, 26.0)])
 
 
 def sideways():
     # Designed with `generator tube-scan` (PHYSICS.md 2.11, V8): a diode (30 across a gap of
     # 9: Hull's planar cutoff sqrt(2V)/d = 0.86) in the player's solenoid field, and a
-    # collector at 10 above the top end of the gap. Collector current: 0.48 without field,
-    # nothing with B negative (the drift goes down); rising as the electrons curve upwards,
-    # 0.96 at B = 0.95, 1.37 at 1.2, 1.56 at 1.35, while the anode's falls to 0 (the cutoff;
-    # its residue above 0.86, 0.24 at 1.3, comes in at the gap's ends, where the
-    # translation symmetry behind Hull's theorem is broken); above ~1.42 the electrons
-    # curl back onto the cathode (0.45 at 1.45). The goal >= 1.1 asks for B in ~1.1-1.42.
+    # collector at 10 above the top end of the gap; inside the grounded envelope. Preview
+    # collector current: 0.47 without field (the anode 0.96), nothing with B negative (the
+    # drift goes down); rising as the electrons curve upwards, 0.83 at B = 0.8, 1.28 at
+    # 0.95, 1.34 at 1.1, 1.27 at 1.2, 1.15 at 1.3, while the anode's falls to 0 from 1.1
+    # (the cutoff; below it, 0.13 at 0.95, comes in at the gap's ends, where the
+    # translation symmetry behind Hull's theorem is broken); above ~1.35 the electrons
+    # curl back onto the cathode, which takes them (0.87 at 1.4, 0.50 at 1.5). The goal
+    # >= 1.1 asks for B in ~0.95-1.3.
     return level(
         "Sideways",
         "Around this tube is a solenoid: switch on its supply (the yellow coil at the top "
@@ -3035,20 +3044,26 @@ def sideways():
         electrodes=[plate(6, 11, 10, thickness=1.0, angle_deg=90.0),
                     plate(16, 11, 10, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
                     plate(9, 19, 6, thickness=1.0, kind="potential", value=10.0)],
-        solenoid_fields=slider(4.0, -1.25, 0.6, 1.25),
+        solenoid_fields=slider(4.0, -1.1, 0.6, 1.1),
         tube=tube(0, 2, 1.1, 10.0, 20.0, 40.0, emit_toward_deg=0.0, solenoid=(23, 21)),
-        reference=[supply(23, 21, 1.25)])
+        reference=[supply(23, 21, 1.1)])
 
 
 def through_the_cloud():
-    # Designed with `generator tube-scan` and verified with `check` (PHYSICS.md 2.11).
-    # The diode (gap 9) needs about 27 to 31 for the current goal (0.92 at 28, 1.05 at
-    # 31). At those voltages the ion (q/m = 0.02, launched at t = 10 when the flow is
-    # established) is pushed into the cathode at y ~ 12. A positive plate below the gap,
-    # left of the ion's path, kicks it rightwards: vertical at (8, 2) at +60 with the anode
-    # at 28 verifies (current 1.010 +- 0.036, the ion arrives at t = 26.2 in both runs);
-    # also horizontal at (9, 3) at +40, and +55 at 29. Without a plate the ion misses
-    # (the current alone is met). Negative plates beyond the gap do not save it.
+    # Designed with `generator tube-scan` and verified with `check` (PHYSICS.md 2.11),
+    # inside the tube's grounded envelope. The diode (gap 9) needs about 28 to 33 for the
+    # current goal without plates (0.95 at 30). The ion (q/m = 0.02, launched at t = 10
+    # when the flow is established, at 1.2: at 0.8 it cannot climb the gap's potential
+    # once a plate raises it) is pushed out of its way: at 30 it leaves the top at x = 3.9,
+    # left of the detector (8 to 14). Of 288 single plates (below and above the gap,
+    # +-20 to +-80, the anode at 30), 25 bring it in: positive ones below the gap, left of
+    # its path, kick it rightwards but draw electrons (1.2-1.4); negative ones right of its
+    # path or near the detector pull it but choke the flow (0.2-0.7); positive ones above
+    # the cathode's top end, at (3-5, 17-18) +35 to +70, push it right as it leaves the
+    # gap and keep the current (0.91-1.14 at anode 28-32). Verified: (4, 18) vertical at
+    # +65 with the anode at 30, current 1.008 +- 0.020, the ion arrives at t = 31.23 in
+    # both runs (the reference); (5, 17) at +50: 1.014 +- 0.120, t = 35.5 and 32.3;
+    # (5, 18) at +35: 1.039 +- 0.004, t = 31.8.
     return level(
         "Through the cloud",
         "An ion (a long line of positive charge, the large dot) is fired up through the gap "
@@ -3056,38 +3071,41 @@ def through_the_cloud():
         "running, with a current between 0.85 and 1.15 into the anode (averaged over "
         "$t = 15$ to $30$), and bring the ion into the detector at the top. The anode's "
         "field pushes positive charges toward the cathode, and the electrons' cloud pulls "
-        "on the ion as it passes: at the voltage the current needs, the ion ends on the "
-        "cathode. Your two plates can push it back on course, but they act on the "
-        "electrons as well, and the ion's own charge disturbs the flow it crosses.",
+        "on the ion as it passes: at the voltage the current needs, the ion leaves the "
+        "tube far left of the detector. Your two plates can push it back on course, but "
+        "they act on the electrons as well, and the ion's own charge disturbs the flow it "
+        "crosses.",
         grid=(24, 20), c=None, t_max=60.0,
         electrodes=[plate(6, 10, 10, thickness=1.0, angle_deg=90.0),
                     plate(16, 10, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
-        supplies=slider(70.0, 20.0, 28.0, 40.0),
-        max_plates=2, plate_voltages=slider(80.0, -40.0, 20.0, 40.0, 60.0),
+        supplies=slider(70.0, 20.0, 30.0, 40.0),
+        max_plates=2, plate_voltages=slider(80.0, -40.0, 20.0, 35.0, 50.0, 65.0),
         plate_size=(3.0, 0.5, 4.0),
         tube=tube(0, 1, 0.85, 1.15, 15.0, 30.0, emit_toward_deg=0.0,
-                  projectiles=[projectile(11, 0, 90.0, 0.8, 0.2, 10.0, launch=10.0,
+                  projectiles=[projectile(11, 0, 90.0, 1.2, 0.2, 10.0, launch=10.0,
                                           detector=((8, 18), (14, 20)))]),
-        reference=[supply(16, 10, 28.0), player_plate(8, 2, 60.0, angle_deg=90.0)])
+        reference=[supply(16, 10, 30.0), player_plate(4, 18, 65.0, angle_deg=90.0)])
 
 
 def electron_gun():
     # Designed with `generator tube-scan`, verified with `check` (PHYSICS.md 2.11). The
-    # cathode is temperature limited (0.1 per unit length of its 8-long face: at most 0.8),
-    # so pulling harder gains nothing. Of what passes the slit (~0.2) the spreading beam
-    # misses the 2-long collector without plates (0.021 +- 0.018). Two horizontal plates
-    # beside the beam after the slit, at about a third of the drift region's 30, focus it.
-    # Verified: (21, 13/7) at +9 0.1539 +- 0.0014 (the reference); (17, 12/8) at +10
-    # 0.1521 +- 0.0014; (19, 13/7) at +5 0.152 +- 0.009, at +10 0.131 +- 0.030; (23,
-    # 13/7) at +10 0.138 +- 0.028. At 0 the lens is too strong and at +15 too weak (both
-    # uncertain, 0.07 +- 0.05).
+    # cathode is temperature limited (0.2 per unit length of its 8-long face: at most 1.6),
+    # so pulling harder gains nothing. Inside the tube's grounded envelope the drift
+    # region's potential peaks on the axis, which focuses the beam a little: with the
+    # former 0.1 it reached the collector unaided (0.113 +- 0.042 for the goal 0.08), so
+    # the cathode was made hotter, its beam's space charge spreading it harder. Without
+    # plates now 0.155 +- 0.026 (the goal 0.24: missed). Two horizontal plates beside the
+    # beam after the slit focus it (preview 0.25-0.31 at +2 to +8, x = 17 to 23).
+    # Verified: (21, 13/7) at +6 0.294 +- 0.008 (the reference); (17, 13/7) at +6 0.288
+    # +- 0.023; (19, 13/7) at +4 0.294 +- 0.019. At 0 the lens is too strong (0.192 +-
+    # 0.025) and at +12 too weak (0.161 +- 0.012): both missed.
     return level(
         "Electron gun",
-        "An electron gun: the hot cathode (left) gives at most 0.1 per unit length of its "
+        "An electron gun: the hot cathode (left) gives at most 0.2 per unit length of its "
         "face (its temperature limits it: a stronger field pulls no more), the anode's slit "
         "lets a thin beam through, and the small collector on the right should catch it. "
         "But the beam's electrons repel one another: it spreads and misses. Place two plates "
-        "beside the beam to focus it, so that at least 0.08 reaches the collector (averaged "
+        "beside the beam to focus it, so that at least 0.24 reaches the collector (averaged "
         "over $t = 20$ to $40$). A plate at a lower potential than the beam's surroundings "
         "pushes the electrons back toward the axis; too low, and it throws them back.",
         grid=(32, 20), c=None, t_max=60.0,
@@ -3095,10 +3113,48 @@ def electron_gun():
                     plate(12, 14, 6, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
                     plate(12, 6, 6, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
                     plate(28, 10, 2, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0)],
-        max_plates=2, plate_voltages=slider(80.0, -10.0, 10.0, 20.0, 30.0),
+        max_plates=2, plate_voltages=slider(80.0, -10.0, 3.0, 6.0, 12.0, 20.0),
         plate_size=(3.0, 0.5, 4.0),
-        tube=tube(0, 3, 0.08, 5.0, 20.0, 40.0, emit_toward_deg=0.0, saturation=0.1),
-        reference=[player_plate(21, 13, 9.0), player_plate(21, 7, 9.0)])
+        tube=tube(0, 3, 0.24, 5.0, 20.0, 40.0, emit_toward_deg=0.0, saturation=0.2),
+        reference=[player_plate(21, 13, 6.0), player_plate(21, 7, 6.0)])
+
+
+def rectifier():
+    # Designed with `generator tube-scan`, verified with `check` (PHYSICS.md 2.11): a
+    # cathode between two anodes 6 away, each on an AC supply (period 20) whose setting is
+    # its amplitude, the right one's half a period behind; the cathode is the output,
+    # through R = 30 and C = 1 to ground, and charges positive as it loses electrons.
+    # Output over t = 60-100 (preview): both anodes at 20/30/40: mean 6.0/9.9/13.9, swing
+    # 0.34/0.55/0.77 (full wave); one at 20/30/40: 3.7/6.2/9.0, swing 1.7/2.6/3.5 (half
+    # wave); both, but of opposite signs (in phase): 4.5/7.4/10.5, swing 3.3/5.0/6.7. The
+    # goal (mean 8.5 to 11.5, ripple below 1.2, over t = 40-80, after the output has
+    # settled) needs both anodes in opposite phase: each supply alone, the other at the
+    # reference, solves on 24 to 36 (preview; `generator window`), the verification's
+    # error (+-0.7 on the mean) narrowing it (at 30/30: 9.26 +- 0.66, at the edge). The
+    # reference 32 sits in the middle.
+    omega = 2.0 * math.pi / 20.0
+    return level(
+        "Rectifier",
+        "A rectifier tube: a hot cathode in the middle, an anode on each side. Each anode is "
+        "on its own AC power supply, a sine of period 20 whose amplitude you set; the right "
+        "one's runs half a period behind the left one's. Electrons flow from the cathode to "
+        "an anode only while that anode is positive: the tube conducts one way. The cathode "
+        "is connected to ground through a load resistor (30) and a capacitor (1): losing "
+        "electrons, it charges positive, and its potential is the rectifier's output, DC "
+        "from AC. Make a smooth supply: the cathode's mean potential between 8.5 and 11.5, "
+        "and its ripple (half its peak-to-peak) below 1.2, over $t = 40$ to $80$.",
+        grid=(24, 16), c=None, t_max=200.0,
+        electrodes=[plate(12, 8, 10, thickness=1.0, angle_deg=90.0),
+                    plate(5, 8, 10, thickness=1.0, angle_deg=90.0, tunable=True),
+                    plate(19, 8, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
+        supplies=slider(80.0, 16.0, 32.0, 48.0),
+        tube=tube(0, None, 0.0, 0.0, 0.0, 0.0,
+                  circuits=[tube_circuit(1, sine(30.0, omega), resistance=0.0),
+                            tube_circuit(2, sine(30.0, omega, phase=math.pi), resistance=0.0),
+                            tube_circuit(0, dc(0.0), resistance=30.0, capacitance=1.0)],
+                  potentials=[potential_goal(0, "mean", 8.5, 11.5, 40.0, 80.0),
+                              potential_goal(0, "swing", 0.0, 1.2, 40.0, 80.0)]),
+        reference=[supply(5, 8, 32.0), supply(19, 8, 32.0)])
 
 
 ARCS.append(("Inside the components: vacuum tubes", [
@@ -3109,6 +3165,7 @@ ARCS.append(("Inside the components: vacuum tubes", [
     ("Intermediate", [
         ("through_the_cloud", through_the_cloud),
         ("electron_gun", electron_gun),
+        ("rectifier", rectifier),
     ]),
 ]))
 

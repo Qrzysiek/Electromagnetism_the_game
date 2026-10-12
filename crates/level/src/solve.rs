@@ -277,6 +277,12 @@ pub fn is_verified_solution(level: &Level, placement: &[Element]) -> bool {
     if level.check_placement(placement).is_err() {
         return false;
     }
+    if level.is_tube() {
+        // No shots: the tube's verdict (every goal, from both runs). Through the shots'
+        // verdicts below, an empty list, every placement of a tube level counted as verified.
+        return level.setup_issues(placement).is_empty()
+            && level.tube_verdict(placement).status == crate::tube::TubeStatus::Met;
+    }
     if level.has_beams() {
         return level.beams_solved(&level.verify_beams(placement));
     }

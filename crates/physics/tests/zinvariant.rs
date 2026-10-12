@@ -327,7 +327,7 @@ fn v5_ramo_current_in_a_coaxial_gap() {
 /// `ERROR_FACTOR`): each reference within 1.5 times the two runs' difference of the fine
 /// run, and the error shrinking with the refinement.
 #[test]
-#[ignore = "4.5 minutes in release: run with --ignored (measured values in PHYSICS.md §2.11)"]
+#[ignore = "2 minutes in release: run with --ignored (measured values in PHYSICS.md §2.11)"]
 fn v6_bipolar_coaxial_diode() {
     use physics::tube::{Emitter, Tube};
     let (ie_ref, ii_ref) = (0.964_739_180_2, 0.778_521_200_6);
@@ -1071,4 +1071,120 @@ fn magnetron_with_space_charge_measurement() {
         "magnetron: at 1.05 B_H {:.3} of the field-free current",
         currents[1] / currents[0]
     );
+}
+
+/// V13: the envelope (`Section::Frame`, meshed on its inner face only). A line charge
+/// λ = 1 at (2.2, 1.7) inside a grounded rectangle [0, 6] × [0, 4], against the exact
+/// Dirichlet Green's function of the rectangle (Gaussian units, ∇²φ = −4πλδ: a sine
+/// series in x whose coefficients jump at the source's y),
+/// `φ = Σ_n (8λ/n) sin(k_n x₀) sin(k_n x) sinh(k_n y<) sinh(k_n (b − y>)) / sinh(k_n b)`,
+/// `k_n = nπ/a`, at three field points off the source's row, where it converges
+/// exponentially (2000 terms, in exponentials). The BEM's potential there is the line
+/// charge's plus the frame's surface charge. With segments of 0.5 (the game's envelope at
+/// both resolutions, `ENVELOPE_SEGMENT`), 0.25 and 0.125. Required: second order as V2 and
+/// V3 (observed order ≥ 1.5) and at the game's 0.5 within 3e-3 of the potential's scale
+/// (the largest |φ| of the points): well below the macroparticle method's few per cent.
+/// (Segments of 1 gave 1.2e-2: the game's envelope does not use them.)
+#[test]
+fn v13_line_charge_in_a_grounded_envelope() {
+    use physics::zinv::line_charge;
+    let (a, b) = (6.0_f64, 4.0_f64);
+    let (x0, y0, lambda) = (2.2_f64, 1.7_f64, 1.0_f64);
+    let points = [(4.1, 2.9), (1.0, 3.2), (3.5, 0.6)];
+    let exact = |x: f64, y: f64| -> f64 {
+        let (lo, hi) = if y < y0 { (y, y0) } else { (y0, y) };
+        (1..=2000)
+            .map(|n| {
+                let k = f64::from(n) * std::f64::consts::PI / a;
+                let ratio = (-k * (hi - lo)).exp()
+                    * (1.0 - (-2.0 * k * lo).exp())
+                    * (1.0 - (-2.0 * k * (b - hi)).exp())
+                    / (2.0 * (1.0 - (-2.0 * k * b).exp()));
+                8.0 * lambda / f64::from(n) * (k * x0).sin() * (k * x).sin() * ratio
+            })
+            .sum()
+    };
+    let reference: Vec<f64> = points.iter().map(|&(x, y)| exact(x, y)).collect();
+    let scale = reference.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
+    let mut errors = Vec::new();
+    for size in [0.5, 0.25, 0.125] {
+        let electrodes = Electrodes::new(
+            vec![Electrode {
+                section: Section::Frame {
+                    center: DVec3::new(0.5 * a, 0.5 * b, 0.0),
+                    half_width: 0.5 * a,
+                    half_height: 0.5 * b,
+                    segment: size,
+                },
+                bias: Bias::Grounded,
+            }],
+            &[(DVec3::new(x0, y0, 0.0), lambda)],
+            size,
+        );
+        let source = DVec3::new(x0, y0, 0.0);
+        let worst = points
+            .iter()
+            .zip(&reference)
+            .map(|(&(x, y), r)| {
+                let p = DVec3::new(x, y, 0.0);
+                let phi = electrodes.sample(p).0 + line_charge(source, lambda, p).0;
+                (phi - r).abs() / scale
+            })
+            .fold(0.0_f64, f64::max);
+        println!(
+            "V13 segments {size}: {} of them, worst {worst:.2e} of the scale {scale:.4} (points {reference:.6?})",
+            electrodes.segments.len()
+        );
+        errors.push(worst);
+    }
+    let order = (errors[1] / errors[2]).ln() / 2f64.ln();
+    println!("V13 observed order {order:.2}");
+    assert!(order >= 1.5, "V13 order {order}");
+    assert!(errors[0] <= 3e-3, "V13 at 0.5: {}", errors[0]);
+}
+
+/// V14: the far field of a segment (`segment_field_fast`, the monopole and quadrupole of
+/// its multipole series beyond `FAR_SEGMENTS` = 4 lengths) against the exact integrals, at
+/// 20 000 points from 4 to 100 lengths in every direction about segments of every
+/// orientation and of lengths 0.05 to 2. The first omitted term is `(L/r)⁴/80` of the
+/// monopole: 4.9e-5 at 4 lengths. Required: below 1e-4 of the field everywhere (far below
+/// the boundary elements' discretization, V2: 2e-4 at the finest mesh), and the exact
+/// integrals used inside 4 lengths (bit-identical there).
+#[test]
+fn v14_far_field_of_a_segment() {
+    use physics::zinv::{FAR_SEGMENTS, segment_field, segment_field_fast};
+    let mut worst: f64 = 0.0;
+    let mut worst_at = 0.0;
+    let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        #[allow(clippy::cast_precision_loss)]
+        let f = (seed >> 11) as f64 / (1u64 << 53) as f64;
+        f
+    };
+    for _ in 0..20_000 {
+        let length = 0.05 * 40.0_f64.powf(next());
+        let angle = std::f64::consts::TAU * next();
+        let a = DVec3::new(10.0 * next() - 5.0, 10.0 * next() - 5.0, 0.0);
+        let b = a + DVec3::new(angle.cos(), angle.sin(), 0.0) * length;
+        let mid = (a + b) * 0.5;
+        let distance = length * FAR_SEGMENTS * 25.0_f64.powf(next());
+        let dir = std::f64::consts::TAU * next();
+        let x = mid + DVec3::new(dir.cos(), dir.sin(), 0.0) * distance;
+        let exact = segment_field(a, b, x);
+        let fast = segment_field_fast(a, b, x);
+        let err = (fast - exact).length() / exact.length();
+        if err > worst {
+            worst = err;
+            worst_at = distance / length;
+        }
+    }
+    // Inside the switch the exact integrals are used.
+    let (a, b) = (DVec3::ZERO, DVec3::new(1.0, 0.0, 0.0));
+    let near = DVec3::new(0.5, 3.9, 0.0);
+    assert_eq!(segment_field_fast(a, b, near), segment_field(a, b, near));
+    println!("V14: worst relative error {worst:.3e} at {worst_at:.2} lengths");
+    assert!(worst < 1e-4, "V14 {worst}");
 }

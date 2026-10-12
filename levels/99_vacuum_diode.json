@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Vacuum diode",
-  "description": "Inside a vacuum tube. The left plate is a hot cathode: its right face emits electrons (blue dots), as many as its field pulls off. The right plate, the anode, is on your power supply. Set its voltage so that a current between 1.0 and 1.4 reaches the anode (averaged over $t = 10$ to $20$). The electrons in flight repel the ones behind them: this space charge chokes the current, which grows as $I \\propto V^{3/2}$ (Child and Langmuir), faster than in proportion to the voltage. The potential map shows the space charge as a flat region in front of the cathode, where the field is pulled down to zero.",
+  "description": "Inside a vacuum tube. The left plate is a hot cathode: its right face emits electrons (blue dots), as many as its field pulls off. The right plate, the anode, is on your power supply. Set its voltage so that a current between 0.9 and 1.5 reaches the anode (averaged over $t = 10$ to $20$). The electrons in flight repel the ones behind them: this space charge chokes the current, which grows as $I \\propto V^{3/2}$ (Child and Langmuir), faster than in proportion to the voltage. The potential map shows the space charge as a flat region in front of the cathode, where the field is pulled down to zero.",
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -33,9 +33,9 @@
     "magnet_strengths": [],
     "supply_voltages": [
       -70.0,
-      12.0,
-      24.0,
-      48.0,
+      13.0,
+      26.0,
+      52.0,
       70.0
     ]
   },
@@ -47,7 +47,7 @@
         0
       ],
       "kind": "supply",
-      "value": 24.0
+      "value": 26.0
     }
   ],
   "electrodes": [
@@ -86,8 +86,8 @@
     "charge_per_mass": -1.0,
     "goal": {
       "electrode": 1,
-      "min": 1.0,
-      "max": 1.4,
+      "min": 0.9,
+      "max": 1.5,
       "start": 10.0,
       "end": 20.0
     },

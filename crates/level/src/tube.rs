@@ -184,6 +184,23 @@ pub const PREVIEW_PARTICLES: f64 = 150.0;
 /// (almost) zero. 1/20: the diode of Vacuum diode at 24 V on its ±70 slider is above it
 /// (its weight unchanged).
 pub const WEIGHT_FLOOR: f64 = 1.0 / 20.0;
+
+/// The tube's envelope (PHYSICS.md §2.11): a grounded shield around the board, this far
+/// outside its edge (so that a projectile launched from the edge starts inside it). In the
+/// z-invariant world an open set of electrodes carries a net charge that depends on the
+/// logarithm's reference radius, and so did its far field: shifting every potential by
+/// the same amount changed a triode's electrons lost off the board from 0.20 to 0.54 per
+/// unit time. Inside a closed grounded contour only potential differences count; what
+/// leaves the board ends on the envelope (counted as lost). A real tube's envelope
+/// charges to about the cathode's potential, which is ground in every level.
+pub const ENVELOPE_MARGIN: f64 = 0.5;
+
+/// The envelope's segment length, at both resolutions (the preview's): it lies away from
+/// the flow, and its own error at 0.6–1 cell from it is then 3.6e-4 of the potential
+/// (V13), far below the macroparticles'. Segments of 1 gave 1.2e-2 (the graded sides'
+/// middle segments are π/2 times longer): rejected.
+pub const ENVELOPE_SEGMENT: f64 = 0.5;
+
 /// A temperature-limited emitter's macroparticles per unit time at its saturation
 /// (preview): its weight is at most `saturation × perimeter / TL_RATE`. The weight rule
 /// of the space-charge limit (its charge before emission) left the Electron gun's beam
@@ -704,6 +721,17 @@ impl Level {
                 p.bias = physics::conductor::Bias::Potential(c.source.value(0.0));
             }
         }
+        // The envelope, grounded, last (ENVELOPE_MARGIN).
+        let max = self.grid.position(self.grid.max_node());
+        prisms.push(Prism {
+            section: Section::Frame {
+                center: DVec3::new(0.5 * max.x, 0.5 * max.y, 0.0),
+                half_width: 0.5 * max.x + ENVELOPE_MARGIN,
+                half_height: 0.5 * max.y + ENVELOPE_MARGIN,
+                segment: ENVELOPE_SEGMENT,
+            },
+            bias: physics::conductor::Bias::Grounded,
+        });
         prisms
     }
 
@@ -986,9 +1014,10 @@ impl Level {
     }
 
     /// The search objective (`solve::objective`) of a tube level, from the preview: the
-    /// current's distance outside the goal's range in units of its width (0 inside), plus
-    /// each projectile's closest approach to its detector (cells), and `Arrived` when all
-    /// are 0, else `Rejected` (as a particle in its detector outside its acceptance).
+    /// current's and each potential goal's distance outside its range in units of its
+    /// width (0 inside), plus each projectile's closest approach to its detector (cells),
+    /// and `Arrived` when all are 0, else `Rejected` (as a particle in its detector outside
+    /// its acceptance).
     ///
     /// # Panics
     /// If the level is not a tube level.
@@ -1001,6 +1030,13 @@ impl Level {
         if let Some(g) = spec.goal {
             let i = sim.current().unwrap_or(0.0);
             score += (g.min - i).max(i - g.max).max(0.0) / (g.max - g.min).max(1e-300);
+        }
+        let measured = sim.results().potential;
+        for (k, g) in spec.potential_goals.iter().enumerate() {
+            // Not measured (the run ended early): one width, finite for the annealing.
+            score += measured.get(k).copied().flatten().map_or(1.0, |v| {
+                (g.min - v).max(v - g.max).max(0.0) / (g.max - g.min).max(1e-300)
+            });
         }
         score += sim.closest().iter().filter(|d| d.is_finite()).sum::<f64>();
         if score == 0.0 {
@@ -1189,6 +1225,19 @@ impl Level {
                     "Tube: the particles would reach {:.2} c; the tube model is Newtonian \
                      (up to 0.1 c): lower the voltages and speeds or leave c infinite.",
                     v / c
+                ));
+            }
+        }
+        // Every electrode inside the board: the envelope lies just outside it.
+        let max = self.grid.position(self.grid.max_node());
+        for (i, b) in boxes.iter().enumerate() {
+            let outside = crate::rect_corners(b)
+                .iter()
+                .any(|c| c.x < -1e-9 || c.y < -1e-9 || c.x > max.x + 1e-9 || c.y > max.y + 1e-9);
+            if outside {
+                out.push(format!(
+                    "Tube: electrode {} reaches beyond the board (the tube's grounded                      envelope lies just outside it).",
+                    i + 1
                 ));
             }
         }

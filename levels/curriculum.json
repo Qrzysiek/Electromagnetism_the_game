@@ -332,7 +332,8 @@
           "name": "Intermediate",
           "levels": [
             "through_the_cloud",
-            "electron_gun"
+            "electron_gun",
+            "rectifier"
           ]
         }
       ]

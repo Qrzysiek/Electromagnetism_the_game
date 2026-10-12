@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Through the cloud",
-  "description": "An ion (a long line of positive charge, the large dot) is fired up through the gap of a working diode, after its electrons have started to flow. Keep the diode running, with a current between 0.85 and 1.15 into the anode (averaged over $t = 15$ to $30$), and bring the ion into the detector at the top. The anode's field pushes positive charges toward the cathode, and the electrons' cloud pulls on the ion as it passes: at the voltage the current needs, the ion ends on the cathode. Your two plates can push it back on course, but they act on the electrons as well, and the ion's own charge disturbs the flow it crosses.",
+  "description": "An ion (a long line of positive charge, the large dot) is fired up through the gap of a working diode, after its electrons have started to flow. Keep the diode running, with a current between 0.85 and 1.15 into the anode (averaged over $t = 15$ to $30$), and bring the ion into the detector at the top. The anode's field pushes positive charges toward the cathode, and the electrons' cloud pulls on the ion as it passes: at the voltage the current needs, the ion leaves the tube far left of the detector. Your two plates can push it back on course, but they act on the electrons as well, and the ion's own charge disturbs the flow it crosses.",
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -36,8 +36,9 @@
       -80.0,
       -40.0,
       20.0,
-      40.0,
-      60.0,
+      35.0,
+      50.0,
+      65.0,
       80.0
     ],
     "plate": {
@@ -48,7 +49,7 @@
     "supply_voltages": [
       -70.0,
       20.0,
-      28.0,
+      30.0,
       40.0,
       70.0
     ]
@@ -61,16 +62,16 @@
         0
       ],
       "kind": "supply",
-      "value": 28.0
+      "value": 30.0
     },
     {
       "node": [
-        8,
-        2,
+        4,
+        18,
         0
       ],
       "kind": "plate",
-      "value": 60.0,
+      "value": 65.0,
       "angle_deg": 90.0
     }
   ],
@@ -124,7 +125,7 @@
           0
         ],
         "direction_deg": 90.0,
-        "speed": 0.8,
+        "speed": 1.2,
         "charge": 0.2,
         "mass": 10.0,
         "launch": 10.0,

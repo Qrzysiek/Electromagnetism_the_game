@@ -177,5 +177,24 @@ physics of diodes" (2017).
   the in-plane return path of the tube's current).
 - **The player's solenoid** (a supply sets B along z) and Sideways (level 100): E × B
   drift above Hull's cutoff into a collector beyond the gap's end.
-- **Next:** a bipolar level, the triode, the rectifier (AC anode), then the circuit
-  coupling (the anode current through a load) with the magnetic and Poynting maps.
+- **Circuits in tubes** (PHYSICS.md §2.11, V10–V11): electrodes as circuit nodes (a
+  DC, sine or pulse source through R, C to ground; ideal and floating), solved implicitly
+  each step with the particles' induced charge, so the tube and its circuit act on each
+  other; one source may drive several electrodes (a grid's wires); goals on electrodes'
+  potentials (mean, ripple, oscillation amplitude), plotted in the panel. Level:
+  Rectifier (103), a full-wave rectifier whose two AC anodes the player drives.
+- **Physics found on the way** (PHYSICS.md §2.11): carriers coming back to their emitter
+  are absorbed on reaching their release layer (V12; they used to bounce there for
+  ever); every tube level is enclosed by a grounded envelope at the board's edge (V13;
+  open boards carried a net charge that depended on the logarithm's reference, and with
+  it the far field: a uniform shift of the potentials changed a triode's losses 2.7-fold);
+  the push's far field from a multipole series (V14) and the induced charge solved once
+  per step, which pay for the envelope. The existing tube levels were re-tuned.
+- **The triode, attempted and deferred:** a grid of wires (one biased sine source) before
+  the cathode and the anode through a load amplify (gain 4.3 with a 6-long anode, period
+  40, R = 60, bias 0), but the anode's capacitance caps the gain at `g_m/(ωC)`, and the
+  preview errs by +29 % when the grid is 1.25 from the cathode (the release distance's
+  first-order error), too much for a goal on the gain; a wider gap (2.25) verifies
+  (12 %) but gains only ~2. Next: a finer mesh on the emitting face, then the
+  amplifier; a bipolar level; an in-plane circuit path for the magnetic and Poynting
+  maps.

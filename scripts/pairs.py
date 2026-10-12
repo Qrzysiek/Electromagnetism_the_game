@@ -8,7 +8,8 @@ Every element the level format or the player can place (fixed charges, magnets, 
 metal spheres of each bias, clouds, electrodes fixed, tunable and driven, dielectric boxes and spheres, ferrites,
 coils steady, ramped, driven, tunable (with a player's supply) and polygonal (also
 driven), free particles at rest and thrown, gates, the launch, the
-detector, a beam, a tube level's cathode and anode (also with the player's solenoid on),
+detector, a beam, a tube level's cathode and anode (also with the player's solenoid on,
+and with circuits: an AC anode and an RC cathode node with goals on its potential),
 player charges, magnets, antennas, plates and free charges, stray fields
 and waves) is put next to every other at several separations, from far to overlapping,
 in a Newtonian world and in a relativistic one with radiation reaction. A pair the game
@@ -166,6 +167,26 @@ def make_tube_solenoid(lv, pl, p, o, w):
     pl.append({"node": [30, 20, 0], "kind": "supply", "value": 1.0})
 
 
+def make_tube_circuit(lv, pl, p, o, w):
+    """A tube level (`make_tube`) whose anode follows an AC source and whose cathode is a
+    circuit node (R and C to ground), with goals on the cathode's potential (its mean and
+    its oscillation's amplitude): the circuit machinery of PHYSICS.md 2.11."""
+    make_tube(lv, pl, p, o, w)
+    k = lv["tube"]["cathode"]
+    lv["tube"]["circuits"] = [
+        {"electrode": k + 1, "source": {"kind": "sine", "amplitude": 1.0, "omega": 0.5},
+         "resistance": 0.0},
+        {"electrode": k, "source": {"kind": "dc", "value": 0.0}, "resistance": 10.0,
+         "capacitance": 1.0},
+    ]
+    lv["tube"]["potential_goals"] = [
+        {"electrode": k, "measure": "mean", "min": -10.0, "max": 10.0, "start": 5.0,
+         "end": 10.0},
+        {"electrode": k, "measure": "amplitude", "omega": 0.5, "min": 0.0, "max": 10.0,
+         "start": 5.0, "end": 10.0},
+    ]
+
+
 def make_tube(lv, pl, p, o, w):
     """Makes the case a tube level (PHYSICS.md 2.11): no shots; a grounded cathode six
     cells left of p emitting toward +x and an anode at p (1 V) collecting the goal's
@@ -239,6 +260,7 @@ ELEMENTS = {
     "detector": set_detector,
     "tube": make_tube,
     "tube_solenoid": make_tube_solenoid,
+    "tube_circuit": make_tube_circuit,
     "player_charge": player(lambda p, o, w: {"node": node(p), "kind": "charge", "value": -1.0}),
     "player_magnet": player(lambda p, o, w: {"node": node(p), "kind": "magnet", "value": 2.0}),
     "player_antenna": player(lambda p, o, w: {"node": node(p), "kind": "antenna", "value": 1.0,

@@ -17,6 +17,12 @@
   "height_ex": 1.581,
   "baseline_ex": 0.05
  },
+ "80": {
+  "file": "48449a14a4ff7d79.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
  "-\\mathbf{m}\\cdot\\mathbf{B}": {
   "file": "2c62d75344a288cb.svg",
   "width_ex": 7.413,
@@ -327,6 +333,12 @@
   "file": "56c9fe7f82f5edc4.svg",
   "width_ex": 6.096,
   "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
+ "t = 40": {
+  "file": "55ec59df190c608a.svg",
+  "width_ex": 6.096,
+  "height_ex": 1.717,
   "baseline_ex": 0.186
  },
  "v = E/B": {

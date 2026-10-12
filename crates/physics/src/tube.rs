@@ -48,7 +48,7 @@ use glam::DVec3;
 
 use crate::bem::{Bias, Lu};
 use crate::circuit::Waveform;
-use crate::zinv::{Electrodes, Section, line_charge, segment_integrals};
+use crate::zinv::{Electrodes, Section, line_charge, segment_field_fast};
 
 /// Distance from the cathode at which macroparticles are released, in segment lengths:
 /// at the mesh's resolution, where a macroparticle's own image (the field w/h of the
@@ -209,6 +209,9 @@ pub struct TubeState {
     /// electrode over the last step (0 for an ideal source, whose current is not
     /// tracked).
     pub circuit_current: Vec<f64>,
+    /// The particles' induced surface density now (all electrodes grounded), kept from
+    /// the end of the last step: the next step's emission and the display reuse it.
+    induced: Vec<f64>,
 }
 
 impl TubeState {
@@ -245,6 +248,15 @@ fn inside(section: &Section, x: DVec3) -> bool {
             let r = libm::sqrt(d.x * d.x + d.y * d.y);
             (r - radius).abs() < 0.5 * thickness
         }
+        Section::Frame {
+            center,
+            half_width,
+            half_height,
+            ..
+        } => {
+            let d = x - center;
+            !(d.x.abs() < half_width && d.y.abs() < half_height)
+        }
     }
 }
 
@@ -274,6 +286,17 @@ fn distance_outside(section: &Section, x: DVec3) -> f64 {
         } => {
             let d = x - center;
             ((libm::sqrt(d.x * d.x + d.y * d.y) - radius).abs() - 0.5 * thickness).max(0.0)
+        }
+        Section::Frame {
+            center,
+            half_width,
+            half_height,
+            ..
+        } => {
+            let d = x - center;
+            (half_width - d.x.abs())
+                .min(half_height - d.y.abs())
+                .max(0.0)
         }
     }
 }
@@ -311,6 +334,7 @@ impl Tube {
             potentials,
             node_charge,
             circuit_current: vec![0.0; self.circuits.len()],
+            induced: vec![0.0; self.electrodes.segments.len()],
             ..TubeState::default()
         }
     }
@@ -426,21 +450,38 @@ impl Tube {
     }
 
     /// The total surface density: the electrodes' at their present potentials plus the
-    /// particles' induced one.
+    /// particles' induced one (as of the state's last step).
     pub fn surface_density(&self, s: &TubeState) -> Vec<f64> {
-        let induced = self.induced_density(s);
         self.static_density(&s.potentials)
             .iter()
-            .zip(&induced)
+            .zip(&s.induced)
             .map(|(a, b)| a + b)
             .collect()
+    }
+
+    /// Adds to `induced` the surface density induced by the particles from index `from` on
+    /// (those added during a step: launched or emitted).
+    fn add_induced(&self, induced: &mut [f64], s: &TubeState, from: usize) {
+        if s.x.len() <= from {
+            return;
+        }
+        let extra = self.electrodes.induced_by(|y| {
+            s.x[from..]
+                .iter()
+                .zip(&s.charge[from..])
+                .map(|(p, l)| line_charge(*p, *l, y).0)
+                .sum()
+        });
+        for (a, b) in induced.iter_mut().zip(&extra) {
+            *a += b;
+        }
     }
 
     /// The field at `x` of the surface charge `sigma` and of every particle but `skip`.
     fn field(&self, s: &TubeState, sigma: &[f64], x: DVec3, skip: Option<usize>) -> DVec3 {
         let mut e = DVec3::ZERO;
         for ((p, q), d) in self.electrodes.segments.iter().zip(sigma) {
-            e += segment_integrals(*p, *q, x).1 * *d;
+            e += segment_field_fast(*p, *q, x) * *d;
         }
         let eps2 = self.softening * self.softening;
         for (k, (p, l)) in s.x.iter().zip(&s.charge).enumerate() {
@@ -471,10 +512,16 @@ impl Tube {
     }
 
     /// Space-charge-limited emission of every emitter: each segment of its electrode
-    /// whose surface density has its carriers' sign releases that charge.
-    fn emit(&self, s: &mut TubeState) -> Vec<f64> {
+    /// whose surface density (the electrodes' at their potentials plus `induced`, the
+    /// particles') has its carriers' sign releases that charge.
+    fn emit(&self, s: &mut TubeState, induced: &[f64]) -> Vec<f64> {
         let mut emitted = vec![0.0; self.electrodes.electrodes.len()];
-        let sigma = self.surface_density(s);
+        let sigma: Vec<f64> = self
+            .static_density(&s.potentials)
+            .iter()
+            .zip(induced)
+            .map(|(a, b)| a + b)
+            .collect();
         for (i, em) in self.emitters.iter().enumerate() {
             let sign = em.charge_per_mass.signum();
             let segs: Vec<usize> = self.segments_of(em.electrode).collect();
@@ -529,6 +576,10 @@ impl Tube {
     /// One step: launches, emission, push (Boris: with B = 0 the kick-drift
     /// leapfrog), absorption.
     pub fn step(&self, s: &mut TubeState) {
+        // The induced density is kept from the last step; the particles added during this
+        // one (launched, emitted) add theirs.
+        let mut induced = std::mem::take(&mut s.induced);
+        let before = s.x.len();
         for (j, p) in self.projectiles.iter().enumerate() {
             if !s.launched[j] && s.t >= p.launch - 0.5 * self.dt {
                 s.launched[j] = true;
@@ -536,7 +587,10 @@ impl Tube {
                 self.add(s, p.x0, p.v0, p.charge, p.charge / p.mass, tag);
             }
         }
-        let emitted = self.emit(s);
+        self.add_induced(&mut induced, s, before);
+        let launched = s.x.len();
+        let emitted = self.emit(s, &induced);
+        self.add_induced(&mut induced, s, launched);
         let nodes = self.nodes();
         // The emitted charge left its electrode.
         for (e, q) in emitted.iter().enumerate() {
@@ -546,7 +600,6 @@ impl Tube {
         }
         crate::cancel::checkpoint();
         // The potentials at the end of the step (sources, circuit nodes), then the field.
-        let induced = self.induced_density(s);
         let q_ind = self.electrodes.charges_of(&induced);
         self.update_potentials(s, s.t + self.dt, &q_ind);
         let sigma: Vec<f64> = self
@@ -638,5 +691,7 @@ impl Tube {
                 k += 1;
             }
         }
+        // The moved particles' induced density, for the next step and the display.
+        s.induced = self.induced_density(s);
     }
 }

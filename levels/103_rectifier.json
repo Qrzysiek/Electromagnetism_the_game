@@ -1,0 +1,160 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Rectifier",
+  "description": "A rectifier tube: a hot cathode in the middle, an anode on each side. Each anode is on its own AC power supply, a sine of period 20 whose amplitude you set; the right one's runs half a period behind the left one's. Electrons flow from the cathode to an anode only while that anode is positive: the tube conducts one way. The cathode is connected to ground through a load resistor (30) and a capacitor (1): losing electrons, it charges positive, and its potential is the rectifier's output, DC from AC. Make a smooth supply: the cathode's mean potential between 8.5 and 11.5, and its ripple (half its peak-to-peak) below 1.2, over $t = 40$ to $80$.",
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -80.0,
+      16.0,
+      32.0,
+      48.0,
+      80.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        5,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": 32.0
+    },
+    {
+      "node": [
+        19,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": 32.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        12,
+        8,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        5,
+        8,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    },
+    {
+      "center": [
+        19,
+        8,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "circuits": [
+      {
+        "electrode": 1,
+        "source": {
+          "kind": "sine",
+          "amplitude": 30.0,
+          "omega": 0.3141592653589793
+        },
+        "resistance": 0.0
+      },
+      {
+        "electrode": 2,
+        "source": {
+          "kind": "sine",
+          "amplitude": 30.0,
+          "omega": 0.3141592653589793,
+          "phase": 3.141592653589793
+        },
+        "resistance": 0.0
+      },
+      {
+        "electrode": 0,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "resistance": 30.0,
+        "capacitance": 1.0
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 0,
+        "measure": "mean",
+        "min": 8.5,
+        "max": 11.5,
+        "start": 40.0,
+        "end": 80.0
+      },
+      {
+        "electrode": 0,
+        "measure": "swing",
+        "min": 0.0,
+        "max": 1.2,
+        "start": 40.0,
+        "end": 80.0
+      }
+    ]
+  }
+}

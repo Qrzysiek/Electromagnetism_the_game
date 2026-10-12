@@ -2448,7 +2448,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                 *electrode < n
                     && linked.iter().all(|e| *e < n)
                     && source_editable(source)
-                    && resistance.is_none_or(|r| nonneg(r))
+                    && resistance.is_none_or(&nonneg)
                     && nonneg(*capacitance)
             });
         let potential_ok = potential_goals.len() <= MAX_COUNT as usize

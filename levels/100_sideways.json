@@ -33,9 +33,9 @@
     "magnet_strengths": [],
     "solenoid_fields": [
       -4.0,
-      -1.25,
+      -1.1,
       0.6,
-      1.25,
+      1.1,
       4.0
     ]
   },
@@ -47,7 +47,7 @@
         0
       ],
       "kind": "supply",
-      "value": 1.25
+      "value": 1.1
     }
   ],
   "electrodes": [

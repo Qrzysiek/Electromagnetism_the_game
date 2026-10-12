@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Electron gun",
-  "description": "An electron gun: the hot cathode (left) gives at most 0.1 per unit length of its face (its temperature limits it: a stronger field pulls no more), the anode's slit lets a thin beam through, and the small collector on the right should catch it. But the beam's electrons repel one another: it spreads and misses. Place two plates beside the beam to focus it, so that at least 0.08 reaches the collector (averaged over $t = 20$ to $40$). A plate at a lower potential than the beam's surroundings pushes the electrons back toward the axis; too low, and it throws them back.",
+  "description": "An electron gun: the hot cathode (left) gives at most 0.2 per unit length of its face (its temperature limits it: a stronger field pulls no more), the anode's slit lets a thin beam through, and the small collector on the right should catch it. But the beam's electrons repel one another: it spreads and misses. Place two plates beside the beam to focus it, so that at least 0.24 reaches the collector (averaged over $t = 20$ to $40$). A plate at a lower potential than the beam's surroundings pushes the electrons back toward the axis; too low, and it throws them back.",
   "grid": {
     "nx": 32,
     "ny": 20,
@@ -35,9 +35,10 @@
     "plate_voltages": [
       -80.0,
       -10.0,
-      10.0,
+      3.0,
+      6.0,
+      12.0,
       20.0,
-      30.0,
       80.0
     ],
     "plate": {
@@ -54,7 +55,7 @@
         0
       ],
       "kind": "plate",
-      "value": 9.0
+      "value": 6.0
     },
     {
       "node": [
@@ -63,7 +64,7 @@
         0
       ],
       "kind": "plate",
-      "value": 9.0
+      "value": 6.0
     }
   ],
   "electrodes": [
@@ -132,12 +133,12 @@
     "charge_per_mass": -1.0,
     "goal": {
       "electrode": 3,
-      "min": 0.08,
+      "min": 0.24,
       "max": 5.0,
       "start": 20.0,
       "end": 40.0
     },
     "emit_toward_deg": 0.0,
-    "saturation": 0.1
+    "saturation": 0.2
   }
 }

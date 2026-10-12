@@ -26,17 +26,7 @@ use crate::bem::{Bias, Lu};
 /// `E_u = ln(r_a² / r_b²)`, `E_v = 2 [atan((L − u)/v) + atan(u/v)]` (twice the angle the
 /// segment subtends; on the segment itself its average, 0).
 pub fn segment_integrals(a: DVec3, b: DVec3, x: DVec3) -> (f64, DVec3) {
-    let d = b - a;
-    let l = libm::sqrt(d.x * d.x + d.y * d.y);
-    let t = DVec3::new(d.x / l, d.y / l, 0.0);
-    let n = DVec3::new(-t.y, t.x, 0.0);
-    let r = x - a;
-    let (u, mut v) = (r.x * t.x + r.y * t.y, r.x * n.x + r.y * n.y);
-    // On the segment's line within rounding (a collocation point computed as the
-    // midpoint): exactly on it, where the normal field's average is 0.
-    if v.abs() <= 1e-12 * l {
-        v = 0.0;
-    }
+    let (t, n, l, u, v) = segment_frame(a, b, x);
     let g = |w: f64| {
         let s = w * w + v * v;
         let log = if s > 0.0 { w * libm::log(s) } else { 0.0 };
@@ -48,6 +38,66 @@ pub fn segment_integrals(a: DVec3, b: DVec3, x: DVec3) -> (f64, DVec3) {
         log - 2.0 * w + arc
     };
     let phi = -(g(u) - g(u - l));
+    (phi, field_in_frame(t, n, l, u, v))
+}
+
+/// The field alone of `segment_integrals` (the same operations: bit-identical), for the
+/// particles' push, which needs no potential (half the logarithms and arctangents).
+pub fn segment_field(a: DVec3, b: DVec3, x: DVec3) -> DVec3 {
+    let (t, n, l, u, v) = segment_frame(a, b, x);
+    field_in_frame(t, n, l, u, v)
+}
+
+/// Beyond this many segment lengths from a segment's midpoint, `segment_field_fast`
+/// replaces the exact integrals by their multipole series (PHYSICS.md §2.11, test V14).
+pub const FAR_SEGMENTS: f64 = 4.0;
+
+/// The field of `segment_field`, from its multipole series where `x` is farther than
+/// `FAR_SEGMENTS` lengths from the midpoint: no logarithm or arctangent there, which made
+/// the particles' push 4–5 times faster with a tube's envelope. With ζ = x − midpoint as a
+/// complex number, d = b − a and q = |d| (unit density), the complex potential
+/// `−2∫ln(ζ − s e^{iθ}) ds` expands (odd moments vanish) to
+/// `E_x − i E_y = 2q/ζ + q d²/(6ζ³) + q d⁴/(40 L² ζ⁵) + …`; the first two terms are kept,
+/// and the first omitted one is `(L/|ζ|)⁴/80` of the monopole: at most 4.9e-5 there.
+pub fn segment_field_fast(a: DVec3, b: DVec3, x: DVec3) -> DVec3 {
+    let d = b - a;
+    let l2 = d.x * d.x + d.y * d.y;
+    let (zx, zy) = (x.x - 0.5 * (a.x + b.x), x.y - 0.5 * (a.y + b.y));
+    let r2 = zx * zx + zy * zy;
+    if r2 < FAR_SEGMENTS * FAR_SEGMENTS * l2 {
+        return segment_field(a, b, x);
+    }
+    let l = libm::sqrt(l2);
+    // 1/ζ, 1/ζ² and 1/ζ³ as (re, im).
+    let (ix, iy) = (zx / r2, -zy / r2);
+    let (i2x, i2y) = (ix * ix - iy * iy, 2.0 * ix * iy);
+    let (i3x, i3y) = (i2x * ix - i2y * iy, i2x * iy + i2y * ix);
+    // d² as a complex number: L² e^{2iθ}.
+    let (dx2, dy2) = (d.x * d.x - d.y * d.y, 2.0 * d.x * d.y);
+    let k = l / 6.0;
+    let wx = 2.0 * l * ix + k * (dx2 * i3x - dy2 * i3y);
+    let wy = 2.0 * l * iy + k * (dx2 * i3y + dy2 * i3x);
+    DVec3::new(wx, -wy, 0.0)
+}
+
+/// The segment's direction `t`, normal `n`, length, and `x`'s coordinates `u` along it
+/// from `a` and `v` across it.
+fn segment_frame(a: DVec3, b: DVec3, x: DVec3) -> (DVec3, DVec3, f64, f64, f64) {
+    let d = b - a;
+    let l = libm::sqrt(d.x * d.x + d.y * d.y);
+    let t = DVec3::new(d.x / l, d.y / l, 0.0);
+    let n = DVec3::new(-t.y, t.x, 0.0);
+    let r = x - a;
+    let (u, mut v) = (r.x * t.x + r.y * t.y, r.x * n.x + r.y * n.y);
+    // On the segment's line within rounding (a collocation point computed as the
+    // midpoint): exactly on it, where the normal field's average is 0.
+    if v.abs() <= 1e-12 * l {
+        v = 0.0;
+    }
+    (t, n, l, u, v)
+}
+
+fn field_in_frame(t: DVec3, n: DVec3, l: f64, u: f64, v: f64) -> DVec3 {
     let ra2 = u * u + v * v;
     let rb2 = (u - l) * (u - l) + v * v;
     let e_u = libm::log(ra2 / rb2);
@@ -56,7 +106,7 @@ pub fn segment_integrals(a: DVec3, b: DVec3, x: DVec3) -> (f64, DVec3) {
     } else {
         2.0 * (libm::atan((l - u) / v) + libm::atan(u / v))
     };
-    (phi, t * e_u + n * e_v)
+    t * e_u + n * e_v
 }
 
 /// A line charge's potential and field at `x`.
@@ -86,12 +136,27 @@ pub enum Section {
         radius: f64,
         thickness: f64,
     },
+    /// An envelope seen end-on: the material outside the axis-aligned rectangle of
+    /// half-extents `half_width` (x) and `half_height` (y) about `center`, meshed on its
+    /// inner face only. Inside a closed contour the potential is fixed by its values on
+    /// the contour (uniqueness), whatever lies outside, so the inner face alone is exact
+    /// there. A tube's shield at the board's edge: inside it the fields depend only on
+    /// potential differences, not on the logarithm's reference (PHYSICS.md §2.11).
+    /// Meshed in segments of at most its own `segment` length, not the electrodes' size:
+    /// it lies away from the flow, and coarse it is still accurate (V13).
+    Frame {
+        center: DVec3,
+        half_width: f64,
+        half_height: f64,
+        segment: f64,
+    },
 }
 
 impl Section {
-    /// The boundary as segments `(start, end)`, counter-clockwise, none longer than
-    /// `size`; a rectangle's sides graded towards the corners (Chebyshev), where the
-    /// density is singular.
+    /// The boundary as segments `(start, end)`, counter-clockwise, of about `size` (a
+    /// frame: its own `segment`); a rectangle's sides in `⌈side/size⌉` segments graded
+    /// towards the corners (Chebyshev), where the density is singular, so the middle ones
+    /// are up to π/2 times longer.
     pub fn mesh(&self, size: f64) -> Vec<(DVec3, DVec3)> {
         match *self {
             Section::Rect {
@@ -102,28 +167,19 @@ impl Section {
             } => {
                 let (s, c) = libm::sincos(angle);
                 let (u, v) = (DVec3::new(c, s, 0.0), DVec3::new(-s, c, 0.0));
-                let corners = [
-                    center - u * half_length - v * half_thickness,
-                    center + u * half_length - v * half_thickness,
-                    center + u * half_length + v * half_thickness,
-                    center - u * half_length + v * half_thickness,
-                ];
-                let mut out = Vec::new();
-                for k in 0..4 {
-                    let (p, q) = (corners[k], corners[(k + 1) % 4]);
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    let n = (((q - p).length() / size).ceil() as usize).max(2);
-                    #[allow(clippy::cast_precision_loss)]
-                    let at = |i: usize| {
-                        let f = 0.5 * (1.0 - libm::cos(std::f64::consts::PI * i as f64 / n as f64));
-                        p + (q - p) * f
-                    };
-                    for i in 0..n {
-                        out.push((at(i), at(i + 1)));
-                    }
-                }
-                out
+                rectangle(center, u * half_length, v * half_thickness, size)
             }
+            Section::Frame {
+                center,
+                half_width,
+                half_height,
+                segment,
+            } => rectangle(
+                center,
+                DVec3::new(half_width, 0.0, 0.0),
+                DVec3::new(0.0, half_height, 0.0),
+                segment,
+            ),
             Section::Circle { center, radius } => circle(center, radius, size),
             Section::Ring {
                 center,
@@ -136,6 +192,32 @@ impl Section {
             }
         }
     }
+}
+
+/// A rectangle's boundary, centre `center` and half-axes `u`, `v`, counter-clockwise in
+/// sides of at most `size` (at least 2), graded towards the corners (Chebyshev).
+fn rectangle(center: DVec3, u: DVec3, v: DVec3, size: f64) -> Vec<(DVec3, DVec3)> {
+    let corners = [
+        center - u - v,
+        center + u - v,
+        center + u + v,
+        center - u + v,
+    ];
+    let mut out = Vec::new();
+    for k in 0..4 {
+        let (p, q) = (corners[k], corners[(k + 1) % 4]);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let n = (((q - p).length() / size).ceil() as usize).max(2);
+        #[allow(clippy::cast_precision_loss)]
+        let at = |i: usize| {
+            let f = 0.5 * (1.0 - libm::cos(std::f64::consts::PI * i as f64 / n as f64));
+            p + (q - p) * f
+        };
+        for i in 0..n {
+            out.push((at(i), at(i + 1)));
+        }
+    }
+    out
 }
 
 /// A circle as a regular polygon of sides no longer than `size` (at least 8).
