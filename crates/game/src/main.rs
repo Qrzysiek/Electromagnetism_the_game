@@ -102,6 +102,20 @@ pub struct TubeField {
     pub arrows: TubeArrows,
 }
 
+/// What a field map is computed for: revision, active shot, active disturbance, all
+/// shots shown, mode, flight shown, the tube frame shown, and the tube maps' gain and range
+/// (as bits).
+pub type MapKey = (
+    u64,
+    usize,
+    usize,
+    bool,
+    Option<MapMode>,
+    bool,
+    usize,
+    (u64, u64),
+);
+
 #[derive(Resource)]
 pub struct Game {
     pub levels: Vec<Level>,
@@ -136,9 +150,8 @@ pub struct Game {
     /// Tube levels: the electric field map's scale and arrows `(position, E)` of the
     /// preview's final state (computed when it arrives), with its revision.
     pub tube_field: Option<TubeField>,
-    /// (revision, active shot, active disturbance, all shots shown, mode, flight shown)
-    /// the field map was computed for.
-    pub map_key: (u64, usize, usize, bool, Option<MapMode>, bool, usize),
+    /// What the field map was computed for (`MapKey`).
+    pub map_key: MapKey,
     pub field_lines: Vec<DrawnFieldLine>,
     /// Distance between neighbouring field lines, in cells.
     pub field_line_spacing: f64,
@@ -176,6 +189,10 @@ pub struct Game {
     /// Gain of the linear scale, in decades (full colour at 10^−gain of the full field's
     /// scale).
     pub field_gain_decades: f64,
+    /// Tube maps: the potential map's gain (decades: full colour at 10^−gain of the
+    /// largest potential difference) and the electric map's range (decades below the top).
+    pub tube_gain_decades: f64,
+    pub tube_range_decades: f64,
     pub animate: bool,
     pub playback_speed: f64,
     pub anim_time: f64,
@@ -215,7 +232,7 @@ impl Game {
             tube_preview: None,
             tube_verdict: None,
             tube_field: None,
-            map_key: (0, 0, 0, false, None, false, 0),
+            map_key: (0, 0, 0, false, None, false, 0, (0, 0)),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
             field_line_opacity: 0.2,
@@ -236,6 +253,8 @@ impl Game {
             field_range_decades: 2.5,
             field_linear: false,
             field_gain_decades: 0.0,
+            tube_gain_decades: 0.0,
+            tube_range_decades: 1.5,
             animate: true,
             playback_speed: 1.0,
             anim_time: 0.0,
@@ -764,6 +783,10 @@ fn dev_capture(
             }
             if let Some(g) = std::env::var("EM_GAIN").ok().and_then(|v| v.parse().ok()) {
                 game.field_gain_decades = g;
+                game.tube_gain_decades = g;
+            }
+            if let Some(d) = std::env::var("EM_RANGE").ok().and_then(|v| v.parse().ok()) {
+                game.tube_range_decades = d;
             }
             if let Ok(m) = std::env::var("EM_MAP") {
                 game.map = match m.as_str() {
@@ -1147,6 +1170,10 @@ fn update_map(
         } else {
             0
         },
+        (
+            game.tube_gain_decades.to_bits(),
+            game.tube_range_decades.to_bits(),
+        ),
     );
     if key == game.map_key {
         return;
@@ -1202,6 +1229,8 @@ fn update_map(
                     spec.charge_per_mass.signum(),
                     mode == MapMode::Electric,
                     scale,
+                    10f64.powf(game.tube_gain_decades),
+                    game.tube_range_decades,
                 );
                 Some((
                     TubeField {

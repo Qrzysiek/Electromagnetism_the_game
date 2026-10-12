@@ -56,8 +56,10 @@ pub struct PotentialParams {
     /// Tube levels: numbers of charged segments and of line charges.
     pub line_segments: u32,
     pub line_charges: u32,
-    /// Electric field map: |E| at the top of its colour scale.
+    /// Electric field map: |E| at the top of its colour scale, and the decades below it
+    /// still coloured.
     pub e_ref: f32,
+    pub e_decades: f32,
 }
 
 impl Default for PotentialParams {
@@ -76,6 +78,7 @@ impl Default for PotentialParams {
             line_segments: 0,
             line_charges: 0,
             e_ref: 1.0,
+            e_decades: 1.5,
         }
     }
 }
@@ -150,10 +153,13 @@ struct Items {
 const TUBE_MAP_SOFTENING: f64 = level::tube::PREVIEW_SEGMENT;
 
 /// Shader parameters and sources for a tube level's map (z-invariant): the potential of
-/// the preview's final state (the electrodes' surface charge, applied and induced, and
-/// the particles' space charge), as the carriers' energy relative to the cathode in
-/// units of `|q|` times the largest potential difference to it (contours every quarter).
-#[allow(clippy::cast_possible_truncation)]
+/// the frame shown (the electrodes' surface charge, applied and induced, and the
+/// particles' space charge), as the carriers' energy relative to the cathode's potential
+/// then, in units of `|q|` times the largest potential difference to it over the run
+/// (`TubeRun::potential_range`: the electrodes' own potentials and their sources' over a
+/// period), divided by `gain` (contours every quarter). The electric map colours `decades`
+/// below `e_ref`.
+#[allow(clippy::cast_possible_truncation, clippy::too_many_arguments)]
 pub fn tube_params(
     run: &level::tube::TubeRun,
     frame: &level::tube::TubeFrame,
@@ -161,14 +167,20 @@ pub fn tube_params(
     sign: f64,
     electric: bool,
     e_ref: f64,
+    gain: f64,
+    decades: f64,
 ) -> (PotentialParams, Vec<[f32; 4]>) {
-    let vc = run.potentials.get(cathode).copied().unwrap_or(0.0);
-    let scale = run
+    let vc = frame
         .potentials
-        .iter()
-        .map(|v| (v - vc).abs())
-        .fold(0.0, f64::max)
-        .max(1e-300);
+        .get(cathode)
+        .map(|v| f64::from(*v))
+        .or_else(|| run.potentials.get(cathode).copied())
+        .unwrap_or(0.0);
+    // Until the scale was measured at the AC sources' extremes it came from the potentials
+    // at t = 0, all 0 with AC anodes: an infinite gain, every colour saturated, a sharp
+    // wall between blue and red.
+    let (lo, hi) = run.potential_range;
+    let scale = (hi - vc).abs().max((lo - vc).abs()).max(1e-9) / gain.max(1e-9);
     let mut items = Vec::new();
     for ((a, b), s) in run.segments.iter().zip(&frame.sigma) {
         items.push(v4(a.x, a.y, b.x, b.y));
@@ -187,6 +199,7 @@ pub fn tube_params(
         line_charges: count(particles.len()),
         mode: u32::from(electric) * 2,
         e_ref: e_ref as f32,
+        e_decades: decades as f32,
         ..PotentialParams::default()
     };
     (out, items)

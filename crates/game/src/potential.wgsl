@@ -43,8 +43,10 @@ struct Params {
     // of line charges, after the electrode panels.
     line_segments: u32,
     line_charges: u32,
-    // Mode 2 (electric field): the |E| of the colour scale's top.
+    // Mode 2 (electric field): the |E| of the colour scale's top, and the decades below
+    // it still coloured.
     e_ref: f32,
+    e_decades: f32,
 };
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
@@ -421,13 +423,14 @@ fn electric_colour(p: vec2<f32>) -> vec3<f32> {
     let ey = -(potential(p + vec2<f32>(0.0, h)) - potential(p - vec2<f32>(0.0, h))) / (2.0 * h);
     let e = length(vec2<f32>(ex, ey)) / max(params.e_ref, 1e-30);
     let l = log(max(e, 1e-6)) / log(10.0);
-    let s = clamp((l + 1.5) / 1.5, 0.0, 1.0);
+    let range = max(params.e_decades, 0.1);
+    let s = clamp((l + range) / range, 0.0, 1.0);
     let base = vec3<f32>(0.10, 0.11, 0.14);
     var col = base + s * vec3<f32>(0.70, 0.50, 0.12);
     let k = l * 4.0;
     let fw_k = fwidth(k);
     let fade = 1.0 - smoothstep(0.06, 0.25, fw_k);
-    if (fade > 0.0 && l > -1.5) {
+    if (fade > 0.0 && l > -range) {
         let f = fract(k);
         let d = min(f, 1.0 - f);
         col = mix(col, col + vec3<f32>(0.08), line_cover(d, fw_k, 1.0) * fade);

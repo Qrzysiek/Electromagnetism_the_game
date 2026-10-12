@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Triode",
-  "description": "A triode: between the hot cathode (left) and the anode (right) a grid of five thin wires, all on one supply: a small signal, a sine of amplitude 1 and period 40, around a steady potential, the bias, which you set. Close to the cathode, where the electrons are slow, the grid controls the current far more strongly than the anode does. The anode takes its current through a resistor (60) from a fixed 100, so as the current swings, the anode's potential swings too, and much more than the grid's: an amplifier. Bias the grid so that the anode's potential oscillates with an amplitude between 2.0 and 4.5 (over $t = 40$ to $80$). Too negative a bias cuts the current off.",
+  "description": "A triode: between the hot cathode (left) and the anode (right) a grid of five thin wires, all on one supply: a small signal, a sine of amplitude 1 and period 40, around a steady potential, the bias, which you set. Close to the cathode, where the electrons are slow, the grid controls the current far more strongly than the anode does. The anode takes its current through a resistor (60) from a fixed 100, so as the current swings, the anode's potential swings too, and much more than the grid's: an amplifier. Bias the grid so that the anode's potential oscillates with an amplitude between 2.2 and 3.8 (over $t = 40$ to $80$). Too negative a bias cuts the current off.",
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -184,8 +184,8 @@
       {
         "electrode": 1,
         "measure": "amplitude",
-        "min": 2.0,
-        "max": 4.5,
+        "min": 2.2,
+        "max": 3.8,
         "start": 40.0,
         "end": 80.0,
         "omega": 0.15707963267948966

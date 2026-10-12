@@ -3055,27 +3055,24 @@ def sideways():
 
 def through_the_cloud():
     # Designed with `generator tube-scan` and verified with `check` (PHYSICS.md 2.11),
-    # inside the tube's grounded envelope. The diode (gap 9) needs about 28 to 33 for the
-    # current goal without plates (0.95 at 30). The ion (q/m = 0.02, launched at t = 10
-    # when the flow is established, at 1.2: at 0.8 it cannot climb the gap's potential
-    # once a plate raises it) is pushed out of its way: at 30 it leaves the top at x = 3.9,
-    # left of the detector (8 to 14). Of 288 single plates (below and above the gap,
-    # +-20 to +-80, the anode at 30), 25 bring it in: positive ones below the gap, left of
-    # its path, kick it rightwards but draw electrons (1.2-1.4); negative ones right of its
-    # path or near the detector pull it but choke the flow (0.2-0.7); positive ones above
-    # the cathode's top end, at (3-5, 17-18) +35 to +70, push it right as it leaves the
-    # gap and keep the current (0.91-1.14 at anode 28-32). Verified: (4, 18) vertical at
-    # +65 with the anode at 30, current 1.008 +- 0.020, the ion arrives at t = 31.23 in
-    # both runs (the reference); (5, 17) at +50: 1.014 +- 0.120, t = 35.5 and 32.3;
-    # (5, 18) at +35: 1.039 +- 0.004, t = 31.8. With the emitters meshed finer and the
-    # weight from the emitting face (PHYSICS.md 2.11) the reference gives 0.980 +- 0.003,
-    # arriving at t = 31.33 and 31.32; the run ends at 40 (at 60 its verification took 21
-    # s).
+    # inside the tube's grounded envelope. The owner (2026-10-12) found the flow at 30 V
+    # too weak for the ion to cross a cloud: the anode is now at 60 (a current of 2.40
+    # without plates, 2.5 times the former, its space charge twice), and the ion (q/m =
+    # 0.02, launched at t = 10 when the flow is established) at 1.8: slower, at 60-70 V it
+    # ends on the cathode whatever single plate helps. Without a plate it leaves the top at
+    # x = 4.8, left of the detector (8 to 14). Of 90 single plates, 24 bring it in:
+    # positive ones below the gap, left of its path, kick it rightwards (the original
+    # idea) but draw electrons (2.7-3.7 at +30 to +75), and one above the cathode's top
+    # end (6, 18) at +65/+75 pushes it right as it leaves the gap (2.85). Verified with
+    # the anode at 60: (9, 2) vertical at +30, current 2.898 +- 0.036, the ion arrives at
+    # t = 21.23 and 21.20 (the reference); (8, 2) horizontal at +45, 2.956 +- 0.018, t =
+    # 21.33 and 21.32; (6, 18) vertical at +65, 2.830 +- 0.073, t = 23.80 and 23.85. Too
+    # strong a plate below draws too much current (3.2 and more at +55 to +75).
     return level(
         "Through the cloud",
         "An ion (a long line of positive charge, the large dot) is fired up through the gap "
         "of a working diode, after its electrons have started to flow. Keep the diode "
-        "running, with a current between 0.85 and 1.15 into the anode (averaged over "
+        "running, with a current between 2.5 and 3.1 into the anode (averaged over "
         "$t = 15$ to $30$), and bring the ion into the detector at the top. The anode's "
         "field pushes positive charges toward the cathode, and the electrons' cloud pulls "
         "on the ion as it passes: at the voltage the current needs, the ion leaves the "
@@ -3085,13 +3082,13 @@ def through_the_cloud():
         grid=(24, 20), c=None, t_max=40.0,
         electrodes=[plate(6, 10, 10, thickness=1.0, angle_deg=90.0),
                     plate(16, 10, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
-        supplies=slider(70.0, 20.0, 30.0, 40.0),
-        max_plates=2, plate_voltages=slider(80.0, -40.0, 20.0, 35.0, 50.0, 65.0),
+        supplies=slider(100.0, 40.0, 60.0, 80.0),
+        max_plates=2, plate_voltages=slider(80.0, -40.0, 20.0, 30.0, 45.0, 65.0),
         plate_size=(3.0, 0.5, 4.0),
-        tube=tube(0, 1, 0.85, 1.15, 15.0, 30.0, emit_toward_deg=0.0,
-                  projectiles=[projectile(11, 0, 90.0, 1.2, 0.2, 10.0, launch=10.0,
+        tube=tube(0, 1, 2.5, 3.1, 15.0, 30.0, emit_toward_deg=0.0,
+                  projectiles=[projectile(11, 0, 90.0, 1.8, 0.2, 10.0, launch=10.0,
                                           detector=((8, 18), (14, 20)))]),
-        reference=[supply(16, 10, 30.0), player_plate(4, 18, 65.0, angle_deg=90.0)])
+        reference=[supply(16, 10, 60.0), player_plate(9, 2, 30.0, angle_deg=90.0)])
 
 
 def electron_gun():
@@ -3171,11 +3168,12 @@ def triode():
     # anode 6 long through R = 60 to B+ = 100. The anode's own capacitance (it faces the
     # grounded envelope and the grid) shunts the load: g_m/(omega C) capped the gain at ~1.3
     # with a 14-long anode at period 20, so the anode is short and the signal slow. Output
-    # amplitude (verification, over one period t = 40-80): 2.55 at bias -1, 2.79 at -0.9,
-    # 2.99 at -0.8, 3.17 at -0.7, 3.39 at -0.6, 3.53 at -0.5, 3.74 at -0.4, 4.15 at 0
-    # (two periods), the preview ~15 % above (bars +-0.7 to +-0.85): the goal 2.0 to 4.5
-    # is verified for a bias of about -0.9 to -0.5; cut off below about -2 (only the
-    # grid's capacitive feedthrough, 0.32, is left).
+    # amplitude (verification, over one period t = 40-80, the particles softened at an
+    # eighth of a segment): 1.96 at bias -1.2, 2.37 at -1, 2.76 at -0.8, 3.12 at -0.6,
+    # 3.49 at -0.4, 3.79 at -0.2, 4.09 at 0, the preview ~7 % above (bars +-0.3 to
+    # +-0.36): the goal 2.2 to 3.8 is verified for a bias of about -0.9 to -0.4 (at 0 and
+    # -0.2 the gain is too high, at -1 too low); cut off below about -2 (only the grid's
+    # capacitive feedthrough, 0.32, is left).
     omega = 2.0 * math.pi / 40.0
     wires = [plate(7, y, 0.6, thickness=0.5, angle_deg=90.0, tunable=(y == 8))
              for y in (8, 4, 6, 10, 12)]
@@ -3188,7 +3186,7 @@ def triode():
         "anode does. The anode takes its current through a resistor (60) from a fixed 100, "
         "so as the current swings, the anode's potential swings too, and much more than "
         "the grid's: an amplifier. Bias the grid so that the anode's potential oscillates "
-        "with an amplitude between 2.0 and 4.5 (over $t = 40$ to $80$). Too negative a "
+        "with an amplitude between 2.2 and 3.8 (over $t = 40$ to $80$). Too negative a "
         "bias cuts the current off.",
         grid=(24, 16), c=None, t_max=200.0,
         electrodes=[plate(5, 8, 6, thickness=1.0, angle_deg=90.0),
@@ -3198,7 +3196,7 @@ def triode():
                   circuits=[tube_circuit(2, sine(1.0, omega), resistance=0.0,
                                          supply_offset=True, linked=(3, 4, 5, 6)),
                             tube_circuit(1, dc(100.0), resistance=60.0)],
-                  potentials=[potential_goal(1, "amplitude", 2.0, 4.5, 40.0, 80.0,
+                  potentials=[potential_goal(1, "amplitude", 2.2, 3.8, 40.0, 80.0,
                                              omega=omega)]),
         reference=[supply(7, 8, -0.7)])
 

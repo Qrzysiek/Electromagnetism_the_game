@@ -199,6 +199,12 @@ physics of diodes" (2017).
   weight was found to depend on the slider's range through its floor (a grid-screened
   cathode got 27 macroparticles instead of 152): the weight now comes from the emitting
   face's charge over the sources' period, with a far lower floor.
-- **Next:** the triode's remaining preview error (~15 %: the grid's and the step's
-  resolution); a bipolar level; an in-plane circuit path for the magnetic and Poynting
+- **The owner's review (2026-10-12):** Through the cloud's flow at 30 V was too thin for
+  the ion to cross a real cloud (now 60 V, the ion at 1.8, a plate below the gap: the
+  original idea works again); the potential map showed blue and red with a sharp wall
+  (its scale came from the potentials at t = 0, all 0 with AC anodes: fixed, and the
+  tube maps have gain and range controls now). The triode's remaining preview error was
+  the particles' softening (half a segment: the narrow gap's space charge smoothed): now
+  an eighth (PHYSICS.md §2.11).
+- **Next:** a bipolar level; an in-plane circuit path for the magnetic and Poynting
   maps.

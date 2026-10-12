@@ -1037,29 +1037,46 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             ui.selectable_value(&mut game.map, None, "off");
         });
         if game.map == Some(MapMode::Electric) {
+            ui.add(
+                egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),
+            )
+            .on_hover_text("How many decades below the strong field are still coloured");
             ui.label(
-                egui::RichText::new(
-                    "|E| at the time shown (live while animating), with the electrons' space charge: bright \
-                     where strong, on a log scale over 1.5 decades below the field at the 99th \
-                     percentile of the board; contours every quarter decade; arrows show its \
-                     direction (a force on electrons the opposite way). Inside metal it is 0. \
-                     Magnetic and Poynting maps need the circuit the tube's current returns \
-                     through, which comes with the circuit coupling.",
-                )
+                egui::RichText::new(format!(
+                    "|E| at the time shown (live while animating), with the electrons' space \
+                     charge: bright where strong, on a log scale over {:.1} decades below the \
+                     field at the 99th percentile of the board; contours every quarter \
+                     decade; arrows show its direction (a force on electrons the opposite \
+                     way). Inside metal it is 0. Magnetic and Poynting maps need the path the \
+                     tube's current returns along through its circuit, which in a \
+                     z-invariant tube runs in the plane and is not modelled.",
+                    game.tube_range_decades
+                ))
                 .small(),
             );
             ui.separator();
             controls(ui);
             return;
         }
+        if game.map == Some(MapMode::Potential) {
+            ui.add(
+                egui::Slider::new(&mut game.tube_gain_decades, 0.0..=2.0).text("gain (decades)"),
+            )
+            .on_hover_text(
+                "Amplifies the colours: full colour at 10^−gain of the largest potential \
+                 difference; small differences (the space charge's dip) become visible",
+            );
+        }
         ui.label(
             egui::RichText::new(
                 "The electrons' potential energy at the time shown (live), relative to the \
-                 cathode, in units of the largest voltage: blue downhill (towards the \
-                 anode), red uphill; contours every quarter. It includes the electrons' \
-                 own space charge and the charge it induces on the electrodes: the flat \
-                 region in front of the cathode, where the field is pulled down to zero, \
-                 is the space charge that limits the current.",
+                 cathode then, in units of the largest potential difference to it the \
+                 electrodes reach (their supplies over a period) divided by the gain: blue \
+                 downhill (towards the anode), red uphill, smoothly graded and saturating \
+                 beyond about twice the unit; contours every quarter. It includes the \
+                 electrons' own space charge and the charge it induces on the electrodes: \
+                 the flat region in front of the cathode, where the field is pulled down to \
+                 zero, is the space charge that limits the current.",
             )
             .small(),
         );

@@ -214,6 +214,15 @@ pub const ENVELOPE_SEGMENT: f64 = 0.5;
 /// need it.
 pub const EMITTER_MESH: f64 = 0.25;
 
+/// The macroparticles' mutual force softened within this fraction of a segment (PHYSICS.md
+/// §2.11): it smooths the space charge's field over that length, and in a narrow gap the
+/// smoothed space charge limits the current too weakly. At half a segment (the earlier
+/// value) the triode's output, 1.25 between its cathode and grid, came out 3.89, 3.38, 3.17
+/// at refine 1, 2, 3 (its limit ~3.0); at an eighth 3.34, 3.12, 3.04. Halving the step,
+/// the weight or the mesh instead moved the preview by +0.03, +0.07 and −0.18 of its −0.50
+/// to the verification. The diode with a gap of 7 barely depends on it.
+pub const SOFTENING: f64 = 0.125;
+
 /// A temperature-limited emitter's macroparticles per unit time at its saturation
 /// (preview): its weight is at most `saturation × perimeter / TL_RATE`. The weight rule
 /// of the space-charge limit (its charge before emission) left the Electron gun's beam
@@ -268,6 +277,10 @@ pub struct TubeRun {
     pub segments: Vec<(DVec3, DVec3)>,
     /// Each prism's potential.
     pub potentials: Vec<f64>,
+    /// The lowest and highest potential the electrodes reach: their own, and their circuits'
+    /// sources over a period (the potential map's scale; at t = 0 alone an AC level's
+    /// electrodes are all at 0).
+    pub potential_range: (f64, f64),
 }
 
 impl TubeRun {
@@ -299,6 +312,7 @@ impl TubeRun {
         if self.segments.is_empty() {
             self.segments = chunk.segments;
             self.potentials = chunk.potentials;
+            self.potential_range = chunk.potential_range;
         }
     }
 
@@ -869,7 +883,7 @@ impl Level {
             electrodes: prisms,
             emitters,
             projectiles,
-            softening: 0.5 * size,
+            softening: SOFTENING * size,
             dt: spec.step / r,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
@@ -921,9 +935,14 @@ impl Level {
             tube.emitters[i].weight = w;
         }
         let state = tube.state();
+        let potential_range = samples
+            .iter()
+            .flatten()
+            .fold((0.0_f64, 0.0_f64), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
         let pending = TubeRun {
             segments: tube.electrodes.segments.clone(),
             potentials: tube.electrodes.potentials.clone(),
+            potential_range,
             ..TubeRun::default()
         };
         let n_goals = spec.potential_goals.len();

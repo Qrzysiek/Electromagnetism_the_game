@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Through the cloud",
-  "description": "An ion (a long line of positive charge, the large dot) is fired up through the gap of a working diode, after its electrons have started to flow. Keep the diode running, with a current between 0.85 and 1.15 into the anode (averaged over $t = 15$ to $30$), and bring the ion into the detector at the top. The anode's field pushes positive charges toward the cathode, and the electrons' cloud pulls on the ion as it passes: at the voltage the current needs, the ion leaves the tube far left of the detector. Your two plates can push it back on course, but they act on the electrons as well, and the ion's own charge disturbs the flow it crosses.",
+  "description": "An ion (a long line of positive charge, the large dot) is fired up through the gap of a working diode, after its electrons have started to flow. Keep the diode running, with a current between 2.5 and 3.1 into the anode (averaged over $t = 15$ to $30$), and bring the ion into the detector at the top. The anode's field pushes positive charges toward the cathode, and the electrons' cloud pulls on the ion as it passes: at the voltage the current needs, the ion leaves the tube far left of the detector. Your two plates can push it back on course, but they act on the electrons as well, and the ion's own charge disturbs the flow it crosses.",
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -36,8 +36,8 @@
       -80.0,
       -40.0,
       20.0,
-      35.0,
-      50.0,
+      30.0,
+      45.0,
       65.0,
       80.0
     ],
@@ -47,11 +47,11 @@
       "height": 4.0
     },
     "supply_voltages": [
-      -70.0,
-      20.0,
-      30.0,
+      -100.0,
       40.0,
-      70.0
+      60.0,
+      80.0,
+      100.0
     ]
   },
   "reference_solution": [
@@ -62,16 +62,16 @@
         0
       ],
       "kind": "supply",
-      "value": 30.0
+      "value": 60.0
     },
     {
       "node": [
-        4,
-        18,
+        9,
+        2,
         0
       ],
       "kind": "plate",
-      "value": 65.0,
+      "value": 30.0,
       "angle_deg": 90.0
     }
   ],
@@ -111,8 +111,8 @@
     "charge_per_mass": -1.0,
     "goal": {
       "electrode": 1,
-      "min": 0.85,
-      "max": 1.15,
+      "min": 2.5,
+      "max": 3.1,
       "start": 15.0,
       "end": 30.0
     },
@@ -125,7 +125,7 @@
           0
         ],
         "direction_deg": 90.0,
-        "speed": 1.2,
+        "speed": 1.8,
         "charge": 0.2,
         "mass": 10.0,
         "launch": 10.0,
