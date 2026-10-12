@@ -191,8 +191,8 @@ physics of diodes" (2017).
   the push's far field from a multipole series (V14) and the induced charge solved once
   per step, which pay for the envelope. The existing tube levels were re-tuned.
 - **The triode** (level 104): a grid of five wires on one biased sine source before the
-  cathode, the anode through a load; the player biases the grid for a gain between 2 and
-  4.5. Two obstacles on the way, both now handled (PHYSICS.md §2.11): the anode's own
+  cathode, the anode through a load; the player biases the grid for a gain between 2.2 and
+  3.8. Two obstacles on the way, both now handled (PHYSICS.md §2.11): the anode's own
   capacitance caps the gain at `g_m/(ωC)` (a short anode, a slow signal), and the preview
   erred by +29 % at the narrow cathode–grid gap (the release distance's first-order
   error: the emitters are now meshed at a quarter, V15). On the way the macroparticles'
@@ -206,5 +206,37 @@ physics of diodes" (2017).
   tube maps have gain and range controls now). The triode's remaining preview error was
   the particles' softening (half a segment: the narrow gap's space charge smoothed): now
   an eighth (PHYSICS.md §2.11).
-- **Next:** a bipolar level; an in-plane circuit path for the magnetic and Poynting
-  maps.
+- **State (2026-10-12):** the stage's plan is built through the triode: levels 99–104
+  (diode, crossed fields, ion through a diode, gun, rectifier, triode), tests V1–V16,
+  all merged to main.
+
+## Next, and questions for the owner
+
+1. **Magnetic and Poynting maps** (requested together with the electric map, which is
+   done). The tube's currents flow in the plane, so its magnetic field is B_z, a stream
+   function of the total current (conduction plus displacement). It therefore depends on
+   the path by which the current returns through the external circuit, and a z-invariant
+   model must draw that path in the plane. **(owner)** Choose:
+   (a) straight leads from each electrode to the envelope;
+   (b) leads the level designer draws;
+   (c) only the particles' own Biot–Savart field (first order in v/c, without the
+   electrodes' surface currents), labelled as such.
+2. **A bipolar level.** Ions emitted from the anode neutralize the electrons' space charge
+   and raise their current (Langmuir: ×1.86 in a planar diode; V6 validates the coaxial
+   bipolar flow). A puzzle needs a trade-off, e.g. more electron current while the ion
+   current onto the cathode (its wear) stays limited. That probably needs a current goal
+   per species, an extension of the format. **(owner)** Is that goal kind wanted?
+3. **The stage's master level** (the plan above: a magnetron or klystron). Both fit the
+   z-invariant model: a magnetron (a cathode, an anode of vanes, B along z) and a
+   sheet-beam klystron (a beam crossing gaps). A magnetron needs resonators: in the
+   quasi-static model, LC tanks between neighbouring vanes, driven by the electrons' Ramo
+   currents. A klystron's output gap needs one to be efficient: without it, the gap's
+   capacitance shunts the signal, as the anode's did in the triode. The tube circuits have
+   no inductors yet. Validation: an LC node against its exact solution, the energy
+   balance (V16), and for a magnetron the oscillation's onset against the Buneman–Hartree
+   condition. **(owner)** Approve before building: which device, and inductors as a new
+   circuit element.
+4. **Tube previews take 0.7–2.3 s.** Five of the six levels exceed the preview budget
+   (`PREVIEW_LIMIT`, 1 s, in `crates/level/src/cost.rs`); the display streams, so only
+   the preview's numbers wait. Not profiled since the envelope and the finer softening.
+   **(owner)** Make them faster, or give tubes a budget of their own?
