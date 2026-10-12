@@ -88,11 +88,23 @@ fn level_hashes() -> BTreeMap<String, String> {
                         h.u64(u64::from(s.to_bits()));
                     }
                 }
-                for (t, q) in &run.collected {
-                    h.f64(*t);
-                    h.f64(*q);
+                // Each current goal's collected charge and current. Without one, zeros
+                // and NaN, as the single-goal format recorded them, so that the hashes
+                // carried over to the list of goals.
+                if run.collected.is_empty() {
+                    for f in &run.frames {
+                        h.f64(f.t);
+                        h.f64(0.0);
+                    }
+                    h.f64(f64::NAN);
                 }
-                h.f64(run.current.unwrap_or(f64::NAN));
+                for (series, current) in run.collected.iter().zip(&run.currents) {
+                    for (t, q) in series {
+                        h.f64(*t);
+                        h.f64(*q);
+                    }
+                    h.f64(current.unwrap_or(f64::NAN));
+                }
                 for track in &run.tracks {
                     for (t, x) in track {
                         h.f64(*t);

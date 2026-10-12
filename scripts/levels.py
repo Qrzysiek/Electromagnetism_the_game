@@ -241,20 +241,38 @@ def slider_problems(lvl):
     return out
 
 
+def current_goal(electrode, lo, hi, start, end, carriers=None):
+    """A tube level's current goal: the current into `electrode`, averaged over
+    t = start..end, between lo and hi; `carriers`: None for the cathode's, "ions" for the
+    ion source's (a bipolar level)."""
+    g = {"electrode": electrode, "min": lo, "max": hi, "start": start, "end": end}
+    if carriers is not None:
+        g["carriers"] = carriers
+    return g
+
+
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
-         potentials=()):
+         potentials=(), goals=(), ions=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
     current into `electrode`, averaged over t = start..end, between lo and hi; with
     `projectiles` (see `projectile`) also each one with a detector arriving there. `b_z`:
     a uniform field along z; `solenoid` = (x, y): the terminal of a solenoid the player
-    powers (a supply there sets B along z, over `level(solenoid_fields=...)`). Tube
-    levels are Newtonian (pass c=None to `level`)."""
+    powers (a supply there sets B along z, over `level(solenoid_fields=...)`). `goals`:
+    further current goals (`current_goal`); `ions` = (electrode, q/m[, coated face's
+    direction]): an ion source (the bipolar diode). Tube levels are Newtonian (pass
+    c=None to `level`)."""
     t = {"cathode": cathode, "charge_per_mass": q_over_m}
-    if electrode is not None:
-        t["goal"] = {"electrode": electrode, "min": lo, "max": hi, "start": start, "end": end}
+    all_goals = ([current_goal(electrode, lo, hi, start, end)] if electrode is not None
+                 else []) + list(goals)
+    if all_goals:
+        t["goals"] = all_goals
+    if ions is not None:
+        t["ions"] = {"electrode": ions[0], "charge_per_mass": ions[1]}
+        if len(ions) > 2:
+            t["ions"]["emit_toward_deg"] = ions[2]
     if circuits:
         t["circuits"] = list(circuits)
     if potentials:

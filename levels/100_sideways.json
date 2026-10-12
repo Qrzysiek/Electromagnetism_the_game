@@ -99,13 +99,15 @@
   "tube": {
     "cathode": 0,
     "charge_per_mass": -1.0,
-    "goal": {
-      "electrode": 2,
-      "min": 1.1,
-      "max": 10.0,
-      "start": 20.0,
-      "end": 40.0
-    },
+    "goals": [
+      {
+        "electrode": 2,
+        "min": 1.1,
+        "max": 10.0,
+        "start": 20.0,
+        "end": 40.0
+      }
+    ],
     "emit_toward_deg": 0.0,
     "solenoid": [
       23,

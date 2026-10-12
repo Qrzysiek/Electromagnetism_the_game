@@ -1372,9 +1372,13 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         .as_ref()
         .filter(|(r, _)| *r == current)
         .map(|(_, v)| v);
-    if let Some(g) = spec.goal {
+    for (k, g) in spec.goals.iter().enumerate() {
+        let whose = match g.carriers {
+            level::tube::Carriers::Cathode => "current",
+            level::tube::Carriers::Ions => "ion current",
+        };
         ui.label(format!(
-            "Goal: the current into electrode {} between {} and {}, averaged over t = {} to {}",
+            "Goal: the {whose} into electrode {} between {} and {}, averaged over t = {} to {}",
             g.electrode + 1,
             fmt_num(g.min),
             fmt_num(g.max),
@@ -1383,13 +1387,17 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         ));
         if let Some(v) = view {
             let run = &v.run;
-            ui.label(match run.current {
+            let current = run.currents.get(k).copied().flatten();
+            ui.label(match current {
                 Some(c) => format!("Preview: {}", fmt_num(c)),
                 None => "Preview: computing…".into(),
             });
             ui.label(egui::RichText::new("Charge collected by the goal electrode:").small());
-            circuit_plot(ui, &run.collected, &[g.start, g.end]);
-            let quiet = run.current.is_some()
+            if let Some(series) = run.collected.get(k) {
+                circuit_plot(ui, series, &[g.start, g.end]);
+            }
+            let quiet = g.carriers == level::tube::Carriers::Cathode
+                && current.is_some()
                 && run
                     .frames
                     .iter()
@@ -1405,7 +1413,7 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 );
             }
         }
-        match verdict.and_then(|v| v.current) {
+        match verdict.and_then(|v| v.currents.get(k).copied()) {
             Some(c) => {
                 let (col, mark) = colour(c.status);
                 ui.colored_label(

@@ -109,13 +109,15 @@
   "tube": {
     "cathode": 0,
     "charge_per_mass": -1.0,
-    "goal": {
-      "electrode": 1,
-      "min": 2.5,
-      "max": 3.1,
-      "start": 15.0,
-      "end": 30.0
-    },
+    "goals": [
+      {
+        "electrode": 1,
+        "min": 2.5,
+        "max": 3.1,
+        "start": 15.0,
+        "end": 30.0
+      }
+    ],
     "emit_toward_deg": 0.0,
     "projectiles": [
       {

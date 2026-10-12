@@ -56,9 +56,14 @@ pub struct TubeSpec {
     /// The preview's time step (the verification's is half).
     #[serde(default = "default_step", skip_serializing_if = "is_default_step")]
     pub step: f64,
-    /// The current goal, if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub goal: Option<CurrentGoal>,
+    /// The current goals (older level files: a single `goal`).
+    #[serde(
+        default,
+        alias = "goal",
+        deserialize_with = "one_or_many",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub goals: Vec<CurrentGoal>,
     /// External circuits of electrodes (per unit length; PHYSICS.md 2.11).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub circuits: Vec<TubeCircuit>,
@@ -159,8 +164,9 @@ pub struct ProjectileSpec {
     pub detector: Option<[Node; 2]>,
 }
 
-/// The current (charge per unit length per time, positive for carriers arriving)
-/// collected by an electrode, averaged over `start..end`, must lie in `min..max`.
+/// The current (charge per unit length per time, positive for carriers arriving) of one
+/// kind of carrier collected by an electrode, averaged over `start..end`, must lie in
+/// `min..max`.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CurrentGoal {
     /// An index into the level's `electrodes`.
@@ -169,6 +175,55 @@ pub struct CurrentGoal {
     pub max: f64,
     pub start: f64,
     pub end: f64,
+    /// Whose current: the cathode's carriers (the default) or the ion source's ions.
+    #[serde(default, skip_serializing_if = "Carriers::is_cathode")]
+    pub carriers: Carriers,
+}
+
+/// The carriers a current goal counts (projectiles never count).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Carriers {
+    /// The cathode's (electrons in every level so far).
+    #[default]
+    Cathode,
+    /// The ion source's (`TubeSpec::ions`): e.g. the ion current into the cathode, its
+    /// wear in a bipolar diode.
+    Ions,
+}
+
+impl Carriers {
+    #[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+    fn is_cathode(&self) -> bool {
+        *self == Carriers::Cathode
+    }
+
+    /// The emitter index of these carriers in a run (`TubeState::collected`'s second
+    /// index): the cathode is emitter 0, the ion source 1.
+    fn emitter(self) -> usize {
+        match self {
+            Carriers::Cathode => 0,
+            Carriers::Ions => 1,
+        }
+    }
+}
+
+/// The current goals: a list, or in older level files a single goal (`goal`).
+fn one_or_many<'de, D>(d: D) -> Result<Vec<CurrentGoal>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(CurrentGoal),
+        Many(Vec<CurrentGoal>),
+    }
+    Ok(match Option::<OneOrMany>::deserialize(d)? {
+        None => Vec::new(),
+        Some(OneOrMany::One(g)) => vec![g],
+        Some(OneOrMany::Many(v)) => v,
+    })
 }
 
 /// Preview resolution: segment length (cells).
@@ -259,10 +314,12 @@ pub struct TubeFrame {
 pub struct TubeRun {
     /// A frame every step.
     pub frames: Vec<TubeFrame>,
-    /// The goal electrode's collected carrier charge (positive for arrivals) over time.
-    pub collected: Vec<(f64, f64)>,
-    /// The goal's average current over its window, once the run has passed its end.
-    pub current: Option<f64>,
+    /// Per current goal: its electrode's collected charge of its carriers (positive for
+    /// arrivals) over time.
+    pub collected: Vec<Vec<(f64, f64)>>,
+    /// Per current goal: its average current over its window, once the run has passed
+    /// its end.
+    pub currents: Vec<Option<f64>>,
     /// Each potential goal's measure, once the run has passed its window.
     pub potential: Vec<Option<f64>>,
     /// Per projectile: its track `(t, x)` while in flight, and when it reached its
@@ -287,8 +344,18 @@ impl TubeRun {
     /// Appends a streamed chunk (its frames and samples follow this run's).
     pub fn extend(&mut self, chunk: TubeRun) {
         self.frames.extend(chunk.frames);
-        self.collected.extend(chunk.collected);
-        self.current = self.current.or(chunk.current);
+        if self.collected.len() < chunk.collected.len() {
+            self.collected.resize(chunk.collected.len(), Vec::new());
+        }
+        for (a, c) in self.collected.iter_mut().zip(chunk.collected) {
+            a.extend(c);
+        }
+        if self.currents.len() < chunk.currents.len() {
+            self.currents.resize(chunk.currents.len(), None);
+        }
+        for (a, c) in self.currents.iter_mut().zip(chunk.currents) {
+            *a = a.or(c);
+        }
         if self.potential.len() < chunk.potential.len() {
             self.potential.resize(chunk.potential.len(), None);
         }
@@ -352,11 +419,12 @@ pub struct TubeSim {
     spec: TubeSpec,
     /// Each projectile's detector box (world coordinates).
     detectors: Vec<Option<(DVec3, DVec3)>>,
-    at_start: Option<(f64, f64)>,
+    /// Per current goal: the time and collected charge at its window's start.
+    at_start: Vec<Option<(f64, f64)>>,
     /// What has not been taken yet.
     pending: TubeRun,
     steps: u32,
-    current: Option<f64>,
+    currents: Vec<Option<f64>>,
     /// Each potential goal's window so far: sum, count, least, most, and the samples
     /// `(t, V)` (for `Measure::Amplitude`).
     windows: Vec<(f64, f64, f64, f64)>,
@@ -424,9 +492,9 @@ impl TubeSim {
         self.tube.emitters.iter().map(|e| e.weight).collect()
     }
 
-    /// The goal's current, once the run has passed the goal window's end.
-    pub fn current(&self) -> Option<f64> {
-        self.current
+    /// Each current goal's current, once the run has passed its window's end.
+    pub fn currents(&self) -> &[Option<f64>] {
+        &self.currents
     }
 
     /// The charge per unit length each electrode has collected so far, per emitter
@@ -462,29 +530,40 @@ impl TubeSim {
 
     /// Advances to time `t_end` (whole steps), recording a frame every step.
     pub fn advance_to(&mut self, t_end: f64) {
-        let sign = self.spec.charge_per_mass.signum();
         let n_proj = self.spec.projectiles.len();
+        let n_goals = self.spec.goals.len();
         while self.state.t < t_end - 0.5 * self.tube.dt {
             self.tube.step(&mut self.state);
             self.steps += 1;
             let s = &self.state;
-            let collected = self
-                .spec
-                .goal
-                .map_or(0.0, |g| sign * s.collected[g.electrode][0]);
-            if let Some(g) = self.spec.goal {
-                if self.at_start.is_none() && s.t >= g.start {
-                    self.at_start = Some((s.t, collected));
+            if self.pending.collected.len() < n_goals {
+                self.pending.collected.resize(n_goals, Vec::new());
+                self.pending.currents.resize(n_goals, None);
+            }
+            for (k, g) in self.spec.goals.iter().enumerate() {
+                // The carriers' charge collected, positive for arrivals.
+                let sign = match g.carriers {
+                    Carriers::Cathode => self.spec.charge_per_mass.signum(),
+                    Carriers::Ions => 1.0,
+                };
+                let collected = sign
+                    * s.collected[g.electrode]
+                        .get(g.carriers.emitter())
+                        .copied()
+                        .unwrap_or(0.0);
+                if self.at_start[k].is_none() && s.t >= g.start {
+                    self.at_start[k] = Some((s.t, collected));
                 }
-                if self.current.is_none() && s.t >= g.end - 0.5 * self.tube.dt {
-                    let (t0, q0) = self.at_start.unwrap_or((0.0, 0.0));
-                    self.current = Some(if s.t > t0 {
+                if self.currents[k].is_none() && s.t >= g.end - 0.5 * self.tube.dt {
+                    let (t0, q0) = self.at_start[k].unwrap_or((0.0, 0.0));
+                    self.currents[k] = Some(if s.t > t0 {
                         (collected - q0) / (s.t - t0)
                     } else {
                         0.0
                     });
-                    self.pending.current = self.current;
+                    self.pending.currents[k] = self.currents[k];
                 }
+                self.pending.collected[k].push((s.t, collected));
             }
             if self.pending.tracks.len() < n_proj {
                 self.pending.tracks.resize(n_proj, Vec::new());
@@ -558,7 +637,6 @@ impl TubeSim {
                     self.pending.potential[k] = Some(m);
                 }
             }
-            self.pending.collected.push((s.t, collected));
         }
         self.pending.in_flight = self.state.x.len();
         self.pending.steps = self.steps;
@@ -593,12 +671,13 @@ pub struct CurrentVerdict {
 }
 
 impl CurrentVerdict {
-    pub fn new(preview: f64, fine: f64, goal: &CurrentGoal) -> Self {
+    /// The verdict on a goal's range `min..max` from the two runs' values.
+    pub fn new(preview: f64, fine: f64, min: f64, max: f64) -> Self {
         let error = ERROR_FACTOR * (fine - preview).abs();
         let (lo, hi) = (fine - error, fine + error);
-        let status = if lo >= goal.min && hi <= goal.max {
+        let status = if lo >= min && hi <= max {
             TubeStatus::Met
-        } else if hi < goal.min || lo > goal.max {
+        } else if hi < min || lo > max {
             TubeStatus::Missed
         } else {
             TubeStatus::Uncertain
@@ -615,8 +694,8 @@ impl CurrentVerdict {
 /// What a verdict needs from one run.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TubeResults {
-    /// The goal's current.
-    pub current: Option<f64>,
+    /// Each current goal's current.
+    pub currents: Vec<Option<f64>>,
     /// Each potential goal's measure.
     pub potential: Vec<Option<f64>>,
     /// When each projectile reached its detector.
@@ -629,7 +708,7 @@ impl TubeSim {
     /// The run's results so far.
     pub fn results(&self) -> TubeResults {
         TubeResults {
-            current: self.current,
+            currents: self.currents.clone(),
             potential: self.potential.clone(),
             arrivals: self.arrivals.clone(),
             capped: self.state.capped,
@@ -640,7 +719,8 @@ impl TubeSim {
 /// The verdict on a placement: each goal's and the whole's.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TubeVerdict {
-    pub current: Option<CurrentVerdict>,
+    /// Each current goal's verdict.
+    pub currents: Vec<CurrentVerdict>,
     /// Each potential goal's verdict (the same rule: the fine run's value, 1.5 times the
     /// runs' difference as its error).
     pub potential: Vec<CurrentVerdict>,
@@ -655,13 +735,19 @@ pub struct TubeVerdict {
 impl TubeVerdict {
     /// From the two runs' results.
     pub fn new(spec: &TubeSpec, preview: &TubeResults, fine: &TubeResults) -> Self {
-        let current = spec.goal.map(|g| {
-            CurrentVerdict::new(
-                preview.current.unwrap_or(0.0),
-                fine.current.unwrap_or(0.0),
-                &g,
-            )
-        });
+        let currents: Vec<CurrentVerdict> = spec
+            .goals
+            .iter()
+            .enumerate()
+            .map(|(k, g)| {
+                CurrentVerdict::new(
+                    preview.currents.get(k).copied().flatten().unwrap_or(0.0),
+                    fine.currents.get(k).copied().flatten().unwrap_or(0.0),
+                    g.min,
+                    g.max,
+                )
+            })
+            .collect();
         let potential: Vec<CurrentVerdict> = spec
             .potential_goals
             .iter()
@@ -670,13 +756,8 @@ impl TubeVerdict {
                 CurrentVerdict::new(
                     preview.potential.get(k).copied().flatten().unwrap_or(0.0),
                     fine.potential.get(k).copied().flatten().unwrap_or(0.0),
-                    &CurrentGoal {
-                        electrode: g.electrode,
-                        min: g.min,
-                        max: g.max,
-                        start: g.start,
-                        end: g.end,
-                    },
+                    g.min,
+                    g.max,
                 )
             })
             .collect();
@@ -698,7 +779,7 @@ impl TubeVerdict {
                 (j, a, b, status)
             })
             .collect();
-        let all = current
+        let all = currents
             .iter()
             .chain(potential.iter())
             .map(|c| c.status)
@@ -717,7 +798,7 @@ impl TubeVerdict {
             };
         }
         Self {
-            current,
+            currents,
             potential,
             arrivals,
             capped,
@@ -946,15 +1027,16 @@ impl Level {
             ..TubeRun::default()
         };
         let n_goals = spec.potential_goals.len();
+        let n_currents = spec.goals.len();
         TubeSim {
             tube,
             state,
             spec,
             detectors,
-            at_start: None,
+            at_start: vec![None; n_currents],
             pending,
             steps: 0,
-            current: None,
+            currents: vec![None; n_currents],
             windows: vec![(0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY); n_goals],
             series: vec![Vec::new(); n_goals],
             potential: vec![None; n_goals],
@@ -1057,9 +1139,11 @@ impl Level {
     pub fn tube_verify_end(&self) -> f64 {
         self.tube.as_ref().map_or(0.0, |t| {
             let goal = t
-                .goal
-                .map_or(0.0, |g| g.end)
-                .max(t.potential_goals.iter().map(|g| g.end).fold(0.0, f64::max));
+                .goals
+                .iter()
+                .map(|g| g.end)
+                .chain(t.potential_goals.iter().map(|g| g.end))
+                .fold(0.0, f64::max);
             if t.projectiles.iter().any(|p| p.detector.is_some()) {
                 goal.max(self.physics.t_max)
             } else {
@@ -1121,8 +1205,8 @@ impl Level {
         let mut sim = self.tube_sim(player, 1);
         sim.advance_to(self.tube_verify_end());
         let mut score = 0.0;
-        if let Some(g) = spec.goal {
-            let i = sim.current().unwrap_or(0.0);
+        for (g, i) in spec.goals.iter().zip(sim.currents()) {
+            let i = i.unwrap_or(0.0);
             score += (g.min - i).max(i - g.max).max(0.0) / (g.max - g.min).max(1e-300);
         }
         let measured = sim.results().potential;
@@ -1149,14 +1233,27 @@ impl Level {
         if spec.cathode >= n {
             out.push("Tube: the cathode is not one of the level's electrodes.".into());
         }
-        if let Some(g) = spec.goal {
-            if g.electrode >= n || g.electrode == spec.cathode {
-                out.push("Tube: the goal must be an electrode other than the cathode.".into());
+        for g in &spec.goals {
+            // A carrier's own emitter takes back only those that return: not a goal.
+            let emitter = match g.carriers {
+                Carriers::Cathode => Some(spec.cathode),
+                Carriers::Ions => spec.ions.map(|i| i.electrode),
+            };
+            if g.carriers == Carriers::Ions && spec.ions.is_none() {
+                out.push("Tube: an ion current goal needs an ion source.".into());
+            } else if g.electrode >= n || Some(g.electrode) == emitter {
+                out.push(
+                    "Tube: a current goal must be an electrode other than its carriers' \
+                     emitter."
+                        .into(),
+                );
             }
             if !(g.min < g.max && 0.0 <= g.start && g.start < g.end && g.end.is_finite()) {
-                out.push("Tube: the goal needs min < max and 0 ≤ start < end.".into());
+                out.push("Tube: a current goal needs min < max and 0 ≤ start < end.".into());
             }
-        } else if !spec.projectiles.iter().any(|p| p.detector.is_some())
+        }
+        if spec.goals.is_empty()
+            && !spec.projectiles.iter().any(|p| p.detector.is_some())
             && spec.potential_goals.is_empty()
         {
             out.push(

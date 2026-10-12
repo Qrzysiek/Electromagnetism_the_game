@@ -1268,7 +1268,7 @@ mod tests {
                     let bad = chunk.frames.iter().any(|f| {
                         f.x.iter().flatten().any(|v| !v.is_finite())
                             || f.sigma.iter().any(|s| !s.is_finite())
-                    }) || chunk.current.is_some_and(|c| !c.is_finite());
+                    }) || chunk.currents.iter().flatten().any(|c| !c.is_finite());
                     if bad {
                         problem.get_or_insert(("nonfinite", "tube preview".into()));
                     }
@@ -1276,8 +1276,9 @@ mod tests {
                 Ok(Response::TubeVerified { verdict, .. }) => {
                     verdicts += 1;
                     if verdict
-                        .current
-                        .is_some_and(|c| !(c.fine.is_finite() && c.error.is_finite()))
+                        .currents
+                        .iter()
+                        .any(|c| !(c.fine.is_finite() && c.error.is_finite()))
                     {
                         problem.get_or_insert(("nonfinite", "tube verdict".into()));
                     }

@@ -3,7 +3,7 @@
 
 #![allow(clippy::disallowed_methods)] // reference values; the engine uses libm (clippy.toml)
 
-use level::tube::{CurrentGoal, CurrentVerdict, TubeSpec};
+use level::tube::{Carriers, CurrentGoal, CurrentVerdict, TubeSpec};
 use level::{ConductorBias, Electrode, Level};
 
 /// A planar diode on a 24 × 16 board: cathode and anode plates 10 long, 1 thick, their
@@ -42,13 +42,14 @@ pub fn diode(v: f64) -> Level {
         b_z: 0.0,
         solenoid: None,
         step: level::tube::DEFAULT_STEP,
-        goal: Some(CurrentGoal {
+        goals: vec![CurrentGoal {
             electrode: 1,
             min: 0.0,
             max: 1.0,
             start: 10.0,
             end: 20.0,
-        }),
+            carriers: Carriers::Cathode,
+        }],
         circuits: Vec::new(),
         potential_goals: Vec::new(),
     });
@@ -58,9 +59,9 @@ pub fn diode(v: f64) -> Level {
 /// The planar diode's preview and verification at two voltages: the setup is accepted,
 /// and the currents scale as V^{3/2} (exact in any geometry: the steady space-charge
 /// equations are invariant under V → λV, J → λ^{3/2} J) within the verdicts' errors
-/// (measured 7.938 for 8, errors 5 % and 8 %). Printed for comparison: the 1D Child–
+/// (measured 8.045 for 8, errors 4 % and 4 %). Printed for comparison: the 1D Child–
 /// Langmuir law per unit length of a 10-wide strip (the plates' finite width adds edge
-/// emission, so it is not a reference), and the run times (0.4 s and 3.1 s).
+/// emission, so it is not a reference), and the run times (0.2 s and 1.0 s).
 #[test]
 fn planar_diode_runs() {
     let mut currents = Vec::new();
@@ -72,14 +73,14 @@ fn planar_diode_runs() {
             level.setup_issues(&[])
         );
         let start = std::time::Instant::now();
-        let goal = level.tube.as_ref().unwrap().goal.unwrap();
+        let goal = level.tube.as_ref().unwrap().goals[0];
         let end = goal.end;
         let coarse = level.tube_run(&[], 1, end);
         let t1 = start.elapsed().as_secs_f64();
         let fine = level.tube_run(&[], 2, end);
         let t2 = start.elapsed().as_secs_f64() - t1;
-        let (ic, i_f) = (coarse.current.unwrap(), fine.current.unwrap());
-        let verdict = CurrentVerdict::new(ic, i_f, &goal);
+        let (ic, i_f) = (coarse.currents[0].unwrap(), fine.currents[0].unwrap());
+        let verdict = CurrentVerdict::new(ic, i_f, goal.min, goal.max);
         // 1D Child–Langmuir (k = 1): J = (√2/9π) √|q/m| V^{3/2}/d², times the width.
         let cl = 2f64.sqrt() / (9.0 * std::f64::consts::PI) * v.powf(1.5) / 49.0 * 10.0;
         println!(
@@ -95,9 +96,8 @@ fn planar_diode_runs() {
 }
 
 /// Calibration of `ERROR_FACTOR` at the game's scale: the planar diode at V = 40 with
-/// refine 1, 2 and 4 (measured 2.68930, 2.55052, 2.53288: the refine-2 run is 0.7 % from
-/// refine 4, 0.13 of its difference to refine 1; first-order extrapolation of (1, 2)
-/// overshoots by 4 %).
+/// refine 1, 2 and 4 (measured 2.20803, 2.14708, 2.11007: the refine-2 run is 1.7 % from
+/// refine 4, 0.61 of its difference to refine 1; PHYSICS.md §2.11).
 /// Slow (about a minute): run on demand with `--ignored`.
 #[test]
 #[ignore = "calibration, about a minute"]
@@ -107,7 +107,7 @@ fn planar_diode_convergence() {
         .iter()
         .map(|&r| {
             let start = std::time::Instant::now();
-            let c = level.tube_results(&[], r).current.unwrap();
+            let c = level.tube_results(&[], r).currents[0].unwrap();
             println!(
                 "refine {r}: {c:.5} ({:.1} s)",
                 start.elapsed().as_secs_f64()
@@ -144,14 +144,7 @@ fn tube_levels_refuse_what_breaks_the_symmetry() {
             .any(|s| s.contains("shots"))
     );
     let mut bad_goal = level.clone();
-    bad_goal
-        .tube
-        .as_mut()
-        .unwrap()
-        .goal
-        .as_mut()
-        .unwrap()
-        .electrode = 0;
+    bad_goal.tube.as_mut().unwrap().goals[0].electrode = 0;
     assert!(
         bad_goal
             .setup_issues(&[])
@@ -162,4 +155,64 @@ fn tube_levels_refuse_what_breaks_the_symmetry() {
 
 fn diode_with_shot() -> Level {
     Level::from_json(include_str!("../../../levels/01_first_bend.json")).expect("a level file")
+}
+
+/// Per-carrier current goals: an older level file's single `goal` loads as a list of one;
+/// an ion goal needs an ion source and may not be on the ion source itself; with ions
+/// from the anode, the ion goal on the cathode counts the ions arriving there (and the
+/// electron goal is unchanged by the second goal).
+#[test]
+fn current_goals_per_carrier() {
+    let old = r#"{"cathode": 0, "goal": {"electrode": 1, "min": 0.0, "max": 1.0, "start": 10.0, "end": 20.0}}"#;
+    let spec: level::tube::TubeSpec = serde_json::from_str(old).unwrap();
+    assert_eq!(spec.goals.len(), 1);
+    assert_eq!(spec.goals[0].carriers, Carriers::Cathode);
+
+    let mut level = diode(20.0);
+    let ion_goal = CurrentGoal {
+        electrode: 0,
+        min: 0.0,
+        max: 1.0,
+        start: 10.0,
+        end: 20.0,
+        carriers: Carriers::Ions,
+    };
+    level.tube.as_mut().unwrap().goals.push(ion_goal);
+    assert!(
+        level
+            .setup_issues(&[])
+            .iter()
+            .any(|s| s.contains("ion source"))
+    );
+    let spec = level.tube.as_mut().unwrap();
+    spec.ions = Some(level::tube::IonSource {
+        electrode: 1,
+        charge_per_mass: 0.04,
+        emit_toward_deg: None,
+    });
+    spec.goals[1].electrode = 1;
+    assert!(
+        level
+            .setup_issues(&[])
+            .iter()
+            .any(|s| s.contains("emitter"))
+    );
+    level.tube.as_mut().unwrap().goals[1].electrode = 0;
+    assert!(
+        level.setup_issues(&[]).is_empty(),
+        "{:?}",
+        level.setup_issues(&[])
+    );
+    let mut sim = level.tube_sim(&[], 1);
+    sim.advance_to(20.0);
+    let (electrons, ions) = (sim.currents()[0].unwrap(), sim.currents()[1].unwrap());
+    println!(
+        "electron current into the anode {electrons:.5}, ion current into the cathode {ions:.5}"
+    );
+    assert!(ions > 0.0 && electrons > 0.0);
+    let mut single = level.clone();
+    single.tube.as_mut().unwrap().goals.truncate(1);
+    let mut alone = single.tube_sim(&[], 1);
+    alone.advance_to(20.0);
+    assert_eq!(alone.currents()[0], Some(electrons));
 }

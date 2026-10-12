@@ -103,8 +103,10 @@ fn tube_scan(level: &Level, placements: &PathBuf, refine: u32) {
         eprintln!("not a tube level");
         return;
     };
+    // The electrodes' currents over the first current goal's window.
     let (start, end) = spec
-        .goal
+        .goals
+        .first()
         .map_or((0.0, level.tube_verify_end()), |g| (g.start, g.end));
     for (i, placement) in list.iter().enumerate() {
         let issues = level.setup_issues(placement);
@@ -147,9 +149,10 @@ fn tube_scan(level: &Level, placements: &PathBuf, refine: u32) {
             })
             .collect();
         println!(
-            "{i}: {} lost {:.4} potential {:?} arrivals {:?} fates {} in flight {} weights {:?}",
+            "{i}: {} lost {:.4} goals {:?} potential {:?} arrivals {:?} fates {} in flight {} weights {:?}",
             currents.join(" "),
             (sim.lost() - lost0) / dt,
+            sim.currents(),
             sim.results().potential,
             sim.arrivals(),
             fates.join("; "),
@@ -383,9 +386,10 @@ fn main() {
                         "outcome Rejected, status NotVerified"
                     }
                 };
-                if let (Some(c), Some(g)) = (v.current, spec.goal) {
+                for (c, g) in v.currents.iter().zip(&spec.goals) {
                     println!(
-                        "  shot tube: current {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
+                        "  shot tube: {:?} current {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
+                        g.carriers,
                         c.fine,
                         c.error,
                         c.preview,

@@ -9,8 +9,8 @@
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::tube::{
-    CurrentGoal, DEFAULT_STEP, IonSource, Measure, PotentialGoal, ProjectileSpec, TubeCircuit,
-    TubeSpec,
+    Carriers, CurrentGoal, DEFAULT_STEP, IonSource, Measure, PotentialGoal, ProjectileSpec,
+    TubeCircuit, TubeSpec,
 };
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
@@ -1512,13 +1512,14 @@ fn edit_tube(
             b_z: 0.0,
             solenoid: None,
             step: DEFAULT_STEP,
-            goal: Some(CurrentGoal {
+            goals: vec![CurrentGoal {
                 electrode: 1,
                 min: 0.0,
                 max: 1.0,
                 start: 10.0,
                 end: 20.0,
-            }),
+                carriers: Carriers::Cathode,
+            }],
             circuits: Vec::new(),
             potential_goals: Vec::new(),
         });
@@ -1533,7 +1534,7 @@ fn edit_tube(
         b_z,
         solenoid,
         step,
-        goal,
+        goals,
         circuits,
         potential_goals,
     }) = tube
@@ -1657,50 +1658,75 @@ fn edit_tube(
     } else {
         *solenoid = None;
     }
-    // Current goal.
-    let mut has_goal = goal.is_some();
-    ui.checkbox(&mut has_goal, "Current goal");
-    if has_goal {
-        let g = goal.get_or_insert(CurrentGoal {
+    // Current goals: each counts the cathode's carriers or the ions.
+    let mut remove_goal = None;
+    for (k, g) in goals.iter_mut().enumerate() {
+        ui.push_id(("current goal", k), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Current goal {}", k + 1));
+                if ui.small_button("×").clicked() {
+                    remove_goal = Some(k);
+                }
+                egui::ComboBox::from_id_salt("carriers")
+                    .selected_text(match g.carriers {
+                        Carriers::Cathode => "cathode's carriers",
+                        Carriers::Ions => "ions",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut g.carriers,
+                            Carriers::Cathode,
+                            "cathode's carriers",
+                        );
+                        ui.selectable_value(&mut g.carriers, Carriers::Ions, "ions")
+                            .on_hover_text("The ion source's ions (needs an ion source)");
+                    });
+            });
+            focus |= index(ui, "  Current into electrode", &mut g.electrode);
+            ui.horizontal(|ui| {
+                ui.label("  from");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(&mut g.min)
+                            .speed(0.01)
+                            .range(0.0..=MAX_POSITIVE),
+                    )
+                    .has_focus();
+                ui.label("to");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(&mut g.max)
+                            .speed(0.01)
+                            .range(0.0..=MAX_POSITIVE),
+                    )
+                    .has_focus();
+            });
+            ui.horizontal(|ui| {
+                ui.label("  averaged over t");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(&mut g.start)
+                            .speed(0.1)
+                            .range(0.0..=MAX_POSITIVE),
+                    )
+                    .has_focus();
+                ui.label("to");
+                focus |= positive(ui, &mut g.end, 0.1, MAX_POSITIVE);
+            });
+        });
+    }
+    if let Some(k) = remove_goal {
+        goals.remove(k);
+    }
+    if goals.len() < MAX_COUNT as usize && ui.button("Add a current goal").clicked() {
+        goals.push(CurrentGoal {
             electrode: last.min(1),
             min: 0.0,
             max: 1.0,
             start: 10.0,
             end: 20.0,
+            carriers: Carriers::Cathode,
         });
-        focus |= index(ui, "  Current into electrode", &mut g.electrode);
-        ui.horizontal(|ui| {
-            ui.label("  from");
-            focus |= ui
-                .add(
-                    egui::DragValue::new(&mut g.min)
-                        .speed(0.01)
-                        .range(0.0..=MAX_POSITIVE),
-                )
-                .has_focus();
-            ui.label("to");
-            focus |= ui
-                .add(
-                    egui::DragValue::new(&mut g.max)
-                        .speed(0.01)
-                        .range(0.0..=MAX_POSITIVE),
-                )
-                .has_focus();
-        });
-        ui.horizontal(|ui| {
-            ui.label("  averaged over t");
-            focus |= ui
-                .add(
-                    egui::DragValue::new(&mut g.start)
-                        .speed(0.1)
-                        .range(0.0..=MAX_POSITIVE),
-                )
-                .has_focus();
-            ui.label("to");
-            focus |= positive(ui, &mut g.end, 0.1, MAX_POSITIVE);
-        });
-    } else {
-        *goal = None;
     }
     // Projectiles.
     let mut remove = None;
@@ -2383,7 +2409,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             b_z,
             solenoid,
             step,
-            goal,
+            goals,
             circuits,
             potential_goals,
         } = t;
@@ -2392,20 +2418,24 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         let nonneg = |v: f64| (0.0..=MAX_POSITIVE).contains(&v);
         let angle = |a: &Option<f64>| a.is_none_or(|a| (-360.0..=360.0).contains(&a));
         let ratio_ok = (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass.abs());
-        let goal_ok = goal.is_none_or(|g| {
-            let CurrentGoal {
-                electrode,
-                min,
-                max,
-                start,
-                end,
-            } = g;
-            electrode < n
-                && nonneg(min)
-                && nonneg(max)
-                && nonneg(start)
-                && (MIN_POSITIVE..=MAX_POSITIVE).contains(&end)
-        });
+        let goal_ok = goals.len() <= MAX_COUNT as usize
+            && goals.iter().all(|g| {
+                let CurrentGoal {
+                    electrode,
+                    min,
+                    max,
+                    start,
+                    end,
+                    // Either value is editable (a combo box); `setup_issues` checks
+                    // that an ion goal has an ion source.
+                    carriers: _,
+                } = *g;
+                electrode < n
+                    && nonneg(min)
+                    && nonneg(max)
+                    && nonneg(start)
+                    && (MIN_POSITIVE..=MAX_POSITIVE).contains(&end)
+            });
         let ions_ok = ions.is_none_or(|i| {
             let IonSource {
                 electrode,

@@ -84,13 +84,15 @@
   "tube": {
     "cathode": 0,
     "charge_per_mass": -1.0,
-    "goal": {
-      "electrode": 1,
-      "min": 0.9,
-      "max": 1.5,
-      "start": 10.0,
-      "end": 20.0
-    },
+    "goals": [
+      {
+        "electrode": 1,
+        "min": 0.9,
+        "max": 1.5,
+        "start": 10.0,
+        "end": 20.0
+      }
+    ],
     "emit_toward_deg": 0.0
   }
 }

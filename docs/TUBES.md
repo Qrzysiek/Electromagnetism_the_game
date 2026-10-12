@@ -279,3 +279,15 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   inverse changed the rounding, and with it the tube levels' results by up to 0.74 % (the
   macroparticles' noise, inside every verdict's bar; PHYSICS.md §2.11, Speed). Further
   speed, if the magnetron needs it: a 2D fast multipole (treecode) for the particle sums.
+- **2, the goal kind, done (2026-10-13):** a tube level has a list of current goals
+  (`goals`; older files' single `goal` still loads), each counting the cathode's carriers
+  or the ions (`carriers`), with the verdict, the panel (one plot per goal), the sandbox
+  editor (add or remove goals, a carriers choice), `generator check`/`tube-scan` and
+  `levels.py` (`current_goal`, `tube(..., goals=, ions=)`). The golden hashes did not
+  change. First numbers for the bipolar levels (the game-scale diode with its anode
+  emitting ions): at q/m = 0.01 the electron current rose ×2.2 (finite plates, not
+  Langmuir's infinite 1.86) but the run must reach t ≈ 80 for the ions to settle, a
+  preview of 2.6 s; with q/m = 0.04 (the mass enters only the timing and the ions' space
+  charge, not the paths or the factor 1.86) the ions cross five times faster than the
+  electrons, and the ion current into the cathode came to 0.21 of the electrons' (the
+  planar law: √(m_e/m_i) = 0.2).
