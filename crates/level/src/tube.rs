@@ -59,6 +59,63 @@ pub struct TubeSpec {
     /// The current goal, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub goal: Option<CurrentGoal>,
+    /// External circuits of electrodes (per unit length; PHYSICS.md 2.11).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub circuits: Vec<TubeCircuit>,
+    /// Goals on electrodes' potentials over windows (their mean or their swing).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub potential_goals: Vec<PotentialGoal>,
+}
+
+/// An electrode's external circuit (per unit length along z): a source through a
+/// resistance into the electrode, a capacitance from it to ground (`physics::tube::
+/// Circuit`). Resistance 0: an ideal source the electrode follows; without a source
+/// (`resistance` infinite, written as `null`): floating with its capacitance. A tunable
+/// electrode's power supply sets the source's level (`Source::with_level`), or with
+/// `supply_offset` a sine's offset (a grid's bias under its signal).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TubeCircuit {
+    pub electrode: usize,
+    pub source: crate::Source,
+    /// None: no source (floating).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resistance: Option<f64>,
+    #[serde(default, skip_serializing_if = "crate::is_zero")]
+    pub capacitance: f64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub supply_offset: bool,
+    /// Further electrodes on the same ideal source (resistance 0 only): a grid's wires.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub linked: Vec<usize>,
+}
+
+/// What a potential goal measures over its window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Measure {
+    /// The mean potential (a rectifier's output).
+    Mean,
+    /// Half its peak-to-peak swing.
+    Swing,
+    /// The amplitude of its oscillation at the goal's `omega` (an amplifier's output):
+    /// the Fourier amplitude over the window after removing a fitted linear trend (a
+    /// node still settling to its operating point drifts; over whole periods the measure
+    /// is exact for a pure sine).
+    Amplitude,
+}
+
+/// An electrode's potential, measured over `start..end`, must lie in `min..max`.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PotentialGoal {
+    pub electrode: usize,
+    pub measure: Measure,
+    /// The angular frequency of `Measure::Amplitude`.
+    #[serde(default, skip_serializing_if = "crate::is_zero")]
+    pub omega: f64,
+    pub min: f64,
+    pub max: f64,
+    pub start: f64,
+    pub end: f64,
 }
 
 fn electron_ratio() -> f64 {
@@ -154,6 +211,8 @@ pub struct TubeFrame {
     pub q: Vec<f32>,
     pub kind: Vec<u8>,
     pub sigma: Vec<f32>,
+    /// Every electrode's potential.
+    pub potentials: Vec<f32>,
 }
 
 /// One run of a tube level (or a chunk of one being streamed: `TubeSim::take_chunk`).
@@ -165,6 +224,8 @@ pub struct TubeRun {
     pub collected: Vec<(f64, f64)>,
     /// The goal's average current over its window, once the run has passed its end.
     pub current: Option<f64>,
+    /// Each potential goal's measure, once the run has passed its window.
+    pub potential: Vec<Option<f64>>,
     /// Per projectile: its track `(t, x)` while in flight, and when it reached its
     /// detector.
     pub tracks: Vec<Vec<(f64, [f32; 2])>>,
@@ -185,6 +246,12 @@ impl TubeRun {
         self.frames.extend(chunk.frames);
         self.collected.extend(chunk.collected);
         self.current = self.current.or(chunk.current);
+        if self.potential.len() < chunk.potential.len() {
+            self.potential.resize(chunk.potential.len(), None);
+        }
+        for (a, c) in self.potential.iter_mut().zip(chunk.potential) {
+            *a = a.or(c);
+        }
         if self.tracks.len() < chunk.tracks.len() {
             self.tracks.resize(chunk.tracks.len(), Vec::new());
         }
@@ -246,9 +313,40 @@ pub struct TubeSim {
     pending: TubeRun,
     steps: u32,
     current: Option<f64>,
+    /// Each potential goal's window so far: sum, count, least, most, and the samples
+    /// `(t, V)` (for `Measure::Amplitude`).
+    windows: Vec<(f64, f64, f64, f64)>,
+    series: Vec<Vec<(f64, f64)>>,
+    potential: Vec<Option<f64>>,
     arrivals: Vec<Option<f64>>,
     /// Per projectile with a detector: its closest approach to the detector so far.
     closest: Vec<f64>,
+}
+
+/// The amplitude of the oscillation at angular frequency `omega` in the samples `(t, v)`
+/// (uniform in time): a least-squares line removed, then `2/N |Σ v e^{−iωt}|`.
+fn amplitude_at(samples: &[(f64, f64)], omega: f64) -> f64 {
+    #[allow(clippy::cast_precision_loss)]
+    let n = samples.len() as f64;
+    if n < 2.0 {
+        return 0.0;
+    }
+    let (st, sv) = samples
+        .iter()
+        .fold((0.0, 0.0), |(a, b), (t, v)| (a + t, b + v));
+    let (mt, mv) = (st / n, sv / n);
+    let (stt, stv) = samples.iter().fold((0.0, 0.0), |(a, b), (t, v)| {
+        (a + (t - mt) * (t - mt), b + (t - mt) * (v - mv))
+    });
+    let slope = if stt > 0.0 { stv / stt } else { 0.0 };
+    let (mut re, mut im) = (0.0, 0.0);
+    for (t, v) in samples {
+        let r = v - (mv + slope * (t - mt));
+        let (s, c) = libm::sincos(omega * t);
+        re += r * c;
+        im += r * s;
+    }
+    2.0 / n * libm::sqrt(re * re + im * im)
 }
 
 /// Distance from `x` to the box `(lo, hi)` (0 inside).
@@ -376,8 +474,36 @@ impl TubeSim {
                     .iter()
                     .map(|v| *v as f32)
                     .collect(),
+                potentials: s.potentials.iter().map(|v| *v as f32).collect(),
             };
             self.pending.frames.push(frame);
+            // Each potential goal's measure over its window.
+            if self.pending.potential.len() < self.potential.len() {
+                self.pending.potential.resize(self.potential.len(), None);
+            }
+            for (k, g) in self.spec.potential_goals.iter().enumerate() {
+                if s.t < g.start - 0.5 * self.tube.dt || self.potential[k].is_some() {
+                    continue;
+                }
+                let v = s.potentials[g.electrode];
+                let w = &mut self.windows[k];
+                w.0 += v;
+                w.1 += 1.0;
+                w.2 = w.2.min(v);
+                w.3 = w.3.max(v);
+                if g.measure == Measure::Amplitude {
+                    self.series[k].push((s.t, v));
+                }
+                if s.t >= g.end - 0.5 * self.tube.dt {
+                    let m = match g.measure {
+                        Measure::Mean => w.0 / w.1.max(1.0),
+                        Measure::Swing => 0.5 * (w.3 - w.2),
+                        Measure::Amplitude => amplitude_at(&self.series[k], g.omega),
+                    };
+                    self.potential[k] = Some(m);
+                    self.pending.potential[k] = Some(m);
+                }
+            }
             self.pending.collected.push((s.t, collected));
         }
         self.pending.in_flight = self.state.x.len();
@@ -437,6 +563,8 @@ impl CurrentVerdict {
 pub struct TubeResults {
     /// The goal's current.
     pub current: Option<f64>,
+    /// Each potential goal's measure.
+    pub potential: Vec<Option<f64>>,
     /// When each projectile reached its detector.
     pub arrivals: Vec<Option<f64>>,
     /// Emission paused at the particle cap.
@@ -448,6 +576,7 @@ impl TubeSim {
     pub fn results(&self) -> TubeResults {
         TubeResults {
             current: self.current,
+            potential: self.potential.clone(),
             arrivals: self.arrivals.clone(),
             capped: self.state.capped,
         }
@@ -458,6 +587,9 @@ impl TubeSim {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TubeVerdict {
     pub current: Option<CurrentVerdict>,
+    /// Each potential goal's verdict (the same rule: the fine run's value, 1.5 times the
+    /// runs' difference as its error).
+    pub potential: Vec<CurrentVerdict>,
     /// Per projectile with a detector: (projectile, preview arrival, verification
     /// arrival, status).
     pub arrivals: Vec<(usize, Option<f64>, Option<f64>, TubeStatus)>,
@@ -476,6 +608,24 @@ impl TubeVerdict {
                 &g,
             )
         });
+        let potential: Vec<CurrentVerdict> = spec
+            .potential_goals
+            .iter()
+            .enumerate()
+            .map(|(k, g)| {
+                CurrentVerdict::new(
+                    preview.potential.get(k).copied().flatten().unwrap_or(0.0),
+                    fine.potential.get(k).copied().flatten().unwrap_or(0.0),
+                    &CurrentGoal {
+                        electrode: g.electrode,
+                        min: g.min,
+                        max: g.max,
+                        start: g.start,
+                        end: g.end,
+                    },
+                )
+            })
+            .collect();
         let arrivals: Vec<_> = spec
             .projectiles
             .iter()
@@ -496,6 +646,7 @@ impl TubeVerdict {
             .collect();
         let all = current
             .iter()
+            .chain(potential.iter())
             .map(|c| c.status)
             .chain(arrivals.iter().map(|a| a.3));
         let capped = preview.capped || fine.capped;
@@ -513,6 +664,7 @@ impl TubeVerdict {
         }
         Self {
             current,
+            potential,
             arrivals,
             capped,
             status,
@@ -529,7 +681,8 @@ impl Level {
     /// The prisms of a placement: every box electrode (the level's at the player's
     /// supplies, then the player's plates), its cross-section.
     pub fn tube_prisms(&self, player: &[Element]) -> Vec<Prism> {
-        self.all_box_electrodes(player)
+        let mut prisms: Vec<Prism> = self
+            .all_box_electrodes(player)
             .into_iter()
             .map(|b| Prism {
                 section: Section::Rect {
@@ -540,7 +693,18 @@ impl Level {
                 },
                 bias: b.bias,
             })
-            .collect()
+            .collect();
+        // An electrode on a source (ideal or through a resistance) starts at the source's
+        // value at t = 0: the supply was on before the cathode heated, so its capacitors
+        // are charged. A floating one keeps its own bias.
+        for c in self.tube_circuits(player) {
+            if c.resistance.is_finite()
+                && let Some(p) = prisms.get_mut(c.electrode)
+            {
+                p.bias = physics::conductor::Bias::Potential(c.source.value(0.0));
+            }
+        }
+        prisms
     }
 
     /// A tube run at `refine` = 1 (preview) or 2 (verification), at t = 0.
@@ -651,6 +815,7 @@ impl Level {
             dt: spec.step / r,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
+            circuits: self.tube_circuits(player),
         };
         let state = tube.state();
         let pending = TubeRun {
@@ -658,6 +823,7 @@ impl Level {
             potentials: tube.electrodes.potentials.clone(),
             ..TubeRun::default()
         };
+        let n_goals = spec.potential_goals.len();
         TubeSim {
             tube,
             state,
@@ -667,9 +833,81 @@ impl Level {
             pending,
             steps: 0,
             current: None,
+            windows: vec![(0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY); n_goals],
+            series: vec![Vec::new(); n_goals],
+            potential: vec![None; n_goals],
             arrivals: vec![None; n_proj],
             closest: vec![f64::INFINITY; n_proj],
         }
+    }
+
+    /// The physics circuits of a placement: each tube circuit with its source set by the
+    /// player's supply on its electrode, if tunable and placed.
+    pub fn tube_circuits(&self, player: &[Element]) -> Vec<physics::tube::Circuit> {
+        let Some(spec) = &self.tube else {
+            return Vec::new();
+        };
+        spec.circuits
+            .iter()
+            .map(|c| {
+                let electrode = &self.electrodes[c.electrode];
+                let supply = player.iter().find(|e| {
+                    e.kind == ElementKind::Supply && electrode.tunable && e.node == electrode.center
+                });
+                let source = match (supply, c.source) {
+                    (
+                        Some(s),
+                        crate::Source::Sine {
+                            amplitude,
+                            omega,
+                            phase,
+                            ..
+                        },
+                    ) if c.supply_offset => crate::Source::Sine {
+                        offset: s.value,
+                        amplitude,
+                        omega,
+                        phase,
+                    },
+                    (Some(s), source) => source.with_level(s.value),
+                    (None, source) => source,
+                };
+                let primary = physics::tube::Circuit {
+                    electrode: c.electrode,
+                    source: source.waveform(),
+                    resistance: c.resistance.unwrap_or(f64::INFINITY),
+                    capacitance: c.capacitance,
+                };
+                // Linked electrodes follow the same ideal source.
+                std::iter::once(primary).chain(c.linked.iter().map(move |&e| {
+                    physics::tube::Circuit {
+                        electrode: e,
+                        ..primary
+                    }
+                }))
+            })
+            .flat_map(|it| it.collect::<Vec<_>>())
+            .collect()
+    }
+
+    /// The extremes of every circuit source of a placement (over all time).
+    fn tube_source_extremes(&self, player: &[Element]) -> (f64, f64) {
+        let mut lo: f64 = 0.0;
+        let mut hi: f64 = 0.0;
+        for c in self.tube_circuits(player) {
+            let (a, b) = match c.source {
+                physics::circuit::Waveform::Dc(v) => (v, v),
+                physics::circuit::Waveform::Sine {
+                    offset, amplitude, ..
+                } => (offset - amplitude.abs(), offset + amplitude.abs()),
+                physics::circuit::Waveform::Pulse { low, high, .. } => {
+                    (low.min(high), low.max(high))
+                }
+            };
+            lo = lo.min(a);
+            hi = hi.max(b);
+        }
+        (lo, hi)
     }
 
     /// The level's largest voltage: of its electrodes' biases and of the sliders' ranges
@@ -685,14 +923,21 @@ impl Level {
             .iter()
             .chain(&self.limits.plate_voltages)
             .map(|v| v.abs());
-        biases.chain(lists).fold(1.0, f64::max)
+        let (lo, hi) = self.tube_source_extremes(&[]);
+        biases
+            .chain(lists)
+            .chain([lo.abs(), hi.abs()])
+            .fold(1.0, f64::max)
     }
 
     /// The end of a tube level's verification runs: the current goal's window end, and
     /// with projectile detectors the level's `t_max` (they must arrive by then).
     pub fn tube_verify_end(&self) -> f64 {
         self.tube.as_ref().map_or(0.0, |t| {
-            let goal = t.goal.map_or(0.0, |g| g.end);
+            let goal = t
+                .goal
+                .map_or(0.0, |g| g.end)
+                .max(t.potential_goals.iter().map(|g| g.end).fold(0.0, f64::max));
             if t.projectiles.iter().any(|p| p.detector.is_some()) {
                 goal.max(self.physics.t_max)
             } else {
@@ -781,8 +1026,12 @@ impl Level {
             if !(g.min < g.max && 0.0 <= g.start && g.start < g.end && g.end.is_finite()) {
                 out.push("Tube: the goal needs min < max and 0 ≤ start < end.".into());
             }
-        } else if !spec.projectiles.iter().any(|p| p.detector.is_some()) {
-            out.push("Tube: no goal (a current goal or a projectile with a detector).".into());
+        } else if !spec.projectiles.iter().any(|p| p.detector.is_some())
+            && spec.potential_goals.is_empty()
+        {
+            out.push(
+                "Tube: no goal (a current, a potential, or a projectile with a detector).".into(),
+            );
         }
         if !(spec.charge_per_mass.is_finite() && spec.charge_per_mass != 0.0) {
             out.push("Tube: the carriers' charge-to-mass ratio must be finite and nonzero.".into());
@@ -800,6 +1049,42 @@ impl Level {
         }
         if spec.saturation.is_some_and(|j| !(j.is_finite() && j > 0.0)) {
             out.push("Tube: the cathode's saturation current must be positive.".into());
+        }
+        // Every electrode in at most one circuit (as its electrode or linked to it).
+        let mut taken: Vec<usize> = Vec::new();
+        for (k, c) in spec.circuits.iter().enumerate() {
+            let mine: Vec<usize> = std::iter::once(c.electrode)
+                .chain(c.linked.iter().copied())
+                .collect();
+            let twice = mine
+                .iter()
+                .enumerate()
+                .any(|(i, e)| taken.contains(e) || mine[..i].contains(e) || *e >= n)
+                || (!c.linked.is_empty() && c.resistance != Some(0.0));
+            taken.extend(mine);
+            let sane = c.electrode < n
+                && !twice
+                && c.source.is_valid()
+                && c.resistance.is_none_or(|r| r.is_finite() && r >= 0.0)
+                && c.capacitance.is_finite()
+                && c.capacitance >= 0.0
+                && (!c.supply_offset || matches!(c.source, crate::Source::Sine { .. }));
+            if !sane {
+                out.push(format!(
+                    "Tube: circuit {} needs electrodes of its own, a valid source, a \
+                     resistance and capacitance that are not negative (an offset supply needs a \
+                     sine; linked electrodes an ideal source, resistance 0).",
+                    k + 1
+                ));
+            }
+        }
+        for (k, g) in spec.potential_goals.iter().enumerate() {
+            if !(g.electrode < n && g.min < g.max && 0.0 <= g.start && g.start < g.end) {
+                out.push(format!(
+                    "Tube: potential goal {} needs an electrode, min < max and 0 ≤ start < end.",
+                    k + 1
+                ));
+            }
         }
         if spec.solenoid.is_some_and(|n| !self.grid.contains(n)) {
             out.push("Tube: the solenoid's terminal must be on the board.".into());
@@ -867,10 +1152,11 @@ impl Level {
         };
         let boxes = self.all_box_electrodes(player);
         if let Some(c) = self.physics.c {
+            let (s_lo, s_hi) = self.tube_source_extremes(player);
             let (lo, hi) = boxes
                 .iter()
                 .map(potential)
-                .fold((0.0_f64, 0.0_f64), |(a, b), v| (a.min(v), b.max(v)));
+                .fold((s_lo, s_hi), |(a, b), v| (a.min(v), b.max(v)));
             let dv = hi - lo;
             let ions = spec.ions.map_or(0.0, |i| i.charge_per_mass);
             let free_mass = self.limits.free_mass.max(1e-300);

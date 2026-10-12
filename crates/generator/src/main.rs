@@ -63,7 +63,14 @@ enum Command {
     /// list of elements), the preview's currents into every electrode over the goal's
     /// window (per emitter, positive for arriving carriers), what left the board, and the
     /// projectiles' arrivals. For designing tube levels.
-    TubeScan { path: PathBuf, placements: PathBuf },
+    TubeScan {
+        path: PathBuf,
+        placements: PathBuf,
+        /// The resolution: 1 the preview, 2 the verification, higher for convergence
+        /// checks (segments, step and macroparticle weight divided by it).
+        #[arg(long, default_value_t = 1)]
+        refine: u32,
+    },
     /// Print the reference flight of one flight index: t, x, y, |p|, radiated energy.
     Trace {
         path: PathBuf,
@@ -89,7 +96,7 @@ fn most_elements(level: &Level) -> usize {
 }
 
 /// `generator tube-scan`: currents into every electrode for several placements.
-fn tube_scan(level: &Level, placements: &PathBuf) {
+fn tube_scan(level: &Level, placements: &PathBuf, refine: u32) {
     let text = std::fs::read_to_string(placements).expect("placements file");
     let list: Vec<Vec<level::Element>> = serde_json::from_str(&text).expect("placements");
     let Some(spec) = &level.tube else {
@@ -105,7 +112,7 @@ fn tube_scan(level: &Level, placements: &PathBuf) {
             println!("{i}: refused: {}", issues.join(" "));
             continue;
         }
-        let mut sim = level.tube_sim(placement, 1);
+        let mut sim = level.tube_sim(placement, refine.max(1));
         sim.advance_to(start);
         let (t0, q0, lost0) = (sim.t(), sim.collected().to_vec(), sim.lost());
         sim.advance_to(end.max(level.tube_verify_end()));
@@ -140,9 +147,10 @@ fn tube_scan(level: &Level, placements: &PathBuf) {
             })
             .collect();
         println!(
-            "{i}: {} lost {:.4} arrivals {:?} fates {}",
+            "{i}: {} lost {:.4} potential {:?} arrivals {:?} fates {}",
             currents.join(" "),
             (sim.lost() - lost0) / dt,
+            sim.results().potential,
             sim.arrivals(),
             fates.join("; ")
         );
@@ -324,7 +332,11 @@ fn main() {
             }
         }
         Command::Window { path, steps } => window(&load(&path), steps),
-        Command::TubeScan { path, placements } => tube_scan(&load(&path), &placements),
+        Command::TubeScan {
+            path,
+            placements,
+            refine,
+        } => tube_scan(&load(&path), &placements, refine),
         Command::Trace {
             path,
             flight,
@@ -372,6 +384,19 @@ fn main() {
                 if let (Some(c), Some(g)) = (v.current, spec.goal) {
                     println!(
                         "  shot tube: current {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
+                        c.fine,
+                        c.error,
+                        c.preview,
+                        g.min,
+                        g.max,
+                        c.status,
+                        verdict(c.status)
+                    );
+                }
+                for (c, g) in v.potential.iter().zip(&spec.potential_goals) {
+                    println!(
+                        "  shot potential: {:?} {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
+                        g.measure,
                         c.fine,
                         c.error,
                         c.preview,

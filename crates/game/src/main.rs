@@ -251,7 +251,13 @@ impl Game {
 
     fn load_level(&mut self, index: usize) {
         self.level_index = index;
+        // The new editor continues the old one's revisions: a fresh one starts again at 1,
+        // and a level loaded again at the same index (capture mode's EM_LEVEL_FILE, which
+        // replaces the level shown) had the revision already sent, so it was never
+        // computed.
+        let next = self.editor.revision + 1;
         self.editor = Editor::new(self.levels[index].clone());
+        self.editor.revision = self.editor.revision.max(next);
         self.arrow_measure = editor::default_measure(&self.editor.level);
         self.arrow_drag = None;
         self.flights.clear();

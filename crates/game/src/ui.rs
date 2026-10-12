@@ -1405,6 +1405,68 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             }
         }
     }
+    for (k, g) in spec.potential_goals.iter().enumerate() {
+        let what = match g.measure {
+            level::tube::Measure::Mean => "mean potential".to_string(),
+            level::tube::Measure::Swing => "swing (half its peak-to-peak)".to_string(),
+            level::tube::Measure::Amplitude => {
+                format!("oscillation amplitude at ω = {}", fmt_num(g.omega))
+            }
+        };
+        ui.label(format!(
+            "Goal: the {what} of electrode {} between {} and {}, over t = {} to {}",
+            g.electrode + 1,
+            fmt_num(g.min),
+            fmt_num(g.max),
+            fmt_num(g.start),
+            fmt_num(g.end)
+        ));
+        if let Some(v) = view {
+            ui.label(match v.run.potential.get(k).copied().flatten() {
+                Some(p) => format!("Preview: {}", fmt_num(p)),
+                None => "Preview: computing…".into(),
+            });
+        }
+        match verdict.and_then(|v| v.potential.get(k).copied()) {
+            Some(c) => {
+                let (col, mark) = colour(c.status);
+                ui.colored_label(
+                    col,
+                    format!(
+                        "Verified: {} ± {} {mark}",
+                        fmt_num(c.fine),
+                        fmt_num(c.error)
+                    ),
+                );
+            }
+            None => {
+                ui.label("Verified: computing…");
+            }
+        }
+    }
+    // The electrodes in circuits: their potential over time (the goal's window marked).
+    if let Some(v) = view {
+        let marks: Vec<f64> = spec
+            .potential_goals
+            .iter()
+            .flat_map(|g| [g.start, g.end])
+            .collect();
+        for c in &spec.circuits {
+            // About 600 points over the run.
+            let every = (v.run.frames.len() / 600).max(1);
+            let samples: Vec<(f64, f64)> = v
+                .run
+                .frames
+                .iter()
+                .step_by(every)
+                .filter_map(|f| f.potentials.get(c.electrode).map(|p| (f.t, f64::from(*p))))
+                .collect();
+            ui.label(
+                egui::RichText::new(format!("Electrode {}: potential", c.electrode + 1)).small(),
+            );
+            circuit_plot(ui, &samples, &marks);
+        }
+    }
     for (j, p) in spec.projectiles.iter().enumerate() {
         if p.detector.is_none() {
             continue;

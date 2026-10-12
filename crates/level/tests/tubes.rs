@@ -49,6 +49,8 @@ pub fn diode(v: f64) -> Level {
             start: 10.0,
             end: 20.0,
         }),
+        circuits: Vec::new(),
+        potential_goals: Vec::new(),
     });
     level
 }

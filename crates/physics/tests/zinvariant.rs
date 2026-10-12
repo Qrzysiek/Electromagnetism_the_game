@@ -216,6 +216,7 @@ fn v4_coaxial_diode_langmuir_blodgett() {
             dt,
             arena: None,
             b_z: 0.0,
+            circuits: Vec::new(),
         };
         let mut s = tube.state();
         let start = std::time::Instant::now();
@@ -379,6 +380,7 @@ fn v6_bipolar_coaxial_diode() {
             dt,
             arena: None,
             b_z: 0.0,
+            circuits: Vec::new(),
         };
         let mut s = tube.state();
         let start = std::time::Instant::now();
@@ -467,6 +469,7 @@ fn v7_projectile_conserves_energy() {
         dt: 0.01,
         arena: None,
         b_z: 0.0,
+        circuits: Vec::new(),
     };
     let energy = |s: &physics::tube::TubeState| {
         let (x, v) = (s.x[0], s.v[0]);
@@ -602,6 +605,7 @@ fn v8_crossed_fields_hull() {
             dt: 0.002,
             arena: None,
             b_z: bz,
+            circuits: Vec::new(),
         };
         let mut s = tube.state();
         let mut largest = [0.0_f64; 8];
@@ -689,6 +693,7 @@ fn v9_temperature_limited_emission() {
             dt: 0.01,
             arena: None,
             b_z: 0.0,
+            circuits: Vec::new(),
         };
         let mut s = tube.state();
         let mut at4 = None;
@@ -710,4 +715,360 @@ fn v9_temperature_limited_emission() {
             "V9 at {v}: {current} vs {exact}"
         );
     }
+}
+
+/// The coaxial pair of the circuit tests: inner radius 1 at `v_inner`, outer radius 2 at
+/// `v_outer`, segments 0.1.
+fn coax(v_inner: f64, v_outer: f64) -> Electrodes {
+    let bias = |v: f64| {
+        if v == 0.0 {
+            Bias::Grounded
+        } else {
+            Bias::Potential(v)
+        }
+    };
+    Electrodes::new(
+        vec![
+            Electrode {
+                section: Section::Circle {
+                    center: DVec3::ZERO,
+                    radius: 1.0,
+                },
+                bias: bias(v_inner),
+            },
+            Electrode {
+                section: Section::Circle {
+                    center: DVec3::ZERO,
+                    radius: 2.0,
+                },
+                bias: bias(v_outer),
+            },
+        ],
+        &[],
+        0.1,
+    )
+}
+
+/// V10: a circuit node discharging. The inner cylinder of a coaxial pair (outer grounded),
+/// at potential 1, discharges through R = 2 into a source at 0, with C = 0.5 to ground:
+/// `τ = R (C₁₁ + C)`, `C₁₁` its capacitance per unit length (the boundary elements'). The
+/// node's backward-Euler step gives exactly `V_n = (1 + Δt/τ)^(−n)`: required to 1e-12
+/// (rounding); and the exponential `e^(−t/τ)` within the method's error, which is below
+/// `(t/τ)(Δt/τ)` relative for these steps.
+#[test]
+fn v10_circuit_node_discharges() {
+    use physics::circuit::Waveform;
+    use physics::tube::{Circuit, Tube};
+    let (r, c_ext, dt) = (2.0, 0.5, 0.01);
+    let electrodes = coax(1.0, 0.0);
+    let c11 = electrodes.capacitance[0][0];
+    let tau = r * (c11 + c_ext);
+    let tube = Tube {
+        electrodes,
+        emitters: Vec::new(),
+        projectiles: Vec::new(),
+        softening: 0.05,
+        dt,
+        arena: None,
+        b_z: 0.0,
+        circuits: vec![Circuit {
+            electrode: 0,
+            source: Waveform::Dc(0.0),
+            resistance: r,
+            capacitance: c_ext,
+        }],
+    };
+    let mut s = tube.state();
+    let (mut worst_discrete, mut worst_exp) = (0.0_f64, 0.0_f64);
+    for n in 1..=400 {
+        tube.step(&mut s);
+        let v = s.potentials[0];
+        let discrete = (1.0 + dt / tau).powi(n);
+        worst_discrete = worst_discrete.max((v * discrete - 1.0).abs());
+        let t = f64::from(n) * dt;
+        let exact = (-t / tau).exp();
+        worst_exp = worst_exp.max(((v - exact) / exact).abs() / ((t / tau) * (dt / tau)));
+    }
+    println!(
+        "V10: tau = {tau:.6} (C11 = {c11:.6}); V(4) = {:.6}; discrete sequence to {worst_discrete:.1e}, exponential within {worst_exp:.3} of the bound",
+        s.potentials[0]
+    );
+    assert!(worst_discrete < 1e-12, "V10 discrete {worst_discrete:.3e}");
+    assert!(worst_exp < 1.0, "V10 exponential {worst_exp:.3}");
+}
+
+/// V11: a beam charging a floating collector. The temperature-limited cathode of V9
+/// (inner, grounded; j = 0.02: a constant current I = j × perimeter) and the outer cylinder
+/// a floating node at first at 4 with C = 10 to ground: the electrons it collects lower its
+/// potential at `dV/dt = −I / (C₂₂ + C)` while the flow is steady (its induced charge then
+/// constant), `C₂₂` its own capacitance. Measured over t = 4–12 against the collected
+/// current. Required: 2 % (V9's quantization of the current; the potential follows the
+/// node's charge exactly).
+#[test]
+fn v11_beam_charges_a_floating_collector() {
+    use physics::circuit::Waveform;
+    use physics::tube::{Circuit, Emitter, Tube};
+    let c_ext = 10.0;
+    let electrodes = coax(0.0, 4.0);
+    let c22 = electrodes.capacitance[1][1];
+    let tube = Tube {
+        electrodes,
+        emitters: vec![Emitter {
+            electrode: 0,
+            charge_per_mass: -1.0,
+            weight: 2e-4,
+            emit_toward: None,
+            saturation: Some(0.02),
+        }],
+        projectiles: Vec::new(),
+        softening: 0.05,
+        dt: 0.01,
+        arena: None,
+        b_z: 0.0,
+        circuits: vec![Circuit {
+            electrode: 1,
+            source: Waveform::Dc(0.0),
+            resistance: f64::INFINITY,
+            capacitance: c_ext,
+        }],
+    };
+    let mut s = tube.state();
+    let mut at4 = None;
+    while s.t < 12.0 {
+        tube.step(&mut s);
+        if at4.is_none() && s.t >= 4.0 {
+            at4 = Some((s.t, s.collected[1][0], s.potentials[1]));
+        }
+    }
+    let (t4, q4, v4) = at4.expect("reached t = 4");
+    let current = (s.collected[1][0] - q4) / (s.t - t4);
+    let slope = (s.potentials[1] - v4) / (s.t - t4);
+    let expected = current / (c22 + c_ext);
+    println!(
+        "V11: collected current {current:.6}; dV/dt {slope:.6e}, expected {expected:.6e} ({:.2e}); V from {v4:.4} to {:.4}",
+        slope / expected - 1.0,
+        s.potentials[1]
+    );
+    assert!(
+        (slope / expected - 1.0).abs() < 0.02,
+        "V11 {slope} vs {expected}"
+    );
+}
+
+/// V12: a carrier coming back to its emitter is absorbed there (`RETURN_ABSORB`). The
+/// coaxial magnetron of V8 above Hull's cutoff (B = 1.1 B_H), now emitting: a
+/// temperature-limited cathode (j = 1e-4 per unit length: its electrons' field is 1e-4 of
+/// the electrodes') releases electrons at rest δ = half a segment out; each flies out to
+/// r_max and back, and is absorbed on crossing 1 + 1.5 δ. Little's law then fixes the
+/// charge in flight: the emission rate (j × the polygon's perimeter) times the time of
+/// flight, exact from energy and canonical angular momentum,
+/// `v_r² = 2(φ(r) − φ(r₀)) − (B/2)²(r² − r₀²)²/r²`, out from the release radius r₀ to
+/// r_max and back to 1 + 1.5 δ (substitutions remove the integrable endpoint
+/// singularities; 20 000 midpoints). Before the rule the electrons skipped around the
+/// cathode for ever, back at δ with zero speed every time, and the charge in flight grew
+/// without bound. Required: the mean charge in flight over t = 6–12 divided by the rate
+/// within 5e-3 of the exact time (the error budget: the step's quantization of release and
+/// absorption, dt/T ~ 1e-3; the macroparticles' discreteness; the mesh's field, 1e-4), and
+/// nothing reaching the anode. (The current back into the cathode is printed: its equal
+/// segments emit together, in bursts 0.55 apart, so a 6-long window counts it to ±9 %.)
+#[test]
+fn v12_returning_carriers_are_absorbed() {
+    use physics::tube::{EMISSION_OFFSET, Emitter, RETURN_ABSORB, Tube};
+    use std::f64::consts::PI;
+    let (a, b, v) = (1.0_f64, 2.0_f64, 1.0_f64);
+    let bz = 1.1 * 2.0 * b / (b * b - a * a) * (2.0 * v).sqrt();
+    let size = 0.1;
+    let electrodes = Electrodes::new(
+        vec![
+            Electrode {
+                section: Section::Circle {
+                    center: DVec3::ZERO,
+                    radius: a,
+                },
+                bias: Bias::Grounded,
+            },
+            Electrode {
+                section: Section::Circle {
+                    center: DVec3::ZERO,
+                    radius: b,
+                },
+                bias: Bias::Potential(v),
+            },
+        ],
+        &[],
+        size,
+    );
+    let lengths: Vec<f64> = (0..electrodes.segments.len())
+        .filter(|&j| electrodes.owner_of(j) == 0)
+        .map(|j| {
+            let (p, q) = electrodes.segments[j];
+            (q - p).length()
+        })
+        .collect();
+    let perimeter: f64 = lengths.iter().sum();
+    let seg = lengths[0];
+    let delta = EMISSION_OFFSET * seg;
+    let j_sat = 1e-4;
+    let rate = j_sat * perimeter;
+    // Released along a chord h = √(a² − L²/4) from the axis, δ out along its normal: on
+    // average r₀ = (h + δ) + L²/(24 (h + δ)) (uniform points along the chord).
+    let h = (a * a - seg * seg / 4.0).sqrt();
+    let r0 = (h + delta) + seg * seg / (24.0 * (h + delta));
+    let r_abs = a + RETURN_ABSORB * delta;
+    let phi = |r: f64| v * (r / a).ln() / (b / a).ln();
+    let vr2 = |r: f64| {
+        2.0 * (phi(r) - phi(r0)) - (bz / 2.0).powi(2) * (r * r - r0 * r0).powi(2) / (r * r)
+    };
+    let (mut lo, mut hi) = (r0 + 1e-9, b);
+    assert!(vr2(hi) < 0.0, "V12: the orbit must turn before the anode");
+    for _ in 0..200 {
+        let mid = 0.5 * (lo + hi);
+        if vr2(mid) > 0.0 {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    let r_max = 0.5 * (lo + hi);
+    let m = 20_000;
+    let mf = f64::from(m);
+    // Out: r = r₀ + (r_max − r₀)(1 − cos θ)/2; the stretch r₀ → r_abs not flown back:
+    // r = r₀ + (r_abs − r₀) u².
+    let out: f64 = (0..m)
+        .map(|i| {
+            let th = PI * (f64::from(i) + 0.5) / mf;
+            let r = r0 + (r_max - r0) * (1.0 - th.cos()) / 2.0;
+            (r_max - r0) / 2.0 * th.sin() / vr2(r).sqrt()
+        })
+        .sum::<f64>()
+        * PI
+        / mf;
+    let skipped: f64 = (0..m)
+        .map(|i| {
+            let u = (f64::from(i) + 0.5) / mf;
+            let r = r0 + (r_abs - r0) * u * u;
+            2.0 * (r_abs - r0) * u / vr2(r).sqrt()
+        })
+        .sum::<f64>()
+        / mf;
+    let exact = 2.0 * out - skipped;
+    let tube = Tube {
+        electrodes,
+        emitters: vec![Emitter {
+            electrode: 0,
+            charge_per_mass: -1.0,
+            weight: rate * exact / 400.0,
+            emit_toward: None,
+            saturation: Some(j_sat),
+        }],
+        projectiles: Vec::new(),
+        softening: 0.5 * size,
+        dt: 0.002,
+        arena: None,
+        b_z: bz,
+        circuits: Vec::new(),
+    };
+    let mut s = tube.state();
+    let (mut sum, mut samples) = (0.0, 0.0);
+    let mut at6 = None;
+    while s.t < 12.0 {
+        tube.step(&mut s);
+        if s.t >= 6.0 {
+            if at6.is_none() {
+                at6 = Some((s.t, s.collected[0][0]));
+            }
+            sum += -s.charge.iter().sum::<f64>();
+            samples += 1.0;
+        }
+    }
+    let (t6, back6) = at6.expect("reached t = 6");
+    let measured = sum / samples / rate;
+    let back = -(s.collected[0][0] - back6) / (s.t - t6);
+    println!(
+        "V12: δ {delta:.5}, r₀ {r0:.5}, r_max {r_max:.5}; time of flight {measured:.6}, exact {exact:.6} ({:.2e}); \
+         back to the cathode {back:.6e} vs emitted {rate:.6e} ({:.2e}); anode {:.3e}; {} in flight",
+        measured / exact - 1.0,
+        back / rate - 1.0,
+        s.collected[1][0],
+        s.x.len()
+    );
+    assert!(
+        (measured / exact - 1.0).abs() < 5e-3,
+        "V12 time of flight {measured} vs {exact}"
+    );
+    assert!(s.collected[1][0] == 0.0, "V12: electrons reached the anode");
+}
+
+/// A measurement, not a validation (PHYSICS.md §2.11, crossed fields): the coaxial
+/// magnetron of V8 with a space-charge-limited cathode, at 1.05 B_H and without field (V4's
+/// coarse resolution). Above Hull's cutoff the space-charge cloud is unstable (the
+/// diocotron instability, seeded by the macroparticles) and carries some current across
+/// the field; Hull's theorem covers steady axisymmetric flow only, so there is no
+/// reference.
+#[test]
+#[ignore = "a measurement (about a minute in release): run with --ignored"]
+fn magnetron_with_space_charge_measurement() {
+    use physics::tube::{Emitter, Tube};
+    let (a, b, v) = (1.0_f64, 2.0_f64, 1.0_f64);
+    let b_h = 2.0 * b / (b * b - a * a) * (2.0 * v).sqrt();
+    let mut currents = Vec::new();
+    for factor in [0.0, 1.05] {
+        let size = 0.1;
+        let electrodes = Electrodes::new(
+            vec![
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: a,
+                    },
+                    bias: Bias::Grounded,
+                },
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: b,
+                    },
+                    bias: Bias::Potential(v),
+                },
+            ],
+            &[],
+            size,
+        );
+        let tube = Tube {
+            electrodes,
+            emitters: vec![Emitter {
+                electrode: 0,
+                charge_per_mass: -1.0,
+                weight: 2e-3,
+                emit_toward: None,
+                saturation: None,
+            }],
+            projectiles: Vec::new(),
+            softening: 0.5 * size,
+            dt: 0.01,
+            arena: None,
+            b_z: factor * b_h,
+            circuits: Vec::new(),
+        };
+        let mut s = tube.state();
+        let mut at6 = None;
+        while s.t < 12.0 {
+            tube.step(&mut s);
+            if at6.is_none() && s.t >= 6.0 {
+                at6 = Some((s.t, s.collected[1][0], s.collected[0][0]));
+            }
+        }
+        let (t6, q6, back6) = at6.expect("reached t = 6");
+        let current = -(s.collected[1][0] - q6) / (s.t - t6);
+        let back = -(s.collected[0][0] - back6) / (s.t - t6);
+        println!(
+            "magnetron at {factor} B_H: anode current {current:.5}, back into the cathode {back:.5}; {} in flight",
+            s.x.len()
+        );
+        currents.push(current);
+    }
+    println!(
+        "magnetron: at 1.05 B_H {:.3} of the field-free current",
+        currents[1] / currents[0]
+    );
 }

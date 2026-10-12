@@ -242,7 +242,8 @@ def slider_problems(lvl):
 
 
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
-         saturation=None, projectiles=(), b_z=0.0, solenoid=None):
+         saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
+         potentials=()):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -251,8 +252,13 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
     a uniform field along z; `solenoid` = (x, y): the terminal of a solenoid the player
     powers (a supply there sets B along z, over `level(solenoid_fields=...)`). Tube
     levels are Newtonian (pass c=None to `level`)."""
-    t = {"cathode": cathode, "charge_per_mass": q_over_m,
-         "goal": {"electrode": electrode, "min": lo, "max": hi, "start": start, "end": end}}
+    t = {"cathode": cathode, "charge_per_mass": q_over_m}
+    if electrode is not None:
+        t["goal"] = {"electrode": electrode, "min": lo, "max": hi, "start": start, "end": end}
+    if circuits:
+        t["circuits"] = list(circuits)
+    if potentials:
+        t["potential_goals"] = list(potentials)
     if emit_toward_deg is not None:
         t["emit_toward_deg"] = emit_toward_deg
     if saturation is not None:
@@ -264,6 +270,38 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
     if solenoid is not None:
         t["solenoid"] = [solenoid[0], solenoid[1], 0]
     return t
+
+
+def tube_circuit(electrode, source, resistance=None, capacitance=0.0, supply_offset=False):
+    """An electrode's circuit in a tube level (per unit length): `source` (see `dc`,
+    `sine`) through `resistance` (0: an ideal source; None: floating) and `capacitance`
+    to ground; a tunable electrode's supply sets the source's level, or with
+    `supply_offset` a sine's offset."""
+    c = {"electrode": electrode, "source": source}
+    if resistance is not None:
+        c["resistance"] = resistance
+    if capacitance:
+        c["capacitance"] = capacitance
+    if supply_offset:
+        c["supply_offset"] = True
+    return c
+
+
+def sine(amplitude, omega, offset=0.0, phase=0.0):
+    """A sine source: offset + amplitude sin(omega t + phase)."""
+    s = {"kind": "sine", "amplitude": amplitude, "omega": omega}
+    if offset:
+        s["offset"] = offset
+    if phase:
+        s["phase"] = phase
+    return s
+
+
+def potential_goal(electrode, measure, lo, hi, start, end):
+    """A tube level's goal on an electrode's potential over t = start..end: its "mean" or
+    its "swing" (half the peak-to-peak) between lo and hi."""
+    return {"electrode": electrode, "measure": measure, "min": lo, "max": hi,
+            "start": start, "end": end}
 
 
 def projectile(x, y, direction_deg, speed, charge, mass, launch=0.0, detector=None):

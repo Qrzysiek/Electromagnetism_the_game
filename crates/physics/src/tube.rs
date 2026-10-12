@@ -19,19 +19,35 @@
 //!   the surface holds drives the cathode's normal field to zero there, the limit.
 //! - **Absorption**: a particle that crosses an electrode's boundary (any change of
 //!   which side of it the particle is on) is collected by that electrode, which records
-//!   the charge; the current is the collected charge per time.
+//!   the charge; the current is the collected charge per time. A carrier that comes back
+//!   to its emitter is absorbed there on reaching the layer it was released from
+//!   (`RETURN_LEAVE`, `RETURN_ABSORB`): released at rest a distance δ out, it lacks the
+//!   energy of that first δ, so it could never come closer again and would bounce there.
 //! - **Temperature-limited emission** (optional per emitter): at most a saturation
 //!   current density, whatever the field (Richardson's limit of a hot cathode); the
 //!   emission is the lesser of the two limits.
 //! - **Species**: several emitters (an electron cathode, an ion-emitting anode: the
 //!   bipolar diode), and projectiles, single line charges launched at given times that
 //!   interact with everything and are absorbed where they hit.
+//! - **Circuits** (per unit length along z, consistent with the symmetry): an electrode may
+//!   be a circuit node, connected through a resistance to a source and through a
+//!   capacitance to ground (resistance 0: an ideal source the electrode follows; infinite:
+//!   floating). The node's charge (its conductor's, `Σ_j C_ij V_j` plus the particles'
+//!   induced charge, and its capacitor's) changes by the resistor's current and by the
+//!   charge of the particles it absorbs or emits; each step its potential is solved
+//!   implicitly (backward Euler in the resistor) from that charge, the other electrodes'
+//!   potentials and the induced charge, so the particles and the circuit act on each other
+//!   exactly (the induced charge carries the Ramo currents). Floating electrodes (a
+//!   fixed charge) are nodes without a circuit, so their charge is conserved as particles
+//!   fly by.
 //! - **Push**: Boris with a fixed step (a uniform B along z rotates the velocity; with
 //!   B = 0 it is the kick-drift leapfrog), symplectic; launches and emission add
 //!   particles at the start of a step.
 
 use glam::DVec3;
 
+use crate::bem::{Bias, Lu};
+use crate::circuit::Waveform;
 use crate::zinv::{Electrodes, Section, line_charge, segment_integrals};
 
 /// Distance from the cathode at which macroparticles are released, in segment lengths:
@@ -46,6 +62,20 @@ use crate::zinv::{Electrodes, Section, line_charge, segment_integrals};
 /// analytic speed at δ instead emptied the space charge near the cathode, which then
 /// emitted more (+111 %, +67 %): rejected.
 pub const EMISSION_OFFSET: f64 = 0.5;
+
+/// A carrier coming back to its emitter (PHYSICS.md §2.11): once it has been farther
+/// than `RETURN_LEAVE` release distances δ (`EMISSION_OFFSET` segments) from the emitter's
+/// surface, it is absorbed by the emitter as soon as it is back within `RETURN_ABSORB` δ.
+/// Released at rest at δ, a macroparticle lacks the energy a real carrier gains over that
+/// first δ, so in a static field it returns exactly to δ with zero speed and turns again
+/// (a real carrier would reach the surface): in a triode with a negative grid the
+/// returning electrons bounced in front of the cathode forever, drifted along it and
+/// left the board (more than the anode collected). Absorbing on the release layer's
+/// return (between δ and 2δ, so not the exact turning point, where the outcome would
+/// hinge on rounding) is the real carrier's fate, with an error of the release's order:
+/// the last 0.5 δ of the way back (test V12, the orbits' time to 1e-3).
+pub const RETURN_LEAVE: f64 = 2.0;
+pub const RETURN_ABSORB: f64 = 1.5;
 
 /// A space-charge-limited emitter: an electrode (or one coated face of it) releasing
 /// carriers of one kind.
@@ -76,6 +106,29 @@ pub struct Projectile {
     pub launch: f64,
     pub charge: f64,
     pub mass: f64,
+}
+
+/// An electrode's external circuit, per unit length along z: a source through a
+/// resistance into the electrode, and a capacitance from it to ground.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Circuit {
+    pub electrode: usize,
+    pub source: Waveform,
+    /// Resistance per unit length (potential × time / charge per unit length): 0 is an
+    /// ideal source (the electrode follows it), infinite no source (floating).
+    pub resistance: f64,
+    /// External capacitance per unit length to ground (charge per unit length / potential).
+    pub capacitance: f64,
+}
+
+/// A circuit node: an electrode whose potential follows from its charge.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Node {
+    electrode: usize,
+    /// Step over resistance (0 without a source).
+    conductance_dt: f64,
+    capacitance: f64,
+    source: Waveform,
 }
 
 /// Where a projectile ended.
@@ -114,6 +167,8 @@ pub struct Tube {
     pub arena: Option<(DVec3, DVec3)>,
     /// A uniform magnetic field along z (a long solenoid around the tube: z-invariant).
     pub b_z: f64,
+    /// External circuits of electrodes.
+    pub circuits: Vec<Circuit>,
 }
 
 /// The particles and the bookkeeping of a running tube.
@@ -129,6 +184,9 @@ pub struct TubeState {
     pub tag: Vec<u32>,
     /// For each particle, per electrode, whether it is inside the electrode's section.
     side: Vec<Vec<bool>>,
+    /// For each particle, whether it has left its emitter's release layer (beyond
+    /// `RETURN_LEAVE` release distances; projectiles never).
+    left: Vec<bool>,
     /// Per emitter, per segment of its electrode, charge owed but not yet emitted (less
     /// than a macroparticle).
     pending: Vec<Vec<f64>>,
@@ -143,6 +201,14 @@ pub struct TubeState {
     pub fates: Vec<Option<Fate>>,
     /// Emission paused at `MAX_PARTICLES` at least once.
     pub capped: bool,
+    /// Every electrode's potential now.
+    pub potentials: Vec<f64>,
+    /// Per circuit node (`Tube::nodes`): its charge (its conductor's and its capacitor's).
+    node_charge: Vec<f64>,
+    /// Per circuit (in `Tube::circuits` order): the current from its source into the
+    /// electrode over the last step (0 for an ideal source, whose current is not
+    /// tracked).
+    pub circuit_current: Vec<f64>,
 }
 
 impl TubeState {
@@ -182,9 +248,57 @@ fn inside(section: &Section, x: DVec3) -> bool {
     }
 }
 
+/// The distance from `x` to the section (0 inside).
+fn distance_outside(section: &Section, x: DVec3) -> f64 {
+    match *section {
+        Section::Rect {
+            center,
+            angle,
+            half_length,
+            half_thickness,
+        } => {
+            let (s, c) = libm::sincos(angle);
+            let d = x - center;
+            let u = ((d.x * c + d.y * s).abs() - half_length).max(0.0);
+            let w = ((-d.x * s + d.y * c).abs() - half_thickness).max(0.0);
+            libm::sqrt(u * u + w * w)
+        }
+        Section::Circle { center, radius } => {
+            let d = x - center;
+            (libm::sqrt(d.x * d.x + d.y * d.y) - radius).max(0.0)
+        }
+        Section::Ring {
+            center,
+            radius,
+            thickness,
+        } => {
+            let d = x - center;
+            ((libm::sqrt(d.x * d.x + d.y * d.y) - radius).abs() - 0.5 * thickness).max(0.0)
+        }
+    }
+}
+
 impl Tube {
     pub fn state(&self) -> TubeState {
         let n_el = self.electrodes.electrodes.len();
+        // The potentials at t = 0: the electrodes' own (their biases, floating ones as
+        // solved), ideal sources at their value.
+        let mut potentials = self.electrodes.potentials.clone();
+        for c in &self.circuits {
+            if c.resistance == 0.0 {
+                potentials[c.electrode] = c.source.value(0.0);
+            }
+        }
+        let cap = &self.electrodes.capacitance;
+        let node_charge = self
+            .nodes()
+            .iter()
+            .map(|n| {
+                let i = n.electrode;
+                (0..n_el).map(|j| cap[i][j] * potentials[j]).sum::<f64>()
+                    + n.capacitance * potentials[i]
+            })
+            .collect();
         TubeState {
             pending: self
                 .emitters
@@ -194,8 +308,116 @@ impl Tube {
             collected: vec![vec![0.0; self.emitters.len()]; n_el],
             launched: vec![false; self.projectiles.len()],
             fates: vec![None; self.projectiles.len()],
+            potentials,
+            node_charge,
+            circuit_current: vec![0.0; self.circuits.len()],
             ..TubeState::default()
         }
+    }
+
+    /// The circuit nodes: electrodes with a circuit through a resistance (not an ideal
+    /// source), then floating electrodes (a fixed charge) without a circuit.
+    fn nodes(&self) -> Vec<Node> {
+        let mut out: Vec<Node> = self
+            .circuits
+            .iter()
+            .filter(|c| c.resistance != 0.0)
+            .map(|c| Node {
+                electrode: c.electrode,
+                conductance_dt: if c.resistance.is_finite() {
+                    self.dt / c.resistance
+                } else {
+                    0.0
+                },
+                capacitance: c.capacitance,
+                source: c.source,
+            })
+            .collect();
+        for (i, e) in self.electrodes.electrodes.iter().enumerate() {
+            if matches!(e.bias, Bias::Charge(_)) && !self.circuits.iter().any(|c| c.electrode == i)
+            {
+                out.push(Node {
+                    electrode: i,
+                    conductance_dt: 0.0,
+                    capacitance: 0.0,
+                    source: Waveform::Dc(0.0),
+                });
+            }
+        }
+        out
+    }
+
+    /// The node index of an electrode, if it is a circuit node.
+    fn node_of(nodes: &[Node], electrode: usize) -> Option<usize> {
+        nodes.iter().position(|n| n.electrode == electrode)
+    }
+
+    /// The potentials at time `t`: ideal sources at their value, the nodes solved from
+    /// their charges (backward Euler in the resistors, whose charge over the step is added
+    /// to the nodes), with the particles' induced charge `q_ind` per electrode.
+    fn update_potentials(&self, s: &mut TubeState, t: f64, q_ind: &[f64]) {
+        for c in &self.circuits {
+            if c.resistance == 0.0 {
+                s.potentials[c.electrode] = c.source.value(t);
+            }
+        }
+        let nodes = self.nodes();
+        if nodes.is_empty() {
+            return;
+        }
+        let k = nodes.len();
+        let n_el = self.electrodes.electrodes.len();
+        let cap = &self.electrodes.capacitance;
+        let mut a = vec![0.0; k * k];
+        let mut b = vec![0.0; k];
+        for (r, n) in nodes.iter().enumerate() {
+            let i = n.electrode;
+            for (c, m) in nodes.iter().enumerate() {
+                a[r * k + c] = cap[i][m.electrode];
+            }
+            a[r * k + r] += n.capacitance + n.conductance_dt;
+            let fixed: f64 = (0..n_el)
+                .filter(|&j| Self::node_of(&nodes, j).is_none())
+                .map(|j| cap[i][j] * s.potentials[j])
+                .sum();
+            b[r] = s.node_charge[r] + n.conductance_dt * n.source.value(t) - fixed - q_ind[i];
+        }
+        let v = Lu::new(a, k).solve(&b);
+        for (r, n) in nodes.iter().enumerate() {
+            s.potentials[n.electrode] = v[r];
+            let delivered = n.conductance_dt * (n.source.value(t) - v[r]);
+            s.node_charge[r] += delivered;
+            if let Some(c) = self
+                .circuits
+                .iter()
+                .position(|c| c.electrode == n.electrode && c.resistance != 0.0)
+            {
+                s.circuit_current[c] = delivered / self.dt;
+            }
+        }
+    }
+
+    /// The surface density of the electrodes at their potentials (no particles).
+    fn static_density(&self, potentials: &[f64]) -> Vec<f64> {
+        let mut sigma = vec![0.0; self.electrodes.segments.len()];
+        for (j, v) in potentials.iter().enumerate() {
+            if *v != 0.0 {
+                for (s, u) in sigma.iter_mut().zip(self.electrodes.unit(j)) {
+                    *s += v * u;
+                }
+            }
+        }
+        sigma
+    }
+
+    /// The particles' induced surface density (all electrodes grounded).
+    fn induced_density(&self, s: &TubeState) -> Vec<f64> {
+        self.electrodes.induced_by(|y| {
+            s.x.iter()
+                .zip(&s.charge)
+                .map(|(p, l)| line_charge(*p, *l, y).0)
+                .sum()
+        })
     }
 
     fn segments_of(&self, electrode: usize) -> impl Iterator<Item = usize> + '_ {
@@ -203,16 +425,11 @@ impl Tube {
             .filter(move |&j| self.electrodes.owner_of(j) == electrode)
     }
 
-    /// The total surface density: the static solution plus the particles' induced one.
+    /// The total surface density: the electrodes' at their present potentials plus the
+    /// particles' induced one.
     pub fn surface_density(&self, s: &TubeState) -> Vec<f64> {
-        let induced = self.electrodes.induced_by(|y| {
-            s.x.iter()
-                .zip(&s.charge)
-                .map(|(p, l)| line_charge(*p, *l, y).0)
-                .sum()
-        });
-        self.electrodes
-            .sigma
+        let induced = self.induced_density(s);
+        self.static_density(&s.potentials)
             .iter()
             .zip(&induced)
             .map(|(a, b)| a + b)
@@ -243,6 +460,7 @@ impl Tube {
         s.charge.push(charge);
         s.qm.push(qm);
         s.tag.push(tag);
+        s.left.push(false);
         s.side.push(
             self.electrodes
                 .electrodes
@@ -254,7 +472,8 @@ impl Tube {
 
     /// Space-charge-limited emission of every emitter: each segment of its electrode
     /// whose surface density has its carriers' sign releases that charge.
-    fn emit(&self, s: &mut TubeState) {
+    fn emit(&self, s: &mut TubeState) -> Vec<f64> {
+        let mut emitted = vec![0.0; self.electrodes.electrodes.len()];
         let sigma = self.surface_density(s);
         for (i, em) in self.emitters.iter().enumerate() {
             let sign = em.charge_per_mass.signum();
@@ -300,9 +519,11 @@ impl Tube {
                     let x = mid + out * (EMISSION_OFFSET * (b - a).length());
                     let tag = u32::try_from(i).unwrap_or(u32::MAX);
                     self.add(s, x, DVec3::ZERO, sign * em.weight, em.charge_per_mass, tag);
+                    emitted[em.electrode] += sign * em.weight;
                 }
             }
         }
+        emitted
     }
 
     /// One step: launches, emission, push (Boris: with B = 0 the kick-drift
@@ -315,9 +536,25 @@ impl Tube {
                 self.add(s, p.x0, p.v0, p.charge, p.charge / p.mass, tag);
             }
         }
-        self.emit(s);
+        let emitted = self.emit(s);
+        let nodes = self.nodes();
+        // The emitted charge left its electrode.
+        for (e, q) in emitted.iter().enumerate() {
+            if let Some(r) = Self::node_of(&nodes, e) {
+                s.node_charge[r] -= q;
+            }
+        }
         crate::cancel::checkpoint();
-        let sigma = self.surface_density(s);
+        // The potentials at the end of the step (sources, circuit nodes), then the field.
+        let induced = self.induced_density(s);
+        let q_ind = self.electrodes.charges_of(&induced);
+        self.update_potentials(s, s.t + self.dt, &q_ind);
+        let sigma: Vec<f64> = self
+            .static_density(&s.potentials)
+            .iter()
+            .zip(&induced)
+            .map(|(a, b)| a + b)
+            .collect();
         let fields: Vec<DVec3> = (0..s.x.len())
             .map(|k| self.field(s, &sigma, s.x[k], Some(k)))
             .collect();
@@ -332,12 +569,38 @@ impl Tube {
             *x += *v * self.dt;
         }
         s.t += self.dt;
-        // Absorption: a particle that crossed an electrode's boundary, or left.
+        // Absorption: a particle that crossed an electrode's boundary, came back to its
+        // emitter (RETURN_ABSORB), or left.
         let n_el = self.electrodes.electrodes.len();
+        let release: Vec<f64> = self
+            .emitters
+            .iter()
+            .map(|em| {
+                EMISSION_OFFSET
+                    * self
+                        .segments_of(em.electrode)
+                        .map(|j| {
+                            let (a, b) = self.electrodes.segments[j];
+                            (b - a).length()
+                        })
+                        .fold(0.0, f64::max)
+            })
+            .collect();
         let mut k = 0;
         while k < s.x.len() {
-            let hit = (0..n_el)
+            let crossed = (0..n_el)
                 .find(|&e| inside(&self.electrodes.electrodes[e].section, s.x[k]) != s.side[k][e]);
+            let mut returned = None;
+            if let Some(em) = self.emitters.get(s.tag[k] as usize) {
+                let delta = release[s.tag[k] as usize];
+                let d = distance_outside(&self.electrodes.electrodes[em.electrode].section, s.x[k]);
+                if d >= RETURN_LEAVE * delta {
+                    s.left[k] = true;
+                } else if s.left[k] && d < RETURN_ABSORB * delta {
+                    returned = Some(em.electrode);
+                }
+            }
+            let hit = crossed.or(returned);
             let out = self.arena.is_some_and(|(lo, hi)| {
                 let x = s.x[k];
                 x.x < lo.x || x.y < lo.y || x.x > hi.x || x.y > hi.y
@@ -357,6 +620,10 @@ impl Tube {
                 } else if let Some(e) = hit {
                     s.collected[e][tag as usize] += s.charge[k];
                 }
+                // A circuit node keeps what it absorbs (projectiles' charge too).
+                if let Some(r) = hit.and_then(|e| Self::node_of(&nodes, e)) {
+                    s.node_charge[r] += s.charge[k];
+                }
                 if hit.is_none() {
                     s.lost += s.charge[k];
                 }
@@ -365,6 +632,7 @@ impl Tube {
                 s.charge.swap_remove(k);
                 s.qm.swap_remove(k);
                 s.tag.swap_remove(k);
+                s.left.swap_remove(k);
                 s.side.swap_remove(k);
             } else {
                 k += 1;

@@ -8,7 +8,10 @@
 
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
-use level::tube::{CurrentGoal, DEFAULT_STEP, IonSource, ProjectileSpec, TubeSpec};
+use level::tube::{
+    CurrentGoal, DEFAULT_STEP, IonSource, Measure, PotentialGoal, ProjectileSpec, TubeCircuit,
+    TubeSpec,
+};
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
     DielectricSphere, Disturbance, Drive, Electrode, Element, ElementKind, FerritePlate,
@@ -131,43 +134,9 @@ fn non_negative(ui: &mut egui::Ui, v: &mut f64, speed: f64) -> bool {
     .has_focus()
 }
 
-/// The circuit driving an electrode or a circular coil (PHYSICS.md §2.10): a source
-/// through a resistance, with a series inductance or a switch (electrodes) or a series
-/// capacitance (coils).
-fn drive_editor(
-    ui: &mut egui::Ui,
-    id: (&str, usize),
-    drive: &mut Option<Drive>,
-    electrode: bool,
-) -> bool {
+/// A source's kind (DC, sine, pulse) and its parameters.
+fn edit_source(ui: &mut egui::Ui, id: (&str, usize), source: &mut Source) -> bool {
     let mut focus = false;
-    let mut on = drive.is_some();
-    if ui
-        .checkbox(&mut on, "driven by a circuit")
-        .on_hover_text(
-            "A source through a resistance drives it (one way: the particles do not act \
-             back); it starts from its static state",
-        )
-        .changed()
-    {
-        *drive = on.then_some(Drive {
-            source: Source::Dc { value: 1.0 },
-            resistance: 1.0,
-            inductance: 0.0,
-            capacitance: 0.0,
-            switch: None,
-        });
-    }
-    let Some(Drive {
-        source,
-        resistance,
-        inductance,
-        capacitance,
-        switch,
-    }) = drive
-    else {
-        return focus;
-    };
     let kind = match source {
         Source::Dc { .. } => 0,
         Source::Sine { .. } => 1,
@@ -262,6 +231,47 @@ fn drive_editor(
             });
         }
     }
+    focus
+}
+
+/// The circuit driving an electrode or a circular coil (PHYSICS.md §2.10): a source
+/// through a resistance, with a series inductance or a switch (electrodes) or a series
+/// capacitance (coils).
+fn drive_editor(
+    ui: &mut egui::Ui,
+    id: (&str, usize),
+    drive: &mut Option<Drive>,
+    electrode: bool,
+) -> bool {
+    let mut focus = false;
+    let mut on = drive.is_some();
+    if ui
+        .checkbox(&mut on, "driven by a circuit")
+        .on_hover_text(
+            "A source through a resistance drives it (one way: the particles do not act \
+             back); it starts from its static state",
+        )
+        .changed()
+    {
+        *drive = on.then_some(Drive {
+            source: Source::Dc { value: 1.0 },
+            resistance: 1.0,
+            inductance: 0.0,
+            capacitance: 0.0,
+            switch: None,
+        });
+    }
+    let Some(Drive {
+        source,
+        resistance,
+        inductance,
+        capacitance,
+        switch,
+    }) = drive
+    else {
+        return focus;
+    };
+    focus |= edit_source(ui, id, source);
     ui.horizontal(|ui| {
         ui.label("R");
         focus |= positive(ui, resistance, 0.01, MAX_POSITIVE);
@@ -301,17 +311,10 @@ fn drive_editor(
     focus
 }
 
-/// A drive within the editors' ranges.
-fn drive_editable(d: &Drive) -> bool {
-    let Drive {
-        source,
-        resistance,
-        inductance,
-        capacitance,
-        switch,
-    } = d;
+/// A source within the editors' ranges.
+fn source_editable(source: &Source) -> bool {
     let non_negative = |v: &f64| (0.0..=MAX_POSITIVE).contains(v);
-    let source_ok = match source {
+    match source {
         Source::Dc { value } => value.is_finite(),
         Source::Sine {
             offset,
@@ -336,7 +339,20 @@ fn drive_editable(d: &Drive) -> bool {
                     .iter()
                     .all(|v| non_negative(v))
         }
-    };
+    }
+}
+
+/// A drive within the editors' ranges.
+fn drive_editable(d: &Drive) -> bool {
+    let Drive {
+        source,
+        resistance,
+        inductance,
+        capacitance,
+        switch,
+    } = d;
+    let non_negative = |v: &f64| (0.0..=MAX_POSITIVE).contains(v);
+    let source_ok = source_editable(source);
     source_ok
         && (MIN_POSITIVE..=MAX_POSITIVE).contains(resistance)
         && non_negative(inductance)
@@ -1503,6 +1519,8 @@ fn edit_tube(
                 start: 10.0,
                 end: 20.0,
             }),
+            circuits: Vec::new(),
+            potential_goals: Vec::new(),
         });
     }
     let Some(TubeSpec {
@@ -1516,6 +1534,8 @@ fn edit_tube(
         solenoid,
         step,
         goal,
+        circuits,
+        potential_goals,
     }) = tube
     else {
         return focus;
@@ -1754,6 +1774,156 @@ fn edit_tube(
             charge: 0.1,
             mass: 1.0,
             detector: None,
+        });
+    }
+    // Circuits of electrodes.
+    let mut remove = None;
+    for (k, c) in circuits.iter_mut().enumerate() {
+        let TubeCircuit {
+            electrode,
+            source,
+            resistance,
+            capacitance,
+            supply_offset,
+            linked,
+        } = c;
+        ui.push_id(("tube_circuit", k), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Circuit {}", k + 1));
+                if ui.small_button("×").clicked() {
+                    remove = Some(k);
+                }
+            });
+            focus |= index(ui, "  on electrode", electrode);
+            focus |= edit_source(ui, ("tube_circuit_source", k), source);
+            ui.horizontal(|ui| {
+                let mut floating = resistance.is_none();
+                ui.checkbox(&mut floating, "floating")
+                    .on_hover_text("No source: the electrode keeps its charge and its capacitor's");
+                if floating {
+                    *resistance = None;
+                } else {
+                    let r = resistance.get_or_insert(1.0);
+                    ui.label("R")
+                        .on_hover_text("0: an ideal source the electrode follows");
+                    focus |= ui
+                        .add(
+                            egui::DragValue::new(r)
+                                .speed(0.01)
+                                .range(0.0..=MAX_POSITIVE),
+                        )
+                        .has_focus();
+                }
+                ui.label("C to ground");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(capacitance)
+                            .speed(0.01)
+                            .range(0.0..=MAX_POSITIVE),
+                    )
+                    .has_focus();
+            });
+            if matches!(source, Source::Sine { .. }) {
+                ui.checkbox(supply_offset, "the supply sets the offset (a bias)");
+            } else {
+                *supply_offset = false;
+            }
+            // Further electrodes on the same ideal source (a grid's wires), 1-based.
+            if *resistance == Some(0.0) {
+                ui.horizontal(|ui| {
+                    ui.label("linked electrodes");
+                    let mut text = linked
+                        .iter()
+                        .map(|e| (e + 1).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(LIST_WIDTH));
+                    if r.changed() {
+                        *linked = text
+                            .split(',')
+                            .filter_map(|t| t.trim().parse::<usize>().ok())
+                            .filter(|&e| (1..=last + 1).contains(&e))
+                            .map(|e| e - 1)
+                            .collect();
+                    }
+                    focus |= r.has_focus();
+                });
+            } else {
+                linked.clear();
+            }
+        });
+    }
+    if let Some(k) = remove {
+        circuits.remove(k);
+    }
+    if circuits.len() < MAX_COUNT as usize && ui.small_button("+ circuit").clicked() {
+        circuits.push(TubeCircuit {
+            electrode: last.min(1),
+            source: Source::Dc { value: 0.0 },
+            resistance: Some(1.0),
+            capacitance: 1.0,
+            supply_offset: false,
+            linked: Vec::new(),
+        });
+    }
+    // Potential goals.
+    let mut remove = None;
+    for (k, g) in potential_goals.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            ui.label(format!("Potential goal {}", k + 1));
+            if ui.small_button("×").clicked() {
+                remove = Some(k);
+            }
+        });
+        focus |= index(ui, "  electrode", &mut g.electrode);
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut g.measure, Measure::Mean, "mean");
+            ui.selectable_value(&mut g.measure, Measure::Swing, "swing")
+                .on_hover_text("Half the peak-to-peak swing over the window");
+            ui.selectable_value(&mut g.measure, Measure::Amplitude, "amplitude")
+                .on_hover_text("The oscillation's amplitude at ω (a drift removed)");
+        });
+        ui.horizontal(|ui| {
+            if g.measure == Measure::Amplitude {
+                ui.label("  ω");
+                focus |= ui
+                    .add(
+                        egui::DragValue::new(&mut g.omega)
+                            .speed(0.01)
+                            .range(0.0..=MAX_POSITIVE),
+                    )
+                    .has_focus();
+            }
+            ui.label("  from");
+            focus |= free(ui, &mut g.min, 0.01);
+            ui.label("to");
+            focus |= free(ui, &mut g.max, 0.01);
+        });
+        ui.horizontal(|ui| {
+            ui.label("  over t");
+            focus |= ui
+                .add(
+                    egui::DragValue::new(&mut g.start)
+                        .speed(0.1)
+                        .range(0.0..=MAX_POSITIVE),
+                )
+                .has_focus();
+            ui.label("to");
+            focus |= positive(ui, &mut g.end, 0.1, MAX_POSITIVE);
+        });
+    }
+    if let Some(k) = remove {
+        potential_goals.remove(k);
+    }
+    if potential_goals.len() < MAX_COUNT as usize && ui.small_button("+ potential goal").clicked() {
+        potential_goals.push(PotentialGoal {
+            electrode: last,
+            measure: Measure::Mean,
+            omega: 0.0,
+            min: 0.0,
+            max: 1.0,
+            start: 20.0,
+            end: 40.0,
         });
     }
     focus
@@ -2214,6 +2384,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             solenoid,
             step,
             goal,
+            circuits,
+            potential_goals,
         } = t;
         let n = electrodes.len();
         let any = |v: f64| (-MAX_POSITIVE..=MAX_POSITIVE).contains(&v);
@@ -2263,7 +2435,43 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     && (MIN_POSITIVE..=MAX_POSITIVE).contains(mass)
                     && detector.is_none_or(|[a, b]| grid.contains(a) && grid.contains(b))
             });
-        let field_ok = solenoid.is_none_or(|n| grid.contains(n))
+        let circuits_ok = circuits.len() <= MAX_COUNT as usize
+            && circuits.iter().all(|c| {
+                let TubeCircuit {
+                    electrode,
+                    source,
+                    resistance,
+                    capacitance,
+                    supply_offset: _,
+                    linked,
+                } = c;
+                *electrode < n
+                    && linked.iter().all(|e| *e < n)
+                    && source_editable(source)
+                    && resistance.is_none_or(|r| nonneg(r))
+                    && nonneg(*capacitance)
+            });
+        let potential_ok = potential_goals.len() <= MAX_COUNT as usize
+            && potential_goals.iter().all(|g| {
+                let PotentialGoal {
+                    electrode,
+                    measure: _,
+                    omega,
+                    min,
+                    max,
+                    start,
+                    end,
+                } = g;
+                *electrode < n
+                    && nonneg(*omega)
+                    && any(*min)
+                    && any(*max)
+                    && nonneg(*start)
+                    && (MIN_POSITIVE..=MAX_POSITIVE).contains(end)
+            });
+        let field_ok = circuits_ok
+            && potential_ok
+            && solenoid.is_none_or(|n| grid.contains(n))
             && any(*b_z)
             && (MIN_POSITIVE..=MAX_POSITIVE).contains(step)
             && saturation.is_none_or(|j| (MIN_POSITIVE..=MAX_POSITIVE).contains(&j));
