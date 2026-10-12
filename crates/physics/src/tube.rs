@@ -48,7 +48,9 @@ use glam::DVec3;
 
 use crate::bem::{Bias, Lu};
 use crate::circuit::Waveform;
-use crate::zinv::{Electrodes, Section, line_charge, segment_field_fast};
+use rayon::prelude::*;
+
+use crate::zinv::{Electrodes, PAR_CHUNK, Section, line_charge, segment_field_fast};
 
 /// Distance from the cathode at which macroparticles are released, in segment lengths:
 /// at the mesh's resolution, where a macroparticle's own image (the field w/h of the
@@ -635,7 +637,10 @@ impl Tube {
             .zip(&induced)
             .map(|(a, b)| a + b)
             .collect();
+        // In parallel, each particle's field whole by one thread (bit-identical).
         let fields: Vec<DVec3> = (0..s.x.len())
+            .into_par_iter()
+            .with_min_len(PAR_CHUNK)
             .map(|k| self.field(s, &sigma, s.x[k], Some(k)))
             .collect();
         for (((x, v), qm), e) in s.x.iter_mut().zip(&mut s.v).zip(&s.qm).zip(&fields) {

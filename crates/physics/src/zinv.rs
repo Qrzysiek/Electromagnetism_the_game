@@ -18,7 +18,15 @@
 
 use glam::DVec3;
 
+use rayon::prelude::*;
+
 use crate::bem::{Bias, Lu};
+
+/// Smallest number of segments or particles per parallel task: each one's sum is
+/// computed whole by one thread in a fixed order and collected in order, so the results
+/// are bit-identical to a serial loop; tasks smaller than this cost more to schedule than
+/// they save.
+pub const PAR_CHUNK: usize = 16;
 
 /// Potential and field at `x` of the segment from `a` to `b` (in the plane) carrying a
 /// unit surface charge density, exactly: with `u` along the segment from `a`, `v` across
@@ -248,7 +256,11 @@ pub struct Electrodes {
     /// Segments `(start, end)` and the electrode each belongs to.
     pub segments: Vec<(DVec3, DVec3)>,
     owner: Vec<usize>,
-    lu: Lu,
+    /// The collocation matrix's inverse (row-major), for the particles' induced charge
+    /// each step (`induced_by`): a matrix–vector product in parallel by rows, each row
+    /// summed in order, instead of the LU's two triangular solves, which are serial and
+    /// took most of a tube's step once its other loops ran in parallel.
+    inverse: Vec<f64>,
     unit: Vec<Vec<f64>>,
     /// Capacitance matrix per unit length: `capacitance[i][j]` the charge per unit
     /// length on `i` with `j` at unit potential and the others at 0.
@@ -363,11 +375,27 @@ impl Electrodes {
                 }
             }
         }
+        // The inverse's columns, solved in parallel (each whole by one thread).
+        crate::cancel::checkpoint();
+        let columns: Vec<Vec<f64>> = (0..n)
+            .into_par_iter()
+            .map(|j| {
+                let mut e = vec![0.0; n];
+                e[j] = 1.0;
+                lu.solve(&e)
+            })
+            .collect();
+        let mut inverse = vec![0.0; n * n];
+        for (j, column) in columns.iter().enumerate() {
+            for (i, v) in column.iter().enumerate() {
+                inverse[i * n + j] = *v;
+            }
+        }
         Self {
             electrodes,
             segments,
             owner,
-            lu,
+            inverse,
             unit,
             capacitance,
             sigma,
@@ -404,13 +432,25 @@ impl Electrodes {
 
     /// The surface charge that cancels the potential `phi_at(midpoint)` of other sources
     /// on the electrodes (all held at 0): the induced charge, e.g. of the particles.
-    pub fn induced_by(&self, phi_at: impl Fn(DVec3) -> f64) -> Vec<f64> {
+    pub fn induced_by(&self, phi_at: impl Fn(DVec3) -> f64 + Sync) -> Vec<f64> {
         let b: Vec<f64> = self
             .segments
-            .iter()
+            .par_iter()
+            .with_min_len(PAR_CHUNK)
             .map(|(a, c)| -phi_at((*a + *c) * 0.5))
             .collect();
-        self.lu.solve(&b)
+        let n = b.len();
+        (0..n)
+            .into_par_iter()
+            .with_min_len(PAR_CHUNK)
+            .map(|i| {
+                let mut s = 0.0;
+                for (a, x) in self.inverse[i * n..(i + 1) * n].iter().zip(&b) {
+                    s += a * x;
+                }
+                s
+            })
+            .collect()
     }
 
     /// The electrode segment `j` belongs to.

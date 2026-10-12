@@ -269,3 +269,13 @@ physics of diodes" (2017).
    current limit, and a stated separate limit for the preview's numbers).
 
 Order: 4, 2, inductors and the klystron, the magnetron, 1.
+
+- **4 done (2026-10-12):** profiled per phase, the particles' fields (50 %) and the
+  induced density (45 %) took the step's time. Both now run in parallel (each sum whole by
+  one thread, collected in order: bit-identical), and the induced density uses the
+  collocation matrix's inverse (a row-parallel product) instead of the serial triangular
+  solves. Previews 0.24–0.63 s (were 0.7–2.3 s), verifications 0.9–2.6 s (were
+  4.4–13.9 s): all within the existing budget, so tubes need no budget of their own. The
+  inverse changed the rounding, and with it the tube levels' results by up to 0.74 % (the
+  macroparticles' noise, inside every verdict's bar; PHYSICS.md §2.11, Speed). Further
+  speed, if the magnetron needs it: a 2D fast multipole (treecode) for the particle sums.
