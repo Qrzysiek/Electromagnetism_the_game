@@ -1188,3 +1188,89 @@ fn v14_far_field_of_a_segment() {
     println!("V14: worst relative error {worst:.3e} at {worst_at:.2} lengths");
     assert!(worst < 1e-4, "V14 {worst}");
 }
+
+/// V15: the emitter meshed finer than the rest (the game's `EMITTER_MESH`, a quarter). V4's
+/// coaxial diode at V4's two resolutions with only the cathode's segments at a quarter: its
+/// particles are released half of its own segment out, so the skipped space-charge layer,
+/// V4's first-order error, shrinks with it. Measured (PHYSICS.md §2.11): the cathode at the
+/// others' size, a half and a quarter gave +15.1 %, +9.2 %, +5.4 % at V4's coarse resolution
+/// and +7.8 %, +4.9 %, +1.0 % at its fine one. Required: at both resolutions below V4's
+/// uniform runs (the refinement helps), and the fine run within the game's verdict bar
+/// (1.5 × the two runs' difference) of the exact current, the rule the verdicts rest on.
+#[test]
+fn v15_finer_emitter_mesh() {
+    use physics::tube::{Emitter, Tube};
+    let beta2 = 0.279_267_160_710_59;
+    let exact = 2.0 / 9.0 * 2f64.sqrt() / (2.0 * beta2);
+    let mut currents = Vec::new();
+    for (weight, dt, size) in [(2e-3, 0.01, 0.1), (1e-3, 0.005, 0.05)] {
+        let electrodes = Electrodes::with_sizes(
+            vec![
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: 1.0,
+                    },
+                    bias: Bias::Grounded,
+                },
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: 2.0,
+                    },
+                    bias: Bias::Potential(1.0),
+                },
+            ],
+            &[],
+            &[0.25 * size, size],
+        );
+        let tube = Tube {
+            electrodes,
+            emitters: vec![Emitter {
+                electrode: 0,
+                charge_per_mass: -1.0,
+                weight,
+                emit_toward: None,
+                saturation: None,
+            }],
+            projectiles: Vec::new(),
+            softening: 0.5 * size,
+            dt,
+            arena: None,
+            b_z: 0.0,
+            circuits: Vec::new(),
+        };
+        let mut s = tube.state();
+        let start = std::time::Instant::now();
+        let mut at4 = None;
+        while s.t < 8.0 {
+            tube.step(&mut s);
+            if at4.is_none() && s.t >= 4.0 {
+                at4 = Some((s.t, s.collected[1][0]));
+            }
+        }
+        let (t4, q4) = at4.expect("reached t = 4");
+        let current = -(s.collected[1][0] - q4) / (s.t - t4);
+        println!(
+            "V15 segments {size}, cathode {:.4}: I/L = {current:.6} ({:+.2e}); {} in flight, {:.1} s",
+            0.25 * size,
+            current / exact - 1.0,
+            s.x.len(),
+            start.elapsed().as_secs_f64()
+        );
+        currents.push(current);
+    }
+    let (coarse, fine) = (currents[0], currents[1]);
+    let bar = 1.5 * (fine - coarse).abs();
+    println!(
+        "V15: fine {fine:.6} ± {bar:.6}, exact {exact:.6}: off by {:.2} of the bar",
+        (fine - exact).abs() / bar
+    );
+    // V4's uniform runs: +15.1 % and +7.8 %.
+    assert!(coarse / exact - 1.0 < 0.151, "V15 coarse {coarse}");
+    assert!(fine / exact - 1.0 < 0.078, "V15 fine {fine}");
+    assert!(
+        (fine - exact).abs() <= bar,
+        "V15 fine {fine} ± {bar} vs {exact}"
+    );
+}

@@ -8,10 +8,11 @@
   "07_thomson_crt": "8b131c3e417cefc2",
   "08_around_the_wall": "df9ac3f85e867025",
   "09_einzel_lens": "cb1dc5a3537d68da",
-  "100_sideways": "eb092c80d7279a43",
-  "101_through_the_cloud": "16e6fac06c0e7a4c",
-  "102_electron_gun": "4cdf932debae27c4",
-  "103_rectifier": "d3e9646225073179",
+  "100_sideways": "ba18aae18eebe035",
+  "101_through_the_cloud": "65371143cf4ee7ff",
+  "102_electron_gun": "d6afe6c8c0612c74",
+  "103_rectifier": "e5157b4794d5c0b7",
+  "104_triode": "100e5688a2b579de",
   "10_reflectron": "a7d90d251ae50899",
   "11_collimator": "923b8d266aa1bb50",
   "12_hemispherical_analyzer": "04ca128258447f0d",
@@ -101,5 +102,5 @@
   "96_jackson_quiet_ring": "5a77a0c2e569ce9c",
   "97_jackson_ring_of_four": "c6d214f69940571e",
   "98_jackson_undulator": "adbb6be82c557ab3",
-  "99_vacuum_diode": "6ea0919b2e50e83d"
+  "99_vacuum_diode": "7dd63189762745a6"
 }

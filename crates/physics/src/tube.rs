@@ -511,6 +511,43 @@ impl Tube {
         );
     }
 
+    /// The outward normal of `electrode`'s segment from `a` to `b` at its point `at`: the
+    /// side away from the electrode's section.
+    fn outward(&self, electrode: usize, a: DVec3, b: DVec3, at: DVec3) -> DVec3 {
+        let t = (b - a).normalize();
+        let n = DVec3::new(-t.y, t.x, 0.0);
+        if inside(
+            &self.electrodes.electrodes[electrode].section,
+            at + n * 1e-6,
+        ) {
+            -n
+        } else {
+            n
+        }
+    }
+
+    /// The charge of its carriers' sign (a magnitude) that an emitter's emitting face holds
+    /// with the electrodes at `potentials` and no particles: what space-charge-limited
+    /// emission releases first, the scale of the charge in flight (the macroparticles'
+    /// weight, `level::tube`).
+    pub fn emitting_charge(&self, emitter: usize, potentials: &[f64]) -> f64 {
+        let em = &self.emitters[emitter];
+        let sign = em.charge_per_mass.signum();
+        let sigma = self.static_density(potentials);
+        self.segments_of(em.electrode)
+            .map(|j| {
+                let (a, b) = self.electrodes.segments[j];
+                let out = self.outward(em.electrode, a, b, (a + b) * 0.5);
+                let q = sigma[j] * (b - a).length();
+                if em.emit_toward.is_some_and(|d| out.dot(d) < 0.5) || q * sign <= 0.0 {
+                    0.0
+                } else {
+                    q.abs()
+                }
+            })
+            .sum()
+    }
+
     /// Space-charge-limited emission of every emitter: each segment of its electrode
     /// whose surface density (the electrodes' at their potentials plus `induced`, the
     /// particles') has its carriers' sign releases that charge.
@@ -546,18 +583,8 @@ impl Tube {
                     s.emitted += 1;
                     #[allow(clippy::cast_precision_loss)]
                     let f = (s.emitted as f64 * 0.618_033_988_749_894_9).fract();
-                    let t = (b - a).normalize();
-                    let n = DVec3::new(-t.y, t.x, 0.0);
                     let mid = a + (b - a) * f;
-                    // Outward: the side away from the electrode's section.
-                    let out = if inside(
-                        &self.electrodes.electrodes[em.electrode].section,
-                        mid + n * 1e-6,
-                    ) {
-                        -n
-                    } else {
-                        n
-                    };
+                    let out = self.outward(em.electrode, a, b, mid);
                     if em.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
                         // Not the coated face: its charge stays.
                         s.pending[i][k] = 0.0;

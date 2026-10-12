@@ -263,10 +263,20 @@ impl Electrodes {
     /// Solves the electrodes for the line charges `sources` `(position, λ)`, with segments
     /// no longer than `size`.
     pub fn new(electrodes: Vec<Electrode>, sources: &[(DVec3, f64)], size: f64) -> Self {
+        let sizes = vec![size; electrodes.len()];
+        Self::with_sizes(electrodes, sources, &sizes)
+    }
+
+    /// As `new`, each electrode meshed with its own segment size (an emitter finer than
+    /// the rest: its particles are released half of its segment out).
+    ///
+    /// # Panics
+    /// If `sizes` has fewer entries than `electrodes`.
+    pub fn with_sizes(electrodes: Vec<Electrode>, sources: &[(DVec3, f64)], sizes: &[f64]) -> Self {
         let mut segments = Vec::new();
         let mut owner = Vec::new();
         for (i, e) in electrodes.iter().enumerate() {
-            let m = e.section.mesh(size);
+            let m = e.section.mesh(sizes[i]);
             owner.extend(std::iter::repeat_n(i, m.len()));
             segments.extend(m);
         }

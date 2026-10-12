@@ -272,12 +272,16 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
     return t
 
 
-def tube_circuit(electrode, source, resistance=None, capacitance=0.0, supply_offset=False):
+def tube_circuit(electrode, source, resistance=None, capacitance=0.0, supply_offset=False,
+                 linked=()):
     """An electrode's circuit in a tube level (per unit length): `source` (see `dc`,
     `sine`) through `resistance` (0: an ideal source; None: floating) and `capacitance`
     to ground; a tunable electrode's supply sets the source's level, or with
-    `supply_offset` a sine's offset."""
+    `supply_offset` a sine's offset; `linked`: further electrodes on the same ideal source
+    (a grid's wires)."""
     c = {"electrode": electrode, "source": source}
+    if linked:
+        c["linked"] = list(linked)
     if resistance is not None:
         c["resistance"] = resistance
     if capacitance:
@@ -3063,7 +3067,10 @@ def through_the_cloud():
     # gap and keep the current (0.91-1.14 at anode 28-32). Verified: (4, 18) vertical at
     # +65 with the anode at 30, current 1.008 +- 0.020, the ion arrives at t = 31.23 in
     # both runs (the reference); (5, 17) at +50: 1.014 +- 0.120, t = 35.5 and 32.3;
-    # (5, 18) at +35: 1.039 +- 0.004, t = 31.8.
+    # (5, 18) at +35: 1.039 +- 0.004, t = 31.8. With the emitters meshed finer and the
+    # weight from the emitting face (PHYSICS.md 2.11) the reference gives 0.980 +- 0.003,
+    # arriving at t = 31.33 and 31.32; the run ends at 40 (at 60 its verification took 21
+    # s).
     return level(
         "Through the cloud",
         "An ion (a long line of positive charge, the large dot) is fired up through the gap "
@@ -3075,7 +3082,7 @@ def through_the_cloud():
         "tube far left of the detector. Your two plates can push it back on course, but "
         "they act on the electrons as well, and the ion's own charge disturbs the flow it "
         "crosses.",
-        grid=(24, 20), c=None, t_max=60.0,
+        grid=(24, 20), c=None, t_max=40.0,
         electrodes=[plate(6, 10, 10, thickness=1.0, angle_deg=90.0),
                     plate(16, 10, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
         supplies=slider(70.0, 20.0, 30.0, 40.0),
@@ -3157,6 +3164,45 @@ def rectifier():
         reference=[supply(5, 8, 32.0), supply(19, 8, 32.0)])
 
 
+def triode():
+    # Designed with `generator tube-scan`, verified with `check` (PHYSICS.md 2.11). A
+    # cathode 6 long, five grid wires (0.6 x 0.5, 2 apart) 1.25 before its face on one
+    # sine source (amplitude 1, period 40) whose offset, the bias, the player sets, and an
+    # anode 6 long through R = 60 to B+ = 100. The anode's own capacitance (it faces the
+    # grounded envelope and the grid) shunts the load: g_m/(omega C) capped the gain at ~1.3
+    # with a 14-long anode at period 20, so the anode is short and the signal slow. Output
+    # amplitude (verification, over one period t = 40-80): 2.55 at bias -1, 2.79 at -0.9,
+    # 2.99 at -0.8, 3.17 at -0.7, 3.39 at -0.6, 3.53 at -0.5, 3.74 at -0.4, 4.15 at 0
+    # (two periods), the preview ~15 % above (bars +-0.7 to +-0.85): the goal 2.0 to 4.5
+    # is verified for a bias of about -0.9 to -0.5; cut off below about -2 (only the
+    # grid's capacitive feedthrough, 0.32, is left).
+    omega = 2.0 * math.pi / 40.0
+    wires = [plate(7, y, 0.6, thickness=0.5, angle_deg=90.0, tunable=(y == 8))
+             for y in (8, 4, 6, 10, 12)]
+    return level(
+        "Triode",
+        "A triode: between the hot cathode (left) and the anode (right) a grid of five thin "
+        "wires, all on one supply: a small signal, a sine of amplitude 1 and period 40, "
+        "around a steady potential, the bias, which you set. Close to the cathode, where the "
+        "electrons are slow, the grid controls the current far more strongly than the "
+        "anode does. The anode takes its current through a resistor (60) from a fixed 100, "
+        "so as the current swings, the anode's potential swings too, and much more than "
+        "the grid's: an amplifier. Bias the grid so that the anode's potential oscillates "
+        "with an amplitude between 2.0 and 4.5 (over $t = 40$ to $80$). Too negative a "
+        "bias cuts the current off.",
+        grid=(24, 16), c=None, t_max=200.0,
+        electrodes=[plate(5, 8, 6, thickness=1.0, angle_deg=90.0),
+                    plate(12, 8, 6, thickness=1.0, angle_deg=90.0)] + wires,
+        supplies=slider(2.0, -1.4, -0.7, 0.7),
+        tube=tube(0, None, 0.0, 0.0, 0.0, 0.0, emit_toward_deg=0.0,
+                  circuits=[tube_circuit(2, sine(1.0, omega), resistance=0.0,
+                                         supply_offset=True, linked=(3, 4, 5, 6)),
+                            tube_circuit(1, dc(100.0), resistance=60.0)],
+                  potentials=[potential_goal(1, "amplitude", 2.0, 4.5, 40.0, 80.0,
+                                             omega=omega)]),
+        reference=[supply(7, 8, -0.7)])
+
+
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
@@ -3166,6 +3212,7 @@ ARCS.append(("Inside the components: vacuum tubes", [
         ("through_the_cloud", through_the_cloud),
         ("electron_gun", electron_gun),
         ("rectifier", rectifier),
+        ("triode", triode),
     ]),
 ]))
 

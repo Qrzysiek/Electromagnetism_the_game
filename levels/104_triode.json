@@ -1,0 +1,196 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Triode",
+  "description": "A triode: between the hot cathode (left) and the anode (right) a grid of five thin wires, all on one supply: a small signal, a sine of amplitude 1 and period 40, around a steady potential, the bias, which you set. Close to the cathode, where the electrons are slow, the grid controls the current far more strongly than the anode does. The anode takes its current through a resistor (60) from a fixed 100, so as the current swings, the anode's potential swings too, and much more than the grid's: an amplifier. Bias the grid so that the anode's potential oscillates with an amplitude between 2.0 and 4.5 (over $t = 40$ to $80$). Too negative a bias cuts the current off.",
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -2.0,
+      -1.4,
+      -0.7,
+      0.7,
+      2.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        7,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": -0.7
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        5,
+        8,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        12,
+        8,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        7,
+        8,
+        0
+      ],
+      "length": 0.6,
+      "thickness": 0.5,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    },
+    {
+      "center": [
+        7,
+        4,
+        0
+      ],
+      "length": 0.6,
+      "thickness": 0.5,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        7,
+        6,
+        0
+      ],
+      "length": 0.6,
+      "thickness": 0.5,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        7,
+        10,
+        0
+      ],
+      "length": 0.6,
+      "thickness": 0.5,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        7,
+        12,
+        0
+      ],
+      "length": 0.6,
+      "thickness": 0.5,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "circuits": [
+      {
+        "electrode": 2,
+        "source": {
+          "kind": "sine",
+          "amplitude": 1.0,
+          "omega": 0.15707963267948966
+        },
+        "linked": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "resistance": 0.0,
+        "supply_offset": true
+      },
+      {
+        "electrode": 1,
+        "source": {
+          "kind": "dc",
+          "value": 100.0
+        },
+        "resistance": 60.0
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 1,
+        "measure": "amplitude",
+        "min": 2.0,
+        "max": 4.5,
+        "start": 40.0,
+        "end": 80.0,
+        "omega": 0.15707963267948966
+      }
+    ],
+    "emit_toward_deg": 0.0
+  }
+}

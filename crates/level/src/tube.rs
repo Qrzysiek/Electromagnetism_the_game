@@ -173,17 +173,21 @@ pub struct CurrentGoal {
 
 /// Preview resolution: segment length (cells).
 pub const PREVIEW_SEGMENT: f64 = 0.5;
-/// Preview resolution: macroparticles per the emitter's charge before emission. In
-/// steady state the space charge in flight is of the order of that charge (the planar
-/// diode's is 4/3 of it), so this sets the number of particles in flight.
+/// Preview resolution: macroparticles per the emitter's charge before emission: the
+/// largest charge of its carriers' sign its emitting face holds without particles, over a
+/// period of the sources (an AC anode leaves it empty at t = 0). In steady state the space
+/// charge in flight is of the order of that charge (the planar diode's is 4/3 of it), so
+/// this sets the number of particles in flight.
 pub const PREVIEW_PARTICLES: f64 = 150.0;
 /// The macroparticle weight's floor, as a fraction of the emitter's charge with every
 /// other electrode at the level's largest voltage (`Level::tube_reference_voltage`): an
-/// emitter with (almost) no charge of its own (all electrodes at its potential) still
-/// emits what passing charges induce on it, and a weight of its own charge would be
-/// (almost) zero. 1/20: the diode of Vacuum diode at 24 V on its ±70 slider is above it
-/// (its weight unchanged).
-pub const WEIGHT_FLOOR: f64 = 1.0 / 20.0;
+/// emitter whose face holds (almost) no charge of its carriers' sign at any phase of the
+/// sources still emits what passing charges induce on it, and a weight from its own charge
+/// would be (almost) zero (a design scan once asked for ~1e300 macroparticles). 1/1000: at
+/// the former 1/20 it overrode a grid-screened cathode's own charge, whose face holds far
+/// less than the level's largest voltage implies (a triode with B+ at 100 on a ±120
+/// slider: 27 macroparticles in flight instead of 152, and its current 28 % low).
+pub const WEIGHT_FLOOR: f64 = 1.0 / 1000.0;
 
 /// The tube's envelope (PHYSICS.md §2.11): a grounded shield around the board, this far
 /// outside its edge (so that a projectile launched from the edge starts inside it). In the
@@ -200,6 +204,15 @@ pub const ENVELOPE_MARGIN: f64 = 0.5;
 /// (V13), far below the macroparticles'. Segments of 1 gave 1.2e-2 (the graded sides'
 /// middle segments are π/2 times longer): rejected.
 pub const ENVELOPE_SEGMENT: f64 = 0.5;
+
+/// The emitters' segments as a fraction of the other electrodes' (PHYSICS.md §2.11, V15):
+/// macroparticles are released half of the emitter's segment out
+/// (`physics::tube::EMISSION_OFFSET`), and the space-charge layer they skip is a
+/// first-order error in that distance (V4). A quarter cut V4's error at the verification's
+/// resolution from 7.8 % to 1.0 %, and the game-scale diode's verdict error from ±0.124 to
+/// ±0.049, for 30–50 % more run time; narrow gaps (a triode's grid 1.25 from its cathode)
+/// need it.
+pub const EMITTER_MESH: f64 = 0.25;
 
 /// A temperature-limited emitter's macroparticles per unit time at its saturation
 /// (preview): its weight is at most `saturation × perimeter / TL_RATE`. The weight rule
@@ -385,6 +398,16 @@ impl TubeSim {
 
     pub fn segment_count(&self) -> usize {
         self.tube.electrodes.segments.len()
+    }
+
+    /// Macroparticles in flight now.
+    pub fn in_flight(&self) -> usize {
+        self.state.x.len()
+    }
+
+    /// Each emitter's macroparticle weight.
+    pub fn weights(&self) -> Vec<f64> {
+        self.tube.emitters.iter().map(|e| e.weight).collect()
     }
 
     /// The goal's current, once the run has passed the goal window's end.
@@ -743,23 +766,31 @@ impl Level {
         let spec = self.tube.clone().expect("a tube level");
         let r = f64::from(refine);
         let size = PREVIEW_SEGMENT / r;
-        let prisms = Prisms::new(self.tube_prisms(player), &[], size);
+        // The emitters meshed finer (EMITTER_MESH).
+        let shapes = self.tube_prisms(player);
+        let sizes: Vec<f64> = (0..shapes.len())
+            .map(|e| {
+                let emits = e == spec.cathode || spec.ions.is_some_and(|i| i.electrode == e);
+                if emits { size * EMITTER_MESH } else { size }
+            })
+            .collect();
+        let prisms = Prisms::with_sizes(shapes, &[], &sizes);
         let toward = |a: Option<f64>| {
             a.map(|a| {
                 let (s, c) = libm::sincos(a.to_radians());
                 DVec3::new(c, s, 0.0)
             })
         };
+        // The macroparticles' weights are set once the tube is built (below); their floor.
         let v_ref = self.tube_reference_voltage();
-        let weight = |e: usize| {
+        let floor = |e: usize| {
             let others: f64 = prisms.capacitance[e]
                 .iter()
                 .enumerate()
                 .filter(|(j, _)| *j != e)
                 .map(|(_, c)| c.abs())
                 .sum();
-            let floor = WEIGHT_FLOOR * v_ref * others;
-            prisms.charge(e).abs().max(floor).max(1e-300) / (PREVIEW_PARTICLES * r)
+            WEIGHT_FLOOR * v_ref * others
         };
         // A temperature-limited cathode emits at most its saturation over its surface:
         // the weight also gives `TL_RATE` macroparticles per unit time at that rate (the
@@ -771,21 +802,20 @@ impl Level {
             .filter(|(k, _)| prisms.owner_of(*k) == spec.cathode)
             .map(|(_, (a, b))| (*b - *a).length())
             .sum();
-        let cathode_weight = spec.saturation.map_or(weight(spec.cathode), |j| {
-            weight(spec.cathode).min(j * perimeter / (TL_RATE * r))
-        });
+        let mut floors = vec![floor(spec.cathode)];
         let mut emitters = vec![Emitter {
             electrode: spec.cathode,
             charge_per_mass: spec.charge_per_mass,
-            weight: cathode_weight,
+            weight: 1.0,
             emit_toward: toward(spec.emit_toward_deg),
             saturation: spec.saturation,
         }];
         if let Some(ions) = spec.ions {
+            floors.push(floor(ions.electrode));
             emitters.push(Emitter {
                 electrode: ions.electrode,
                 charge_per_mass: ions.charge_per_mass,
-                weight: weight(ions.electrode),
+                weight: 1.0,
                 emit_toward: toward(ions.emit_toward_deg),
                 saturation: None,
             });
@@ -835,7 +865,7 @@ impl Level {
                     .find(|e| e.kind == ElementKind::Supply && e.node == n)
             })
             .map_or(spec.b_z, |e| e.value);
-        let tube = Tube {
+        let mut tube = Tube {
             electrodes: prisms,
             emitters,
             projectiles,
@@ -845,6 +875,51 @@ impl Level {
             b_z,
             circuits: self.tube_circuits(player),
         };
+        // Each emitter's weight: 1/PREVIEW_PARTICLES of the largest charge its emitting face
+        // holds (no particles) over 16 phases of the sources' longest period (t = 0 alone
+        // without periodic sources), at least the floor; a temperature-limited cathode's at
+        // most what gives TL_RATE macroparticles per unit time.
+        let period = tube
+            .circuits
+            .iter()
+            .filter_map(|c| match c.source {
+                physics::circuit::Waveform::Sine { omega, .. } if omega > 0.0 => {
+                    Some(std::f64::consts::TAU / omega)
+                }
+                physics::circuit::Waveform::Pulse { period, .. } if period > 0.0 => Some(period),
+                _ => None,
+            })
+            .fold(0.0, f64::max);
+        let phases: Vec<f64> = if period > 0.0 {
+            (0..16).map(|k| period * f64::from(k) / 16.0).collect()
+        } else {
+            vec![0.0]
+        };
+        let samples: Vec<Vec<f64>> = phases
+            .iter()
+            .map(|&t| {
+                let mut v = tube.electrodes.potentials.clone();
+                for c in &tube.circuits {
+                    if c.resistance.is_finite() {
+                        v[c.electrode] = c.source.value(t);
+                    }
+                }
+                v
+            })
+            .collect();
+        for (i, fl) in floors.iter().enumerate() {
+            let q = samples
+                .iter()
+                .map(|v| tube.emitting_charge(i, v))
+                .fold(0.0, f64::max);
+            let mut w = q.max(*fl).max(1e-300) / (PREVIEW_PARTICLES * r);
+            if i == 0
+                && let Some(j) = spec.saturation
+            {
+                w = w.min(j * perimeter / (TL_RATE * r));
+            }
+            tube.emitters[i].weight = w;
+        }
         let state = tube.state();
         let pending = TubeRun {
             segments: tube.electrodes.segments.clone(),

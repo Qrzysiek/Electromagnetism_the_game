@@ -168,14 +168,17 @@ def make_tube_solenoid(lv, pl, p, o, w):
 
 
 def make_tube_circuit(lv, pl, p, o, w):
-    """A tube level (`make_tube`) whose anode follows an AC source and whose cathode is a
-    circuit node (R and C to ground), with goals on the cathode's potential (its mean and
-    its oscillation's amplitude): the circuit machinery of PHYSICS.md 2.11."""
+    """A tube level (`make_tube`) whose anode follows an AC source, with a grid wire linked
+    to it, and whose cathode is a circuit node (R and C to ground), with goals on the
+    cathode's potential (its mean and its oscillation's amplitude): the circuit machinery of
+    PHYSICS.md 2.11."""
     make_tube(lv, pl, p, o, w)
     k = lv["tube"]["cathode"]
+    # A grid wire between them, linked to the anode's ideal source (a triode's wires).
+    lv["electrodes"].append(electrode((p[0] - 3, p[1] + 2), length=0.6, thickness=0.5))
     lv["tube"]["circuits"] = [
         {"electrode": k + 1, "source": {"kind": "sine", "amplitude": 1.0, "omega": 0.5},
-         "resistance": 0.0},
+         "resistance": 0.0, "linked": [k + 2]},
         {"electrode": k, "source": {"kind": "dc", "value": 0.0}, "resistance": 10.0,
          "capacitance": 1.0},
     ]

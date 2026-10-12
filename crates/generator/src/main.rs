@@ -147,12 +147,14 @@ fn tube_scan(level: &Level, placements: &PathBuf, refine: u32) {
             })
             .collect();
         println!(
-            "{i}: {} lost {:.4} potential {:?} arrivals {:?} fates {}",
+            "{i}: {} lost {:.4} potential {:?} arrivals {:?} fates {} in flight {} weights {:?}",
             currents.join(" "),
             (sim.lost() - lost0) / dt,
             sim.results().potential,
             sim.arrivals(),
-            fates.join("; ")
+            fates.join("; "),
+            sim.in_flight(),
+            sim.weights()
         );
     }
 }

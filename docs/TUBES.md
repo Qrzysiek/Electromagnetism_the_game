@@ -190,11 +190,15 @@ physics of diodes" (2017).
   it the far field: a uniform shift of the potentials changed a triode's losses 2.7-fold);
   the push's far field from a multipole series (V14) and the induced charge solved once
   per step, which pay for the envelope. The existing tube levels were re-tuned.
-- **The triode, attempted and deferred:** a grid of wires (one biased sine source) before
-  the cathode and the anode through a load amplify (gain 4.3 with a 6-long anode, period
-  40, R = 60, bias 0), but the anode's capacitance caps the gain at `g_m/(ωC)`, and the
-  preview errs by +29 % when the grid is 1.25 from the cathode (the release distance's
-  first-order error), too much for a goal on the gain; a wider gap (2.25) verifies
-  (12 %) but gains only ~2. Next: a finer mesh on the emitting face, then the
-  amplifier; a bipolar level; an in-plane circuit path for the magnetic and Poynting
+- **The triode** (level 104): a grid of five wires on one biased sine source before the
+  cathode, the anode through a load; the player biases the grid for a gain between 2 and
+  4.5. Two obstacles on the way, both now handled (PHYSICS.md §2.11): the anode's own
+  capacitance caps the gain at `g_m/(ωC)` (a short anode, a slow signal), and the preview
+  erred by +29 % at the narrow cathode–grid gap (the release distance's first-order
+  error: the emitters are now meshed at a quarter, V15). On the way the macroparticles'
+  weight was found to depend on the slider's range through its floor (a grid-screened
+  cathode got 27 macroparticles instead of 152): the weight now comes from the emitting
+  face's charge over the sources' period, with a far lower floor.
+- **Next:** the triode's remaining preview error (~15 %: the grid's and the step's
+  resolution); a bipolar level; an in-plane circuit path for the magnetic and Poynting
   maps.
