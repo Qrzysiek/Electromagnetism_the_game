@@ -1,0 +1,116 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Sideways",
+  "description": "Around this tube is a solenoid: switch on its supply (the yellow coil at the top right) to fill the tube with a magnetic field along its length, out of the board when positive. Electrons crossing it curve, and above a critical field (Hull's cutoff) they cannot reach the anode at all: they drift along the cathode instead, sideways, perpendicular to both the electric and the magnetic field. Send the electrons into the collector above the gap: at least 1.1 must land there (averaged over $t = 20$ to $40$).",
+  "grid": {
+    "nx": 24,
+    "ny": 22,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 60.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "solenoid_fields": [
+      -4.0,
+      -1.25,
+      0.6,
+      1.25,
+      4.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        23,
+        21,
+        0
+      ],
+      "kind": "supply",
+      "value": 1.25
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        6,
+        11,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        16,
+        11,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "potential",
+        "value": 30.0
+      }
+    },
+    {
+      "center": [
+        9,
+        19,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "potential",
+        "value": 10.0
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goal": {
+      "electrode": 2,
+      "min": 1.1,
+      "max": 10.0,
+      "start": 20.0,
+      "end": 40.0
+    },
+    "emit_toward_deg": 0.0,
+    "solenoid": [
+      23,
+      21,
+      0
+    ]
+  }
+}

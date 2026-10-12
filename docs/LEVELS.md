@@ -121,8 +121,9 @@ verified reference solution for every shot and negligible radiation
 | 97 | Jackson Pr. 14.23: a ring of four | 11 Intermediate | the band 0.6–2.6 holds ω₀, 2ω₀, 3ω₀ (below 1.3e-5 per steradian): a pair leaves 2ω₀, three at 120° leave 3ω₀; four evenly spaced radiate only at 4ω₀, outside the band | ≤ 5 free charges | 3 |
 | 98 | Jackson §14.7: undulator | 11 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 | 99 | Vacuum diode | 12 Introduction | a z-invariant tube (PHYSICS.md §2.11): the cathode emits under the space-charge limit; set the anode's supply so that 1.0–1.4 reaches it (verified 1.20 ± 0.07 at 24; solves for 21–25.7 of the slider ±70): the current grows as V^{3/2} | 1 supply (anode) | 1 |
-| 100 | Through the cloud | 12 Intermediate | an ion (q/m = 0.02) fired up through a working diode must reach the top detector while the anode current stays in 0.85–1.15: at the 27–31 V that needs, the field and the electron cloud throw the ion onto the cathode; a positive plate below the gap kicks it back on course (verified at 28 V with a vertical plate at (8, 2) at +60: current 1.010 ± 0.036, the ion arrives at t = 26.2 in both runs) | ≤ 2 plates (±80), the anode's supply (±70) | 2 |
-| 101 | Electron gun | 12 Intermediate | a temperature-limited cathode (at most 0.8) and a slit: the beam through it spreads under its own charge and misses the small collector (0.021 without plates); two plates beside the beam after the slit at about a third of the drift potential focus ≥ 0.08 onto it (+9 at (21, 13/7): 0.1539 ± 0.0014); at 0 the lens is too strong, at +15 too weak | ≤ 2 plates (±80) | 2 |
+| 100 | Sideways | 12 Introduction | the player's solenoid: above Hull's cutoff the electrons cannot reach the anode and drift along the cathode (E × B) into the collector beyond the gap's end (≥ 1.1: B in 1.07–1.40 of the slider ±4, positive: out of the board); the wrong sign sends them down, too strong a field curls them back onto the cathode (verified 1.39 ± 0.03 at 1.25) | 1 supply (the solenoid) | 1 |
+| 101 | Through the cloud | 12 Intermediate | an ion (q/m = 0.02) fired up through a working diode must reach the top detector (x 8–14) while the anode current stays in 0.85–1.15: at the 27–31 V that needs, the field and the electron cloud throw the ion onto the cathode; a positive plate below the gap kicks it back on course (verified at 28 V with a vertical plate at (8, 2) at +60: current 1.010 ± 0.036, the ion arrives at t = 26.2 in both runs) | ≤ 2 plates (±80), the anode's supply (±70) | 2 |
+| 102 | Electron gun | 12 Intermediate | a temperature-limited cathode (at most 0.8) and a slit: the beam through it spreads under its own charge and misses the small collector (0.021 without plates); two plates beside the beam after the slit at about a third of the drift potential focus ≥ 0.08 onto it (+9 at (21, 13/7): 0.1539 ± 0.0014); at 0 the lens is too strong, at +15 too weak | ≤ 2 plates (±80) | 2 |
 
 ## Automatic detectors
 
@@ -252,6 +253,9 @@ on 2026-10-05 and levels 46–49 (the circuits) on 2026-10-06 with the same sett
 | 92_jackson_ring_of_four | 21.1 | < 3.0e-3 | 0/16 | NaN | inf / 333 | 0.87 |
 | 93_jackson_undulator | 24.6 | < 3.0e-3 | 5/16 | 123 | 1003 / 333 | 0.52 |
 | 99_vacuum_diode | 0.8 | 1.9e-1 | 16/16 | 6 | 6 / 5 | 0.24 |
+| 100_sideways | 0.8 | 2.1e-1 | 8/8 | 6 | 6 / 5 | 0.07 |
+| 101_through_the_cloud | 7.5 | 3.3e-3 | 0/8 | NaN | inf / 300 | 0.73 |
+| 102_electron_gun | 7.1 | 1.3e-2 | 8/8 | 80 | 80 / 75 | 0.55 |
 
 Reading the table by tier (levels 1–56): the introductions are solved by the search in
 15–16 of 16 runs within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
@@ -446,6 +450,14 @@ Notes:
   - Isotope separator: collimation (stage 1) takes one charge; the magnetic separation 4
     elements. A first version with the collectors on opposite sides of the axis had no
     solution: a magnetic field bends both isotopes the same way, the lighter more.
+- The tube levels 100–102 (2026-10-12) with 300 samples and 8 search runs (a tube
+  evaluation takes 0.3–1 s). Through the cloud: the search fails (0/8) and few random
+  placements solve (1 in 300), but 59 of 258 single plates below and left of the gap
+  (+40 to +80, either orientation, the anode at 28) do: the objective (the ion's closest
+  approach to its detector) is flat wherever the ion lands on the cathode, which gives the
+  search no direction, while a player sees the ion's track bend into the cathode and pushes
+  it back. Sideways and Vacuum diode are one-slider introductions (the search's five
+  candidate values; the continuous slider's solving window is 4.2 % and 3.3 % of its range).
 - Vacuum diode (2026-10-07, same settings): the search tries the slider's candidate
   voltages only (±70, 12, 24, 48), so the table counts five configurations; on the
   continuous slider the solving interval is 21–25.7, 3.3 % of the range

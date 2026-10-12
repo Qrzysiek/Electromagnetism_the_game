@@ -984,6 +984,11 @@ pub struct Limits {
     /// coil's supply sets its source's voltage, from `supply_voltages`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub coil_rates: Vec<f64>,
+    /// Fields B along z the power supply of a tube level's solenoid may be set to
+    /// (signed: positive out of the plane): a slider over the range of the list
+    /// (`tube::TubeSpec::solenoid`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub solenoid_fields: Vec<f64>,
     /// Maximum number of free charges the player may place (dynamic particles).
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub max_free: u32,
@@ -1175,6 +1180,8 @@ impl Limits {
 pub enum SupplyTarget {
     Electrode(usize),
     Coil(usize),
+    /// A tube level's solenoid (B along z).
+    Solenoid,
 }
 
 /// A box of grid nodes, inclusive.
@@ -1623,7 +1630,12 @@ impl Level {
             .iter()
             .enumerate()
             .filter_map(|(i, c)| c.supply_node().map(|n| (n, SupplyTarget::Coil(i))));
-        electrodes.chain(coils).collect()
+        let solenoid = self
+            .tube
+            .as_ref()
+            .and_then(|t| t.solenoid)
+            .map(|n| (n, SupplyTarget::Solenoid));
+        electrodes.chain(coils).chain(solenoid).collect()
     }
 
     /// The slider list of a supply's target: a voltage (an electrode's potential, or the
@@ -1633,6 +1645,7 @@ impl Level {
         match target {
             SupplyTarget::Coil(i) if !self.coils[i].is_driven() => &self.limits.coil_rates,
             SupplyTarget::Electrode(_) | SupplyTarget::Coil(_) => &self.limits.supply_voltages,
+            SupplyTarget::Solenoid => &self.limits.solenoid_fields,
         }
     }
 
@@ -3221,6 +3234,7 @@ mod tests {
                 },
                 supply_voltages: vec![-1e4, 1e4],
                 coil_rates: vec![],
+                solenoid_fields: vec![],
                 max_free: 2,
                 free_charges: vec![-1e-6, 2e-6],
                 free_speeds: vec![0.0, 0.7],

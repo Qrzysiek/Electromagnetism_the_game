@@ -175,6 +175,7 @@ physics of diodes" (2017).
   other) and Electron gun (focusing a space-charge-spreading beam onto a small
   collector). Magnetic and Poynting maps wait for the circuit coupling (B_z depends on
   the in-plane return path of the tube's current).
-- **Next:** a magnetron level (the player's solenoid: a B slider; Hull's cutoff), a
-  bipolar level, the triode, the rectifier (AC anode), then the circuit coupling (the
-  anode current through a load) with the magnetic and Poynting maps.
+- **The player's solenoid** (a supply sets B along z) and Sideways (level 100): E × B
+  drift above Hull's cutoff into a collector beyond the gap's end.
+- **Next:** a bipolar level, the triode, the rectifier (AC anode), then the circuit
+  coupling (the anode current through a load) with the magnetic and Poynting maps.

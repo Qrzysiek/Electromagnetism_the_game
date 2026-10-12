@@ -589,6 +589,53 @@ pub fn draw(
         }
     }
 
+    // A tube level's solenoid: its terminal (a yellow coil symbol: click it to switch its
+    // supply), and, while it is on, the field's direction around the board: dots (out of
+    // the board) in orange, crosses (into it) in teal, as the magnetic map colours them.
+    if let Some(n) = level.tube.as_ref().and_then(|t| t.solenoid) {
+        let p = to_vec2(grid.position(n));
+        let yellow = Color::srgb(1.0, 0.85, 0.3);
+        for k in 0..3 {
+            #[allow(clippy::cast_precision_loss)]
+            let c = p + Vec2::new(-0.3 + 0.3 * k as f32, 0.0);
+            gizmos.circle_2d(c, 0.18, yellow);
+        }
+        let b = game
+            .editor
+            .placement
+            .iter()
+            .find(|e| e.kind == level::ElementKind::Supply && e.node == n)
+            .map(|e| e.value);
+        if let Some(b) = b.filter(|b| *b != 0.0) {
+            let bounds = level.bounds();
+            let (lo, hi) = (to_vec2(bounds.min), to_vec2(bounds.max));
+            let color = if b > 0.0 {
+                Color::srgba(0.95, 0.6, 0.15, 0.8)
+            } else {
+                Color::srgba(0.2, 0.75, 0.7, 0.8)
+            };
+            let marks = 8;
+            for k in 0..=marks {
+                #[allow(clippy::cast_precision_loss)]
+                let f = k as f32 / marks as f32;
+                // Just inside the board's frame (outside it the view's edge cut them).
+                for q in [
+                    Vec2::new(lo.x + 0.5 + (hi.x - lo.x - 1.0) * f, hi.y - 0.5),
+                    Vec2::new(lo.x + 0.5 + (hi.x - lo.x - 1.0) * f, lo.y + 0.5),
+                ] {
+                    gizmos.circle_2d(q, 0.25, color);
+                    if b > 0.0 {
+                        gizmos.circle_2d(q, 0.05, color);
+                    } else {
+                        let d = 0.17;
+                        gizmos.line_2d(q + Vec2::new(-d, -d), q + Vec2::new(d, d), color);
+                        gizmos.line_2d(q + Vec2::new(-d, d), q + Vec2::new(d, -d), color);
+                    }
+                }
+            }
+        }
+    }
+
     // Charge clouds: penetrable, so no solid fill: faint rings in the sign's colour
     // (red positive, blue negative), and a dashed rim.
     for c in &level.clouds {

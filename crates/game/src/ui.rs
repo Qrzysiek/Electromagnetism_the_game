@@ -1890,6 +1890,13 @@ fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 };
                 (format!("Coil {} {what}:", i + 1), own)
             }
+            level::SupplyTarget::Solenoid => {
+                let own = level.tube.as_ref().map_or(0.0, |t| t.b_z);
+                (
+                    "Solenoid B:".to_string(),
+                    format!("off, B = {} (out of the board positive)", fmt_si(own)),
+                )
+            }
         };
         let list = level.supply_list(target).to_vec();
         let current = game.editor.supply(centre);

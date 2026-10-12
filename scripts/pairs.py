@@ -8,7 +8,8 @@ Every element the level format or the player can place (fixed charges, magnets, 
 metal spheres of each bias, clouds, electrodes fixed, tunable and driven, dielectric boxes and spheres, ferrites,
 coils steady, ramped, driven, tunable (with a player's supply) and polygonal (also
 driven), free particles at rest and thrown, gates, the launch, the
-detector, a beam, a tube level's cathode and anode, player charges, magnets, antennas, plates and free charges, stray fields
+detector, a beam, a tube level's cathode and anode (also with the player's solenoid on),
+player charges, magnets, antennas, plates and free charges, stray fields
 and waves) is put next to every other at several separations, from far to overlapping,
 in a Newtonian world and in a relativistic one with radiation reaction. A pair the game
 refuses (a player element on an occupied node, metal overlapping metal, a particle
@@ -156,6 +157,15 @@ def set_detector(lv, pl, p, o, w):
     lv["shots"][0]["detector"] = {"min": [p[0], p[1] - 1, 0], "max": [p[0] + 1, p[1] + 1, 0]}
 
 
+def make_tube_solenoid(lv, pl, p, o, w):
+    """A tube level (`make_tube`) with the player's solenoid switched on (B = 1 along z:
+    the electrons' cycloids are a few cells high, near Hull's cutoff of this gap)."""
+    make_tube(lv, pl, p, o, w)
+    lv["tube"]["solenoid"] = [30, 20, 0]
+    lv["limits"]["solenoid_fields"] = [-2.0, 2.0]
+    pl.append({"node": [30, 20, 0], "kind": "supply", "value": 1.0})
+
+
 def make_tube(lv, pl, p, o, w):
     """Makes the case a tube level (PHYSICS.md 2.11): no shots; a grounded cathode six
     cells left of p emitting toward +x and an anode at p (1 V) collecting the goal's
@@ -228,6 +238,7 @@ ELEMENTS = {
     "beam": set_launch(True),
     "detector": set_detector,
     "tube": make_tube,
+    "tube_solenoid": make_tube_solenoid,
     "player_charge": player(lambda p, o, w: {"node": node(p), "kind": "charge", "value": -1.0}),
     "player_magnet": player(lambda p, o, w: {"node": node(p), "kind": "magnet", "value": 2.0}),
     "player_antenna": player(lambda p, o, w: {"node": node(p), "kind": "antenna", "value": 1.0,

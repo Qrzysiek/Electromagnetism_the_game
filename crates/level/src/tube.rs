@@ -49,6 +49,10 @@ pub struct TubeSpec {
     /// A uniform magnetic field along z (a solenoid around the tube).
     #[serde(default, skip_serializing_if = "crate::is_zero")]
     pub b_z: f64,
+    /// A solenoid the player powers: its terminal node, where a power supply (from
+    /// `limits.solenoid_fields`) sets B along z in place of `b_z`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solenoid: Option<Node>,
     /// The preview's time step (the verification's is half).
     #[serde(default = "default_step", skip_serializing_if = "is_default_step")]
     pub step: f64,
@@ -630,6 +634,15 @@ impl Level {
         }
         let n_proj = detectors.len();
         let max = self.grid.position(self.grid.max_node());
+        // The solenoid's field: the player's supply on its terminal, else the level's.
+        let b_z = spec
+            .solenoid
+            .and_then(|n| {
+                player
+                    .iter()
+                    .find(|e| e.kind == ElementKind::Supply && e.node == n)
+            })
+            .map_or(spec.b_z, |e| e.value);
         let tube = Tube {
             electrodes: prisms,
             emitters,
@@ -637,7 +650,7 @@ impl Level {
             softening: 0.5 * size,
             dt: spec.step / r,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
-            b_z: spec.b_z,
+            b_z,
         };
         let state = tube.state();
         let pending = TubeRun {
@@ -787,6 +800,9 @@ impl Level {
         }
         if spec.saturation.is_some_and(|j| !(j.is_finite() && j > 0.0)) {
             out.push("Tube: the cathode's saturation current must be positive.".into());
+        }
+        if spec.solenoid.is_some_and(|n| !self.grid.contains(n)) {
+            out.push("Tube: the solenoid's terminal must be on the board.".into());
         }
         if !(spec.b_z.is_finite() && spec.step.is_finite() && spec.step > 0.0) {
             out.push("Tube: B_z must be finite and the step positive.".into());

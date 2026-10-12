@@ -168,6 +168,7 @@ pub fn empty_level() -> Level {
             plate: level::PlateSize::default(),
             supply_voltages: vec![],
             coil_rates: vec![],
+            solenoid_fields: vec![],
             max_free: 0,
             free_charges: vec![],
             free_speeds: vec![],
@@ -202,6 +203,7 @@ fn sync_texts(game: &mut Game) {
     game.sandbox.texts.plate_voltages = list_to_text(&limits.plate_voltages);
     game.sandbox.texts.supply_voltages = list_to_text(&limits.supply_voltages);
     game.sandbox.texts.coil_rates = list_to_text(&limits.coil_rates);
+    game.sandbox.texts.solenoid_fields = list_to_text(&limits.solenoid_fields);
     game.sandbox.texts.free_charges = list_to_text(&limits.free_charges);
     game.sandbox.texts.free_speeds = list_to_text(&limits.free_speeds);
 }

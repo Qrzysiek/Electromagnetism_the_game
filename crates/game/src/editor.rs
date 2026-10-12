@@ -482,7 +482,14 @@ impl Editor {
                     && physics::bem::Electrodes::shapes_only(vec![*b]).contains(p, PICK_MARGIN)
             })
             .map(|(e, _)| e.center);
-        electrode.or_else(|| {
+        // A tube level's solenoid: its terminal node.
+        let solenoid = self
+            .level
+            .tube
+            .as_ref()
+            .and_then(|t| t.solenoid)
+            .filter(|n| (p - self.level.grid.position(*n)).length() <= PICK_MARGIN);
+        electrode.or(solenoid).or_else(|| {
             let cell = 1.0 / f64::from(self.level.grid.subdivision.max(1));
             self.level.coils.iter().find_map(|c| match c {
                 level::Coil::Circle { center, radius, .. } => {
@@ -514,7 +521,14 @@ impl Editor {
     /// at the electrode's own bias or the coil's own ramp rate (within the supply's range).
     fn add_supply(&mut self, centre: Node) -> Result<(), PlacementError> {
         let electrode = self.level.electrodes.iter().find(|e| e.center == centre);
+        let solenoid = self
+            .level
+            .tube
+            .as_ref()
+            .filter(|t| t.solenoid == Some(centre))
+            .map(|t| t.b_z);
         let own = match electrode {
+            _ if solenoid.is_some() => solenoid.unwrap_or(0.0),
             Some(el) => match el.bias {
                 ConductorBias::Potential(v) => v,
                 ConductorBias::Grounded | ConductorBias::Charge(_) => 0.0,

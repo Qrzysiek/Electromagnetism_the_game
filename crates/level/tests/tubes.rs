@@ -40,6 +40,7 @@ pub fn diode(v: f64) -> Level {
         ions: None,
         projectiles: Vec::new(),
         b_z: 0.0,
+        solenoid: None,
         step: level::tube::DEFAULT_STEP,
         goal: Some(CurrentGoal {
             electrode: 1,

@@ -46,6 +46,7 @@ pub struct EditTexts {
     pub plate_voltages: String,
     pub supply_voltages: String,
     pub coil_rates: String,
+    pub solenoid_fields: String,
     pub free_charges: String,
     pub free_speeds: String,
 }
@@ -1493,6 +1494,7 @@ fn edit_tube(
             ions: None,
             projectiles: Vec::new(),
             b_z: 0.0,
+            solenoid: None,
             step: DEFAULT_STEP,
             goal: Some(CurrentGoal {
                 electrode: 1,
@@ -1511,6 +1513,7 @@ fn edit_tube(
         ions,
         projectiles,
         b_z,
+        solenoid,
         step,
         goal,
     }) = tube
@@ -1618,6 +1621,22 @@ fn edit_tube(
         ui.label("step");
         focus |= positive(ui, step, 0.001, MAX_POSITIVE);
     });
+    let mut has_solenoid = solenoid.is_some();
+    ui.checkbox(&mut has_solenoid, "Player's solenoid (supply sets B)")
+        .on_hover_text(
+            "A solenoid around the tube the player powers: a supply on its terminal node \
+             sets B along z, over the range of the limits' solenoid fields",
+        );
+    if has_solenoid {
+        let m = grid.max_node();
+        let n = solenoid.get_or_insert([m[0], m[1], 0]);
+        ui.horizontal(|ui| {
+            ui.label("  terminal");
+            focus |= node(ui, n, grid);
+        });
+    } else {
+        *solenoid = None;
+    }
     // Current goal.
     let mut has_goal = goal.is_some();
     ui.checkbox(&mut has_goal, "Current goal");
@@ -1837,6 +1856,7 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         plate,
         supply_voltages,
         coil_rates,
+        solenoid_fields,
         max_free,
         free_charges,
         free_speeds,
@@ -1928,6 +1948,16 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
             texts.supply_voltages = list_to_text(supply_voltages);
         }
         r.on_hover_text("Potentials of the power supplies of tunable electrodes (signed)")
+            .has_focus()
+    });
+    focus |= row(ui, "Solenoid fields B", |ui| {
+        let r = ui
+            .add(egui::TextEdit::singleline(&mut texts.solenoid_fields).desired_width(LIST_WIDTH));
+        if r.lost_focus() {
+            *solenoid_fields = parse_signed_list(&texts.solenoid_fields);
+            texts.solenoid_fields = list_to_text(solenoid_fields);
+        }
+        r.on_hover_text("Fields B along z of a tube level's solenoid supply (signed)")
             .has_focus()
     });
     focus |= row(ui, "Coil ramp rates dκ/dt", |ui| {
@@ -2181,6 +2211,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             ions,
             projectiles,
             b_z,
+            solenoid,
             step,
             goal,
         } = t;
@@ -2232,7 +2263,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     && (MIN_POSITIVE..=MAX_POSITIVE).contains(mass)
                     && detector.is_none_or(|[a, b]| grid.contains(a) && grid.contains(b))
             });
-        let field_ok = any(*b_z)
+        let field_ok = solenoid.is_none_or(|n| grid.contains(n))
+            && any(*b_z)
             && (MIN_POSITIVE..=MAX_POSITIVE).contains(step)
             && saturation.is_none_or(|j| (MIN_POSITIVE..=MAX_POSITIVE).contains(&j));
         if *cathode >= n
@@ -2647,6 +2679,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         plate,
         supply_voltages,
         coil_rates,
+        solenoid_fields,
         max_free,
         free_charges,
         free_speeds,
@@ -2669,6 +2702,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             .iter()
             .chain(supply_voltages)
             .chain(coil_rates)
+            .chain(solenoid_fields)
             .all(|v| v.is_finite())
     {
         return fail("plate limits outside the editor's range");

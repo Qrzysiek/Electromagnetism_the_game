@@ -216,7 +216,8 @@ def slider_problems(lvl):
     limits = lvl["limits"]
     lists = {"supply voltages": limits.get("supply_voltages", []),
              "coil rates": limits.get("coil_rates", []),
-             "plate voltages": limits.get("plate_voltages", [])}
+             "plate voltages": limits.get("plate_voltages", []),
+             "solenoid fields": limits.get("solenoid_fields", [])}
     for what, vals in lists.items():
         if vals and min(vals) != -max(vals):
             out.append(f"{what} slider [{min(vals)}, {max(vals)}] not symmetric about 0")
@@ -228,6 +229,8 @@ def slider_problems(lvl):
     for e in lvl["reference_solution"]:
         if e["kind"] == "plate":
             vals = lists["plate voltages"]
+        elif e["kind"] == "supply" and e["node"] == lvl.get("tube", {}).get("solenoid"):
+            vals = lists["solenoid fields"]
         elif e["kind"] == "supply":
             vals = lists["coil rates" if e["node"] in coil_centres else "supply voltages"]
         else:
@@ -239,12 +242,14 @@ def slider_problems(lvl):
 
 
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
-         saturation=None, projectiles=()):
+         saturation=None, projectiles=(), b_z=0.0, solenoid=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
     current into `electrode`, averaged over t = start..end, between lo and hi; with
-    `projectiles` (see `projectile`) also each one with a detector arriving there. Tube
+    `projectiles` (see `projectile`) also each one with a detector arriving there. `b_z`:
+    a uniform field along z; `solenoid` = (x, y): the terminal of a solenoid the player
+    powers (a supply there sets B along z, over `level(solenoid_fields=...)`). Tube
     levels are Newtonian (pass c=None to `level`)."""
     t = {"cathode": cathode, "charge_per_mass": q_over_m,
          "goal": {"electrode": electrode, "min": lo, "max": hi, "start": start, "end": end}}
@@ -254,6 +259,10 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
         t["saturation"] = saturation
     if projectiles:
         t["projectiles"] = list(projectiles)
+    if b_z:
+        t["b_z"] = b_z
+    if solenoid is not None:
+        t["solenoid"] = [solenoid[0], solenoid[1], 0]
     return t
 
 
@@ -312,7 +321,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
           beam_interaction=False, gates=(), clouds=(), free_particles=(), max_free=0,
           free_charges=(), free_speeds=(), free_mass=1.0, free_radius=0.3, dielectrics=(),
-          coil_rates=(), ferrites=(), tube=None):
+          coil_rates=(), ferrites=(), tube=None, solenoid_fields=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -332,6 +341,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         limits["supply_voltages"] = list(supplies)
     if coil_rates:
         limits["coil_rates"] = list(coil_rates)
+    if solenoid_fields:
+        limits["solenoid_fields"] = list(solenoid_fields)
     if max_free:
         limits["max_free"] = max_free
         limits["free_charges"] = list(free_charges)
@@ -2964,6 +2975,33 @@ def vacuum_diode():
         reference=[supply(16, 8, 24.0)])
 
 
+def sideways():
+    # Designed with `generator tube-scan` (PHYSICS.md 2.11, V8): a diode (30 across a gap of
+    # 9: Hull's planar cutoff sqrt(2V)/d = 0.86) in the player's solenoid field, and a
+    # collector at 10 above the top end of the gap. Collector current: 0.48 without field,
+    # nothing with B negative (the drift goes down); rising as the electrons curve upwards,
+    # 0.96 at B = 0.95, 1.37 at 1.2, 1.56 at 1.35, while the anode's falls to 0 (the cutoff;
+    # its residue above 0.86, 0.24 at 1.3, comes in at the gap's ends, where the
+    # translation symmetry behind Hull's theorem is broken); above ~1.42 the electrons
+    # curl back onto the cathode (0.45 at 1.45). The goal >= 1.1 asks for B in ~1.1-1.42.
+    return level(
+        "Sideways",
+        "Around this tube is a solenoid: switch on its supply (the yellow coil at the top "
+        "right) to fill the tube with a magnetic field along its length, out of the board "
+        "when positive. Electrons crossing it curve, and above a critical field (Hull's "
+        "cutoff) they cannot reach the anode at all: they drift along the cathode instead, "
+        "sideways, perpendicular to both the electric and the magnetic field. Send the "
+        "electrons into the collector above the gap: at least 1.1 must land there "
+        "(averaged over $t = 20$ to $40$).",
+        grid=(24, 22), c=None, t_max=60.0,
+        electrodes=[plate(6, 11, 10, thickness=1.0, angle_deg=90.0),
+                    plate(16, 11, 10, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
+                    plate(9, 19, 6, thickness=1.0, kind="potential", value=10.0)],
+        solenoid_fields=slider(4.0, -1.25, 0.6, 1.25),
+        tube=tube(0, 2, 1.1, 10.0, 20.0, 40.0, emit_toward_deg=0.0, solenoid=(23, 21)),
+        reference=[supply(23, 21, 1.25)])
+
+
 def through_the_cloud():
     # Designed with `generator tube-scan` and verified with `check` (PHYSICS.md 2.11).
     # The diode (gap 9) needs about 27 to 31 for the current goal (0.92 at 28, 1.05 at
@@ -2991,7 +3029,7 @@ def through_the_cloud():
         plate_size=(3.0, 0.5, 4.0),
         tube=tube(0, 1, 0.85, 1.15, 15.0, 30.0, emit_toward_deg=0.0,
                   projectiles=[projectile(11, 0, 90.0, 0.8, 0.2, 10.0, launch=10.0,
-                                          detector=((10, 18), (13, 20)))]),
+                                          detector=((8, 18), (14, 20)))]),
         reference=[supply(16, 10, 28.0), player_plate(8, 2, 60.0, angle_deg=90.0)])
 
 
@@ -3028,6 +3066,7 @@ def electron_gun():
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
+        ("sideways", sideways),
     ]),
     ("Intermediate", [
         ("through_the_cloud", through_the_cloud),
