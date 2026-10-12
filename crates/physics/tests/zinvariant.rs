@@ -1274,3 +1274,135 @@ fn v15_finer_emitter_mesh() {
         "V15 fine {fine} ± {bar} vs {exact}"
     );
 }
+
+/// V16: the energy balance of a particle coupled to a circuit (the tubes' plan, docs/TUBES.md:
+/// the sources' work = the Joule heat + the particles' energy + the field's). A projectile
+/// (λ = −0.05, mass 1) orbits the inner conductor of a coaxial pair (radii 1 and 3; the inner
+/// held at 1 by an ideal source, the outer a circuit node through R to ground with C = 1).
+/// Its eccentric orbit changes the charge it induces on the outer conductor, which drives a
+/// current through R: the orbit is braked by Joule heating. The field energy of conductors
+/// and a line charge (its self-energy aside) is `W = ½ Σ Q_i V_i + ½ λ φ_c(x)`, with the
+/// conductors' charges and their potential at the particle from the model's own surface
+/// charge; so `E = ½ m v² + W + ½ C V² + ∫ V²/R dt − ∫ V_in dQ_in` is conserved, the last term
+/// the inner source's work. The circuit is integrated by backward Euler (first order), the
+/// particle by leapfrog (its velocity half a step from its position). Required: the
+/// residual (the drift of E over t = 0–40) below 2 % of the Joule heat at dt = 0.002, and
+/// first order: at least 1.6 times smaller than at dt = 0.004.
+#[test]
+fn v16_circuit_energy_balance() {
+    use physics::circuit::Waveform;
+    use physics::tube::{Circuit, Projectile, Tube};
+    use physics::zinv::segment_integrals;
+    let (lambda, mass, r_load) = (-0.05_f64, 1.0_f64, 2.0_f64);
+    let mut residuals = Vec::new();
+    for dt in [0.004, 0.002] {
+        let electrodes = Electrodes::new(
+            vec![
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: 1.0,
+                    },
+                    bias: Bias::Potential(1.0),
+                },
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: 3.0,
+                    },
+                    bias: Bias::Grounded,
+                },
+            ],
+            &[],
+            0.1,
+        );
+        let tube = Tube {
+            electrodes,
+            emitters: Vec::new(),
+            // Slower than circular at r = 1.8 (0.213): an eccentric orbit between ~1.5 and
+            // 1.8, clear of the conductors.
+            projectiles: vec![Projectile {
+                x0: DVec3::new(1.8, 0.0, 0.0),
+                v0: DVec3::new(0.0, 0.195, 0.0),
+                launch: 0.0,
+                charge: lambda,
+                mass,
+            }],
+            softening: 0.05,
+            dt,
+            arena: None,
+            b_z: 0.0,
+            circuits: vec![Circuit {
+                electrode: 1,
+                source: Waveform::Dc(0.0),
+                resistance: r_load,
+                capacitance: 1.0,
+            }],
+        };
+        let mut s = tube.state();
+        // The energy now: kinetic, field, capacitor.
+        let energy = |s: &physics::tube::TubeState| -> (f64, f64) {
+            let sigma = tube.surface_density(s);
+            let q = tube.electrodes.charges_of(&sigma);
+            let field: f64 = q
+                .iter()
+                .zip(&s.potentials)
+                .map(|(q, v)| 0.5 * q * v)
+                .sum::<f64>()
+                + s.x
+                    .iter()
+                    .zip(&s.charge)
+                    .map(|(x, l)| {
+                        let phi: f64 = tube
+                            .electrodes
+                            .segments
+                            .iter()
+                            .zip(&sigma)
+                            .map(|((a, b), d)| d * segment_integrals(*a, *b, *x).0)
+                            .sum();
+                        0.5 * l * phi
+                    })
+                    .sum::<f64>();
+            let kinetic: f64 =
+                s.v.iter()
+                    .zip(s.charge.iter().zip(&s.qm))
+                    .map(|(v, (l, qm))| 0.5 * (l / qm) * v.length_squared())
+                    .sum();
+            (
+                kinetic + field + 0.5 * 1.0 * s.potentials[1] * s.potentials[1],
+                q[0],
+            )
+        };
+        tube.step(&mut s);
+        let (e0, mut q_in) = energy(&s);
+        let (mut joule, mut work) = (0.0, 0.0);
+        let mut r_range = (f64::INFINITY, 0.0_f64);
+        while s.t < 40.0 {
+            tube.step(&mut s);
+            let i = s.circuit_current[0];
+            joule += i * i * r_load * dt;
+            let (_, q) = energy(&s);
+            work += 1.0 * (q - q_in);
+            q_in = q;
+            let Some(x) = s.x.first() else { break };
+            r_range = (r_range.0.min(x.length()), r_range.1.max(x.length()));
+        }
+        let (e1, _) = energy(&s);
+        let residual = (e1 + joule - work) - e0;
+        println!(
+            "V16 dt {dt}: E {e0:.8} -> {e1:.8}, Joule {joule:.6e}, source work {work:.6e}, residual {residual:.3e} ({:.2e} of the Joule heat); r in {:.3}..{:.3}",
+            residual / joule,
+            r_range.0,
+            r_range.1
+        );
+        assert!(s.fates[0].is_none(), "V16: the projectile hit an electrode");
+        residuals.push((residual, joule));
+    }
+    let ((r0, _), (r1, j1)) = (residuals[0], residuals[1]);
+    println!("V16: residual ratio {:.2}", r0.abs() / r1.abs());
+    assert!(r1.abs() < 0.02 * j1, "V16 residual {r1} vs Joule {j1}");
+    assert!(
+        r0.abs() >= 1.6 * r1.abs(),
+        "V16 not first order: {r0} then {r1}"
+    );
+}
