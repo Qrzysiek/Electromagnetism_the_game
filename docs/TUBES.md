@@ -240,3 +240,32 @@ physics of diodes" (2017).
    (`PREVIEW_LIMIT`, 1 s, in `crates/level/src/cost.rs`); the display streams, so only
    the preview's numbers wait. Not profiled since the envelope and the finer softening.
    **(owner)** Make them faster, or give tubes a budget of their own?
+
+## Decisions (owner, 2026-10-12)
+
+1. **Maps:** straight leads from each electrode to the nearest point of the envelope,
+   drawn on the map, the convention stated in the model notes. B_z from the total current
+   (conduction plus displacement), zero outside the envelope; S = E × B_z ẑ/μ₀. Not (c):
+   the particles' own Biot–Savart field is not divergence-free beside electrodes (their
+   surface currents are of the beam current's size), so it is wrong there at first order.
+   Leads drawn by the designer (b) can come later as an optional override.
+2. **Per-carrier current goals:** yes (`carriers`: all, electrons or ions), and a bipolar
+   level where the player places ion-emitting strips on the anode: an electron current
+   above the unipolar Child–Langmuir value with the ion current onto a protected cathode
+   segment limited.
+3. **Inductors and both devices.** Inductors as a circuit element, with an
+   energy-conserving scheme for the L and C states (backward Euler would damp an LC tank
+   by ~ω²dt/2 per unit time, a numerical loss that would set the resonator's Q); tests: an
+   LC node against its exact solution over many periods, V16 with ½LI². Then a klystron
+   (an intermediate level; references: ballistic bunching, the optimum X = 1.841, and the
+   reduced plasma frequency's debunching) and a magnetron as the stage's finale (crossed
+   fields, space charge, LC tanks, the solenoid; Buneman–Hartree). The owner saw no point
+   in choosing one. The smooth-anode magnetron's instability is seeded by the
+   macroparticles' noise (V8): if the oscillation's onset does not converge between
+   preview and verification, the tanks are primed (a small injected signal, as real
+   magnetrons are).
+4. **Preview cost:** profile and speed up first; decide on a tube budget with the
+   measured numbers (if one is needed: time to the first streamed frame within the
+   current limit, and a stated separate limit for the preview's numbers).
+
+Order: 4, 2, inductors and the klystron, the magnetron, 1.
