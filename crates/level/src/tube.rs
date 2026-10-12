@@ -34,6 +34,11 @@ pub struct TubeSpec {
     /// this direction (degrees, in the plane) emit. None: every face.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emit_toward_deg: Option<f64>,
+    /// The cathode's temperature-limited emission: at most this current per unit length
+    /// of its surface (`physics::tube::Emitter::saturation`). None: space-charge limited
+    /// only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saturation: Option<f64>,
     /// An electrode that emits positive ions under the space-charge limit (the bipolar
     /// diode).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -111,6 +116,19 @@ pub const PREVIEW_SEGMENT: f64 = 0.5;
 /// steady state the space charge in flight is of the order of that charge (the planar
 /// diode's is 4/3 of it), so this sets the number of particles in flight.
 pub const PREVIEW_PARTICLES: f64 = 150.0;
+/// The macroparticle weight's floor, as a fraction of the emitter's charge with every
+/// other electrode at the level's largest voltage (`Level::tube_reference_voltage`): an
+/// emitter with (almost) no charge of its own (all electrodes at its potential) still
+/// emits what passing charges induce on it, and a weight of its own charge would be
+/// (almost) zero. 1/20: the diode of Vacuum diode at 24 V on its ±70 slider is above it
+/// (its weight unchanged).
+pub const WEIGHT_FLOOR: f64 = 1.0 / 20.0;
+/// A temperature-limited emitter's macroparticles per unit time at its saturation
+/// (preview): its weight is at most `saturation × perimeter / TL_RATE`. The weight rule
+/// of the space-charge limit (its charge before emission) left the Electron gun's beam
+/// at 36 macroparticles in flight, sparse to the eye and grainy for the verdict; with
+/// this rule ~150.
+pub const TL_RATE: f64 = 50.0;
 /// The fine run's error as a multiple of the two runs' difference. At first order the
 /// error equals the difference; measured: V4 (order 0.95) 1.08×, the game-scale planar
 /// diode at V = 40 0.15× (`tests/tubes.rs`, `planar_diode_convergence`, against
@@ -255,6 +273,26 @@ impl TubeSim {
         self.current
     }
 
+    /// The charge per unit length each electrode has collected so far, per emitter
+    /// (signed: electrons negative), and what left the board.
+    pub fn collected(&self) -> &[Vec<f64>] {
+        &self.state.collected
+    }
+
+    pub fn lost(&self) -> f64 {
+        self.state.lost
+    }
+
+    /// Emission paused at `physics::tube::MAX_PARTICLES` at least once.
+    pub fn capped(&self) -> bool {
+        self.state.capped
+    }
+
+    /// Where each projectile ended (None: still flying, or not launched yet).
+    pub fn fates(&self) -> &[Option<physics::tube::Fate>] {
+        &self.state.fates
+    }
+
     /// When each projectile reached its detector (None: not, or no detector).
     pub fn arrivals(&self) -> &[Option<f64>] {
         &self.arrivals
@@ -390,6 +428,28 @@ impl CurrentVerdict {
     }
 }
 
+/// What a verdict needs from one run.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TubeResults {
+    /// The goal's current.
+    pub current: Option<f64>,
+    /// When each projectile reached its detector.
+    pub arrivals: Vec<Option<f64>>,
+    /// Emission paused at the particle cap.
+    pub capped: bool,
+}
+
+impl TubeSim {
+    /// The run's results so far.
+    pub fn results(&self) -> TubeResults {
+        TubeResults {
+            current: self.current,
+            arrivals: self.arrivals.clone(),
+            capped: self.state.capped,
+        }
+    }
+}
+
 /// The verdict on a placement: each goal's and the whole's.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TubeVerdict {
@@ -397,19 +457,21 @@ pub struct TubeVerdict {
     /// Per projectile with a detector: (projectile, preview arrival, verification
     /// arrival, status).
     pub arrivals: Vec<(usize, Option<f64>, Option<f64>, TubeStatus)>,
+    /// A run hit the particle cap (`physics::tube::MAX_PARTICLES`): uncertain.
+    pub capped: bool,
     pub status: TubeStatus,
 }
 
 impl TubeVerdict {
-    /// From the two runs' results `(current, arrivals)`.
-    pub fn new(
-        spec: &TubeSpec,
-        preview: &(Option<f64>, Vec<Option<f64>>),
-        fine: &(Option<f64>, Vec<Option<f64>>),
-    ) -> Self {
-        let current = spec
-            .goal
-            .map(|g| CurrentVerdict::new(preview.0.unwrap_or(0.0), fine.0.unwrap_or(0.0), &g));
+    /// From the two runs' results.
+    pub fn new(spec: &TubeSpec, preview: &TubeResults, fine: &TubeResults) -> Self {
+        let current = spec.goal.map(|g| {
+            CurrentVerdict::new(
+                preview.current.unwrap_or(0.0),
+                fine.current.unwrap_or(0.0),
+                &g,
+            )
+        });
         let arrivals: Vec<_> = spec
             .projectiles
             .iter()
@@ -417,8 +479,8 @@ impl TubeVerdict {
             .filter(|(_, p)| p.detector.is_some())
             .map(|(j, _)| {
                 let (a, b) = (
-                    preview.1.get(j).copied().flatten(),
-                    fine.1.get(j).copied().flatten(),
+                    preview.arrivals.get(j).copied().flatten(),
+                    fine.arrivals.get(j).copied().flatten(),
                 );
                 let status = match (a.is_some(), b.is_some()) {
                     (true, true) => TubeStatus::Met,
@@ -432,7 +494,12 @@ impl TubeVerdict {
             .iter()
             .map(|c| c.status)
             .chain(arrivals.iter().map(|a| a.3));
-        let mut status = TubeStatus::Met;
+        let capped = preview.capped || fine.capped;
+        let mut status = if capped {
+            TubeStatus::Uncertain
+        } else {
+            TubeStatus::Met
+        };
         for s in all {
             status = match (status, s) {
                 (TubeStatus::Missed, _) | (_, TubeStatus::Missed) => TubeStatus::Missed,
@@ -443,6 +510,7 @@ impl TubeVerdict {
         Self {
             current,
             arrivals,
+            capped,
             status,
         }
     }
@@ -486,12 +554,36 @@ impl Level {
                 DVec3::new(c, s, 0.0)
             })
         };
-        let weight = |e: usize| prisms.charge(e).abs().max(1e-300) / (PREVIEW_PARTICLES * r);
+        let v_ref = self.tube_reference_voltage();
+        let weight = |e: usize| {
+            let others: f64 = prisms.capacitance[e]
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != e)
+                .map(|(_, c)| c.abs())
+                .sum();
+            let floor = WEIGHT_FLOOR * v_ref * others;
+            prisms.charge(e).abs().max(floor).max(1e-300) / (PREVIEW_PARTICLES * r)
+        };
+        // A temperature-limited cathode emits at most its saturation over its surface:
+        // the weight also gives `TL_RATE` macroparticles per unit time at that rate (the
+        // whole perimeter: an upper bound of the emitting faces, so at least that many).
+        let perimeter: f64 = prisms
+            .segments
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| prisms.owner_of(*k) == spec.cathode)
+            .map(|(_, (a, b))| (*b - *a).length())
+            .sum();
+        let cathode_weight = spec.saturation.map_or(weight(spec.cathode), |j| {
+            weight(spec.cathode).min(j * perimeter / (TL_RATE * r))
+        });
         let mut emitters = vec![Emitter {
             electrode: spec.cathode,
             charge_per_mass: spec.charge_per_mass,
-            weight: weight(spec.cathode),
+            weight: cathode_weight,
             emit_toward: toward(spec.emit_toward_deg),
+            saturation: spec.saturation,
         }];
         if let Some(ions) = spec.ions {
             emitters.push(Emitter {
@@ -499,9 +591,11 @@ impl Level {
                 charge_per_mass: ions.charge_per_mass,
                 weight: weight(ions.electrode),
                 emit_toward: toward(ions.emit_toward_deg),
+                saturation: None,
             });
         }
-        let projectiles = spec
+        // The level's projectiles, then the player's free charges (thrown at t = 0).
+        let mut projectiles: Vec<Projectile> = spec
             .projectiles
             .iter()
             .map(|p| {
@@ -515,7 +609,7 @@ impl Level {
                 }
             })
             .collect();
-        let detectors: Vec<_> = spec
+        let mut detectors: Vec<_> = spec
             .projectiles
             .iter()
             .map(|p| {
@@ -523,6 +617,17 @@ impl Level {
                     .map(|[a, b]| (self.grid.position(a), self.grid.position(b)))
             })
             .collect();
+        for e in player.iter().filter(|e| e.kind == ElementKind::Free) {
+            let (s, c) = libm::sincos(e.angle_deg.to_radians());
+            projectiles.push(Projectile {
+                x0: self.grid.position(e.node),
+                v0: DVec3::new(c, s, 0.0) * e.speed.unwrap_or(0.0),
+                launch: 0.0,
+                charge: e.value,
+                mass: self.limits.free_mass,
+            });
+            detectors.push(None);
+        }
         let n_proj = detectors.len();
         let max = self.grid.position(self.grid.max_node());
         let tube = Tube {
@@ -552,6 +657,22 @@ impl Level {
             arrivals: vec![None; n_proj],
             closest: vec![f64::INFINITY; n_proj],
         }
+    }
+
+    /// The level's largest voltage: of its electrodes' biases and of the sliders' ranges
+    /// (supplies, plates); at least 1. Sets the macroparticles' weight floor.
+    pub fn tube_reference_voltage(&self) -> f64 {
+        let biases = self.electrodes.iter().map(|e| match e.bias {
+            crate::ConductorBias::Potential(v) => v.abs(),
+            crate::ConductorBias::Grounded | crate::ConductorBias::Charge(_) => 0.0,
+        });
+        let lists = self
+            .limits
+            .supply_voltages
+            .iter()
+            .chain(&self.limits.plate_voltages)
+            .map(|v| v.abs());
+        biases.chain(lists).fold(1.0, f64::max)
     }
 
     /// The end of a tube level's verification runs: the current goal's window end, and
@@ -587,10 +708,10 @@ impl Level {
     ///
     /// # Panics
     /// If the level is not a tube level.
-    pub fn tube_results(&self, player: &[Element], refine: u32) -> (Option<f64>, Vec<Option<f64>>) {
+    pub fn tube_results(&self, player: &[Element], refine: u32) -> TubeResults {
         let mut sim = self.tube_sim(player, refine);
         sim.advance_to(self.tube_verify_end());
-        (sim.current(), sim.arrivals().to_vec())
+        sim.results()
     }
 
     /// The verdict of a placement: the preview and the verification run.
@@ -664,6 +785,9 @@ impl Level {
                     .into(),
             );
         }
+        if spec.saturation.is_some_and(|j| !(j.is_finite() && j > 0.0)) {
+            out.push("Tube: the cathode's saturation current must be positive.".into());
+        }
         if !(spec.b_z.is_finite() && spec.step.is_finite() && spec.step > 0.0) {
             out.push("Tube: B_z must be finite and the step positive.".into());
         }
@@ -708,10 +832,13 @@ impl Level {
                 "driven electrodes",
             ),
             (
-                player
-                    .iter()
-                    .any(|e| !matches!(e.kind, ElementKind::Plate | ElementKind::Supply)),
-                "placed elements other than plates and supplies",
+                player.iter().any(|e| {
+                    !matches!(
+                        e.kind,
+                        ElementKind::Plate | ElementKind::Supply | ElementKind::Free
+                    )
+                }),
+                "placed elements other than plates, supplies and free charges",
             ),
         ];
         // Newtonian: every carrier (falling through the largest potential difference)
@@ -730,13 +857,30 @@ impl Level {
                 .fold((0.0_f64, 0.0_f64), |(a, b), v| (a.min(v), b.max(v)));
             let dv = hi - lo;
             let ions = spec.ions.map_or(0.0, |i| i.charge_per_mass);
+            let free_mass = self.limits.free_mass.max(1e-300);
             let ratios = spec
                 .projectiles
                 .iter()
                 .map(|p| (p.charge / p.mass).abs())
+                .chain(
+                    player
+                        .iter()
+                        .filter(|e| e.kind == ElementKind::Free)
+                        .map(|e| (e.value / free_mass).abs()),
+                )
                 .chain([spec.charge_per_mass.abs(), ions]);
             let fall = ratios.fold(0.0_f64, f64::max);
-            let launch = spec.projectiles.iter().map(|p| p.speed).fold(0.0, f64::max);
+            let launch = spec
+                .projectiles
+                .iter()
+                .map(|p| p.speed)
+                .chain(
+                    player
+                        .iter()
+                        .filter(|e| e.kind == ElementKind::Free)
+                        .map(|e| e.speed.unwrap_or(0.0)),
+                )
+                .fold(0.0, f64::max);
             let v = libm::sqrt(2.0 * fall * dv + launch * launch);
             if v > 0.1 * c {
                 out.push(format!(
@@ -761,11 +905,20 @@ impl Level {
                 }
             }
         }
-        // A projectile starting inside metal.
+        // A projectile or a free charge starting inside metal.
         let shapes = physics::bem::Electrodes::shapes_only(boxes);
         for (j, p) in spec.projectiles.iter().enumerate() {
             if shapes.contains(self.grid.position(p.node), crate::CONTACT_DISTANCE) {
                 out.push(format!("Tube: projectile {} starts in metal.", j + 1));
+            }
+        }
+        for (j, e) in player
+            .iter()
+            .filter(|e| e.kind == ElementKind::Free)
+            .enumerate()
+        {
+            if shapes.contains(self.grid.position(e.node), crate::CONTACT_DISTANCE) {
+                out.push(format!("Tube: your free charge {} starts in metal.", j + 1));
             }
         }
         for (bad, what) in breaks {

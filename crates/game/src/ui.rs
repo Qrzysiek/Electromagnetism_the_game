@@ -1289,6 +1289,24 @@ fn controls(ui: &mut egui::Ui) {
 
 /// Tube levels: the goal electrode's current, preview and verified, against the goal,
 /// and its collected charge over time (the window's ends marked).
+/// A tube level's numbers (currents, their errors, times): plain decimals with about
+/// three significant digits (SI prefixes, as `fmt_si` writes them, read oddly here:
+/// "850m" for 0.85).
+fn fmt_num(v: f64) -> String {
+    let a = v.abs();
+    if a != 0.0 && !(1e-3..1e4).contains(&a) {
+        format!("{v:.2e}")
+    } else if a >= 100.0 {
+        format!("{v:.0}")
+    } else if a >= 10.0 {
+        format!("{v:.1}")
+    } else if a >= 1.0 {
+        format!("{v:.2}")
+    } else {
+        format!("{v:.3}")
+    }
+}
+
 fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     use level::tube::TubeStatus;
     let Some(spec) = &level.tube else {
@@ -1341,15 +1359,15 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         ui.label(format!(
             "Goal: the current into electrode {} between {} and {}, averaged over t = {} to {}",
             g.electrode + 1,
-            fmt_si(g.min),
-            fmt_si(g.max),
-            fmt_si(g.start),
-            fmt_si(g.end)
+            fmt_num(g.min),
+            fmt_num(g.max),
+            fmt_num(g.start),
+            fmt_num(g.end)
         ));
         if let Some(v) = view {
             let run = &v.run;
             ui.label(match run.current {
-                Some(c) => format!("Preview: {}", fmt_si(c)),
+                Some(c) => format!("Preview: {}", fmt_num(c)),
                 None => "Preview: computing…".into(),
             });
             ui.label(egui::RichText::new("Charge collected by the goal electrode:").small());
@@ -1375,7 +1393,11 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 let (col, mark) = colour(c.status);
                 ui.colored_label(
                     col,
-                    format!("Verified: {} ± {} {mark}", fmt_si(c.fine), fmt_si(c.error)),
+                    format!(
+                        "Verified: {} ± {} {mark}",
+                        fmt_num(c.fine),
+                        fmt_num(c.error)
+                    ),
                 );
             }
             None => {
@@ -1413,6 +1435,15 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             },
         };
         ui.label(text);
+    }
+    if verdict.is_some_and(|v| v.capped) {
+        ui.colored_label(
+            egui::Color32::from_rgb(255, 170, 80),
+            format!(
+                "Too many particles: a run reached {} and emission paused, so the verdict                  is uncertain.",
+                physics::tube::MAX_PARTICLES
+            ),
+        );
     }
     if let Some(v) = view {
         let shown = game

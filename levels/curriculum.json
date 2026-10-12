@@ -326,6 +326,13 @@
           "levels": [
             "vacuum_diode"
           ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "through_the_cloud",
+            "electron_gun"
+          ]
         }
       ]
     }

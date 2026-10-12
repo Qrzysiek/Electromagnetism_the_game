@@ -622,16 +622,12 @@ fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
     if !send_cost(&cost) {
         return false;
     }
-    let coarse = (sim.current(), sim.arrivals().to_vec());
+    let coarse = sim.results();
     let start = Instant::now();
     let Some((fine, segments, steps)) = unless_stale(newest, rev, || {
         let mut fine = req.level.tube_sim(&req.placement, 2);
         fine.advance_to(verify_end);
-        (
-            (fine.current(), fine.arrivals().to_vec()),
-            fine.segment_count(),
-            fine.steps(),
-        )
+        (fine.results(), fine.segment_count(), fine.steps())
     }) else {
         return true;
     };

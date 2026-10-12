@@ -59,6 +59,11 @@ enum Command {
         #[arg(long, default_value_t = 240)]
         steps: u32,
     },
+    /// Tube levels: for each placement in a JSON file (a list of placements, each a
+    /// list of elements), the preview's currents into every electrode over the goal's
+    /// window (per emitter, positive for arriving carriers), what left the board, and the
+    /// projectiles' arrivals. For designing tube levels.
+    TubeScan { path: PathBuf, placements: PathBuf },
     /// Print the reference flight of one flight index: t, x, y, |p|, radiated energy.
     Trace {
         path: PathBuf,
@@ -81,6 +86,67 @@ fn most_elements(level: &Level) -> usize {
     let l = &level.limits;
     let supplies = level.electrodes.iter().filter(|e| e.tunable).count();
     (l.max_charges + l.max_magnets + l.max_antennas + l.max_plates) as usize + supplies
+}
+
+/// `generator tube-scan`: currents into every electrode for several placements.
+fn tube_scan(level: &Level, placements: &PathBuf) {
+    let text = std::fs::read_to_string(placements).expect("placements file");
+    let list: Vec<Vec<level::Element>> = serde_json::from_str(&text).expect("placements");
+    let Some(spec) = &level.tube else {
+        eprintln!("not a tube level");
+        return;
+    };
+    let (start, end) = spec
+        .goal
+        .map_or((0.0, level.tube_verify_end()), |g| (g.start, g.end));
+    for (i, placement) in list.iter().enumerate() {
+        let issues = level.setup_issues(placement);
+        if !issues.is_empty() {
+            println!("{i}: refused: {}", issues.join(" "));
+            continue;
+        }
+        let mut sim = level.tube_sim(placement, 1);
+        sim.advance_to(start);
+        let (t0, q0, lost0) = (sim.t(), sim.collected().to_vec(), sim.lost());
+        sim.advance_to(end.max(level.tube_verify_end()));
+        let dt = (sim.t() - t0).max(1e-300);
+        let signs = [spec.charge_per_mass.signum(), 1.0];
+        let currents: Vec<String> = sim
+            .collected()
+            .iter()
+            .zip(&q0)
+            .enumerate()
+            .map(|(e, (q, q0))| {
+                let per: Vec<String> = q
+                    .iter()
+                    .zip(q0)
+                    .zip(signs)
+                    .map(|((a, b), s)| format!("{:.4}", s * (a - b) / dt))
+                    .collect();
+                format!("e{}={}", e + 1, per.join("/"))
+            })
+            .collect();
+        let fates: Vec<String> = sim
+            .fates()
+            .iter()
+            .map(|f| match f {
+                Some(physics::tube::Fate::Absorbed { electrode, t, x }) => {
+                    format!("e{} t{t:.1} ({:.2},{:.2})", electrode + 1, x.x, x.y)
+                }
+                Some(physics::tube::Fate::Lost { t, x }) => {
+                    format!("out t{t:.1} ({:.2},{:.2})", x.x, x.y)
+                }
+                None => "flying".into(),
+            })
+            .collect();
+        println!(
+            "{i}: {} lost {:.4} arrivals {:?} fates {}",
+            currents.join(" "),
+            (sim.lost() - lost0) / dt,
+            sim.arrivals(),
+            fates.join("; ")
+        );
+    }
 }
 
 /// `generator window`: the solving intervals of each slider-set potential.
@@ -258,6 +324,7 @@ fn main() {
             }
         }
         Command::Window { path, steps } => window(&load(&path), steps),
+        Command::TubeScan { path, placements } => tube_scan(&load(&path), &placements),
         Command::Trace {
             path,
             flight,

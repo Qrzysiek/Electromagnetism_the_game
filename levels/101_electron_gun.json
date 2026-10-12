@@ -1,0 +1,143 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Electron gun",
+  "description": "An electron gun: the hot cathode (left) gives at most 0.1 per unit length of its face (its temperature limits it: a stronger field pulls no more), the anode's slit lets a thin beam through, and the small collector on the right should catch it. But the beam's electrons repel one another: it spreads and misses. Place two plates beside the beam to focus it, so that at least 0.08 reaches the collector (averaged over $t = 20$ to $40$). A plate at a lower potential than the beam's surroundings pushes the electrons back toward the axis; too low, and it throws them back.",
+  "grid": {
+    "nx": 32,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 60.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "max_plates": 2,
+    "plate_voltages": [
+      -80.0,
+      -10.0,
+      10.0,
+      20.0,
+      30.0,
+      80.0
+    ],
+    "plate": {
+      "length": 3.0,
+      "thickness": 0.5,
+      "height": 4.0
+    }
+  },
+  "reference_solution": [
+    {
+      "node": [
+        21,
+        13,
+        0
+      ],
+      "kind": "plate",
+      "value": 9.0
+    },
+    {
+      "node": [
+        21,
+        7,
+        0
+      ],
+      "kind": "plate",
+      "value": 9.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        4,
+        10,
+        0
+      ],
+      "length": 8,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        12,
+        14,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "potential",
+        "value": 30.0
+      }
+    },
+    {
+      "center": [
+        12,
+        6,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "potential",
+        "value": 30.0
+      }
+    },
+    {
+      "center": [
+        28,
+        10,
+        0
+      ],
+      "length": 2,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "potential",
+        "value": 30.0
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goal": {
+      "electrode": 3,
+      "min": 0.08,
+      "max": 5.0,
+      "start": 20.0,
+      "end": 40.0
+    },
+    "emit_toward_deg": 0.0,
+    "saturation": 0.1
+  }
+}

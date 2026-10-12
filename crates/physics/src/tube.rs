@@ -20,6 +20,9 @@
 //! - **Absorption**: a particle that crosses an electrode's boundary (any change of
 //!   which side of it the particle is on) is collected by that electrode, which records
 //!   the charge; the current is the collected charge per time.
+//! - **Temperature-limited emission** (optional per emitter): at most a saturation
+//!   current density, whatever the field (Richardson's limit of a hot cathode); the
+//!   emission is the lesser of the two limits.
 //! - **Species**: several emitters (an electron cathode, an ion-emitting anode: the
 //!   bipolar diode), and projectiles, single line charges launched at given times that
 //!   interact with everything and are absorbed where they hit.
@@ -56,6 +59,11 @@ pub struct Emitter {
     /// The emitting face (a coating): only segments whose outward normal is within 60°
     /// of this unit direction emit. None: every face.
     pub emit_toward: Option<DVec3>,
+    /// Temperature-limited emission: at most this current per unit area (charge per
+    /// unit length of the surface, per unit z-length, per time; the Richardson current
+    /// of the cathode's temperature). Below it the space charge limits the emission,
+    /// above it the temperature (the Langmuir knee). None: space-charge limited only.
+    pub saturation: Option<f64>,
 }
 
 /// A projectile: one line charge (not a macroparticle) launched at a time, with its own
@@ -78,6 +86,12 @@ pub enum Fate {
     /// Left the arena.
     Lost { t: f64, x: DVec3 },
 }
+
+/// Most macroparticles in flight: beyond it emission pauses and the state records it
+/// (`TubeState::capped`; the level's verdict is then uncertain). The game's runs hold a
+/// few hundred; a degenerate weight once asked for ~1e300 (a cathode with no charge of
+/// its own emitting the charge a passing ion induced, at a weight of its own charge).
+pub const MAX_PARTICLES: usize = 20_000;
 
 /// Tag of projectile `j` (`TubeState::tag`); emitted carriers carry their emitter's
 /// index.
@@ -127,6 +141,8 @@ pub struct TubeState {
     /// Which projectiles have been launched, and where each ended.
     launched: Vec<bool>,
     pub fates: Vec<Option<Fate>>,
+    /// Emission paused at `MAX_PARTICLES` at least once.
+    pub capped: bool,
 }
 
 impl TubeState {
@@ -247,9 +263,18 @@ impl Tube {
                 let (a, b) = self.electrodes.segments[j];
                 let charge = sigma[j] * (b - a).length();
                 if charge * sign > 0.0 {
-                    s.pending[i][k] += charge.abs();
+                    // The space-charge limit (the surface's charge), or the temperature
+                    // limit over this step, whichever is less.
+                    let cap = em
+                        .saturation
+                        .map_or(f64::INFINITY, |j_sat| j_sat * (b - a).length() * self.dt);
+                    s.pending[i][k] += charge.abs().min(cap);
                 }
                 while s.pending[i][k] >= em.weight {
+                    if s.x.len() >= MAX_PARTICLES {
+                        s.capped = true;
+                        break;
+                    }
                     s.pending[i][k] -= em.weight;
                     // Low-discrepancy point along the segment (golden ratio).
                     s.emitted += 1;

@@ -165,5 +165,16 @@ physics of diodes" (2017).
   preview and verified runs, verdict, cost; game: worker, panel, particles, potential map
   with space charge; sandbox: the Tube section; generator: check, solve, window) and the
   first level, Vacuum diode (V^{3/2}). PHYSICS.md §2.11.
-- **Next:** the rectifier (AC anode: a driven electrode in a tube), the triode (a grid of
-  small electrodes), then the circuit coupling (the anode current through a load).
+- **The owner's review of Vacuum diode (2026-10-07):** too short to watch, no speed
+  control, "more like a demo than a level". Done: runs streamed to t_max (200 for the
+  diode) with a speed slider; live potential and electric maps; ion emitters (the bipolar
+  diode, V6), projectiles that interact with the electrons and land on the electrodes
+  (V7), the player's free charges thrown into tubes, a uniform B along z (crossed fields,
+  V8), temperature-limited cathodes (V9); and two puzzles where placing plates matters:
+  Through the cloud (an ion across a working diode, two goals that pull against each
+  other) and Electron gun (focusing a space-charge-spreading beam onto a small
+  collector). Magnetic and Poynting maps wait for the circuit coupling (B_z depends on
+  the in-plane return path of the tube's current).
+- **Next:** a magnetron level (the player's solenoid: a B slider; Hull's cutoff), a
+  bipolar level, the triode, the rectifier (AC anode), then the circuit coupling (the
+  anode current through a load) with the magnetic and Poynting maps.

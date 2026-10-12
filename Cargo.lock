@@ -3090,6 +3090,7 @@ dependencies = [
  "clap",
  "level",
  "physics",
+ "serde_json",
 ]
 
 [[package]]

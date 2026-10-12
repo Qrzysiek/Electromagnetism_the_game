@@ -1093,13 +1093,20 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
         };
         gizmos.circle_2d(Vec2::new(x[0], x[1]), 0.06, color.with_alpha(fade));
     }
-    // Projectiles: their detectors, their tracks so far and where they are now.
+    // Projectiles (the level's, then the player's free charges): their detectors, their
+    // tracks so far and where they are now.
     let level = &game.editor.level;
     if let Some(spec) = &level.tube {
         let t = frame.t;
-        for (j, p) in spec.projectiles.iter().enumerate() {
-            let color = free_goal_color(j);
-            if let Some([a, b]) = p.detector {
+        for j in 0..view.run.tracks.len().max(spec.projectiles.len()) {
+            let p = spec.projectiles.get(j);
+            // The player's free charges pale yellow, as in the other levels.
+            let color = if p.is_some() {
+                free_goal_color(j)
+            } else {
+                Color::srgb(1.0, 0.95, 0.6)
+            };
+            if let Some([a, b]) = p.and_then(|p| p.detector) {
                 let (a, b) = (
                     to_vec2(level.grid.position(a)),
                     to_vec2(level.grid.position(b)),

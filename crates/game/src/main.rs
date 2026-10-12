@@ -540,7 +540,7 @@ fn load_levels() -> (Vec<Level>, Vec<PathBuf>) {
                     .collect()
             })
             .unwrap_or_default();
-        v.sort();
+        v.sort_by_key(|p| level::level_order_key(p));
         v
     };
     let mut levels = Vec::new();
@@ -664,9 +664,12 @@ fn dev_capture(
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(120);
     let wait = std::env::var("EM_WAIT").is_ok_and(|v| v == "1");
-    // Tube levels: also the whole streamed display run.
-    let streamed =
-        !game.editor.level.is_tube() || game.tube_preview.as_ref().is_some_and(|v| v.done);
+    // Tube levels: also the whole streamed display run (a refused setup has none: it is
+    // settled at once; waiting for its stream timed out every refused case of the
+    // pairwise check).
+    let streamed = !game.editor.level.is_tube()
+        || game.invalid_setup().is_some()
+        || game.tube_preview.as_ref().is_some_and(|v| v.done);
     let settled = game.progress() == Progress::Done && streamed;
     if shot_at.is_none() && *frame >= shot && (!wait || settled) {
         *shot_at = Some(*frame);

@@ -36,6 +36,7 @@ pub fn diode(v: f64) -> Level {
         cathode: 0,
         charge_per_mass: -1.0,
         emit_toward_deg: None,
+        saturation: None,
         ions: None,
         projectiles: Vec::new(),
         b_z: 0.0,
@@ -103,7 +104,7 @@ fn planar_diode_convergence() {
         .iter()
         .map(|&r| {
             let start = std::time::Instant::now();
-            let c = level.tube_results(&[], r).0.unwrap();
+            let c = level.tube_results(&[], r).current.unwrap();
             println!(
                 "refine {r}: {c:.5} ({:.1} s)",
                 start.elapsed().as_secs_f64()

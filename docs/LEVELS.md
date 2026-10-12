@@ -121,6 +121,8 @@ verified reference solution for every shot and negligible radiation
 | 97 | Jackson Pr. 14.23: a ring of four | 11 Intermediate | the band 0.6–2.6 holds ω₀, 2ω₀, 3ω₀ (below 1.3e-5 per steradian): a pair leaves 2ω₀, three at 120° leave 3ω₀; four evenly spaced radiate only at 4ω₀, outside the band | ≤ 5 free charges | 3 |
 | 98 | Jackson §14.7: undulator | 11 Master | build an alternating row whose on-axis line 2γ²ω_u lands in the band 34–38 (spacing 3), strong enough (the line grows as N²), without steering the beam | ≤ 12 magnets | 10 |
 | 99 | Vacuum diode | 12 Introduction | a z-invariant tube (PHYSICS.md §2.11): the cathode emits under the space-charge limit; set the anode's supply so that 1.0–1.4 reaches it (verified 1.20 ± 0.07 at 24; solves for 21–25.7 of the slider ±70): the current grows as V^{3/2} | 1 supply (anode) | 1 |
+| 100 | Through the cloud | 12 Intermediate | an ion (q/m = 0.02) fired up through a working diode must reach the top detector while the anode current stays in 0.85–1.15: at the 27–31 V that needs, the field and the electron cloud throw the ion onto the cathode; a positive plate below the gap kicks it back on course (verified at 28 V with a vertical plate at (8, 2) at +60: current 1.010 ± 0.036, the ion arrives at t = 26.2 in both runs) | ≤ 2 plates (±80), the anode's supply (±70) | 2 |
+| 101 | Electron gun | 12 Intermediate | a temperature-limited cathode (at most 0.8) and a slit: the beam through it spreads under its own charge and misses the small collector (0.021 without plates); two plates beside the beam after the slit at about a third of the drift potential focus ≥ 0.08 onto it (+9 at (21, 13/7): 0.1539 ± 0.0014); at 0 the lens is too strong, at +15 too weak | ≤ 2 plates (±80) | 2 |
 
 ## Automatic detectors
 

@@ -1489,6 +1489,7 @@ fn edit_tube(
             cathode: 0,
             charge_per_mass: -1.0,
             emit_toward_deg: None,
+            saturation: None,
             ions: None,
             projectiles: Vec::new(),
             b_z: 0.0,
@@ -1506,6 +1507,7 @@ fn edit_tube(
         cathode,
         charge_per_mass,
         emit_toward_deg,
+        saturation,
         ions,
         projectiles,
         b_z,
@@ -1580,6 +1582,20 @@ fn edit_tube(
     focus |= index(ui, "Cathode: electrode", cathode);
     focus |= ratio(ui, "Carriers' q/m", charge_per_mass, false);
     focus |= face(ui, emit_toward_deg, "cathode");
+    ui.horizontal(|ui| {
+        let mut limited = saturation.is_some();
+        ui.checkbox(&mut limited, "Temperature-limited, at most")
+            .on_hover_text(
+                "The cathode's emission per unit length of its surface cannot exceed this \
+                 (Richardson's limit at its temperature), whatever the field",
+            );
+        if limited {
+            let j = saturation.get_or_insert(0.1);
+            focus |= positive(ui, j, 0.001, MAX_POSITIVE);
+        } else {
+            *saturation = None;
+        }
+    });
     // Ion source.
     let mut has_ions = ions.is_some();
     ui.checkbox(&mut has_ions, "Ion source (bipolar)")
@@ -2161,6 +2177,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             cathode,
             charge_per_mass,
             emit_toward_deg,
+            saturation,
             ions,
             projectiles,
             b_z,
@@ -2215,7 +2232,9 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     && (MIN_POSITIVE..=MAX_POSITIVE).contains(mass)
                     && detector.is_none_or(|[a, b]| grid.contains(a) && grid.contains(b))
             });
-        let field_ok = any(*b_z) && (MIN_POSITIVE..=MAX_POSITIVE).contains(step);
+        let field_ok = any(*b_z)
+            && (MIN_POSITIVE..=MAX_POSITIVE).contains(step)
+            && saturation.is_none_or(|j| (MIN_POSITIVE..=MAX_POSITIVE).contains(&j));
         if *cathode >= n
             || !ratio_ok
             || !goal_ok

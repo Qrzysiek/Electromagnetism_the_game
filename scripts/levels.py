@@ -238,16 +238,36 @@ def slider_problems(lvl):
     return out
 
 
-def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0):
+def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
+         saturation=None, projectiles=()):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
-    (from its faces toward `emit_toward_deg` only, if given); the goal is the current into
-    `electrode`, averaged over t = start..end, between lo and hi. Tube levels are
-    Newtonian (pass c=None to `level`)."""
+    (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
+    length of its surface, if given: a temperature-limited cathode); the goal is the
+    current into `electrode`, averaged over t = start..end, between lo and hi; with
+    `projectiles` (see `projectile`) also each one with a detector arriving there. Tube
+    levels are Newtonian (pass c=None to `level`)."""
     t = {"cathode": cathode, "charge_per_mass": q_over_m,
          "goal": {"electrode": electrode, "min": lo, "max": hi, "start": start, "end": end}}
     if emit_toward_deg is not None:
         t["emit_toward_deg"] = emit_toward_deg
+    if saturation is not None:
+        t["saturation"] = saturation
+    if projectiles:
+        t["projectiles"] = list(projectiles)
     return t
+
+
+def projectile(x, y, direction_deg, speed, charge, mass, launch=0.0, detector=None):
+    """A line charge fired through a tube level at time `launch`; it must arrive in the
+    box `detector` = ((x0, y0), (x1, y1)) if given."""
+    p = {"node": [x, y, 0], "direction_deg": direction_deg, "speed": speed,
+         "charge": charge, "mass": mass}
+    if launch:
+        p["launch"] = launch
+    if detector is not None:
+        (x0, y0), (x1, y1) = detector
+        p["detector"] = [[x0, y0, 0], [x1, y1, 0]]
+    return p
 
 
 def player_plate(x, y, v, angle_deg=0.0):
@@ -2944,9 +2964,74 @@ def vacuum_diode():
         reference=[supply(16, 8, 24.0)])
 
 
+def through_the_cloud():
+    # Designed with `generator tube-scan` and verified with `check` (PHYSICS.md 2.11).
+    # The diode (gap 9) needs about 27 to 31 for the current goal (0.92 at 28, 1.05 at
+    # 31). At those voltages the ion (q/m = 0.02, launched at t = 10 when the flow is
+    # established) is pushed into the cathode at y ~ 12. A positive plate below the gap,
+    # left of the ion's path, kicks it rightwards: vertical at (8, 2) at +60 with the anode
+    # at 28 verifies (current 1.010 +- 0.036, the ion arrives at t = 26.2 in both runs);
+    # also horizontal at (9, 3) at +40, and +55 at 29. Without a plate the ion misses
+    # (the current alone is met). Negative plates beyond the gap do not save it.
+    return level(
+        "Through the cloud",
+        "An ion (a long line of positive charge, the large dot) is fired up through the gap "
+        "of a working diode, after its electrons have started to flow. Keep the diode "
+        "running, with a current between 0.85 and 1.15 into the anode (averaged over "
+        "$t = 15$ to $30$), and bring the ion into the detector at the top. The anode's "
+        "field pushes positive charges toward the cathode, and the electrons' cloud pulls "
+        "on the ion as it passes: at the voltage the current needs, the ion ends on the "
+        "cathode. Your two plates can push it back on course, but they act on the "
+        "electrons as well, and the ion's own charge disturbs the flow it crosses.",
+        grid=(24, 20), c=None, t_max=60.0,
+        electrodes=[plate(6, 10, 10, thickness=1.0, angle_deg=90.0),
+                    plate(16, 10, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
+        supplies=slider(70.0, 20.0, 28.0, 40.0),
+        max_plates=2, plate_voltages=slider(80.0, -40.0, 20.0, 40.0, 60.0),
+        plate_size=(3.0, 0.5, 4.0),
+        tube=tube(0, 1, 0.85, 1.15, 15.0, 30.0, emit_toward_deg=0.0,
+                  projectiles=[projectile(11, 0, 90.0, 0.8, 0.2, 10.0, launch=10.0,
+                                          detector=((10, 18), (13, 20)))]),
+        reference=[supply(16, 10, 28.0), player_plate(8, 2, 60.0, angle_deg=90.0)])
+
+
+def electron_gun():
+    # Designed with `generator tube-scan`, verified with `check` (PHYSICS.md 2.11). The
+    # cathode is temperature limited (0.1 per unit length of its 8-long face: at most 0.8),
+    # so pulling harder gains nothing. Of what passes the slit (~0.2) the spreading beam
+    # misses the 2-long collector without plates (0.021 +- 0.018). Two horizontal plates
+    # beside the beam after the slit, at about a third of the drift region's 30, focus it.
+    # Verified: (21, 13/7) at +9 0.1539 +- 0.0014 (the reference); (17, 12/8) at +10
+    # 0.1521 +- 0.0014; (19, 13/7) at +5 0.152 +- 0.009, at +10 0.131 +- 0.030; (23,
+    # 13/7) at +10 0.138 +- 0.028. At 0 the lens is too strong and at +15 too weak (both
+    # uncertain, 0.07 +- 0.05).
+    return level(
+        "Electron gun",
+        "An electron gun: the hot cathode (left) gives at most 0.1 per unit length of its "
+        "face (its temperature limits it: a stronger field pulls no more), the anode's slit "
+        "lets a thin beam through, and the small collector on the right should catch it. "
+        "But the beam's electrons repel one another: it spreads and misses. Place two plates "
+        "beside the beam to focus it, so that at least 0.08 reaches the collector (averaged "
+        "over $t = 20$ to $40$). A plate at a lower potential than the beam's surroundings "
+        "pushes the electrons back toward the axis; too low, and it throws them back.",
+        grid=(32, 20), c=None, t_max=60.0,
+        electrodes=[plate(4, 10, 8, thickness=1.0, angle_deg=90.0),
+                    plate(12, 14, 6, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
+                    plate(12, 6, 6, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
+                    plate(28, 10, 2, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0)],
+        max_plates=2, plate_voltages=slider(80.0, -10.0, 10.0, 20.0, 30.0),
+        plate_size=(3.0, 0.5, 4.0),
+        tube=tube(0, 3, 0.08, 5.0, 20.0, 40.0, emit_toward_deg=0.0, saturation=0.1),
+        reference=[player_plate(21, 13, 9.0), player_plate(21, 7, 9.0)])
+
+
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
+    ]),
+    ("Intermediate", [
+        ("through_the_cloud", through_the_cloud),
+        ("electron_gun", electron_gun),
     ]),
 ]))
 

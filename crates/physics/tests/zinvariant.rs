@@ -209,6 +209,7 @@ fn v4_coaxial_diode_langmuir_blodgett() {
                 charge_per_mass: -1.0,
                 weight,
                 emit_toward: None,
+                saturation: None,
             }],
             projectiles: Vec::new(),
             softening: 0.5 * size,
@@ -363,12 +364,14 @@ fn v6_bipolar_coaxial_diode() {
                     charge_per_mass: -1.0,
                     weight,
                     emit_toward: None,
+                    saturation: None,
                 },
                 Emitter {
                     electrode: 1,
                     charge_per_mass: 1.0,
                     weight,
                     emit_toward: None,
+                    saturation: None,
                 },
             ],
             projectiles: Vec::new(),
@@ -630,5 +633,81 @@ fn v8_crossed_fields_hull() {
                 );
             }
         }
+    }
+}
+
+/// V9: temperature-limited emission. The coaxial diode of V4 with the cathode's emission
+/// capped at j = 0.02 per unit length of its surface (Richardson's limit of a cooler
+/// cathode): j times the perimeter (0.126) is far below the space-charge limit (0.56,
+/// V4), so the field keeps pulling every electron off and the anode collects exactly
+/// `j × perimeter` (the polygon's), whatever the voltage (here 1 and 4). Required: within
+/// 2 % over t = 4–12 (the only error is the macroparticles' quantization at the window's
+/// ends: at most one macroparticle of 2e-4 per segment, 1.3 %).
+#[test]
+fn v9_temperature_limited_emission() {
+    use physics::tube::{Emitter, Tube};
+    let j_sat = 0.02;
+    for v in [1.0, 4.0] {
+        let electrodes = Electrodes::new(
+            vec![
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: 1.0,
+                    },
+                    bias: Bias::Grounded,
+                },
+                Electrode {
+                    section: Section::Circle {
+                        center: DVec3::ZERO,
+                        radius: 2.0,
+                    },
+                    bias: Bias::Potential(v),
+                },
+            ],
+            &[],
+            0.1,
+        );
+        let perimeter: f64 = electrodes
+            .segments
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| electrodes.owner_of(*k) == 0)
+            .map(|(_, (a, b))| (*b - *a).length())
+            .sum();
+        let tube = Tube {
+            electrodes,
+            emitters: vec![Emitter {
+                electrode: 0,
+                charge_per_mass: -1.0,
+                weight: 2e-4,
+                emit_toward: None,
+                saturation: Some(j_sat),
+            }],
+            projectiles: Vec::new(),
+            softening: 0.05,
+            dt: 0.01,
+            arena: None,
+            b_z: 0.0,
+        };
+        let mut s = tube.state();
+        let mut at4 = None;
+        while s.t < 12.0 {
+            tube.step(&mut s);
+            if at4.is_none() && s.t >= 4.0 {
+                at4 = Some((s.t, s.collected[1][0]));
+            }
+        }
+        let (t4, q4) = at4.expect("reached t = 4");
+        let current = -(s.collected[1][0] - q4) / (s.t - t4);
+        let exact = j_sat * perimeter;
+        println!(
+            "V9 at V = {v}: current {current:.6}, j × perimeter {exact:.6} ({:.2e})",
+            current / exact - 1.0
+        );
+        assert!(
+            (current / exact - 1.0).abs() < 0.02,
+            "V9 at {v}: {current} vs {exact}"
+        );
     }
 }

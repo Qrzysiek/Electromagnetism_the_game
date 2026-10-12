@@ -1071,6 +1071,21 @@ fn is_zero_u32(v: &u32) -> bool {
 /// Smallest and largest value of a list (the range of hardcore mode).
 /// Whether `path` in a levels directory is a level: a `.json` file other than the
 /// directory's metadata (`golden_hashes.json`, `curriculum.json`).
+/// The order of level files: by their number prefix (`NN_slug.json`, numerically: 100
+/// after 99, which a plain name order put before 11), then by name; files without a
+/// number last.
+pub fn level_order_key(path: &std::path::Path) -> (u64, String) {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let number = name
+        .split_once('_')
+        .and_then(|(n, _)| n.parse::<u64>().ok())
+        .unwrap_or(u64::MAX);
+    (number, name)
+}
+
 pub fn is_level_file(path: &std::path::Path) -> bool {
     path.extension().is_some_and(|e| e == "json")
         && !path.ends_with("golden_hashes.json")

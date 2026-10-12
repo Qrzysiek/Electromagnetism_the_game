@@ -1,0 +1,146 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Through the cloud",
+  "description": "An ion (a long line of positive charge, the large dot) is fired up through the gap of a working diode, after its electrons have started to flow. Keep the diode running, with a current between 0.85 and 1.15 into the anode (averaged over $t = 15$ to $30$), and bring the ion into the detector at the top. The anode's field pushes positive charges toward the cathode, and the electrons' cloud pulls on the ion as it passes: at the voltage the current needs, the ion ends on the cathode. Your two plates can push it back on course, but they act on the electrons as well, and the ion's own charge disturbs the flow it crosses.",
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 60.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "max_plates": 2,
+    "plate_voltages": [
+      -80.0,
+      -40.0,
+      20.0,
+      40.0,
+      60.0,
+      80.0
+    ],
+    "plate": {
+      "length": 3.0,
+      "thickness": 0.5,
+      "height": 4.0
+    },
+    "supply_voltages": [
+      -70.0,
+      20.0,
+      28.0,
+      40.0,
+      70.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        16,
+        10,
+        0
+      ],
+      "kind": "supply",
+      "value": 28.0
+    },
+    {
+      "node": [
+        8,
+        2,
+        0
+      ],
+      "kind": "plate",
+      "value": 60.0,
+      "angle_deg": 90.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        6,
+        10,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        16,
+        10,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goal": {
+      "electrode": 1,
+      "min": 0.85,
+      "max": 1.15,
+      "start": 15.0,
+      "end": 30.0
+    },
+    "emit_toward_deg": 0.0,
+    "projectiles": [
+      {
+        "node": [
+          11,
+          0,
+          0
+        ],
+        "direction_deg": 90.0,
+        "speed": 0.8,
+        "charge": 0.2,
+        "mass": 10.0,
+        "launch": 10.0,
+        "detector": [
+          [
+            10,
+            18,
+            0
+          ],
+          [
+            13,
+            20,
+            0
+          ]
+        ]
+      }
+    ]
+  }
+}

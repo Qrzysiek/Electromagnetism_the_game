@@ -5,6 +5,18 @@
   "height_ex": 1.557,
   "baseline_ex": 0.05
  },
+ "30": {
+  "file": "624b60c58c9d8bfb.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
+ "40": {
+  "file": "d59eced1ded07f84.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.581,
+  "baseline_ex": 0.05
+ },
  "-\\mathbf{m}\\cdot\\mathbf{B}": {
   "file": "2c62d75344a288cb.svg",
   "width_ex": 7.413,
@@ -301,6 +313,18 @@
  },
  "t = 10": {
   "file": "a66f36481e6456f4.svg",
+  "width_ex": 6.096,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
+ "t = 15": {
+  "file": "ee5c5cd3e3bc034e.svg",
+  "width_ex": 6.096,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
+ "t = 20": {
+  "file": "56c9fe7f82f5edc4.svg",
   "width_ex": 6.096,
   "height_ex": 1.692,
   "baseline_ex": 0.186

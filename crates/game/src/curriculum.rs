@@ -80,7 +80,7 @@ mod tests {
             .filter_map(|e| e.ok().map(|e| e.path()))
             .filter(|p| level::is_level_file(p))
             .collect();
-        paths.sort();
+        paths.sort_by_key(|p| level::level_order_key(p));
         let places = places(&paths);
         let mut last = (0, String::new());
         let mut seen_tiers: Vec<(usize, String)> = Vec::new();
