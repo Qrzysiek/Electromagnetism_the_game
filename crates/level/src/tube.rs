@@ -53,6 +53,11 @@ pub struct TubeSpec {
     /// `limits.solenoid_fields`) sets B along z in place of `b_z`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub solenoid: Option<Node>,
+    /// A temperature-limited cathode's macroparticles per unit time at its saturation, in
+    /// the preview (the verification's twice as many; `TL_RATE` by default): a beam
+    /// modulated at a high frequency needs many per period.
+    #[serde(default = "default_rate", skip_serializing_if = "is_default_rate")]
+    pub particle_rate: f64,
     /// The preview's time step (the verification's is half).
     #[serde(default = "default_step", skip_serializing_if = "is_default_step")]
     pub step: f64,
@@ -111,10 +116,27 @@ pub enum Measure {
     /// Half its peak-to-peak swing.
     Swing,
     /// The amplitude of its oscillation at the goal's `omega` (an amplifier's output):
-    /// the Fourier amplitude over the window after removing a fitted linear trend (a
-    /// node still settling to its operating point drifts; over whole periods the measure
-    /// is exact for a pure sine).
+    /// a sine at ω fitted together with a linear trend over the window (a node still
+    /// settling to its operating point drifts), exact for a sine on a line.
     Amplitude,
+    /// The phase of its oscillation at the goal's `omega` relative to `sin(ω t)` (the
+    /// phase of every source's sine without its own phase: a klystron's drive), in
+    /// degrees: `V ≈ A sin(ω t + φ)`, from the same Fourier sums as the amplitude. Phases
+    /// are compared modulo 360: a value is taken at its turn nearest the goal's middle.
+    Phase,
+}
+
+impl PotentialGoal {
+    /// A measured value as the goal compares it: a phase at its turn nearest the goal's
+    /// middle (`Measure::Phase`), anything else as it is.
+    pub fn compared(&self, v: f64) -> f64 {
+        if self.measure == Measure::Phase {
+            let middle = 0.5 * (self.min + self.max);
+            v + 360.0 * libm::round((middle - v) / 360.0)
+        } else {
+            v
+        }
+    }
 }
 
 /// An electrode's potential, measured over `start..end`, must lie in `min..max`.
@@ -122,7 +144,7 @@ pub enum Measure {
 pub struct PotentialGoal {
     pub electrode: usize,
     pub measure: Measure,
-    /// The angular frequency of `Measure::Amplitude`.
+    /// The angular frequency of `Measure::Amplitude` and `Measure::Phase`.
     #[serde(default, skip_serializing_if = "crate::is_zero")]
     pub omega: f64,
     pub min: f64,
@@ -140,6 +162,15 @@ pub const DEFAULT_STEP: f64 = 1.0 / 30.0;
 
 fn default_step() -> f64 {
     DEFAULT_STEP
+}
+
+fn default_rate() -> f64 {
+    TL_RATE
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref, clippy::float_cmp)]
+fn is_default_rate(v: &f64) -> bool {
+    *v == TL_RATE
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref, clippy::float_cmp)]
@@ -443,30 +474,55 @@ pub struct TubeSim {
     closest: Vec<f64>,
 }
 
-/// The amplitude of the oscillation at angular frequency `omega` in the samples `(t, v)`
-/// (uniform in time): a least-squares line removed, then `2/N |Σ v e^{−iωt}|`.
-fn amplitude_at(samples: &[(f64, f64)], omega: f64) -> f64 {
+/// The amplitude and phase (degrees, relative to `sin(ω t)`) of the oscillation at angular
+/// frequency `omega` in the samples `(t, v)`: the least-squares fit of
+/// `a + b (t − t̄) + c cos ωt + d sin ωt`, all four together (exact for a sine on a line,
+/// over any window; fitting the line first and then the sine took part of the sine with
+/// the line: 1e-3 of the amplitude over 10 periods, up to tens of per cent over one), and
+/// `A = √(c² + d²)`, `φ = atan2(c, d)` for `v ≈ A sin(ω t + φ)`.
+#[allow(clippy::needless_range_loop)] // index form mirrors the algorithm
+fn fourier_at(samples: &[(f64, f64)], omega: f64) -> (f64, f64) {
     #[allow(clippy::cast_precision_loss)]
     let n = samples.len() as f64;
-    if n < 2.0 {
-        return 0.0;
+    if samples.len() < 4 {
+        return (0.0, 0.0);
     }
-    let (st, sv) = samples
-        .iter()
-        .fold((0.0, 0.0), |(a, b), (t, v)| (a + t, b + v));
-    let (mt, mv) = (st / n, sv / n);
-    let (stt, stv) = samples.iter().fold((0.0, 0.0), |(a, b), (t, v)| {
-        (a + (t - mt) * (t - mt), b + (t - mt) * (v - mv))
-    });
-    let slope = if stt > 0.0 { stv / stt } else { 0.0 };
-    let (mut re, mut im) = (0.0, 0.0);
+    let mean_t = samples.iter().map(|(t, _)| t).sum::<f64>() / n;
+    // Normal equations of the four basis functions.
+    let mut m = [[0.0_f64; 5]; 4];
     for (t, v) in samples {
-        let r = v - (mv + slope * (t - mt));
         let (s, c) = libm::sincos(omega * t);
-        re += r * c;
-        im += r * s;
+        let f = [1.0, t - mean_t, c, s];
+        for i in 0..4 {
+            for j in 0..4 {
+                m[i][j] += f[i] * f[j];
+            }
+            m[i][4] += f[i] * v;
+        }
     }
-    2.0 / n * libm::sqrt(re * re + im * im)
+    // Gaussian elimination with partial pivoting (a 4 × 4 system, fixed order).
+    for k in 0..4 {
+        let p = (k..4)
+            .max_by(|&i, &j| m[i][k].abs().total_cmp(&m[j][k].abs()))
+            .unwrap_or(k);
+        m.swap(k, p);
+        if m[k][k] == 0.0 {
+            return (0.0, 0.0);
+        }
+        for i in k + 1..4 {
+            let f = m[i][k] / m[k][k];
+            for j in k..5 {
+                m[i][j] -= f * m[k][j];
+            }
+        }
+    }
+    let mut x = [0.0_f64; 4];
+    for i in (0..4).rev() {
+        let rest: f64 = (i + 1..4).map(|j| m[i][j] * x[j]).sum();
+        x[i] = (m[i][4] - rest) / m[i][i];
+    }
+    let (c, d) = (x[2], x[3]);
+    (libm::sqrt(c * c + d * d), libm::atan2(c, d).to_degrees())
 }
 
 /// Distance from `x` to the box `(lo, hi)` (0 inside).
@@ -632,14 +688,15 @@ impl TubeSim {
                 w.1 += 1.0;
                 w.2 = w.2.min(v);
                 w.3 = w.3.max(v);
-                if g.measure == Measure::Amplitude {
+                if matches!(g.measure, Measure::Amplitude | Measure::Phase) {
                     self.series[k].push((s.t, v));
                 }
                 if s.t >= g.end - 0.5 * self.tube.dt {
                     let m = match g.measure {
                         Measure::Mean => w.0 / w.1.max(1.0),
                         Measure::Swing => 0.5 * (w.3 - w.2),
-                        Measure::Amplitude => amplitude_at(&self.series[k], g.omega),
+                        Measure::Amplitude => fourier_at(&self.series[k], g.omega).0,
+                        Measure::Phase => fourier_at(&self.series[k], g.omega).1,
                     };
                     self.potential[k] = Some(m);
                     self.pending.potential[k] = Some(m);
@@ -762,8 +819,8 @@ impl TubeVerdict {
             .enumerate()
             .map(|(k, g)| {
                 CurrentVerdict::new(
-                    preview.potential.get(k).copied().flatten().unwrap_or(0.0),
-                    fine.potential.get(k).copied().flatten().unwrap_or(0.0),
+                    g.compared(preview.potential.get(k).copied().flatten().unwrap_or(0.0)),
+                    g.compared(fine.potential.get(k).copied().flatten().unwrap_or(0.0)),
                     g.min,
                     g.max,
                 )
@@ -1039,7 +1096,7 @@ impl Level {
             if i == 0
                 && let Some(j) = spec.saturation
             {
-                w = w.min(j * perimeter / (TL_RATE * r));
+                w = w.min(j * perimeter / (spec.particle_rate * r));
             }
             tube.emitters[i].weight = w;
         }
@@ -1243,6 +1300,7 @@ impl Level {
         for (k, g) in spec.potential_goals.iter().enumerate() {
             // Not measured (the run ended early): one width, finite for the annealing.
             score += measured.get(k).copied().flatten().map_or(1.0, |v| {
+                let v = g.compared(v);
                 (g.min - v).max(v - g.max).max(0.0) / (g.max - g.min).max(1e-300)
             });
         }
@@ -1306,6 +1364,9 @@ impl Level {
         }
         if spec.saturation.is_some_and(|j| !(j.is_finite() && j > 0.0)) {
             out.push("Tube: the cathode's saturation current must be positive.".into());
+        }
+        if !(spec.particle_rate.is_finite() && spec.particle_rate >= 1.0) {
+            out.push("Tube: the cathode's macroparticle rate must be at least 1.".into());
         }
         // Every electrode in at most one circuit (as its electrode or linked to it).
         let mut taken: Vec<usize> = Vec::new();
@@ -1524,5 +1585,49 @@ impl Level {
                 ));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Fourier measures of a potential goal: `3 sin(ω t + φ)` plus a drift and an
+    /// offset, sampled uniformly over whole periods, gives the amplitude 3 and the phase φ
+    /// (degrees) to rounding, for phases all round the circle; a phase goal compares a value
+    /// at its turn nearest the goal's middle.
+    #[test]
+    fn amplitude_and_phase() {
+        let omega = 2.0 * std::f64::consts::PI / 1.5;
+        for phi in [-170.0_f64, -90.0, -10.0, 0.0, 45.0, 135.0, 179.0] {
+            let samples: Vec<(f64, f64)> = (0..600)
+                .map(|k| {
+                    let t = 10.0 + f64::from(k) * 0.025;
+                    (
+                        t,
+                        3.0 * libm::sin(omega * t + phi.to_radians()) + 0.2 * t - 5.0,
+                    )
+                })
+                .collect();
+            let (a, p) = fourier_at(&samples, omega);
+            assert!((a - 3.0).abs() < 1e-9, "amplitude {a} at {phi}");
+            assert!((p - phi).abs() < 1e-7, "phase {p} for {phi}");
+        }
+        let goal = PotentialGoal {
+            electrode: 0,
+            measure: Measure::Phase,
+            omega,
+            min: 150.0,
+            max: 210.0,
+            start: 0.0,
+            end: 1.0,
+        };
+        assert!((goal.compared(-170.0) - 190.0).abs() < 1e-12);
+        assert!((goal.compared(170.0) - 170.0).abs() < 1e-12);
+        let mean = PotentialGoal {
+            measure: Measure::Mean,
+            ..goal
+        };
+        assert!((mean.compared(-170.0) + 170.0).abs() < 1e-12);
     }
 }

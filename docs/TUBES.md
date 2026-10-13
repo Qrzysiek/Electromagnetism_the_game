@@ -324,3 +324,17 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   magnetron needs anyway, then return; (b) an artificial mass ratio of ~4 so that the two
   cutoffs bound the field; (c) relax the slider rule for this level's field. The level's
   design is kept in `scripts/levels.py` (`ion_diode`, not in the curriculum).
+- **Klystron done (2026-10-13; level 106):** a weak beam (ballistic bunching) from a
+  Wehnelt gun, a buncher on a sine and a tuned catcher (a tank) 21 further; the player sets
+  the cathode's −V₀ (the beam's speed) and the drive V₁. Against Webster's small-signal
+  theory from the level's own fields: the optimum drive within 13.4 % of the prediction,
+  the rising side's shape to 0.001; past the optimum the two-gap buncher and the finite
+  catcher depart from the thin-gap J₁ (0.821 against 0.726 at 1.5 times the optimum's
+  drive), measured and stated. The amplitude alone hardly depends on V₀ (the buncher's
+  coupling grows with the speed, offsetting the drift angle), so the level asks for the
+  output's phase too (a new potential goal, `phase`): 7.5° per volt, phase pushing. A flat
+  optimum and the verdicts' bars (amplitudes 5 %) leave no narrow window at saturation, so
+  the goal is a klystron backed off below it, with an overbunched island as well. On the
+  way: a per-level macroparticle rate for temperature-limited cathodes (`particle_rate`),
+  and the amplitude measure corrected (fitted together with the trend; the old fit took
+  part of the sine with the line).

@@ -1,0 +1,326 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Klystron",
+  "description": "A klystron amplifier. The gun on the left shoots a weak electron beam into a grounded tube; you set the cathode's voltage, and with it the beam's speed. On its way the beam passes the buncher, plates on a small sine (period 1) whose amplitude you set: crossing its gaps speeds some electrons up and slows others down. Further on the fast ones catch up with the slow ones and the beam gathers into bunches, one per period, which induce a current in the catcher plate, a tuned circuit ringing at the same frequency. Run it as a linear amplifier, below saturation: the catcher must oscillate with an amplitude between 0.085 and 0.105, and with a phase, relative to the buncher's signal, between $-135°$ and $-105°$ (over $t = 10$ to $20$). A stronger signal bunches the beam tighter, up to a point: too strong a one overbunches it, the fast electrons overtaking the slow ones before the catcher. The phase depends on how long the bunches take to arrive.",
+  "grid": {
+    "nx": 48,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 40.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -80.0,
+      -60.0,
+      -54.0,
+      -30.0,
+      11.0,
+      30.0,
+      80.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        3,
+        10,
+        0
+      ],
+      "kind": "supply",
+      "value": -54.0
+    },
+    {
+      "node": [
+        17,
+        13,
+        0
+      ],
+      "kind": "supply",
+      "value": 11.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        3,
+        10,
+        0
+      ],
+      "length": 4,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    },
+    {
+      "center": [
+        3,
+        13,
+        0
+      ],
+      "length": 4,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        3,
+        7,
+        0
+      ],
+      "length": 4,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        10,
+        13,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        10,
+        7,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        17,
+        13,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    },
+    {
+      "center": [
+        17,
+        7,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        28,
+        13,
+        0
+      ],
+      "length": 14,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        28,
+        7,
+        0
+      ],
+      "length": 14,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        38,
+        13,
+        0
+      ],
+      "length": 4,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        38,
+        7,
+        0
+      ],
+      "length": 4,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        43,
+        13,
+        0
+      ],
+      "length": 4,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        43,
+        7,
+        0
+      ],
+      "length": 4,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        47,
+        10,
+        0
+      ],
+      "length": 4,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "particle_rate": 400.0,
+    "circuits": [
+      {
+        "electrode": 0,
+        "source": {
+          "kind": "dc",
+          "value": -50.0
+        },
+        "linked": [
+          1,
+          2
+        ],
+        "resistance": 0.0
+      },
+      {
+        "electrode": 5,
+        "source": {
+          "kind": "sine",
+          "amplitude": 11.0,
+          "omega": 6.283185307179586
+        },
+        "linked": [
+          6
+        ],
+        "resistance": 0.0
+      },
+      {
+        "electrode": 10,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "inductance": 0.051,
+        "resistance": 0.04
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 10,
+        "measure": "amplitude",
+        "min": 0.085,
+        "max": 0.105,
+        "start": 10.0,
+        "end": 20.0,
+        "omega": 6.283185307179586
+      },
+      {
+        "electrode": 10,
+        "measure": "phase",
+        "min": -135.0,
+        "max": -105.0,
+        "start": 10.0,
+        "end": 20.0,
+        "omega": 6.283185307179586
+      }
+    ],
+    "emit_toward_deg": 0.0,
+    "saturation": 0.02
+  }
+}

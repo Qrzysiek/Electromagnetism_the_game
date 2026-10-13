@@ -10,7 +10,7 @@ use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::tube::{
     Carriers, CurrentGoal, DEFAULT_STEP, IonSource, Measure, PotentialGoal, ProjectileSpec,
-    TubeCircuit, TubeSpec,
+    TL_RATE, TubeCircuit, TubeSpec,
 };
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
@@ -1528,6 +1528,7 @@ fn edit_tube(
             projectiles: Vec::new(),
             b_z: 0.0,
             solenoid: None,
+            particle_rate: TL_RATE,
             step: DEFAULT_STEP,
             goals: vec![CurrentGoal {
                 electrode: 1,
@@ -1550,6 +1551,7 @@ fn edit_tube(
         projectiles,
         b_z,
         solenoid,
+        particle_rate,
         step,
         goals,
         circuits,
@@ -1637,6 +1639,21 @@ fn edit_tube(
             *saturation = None;
         }
     });
+    if saturation.is_some() {
+        ui.horizontal(|ui| {
+            ui.label("  macroparticles per time").on_hover_text(
+                "At the saturation, in the preview (the verification twice as many): a beam \
+                 modulated at a high frequency needs many per period",
+            );
+            focus |= ui
+                .add(
+                    egui::DragValue::new(particle_rate)
+                        .speed(1.0)
+                        .range(1.0..=MAX_POSITIVE),
+                )
+                .has_focus();
+        });
+    }
     // Ion source.
     let mut has_ions = ions.is_some();
     ui.checkbox(&mut has_ions, "Ion source (bipolar)")
@@ -1963,9 +1980,13 @@ fn edit_tube(
                 .on_hover_text("Half the peak-to-peak swing over the window");
             ui.selectable_value(&mut g.measure, Measure::Amplitude, "amplitude")
                 .on_hover_text("The oscillation's amplitude at ω (a drift removed)");
+            ui.selectable_value(&mut g.measure, Measure::Phase, "phase")
+                .on_hover_text(
+                    "The oscillation's phase at ω relative to sin(ωt), in degrees (modulo 360)",
+                );
         });
         ui.horizontal(|ui| {
-            if g.measure == Measure::Amplitude {
+            if matches!(g.measure, Measure::Amplitude | Measure::Phase) {
                 ui.label("  ω");
                 focus |= ui
                     .add(
@@ -2463,6 +2484,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             projectiles,
             b_z,
             solenoid,
+            particle_rate,
             step,
             goals,
             circuits,
@@ -2472,7 +2494,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         let any = |v: f64| (-MAX_POSITIVE..=MAX_POSITIVE).contains(&v);
         let nonneg = |v: f64| (0.0..=MAX_POSITIVE).contains(&v);
         let angle = |a: &Option<f64>| a.is_none_or(|a| (-360.0..=360.0).contains(&a));
-        let ratio_ok = (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass.abs());
+        let ratio_ok = (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass.abs())
+            && (1.0..=MAX_POSITIVE).contains(particle_rate);
         let goal_ok = goals.len() <= MAX_COUNT as usize
             && goals.iter().all(|g| {
                 let CurrentGoal {

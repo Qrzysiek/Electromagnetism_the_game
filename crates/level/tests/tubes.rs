@@ -42,6 +42,7 @@ pub fn diode(v: f64) -> Level {
         projectiles: Vec::new(),
         b_z: 0.0,
         solenoid: None,
+        particle_rate: level::tube::TL_RATE,
         step: level::tube::DEFAULT_STEP,
         goals: vec![CurrentGoal {
             electrode: 1,
@@ -358,4 +359,96 @@ fn rods_and_rings() {
             .iter()
             .any(|s| s.contains("starts in metal"))
     );
+}
+
+/// The klystron (level Klystron) against small-signal ballistic bunching theory, from the
+/// level's own fields: the buncher (its two plates at 1, everything else at 0) gives an
+/// electron crossing it at v0 the energy `V1 Re(G e^{iωt0})`, `G = ∫ E_x e^{iωx/v0} dx`
+/// along the beam's axis (y = 10), so the speed is modulated by `Δv/v0 = V1 |G| / (2 V0)`
+/// and after the drift L between the buncher's and the catcher's centres (both
+/// symmetric: 21) the fundamental of the beam current is `2 I0 J1(X)`,
+/// `X = (Δv/v0) ω L / v0` (Webster), which the catcher's tank turns into its amplitude
+/// (a constant factor). Predicted: the optimum drive `V1 = 1.841 · 2 V0 v0 / (|G| ω L)`.
+/// Measured: the preview's catcher amplitude at V0 = 50 over drives around it. Required
+/// (fixed before measuring): the measured optimum within 15 % of the prediction (at the
+/// optimum the speeds are modulated by ~14 %, where the small-signal theory's
+/// corrections are of that order), and the rising side's shape, the amplitude at half
+/// the measured optimum's drive relative to the largest, within 0.05 of
+/// J1(0.92)/J1(1.841) = 0.711. A first version compared the shape at fractions of the
+/// predicted optimum, which counts the optimum's allowed 15 % twice (it failed by 0.09
+/// with the optimum 13 % off). Past the optimum the thin-gap theory does not hold here
+/// (a buncher of two gaps 7 apart, between which the electrons already drift, and a
+/// catcher 4 long): printed, not required (PHYSICS.md §2.11).
+#[test]
+#[allow(clippy::many_single_char_names)]
+fn klystron_against_bunching_theory() {
+    let level = level::shipped("klystron");
+    let (v0_cathode, omega, l_drift) = (50.0_f64, 2.0 * std::f64::consts::PI, 21.0);
+    let v0 = (2.0 * v0_cathode).sqrt();
+    // The buncher's field per volt along the axis.
+    let mut prisms = level.tube_prisms(&[]);
+    for (i, p) in prisms.iter_mut().enumerate() {
+        p.bias = if i == 5 || i == 6 {
+            physics::conductor::Bias::Potential(1.0)
+        } else {
+            physics::conductor::Bias::Grounded
+        };
+    }
+    let field = physics::zinv::Electrodes::new(prisms, &[], 0.1);
+    let (dx, mut g_re, mut g_im) = (0.02, 0.0, 0.0);
+    let mut x = 7.0;
+    while x < 30.0 {
+        let e = field.sample(physics::DVec3::new(x, 10.0, 0.0)).1;
+        // Energy gained by an electron (charge -1) moving +x: -E_x dx per volt.
+        let k = omega * x / v0;
+        g_re -= e.x * k.cos() * dx;
+        g_im -= e.x * k.sin() * dx;
+        x += dx;
+    }
+    let g = (g_re * g_re + g_im * g_im).sqrt();
+    let theta0 = omega * l_drift / v0;
+    let predicted = 1.841 * 2.0 * v0_cathode / (g * theta0);
+    // The measured drive curve (preview).
+    let amplitude = |v1: f64| {
+        let placement = [
+            level::Element {
+                kind: level::ElementKind::Supply,
+                ..level::Element::charge([3, 10, 0], -v0_cathode)
+            },
+            level::Element {
+                kind: level::ElementKind::Supply,
+                ..level::Element::charge([17, 13, 0], v1)
+            },
+        ];
+        level.tube_results(&placement, 1).potential[0].unwrap()
+    };
+    let drives: Vec<f64> = [0.7, 0.85, 1.0, 1.15, 1.3]
+        .iter()
+        .map(|f| f * predicted)
+        .collect();
+    let curve: Vec<f64> = drives.iter().map(|&v| amplitude(v)).collect();
+    // The peak of the parabola through the largest sample and its neighbours.
+    let k = (1..curve.len() - 1)
+        .max_by(|&a, &b| curve[a].total_cmp(&curve[b]))
+        .unwrap();
+    let (a, b, c) = (curve[k - 1], curve[k], curve[k + 1]);
+    let h = drives[1] - drives[0];
+    let peak_at = drives[k] + 0.5 * h * (a - c) / (a - 2.0 * b + c);
+    let peak = b - 0.125 * (a - c) * (a - c) / (a - 2.0 * b + c);
+    let half = amplitude(0.5 * peak_at) / peak;
+    let over = amplitude(1.5 * peak_at) / peak;
+    let j1 = |x: f64| libm::j1(x) / libm::j1(1.841);
+    println!(
+        "klystron: |G| = {g:.4}, theta0 = {theta0:.3}, predicted optimum V1 = {predicted:.3}, \
+         measured {peak_at:.3} ({:+.1} %); amplitudes {curve:.4?} at {drives:.3?}; at half the \
+         optimum's drive {half:.3} (J1: {:.3}); at 1.5 times {over:.3} (thin-gap J1: {:.3})",
+        100.0 * (peak_at / predicted - 1.0),
+        j1(0.5 * 1.841),
+        j1(1.5 * 1.841)
+    );
+    assert!(
+        (peak_at / predicted - 1.0).abs() < 0.15,
+        "optimum {peak_at} vs {predicted}"
+    );
+    assert!((half - j1(0.5 * 1.841)).abs() < 0.05, "half drive {half}");
 }

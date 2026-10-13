@@ -1437,6 +1437,10 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             level::tube::Measure::Amplitude => {
                 format!("oscillation amplitude at ω = {}", fmt_num(g.omega))
             }
+            level::tube::Measure::Phase => format!(
+                "oscillation phase (degrees) at ω = {} relative to the drive",
+                fmt_num(g.omega)
+            ),
         };
         ui.label(format!(
             "Goal: the {what} of electrode {} between {} and {}, over t = {} to {}",

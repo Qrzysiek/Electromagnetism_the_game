@@ -256,7 +256,7 @@ def current_goal(electrode, lo, hi, start, end, carriers=None):
 
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
-         potentials=(), goals=(), ions=None, step=None):
+         potentials=(), goals=(), ions=None, step=None, particle_rate=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -274,6 +274,8 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
         t["goals"] = all_goals
     if step is not None:
         t["step"] = step
+    if particle_rate is not None:
+        t["particle_rate"] = particle_rate
     if ions is not None:
         t["ions"] = {"electrode": ions[0], "charge_per_mass": ions[1]}
         if len(ions) > 2:
@@ -296,13 +298,18 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
 
 
 def tube_circuit(electrode, source, resistance=None, capacitance=0.0, supply_offset=False,
-                 linked=()):
+                 linked=(), inductance=0.0, return_to=None):
     """An electrode's circuit in a tube level (per unit length): `source` (see `dc`,
-    `sine`) through `resistance` (0: an ideal source; None: floating) and `capacitance`
-    to ground; a tunable electrode's supply sets the source's level, or with
+    `sine`) through `resistance` (0: an ideal source; None: floating) and `inductance` (a
+    tank's coil) in series, and `capacitance` to ground; the branch ends on ground, or on
+    electrode `return_to`; a tunable electrode's supply sets the source's level, or with
     `supply_offset` a sine's offset; `linked`: further electrodes on the same ideal source
     (a grid's wires)."""
     c = {"electrode": electrode, "source": source}
+    if inductance:
+        c["inductance"] = inductance
+    if return_to is not None:
+        c["return_to"] = return_to
     if linked:
         c["linked"] = list(linked)
     if resistance is not None:
@@ -3308,6 +3315,72 @@ def triode():
         reference=[supply(7, 8, -0.7)])
 
 
+def klystron():
+    # Designed with `generator tube-scan` (PHYSICS.md 2.11). A weak beam (a temperature-
+    # limited cathode, 0.02 per unit length of its 4-long face, 400 macroparticles per unit
+    # time: 1/400 of a period apart) from a Wehnelt gun (the cathode between two plates at
+    # its potential, the accelerating gap into the grounded drift tube's mouth a
+    # converging lens: most of the beam reaches the collector) flies past a buncher
+    # (plates 14-20 on a sine of amplitude V1, period 1: its entrance and exit gaps
+    # modulate the electrons' speeds) and a catcher 21 further (one plate, a tank: L = 0.051
+    # in series with R = 0.04 to ground, resonant at omega = 2 pi with the plate's own
+    # capacitance, 0.497 from the boundary elements; Q ~ 8, rung up in 2.5). The player
+    # sets the cathode's potential -V0 (the beam's energy) and V1. The beam's space charge
+    # is negligible: the bunching is ballistic. Output amplitude against the drive at
+    # V0 = 50 (preview): 0.073 at V1 = 8, 0.111 at 14, 0.121 at 20, 0.109 at 26
+    # (overbunching); with the buncher at a fixed offset the J1 shape was measured to 2 %
+    # (J1(X)/J1max with X = 0.092 V1 fitted at the peak: 0.306, 0.711, 0.956 at V1 = 4,
+    # 10, 24 for the measured 0.300, 0.694, 0.959). The output's phase moves with the
+    # drift angle omega L/v0, 7.5 degrees per volt near 50 (theta0/(2 V0) = 7.6: phase
+    # pushing): 122.7 at V0 = 40, 169.6 at 45, -151.4 at 50, -114.4 at 55, -82.7 at 60
+    # (V1 = 20); the amplitude hardly depends on V0. At V0 = 54: the amplitude 0.072 at
+    # V1 = 8, 0.088 at 10, 0.095 at 11, 0.102 at 12, 0.111 at 14 (phase -125); past the
+    # optimum 0.103 at 28, 0.096 at 30, 0.089 at 32, 0.079 at 34 (phase -113 to -103).
+    # Refine 1 to 2: phases within 2.6 degrees, amplitudes 5 %. A flat optimum and those
+    # bars leave no narrow window at saturation, so the goal is a klystron backed off below
+    # it (as one feeding an accelerator is, so that its output follows its drive):
+    # amplitude 0.085-0.105 and phase -135 to -105, which ask for V0 ~ 52-56 and V1 ~
+    # 9.7-12.5, or overbunched ~27.5-33; the next island of phase lies beyond the slider.
+    omega = 2.0 * math.pi
+    P = plate
+    return level(
+        "Klystron",
+        "A klystron amplifier. The gun on the left shoots a weak electron beam into a "
+        "grounded tube; you set the cathode's voltage, and with it the beam's speed. On its "
+        "way the beam passes the buncher, plates on a small sine (period 1) whose amplitude "
+        "you set: crossing its gaps speeds some electrons up and slows others down. Further "
+        "on the fast ones catch up with the slow ones and the beam gathers into bunches, one "
+        "per period, which induce a current in the catcher plate, a tuned circuit ringing at "
+        "the same frequency. Run it as a linear amplifier, below saturation: the catcher "
+        "must oscillate with an amplitude between 0.085 and 0.105, and with a phase, "
+        "relative to the buncher's signal, between $-135°$ and $-105°$ (over $t = 10$ to "
+        "$20$). A stronger signal bunches the beam tighter, up to a point: too strong a one "
+        "overbunches it, the fast electrons overtaking the slow ones before the catcher. "
+        "The phase depends on how long the bunches take to arrive.",
+        grid=(48, 20), c=None, t_max=40.0,
+        electrodes=[
+            P(3, 10, 4, thickness=1.0, angle_deg=90.0, tunable=True),
+            P(3, 13, 4, thickness=1.0), P(3, 7, 4, thickness=1.0),
+            P(10, 13, 6, thickness=1.0), P(10, 7, 6, thickness=1.0),
+            P(17, 13, 6, thickness=1.0, tunable=True), P(17, 7, 6, thickness=1.0),
+            P(28, 13, 14, thickness=1.0), P(28, 7, 14, thickness=1.0),
+            P(38, 13, 4, thickness=1.0),
+            P(38, 7, 4, thickness=1.0),
+            P(43, 13, 4, thickness=1.0), P(43, 7, 4, thickness=1.0),
+            P(47, 10, 4, thickness=1.0, angle_deg=90.0)],
+        supplies=slider(80.0, -30.0, -54.0, -60.0, 11.0, 30.0),
+        tube=tube(0, None, 0.0, 0.0, 0.0, 0.0, emit_toward_deg=0.0, saturation=0.02,
+                  particle_rate=400.0,
+                  circuits=[tube_circuit(0, dc(-50.0), resistance=0.0, linked=(1, 2)),
+                            tube_circuit(5, sine(11.0, omega), resistance=0.0, linked=(6,)),
+                            tube_circuit(10, dc(0.0), resistance=0.04, inductance=0.051)],
+                  potentials=[potential_goal(10, "amplitude", 0.085, 0.105, 10.0, 20.0,
+                                             omega=omega),
+                              potential_goal(10, "phase", -135.0, -105.0, 10.0, 20.0,
+                                             omega=omega)]),
+        reference=[supply(3, 10, -54.0), supply(17, 13, 11.0)])
+
+
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
@@ -3319,6 +3392,7 @@ ARCS.append(("Inside the components: vacuum tubes", [
         ("electron_gun", electron_gun),
         ("rectifier", rectifier),
         ("triode", triode),
+        ("klystron", klystron),
     ]),
 ]))
 
