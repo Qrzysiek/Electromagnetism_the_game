@@ -349,3 +349,15 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   the map beside every electrode it drives (linked ones too) or at a coil's or solenoid's
   terminal; hovering a slider (or moving it), or an electrode on the map, outlines its
   electrodes in cyan (`EM_FOCUS=<n>` holds one in a capture).
+- **Noise, stage 1 (owner's choice (a), 2026-10-13).** Measured on the ion diode's
+  scratch level (28 V over t = 20–30, ions onto the ring at B = 1.8 / the strong-field
+  B = 3): the macroparticles' number dominates: ×1, ×2, ×4, ×8 gave 8.21/5.05, 7.42/4.91,
+  6.90/4.75, 6.66/4.66 at the preview's mesh (converging toward ~6.4); the softening alone
+  ×2, ×4 only 7.78/5.00, 7.68/4.88; the mesh and step another first-order ~6 % (refine 2:
+  6.88/4.68; with ×4 particles 6.27/4.48). The quiet start alone did not change it (8.21
+  against 8.04). So the sheath needs ~8 times as many macroparticles, ~30 times the cost
+  with direct sums: a tree code. Its first step, done: the macroparticles are uniformly
+  charged rods (radius an eighth of a segment), exactly Coulomb outside, so that far
+  groups can be summed as multipoles exactly (PHYSICS.md §2.11; the calibration diode now
+  converges at first order, ratio 0.51). `generator tube-scan --particles F --softening F`
+  vary the two alone (`TubeResolution`).

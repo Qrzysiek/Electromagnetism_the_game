@@ -11,7 +11,8 @@
 //! - **Fields** at a particle: the electrodes' at their potentials (the static
 //!   solution), the induced surface charge of all particles (solved each step from the
 //!   factorization, all electrodes held at their potentials), and every other particle
-//!   (2D Coulomb, `2λ r̂/r`, softened within `softening`, much below the spacing).
+//!   (2D Coulomb, `2λ r̂/r`): each a uniformly charged rod of radius `softening`, much
+//!   below the spacing, so its field is exactly Coulomb outside the rod (`2λ r⃗/h²` inside).
 //! - **Emission** (space-charge limited, by Gauss's law): each step, each segment of
 //!   the cathode whose surface density has the carriers' sign emits that charge (its
 //!   density times its length) as macroparticles, released at rest `EMISSION_OFFSET` out at
@@ -182,7 +183,9 @@ pub struct Tube {
     pub electrodes: Electrodes,
     pub emitters: Vec<Emitter>,
     pub projectiles: Vec<Projectile>,
-    /// Softening length of the particles' mutual force.
+    /// The macroparticles' radius h: each is a uniformly charged rod, its field `2λ r⃗/h²`
+    /// inside and exactly `2λ r⃗/r²` outside (a compact softening: beyond h the mutual force
+    /// is Coulomb's, so far groups of particles may be summed as multipoles exactly).
     pub softening: f64,
     /// Time step.
     pub dt: f64,
@@ -606,13 +609,13 @@ impl Tube {
         for ((p, q), d) in self.electrodes.segments.iter().zip(sigma) {
             e += segment_field_fast(*p, *q, x) * *d;
         }
-        let eps2 = self.softening * self.softening;
+        let h2 = self.softening * self.softening;
         for (k, (p, l)) in s.x.iter().zip(&s.charge).enumerate() {
             if Some(k) == skip {
                 continue;
             }
             let r = DVec3::new(x.x - p.x, x.y - p.y, 0.0);
-            let r2 = r.x * r.x + r.y * r.y + eps2;
+            let r2 = (r.x * r.x + r.y * r.y).max(h2);
             e += r * (2.0 * l / r2);
         }
         e

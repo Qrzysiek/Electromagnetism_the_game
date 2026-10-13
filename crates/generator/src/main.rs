@@ -70,6 +70,12 @@ enum Command {
         /// checks (segments, step and macroparticle weight divided by it).
         #[arg(long, default_value_t = 1)]
         refine: u32,
+        /// Convergence studies: this many times as many macroparticles, alone.
+        #[arg(long, default_value_t = 1.0)]
+        particles: f64,
+        /// Convergence studies: this many times the particles' softening, alone.
+        #[arg(long, default_value_t = 1.0)]
+        softening: f64,
     },
     /// Print the reference flight of one flight index: t, x, y, |p|, radiated energy.
     Trace {
@@ -96,7 +102,7 @@ fn most_elements(level: &Level) -> usize {
 }
 
 /// `generator tube-scan`: currents into every electrode for several placements.
-fn tube_scan(level: &Level, placements: &PathBuf, refine: u32) {
+fn tube_scan(level: &Level, placements: &PathBuf, res: level::tube::TubeResolution) {
     let text = std::fs::read_to_string(placements).expect("placements file");
     let list: Vec<Vec<level::Element>> = serde_json::from_str(&text).expect("placements");
     let Some(spec) = &level.tube else {
@@ -114,7 +120,13 @@ fn tube_scan(level: &Level, placements: &PathBuf, refine: u32) {
             println!("{i}: refused: {}", issues.join(" "));
             continue;
         }
-        let mut sim = level.tube_sim(placement, refine.max(1));
+        let mut sim = level.tube_sim_at(
+            placement,
+            level::tube::TubeResolution {
+                refine: res.refine.max(1),
+                ..res
+            },
+        );
         sim.advance_to(start);
         let (t0, q0, lost0) = (sim.t(), sim.collected().to_vec(), sim.lost());
         sim.advance_to(end.max(level.tube_verify_end()));
@@ -341,7 +353,17 @@ fn main() {
             path,
             placements,
             refine,
-        } => tube_scan(&load(&path), &placements, refine),
+            particles,
+            softening,
+        } => tube_scan(
+            &load(&path),
+            &placements,
+            level::tube::TubeResolution {
+                refine,
+                particles,
+                softening,
+            },
+        ),
         Command::Trace {
             path,
             flight,

@@ -265,6 +265,27 @@ where
     })
 }
 
+/// A tube run's resolution: `refine` divides the segments, the step, the macroparticles'
+/// weight and the softening (1: the preview, 2: the verification); `particles` and
+/// `softening` further multiply the macroparticles' number and the softening alone.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TubeResolution {
+    pub refine: u32,
+    pub particles: f64,
+    pub softening: f64,
+}
+
+impl TubeResolution {
+    /// The game's resolutions: everything scaled by `refine` together.
+    pub fn refined(refine: u32) -> Self {
+        Self {
+            refine,
+            particles: 1.0,
+            softening: 1.0,
+        }
+    }
+}
+
 /// Preview resolution: segment length (cells).
 pub const PREVIEW_SEGMENT: f64 = 0.5;
 /// Preview resolution: macroparticles per the emitter's charge before emission: the
@@ -308,13 +329,16 @@ pub const ENVELOPE_SEGMENT: f64 = 0.5;
 /// need it.
 pub const EMITTER_MESH: f64 = 0.25;
 
-/// The macroparticles' mutual force softened within this fraction of a segment (PHYSICS.md
-/// §2.11): it smooths the space charge's field over that length, and in a narrow gap the
-/// smoothed space charge limits the current too weakly. At half a segment (the earlier
-/// value) the triode's output, 1.25 between its cathode and grid, came out 3.89, 3.38, 3.17
-/// at refine 1, 2, 3 (its limit ~3.0); at an eighth 3.34, 3.12, 3.04. Halving the step,
-/// the weight or the mesh instead moved the preview by +0.03, +0.07 and −0.18 of its −0.50
-/// to the verification. The diode with a gap of 7 barely depends on it.
+/// The macroparticles' radius as a fraction of a segment (PHYSICS.md §2.11): each is a
+/// uniformly charged rod, its field softened inside it and exactly Coulomb's outside. It
+/// replaced the softening `r⃗/(r² + ε²)` at an eighth, which never quite became Coulomb's
+/// (ε²/r²: 0.4 % one cell away), so that far groups of particles could not be summed as
+/// multipoles exactly. Rods of a quarter (the same largest force) converged more slowly on
+/// the calibration diode (ratio 0.76, against 0.51 for the eighth). The softening smooths the space
+/// charge's field over that length, and in a narrow gap the smoothed space charge limits the
+/// current too weakly: at half a segment (Plummer, the earliest value) the triode's output,
+/// 1.25 between its cathode and grid, came out 3.89, 3.38, 3.17 at refine 1, 2, 3 (its
+/// limit ~3.0); at an eighth 3.34, 3.12, 3.04.
 pub const SOFTENING: f64 = 0.125;
 
 /// A temperature-limited emitter's macroparticles per unit time at its saturation
@@ -943,7 +967,17 @@ impl Level {
     /// # Panics
     /// If the level is not a tube level.
     pub fn tube_sim(&self, player: &[Element], refine: u32) -> TubeSim {
+        self.tube_sim_at(player, TubeResolution::refined(refine))
+    }
+
+    /// A tube run at a resolution whose parts may be varied separately (convergence
+    /// studies: `generator tube-scan --particles --softening`), at t = 0.
+    ///
+    /// # Panics
+    /// If the level is not a tube level.
+    pub fn tube_sim_at(&self, player: &[Element], res: TubeResolution) -> TubeSim {
         let spec = self.tube.clone().expect("a tube level");
+        let refine = res.refine;
         let r = f64::from(refine);
         let size = PREVIEW_SEGMENT / r;
         // The emitters meshed finer (EMITTER_MESH).
@@ -1049,7 +1083,7 @@ impl Level {
             electrodes: prisms,
             emitters,
             projectiles,
-            softening: SOFTENING * size,
+            softening: SOFTENING * size * res.softening,
             dt: spec.step / r,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
@@ -1092,11 +1126,11 @@ impl Level {
                 .iter()
                 .map(|v| tube.emitting_charge(i, v))
                 .fold(0.0, f64::max);
-            let mut w = q.max(*fl).max(1e-300) / (PREVIEW_PARTICLES * r);
+            let mut w = q.max(*fl).max(1e-300) / (PREVIEW_PARTICLES * r * res.particles);
             if i == 0
                 && let Some(j) = spec.saturation
             {
-                w = w.min(j * perimeter / (spec.particle_rate * r));
+                w = w.min(j * perimeter / (spec.particle_rate * r * res.particles));
             }
             tube.emitters[i].weight = w;
         }
