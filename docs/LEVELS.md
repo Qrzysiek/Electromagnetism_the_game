@@ -267,7 +267,7 @@ on 2026-10-05 and levels 46–49 (the circuits) on 2026-10-06 with the same sett
 | 105_rectifier | 1.6 | 8.0e-2 | 8/8 | 18 | 18 / 12 | 0.48 |
 | 106_triode | 0.8 | 1.9e-1 | 8/8 | 3 | 3 / 5 | 0.33 |
 | 107_klystron | 1.8 | 3.0e-2 | 8/8 | 36 | 36 / 33 | 0.21 |
-| 108_magnetron | 1.6 | 1.5e-1 | 8/8 | 24 | 24 / 7 | 0.32 |
+| 108_magnetron | 1.6 | 1.1e-1 | 8/8 | 26 | 26 / 9 | 0.34 |
 
 Reading the table by tier (levels 1–56): the introductions are solved by the search in
 15–16 of 16 runs within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
