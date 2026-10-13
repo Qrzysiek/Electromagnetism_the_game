@@ -267,6 +267,7 @@ on 2026-10-05 and levels 46–49 (the circuits) on 2026-10-06 with the same sett
 | 105_rectifier | 1.6 | 8.0e-2 | 8/8 | 18 | 18 / 12 | 0.48 |
 | 106_triode | 0.8 | 1.9e-1 | 8/8 | 3 | 3 / 5 | 0.33 |
 | 107_klystron | 1.8 | 3.0e-2 | 8/8 | 36 | 36 / 33 | 0.21 |
+| 108_magnetron | 1.6 | 1.5e-1 | 8/8 | 24 | 24 / 7 | 0.32 |
 
 Reading the table by tier (levels 1–56): the introductions are solved by the search in
 15–16 of 16 runs within 3–80 evaluations. The intermediate levels need more (Around the wall 3/16, Soft
@@ -479,7 +480,12 @@ Notes:
   on 1.65–2.50 at 30 V and on the mirror interval −2.50 to −1.68 (the insulation does not
   depend on the field's sign); the solenoid interval's middle, 2.08, is uncertain, not
   verified: the ion current flattens with B (6.0 at 2.2, 5.05 at 3), so the middle lies
-  within the verdict's bar of the goal's lower bound. Rectifier: two supplies, the full wave on each 24–36 with the other at 32
+  within the verdict's bar of the goal's lower bound. Magnetron (2026-10-13; a preview
+  takes 1.1 s, a verification 5.3 s): the table counts the sliders' candidate values
+  (the band's three points on each), so its random rate (15 %) flatters it; on the
+  continuous sliders the supply solves on 43.3–48.0 at B = 6 (2.9 % of ±80) and the
+  solenoid on 5.83–6.25 at 45 V (2.1 % of ±10), plus a near-cutoff pocket (4.58–4.67)
+  and the mirrors, every middle verified. Rectifier: two supplies, the full wave on each 24–36 with the other at 32
   (preview), random choices of the five candidate values solve 8 %. Sideways, Vacuum
   diode and Triode are one-slider introductions (the search's five candidate values;
   Sideways solves on 0.9–1.3 of ±4 in the preview, Vacuum diode verifies on 23.5–30.5 of
