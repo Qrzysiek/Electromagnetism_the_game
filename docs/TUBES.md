@@ -361,3 +361,13 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   groups can be summed as multipoles exactly (PHYSICS.md §2.11; the calibration diode now
   converges at first order, ratio 0.51). `generator tube-scan --particles F --softening F`
   vary the two alone (`TubeResolution`).
+- **The owner's review, continued (2026-10-13):** the "light blue noise over the blue
+  potential" on the right of the Klystron was its beam's macroparticles, spread to the
+  whole aperture (physically: the gun's lens and the buncher's fringe fields; a slow beam
+  spreads most), drawn as dots. The particles are now drawn by default as a glow of their
+  charge's density (a View choice: density, dots, off). And a general rule from the owner:
+  at the lowest playback speed the animation must stay smooth, not a slideshow. Flights and
+  beams already interpolated along their paths; tube levels jumped from step to step (at
+  speed 0.05, 1.5 pictures per second): their particles now carry identities and the
+  display interpolates between steps (particles, electrode charges, potentials, the
+  projectiles along their tracks).

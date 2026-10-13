@@ -60,6 +60,9 @@ pub struct PotentialParams {
     /// still coloured.
     pub e_ref: f32,
     pub e_decades: f32,
+    /// Tube levels: the particles drawn as the density of their charge, a glow (z > 0):
+    /// x = 1/(2 s²) for a Gaussian of width s, y = 1/(|q| at full glow).
+    pub glow: Vec4,
 }
 
 impl Default for PotentialParams {
@@ -79,9 +82,16 @@ impl Default for PotentialParams {
             line_charges: 0,
             e_ref: 1.0,
             e_decades: 1.5,
+            glow: Vec4::ZERO,
         }
     }
 }
+
+/// Width of the particles' density glow (cells): a beam of macroparticles a fraction of a
+/// cell apart reads as one stream.
+const GLOW_WIDTH: f32 = 0.3;
+/// Overlapping macroparticles at full glow.
+const GLOW_FULL: f32 = 4.0;
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct PotentialMaterial {
@@ -169,6 +179,7 @@ pub fn tube_params(
     e_ref: f64,
     gain: f64,
     decades: f64,
+    glow: bool,
 ) -> (PotentialParams, Vec<[f32; 4]>) {
     let vc = frame
         .potentials
@@ -192,7 +203,21 @@ pub fn tube_params(
         items.push([x[0], x[1], *q, eps2 as f32]);
     }
     let particles = &frame.x;
+    // The glow's scale: a typical macroparticle's charge (each emitter's are alike).
+    #[allow(clippy::cast_precision_loss)]
+    let q_ref = frame.q.iter().map(|q| q.abs()).sum::<f32>() / frame.q.len().max(1) as f32;
+    let glow = if glow && q_ref > 0.0 {
+        Vec4::new(
+            1.0 / (2.0 * GLOW_WIDTH * GLOW_WIDTH),
+            1.0 / (q_ref * GLOW_FULL),
+            1.0,
+            0.0,
+        )
+    } else {
+        Vec4::ZERO
+    };
     let out = PotentialParams {
+        glow,
         phi_weight: (sign / scale) as f32,
         u_a: (sign * vc / scale) as f32,
         line_segments: count(run.segments.len()),

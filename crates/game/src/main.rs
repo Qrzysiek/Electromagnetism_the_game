@@ -105,6 +105,9 @@ pub struct TubeField {
 /// What a field map is computed for: revision, active shot, active disturbance, all
 /// shots shown, mode, flight shown, the tube frame shown, and the tube maps' gain and range
 /// (as bits).
+/// What the field map was drawn for: setup revision, shot, disturbance, all shots, map,
+/// flight arrived, a tube's picture (its frame, or while animating the time's bits), and a
+/// tube map's gain and range.
 pub type MapKey = (
     u64,
     usize,
@@ -112,9 +115,18 @@ pub type MapKey = (
     bool,
     Option<MapMode>,
     bool,
-    usize,
+    u64,
     (u64, u64),
 );
+
+/// How a tube level's particles are drawn: as the density of their charge (a glow in the
+/// map, the default), as dots, or not at all (to see the map alone).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TubeParticles {
+    Density,
+    Dots,
+    Hidden,
+}
 
 #[derive(Resource)]
 pub struct Game {
@@ -196,6 +208,8 @@ pub struct Game {
     /// slider hovered or moved, or one of its electrodes hovered on the map.
     pub supply_focus: Option<(level::Node, std::time::Instant)>,
     pub tube_range_decades: f64,
+    /// Tube levels: how the particles are drawn.
+    pub tube_particles: TubeParticles,
     pub animate: bool,
     pub playback_speed: f64,
     pub anim_time: f64,
@@ -276,6 +290,7 @@ impl Game {
             field_gain_decades: 0.0,
             tube_gain_decades: 0.0,
             supply_focus: None,
+            tube_particles: TubeParticles::Density,
             tube_range_decades: 1.5,
             animate: true,
             playback_speed: 1.0,
@@ -389,6 +404,17 @@ impl Game {
         } else {
             n - 1
         })
+    }
+
+    /// Tube levels: the picture shown, interpolated between the stored frames at the
+    /// animation time (smooth at any playback speed); the last frame when not animating.
+    pub fn tube_display_frame(&self) -> Option<level::tube::TubeFrame> {
+        let v = self.tube_preview.as_ref()?;
+        if self.animate {
+            v.run.frame_between(self.anim_time)
+        } else {
+            v.run.frames.last().cloned()
+        }
     }
 
     pub fn progress(&self) -> Progress {
@@ -1201,14 +1227,19 @@ fn update_map(
         game.show_all_shots,
         game.map,
         has_flight,
+        // Tube levels follow the animation time (interpolated pictures between the frames).
         if game.editor.level.is_tube() {
-            game.tube_frame().unwrap_or(0)
+            if game.animate {
+                game.anim_time.to_bits()
+            } else {
+                u64::try_from(game.tube_frame().unwrap_or(0)).unwrap_or(u64::MAX)
+            }
         } else {
             0
         },
         (
             game.tube_gain_decades.to_bits(),
-            game.tube_range_decades.to_bits(),
+            game.tube_range_decades.to_bits() ^ (game.tube_particles as u64),
         ),
     );
     if key == game.map_key {
@@ -1234,8 +1265,9 @@ fn update_map(
     // previous level's).
     if level.is_tube() || level.shots.is_empty() {
         let shown = game.tube_frame();
-        let field = match (&level.tube, &game.tube_preview, shown) {
-            (Some(spec), Some(v), Some(k)) if v.revision == game.sent_revision => {
+        let picture = game.tube_display_frame();
+        let field = match (&level.tube, &game.tube_preview, shown, &picture) {
+            (Some(spec), Some(v), Some(k), Some(picture)) if v.revision == game.sent_revision => {
                 let run = &v.run;
                 let old = game
                     .tube_field
@@ -1250,23 +1282,24 @@ fn update_map(
                         .and_then(|_| run.frame_at(level.tube_verify_end()))
                     {
                         Some(f) => (tube_field(level, run, f).0, true),
-                        None => (tube_field(level, run, &run.frames[k]).0, false),
+                        None => (tube_field(level, run, picture).0, false),
                     },
                 };
                 let arrows = if mode == MapMode::Electric {
-                    tube_field(level, run, &run.frames[k]).1
+                    tube_field(level, run, picture).1
                 } else {
                     Vec::new()
                 };
                 let (params, items) = potential::tube_params(
                     run,
-                    &run.frames[k],
+                    picture,
                     spec.cathode,
                     spec.charge_per_mass.signum(),
                     mode == MapMode::Electric,
                     scale,
                     10f64.powf(game.tube_gain_decades),
                     game.tube_range_decades,
+                    game.tube_particles == TubeParticles::Density,
                 );
                 Some((
                     TubeField {

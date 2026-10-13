@@ -47,6 +47,9 @@ struct Params {
     // it still coloured.
     e_ref: f32,
     e_decades: f32,
+    // Tube levels: the particles as a glow of their charge's density (z > 0): x = 1/(2 s^2)
+    // of a Gaussian of width s, y = 1/(|q| at full glow).
+    glow: vec4<f32>,
 };
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
@@ -448,6 +451,29 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         col = electric_colour(p);
     } else {
         col = potential_colour(p);
+    }
+    // Tube levels: the particles as the density of their charge (electrons light blue,
+    // ions orange), a glow rather than a snow of dots.
+    if (params.glow.z > 0.5) {
+        var neg = 0.0;
+        var pos = 0.0;
+        for (var i = 0u; i < params.line_charges; i = i + 1u) {
+            let c = items[first_line_charge() + i];
+            let d = p - c.xy;
+            let r2 = dot(d, d) * params.glow.x;
+            if (r2 < 9.0) {
+                let w = abs(c.z) * exp(-r2);
+                if (c.z < 0.0) {
+                    neg = neg + w;
+                } else {
+                    pos = pos + w;
+                }
+            }
+        }
+        let gn = 1.0 - exp(-neg * params.glow.y);
+        let gp = 1.0 - exp(-pos * params.glow.y);
+        col = mix(col, vec3<f32>(0.6, 0.85, 1.0), 0.85 * gn);
+        col = mix(col, vec3<f32>(1.0, 0.7, 0.4), 0.85 * gp);
     }
     // Inside a solid.
     let inside = solid_distance(p);

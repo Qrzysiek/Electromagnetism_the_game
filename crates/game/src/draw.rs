@@ -1224,8 +1224,18 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     if !game.editor.level.is_tube() {
         return;
     }
-    let Some(frame) = game.tube_frame().and_then(|k| view.run.frames.get(k)) else {
+    let Some(frame) = game.tube_display_frame() else {
         return;
+    };
+    // Dots unless the map draws the particles' density (or they are hidden).
+    let map_on = matches!(
+        game.map,
+        Some(crate::potential::MapMode::Potential | crate::potential::MapMode::Electric)
+    );
+    let dots = match game.tube_particles {
+        crate::TubeParticles::Dots => true,
+        crate::TubeParticles::Density => !map_on,
+        crate::TubeParticles::Hidden => false,
     };
     // Negative carriers (electrons) blue, positive (ions) orange; projectiles from their
     // tracks below. Many macroparticles (a weak, finely sampled beam) are drawn fainter, so
@@ -1234,7 +1244,7 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     #[allow(clippy::cast_precision_loss)]
     let crowd = (200.0 / frame.x.len().max(1) as f32).clamp(0.3, 1.0);
     let fade = 0.85 * crowd * stale_fade(view.revision, game.sent_revision);
-    for (x, kind) in frame.x.iter().zip(&frame.kind) {
+    for (x, kind) in frame.x.iter().zip(&frame.kind).filter(|_| dots) {
         let color = match *kind {
             level::tube::KIND_NEGATIVE => Color::srgb(0.6, 0.85, 1.0),
             level::tube::KIND_POSITIVE => Color::srgb(1.0, 0.7, 0.4),
@@ -1277,16 +1287,32 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
                 continue;
             };
             let k = track.partition_point(|(tk, _)| *tk <= t);
-            if k >= 2 {
+            // Where it is at the time shown: between its samples (smooth at any speed).
+            let now = (k >= 1).then(|| {
+                let (t0, x0) = track[k - 1];
+                match track.get(k) {
+                    Some(&(t1, x1)) if t1 > t0 => {
+                        #[allow(clippy::cast_possible_truncation)]
+                        let w = ((t - t0) / (t1 - t0)).clamp(0.0, 1.0) as f32;
+                        Vec2::new(x0[0] + (x1[0] - x0[0]) * w, x0[1] + (x1[1] - x0[1]) * w)
+                    }
+                    _ => Vec2::new(x0[0], x0[1]),
+                }
+            });
+            if k >= 1 {
                 gizmos.linestrip_2d(
-                    track[..k].iter().map(|(_, x)| Vec2::new(x[0], x[1])),
+                    track[..k]
+                        .iter()
+                        .map(|(_, x)| Vec2::new(x[0], x[1]))
+                        .chain(now),
                     color.with_alpha(0.7 * fade),
                 );
             }
-            // In flight at the frame's time (its track continues past it).
-            if k >= 1 && k < track.len() || track.last().is_some_and(|l| (l.0 - t).abs() < 1e-9) {
-                let x = track[k - 1].1;
-                gizmos.circle_2d(Vec2::new(x[0], x[1]), 0.18, color.with_alpha(fade));
+            // In flight at the time shown (its track continues past it).
+            if let Some(x) = now
+                .filter(|_| k < track.len() || track.last().is_some_and(|l| (l.0 - t).abs() < 1e-9))
+            {
+                gizmos.circle_2d(x, 0.18, color.with_alpha(fade));
             }
         }
     }

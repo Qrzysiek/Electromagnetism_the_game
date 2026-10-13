@@ -1120,6 +1120,19 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             ui.selectable_value(&mut game.map, Some(MapMode::Electric), "electric field");
             ui.selectable_value(&mut game.map, None, "off");
         });
+        ui.horizontal(|ui| {
+            use crate::TubeParticles;
+            ui.label("Particles:");
+            ui.selectable_value(&mut game.tube_particles, TubeParticles::Density, "density")
+                .on_hover_text(
+                    "The density of their charge, a glow on the map (electrons light blue, \
+                     ions orange): a beam of many macroparticles reads as one stream",
+                );
+            ui.selectable_value(&mut game.tube_particles, TubeParticles::Dots, "dots")
+                .on_hover_text("Each macroparticle (a line of many carriers) as a dot");
+            ui.selectable_value(&mut game.tube_particles, TubeParticles::Hidden, "off")
+                .on_hover_text("The map alone");
+        });
         if game.map == Some(MapMode::Electric) {
             ui.add(
                 egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),

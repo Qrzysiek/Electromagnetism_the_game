@@ -210,6 +210,11 @@ pub struct TubeState {
     pub qm: Vec<f64>,
     /// Emitter index, or `PROJECTILE_TAG + j` for projectile j.
     pub tag: Vec<u32>,
+    /// Each particle's identity, kept while it flies (the display interpolates between
+    /// steps by it).
+    pub id: Vec<u32>,
+    /// The next particle's identity.
+    next_id: u32,
     /// For each particle, per electrode, whether it is inside the electrode's section.
     side: Vec<Vec<bool>>,
     /// For each particle, whether it has left its emitter's release layer (beyond
@@ -627,6 +632,8 @@ impl Tube {
         s.charge.push(charge);
         s.qm.push(qm);
         s.tag.push(tag);
+        s.id.push(s.next_id);
+        s.next_id = s.next_id.wrapping_add(1);
         s.left.push(false);
         s.side.push(
             self.electrodes
@@ -841,6 +848,7 @@ impl Tube {
                 s.charge.swap_remove(k);
                 s.qm.swap_remove(k);
                 s.tag.swap_remove(k);
+                s.id.swap_remove(k);
                 s.left.swap_remove(k);
                 s.side.swap_remove(k);
             } else {

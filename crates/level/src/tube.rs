@@ -367,6 +367,8 @@ pub struct TubeFrame {
     pub x: Vec<[f32; 2]>,
     pub q: Vec<f32>,
     pub kind: Vec<u8>,
+    /// Each particle's identity (`physics::tube::TubeState::id`).
+    pub id: Vec<u32>,
     pub sigma: Vec<f32>,
     /// Every electrode's potential.
     pub potentials: Vec<f32>,
@@ -444,6 +446,51 @@ impl TubeRun {
             self.potentials = chunk.potentials;
             self.potential_range = chunk.potential_range;
         }
+    }
+
+    /// The picture at time `t` between the stored frames, for the display (smooth at any
+    /// playback speed): each particle in both neighbouring frames moved linearly between
+    /// them, the surface densities and potentials interpolated; a particle absorbed before
+    /// the next frame stays where it was, one emitted after it appears with that frame.
+    /// Before the first frame the first, after the last the last.
+    pub fn frame_between(&self, t: f64) -> Option<TubeFrame> {
+        let k = self.frames.partition_point(|f| f.t <= t).saturating_sub(1);
+        let a = self.frames.get(k)?;
+        let Some(b) = self.frames.get(k + 1).filter(|b| b.t > a.t && t > a.t) else {
+            return Some(a.clone());
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        let w = ((t - a.t) / (b.t - a.t)).clamp(0.0, 1.0) as f32;
+        let next: std::collections::HashMap<u32, usize> =
+            b.id.iter().enumerate().map(|(i, id)| (*id, i)).collect();
+        let lerp = |u: f32, v: f32| u + (v - u) * w;
+        let x =
+            a.x.iter()
+                .enumerate()
+                .map(|(i, p)| match a.id.get(i).and_then(|id| next.get(id)) {
+                    Some(&j) => [lerp(p[0], b.x[j][0]), lerp(p[1], b.x[j][1])],
+                    None => *p,
+                })
+                .collect();
+        Some(TubeFrame {
+            t,
+            x,
+            q: a.q.clone(),
+            kind: a.kind.clone(),
+            id: a.id.clone(),
+            sigma: a
+                .sigma
+                .iter()
+                .zip(&b.sigma)
+                .map(|(u, v)| lerp(*u, *v))
+                .collect(),
+            potentials: a
+                .potentials
+                .iter()
+                .zip(&b.potentials)
+                .map(|(u, v)| lerp(*u, *v))
+                .collect(),
+        })
     }
 
     /// The frame at time `t` (the last one at or before it; the first before it).
@@ -696,6 +743,7 @@ impl TubeSim {
                     .map(|v| *v as f32)
                     .collect(),
                 potentials: s.potentials.iter().map(|v| *v as f32).collect(),
+                id: s.id.clone(),
             };
             self.pending.frames.push(frame);
             // Each potential goal's measure over its window.
@@ -1625,6 +1673,38 @@ impl Level {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The picture between two frames: a particle in both moves linearly, one absorbed
+    /// before the second stays where it was, the surface densities and potentials are
+    /// interpolated; before the first frame the first, after the last the last.
+    #[test]
+    fn frames_interpolate() {
+        let frame = |t: f64, x: Vec<[f32; 2]>, id: Vec<u32>, sigma: f32| TubeFrame {
+            t,
+            q: vec![-1.0; x.len()],
+            kind: vec![KIND_NEGATIVE; x.len()],
+            x,
+            id,
+            sigma: vec![sigma; 3],
+            potentials: vec![sigma; 2],
+        };
+        let run = TubeRun {
+            frames: vec![
+                frame(1.0, vec![[0.0, 0.0], [5.0, 5.0]], vec![7, 8], 1.0),
+                // Particle 8 absorbed, 9 emitted, 7 moved and now listed second.
+                frame(2.0, vec![[9.0, 9.0], [1.0, 2.0]], vec![9, 7], 3.0),
+            ],
+            ..TubeRun::default()
+        };
+        let mid = run.frame_between(1.25).unwrap();
+        assert!((mid.t - 1.25).abs() < 1e-12);
+        assert_eq!(mid.x, vec![[0.25, 0.5], [5.0, 5.0]]);
+        assert_eq!(mid.id, vec![7, 8]);
+        assert_eq!(mid.sigma, vec![1.5; 3]);
+        assert_eq!(mid.potentials, vec![1.5; 2]);
+        assert_eq!(run.frame_between(0.5).unwrap().x, run.frames[0].x);
+        assert_eq!(run.frame_between(3.0).unwrap().x, run.frames[1].x);
+    }
 
     /// The Fourier measures of a potential goal: `3 sin(ω t + φ)` plus a drift and an
     /// offset, sampled uniformly over whole periods, gives the amplitude 3 and the phase φ
