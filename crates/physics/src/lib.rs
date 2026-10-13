@@ -19,6 +19,7 @@ pub mod field_motion;
 pub mod geometry;
 pub mod inductance;
 pub mod integrator;
+pub mod lattice;
 pub mod lienard;
 pub mod magnetic;
 pub mod panel;

@@ -1222,6 +1222,7 @@ impl Level {
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
             circuits: self.tube_circuits(player),
+            lattices: Vec::new(),
         };
         // Each emitter's weight: 1/PREVIEW_PARTICLES of the largest charge its emitting face
         // holds (no particles) over 16 phases of the sources' longest period (t = 0 alone

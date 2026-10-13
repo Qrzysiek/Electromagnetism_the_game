@@ -51,6 +51,7 @@ use crate::bem::{Bias, Lu};
 use crate::circuit::Waveform;
 use rayon::prelude::*;
 
+use crate::lattice::Lattice;
 use crate::tree2d::{Source, Tree};
 use crate::zinv::{Electrodes, PAR_CHUNK, Section, line_charge, segment_field_fast};
 
@@ -212,6 +213,10 @@ pub struct Tube {
     pub b_z: f64,
     /// External circuits of electrodes.
     pub circuits: Vec<Circuit>,
+    /// Conductors' interiors (`lattice.rs`): their carriers fill them at the start (tagged
+    /// `emitters.len() + k`), every carrier inside one scatters off its ion cores and
+    /// walls, and their backgrounds add to the field.
+    pub lattices: Vec<Lattice>,
 }
 
 /// The particles and the bookkeeping of a running tube.
@@ -249,6 +254,12 @@ pub struct TubeState {
     pub fates: Vec<Option<Fate>>,
     /// Emission paused at `MAX_PARTICLES` at least once.
     pub capped: bool,
+    /// The energy per unit length the lattices have taken in collisions (the Joule heat),
+    /// and the collisions.
+    pub joule: f64,
+    pub collisions: u64,
+    /// The density the lattices' backgrounds induce on the segments (constant).
+    background: Vec<f64>,
     /// Every electrode's potential now.
     pub potentials: Vec<f64>,
     /// Per circuit node (`Tube::nodes`): its charge (its conductor's and its capacitor's).
@@ -373,7 +384,7 @@ impl Tube {
                     + nodes[r].capacitance * potentials[nodes[r].electrode]
             })
             .collect();
-        TubeState {
+        let mut s = TubeState {
             // A quiet start: each segment's account begins at a different fraction of a
             // macroparticle (the golden-ratio sequence), so that segments emitting at the
             // same rate do not emit together in volleys.
@@ -390,7 +401,7 @@ impl Tube {
                         .collect()
                 })
                 .collect(),
-            collected: vec![vec![0.0; self.emitters.len()]; n_el],
+            collected: vec![vec![0.0; self.emitters.len() + self.lattices.len()]; n_el],
             launched: vec![false; self.projectiles.len()],
             fates: vec![None; self.projectiles.len()],
             potentials,
@@ -399,7 +410,28 @@ impl Tube {
             inductor_current: vec![0.0; self.circuits.len()],
             induced: vec![0.0; self.electrodes.segments.len()],
             ..TubeState::default()
+        };
+        // The conductors: their carriers, and the charge their backgrounds induce.
+        if !self.lattices.is_empty() {
+            let n_em = u32::try_from(self.emitters.len()).unwrap_or(0);
+            for (k, l) in self.lattices.iter().enumerate() {
+                let q = l.carrier_charge();
+                let tag = n_em + u32::try_from(k).unwrap_or(0);
+                for (x, v) in l.fill() {
+                    self.add(&mut s, x, v, q, l.charge_per_mass, tag);
+                }
+            }
+            s.background = self
+                .electrodes
+                .induced_by(|y| self.lattices.iter().map(|l| l.background_at(y).0).sum());
+            s.induced = self.induced_density(&s);
+            for (i, b) in s.induced.iter_mut().zip(&s.background) {
+                *i += b;
+            }
+        } else {
+            s.background = vec![0.0; self.electrodes.segments.len()];
         }
+        s
     }
 
     /// The circuit nodes: electrodes with a circuit through a resistance or an inductance
@@ -690,6 +722,9 @@ impl Tube {
             let r2 = (r.x * r.x + r.y * r.y).max(h2);
             e += r * (2.0 * l / r2);
         }
+        for l in &self.lattices {
+            e += l.background_at(x).1;
+        }
         e
     }
 
@@ -861,7 +896,23 @@ impl Tube {
                 .map(|k| self.field(s, &sigma, s.x[k], Some(k)))
                 .collect()
         };
+        let before = if self.lattices.is_empty() {
+            Vec::new()
+        } else {
+            s.x.iter().copied().zip(s.v.iter().copied()).collect()
+        };
         for (((x, v), qm), e) in s.x.iter_mut().zip(&mut s.v).zip(&s.qm).zip(&fields) {
+            // The conductors' backgrounds (no sum at all without one: bit for bit as before).
+            let e = if self.lattices.is_empty() {
+                *e
+            } else {
+                *e + self
+                    .lattices
+                    .iter()
+                    .map(|l| l.background_at(*x).1)
+                    .sum::<DVec3>()
+            };
+            let e = &e;
             let h = 0.5 * self.dt * qm;
             let minus = *v + *e * h;
             // Rotation about z by the magnetic field (Boris).
@@ -872,6 +923,19 @@ impl Tube {
             *x += *v * self.dt;
         }
         s.t += self.dt;
+        // The conductors: every carrier that was inside one scatters (lattice.rs).
+        if !self.lattices.is_empty() {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let step = libm::round(s.t / self.dt) as u64;
+            for (p, (a, v0)) in before.iter().enumerate() {
+                if s.tag[p] >= PROJECTILE_TAG {
+                    continue;
+                }
+                if let Some(l) = self.lattices.iter().find(|l| l.contains(*a)) {
+                    self.scatter(l, s, p, *a, *v0, step);
+                }
+            }
+        }
         // Absorption: a particle that crossed an electrode's boundary, came back to its
         // emitter (RETURN_ABSORB), or left.
         let n_el = self.electrodes.electrodes.len();
@@ -944,5 +1008,68 @@ impl Tube {
         }
         // The moved particles' induced density, for the next step and the display.
         s.induced = self.induced_density(s);
+        for (i, b) in s.induced.iter_mut().zip(&s.background) {
+            *i += b;
+        }
+    }
+
+    /// The field at `x` now: the segments' charge, every particle's (softened) and the
+    /// lattices' backgrounds.
+    #[must_use]
+    pub fn field_at(&self, s: &TubeState, x: DVec3) -> DVec3 {
+        let sigma = self.surface_density(s);
+        self.field(s, &sigma, x, None)
+    }
+
+    /// The carrier `p` of `lattice` after a move from `a` (its velocity `v0` before the
+    /// step's kick): through the cores it entered (`Lattice::advance`: bounces, new
+    /// thermal speeds, the lattice taking the energy), then the walls (reflecting, but
+    /// where an electrode lies beyond: a contact, which absorbs the carrier below).
+    fn scatter(
+        &self,
+        lattice: &Lattice,
+        s: &mut TubeState,
+        p: usize,
+        a: DVec3,
+        v0: DVec3,
+        step: u64,
+    ) {
+        if let Some(m) = lattice.advance(a, v0, s.v[p], self.dt, s.id[p], step) {
+            let mass = (s.charge[p] / s.qm[p]).abs();
+            s.joule += mass * m.heat_per_mass;
+            s.collisions += u64::from(m.collisions);
+            s.x[p] = m.x;
+            s.v[p] = m.v;
+        }
+        for _ in 0..4 {
+            let x = s.x[p];
+            if lattice.contains(x)
+                || self
+                    .electrodes
+                    .electrodes
+                    .iter()
+                    .any(|e| inside(&e.section, x))
+            {
+                break;
+            }
+            let (lo, hi) = (lattice.lo, lattice.hi);
+            let (mut x, mut v) = (x, s.v[p]);
+            if x.x < lo.x {
+                x.x = 2.0 * lo.x - x.x;
+                v.x = -v.x;
+            } else if x.x > hi.x {
+                x.x = 2.0 * hi.x - x.x;
+                v.x = -v.x;
+            }
+            if x.y < lo.y {
+                x.y = 2.0 * lo.y - x.y;
+                v.y = -v.y;
+            } else if x.y > hi.y {
+                x.y = 2.0 * hi.y - x.y;
+                v.y = -v.y;
+            }
+            s.x[p] = x;
+            s.v[p] = v;
+        }
     }
 }

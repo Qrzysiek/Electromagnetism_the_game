@@ -117,6 +117,28 @@ fn field_in_frame(t: DVec3, n: DVec3, l: f64, u: f64, v: f64) -> DVec3 {
     t * e_u + n * e_v
 }
 
+/// Potential and field at `x` of the rectangle `lo`..`hi` (axis-aligned, in the plane)
+/// carrying a unit charge per area (a conductor's ions as a uniform background), exactly:
+/// with `u = x − x′`, `v = y − y′` over the rectangle, `φ = −Σ± F(u, v)`, the corner sum of
+/// `F = u v ln(u² + v²) − 3uv + u² atan(v/u) + v² atan(u/v)` (`∂²F/∂u∂v = ln(u² + v²)`, so
+/// `φ = −∫∫ ln r² dA`), and `E = Σ± (∂F/∂u, ∂F/∂v)`,
+/// `∂F/∂u = v ln(u² + v²) − 2v + 2u atan(v/u)` (test `rect_field_*`).
+pub fn rect_integrals(lo: DVec3, hi: DVec3, x: DVec3) -> (f64, DVec3) {
+    let ln2 = |u: f64, v: f64| {
+        let r2 = u * u + v * v;
+        if r2 > 0.0 { libm::log(r2) } else { 0.0 }
+    };
+    // w·atan(z/w), 0 at w = 0 (its limit).
+    let wat = |w: f64, z: f64| if w == 0.0 { 0.0 } else { w * libm::atan(z / w) };
+    let f = |u: f64, v: f64| u * v * ln2(u, v) - 3.0 * u * v + u * wat(u, v) + v * wat(v, u);
+    let fu = |u: f64, v: f64| v * ln2(u, v) - 2.0 * v + 2.0 * wat(u, v);
+    let fv = |u: f64, v: f64| u * ln2(u, v) - 2.0 * u + 2.0 * wat(v, u);
+    let (ua, ub) = (x.x - hi.x, x.x - lo.x);
+    let (va, vb) = (x.y - hi.y, x.y - lo.y);
+    let sum = |g: &dyn Fn(f64, f64) -> f64| g(ub, vb) - g(ua, vb) - g(ub, va) + g(ua, va);
+    (-sum(&f), DVec3::new(sum(&fu), sum(&fv), 0.0))
+}
+
 /// A line charge's potential and field at `x`.
 pub fn line_charge(p: DVec3, lambda: f64, x: DVec3) -> (f64, DVec3) {
     let r = DVec3::new(x.x - p.x, x.y - p.y, 0.0);
@@ -472,5 +494,72 @@ impl Electrodes {
     /// The unit system of electrode `j` (its density with `j` at 1, the others at 0).
     pub fn unit(&self, j: usize) -> &[f64] {
         &self.unit[j]
+    }
+}
+
+#[cfg(test)]
+mod rect_tests {
+    use super::*;
+
+    /// The rectangle's field obeys Gauss's law: its flux through a square around it is
+    /// 4π times its charge, and through one beside it 0 (to 1e-6 of 4πQ: the contour's
+    /// quadrature); far away it is a line charge's (2Q r̂/r, to 1e-4 at 50 sizes); E = −∇φ
+    /// (centred differences, 1e-6).
+    #[test]
+    fn rect_field_gauss_and_far_field() {
+        let (lo, hi) = (DVec3::new(1.0, 2.0, 0.0), DVec3::new(4.0, 3.5, 0.0));
+        let q = (hi.x - lo.x) * (hi.y - lo.y);
+        let flux = |c: DVec3, half: f64| {
+            let n = 4000;
+            let mut s = 0.0;
+            for k in 0..n {
+                #[allow(clippy::cast_precision_loss)]
+                let t = -half + 2.0 * half * (k as f64 + 0.5) / n as f64;
+                let w = 2.0 * half / f64::from(n);
+                s += rect_integrals(lo, hi, c + DVec3::new(half, t, 0.0)).1.x * w;
+                s -= rect_integrals(lo, hi, c + DVec3::new(-half, t, 0.0)).1.x * w;
+                s += rect_integrals(lo, hi, c + DVec3::new(t, half, 0.0)).1.y * w;
+                s -= rect_integrals(lo, hi, c + DVec3::new(t, -half, 0.0)).1.y * w;
+            }
+            s
+        };
+        let around = flux(DVec3::new(2.5, 2.75, 0.0), 3.0);
+        let beside = flux(DVec3::new(12.0, 2.75, 0.0), 3.0);
+        let four_pi_q = 4.0 * std::f64::consts::PI * q;
+        assert!(
+            (around - four_pi_q).abs() < 1e-6 * four_pi_q,
+            "{around} vs {four_pi_q}"
+        );
+        assert!(beside.abs() < 1e-6 * four_pi_q, "{beside}");
+        let far = DVec3::new(2.5 + 150.0, 2.75 + 80.0, 0.0);
+        let r = far - DVec3::new(2.5, 2.75, 0.0);
+        let exact = r * (2.0 * q / r.length_squared());
+        let e = rect_integrals(lo, hi, far).1;
+        assert!(
+            (e - exact).length() < 1e-4 * exact.length(),
+            "{e} vs {exact}"
+        );
+        for x in [
+            DVec3::new(2.0, 2.5, 0.0),
+            DVec3::new(0.3, 5.0, 0.0),
+            DVec3::new(5.0, 1.0, 0.0),
+        ] {
+            let h = 1e-5;
+            let gx = -(rect_integrals(lo, hi, x + DVec3::X * h).0
+                - rect_integrals(lo, hi, x - DVec3::X * h).0)
+                / (2.0 * h);
+            let gy = -(rect_integrals(lo, hi, x + DVec3::Y * h).0
+                - rect_integrals(lo, hi, x - DVec3::Y * h).0)
+                / (2.0 * h);
+            let e = rect_integrals(lo, hi, x).1;
+            assert!(
+                (e.x - gx).abs() < 1e-6 * (1.0 + e.length()),
+                "{x}: {e} vs {gx} {gy}"
+            );
+            assert!(
+                (e.y - gy).abs() < 1e-6 * (1.0 + e.length()),
+                "{x}: {e} vs {gx} {gy}"
+            );
+        }
     }
 }

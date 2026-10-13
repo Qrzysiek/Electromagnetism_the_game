@@ -216,6 +216,7 @@ fn v4_coaxial_diode_langmuir_blodgett() {
             dt,
             arena: None,
             b_z: 0.0,
+            lattices: Vec::new(),
             circuits: Vec::new(),
         };
         let mut s = tube.state();
@@ -380,6 +381,7 @@ fn v6_bipolar_coaxial_diode() {
             dt,
             arena: None,
             b_z: 0.0,
+            lattices: Vec::new(),
             circuits: Vec::new(),
         };
         let mut s = tube.state();
@@ -469,6 +471,7 @@ fn v7_projectile_conserves_energy() {
         dt: 0.01,
         arena: None,
         b_z: 0.0,
+        lattices: Vec::new(),
         circuits: Vec::new(),
     };
     let energy = |s: &physics::tube::TubeState| {
@@ -605,6 +608,7 @@ fn v8_crossed_fields_hull() {
             dt: 0.002,
             arena: None,
             b_z: bz,
+            lattices: Vec::new(),
             circuits: Vec::new(),
         };
         let mut s = tube.state();
@@ -693,6 +697,7 @@ fn v9_temperature_limited_emission() {
             dt: 0.01,
             arena: None,
             b_z: 0.0,
+            lattices: Vec::new(),
             circuits: Vec::new(),
         };
         let mut s = tube.state();
@@ -771,6 +776,7 @@ fn v10_circuit_node_discharges() {
         dt,
         arena: None,
         b_z: 0.0,
+        lattices: Vec::new(),
         circuits: vec![Circuit {
             electrode: 0,
             source: Waveform::Dc(0.0),
@@ -827,6 +833,7 @@ fn v11_beam_charges_a_floating_collector() {
         dt: 0.01,
         arena: None,
         b_z: 0.0,
+        lattices: Vec::new(),
         circuits: vec![Circuit {
             electrode: 1,
             source: Waveform::Dc(0.0),
@@ -970,6 +977,7 @@ fn v12_returning_carriers_are_absorbed() {
         dt: 0.002,
         arena: None,
         b_z: bz,
+        lattices: Vec::new(),
         circuits: Vec::new(),
     };
     let mut s = tube.state();
@@ -1052,6 +1060,7 @@ fn magnetron_with_space_charge_measurement() {
             dt: 0.01,
             arena: None,
             b_z: factor * b_h,
+            lattices: Vec::new(),
             circuits: Vec::new(),
         };
         let mut s = tube.state();
@@ -1242,6 +1251,7 @@ fn v15_finer_emitter_mesh() {
             dt,
             arena: None,
             b_z: 0.0,
+            lattices: Vec::new(),
             circuits: Vec::new(),
         };
         let mut s = tube.state();
@@ -1350,6 +1360,7 @@ fn energy_balance(l: f64) {
             dt,
             arena: None,
             b_z: 0.0,
+            lattices: Vec::new(),
             circuits: vec![Circuit {
                 electrode: 1,
                 source: Waveform::Dc(0.0),
@@ -1454,6 +1465,7 @@ fn v17_lc_tank_keeps_its_energy() {
         dt,
         arena: None,
         b_z: 0.0,
+        lattices: Vec::new(),
         circuits: vec![Circuit {
             electrode: 0,
             source: Waveform::Dc(0.0),
@@ -1528,6 +1540,7 @@ fn v18_tank_between_two_electrodes() {
         dt,
         arena: None,
         b_z: 0.0,
+        lattices: Vec::new(),
         circuits: vec![Circuit {
             electrode: 0,
             source: Waveform::Dc(0.0),
@@ -1610,6 +1623,7 @@ fn v19_strapped_electrodes_are_one_node() {
         dt,
         arena: None,
         b_z: 0.0,
+        lattices: Vec::new(),
         circuits: vec![
             Circuit {
                 electrode: 0,
