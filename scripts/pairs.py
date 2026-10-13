@@ -224,6 +224,21 @@ def make_tube(lv, pl, p, o, w):
                            "end": 10.0}}
 
 
+def make_tube_coax(lv, pl, p, o, w):
+    """A coaxial tube level: a rod cathode (diameter 2) at p inside a ring anode
+    (mid-diameter 7, wall 1, at 1 V) collecting the goal's current, so that the other
+    element lands inside the ring, on its wall or outside it: rods and rings (PHYSICS.md
+    2.11)."""
+    lv["shots"] = []
+    es = lv.setdefault("electrodes", [])
+    k = len(es)
+    es.append(electrode(p, length=2.0, thickness=2.0, shape="rod", bias={"kind": "grounded"}))
+    es.append(electrode(p, length=7.0, thickness=1.0, shape="ring"))
+    lv["tube"] = {"cathode": k, "charge_per_mass": -1.0,
+                  "goals": [{"electrode": k + 1, "min": 0.0, "max": 1.0, "start": 5.0,
+                             "end": 10.0}]}
+
+
 ELEMENTS = {
     "charge": add("elements", lambda p, o, w: {"node": node(p), "kind": "charge", "value": 1.0}),
     "magnet": add("elements", lambda p, o, w: {"node": node(p), "kind": "magnet", "value": 2.0}),
@@ -237,6 +252,9 @@ ELEMENTS = {
         "center": node(p), "radius": 1.5, "bias": {"kind": "potential", "value": 1.0}}),
     "cloud": add("clouds", lambda p, o, w: {"center": node(p), "radius": 2.0, "charge": -2.0}),
     "electrode": add("electrodes", lambda p, o, w: electrode(p)),
+    # A ring (tube levels only: the 3D levels must refuse it).
+    "electrode_ring": add("electrodes", lambda p, o, w: electrode(p, length=3.0, thickness=0.4,
+                                                                  shape="ring")),
     "electrode_tunable": lambda lv, pl, p, o, w: (
         lv.setdefault("electrodes", []).append(electrode(p, tunable=True)),
         pl.append({"node": node(p), "kind": "supply", "value": -1.0})),
@@ -284,6 +302,7 @@ ELEMENTS = {
     "tube_solenoid": make_tube_solenoid,
     "tube_circuit": make_tube_circuit,
     "tube_tank": make_tube_tank,
+    "tube_coax": make_tube_coax,
     "player_charge": player(lambda p, o, w: {"node": node(p), "kind": "charge", "value": -1.0}),
     "player_magnet": player(lambda p, o, w: {"node": node(p), "kind": "magnet", "value": 2.0}),
     "player_antenna": player(lambda p, o, w: {"node": node(p), "kind": "antenna", "value": 1.0,

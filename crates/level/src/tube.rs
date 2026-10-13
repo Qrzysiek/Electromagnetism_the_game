@@ -827,14 +827,34 @@ impl Level {
         let mut prisms: Vec<Prism> = self
             .all_box_electrodes(player)
             .into_iter()
-            .map(|b| Prism {
-                section: Section::Rect {
-                    center: b.center,
-                    angle: b.angle,
-                    half_length: b.half_length,
-                    half_thickness: b.half_thickness,
-                },
-                bias: b.bias,
+            .enumerate()
+            .map(|(i, b)| {
+                let shape = self
+                    .electrodes
+                    .get(i)
+                    .map_or(crate::ElectrodeShape::Box, |e| e.shape);
+                let e = self.electrodes.get(i);
+                let section = match (shape, e) {
+                    (crate::ElectrodeShape::Rod, Some(e)) => Section::Circle {
+                        center: b.center,
+                        radius: e.length / 2.0,
+                    },
+                    (crate::ElectrodeShape::Ring, Some(e)) => Section::Ring {
+                        center: b.center,
+                        radius: e.length / 2.0,
+                        thickness: e.thickness,
+                    },
+                    _ => Section::Rect {
+                        center: b.center,
+                        angle: b.angle,
+                        half_length: b.half_length,
+                        half_thickness: b.half_thickness,
+                    },
+                };
+                Prism {
+                    section,
+                    bias: b.bias,
+                }
             })
             .collect();
         // An electrode on a source (ideal or through a resistance) starts at the source's
@@ -1445,26 +1465,30 @@ impl Level {
                 ));
             }
         }
-        // Every electrode inside the board: the envelope lies just outside it.
+        // Every electrode inside the board: the envelope lies just outside it. The
+        // electrodes' own outlines (a rod's circle, a ring's annulus, open inside).
+        let outlines = self.electrode_outlines(player);
         let max = self.grid.position(self.grid.max_node());
-        for (i, b) in boxes.iter().enumerate() {
-            let outside = crate::rect_corners(b)
-                .iter()
-                .any(|c| c.x < -1e-9 || c.y < -1e-9 || c.x > max.x + 1e-9 || c.y > max.y + 1e-9);
-            if outside {
+        let board = [
+            DVec3::ZERO,
+            DVec3::new(max.x, 0.0, 0.0),
+            DVec3::new(max.x, max.y, 0.0),
+            DVec3::new(0.0, max.y, 0.0),
+        ];
+        for (i, o) in outlines.iter().enumerate() {
+            if !o.within(&board) {
                 out.push(format!(
-                    "Tube: electrode {} reaches beyond the board (the tube's grounded                      envelope lies just outside it).",
+                    "Tube: electrode {} reaches beyond the board (the tube's grounded \
+                     envelope lies just outside it).",
                     i + 1
                 ));
             }
         }
         // Prisms must not touch: the boundary elements of touching electrodes at different
         // potentials would hold an infinite field between them.
-        for (i, a) in boxes.iter().enumerate() {
-            for (j, b) in boxes.iter().enumerate().skip(i + 1) {
-                if crate::rect_distance(&crate::rect_corners(a), &crate::rect_corners(b))
-                    < crate::CONTACT_DISTANCE
-                {
+        for (i, a) in outlines.iter().enumerate() {
+            for (j, b) in outlines.iter().enumerate().skip(i + 1) {
+                if a.distance(b) < crate::CONTACT_DISTANCE {
                     out.push(format!(
                         "Electrodes {} and {} touch or overlap.",
                         i + 1,
@@ -1474,9 +1498,13 @@ impl Level {
             }
         }
         // A projectile or a free charge starting inside metal.
-        let shapes = physics::bem::Electrodes::shapes_only(boxes);
+        let in_metal = |x: DVec3| {
+            outlines
+                .iter()
+                .any(|o| o.distance_to(x) < crate::CONTACT_DISTANCE)
+        };
         for (j, p) in spec.projectiles.iter().enumerate() {
-            if shapes.contains(self.grid.position(p.node), crate::CONTACT_DISTANCE) {
+            if in_metal(self.grid.position(p.node)) {
                 out.push(format!("Tube: projectile {} starts in metal.", j + 1));
             }
         }
@@ -1485,7 +1513,7 @@ impl Level {
             .filter(|e| e.kind == ElementKind::Free)
             .enumerate()
         {
-            if shapes.contains(self.grid.position(e.node), crate::CONTACT_DISTANCE) {
+            if in_metal(self.grid.position(e.node)) {
                 out.push(format!("Tube: your free charge {} starts in metal.", j + 1));
             }
         }

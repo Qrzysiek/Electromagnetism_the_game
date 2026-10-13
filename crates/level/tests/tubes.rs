@@ -24,6 +24,7 @@ pub fn diode(v: f64) -> Level {
         thickness: 1.0,
         height: 10.0,
         angle_deg: 90.0,
+        shape: level::ElectrodeShape::Box,
         bias,
         tunable: false,
         drive: None,
@@ -259,5 +260,102 @@ fn coils_in_tube_circuits() {
         run.frames
             .iter()
             .all(|f| f.potentials.iter().all(|v| v.is_finite()))
+    );
+}
+
+/// A coaxial tube: a rod (diameter 2) inside a ring (mid-diameter 6, wall 1), on a 24 × 16
+/// board.
+fn coax_level() -> Level {
+    let mut level = diode(10.0);
+    let round = |shape, length: f64, thickness: f64, bias| Electrode {
+        center: [12, 8, 0],
+        length,
+        thickness,
+        height: 10.0,
+        angle_deg: 0.0,
+        shape,
+        bias,
+        tunable: false,
+        drive: None,
+    };
+    level.electrodes = vec![
+        round(
+            level::ElectrodeShape::Rod,
+            2.0,
+            2.0,
+            ConductorBias::Potential(1.0),
+        ),
+        round(
+            level::ElectrodeShape::Ring,
+            6.0,
+            1.0,
+            ConductorBias::Grounded,
+        ),
+    ];
+    level
+}
+
+/// Rods and rings (tube levels): the level's shapes reach the boundary elements as circles
+/// and annuli, so the rod's capacitance per unit length inside the ring is the coaxial
+/// `1/(2 ln(b/a))` with a = 1 and b = 2.5 (the ring's inner radius; the grounded envelope
+/// outside the ring does not matter): required to 1e-3 with segments of 0.1 (V2: 2e-4 at
+/// 0.05). The setup checks use the shapes: the rod in the ring's hole is clear of it, a
+/// rod reaching into the wall touches it, a ring beyond the board is refused, and a 3D
+/// level refuses rods.
+#[test]
+fn rods_and_rings() {
+    let level = coax_level();
+    assert!(
+        level.setup_issues(&[]).is_empty(),
+        "{:?}",
+        level.setup_issues(&[])
+    );
+    let prisms = physics::zinv::Electrodes::new(level.tube_prisms(&[]), &[], 0.1);
+    let c = prisms.capacitance[0][0];
+    let exact = 1.0 / (2.0 * (2.5_f64).ln());
+    println!(
+        "coaxial rod in a ring: C = {c:.6}, exact {exact:.6} ({:.2e})",
+        c / exact - 1.0
+    );
+    assert!((c / exact - 1.0).abs() < 1e-3, "C {c} vs {exact}");
+
+    let mut fat = level.clone();
+    fat.electrodes[0].length = 5.0;
+    assert!(
+        fat.setup_issues(&[])
+            .iter()
+            .any(|s| s.contains("touch or overlap"))
+    );
+    let mut wide = level.clone();
+    wide.electrodes[1].length = 20.0;
+    assert!(
+        wide.setup_issues(&[])
+            .iter()
+            .any(|s| s.contains("beyond the board"))
+    );
+    let mut flat = level::shipped("first_bend");
+    flat.electrodes = level.electrodes.clone();
+    assert!(
+        flat.setup_issues(&[])
+            .iter()
+            .any(|s| s.contains("rods and rings"))
+    );
+    // A free charge in the ring's hole starts in vacuum, one in its wall in metal.
+    let free = |x: i64| level::Element {
+        kind: level::ElementKind::Free,
+        speed: Some(0.0),
+        ..level::Element::charge([x, 8, 0], -0.01)
+    };
+    assert!(
+        !level
+            .setup_issues(&[free(14)])
+            .iter()
+            .any(|s| s.contains("starts in metal"))
+    );
+    assert!(
+        level
+            .setup_issues(&[free(15)])
+            .iter()
+            .any(|s| s.contains("starts in metal"))
     );
 }

@@ -14,9 +14,9 @@ use level::tube::{
 };
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
-    DielectricSphere, Disturbance, Drive, Electrode, Element, ElementKind, FerritePlate,
-    FreeParticle, Grid, Launch, Level, Limits, Node, ParticleSpec, RadiationGoal, Region2, Shot,
-    Source, Switch, TolerancesSpec, Wave, WorldPhysics,
+    DielectricSphere, Disturbance, Drive, Electrode, ElectrodeShape, Element, ElementKind,
+    FerritePlate, FreeParticle, Grid, Launch, Level, Limits, Node, ParticleSpec, RadiationGoal,
+    Region2, Shot, Source, Switch, TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -1273,6 +1273,7 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
             thickness,
             height,
             angle_deg,
+            shape,
             bias,
             tunable,
             drive,
@@ -1290,6 +1291,21 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
                 }
             });
             ui.horizontal(|ui| {
+                egui::ComboBox::from_id_salt("shape")
+                    .selected_text(match shape {
+                        ElectrodeShape::Box => "box",
+                        ElectrodeShape::Rod => "rod",
+                        ElectrodeShape::Ring => "ring",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(shape, ElectrodeShape::Box, "box");
+                        ui.selectable_value(shape, ElectrodeShape::Rod, "rod")
+                            .on_hover_text("Tube levels: a circle, diameter L");
+                        ui.selectable_value(shape, ElectrodeShape::Ring, "ring")
+                            .on_hover_text(
+                                "Tube levels: an annulus, mid-diameter L, wall T, open inside",
+                            );
+                    });
                 ui.label("L×T×H");
                 focus |= positive(ui, length, 0.05, MAX_POSITIVE);
                 focus |= positive(ui, thickness, 0.02, MAX_POSITIVE);
@@ -1315,6 +1331,7 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
             thickness: 0.4,
             height: 4.0,
             angle_deg: 0.0,
+            shape: ElectrodeShape::Box,
             bias: ConductorBias::Grounded,
             tunable: false,
             drive: None,
@@ -2762,6 +2779,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             thickness,
             height,
             angle_deg,
+            // A combo box of every shape (`setup_issues` keeps rods and rings to tubes).
+            shape: _,
             bias,
             // A checkbox.
             tunable: _,

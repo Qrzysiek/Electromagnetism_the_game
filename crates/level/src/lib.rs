@@ -106,6 +106,11 @@ pub struct Electrode {
     pub height: f64,
     #[serde(default)]
     pub angle_deg: f64,
+    /// The cross-section (tube levels only; the 3D levels' electrodes are boxes): a box,
+    /// a rod (a circle of diameter `length`) or a ring (a tube's wall seen end-on: an
+    /// annulus of mid-diameter `length` and wall `thickness`, open inside).
+    #[serde(default, skip_serializing_if = "ElectrodeShape::is_box")]
+    pub shape: ElectrodeShape,
     pub bias: ConductorBias,
     /// The player sets this electrode's potential with a power supply (an element of kind
     /// `Supply` on its centre, one of `limits.supply_voltages`); without one it keeps
@@ -116,6 +121,25 @@ pub struct Electrode {
     /// A circuit driving its potential (PHYSICS.md §2.10).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drive: Option<Drive>,
+}
+
+/// An electrode's cross-section (`Electrode::shape`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ElectrodeShape {
+    #[default]
+    Box,
+    /// A circle of diameter `length` (a wire, a cylinder seen end-on).
+    Rod,
+    /// An annulus of mid-diameter `length` and wall `thickness` (a coaxial anode).
+    Ring,
+}
+
+impl ElectrodeShape {
+    #[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+    fn is_box(&self) -> bool {
+        *self == ElectrodeShape::Box
+    }
 }
 
 /// A dielectric box standing on the plane (symmetric about it), of relative permittivity
@@ -1478,6 +1502,17 @@ impl Level {
     /// game shows these instead of computing; the shipped levels have none.
     pub fn setup_issues(&self, player: &[Element]) -> Vec<String> {
         let mut out = Vec::new();
+        if !self.is_tube() {
+            for (i, e) in self.electrodes.iter().enumerate() {
+                if e.shape != ElectrodeShape::Box {
+                    out.push(format!(
+                        "Electrode {}: rods and rings exist in tube levels only (the 3D \
+                         levels' boundary elements mesh boxes).",
+                        i + 1
+                    ));
+                }
+            }
+        }
         let pos = |n: Node| self.grid.position(n);
         let boxes = physics::bem::Electrodes::shapes_only(self.all_box_electrodes(player));
         for (i, a) in self.conductors.iter().enumerate() {
@@ -1707,9 +1742,14 @@ impl Level {
                     return Err(PlacementError::OutsideRegion(e.node));
                 }
             }
-            let blocked = boxes
+            let outline = Outline::Rect(corners);
+            let blocked = self
+                .electrode_outlines(&[])
                 .iter()
-                .any(|o| rect_distance(&corners, &rect_corners(o)) < PLATE_CLEARANCE)
+                .any(|o| o.distance(&outline) < PLATE_CLEARANCE)
+                || boxes[self.electrodes.len()..]
+                    .iter()
+                    .any(|o| rect_distance(&corners, &rect_corners(o)) < PLATE_CLEARANCE)
                 || self.shots.iter().any(|s| {
                     rect_distance(
                         &corners,
@@ -2857,15 +2897,16 @@ impl Level {
         boxes.chain(spheres).collect()
     }
 
-    /// The level's electrodes as physics boxes, at their own bias.
+    /// The level's electrodes as physics boxes, at their own bias (a rod or a ring: its
+    /// bounding square; their own outlines are `electrode_outlines`).
     pub fn box_electrodes(&self) -> Vec<physics::bem::BoxElectrode> {
         self.electrodes
             .iter()
             .map(|e| physics::bem::BoxElectrode {
                 center: self.grid.position(e.center),
                 angle: e.angle_deg.to_radians(),
-                half_length: e.length / 2.0,
-                half_thickness: e.thickness / 2.0,
+                half_length: e.outer_radius().unwrap_or(e.length / 2.0),
+                half_thickness: e.outer_radius().unwrap_or(e.thickness / 2.0),
                 half_height: e.height / 2.0,
                 bias: match e.bias {
                     ConductorBias::Grounded => Bias::Grounded,
@@ -2959,6 +3000,172 @@ fn electrodes_for(
         Resolution::Display => physics::bem::Resolution::Display,
     };
     physics::bem::Electrodes::new_with_dielectrics(boxes, dielectrics, &sources, res)
+}
+
+impl Electrode {
+    /// A rod's radius, or a ring's outer radius (None for a box).
+    pub fn outer_radius(&self) -> Option<f64> {
+        match self.shape {
+            ElectrodeShape::Box => None,
+            ElectrodeShape::Rod => Some(self.length / 2.0),
+            ElectrodeShape::Ring => Some((self.length + self.thickness) / 2.0),
+        }
+    }
+}
+
+/// An electrode's cross-section for geometric checks: a box's corners, or (tube levels) a
+/// rod's circle or a ring's annulus.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Outline {
+    Rect([DVec3; 4]),
+    Circle {
+        center: DVec3,
+        radius: f64,
+    },
+    Ring {
+        center: DVec3,
+        inner: f64,
+        outer: f64,
+    },
+}
+
+impl Outline {
+    /// The nearest and farthest distances from `c` to this outline's material (the nearest
+    /// 0 if `c` lies in it).
+    fn radial_range(&self, c: DVec3) -> (f64, f64) {
+        match *self {
+            Outline::Rect(r) => {
+                let near = if rect_contains(&r, c) {
+                    0.0
+                } else {
+                    (0..4)
+                        .map(|i| segment_distance(c, r[i], r[(i + 1) % 4]))
+                        .fold(f64::INFINITY, f64::min)
+                };
+                let far = r.iter().map(|p| (*p - c).length()).fold(0.0, f64::max);
+                (near, far)
+            }
+            Outline::Circle { center, radius } => {
+                let d = (center - c).length();
+                ((d - radius).max(0.0), d + radius)
+            }
+            Outline::Ring {
+                center,
+                inner,
+                outer,
+            } => {
+                let d = (center - c).length();
+                let near = if d < inner {
+                    inner - d
+                } else if d > outer {
+                    d - outer
+                } else {
+                    0.0
+                };
+                (near, d + outer)
+            }
+        }
+    }
+
+    /// The distance between two outlines' material (0 where they touch or overlap). Exact
+    /// for connected shapes: a shape reaching from a ring's hole to beyond it crosses the
+    /// ring.
+    pub fn distance(&self, other: &Outline) -> f64 {
+        match (*self, *other) {
+            (Outline::Rect(a), Outline::Rect(b)) => rect_distance(&a, &b),
+            (Outline::Circle { center, radius }, o) | (o, Outline::Circle { center, radius }) => {
+                (o.radial_range(center).0 - radius).max(0.0)
+            }
+            (
+                Outline::Ring {
+                    center,
+                    inner,
+                    outer,
+                },
+                o,
+            )
+            | (
+                o,
+                Outline::Ring {
+                    center,
+                    inner,
+                    outer,
+                },
+            ) => {
+                let (near, far) = o.radial_range(center);
+                if far < inner {
+                    inner - far
+                } else if near > outer {
+                    near - outer
+                } else {
+                    0.0
+                }
+            }
+        }
+    }
+
+    /// The distance from point `p` to the material (0 inside it).
+    pub fn distance_to(&self, p: DVec3) -> f64 {
+        self.radial_range(p).0
+    }
+
+    /// Whether the outline lies within the axis-aligned rectangle `r` (corners as
+    /// `Level::node_rect` gives them: lower left first, upper right third).
+    pub(crate) fn within(&self, r: &[DVec3; 4]) -> bool {
+        let (lo, hi) = (r[0], r[2]);
+        let inside = |c: DVec3, e: f64| {
+            c.x - e >= lo.x - 1e-9
+                && c.y - e >= lo.y - 1e-9
+                && c.x + e <= hi.x + 1e-9
+                && c.y + e <= hi.y + 1e-9
+        };
+        match *self {
+            Outline::Rect(corners) => corners.iter().all(|c| inside(*c, 0.0)),
+            Outline::Circle { center, radius } => inside(center, radius),
+            Outline::Ring { center, outer, .. } => inside(center, outer),
+        }
+    }
+}
+
+impl Level {
+    /// The outlines of every electrode of a placement: the level's (by their shapes), then
+    /// the player's plates (boxes), in `all_box_electrodes`' order.
+    pub fn electrode_outlines(&self, player: &[Element]) -> Vec<Outline> {
+        self.electrodes
+            .iter()
+            .map(|e| {
+                let center = self.grid.position(e.center);
+                let center = DVec3::new(center.x, center.y, 0.0);
+                match e.shape {
+                    ElectrodeShape::Rod => Outline::Circle {
+                        center,
+                        radius: e.length / 2.0,
+                    },
+                    ElectrodeShape::Ring => Outline::Ring {
+                        center,
+                        inner: (e.length - e.thickness) / 2.0,
+                        outer: (e.length + e.thickness) / 2.0,
+                    },
+                    ElectrodeShape::Box => {
+                        Outline::Rect(rect_corners(&physics::bem::BoxElectrode {
+                            center,
+                            angle: e.angle_deg.to_radians(),
+                            half_length: e.length / 2.0,
+                            half_thickness: e.thickness / 2.0,
+                            half_height: e.height / 2.0,
+                            bias: Bias::Grounded,
+                        }))
+                    }
+                }
+            })
+            .chain(
+                player
+                    .iter()
+                    .filter(|e| e.kind == ElementKind::Plate)
+                    .map(|e| Outline::Rect(rect_corners(&self.plate_box(e)))),
+            )
+            .collect()
+    }
 }
 
 /// In-plane corners of an electrode box (z = 0), counter-clockwise.
@@ -3344,6 +3551,7 @@ mod tests {
             thickness: 0.4,
             height: 4.0,
             angle_deg: 0.0,
+            shape: ElectrodeShape::Box,
             bias: ConductorBias::Grounded,
             tunable: true,
             drive: None,
@@ -3460,6 +3668,7 @@ mod tests {
             thickness: 0.4,
             height: 4.0,
             angle_deg: 90.0,
+            shape: ElectrodeShape::Box,
             bias: ConductorBias::Potential(1e4),
             tunable: false,
             drive: None,

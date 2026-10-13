@@ -472,16 +472,23 @@ impl Editor {
     pub fn tunable_at(&self, node: Node) -> Option<Node> {
         let p = self.level.grid.position(node);
         let boxes = self.level.box_electrodes();
+        let outlines = self.level.electrode_outlines(&[]);
         let electrode = self
             .level
             .electrodes
             .iter()
             .zip(boxes)
-            .find(|(e, b)| {
+            .zip(outlines)
+            .find(|((e, b), o)| {
                 e.tunable
-                    && physics::bem::Electrodes::shapes_only(vec![*b]).contains(p, PICK_MARGIN)
+                    && if e.shape == level::ElectrodeShape::Box {
+                        physics::bem::Electrodes::shapes_only(vec![*b]).contains(p, PICK_MARGIN)
+                    } else {
+                        // A rod or a ring itself (a ring's hole is not the electrode).
+                        o.distance_to(p) <= PICK_MARGIN
+                    }
             })
-            .map(|(e, _)| e.center);
+            .map(|((e, _), _)| e.center);
         // A tube level's solenoid: its terminal node.
         let solenoid = self
             .level

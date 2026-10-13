@@ -337,6 +337,36 @@ fn draw_box(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode) {
     gizmos.linestrip_2d(box_outline(b, 0.0), rim);
 }
 
+/// A rod (`inner` = 0) or a ring between radii `inner` and `outer` (tube levels): grey
+/// metal (concentric hatching) with a rim in the colour of its potential, as `draw_box`.
+fn draw_round(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode, inner: f64, outer: f64) {
+    let c = to_vec2(b.center);
+    #[allow(clippy::cast_possible_truncation)]
+    let (inner, outer) = (inner as f32, outer as f32);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let rings = (((outer - inner) / 0.03).ceil() as u32).max(2);
+    for k in 0..=rings {
+        #[allow(clippy::cast_precision_loss)]
+        let r = inner + (outer - inner) * k as f32 / rings as f32;
+        if r > 0.0 {
+            gizmos.circle_2d(c, r, Color::srgb(0.42, 0.45, 0.5));
+        }
+    }
+    let rim = match b.bias {
+        physics::conductor::Bias::Charge(x) | physics::conductor::Bias::Potential(x) if x > 0.0 => {
+            Color::srgb(1.0, 0.45, 0.35)
+        }
+        physics::conductor::Bias::Charge(x) | physics::conductor::Bias::Potential(x) if x < 0.0 => {
+            Color::srgb(0.4, 0.65, 1.0)
+        }
+        _ => Color::srgb(0.85, 0.85, 0.85),
+    };
+    gizmos.circle_2d(c, outer, rim);
+    if inner > 0.0 {
+        gizmos.circle_2d(c, inner, rim);
+    }
+}
+
 /// A dielectric: its cross-section hatched in teal (an insulator, unlike the grey metal).
 fn draw_dielectric(gizmos: &mut Gizmos, b: &physics::bem::BoxElectrode) {
     let c = to_vec2(b.center);
@@ -578,14 +608,41 @@ pub fn draw(
     // their supply), player plates a white one.
     let boxes = level.all_box_electrodes(&game.editor.placement);
     for (i, b) in boxes.iter().enumerate() {
-        draw_box(&mut gizmos, b);
-        let frame = match level.electrodes.get(i) {
+        let shape = level
+            .electrodes
+            .get(i)
+            .map_or(level::ElectrodeShape::Box, |e| e.shape);
+        let e = level.electrodes.get(i);
+        // A rod's radius, or a ring's inner and outer radii (tube levels).
+        let radii = match (shape, e) {
+            (level::ElectrodeShape::Rod, Some(e)) => Some((0.0, e.length / 2.0)),
+            (level::ElectrodeShape::Ring, Some(e)) => Some((
+                (e.length - e.thickness) / 2.0,
+                (e.length + e.thickness) / 2.0,
+            )),
+            _ => None,
+        };
+        match radii {
+            Some((inner, outer)) => draw_round(&mut gizmos, b, inner, outer),
+            None => draw_box(&mut gizmos, b),
+        }
+        let frame = match e {
             Some(e) if e.tunable => Some(Color::srgb(1.0, 0.85, 0.3)),
             Some(_) => None,
             None => Some(Color::srgb(1.0, 1.0, 1.0)),
         };
         if let Some(color) = frame {
-            gizmos.linestrip_2d(box_outline(b, 0.12), color);
+            match radii {
+                #[allow(clippy::cast_possible_truncation)]
+                Some((inner, outer)) => {
+                    let c = to_vec2(b.center);
+                    gizmos.circle_2d(c, outer as f32 + 0.12, color);
+                    if inner > 0.0 {
+                        gizmos.circle_2d(c, (inner as f32 - 0.12).max(0.01), color);
+                    }
+                }
+                None => gizmos.linestrip_2d(box_outline(b, 0.12), color),
+            }
         }
     }
 
