@@ -3440,6 +3440,14 @@ def magnetron():
     # short of the goal). `generator window` at the reference: the supply 43.3-48.0 (2.9 %
     # of the range), the solenoid 5.83-6.25 and that pocket (and their mirrors: the field's
     # sign only turns the hub the other way); every middle verified.
+    # Its output (the owner, 2026-10-13: the radiation on the map, from all the charges): the
+    # tube moved to the middle of a 96 x 96 board (about a wavelength, 2 pi c/omega ~ 82 at
+    # c = 40, across) and an antenna, a rod of diameter 2 twenty cells from the axis, is
+    # strapped to the tank's vanes; the field solver (level::tube_em) shows its waves. Its
+    # radiation resistance, measured with `generator tube-field`, is the tank's load: at R =
+    # 0.002 the board radiated 0.91 of the load's R<I^2>, at R = 0.0018 the two agree to ~3 %
+    # (test magnetron_antenna_radiates_its_load). Redesigned windows: the supply 42.0-47.3,
+    # the solenoid 5.83-6.33 (the near-cutoff pocket shrank to a point at 4.58).
     return level(
         "Magnetron",
         "A magnetron, the heart of a microwave oven and of wartime radar. Electrons leave "
@@ -3452,29 +3460,31 @@ def magnetron():
         "that turn with it. Make the tuned circuit oscillate with a swing of at least 10 "
         "(half its peak-to-peak, over $t = 90$ to $120$). The electrons drift at $E/B$: "
         "to keep pace with the wave the voltage must rise with the field. Too weak a field "
-        "lets them straight onto the vanes; too fast a drift outruns the wave. The tuned "
-        "circuit's load is the output: an antenna along the axis radiates what it absorbs, "
-        "the microwaves of the picture below the goals.",
-        grid=(24, 24), c=None, t_max=150.0,
-        electrodes=[plate(12, 12, 4, thickness=4.0, shape="rod", tunable=True),
-                    plate(18, 12, 3.0, thickness=0.6, angle_deg=0.0),
-                    plate(16, 16, 2.313708, thickness=0.6, angle_deg=45.0),
-                    plate(12, 18, 3.0, thickness=0.6, angle_deg=90.0),
-                    plate(8, 16, 2.313708, thickness=0.6, angle_deg=135.0),
-                    plate(6, 12, 3.0, thickness=0.6, angle_deg=180.0),
-                    plate(8, 8, 2.313708, thickness=0.6, angle_deg=225.0),
-                    plate(12, 6, 3.0, thickness=0.6, angle_deg=270.0),
-                    plate(16, 8, 2.313708, thickness=0.6, angle_deg=315.0),
-                    plate(12, 12, 18, thickness=1.0, shape="ring")],
+        "lets them straight onto the vanes; too fast a drift outruns the wave. The rod "
+        "outside the block is the antenna, strapped to the tuned set of vanes: it radiates "
+        "the microwaves (the magnetic or energy flow map shows them leaving; the mouse wheel "
+        "zooms in on the spokes).",
+        grid=(96, 96), c=None, t_max=150.0,
+        electrodes=[plate(48, 48, 4, thickness=4.0, shape="rod", tunable=True),
+                    plate(54, 48, 3.0, thickness=0.6, angle_deg=0.0),
+                    plate(52, 52, 2.313708, thickness=0.6, angle_deg=45.0),
+                    plate(48, 54, 3.0, thickness=0.6, angle_deg=90.0),
+                    plate(44, 52, 2.313708, thickness=0.6, angle_deg=135.0),
+                    plate(42, 48, 3.0, thickness=0.6, angle_deg=180.0),
+                    plate(44, 44, 2.313708, thickness=0.6, angle_deg=225.0),
+                    plate(48, 42, 3.0, thickness=0.6, angle_deg=270.0),
+                    plate(52, 44, 2.313708, thickness=0.6, angle_deg=315.0),
+                    plate(48, 48, 18, thickness=1.0, shape="ring"),
+                    plate(68, 48, 2, thickness=2.0, shape="rod")],
         supplies=slider(80.0, -38.0, -45.0, -52.0),
         solenoid_fields=slider(10.0, 5.5, 6.0, 6.5),
-        tube=tube(0, None, 0.0, 0.0, 0.0, 0.0, solenoid=(23, 23), step=0.05,
+        tube=tube(0, None, 0.0, 0.0, 0.0, 0.0, solenoid=(95, 95), step=0.05,
                   circuits=[tube_circuit(1, dc(0.0), resistance=0.0, linked=(3, 5, 7, 9)),
-                            tube_circuit(2, dc(0.0), resistance=0.002, inductance=0.036,
-                                         capacitance=1.34, linked=(4, 6, 8))],
+                            tube_circuit(2, dc(0.0), resistance=0.0018, inductance=0.036,
+                                         capacitance=1.34, linked=(4, 6, 8, 10))],
                   potentials=[potential_goal(2, "swing", 10.0, 1000.0, 90.0, 120.0)],
-                  output=(1, 50.0)),
-        reference=[supply(12, 12, -45.0), supply(23, 23, 6.0)])
+                  output=(1, 40.0)),
+        reference=[supply(48, 48, -45.0), supply(95, 95, 6.0)])
 
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [

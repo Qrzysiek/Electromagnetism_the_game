@@ -1118,6 +1118,16 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             ui.label("Map:");
             ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential");
             ui.selectable_value(&mut game.map, Some(MapMode::Electric), "electric field");
+        });
+        ui.horizontal(|ui| {
+            ui.label("     ");
+            ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B")
+                .on_hover_text(
+                    "B_z of the electromagnetic field the run's charges and currents make, \
+                     with retardation (computed as the animation plays)",
+                );
+            ui.selectable_value(&mut game.map, Some(MapMode::EnergyFlow), "energy flow")
+                .on_hover_text("The Poynting vector of that field: where its energy goes");
             ui.selectable_value(&mut game.map, None, "off");
         });
         ui.horizontal(|ui| {
@@ -1133,6 +1143,37 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             ui.selectable_value(&mut game.tube_particles, TubeParticles::Hidden, "off")
                 .on_hover_text("The map alone");
         });
+        if matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow)) {
+            ui.add(
+                egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),
+            )
+            .on_hover_text("How many decades below the run's strongest field are still coloured");
+            let (c, t) = game.em_snapshot.as_ref().map_or((0.0, 0.0), |s| (s.c, s.t));
+            let what = if game.map == Some(MapMode::Magnetic) {
+                "B_z, out of the plane (orange) or into it (teal)"
+            } else {
+                "the energy flow |S| = (c/4π)|E × B| (arrows: its direction)"
+            };
+            ui.label(
+                egui::RichText::new(format!(
+                    "The electromagnetic field of the run's charges and currents, with \
+                     retardation at the speed of light c = {} (a display parameter: the \
+                     carriers' own motion stays Newtonian): {what}, on a log scale over {:.1} \
+                     decades below the run's strongest so far (the board's 99th \
+                     percentile); field at t = {}. Every \
+                     electrode is a perfect conductor; each one's circuit current comes \
+                     along a straight lead from the enclosing grounded ring or the board's \
+                     edge (a convention: a z-invariant tube's circuit runs in the plane).",
+                    fmt_num(c),
+                    game.tube_range_decades,
+                    fmt_num(t),
+                ))
+                .small(),
+            );
+            ui.separator();
+            controls(ui);
+            return;
+        }
         if game.map == Some(MapMode::Electric) {
             ui.add(
                 egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),
@@ -1144,9 +1185,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                      charge: bright where strong, on a log scale over {:.1} decades below the \
                      field at the 99th percentile of the board; contours every quarter \
                      decade; arrows show its direction (a force on electrons the opposite \
-                     way). Inside metal it is 0. Magnetic and Poynting maps need the path the \
-                     tube's current returns along through its circuit, which in a \
-                     z-invariant tube runs in the plane and is not modelled.",
+                     way). Inside metal it is 0.",
                     game.tube_range_decades
                 ))
                 .small(),
@@ -1349,7 +1388,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
              launch the particle is taken to move uniformly."
         }
         // Tube levels only (their own View section).
-        Some(MapMode::Electric) | None => "",
+        Some(MapMode::Electric | MapMode::EnergyFlow) | None => "",
     };
     if !legend.is_empty() {
         ui.label(egui::RichText::new(legend).small());
@@ -1572,37 +1611,45 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             }
         }
     }
-    // The radiated output: the antenna's wave around the tube (its history taken only when
-    // the picture is redrawn).
+    // The radiated output: the field's energy flow out of the board (`em.rs`) against the
+    // load's absorption.
     if let (Some(o), Some(v)) = (spec.output, view) {
-        let t = if game.animate {
-            game.anim_time
-        } else {
-            v.run.frames.last().map_or(0.0, |f| f.t)
-        };
-        let stale = game
-            .emission
-            .as_ref()
-            .is_none_or(|e| e.revision != v.revision || (e.t - t).abs() > 0.02);
-        let history: Option<Vec<(f64, f64)>> = stale.then(|| {
-            v.run
-                .frames
-                .iter()
-                .take_while(|f| f.t <= t)
-                .filter_map(|f| f.currents.get(o.circuit).map(|i| (f.t, f64::from(*i))))
-                .collect()
-        });
-        let revision = v.revision;
         let load = spec
             .circuits
             .get(o.circuit)
             .and_then(|c| c.resistance)
             .unwrap_or(0.0);
-        let block = level_radius(game);
-        // The carriers' largest speed: the run's whole potential difference.
-        let (lo, hi) = v.run.potential_range;
-        let v_max = (2.0 * spec.charge_per_mass.abs() * (hi - lo).abs()).sqrt();
-        emission_inset(ui, game, history, revision, o, load, t, block, v_max);
+        let t = if game.animate {
+            game.anim_time
+        } else {
+            v.run.frames.last().map_or(0.0, |f| f.t)
+        };
+        let recent: Vec<f64> = v
+            .run
+            .frames
+            .iter()
+            .filter(|f| f.t <= t && f.t >= t - 2.0)
+            .filter_map(|f| f.currents.get(o.circuit).map(|i| f64::from(*i).powi(2)))
+            .collect();
+        #[allow(clippy::cast_precision_loss)]
+        let absorbed = load * recent.iter().sum::<f64>() / recent.len().max(1) as f64;
+        let field_map = matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow));
+        let text = match game.em_snapshot.as_ref().filter(|_| field_map) {
+            Some(s) => format!(
+                "Microwave output: {} per unit length leaves the board (the field's energy \
+                 flow through its edge, over the last 2 time units); the load absorbs {} \
+                 (R times the mean of I squared).",
+                fmt_num(s.radiated),
+                fmt_num(absorbed)
+            ),
+            None => format!(
+                "Microwave output: the load absorbs {} (R times the mean of I squared). To \
+                 see the waves the antenna radiates, choose the magnetic or energy flow map \
+                 (the mouse wheel zooms; Z shows the whole board).",
+                fmt_num(absorbed)
+            ),
+        };
+        ui.label(egui::RichText::new(text).small());
     }
     // (The output's picture needed the game mutably.)
     let view = game.tube_preview.as_ref().filter(|v| v.revision == current);
@@ -3015,192 +3062,6 @@ fn circuit_plot(ui: &mut egui::Ui, samples: &[(f64, f64)], marks: &[f64]) {
         ),
         egui::FontId::proportional(10.0),
         text,
-    );
-}
-
-/// Tube levels with an output (`level::tube::TubeOutput`): the picture of the antenna's
-/// radiated wave, kept between frames.
-pub struct EmissionView {
-    revision: u64,
-    t: f64,
-    /// The largest |E_z| shown so far in this run: the colours' unit, so the wave is seen
-    /// to grow as the oscillation starts.
-    scale: f64,
-    texture: egui::TextureHandle,
-    /// The wavelength (cells) and the radiated power at the time shown.
-    lambda: Option<f64>,
-    power: f64,
-}
-
-/// Pixels across the emission picture.
-const EMISSION_PIXELS: usize = 220;
-/// Samples of the field's radial profile.
-const EMISSION_RADII: usize = 200;
-/// The picture's half-width: the distance the wave runs in this time.
-const EMISSION_SPAN_T: f64 = 7.0;
-
-/// The level's electrodes' extent from the board's centre (cells): the tube drawn as a
-/// dot in the emission picture.
-fn level_radius(game: &Game) -> f64 {
-    let b = game.editor.level.bounds();
-    let c = (b.max + b.min) * 0.5;
-    game.editor
-        .level
-        .electrodes
-        .iter()
-        .map(|e| {
-            let p = game.editor.level.grid.position(e.center);
-            (p - c).length() + 0.5 * e.length.max(e.thickness)
-        })
-        .fold(0.0, f64::max)
-}
-
-/// The radiated wave of a tube's output (`level::tube::line_wave`): `E_z` around the
-/// antenna on the tube's axis at time `t`, from the load's current over the run so far,
-/// out to where the wave has run in `EMISSION_SPAN_T`; red and blue its sign, the tube a
-/// grey dot. Recomputed when `history` (the load's current up to `t`) is given: when the
-/// time shown has moved.
-#[allow(
-    clippy::too_many_arguments,
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
-)]
-fn emission_inset(
-    ui: &mut egui::Ui,
-    game: &mut Game,
-    history: Option<Vec<(f64, f64)>>,
-    revision: u64,
-    output: level::tube::TubeOutput,
-    load: f64,
-    t: f64,
-    block: f64,
-    v_max: f64,
-) {
-    use rayon::prelude::*;
-    let c = output.c;
-    let half = c * EMISSION_SPAN_T;
-    if let Some(history) = history {
-        // The radial profile out to the picture's corners.
-        let reach = half * std::f64::consts::SQRT_2;
-        let profile: Vec<f64> = (0..EMISSION_RADII)
-            .into_par_iter()
-            .map(|k| {
-                let r = (k as f64 + 0.5) / EMISSION_RADII as f64 * reach;
-                level::tube::line_wave(&history, t, r, c)
-            })
-            .collect();
-        let peak = profile.iter().fold(0.0_f64, |m, e| m.max(e.abs()));
-        let scale = match &game.emission {
-            Some(e) if e.revision == revision => e.scale.max(peak),
-            _ => peak,
-        }
-        .max(1e-300);
-        // The wavelength from the load current's up-crossings over its last 20 time units.
-        let recent: Vec<&(f64, f64)> = history.iter().filter(|(tk, _)| *tk >= t - 20.0).collect();
-        let ups: Vec<f64> = recent
-            .windows(2)
-            .filter(|w| w[0].1 < 0.0 && w[1].1 >= 0.0)
-            .map(|w| w[1].0)
-            .collect();
-        let lambda =
-            (ups.len() >= 3).then(|| c * (ups[ups.len() - 1] - ups[0]) / (ups.len() - 1) as f64);
-        // The power the load absorbs (= radiates), over the last two time units.
-        let last: Vec<f64> = history
-            .iter()
-            .filter(|(tk, _)| *tk >= t - 2.0)
-            .map(|(_, i)| i * i)
-            .collect();
-        let power = load * last.iter().sum::<f64>() / last.len().max(1) as f64;
-        let n = EMISSION_PIXELS;
-        let mut pixels = vec![egui::Color32::from_rgb(12, 14, 20); n * n];
-        let dot = (block / half * 0.5 * n as f64).max(2.0);
-        for (i, px) in pixels.iter_mut().enumerate() {
-            let (x, y) = ((i % n) as f64 + 0.5, (i / n) as f64 + 0.5);
-            let (dx, dy) = (x - 0.5 * n as f64, y - 0.5 * n as f64);
-            let rp = (dx * dx + dy * dy).sqrt();
-            if rp <= dot {
-                *px = egui::Color32::from_gray(130);
-                continue;
-            }
-            let r = rp / (0.5 * n as f64) * half;
-            let at =
-                (r / reach * EMISSION_RADII as f64 - 0.5).clamp(0.0, (EMISSION_RADII - 1) as f64);
-            let k = at.floor() as usize;
-            let w = at - k as f64;
-            let e = profile[k] * (1.0 - w) + profile[(k + 1).min(EMISSION_RADII - 1)] * w;
-            let v = (e / scale).clamp(-1.0, 1.0);
-            let a = v.abs().powf(0.6);
-            let (cr, cg, cb) = if v > 0.0 {
-                (255.0, 140.0, 60.0)
-            } else {
-                (80.0, 160.0, 255.0)
-            };
-            let mix = |base: f64, col: f64| (base + (col - base) * a) as u8;
-            *px = egui::Color32::from_rgb(mix(12.0, cr), mix(14.0, cg), mix(20.0, cb));
-        }
-        let image = egui::ColorImage::new([n, n], pixels);
-        match &mut game.emission {
-            Some(e) => {
-                e.texture.set(image, egui::TextureOptions::LINEAR);
-                e.revision = revision;
-                e.t = t;
-                e.scale = scale;
-                e.lambda = lambda;
-                e.power = power;
-            }
-            None => {
-                game.emission = Some(EmissionView {
-                    revision,
-                    t,
-                    scale,
-                    texture: ui
-                        .ctx()
-                        .load_texture("emission", image, egui::TextureOptions::LINEAR),
-                    lambda,
-                    power,
-                });
-            }
-        }
-    }
-    let Some(e) = &game.emission else { return };
-    ui.label(egui::RichText::new("Microwave output").strong());
-    let size = ui.available_width().min(260.0);
-    let response = ui.image((e.texture.id(), egui::vec2(size, size)));
-    // A bar one wavelength long.
-    if let Some(lambda) = e.lambda {
-        let rect = response.rect;
-        let len = (lambda / (2.0 * half)) as f32 * rect.width();
-        if len < rect.width() * 0.9 {
-            let y = rect.bottom() - 8.0;
-            let x0 = rect.left() + 8.0;
-            ui.painter().line_segment(
-                [egui::pos2(x0, y), egui::pos2(x0 + len, y)],
-                egui::Stroke::new(2.0, egui::Color32::WHITE),
-            );
-            ui.painter().text(
-                egui::pos2(x0, y - 4.0),
-                egui::Align2::LEFT_BOTTOM,
-                "λ",
-                egui::FontId::proportional(12.0),
-                egui::Color32::WHITE,
-            );
-        }
-    }
-    ui.label(
-        egui::RichText::new(format!(
-            "The antenna on the tube's axis radiates what the load absorbs: E_z (red, blue: \
-             its sign) around the tube (the grey dot), {} cells across{}. Radiated power \
-             {} per unit length. Wave speed c = {} (the picture only: the electrons stay \
-             Newtonian, at most {} of it).",
-            fmt_num(2.0 * half),
-            e.lambda
-                .map_or(String::new(), |l| format!("; wavelength {}", fmt_num(l))),
-            fmt_num(e.power),
-            fmt_num(c),
-            fmt_num(v_max / c),
-        ))
-        .small(),
     );
 }
 

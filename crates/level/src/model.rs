@@ -466,10 +466,10 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
         out.push(note(
             false,
             &format!(
-                "The output: circuit {}'s load stands for an antenna along the tube's axis, \
-                 radiating what the load absorbs. Its wave is the exact 2D retarded field of \
-                 the load's current, drawn at the wave speed c = {}: a picture only, the \
-                 carriers' motion stays Newtonian.",
+                "The output: circuit {}'s load is what the antenna strapped to it radiates. \
+                 The field maps show the run's electromagnetic field at the speed of light \
+                 c = {} (a display parameter, one-way coupled: the carriers' motion stays \
+                 Newtonian), the board's edge absorbing the waves.",
                 o.circuit + 1,
                 o.c
             ),

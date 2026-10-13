@@ -84,6 +84,18 @@ enum Command {
         #[arg(long)]
         trace: Option<usize>,
     },
+    /// Tube levels: the electromagnetic field of the reference's preview run
+    /// (`level::tube_em`), every `every` time units to `--end`: the power radiated out of
+    /// the board (over the last 2 time units) and, for a level with an output, its load's
+    /// `R⟨I²⟩` over the same span.
+    TubeField {
+        path: PathBuf,
+        #[arg(long, default_value_t = 10.0)]
+        every: f64,
+        /// The run's end (default: the level's display end).
+        #[arg(long)]
+        end: Option<f64>,
+    },
     /// Print the reference flight of one flight index: t, x, y, |p|, radiated energy.
     Trace {
         path: PathBuf,
@@ -195,6 +207,51 @@ fn tube_scan(
             sim.weights()
         );
     }
+}
+
+/// `generator tube-field`: the radiated power of the reference's run along it.
+fn tube_field(level: &Level, every: f64, end: Option<f64>) {
+    let end = end.unwrap_or_else(|| level.tube_display_end());
+    let started = std::time::Instant::now();
+    let run = level.tube_run(&level.reference_solution, 1, end);
+    let ran = started.elapsed().as_secs_f64();
+    let mut em = level::tube_em::TubeEm::new(level, &run);
+    let g = em.fdtd.grid;
+    println!(
+        "run {ran:.1} s; field grid {} x {} (h {}), c {}, dt {:.5}",
+        g.nx, g.ny, g.h, em.fdtd.c, em.fdtd.dt
+    );
+    let spec = level.tube.as_ref().expect("a tube level");
+    let load = spec.output.and_then(|o| {
+        spec.circuits
+            .get(o.circuit)
+            .and_then(|c| c.resistance)
+            .map(|r| (o.circuit, r))
+    });
+    let started = std::time::Instant::now();
+    let mut t = every;
+    while t <= end + 1e-9 {
+        em.advance_to(&run, t);
+        let absorbed = load.map_or(0.0, |(k, r)| {
+            let i2: Vec<f64> = run
+                .frames
+                .iter()
+                .filter(|f| f.t <= t && f.t >= t - 2.0)
+                .filter_map(|f| f.currents.get(k).map(|i| f64::from(*i).powi(2)))
+                .collect();
+            #[allow(clippy::cast_precision_loss)]
+            let mean = i2.iter().sum::<f64>() / i2.len().max(1) as f64;
+            r * mean
+        });
+        println!(
+            "t {:7.2}: radiated {:.5e}, load R<I^2> {:.5e}",
+            em.fdtd.t,
+            em.mean_outflow(2.0),
+            absorbed
+        );
+        t += every;
+    }
+    println!("field {:.1} s", started.elapsed().as_secs_f64());
 }
 
 /// `generator window`: the solving intervals of each slider-set potential.
@@ -391,6 +448,7 @@ fn main() {
             },
             trace,
         ),
+        Command::TubeField { path, every, end } => tube_field(&load(&path), every, end),
         Command::Trace {
             path,
             flight,

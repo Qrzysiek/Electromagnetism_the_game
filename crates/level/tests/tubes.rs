@@ -455,3 +455,77 @@ fn klystron_against_bunching_theory() {
     );
     assert!((half - j1(0.5 * 1.841)).abs() < 0.05, "half drive {half}");
 }
+
+/// The electromagnetic field of a run (`level::tube_em`, PHYSICS.md §2.11) on Bipolar diode's
+/// preview: electrons and ions emitted, absorbed, and the electrodes' circuit currents on
+/// their leads. Gauss's law must hold at every vacuum node at every 50th step, to 1e-9 of
+/// the largest charge density (the deposition is exact; rounding accumulates over the
+/// steps).
+#[test]
+fn em_field_keeps_gauss_law() {
+    let level = level::shipped("bipolar_diode");
+    let player: Vec<level::Element> = level.reference_solution.clone();
+    let run = level.tube_run(&player, 1, 8.0);
+    let mut em = level::tube_em::TubeEm::new(&level, &run);
+    assert!(em.leads.iter().all(Option::is_some), "a lead per electrode");
+    let (nx, ny) = (em.fdtd.grid.nx, em.fdtd.grid.ny);
+    let mut worst = 0.0_f64;
+    let mut checks = 0;
+    let mut t = run.frames[0].t;
+    while t < 8.0 {
+        t += 50.0 * em.fdtd.dt;
+        em.advance_to(&run, t);
+        let rho = em.charge_density();
+        let peak = rho.iter().fold(0.0_f64, |m, r| m.max(r.abs()));
+        if peak == 0.0 {
+            continue;
+        }
+        for j in 2..ny - 1 {
+            for i in 2..nx - 1 {
+                if em.in_vacuum(i, j) {
+                    let r = rho[i + (nx + 1) * j];
+                    worst = worst.max((em.fdtd.gauss(i, j) - r).abs() / peak);
+                }
+            }
+        }
+        checks += 1;
+    }
+    println!(
+        "EM: Gauss's law to {worst:.2e} of the peak density over {checks} checks, c = {:.1}",
+        em.fdtd.c
+    );
+    assert!(checks > 5 && worst < 1e-9, "EM Gauss {worst:e}");
+}
+
+/// The magnetron's antenna radiates its load (PHYSICS.md §2.11): on the reference's preview
+/// run, the electromagnetic field's power out of the board over t = 98–100 (the field
+/// solver's) against the tank load's R⟨I²⟩ over the same span (the circuit's): two
+/// independent calculations of the same energy. Required 10 % (measured ~3 % when the
+/// load was set to the antenna's radiation resistance).
+#[test]
+fn magnetron_antenna_radiates_its_load() {
+    let level = level::shipped("magnetron");
+    let run = level.tube_run(&level.reference_solution, 1, 100.0);
+    let mut em = level::tube_em::TubeEm::new(&level, &run);
+    em.advance_to(&run, 100.0);
+    let radiated = em.mean_outflow(2.0);
+    let spec = level.tube.as_ref().unwrap();
+    let o = spec.output.unwrap();
+    let r = spec.circuits[o.circuit].resistance.unwrap();
+    let i2: Vec<f64> = run
+        .frames
+        .iter()
+        .filter(|f| f.t >= em.fdtd.t - 2.0 && f.t <= em.fdtd.t)
+        .map(|f| f64::from(f.currents[o.circuit]).powi(2))
+        .collect();
+    #[allow(clippy::cast_precision_loss)]
+    let absorbed = r * i2.iter().sum::<f64>() / i2.len() as f64;
+    println!(
+        "magnetron: radiated {radiated:.4} against the load's {absorbed:.4} ({:+.1} %)",
+        100.0 * (radiated / absorbed - 1.0)
+    );
+    assert!(
+        (radiated / absorbed - 1.0).abs() < 0.1,
+        "{radiated} vs {absorbed}"
+    );
+}

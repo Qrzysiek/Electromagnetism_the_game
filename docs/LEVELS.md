@@ -129,7 +129,7 @@ verified reference solution for every shot and negligible radiation
 | 105 | Rectifier | 12 Intermediate | circuits in the tube (PHYSICS.md §2.11): a cathode between two anodes on AC supplies (period 20) half a period apart; the cathode is the output, through a load (R = 30, C = 1) to ground: its mean in 8.5–11.5 and its ripple below 1.2 (over t = 40–80) need both anodes driven alike, full wave, at about 24–36 each (preview); one anode (half wave) leaves a ripple of 2.6, opposite signs put the anodes in phase (ripple 5); verified at 32/32: mean 9.47 ± 0.25, ripple 0.764 ± 0.020 | 2 supplies (the anodes, ±80) | 2 |
 | 106 | Triode | 12 Intermediate | the grid (PHYSICS.md §2.11): five wires 1.25 before the cathode on one sine (amplitude 1, period 40) around the bias the player sets; the anode through R = 60 to a fixed 100 swings far more than the grid: bias it so the anode's oscillation has an amplitude of 2.2–3.8 (verified at −0.7: 2.91 ± 0.26; about −0.9 to −0.4 verifies: at 0 the gain is too high, at −1 too low; cut off below about −2) | 1 supply (the grid's bias, ±2.6; ±2 until its preview window, −1.15 to −0.35, was found to hold the half's middle) | 1 |
 | 107 | Klystron | 12 Intermediate | a weak beam (no space charge: ballistic bunching) from a Wehnelt gun passes a buncher (V₁ sin 2πt) and a tuned catcher 21 further; the player sets the cathode's −V₀ and V₁. The output amplitude follows Webster's 2I₀J₁(X) (the optimum drive within 14 % of the prediction from the buncher's own field, the rising side to 0.006; test `klystron_against_bunching_theory`), its phase moves 7.5° per volt (phase pushing). Backed off below saturation: amplitude 0.085–0.105 and phase −135° to −105° solve for −V₀ in −56.7 to −52.7 and V₁ in 10–12, or overbunched 27.3–32 (of ±80; the middles verified on the first); verified at (−54, 11): 0.0967 ± 0.0022, −122.6° ± 3.5° | 2 supplies (cathode, buncher; ±80) | 2 |
-| 108 | Magnetron | 12 Master | a strapped eight-vane magnetron (rod cathode on the player's supply, the diagonal vanes strapped onto a tank near ω = 3, the player's solenoid): the tank must oscillate with a swing of at least 10 over t = 90–120. The π mode starts where the electrons' drift keeps step with its wave (the Buneman–Hartree condition, V rising with B): at (45 V, B = 6) the supply solves on 43.3–48.0 and the solenoid on 5.83–6.25, plus a near-cutoff pocket at 4.58–4.67 that draws seven times the current. Verified 15.66 ± 1.20; preview 1.1 s, verification 5.3 s. Its output (the tank's load) radiates: the game draws the antenna's microwaves beside the tube | 2 supplies (cathode ±80, solenoid ±10) | 2 |
+| 108 | Magnetron | 12 Master | a strapped eight-vane magnetron (rod cathode on the player's supply, the diagonal vanes strapped onto a tank near ω = 3 and onto an antenna outside the block, the player's solenoid) on a 96 × 96 board: the tank must oscillate with a swing of at least 10 over t = 90–120. The π mode starts where the electrons' drift keeps step with its wave (Buneman–Hartree, V rising with B): at (45 V, B = 6) the supply solves on 42.0–47.3 and the solenoid on 5.83–6.33. The antenna radiates what the tank's load absorbs (its radiation resistance is the load: the field solver's outflow matches R⟨I²⟩ to ~3 %); the magnetic and energy-flow maps show the waves leaving. Verified 16.80 ± 0.43; preview 2.1 s, verification 8.1 s | 2 supplies (cathode ±80, solenoid ±10) | 2 |
 
 ## Automatic detectors
 
@@ -482,11 +482,11 @@ Notes:
   depend on the field's sign); the solenoid interval's middle, 2.08, is uncertain, not
   verified: the ion current flattens with B (6.0 at 2.2, 5.05 at 3), so the middle lies
   within the verdict's bar of the goal's lower bound. Magnetron (2026-10-13; a preview
-  takes 1.1 s, a verification 5.3 s): the table counts the sliders' candidate values
-  (the band's three points on each), so its random rate (15 %) flatters it; on the
-  continuous sliders the supply solves on 43.3–48.0 at B = 6 (2.9 % of ±80) and the
-  solenoid on 5.83–6.25 at 45 V (2.1 % of ±10), plus a near-cutoff pocket (4.58–4.67)
-  and the mirrors, every middle verified. Rectifier: two supplies, the full wave on each 24–36 with the other at 32
+  takes 2.1 s, a verification 8.1 s, after its redesign around the antenna on a larger
+  board): the table counts the sliders' candidate values (the band's three points on
+  each), so its random rate flatters it; on the continuous sliders the supply solves on
+  42.0–47.3 at B = 6 (3.3 % of ±80) and the solenoid on 5.83–6.33 at 45 V (2.5 % of ±10),
+  plus the mirrors and a near-cutoff point at 4.58, the main windows' middles verified. Rectifier: two supplies, the full wave on each 24–36 with the other at 32
   (preview), random choices of the five candidate values solve 8 %. Sideways, Vacuum
   diode and Triode are one-slider introductions (the search's five candidate values;
   Sideways solves on 0.9–1.3 of ±4 in the preview, Vacuum diode verifies on 23.5–30.5 of

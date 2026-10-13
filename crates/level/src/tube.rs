@@ -97,44 +97,17 @@ pub struct TubeSpec {
 }
 
 /// A tube's output (PHYSICS.md §2.11, the magnetron): the load of circuit `circuit` (its
-/// resistance) stands for an antenna along the tube's axis, which radiates what the load
-/// absorbs. The game draws the antenna's wave (`line_wave`) at the wave speed `c`, for the
-/// display only: the tube's own dynamics stay Newtonian (the electrons at a fraction of
-/// `c`).
+/// resistance) is what an antenna radiates, the level's antenna electrode strapped to that
+/// circuit's electrode. The game shows the run's electromagnetic field (`tube_em`) at the
+/// speed of light `c`, a display parameter: the tube's own dynamics stay Newtonian (the
+/// electrons at a fraction of `c`); an output's level is open (its board's edge absorbs
+/// the waves).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TubeOutput {
     /// The circuit (an index into `TubeSpec::circuits`) whose resistance is the load.
     pub circuit: usize,
     /// The speed of light of the radiated wave.
     pub c: f64,
-}
-
-/// The field `E_z` (Gaussian units) at distance `r` and time `t` of a line current along z
-/// with the history `(t_k, I_k)` (linear between samples, zero before the first, which is
-/// at or after the switch-on): the 2D retarded solution
-/// `E_z = −(2/c²) ∫ İ(t − τ) dτ / √(τ² − (r/c)²)` over `τ > r/c`, exact for the piecewise
-/// linear current (each interval's `İ` times the kernel's integral,
-/// `acosh(τ₂ c/r) − acosh(τ₁ c/r)`). For a long sine `I₀ sin ωt` it tends to
-/// `(π ω I₀/c²) [Y₀(kr) cos ωt − J₀(kr) sin ωt]`, an outgoing cylindrical wave carrying
-/// `π ω I₀²/(2c²)` per unit length (tests `line_wave_*`).
-#[must_use]
-pub fn line_wave(history: &[(f64, f64)], t: f64, r: f64, c: f64) -> f64 {
-    let a = r / c;
-    if a <= 0.0 {
-        return 0.0;
-    }
-    let kernel = |tau: f64| libm::acosh((tau / a).max(1.0));
-    let mut sum = 0.0;
-    for w in history.windows(2) {
-        let ((t0, i0), (t1, i1)) = (w[0], w[1]);
-        // τ over the interval, the retarded part only.
-        let (hi, lo) = (t - t0, (t - t1).max(a));
-        if hi <= a || t1 <= t0 {
-            continue;
-        }
-        sum += (i1 - i0) / (t1 - t0) * (kernel(hi) - kernel(lo));
-    }
-    -2.0 / (c * c) * sum
 }
 
 /// An electrode's external circuit (per unit length along z): a source through a
@@ -474,6 +447,8 @@ pub struct TubeRun {
     pub steps: u32,
     /// The segments `(start, end)` the frames' densities belong to.
     pub segments: Vec<(DVec3, DVec3)>,
+    /// Each segment's electrode.
+    pub owners: Vec<usize>,
     /// Each prism's potential.
     pub potentials: Vec<f64>,
     /// The lowest and highest potential the electrodes reach: their own, and their circuits'
@@ -1301,6 +1276,9 @@ impl Level {
             .fold((0.0_f64, 0.0_f64), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
         let pending = TubeRun {
             segments: tube.electrodes.segments.clone(),
+            owners: (0..tube.electrodes.segments.len())
+                .map(|j| tube.electrodes.owner_of(j))
+                .collect(),
             potentials: tube.electrodes.potentials.clone(),
             potential_range,
             ..TubeRun::default()
@@ -1818,62 +1796,6 @@ impl Level {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// `line_wave` for a ramp `I = t` (from t = 0, sampled every 0.05): `İ = 1`, so
-    /// `E_z = −(2/c²) acosh(ct/r)` for `t > r/c` and 0 before, exactly (the piecewise
-    /// linear current is the ramp itself). Required 1e-12 relative.
-    #[test]
-    fn line_wave_ramp() {
-        let c = 50.0;
-        #[allow(clippy::cast_precision_loss)]
-        let history: Vec<(f64, f64)> = (0..=400)
-            .map(|k| (0.05 * k as f64, 0.05 * k as f64))
-            .collect();
-        for (t, r) in [(5.0, 10.0), (12.3, 300.0), (20.0, 999.0), (3.0, 200.0)] {
-            let exact = if c * t > r {
-                -2.0 / (c * c) * libm::acosh(c * t / r)
-            } else {
-                0.0
-            };
-            let got = line_wave(&history, t, r, c);
-            assert!(
-                (got - exact).abs() <= 1e-12 * exact.abs().max(1e-30),
-                "t {t} r {r}: {got} against {exact}"
-            );
-        }
-    }
-
-    /// `line_wave` for `I = sin ωt` switched on at t = 0 (sampled every 0.01), at t = 400:
-    /// the steady cylindrical wave `(π ω/c²) [Y₀(kr) cos ωt − J₀(kr) sin ωt]`, `k = ω/c`.
-    /// Required 1 % of its amplitude (the display's accuracy; the sampling's error is
-    /// ~(ω dt)²/8 ≈ 1e-4 and the switch-on's fading tail ~1/(ωt) ≈ 1e-3).
-    #[test]
-    fn line_wave_steady_sine() {
-        let (c, omega, t) = (50.0, 3.0, 400.0);
-        #[allow(clippy::cast_precision_loss)]
-        let history: Vec<(f64, f64)> = (0..=40_000)
-            .map(|k| {
-                let tk = 0.01 * k as f64;
-                (tk, libm::sin(omega * tk))
-            })
-            .collect();
-        let k = omega / c;
-        for r in [5.0, 20.0, 60.0, 150.0, 400.0] {
-            let (j0, y0) = (libm::j0(k * r), libm::y0(k * r));
-            let scale = std::f64::consts::PI * omega / (c * c);
-            let exact = scale * (y0 * libm::cos(omega * t) - j0 * libm::sin(omega * t));
-            let amplitude = scale * libm::sqrt(j0 * j0 + y0 * y0);
-            let got = line_wave(&history, t, r, c);
-            println!(
-                "line wave r {r}: {got:.6e} against {exact:.6e} ({:.1e} of the amplitude)",
-                (got - exact).abs() / amplitude
-            );
-            assert!(
-                (got - exact).abs() < 0.01 * amplitude,
-                "r {r}: {got} against {exact}"
-            );
-        }
-    }
 
     /// The picture between two frames: a particle in both moves linearly, one absorbed
     /// before the second stays where it was, the surface densities and potentials are

@@ -51,6 +51,11 @@ struct Params {
     // of a Gaussian of width s, y and w = 1/(|q| at full glow) of the negative and the
     // positive particles.
     glow: vec4<f32>,
+    // Mode 3 (a tube's electromagnetic field on a grid, after the line charges): origin
+    // (x, y), spacing, the colour unit; samples across, up, quantity (0: B_z, 1: |S|),
+    // decades coloured (f32 bits).
+    grid: vec4<f32>,
+    grid_n: vec4<u32>,
 };
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: Params;
@@ -89,6 +94,52 @@ fn first_line_segment() -> u32 {
 }
 fn first_line_charge() -> u32 {
     return first_line_segment() + 2u * params.line_segments;
+}
+fn first_grid() -> u32 {
+    return first_line_charge() + params.line_charges;
+}
+
+// Mode 3: the grid's sample (B_z, S_x, S_y) at p, bilinear between the sample centres.
+fn grid_sample(p: vec2<f32>) -> vec3<f32> {
+    let nx = params.grid_n.x;
+    let ny = params.grid_n.y;
+    if (nx < 2u || ny < 2u) {
+        return vec3<f32>(0.0);
+    }
+    let u = clamp((p.x - params.grid.x) / params.grid.z - 0.5, 0.0, f32(nx - 1u) - 1e-3);
+    let v = clamp((p.y - params.grid.y) / params.grid.z - 0.5, 0.0, f32(ny - 1u) - 1e-3);
+    let i = u32(floor(u));
+    let j = u32(floor(v));
+    let fu = u - f32(i);
+    let fv = v - f32(j);
+    let b = first_grid();
+    let a00 = items[b + i + nx * j].xyz;
+    let a10 = items[b + i + 1u + nx * j].xyz;
+    let a01 = items[b + i + nx * (j + 1u)].xyz;
+    let a11 = items[b + i + 1u + nx * (j + 1u)].xyz;
+    return mix(mix(a00, a10, fu), mix(a01, a11, fu), fv);
+}
+
+// Mode 3's colour: B_z signed (orange out of the plane, teal into it) or |S| (amber), each
+// on a log scale over the decades below the unit.
+fn grid_colour(p: vec2<f32>) -> vec3<f32> {
+    let s = grid_sample(p);
+    let unit = max(params.grid.w, 1e-30);
+    let range = max(bitcast<f32>(params.grid_n.w), 0.1);
+    let base = vec3<f32>(0.10, 0.11, 0.14);
+    if (params.grid_n.z == 0u) {
+        let v = s.x / unit;
+        let l = log(max(abs(v), 1e-12)) / log(10.0);
+        let k = clamp((l + range) / range, 0.0, 1.0);
+        if (v > 0.0) {
+            return base + k * vec3<f32>(0.85, 0.45, 0.10);
+        }
+        return base + k * vec3<f32>(0.05, 0.60, 0.65);
+    }
+    let m = length(s.yz) / unit;
+    let l = log(max(m, 1e-12)) / log(10.0);
+    let k = clamp((l + range) / range, 0.0, 1.0);
+    return base + k * vec3<f32>(0.75, 0.55, 0.15);
 }
 
 // Potential of a segment of unit surface density in the z-invariant world (as
@@ -450,6 +501,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         col = magnetic_colour(p);
     } else if (params.mode == 2u) {
         col = electric_colour(p);
+    } else if (params.mode == 3u) {
+        col = grid_colour(p);
     } else {
         col = potential_colour(p);
     }

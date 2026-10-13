@@ -18,6 +18,7 @@ pub mod cost;
 pub mod model;
 pub mod solve;
 pub mod tube;
+pub mod tube_em;
 
 use physics::DVec3;
 use physics::antenna::OscillatingDipole;

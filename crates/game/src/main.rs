@@ -5,6 +5,7 @@
 mod curriculum;
 mod draw;
 mod editor;
+mod em;
 mod level_editor;
 mod math;
 mod potential;
@@ -162,8 +163,14 @@ pub struct Game {
     /// Tube levels: the electric field map's scale and arrows `(position, E)` of the
     /// preview's final state (computed when it arrives), with its revision.
     pub tube_field: Option<TubeField>,
-    /// Tube levels with an output: the radiated wave's picture.
-    pub emission: Option<ui::EmissionView>,
+    /// Tube levels' field maps: the field's thread (started on first use), the run it was
+    /// given, the last time asked, the latest snapshot, and the run's colour units so far
+    /// (its revision, the largest |B_z| and |S|).
+    pub em: Option<em::EmWorker>,
+    pub em_run: Option<u64>,
+    pub em_asked: f64,
+    pub em_snapshot: Option<em::EmSnapshot>,
+    pub em_units: (u64, f64, f64),
     /// What the field map was computed for (`MapKey`).
     pub map_key: MapKey,
     pub field_lines: Vec<DrawnFieldLine>,
@@ -227,6 +234,10 @@ pub struct Game {
     pub text_focus: bool,
     /// Left edge of the side panel in physical pixels (reported by the UI).
     pub panel_left_px: Option<f32>,
+    /// Tube levels: the view's zoom (1: the whole board, smaller: closer) and its centre
+    /// when zoomed (world coordinates).
+    pub zoom: f32,
+    pub zoom_center: Option<Vec2>,
 }
 
 impl Game {
@@ -269,7 +280,11 @@ impl Game {
             tube_preview: None,
             tube_verdict: None,
             tube_field: None,
-            emission: None,
+            em: None,
+            em_run: None,
+            em_asked: -1.0,
+            em_snapshot: None,
+            em_units: (0, 0.0, 0.0),
             map_key: (0, 0, 0, false, None, false, 0, (0, 0)),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
@@ -305,6 +320,8 @@ impl Game {
             arrow_measure,
             text_focus: false,
             panel_left_px: None,
+            zoom: 1.0,
+            zoom_center: None,
         }
     }
 
@@ -315,6 +332,8 @@ impl Game {
         // replaces the level shown) had the revision already sent, so it was never
         // computed.
         let next = self.editor.revision + 1;
+        self.zoom = 1.0;
+        self.zoom_center = None;
         self.editor = Editor::new(self.levels[index].clone());
         self.editor.revision = self.editor.revision.max(next);
         self.arrow_measure = editor::default_measure(&self.editor.level);
@@ -673,6 +692,7 @@ fn main() {
             (
                 input,
                 sync_physics,
+                update_em,
                 update_map,
                 update_field_lines,
                 poll_physics,
@@ -697,15 +717,20 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
         Some(MapMode::ParticleField),
         Some(MapMode::Total),
         Some(MapMode::Electric),
+        Some(MapMode::EnergyFlow),
         None,
     ];
     // Tube levels: their potential and electric field only (the other views are the 3D
     // slice's); the electric map only there.
     let available = |m: Option<MapMode>| match m {
-        _ if level.is_tube() => matches!(m, Some(MapMode::Potential | MapMode::Electric) | None),
+        _ if level.is_tube() => matches!(
+            m,
+            Some(MapMode::Potential | MapMode::Electric | MapMode::Magnetic | MapMode::EnergyFlow)
+                | None
+        ),
         Some(MapMode::Waves) => radiation::waves_available(level),
         Some(MapMode::ParticleField) => radiation::particle_field_available(level),
-        Some(MapMode::Electric) => false,
+        Some(MapMode::Electric | MapMode::EnergyFlow) => false,
         _ => true,
     };
     let i = order.iter().position(|&m| m == map).unwrap_or(0);
@@ -746,7 +771,14 @@ fn dev_capture(
     let streamed = !game.editor.level.is_tube()
         || game.invalid_setup().is_some()
         || game.tube_preview.as_ref().is_some_and(|v| v.done);
-    let settled = game.progress() == Progress::Done && streamed;
+    // A field map: its field at the time shown.
+    let field = !game.editor.level.is_tube()
+        || !matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow))
+        || game
+            .em_snapshot
+            .as_ref()
+            .is_some_and(|s| (s.t - game.anim_time).abs() < 0.05);
+    let settled = game.progress() == Progress::Done && streamed && field;
     if shot_at.is_none() && *frame >= shot && (!wait || settled) {
         *shot_at = Some(*frame);
         commands
@@ -761,6 +793,13 @@ fn dev_capture(
         .and_then(|v| v.parse::<f64>().ok())
     {
         game.anim_time = t;
+    }
+    // A zoom on the board's centre (tube levels: 1 the whole board).
+    if let Some(z) = std::env::var("EM_ZOOM")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+    {
+        game.zoom = z.clamp(0.1, 1.0);
     }
     match *frame {
         3 => {
@@ -856,6 +895,7 @@ fn dev_capture(
                     "particle" => Some(MapMode::ParticleField),
                     "total" => Some(MapMode::Total),
                     "electric" => Some(MapMode::Electric),
+                    "energy" => Some(MapMode::EnergyFlow),
                     "off" => None,
                     _ => Some(MapMode::Potential),
                 };
@@ -1036,6 +1076,10 @@ fn input(
         if keys.just_pressed(KeyCode::KeyF) {
             game.show_field_lines = !game.show_field_lines;
         }
+        if keys.just_pressed(KeyCode::KeyZ) || keys.just_pressed(KeyCode::Home) {
+            game.zoom = 1.0;
+            game.zoom_center = None;
+        }
         if keys.just_pressed(KeyCode::KeyV) {
             game.map = next_map(&game.editor.level, game.map);
         }
@@ -1142,6 +1186,26 @@ fn input(
         game.editor.set_cursor(node);
         game.editor.remove();
     }
+    // Tube levels (nothing to place by magnitude): the wheel zooms about the pointer.
+    if game.editor.level.is_tube() {
+        for ev in wheel.read() {
+            if ev.y == 0.0 {
+                continue;
+            }
+            let old = game.zoom;
+            let new = (old * 1.2_f32.powf(-ev.y.signum())).clamp(0.1, 1.0);
+            let b = game.editor.level.bounds();
+            #[allow(clippy::cast_possible_truncation)]
+            let fit = Vec2::new(
+                (0.5 * (b.max.x + b.min.x)) as f32,
+                (0.5 * (b.max.y + b.min.y)) as f32,
+            );
+            let centre = game.zoom_center.unwrap_or(fit);
+            game.zoom = new;
+            game.zoom_center = (new < 1.0).then(|| world + (centre - world) * (new / old));
+        }
+        return;
+    }
     for ev in wheel.read() {
         if ev.y > 0.0 {
             game.editor.cycle_magnitude(1);
@@ -1242,14 +1306,22 @@ fn update_map(
         },
         (
             game.tube_gain_decades.to_bits(),
-            game.tube_range_decades.to_bits() ^ (game.tube_particles as u64),
+            game.tube_range_decades.to_bits()
+                ^ (game.tube_particles as u64)
+                ^ game
+                    .em_snapshot
+                    .as_ref()
+                    .map_or(0, |s| s.t.to_bits().rotate_left(17)),
         ),
     );
     if key == game.map_key {
         return;
     }
     game.map_key = key;
-    let Some(mode @ (MapMode::Potential | MapMode::Magnetic | MapMode::Electric)) = game.map else {
+    let Some(
+        mode @ (MapMode::Potential | MapMode::Magnetic | MapMode::Electric | MapMode::EnergyFlow),
+    ) = game.map
+    else {
         return;
     };
     let level = &game.editor.level;
@@ -1267,13 +1339,72 @@ fn update_map(
     // the preview arrives, and a level without shots shows a blank map (not the
     // previous level's).
     if level.is_tube() || level.shots.is_empty() {
+        let mut new_units = None;
         let shown = game.tube_frame();
         let picture = game.tube_display_frame();
         let field = match (&level.tube, &game.tube_preview, shown, &picture) {
-            (Some(spec), Some(v), Some(k), Some(picture)) if v.revision == game.sent_revision => {
+            (Some(spec), Some(v), Some(k), Some(picture)) if v.revision == game.sent_revision => 'arm: {
                 let run = &v.run;
                 // Many particles merged for the map (the shader and the arrows sum them all).
                 let binned = potential::map_frame(picture);
+                // The electromagnetic field's maps (`em.rs`).
+                if matches!(mode, MapMode::Magnetic | MapMode::EnergyFlow) {
+                    let Some(snap) = game.em_snapshot.as_ref() else {
+                        break 'arm None;
+                    };
+                    // The colour unit: the 99th percentile over the board (the tube's
+                    // inside, small and with the strongest fields, saturates; the
+                    // radiation around it shows).
+                    let peak = |f: &dyn Fn(&[f32; 3]) -> f64| {
+                        let mut v: Vec<f64> = snap.samples.iter().map(f).collect();
+                        v.sort_by(f64::total_cmp);
+                        #[allow(
+                            clippy::cast_possible_truncation,
+                            clippy::cast_sign_loss,
+                            clippy::cast_precision_loss
+                        )]
+                        v.get((0.99 * v.len() as f64) as usize)
+                            .copied()
+                            .unwrap_or(0.0)
+                    };
+                    let b = peak(&|s| f64::from(s[0].abs()));
+                    let sm = peak(&|s| f64::from(s[1].hypot(s[2])));
+                    let units = if game.em_units.0 == v.revision {
+                        (v.revision, game.em_units.1.max(b), game.em_units.2.max(sm))
+                    } else {
+                        (v.revision, b, sm)
+                    };
+                    new_units = Some(units);
+                    let magnetic = mode == MapMode::Magnetic;
+                    let scale = if magnetic { units.1 } else { units.2 }.max(1e-300);
+                    let arrows = if magnetic {
+                        Vec::new()
+                    } else {
+                        tube_flow_arrows(level, snap)
+                    };
+                    let (params, items) = potential::tube_field_params(
+                        run,
+                        &binned,
+                        picture,
+                        spec.cathode,
+                        snap,
+                        magnetic,
+                        scale,
+                        game.tube_range_decades,
+                        game.tube_particles == TubeParticles::Density,
+                    );
+                    break 'arm Some((
+                        TubeField {
+                            revision: v.revision,
+                            frame: k,
+                            scale,
+                            scale_final: false,
+                            arrows,
+                        },
+                        params,
+                        items,
+                    ));
+                }
                 let old = game
                     .tube_field
                     .as_ref()
@@ -1321,6 +1452,9 @@ fn update_map(
             }
             _ => None,
         };
+        if let Some(u) = new_units {
+            game.em_units = u;
+        }
         let (params, items) = match field {
             Some((f, params, items)) => {
                 game.tube_field = Some(f);
@@ -1508,6 +1642,15 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
                 chunk,
                 done,
             } if revision == current => {
+                // The field's thread follows the same run.
+                if game.em_run == Some(revision)
+                    && let Some(w) = &game.em
+                {
+                    w.send(em::EmRequest::Frames {
+                        revision,
+                        chunk: chunk.clone(),
+                    });
+                }
                 let chunk = std::sync::Arc::try_unwrap(chunk).unwrap_or_else(|a| (*a).clone());
                 match &mut game.tube_preview {
                     Some(v) if v.revision == revision => {
@@ -1533,6 +1676,81 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
 
 /// Arrow spacing of the tube's electric field map (cells).
 const TUBE_ARROW_SPACING: usize = 2;
+
+/// The energy flow map's arrows: the Poynting vector of the field's snapshot at the
+/// arrow grid's points (the nearest sample).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+fn tube_flow_arrows(level: &Level, snap: &em::EmSnapshot) -> TubeArrows {
+    let m = level.grid.max_node();
+    let mut arrows = Vec::new();
+    if snap.nx == 0 || snap.ny == 0 {
+        return arrows;
+    }
+    // About 24 arrows across the board.
+    let spacing = usize::try_from(m[0].max(m[1]) / 24)
+        .unwrap_or(0)
+        .max(TUBE_ARROW_SPACING);
+    for y in (0..=m[1]).step_by(spacing) {
+        for x in (0..=m[0]).step_by(spacing) {
+            let p = level.grid.position([x, y, 0]);
+            let i = (((p.x - snap.origin.0) / snap.spacing) as usize).min(snap.nx - 1);
+            let j = (((p.y - snap.origin.1) / snap.spacing) as usize).min(snap.ny - 1);
+            let s = snap.samples[i + snap.nx * j];
+            arrows.push((draw::to_vec2(p), Vec2::new(s[1], s[2])));
+        }
+    }
+    arrows
+}
+
+/// Tube levels' field maps: keeps the field's thread on the preview and the time shown,
+/// and takes its snapshots.
+fn update_em(mut game: ResMut<Game>) {
+    let game = &mut *game;
+    let field_map = game.editor.level.is_tube()
+        && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow));
+    if !field_map {
+        return;
+    }
+    let Some(v) = game
+        .tube_preview
+        .as_ref()
+        .filter(|v| v.revision == game.sent_revision)
+    else {
+        return;
+    };
+    let w = game.em.get_or_insert_with(em::EmWorker::start);
+    if game.em_run != Some(v.revision) {
+        w.send(em::EmRequest::Reset {
+            revision: v.revision,
+            level: std::sync::Arc::new(game.editor.level.clone()),
+            run: Box::new(v.run.clone()),
+        });
+        game.em_run = Some(v.revision);
+        game.em_asked = -1.0;
+        game.em_snapshot = None;
+    }
+    let t = if game.animate {
+        game.anim_time
+    } else {
+        v.run.frames.last().map_or(0.0, |f| f.t)
+    };
+    if (t - game.em_asked).abs() > 1e-9 {
+        w.send(em::EmRequest::Want {
+            revision: v.revision,
+            t,
+        });
+        game.em_asked = t;
+    }
+    if let Some(s) = w.latest()
+        && Some(s.revision) == game.em_run
+    {
+        game.em_snapshot = Some(s);
+    }
+}
 
 /// Arrows `(position, E)` of a tube's electric field map.
 pub type TubeArrows = Vec<(Vec2, Vec2)>;
@@ -1619,8 +1837,19 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
     // Playback in internal time units per second, with a pause at the end. Tube levels
     // play at 1 unit per second (a run of 20 takes 20 s at speed 1; at 4 units per second
     // it was over before the flow could be watched).
-    let rate = if level.is_tube() { 1.0 } else { 4.0 };
+    let tube = level.is_tube();
+    let rate = if tube { 1.0 } else { 4.0 };
     game.anim_time += time.delta_secs_f64() * game.playback_speed * rate;
+    // The field maps' playback waits for the field (`update_em`); a capture at a set time
+    // (`EM_TIME`) waits for it instead (`dev_capture`).
+    if tube
+        && std::env::var_os("EM_TIME").is_none()
+        && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow))
+        && let Some(s) = &game.em_snapshot
+    {
+        let ahead = 0.25 * game.playback_speed.max(0.25);
+        game.anim_time = game.anim_time.min(s.t + ahead);
+    }
     if streaming {
         game.anim_time = game.anim_time.min(end);
     } else if game.anim_time > end + 2.0 * game.playback_speed.max(0.25) {
@@ -1656,8 +1885,17 @@ fn fit_camera(
         1.0
     };
     let (w, h) = (size.x as f32 + margin, size.y as f32 + margin);
-    // World units per physical pixel.
-    let s = (w / avail_w).max(h / win_h);
+    // World units per physical pixel (tube levels: zoomed by the wheel).
+    let s = (w / avail_w).max(h / win_h) * game.zoom;
+    #[allow(clippy::cast_possible_truncation)]
+    let center = match game.zoom_center {
+        Some(c) => physics::DVec3::new(
+            f64::from(c.x).clamp(b.min.x, b.max.x),
+            f64::from(c.y).clamp(b.min.y, b.max.y),
+            0.0,
+        ),
+        None => center,
+    };
     if let Projection::Orthographic(o) = &mut *proj {
         o.scaling_mode = ScalingMode::Fixed {
             width: win_w * s,

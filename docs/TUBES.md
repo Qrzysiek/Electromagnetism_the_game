@@ -404,3 +404,25 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   radiates through an antenna on the axis), drawn as the exact 2D retarded wave of the load
   current beside the tube (PHYSICS.md §2.11). New owner rule: whatever a level says can
   happen must be possible within its sliders.
+- **Owner 2026-10-13: the magnetron's radiation on the map, from all charges.** The inset
+  (an antenna's wave beside the tube) showed no mechanism. Chosen: the full field of every
+  charge (electrons, vanes, block) with retardation, by a 2D TE Maxwell solver (FDTD:
+  Ex, Ey, B_z on a Yee grid, electrodes as perfect conductors, absorbing boundaries)
+  driven by each run (the particles' currents deposited charge-conservingly, each
+  electrode's circuit current along a straight lead to the envelope, the conventions of
+  decision 1 above), shown as B_z, Poynting and radiation maps for every tube level (so
+  item 1 too). A closed grounded anode shields its interior, so the magnetron's waves
+  leave through an output: an antenna outside the block strapped to the oscillating
+  vanes, whose radiation resistance (measured by the solver) becomes the tank's load.
+  The solver is one-way coupled (the carriers keep the quasi-static model), as the 3D
+  levels' radiation views are; its c is a display parameter (electrons at most ~0.25 c).
+- **Field solver done (2026-10-13):** `physics::fdtd2d` (TE Maxwell on a Yee grid, perfect
+  conductors, CPML, Esirkepov deposition; tests F1–F6) driven by the runs
+  (`level::tube_em`: the leads' convention, Gauss's law kept to 5.7e-10 on a real run), and
+  the game's magnetic and energy-flow maps for every tube level (item 1 of the questions
+  above, with the straight leads), computed on a thread as the animation plays; tube
+  levels zoom with the mouse wheel. The magnetron (now on a 96 × 96 board) radiates through
+  an antenna strapped to its tank's vanes; its load R = 0.0018 is the antenna's radiation
+  resistance as the solver measures it (the power leaving the board matches the load's
+  R⟨I²⟩ to ~3 %). The inset of the antenna's wave is gone. Left: the interior's B_z is
+  speckled by the macroparticles' individual currents (a current filter would smooth it).

@@ -13,6 +13,7 @@ pub mod drive;
 pub mod dynamics;
 pub mod events;
 pub mod external;
+pub mod fdtd2d;
 pub mod field;
 pub mod field_motion;
 pub mod geometry;

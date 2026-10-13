@@ -29,6 +29,9 @@ pub enum MapMode {
     Total,
     /// Tube levels: |E| of the preview's final state, with arrows.
     Electric,
+    /// Tube levels: the energy flow (Poynting vector) of the run's electromagnetic field,
+    /// with arrows (`em.rs`; `Magnetic` shows its B_z).
+    EnergyFlow,
 }
 
 /// Uniform parameters of the maps. The sources themselves are in the storage buffer
@@ -63,6 +66,12 @@ pub struct PotentialParams {
     /// Tube levels: the particles drawn as the density of their charge, a glow (z > 0):
     /// x = 1/(2 s²) for a Gaussian of width s, y = 1/(|q| at full glow).
     pub glow: Vec4,
+    /// Tube levels' field maps (mode 3): the display grid's origin (x, y), its spacing
+    /// and the colour scale's unit.
+    pub grid: Vec4,
+    /// Its samples across and up, the quantity (0: B_z, 1: |S|) and the decades coloured
+    /// below the unit (as bits).
+    pub grid_n: UVec4,
 }
 
 impl Default for PotentialParams {
@@ -83,6 +92,8 @@ impl Default for PotentialParams {
             e_ref: 1.0,
             e_decades: 1.5,
             glow: Vec4::ZERO,
+            grid: Vec4::ZERO,
+            grid_n: UVec4::ZERO,
         }
     }
 }
@@ -400,7 +411,7 @@ pub fn params(
         mode: match mode {
             MapMode::Potential => 0,
             MapMode::Magnetic | MapMode::Waves | MapMode::ParticleField | MapMode::Total => 1,
-            MapMode::Electric => 2,
+            MapMode::Electric | MapMode::EnergyFlow => 2,
         },
         uniform: Vec4::new(e_u.x as f32, e_u.y as f32, (b_u / b_ref) as f32, 0.0),
         origin: Vec4::new(
@@ -503,4 +514,40 @@ pub fn params(
         out.limit_count = count(limits.len());
     }
     (out, items.out)
+}
+
+/// Shader parameters and sources for a tube level's field map (mode 3): the snapshot of
+/// its electromagnetic field (`em.rs`), B_z (`magnetic`) or the Poynting vector's
+/// magnitude, coloured on a log scale over `decades` below `scale`; the particles' glow
+/// over it as on the potential map (`tube_params`).
+#[allow(clippy::cast_possible_truncation, clippy::too_many_arguments)]
+pub fn tube_field_params(
+    run: &level::tube::TubeRun,
+    frame: &level::tube::TubeFrame,
+    raw: &level::tube::TubeFrame,
+    cathode: usize,
+    snapshot: &crate::em::EmSnapshot,
+    magnetic: bool,
+    scale: f64,
+    decades: f64,
+    glow: bool,
+) -> (PotentialParams, Vec<[f32; 4]>) {
+    let (mut params, mut items) = tube_params(
+        run, frame, raw, cathode, -1.0, false, 1.0, 1.0, decades, glow,
+    );
+    items.extend(snapshot.samples.iter().map(|s| [s[0], s[1], s[2], 0.0]));
+    params.mode = 3;
+    params.grid = Vec4::new(
+        snapshot.origin.0 as f32,
+        snapshot.origin.1 as f32,
+        snapshot.spacing as f32,
+        scale as f32,
+    );
+    params.grid_n = UVec4::new(
+        u32::try_from(snapshot.nx).unwrap_or(0),
+        u32::try_from(snapshot.ny).unwrap_or(0),
+        u32::from(!magnetic),
+        (decades as f32).to_bits(),
+    );
+    (params, items)
 }

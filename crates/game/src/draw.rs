@@ -551,6 +551,7 @@ pub fn draw(
                 crate::potential::MapMode::Potential
                     | crate::potential::MapMode::Magnetic
                     | crate::potential::MapMode::Electric
+                    | crate::potential::MapMode::EnergyFlow
             )
         ) {
             Visibility::Visible
@@ -1230,7 +1231,12 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     // Dots unless the map draws the particles' density (or they are hidden).
     let map_on = matches!(
         game.map,
-        Some(crate::potential::MapMode::Potential | crate::potential::MapMode::Electric)
+        Some(
+            crate::potential::MapMode::Potential
+                | crate::potential::MapMode::Electric
+                | crate::potential::MapMode::Magnetic
+                | crate::potential::MapMode::EnergyFlow
+        )
     );
     let dots = match game.tube_particles {
         crate::TubeParticles::Dots => true,
@@ -1318,8 +1324,10 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     }
     // The electric field map's arrows: direction, faded with |E| over the map's 1.5
     // decades (as its colours).
-    if game.map == Some(crate::potential::MapMode::Electric)
-        && let Some(field) = &game.tube_field
+    if matches!(
+        game.map,
+        Some(crate::potential::MapMode::Electric | crate::potential::MapMode::EnergyFlow)
+    ) && let Some(field) = &game.tube_field
     {
         #[allow(clippy::cast_possible_truncation)]
         let scale = field.scale as f32;
