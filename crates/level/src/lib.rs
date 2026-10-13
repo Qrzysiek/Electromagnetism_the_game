@@ -1673,6 +1673,22 @@ impl Level {
         electrodes.chain(coils).chain(solenoid).collect()
     }
 
+    /// The electrodes a supply drives: its tunable electrode and those linked to it through
+    /// its tube circuit (a grid's wires, a buncher's second plate, a gun's Wehnelt). None
+    /// for a coil or a solenoid.
+    pub fn supply_electrodes(&self, target: SupplyTarget) -> Vec<usize> {
+        let SupplyTarget::Electrode(i) = target else {
+            return Vec::new();
+        };
+        let mut out = vec![i];
+        if let Some(t) = &self.tube {
+            for c in t.circuits.iter().filter(|c| c.electrode == i) {
+                out.extend(c.linked.iter().copied());
+            }
+        }
+        out
+    }
+
     /// The slider list of a supply's target: a voltage (an electrode's potential, or the
     /// source of a circuit driving a coil: a voltage source too) or a ramp rate (an
     /// undriven coil's).

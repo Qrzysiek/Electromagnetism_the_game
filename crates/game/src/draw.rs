@@ -587,9 +587,27 @@ pub fn draw(
         }
     }
 
-    // Coils.
-    for coil in &level.coils {
+    // Coils; the one whose supply is in focus with a bright ring (as electrodes are).
+    let focused_coil = game
+        .focused_supply()
+        .and_then(|n| level.supply_targets().into_iter().find(|(c, _)| *c == n))
+        .and_then(|(_, t)| match t {
+            level::SupplyTarget::Coil(i) => Some(i),
+            _ => None,
+        });
+    for (i, coil) in level.coils.iter().enumerate() {
         draw_coil(&mut gizmos, grid, coil);
+        if focused_coil == Some(i)
+            && let Coil::Circle { center, radius, .. } = coil
+        {
+            let c = to_vec2(grid.position(*center));
+            for grow in [0.35_f32, 0.42, 0.49] {
+                #[allow(clippy::cast_possible_truncation)]
+                gizmos
+                    .circle_2d(c, *radius as f32 + grow, Color::srgb(0.35, 0.94, 1.0))
+                    .resolution(128);
+            }
+        }
     }
 
     // Dielectrics: translucent boxes with a teal rim (insulators, not metal).
@@ -607,6 +625,14 @@ pub fn draw(
     // the player's plates. Tunable electrodes get a yellow frame (click them to switch
     // their supply), player plates a white one.
     let boxes = level.all_box_electrodes(&game.editor.placement);
+    // The electrodes of the supply in focus (its slider hovered or moved, or one of them
+    // hovered): a bright outline, in the colour of its badge.
+    let focused: Vec<usize> = game
+        .focused_supply()
+        .and_then(|n| level.supply_targets().into_iter().find(|(c, _)| *c == n))
+        .map(|(_, t)| level.supply_electrodes(t))
+        .unwrap_or_default();
+    let focus_colour = Color::srgb(0.35, 0.94, 1.0);
     for (i, b) in boxes.iter().enumerate() {
         let shape = level
             .electrodes
@@ -642,6 +668,21 @@ pub fn draw(
                     }
                 }
                 None => gizmos.linestrip_2d(box_outline(b, 0.12), color),
+            }
+        }
+        if focused.contains(&i) {
+            for grow in [0.2_f32, 0.26, 0.32] {
+                match radii {
+                    #[allow(clippy::cast_possible_truncation)]
+                    Some((inner, outer)) => {
+                        let c = to_vec2(b.center);
+                        gizmos.circle_2d(c, outer as f32 + grow, focus_colour);
+                        if inner > 0.0 {
+                            gizmos.circle_2d(c, (inner as f32 - grow).max(0.01), focus_colour);
+                        }
+                    }
+                    None => gizmos.linestrip_2d(box_outline(b, grow), focus_colour),
+                }
             }
         }
     }
@@ -1187,8 +1228,12 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
         return;
     };
     // Negative carriers (electrons) blue, positive (ions) orange; projectiles from their
-    // tracks below.
-    let fade = 0.85 * stale_fade(view.revision, game.sent_revision);
+    // tracks below. Many macroparticles (a weak, finely sampled beam) are drawn fainter, so
+    // that the beam reads as its density, bright where they crowd (a bunch), rather than
+    // as a snow of single dots.
+    #[allow(clippy::cast_precision_loss)]
+    let crowd = (200.0 / frame.x.len().max(1) as f32).clamp(0.3, 1.0);
+    let fade = 0.85 * crowd * stale_fade(view.revision, game.sent_revision);
     for (x, kind) in frame.x.iter().zip(&frame.kind) {
         let color = match *kind {
             level::tube::KIND_NEGATIVE => Color::srgb(0.6, 0.85, 1.0),

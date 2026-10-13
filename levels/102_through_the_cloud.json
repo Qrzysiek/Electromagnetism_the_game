@@ -33,13 +33,13 @@
     "magnet_strengths": [],
     "max_plates": 2,
     "plate_voltages": [
-      -80.0,
+      -100.0,
       -40.0,
       20.0,
       30.0,
       45.0,
       65.0,
-      80.0
+      100.0
     ],
     "plate": {
       "length": 3.0,

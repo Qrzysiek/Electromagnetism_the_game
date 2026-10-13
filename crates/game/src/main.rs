@@ -192,6 +192,9 @@ pub struct Game {
     /// Tube maps: the potential map's gain (decades: full colour at 10^−gain of the
     /// largest potential difference) and the electric map's range (decades below the top).
     pub tube_gain_decades: f64,
+    /// The supply whose electrodes are highlighted (its centre node) and until when: its
+    /// slider hovered or moved, or one of its electrodes hovered on the map.
+    pub supply_focus: Option<(level::Node, std::time::Instant)>,
     pub tube_range_decades: f64,
     pub animate: bool,
     pub playback_speed: f64,
@@ -211,6 +214,24 @@ pub struct Game {
 }
 
 impl Game {
+    /// Highlights a supply's electrodes for `seconds` from now.
+    pub fn focus_supply(&mut self, centre: level::Node, seconds: f64) {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs_f64(seconds);
+        if self
+            .supply_focus
+            .is_none_or(|(n, t)| n != centre || t < until)
+        {
+            self.supply_focus = Some((centre, until));
+        }
+    }
+
+    /// The supply highlighted now, if any.
+    pub fn focused_supply(&self) -> Option<level::Node> {
+        self.supply_focus
+            .filter(|(_, t)| std::time::Instant::now() < *t)
+            .map(|(n, _)| n)
+    }
+
     pub fn new(levels: Vec<Level>, level_paths: Vec<PathBuf>) -> Self {
         let editor = Editor::new(levels[0].clone());
         let arrow_measure = editor::default_measure(&editor.level);
@@ -254,6 +275,7 @@ impl Game {
             field_linear: false,
             field_gain_decades: 0.0,
             tube_gain_decades: 0.0,
+            supply_focus: None,
             tube_range_decades: 1.5,
             animate: true,
             playback_speed: 1.0,
@@ -772,6 +794,16 @@ fn dev_capture(
             if std::env::var("EM_TRACERS").is_ok_and(|v| v == "1") {
                 game.flow_tracers = true;
             }
+            // A supply held in focus (its number in the panel, 1-based): its electrodes
+            // highlighted, as when its slider is hovered.
+            if let Some(k) = std::env::var("EM_FOCUS")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                && let Some((n, _)) = game.editor.level.supply_targets().get(k.wrapping_sub(1))
+            {
+                let n = *n;
+                game.focus_supply(n, 3600.0);
+            }
             if std::env::var("EM_AVERAGE").is_ok_and(|v| v == "0") {
                 game.flow_average = false;
             }
@@ -1011,6 +1043,10 @@ fn input(
     // The node under the pointer, if the pointer is on the grid.
     let node = nearest_node(game, world);
     let on_grid = game.editor.level.grid.contains(node);
+    // A tunable electrode under the pointer highlights its supply (and its slider's badge).
+    if let Some(n) = game.editor.tunable_at(node) {
+        game.focus_supply(n, 0.15);
+    }
     // Follow the mouse only when it moves, so keyboard control is not overridden.
     if on_grid
         && game

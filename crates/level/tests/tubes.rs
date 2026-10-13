@@ -61,7 +61,7 @@ pub fn diode(v: f64) -> Level {
 /// The planar diode's preview and verification at two voltages: the setup is accepted,
 /// and the currents scale as V^{3/2} (exact in any geometry: the steady space-charge
 /// equations are invariant under V → λV, J → λ^{3/2} J) within the verdicts' errors
-/// (measured 8.045 for 8, errors 4 % and 4 %). Printed for comparison: the 1D Child–
+/// (measured 8.050 for 8, errors 5 % and 4 %). Printed for comparison: the 1D Child–
 /// Langmuir law per unit length of a 10-wide strip (the plates' finite width adds edge
 /// emission, so it is not a reference), and the run times (0.2 s and 1.0 s).
 #[test]
@@ -98,8 +98,8 @@ fn planar_diode_runs() {
 }
 
 /// Calibration of `ERROR_FACTOR` at the game's scale: the planar diode at V = 40 with
-/// refine 1, 2 and 4 (measured 2.20803, 2.14708, 2.11007: the refine-2 run is 1.7 % from
-/// refine 4, 0.61 of its difference to refine 1; PHYSICS.md §2.11).
+/// refine 1, 2 and 4 (measured 2.20803, 2.14575, 2.10675: the refine-2 run is 1.9 % from
+/// refine 4, 0.63 of its difference to refine 1; PHYSICS.md §2.11).
 /// Slow (about a minute): run on demand with `--ignored`.
 #[test]
 #[ignore = "calibration, about a minute"]

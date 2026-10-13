@@ -8,13 +8,13 @@
   "07_thomson_crt": "8b131c3e417cefc2",
   "08_around_the_wall": "df9ac3f85e867025",
   "09_einzel_lens": "cb1dc5a3537d68da",
-  "100_sideways": "f83b037fb3bbe821",
-  "101_bipolar_diode": "325f5f4034dcb873",
-  "102_through_the_cloud": "86e786992118fbbe",
-  "103_electron_gun": "75ec0e8702ca9d79",
-  "104_rectifier": "01733a7e6606fd9e",
-  "105_triode": "344519260f618487",
-  "106_klystron": "ad5267a3c67a43d1",
+  "100_sideways": "5a45e19174f3cb5c",
+  "101_bipolar_diode": "e6644ec42adb90b7",
+  "102_through_the_cloud": "7d6cd4adf6dd54c9",
+  "103_electron_gun": "6f02377fd5236d80",
+  "104_rectifier": "c2d45af9864dd81f",
+  "105_triode": "23f7e1e48f7b2715",
+  "106_klystron": "ec40e4650a788665",
   "10_reflectron": "a7d90d251ae50899",
   "11_collimator": "923b8d266aa1bb50",
   "12_hemispherical_analyzer": "04ca128258447f0d",
@@ -104,5 +104,5 @@
   "96_jackson_quiet_ring": "5a77a0c2e569ce9c",
   "97_jackson_ring_of_four": "c6d214f69940571e",
   "98_jackson_undulator": "adbb6be82c557ab3",
-  "99_vacuum_diode": "950ce1886dc8ea83"
+  "99_vacuum_diode": "64c509db627440e5"
 }

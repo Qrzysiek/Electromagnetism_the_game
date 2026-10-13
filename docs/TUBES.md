@@ -327,9 +327,9 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
 - **Klystron done (2026-10-13; level 106):** a weak beam (ballistic bunching) from a
   Wehnelt gun, a buncher on a sine and a tuned catcher (a tank) 21 further; the player sets
   the cathode's −V₀ (the beam's speed) and the drive V₁. Against Webster's small-signal
-  theory from the level's own fields: the optimum drive within 13.4 % of the prediction,
-  the rising side's shape to 0.001; past the optimum the two-gap buncher and the finite
-  catcher depart from the thin-gap J₁ (0.821 against 0.726 at 1.5 times the optimum's
+  theory from the level's own fields: the optimum drive within 13.7 % of the prediction,
+  the rising side's shape to 0.006; past the optimum the two-gap buncher and the finite
+  catcher depart from the thin-gap J₁ (0.822 against 0.726 at 1.5 times the optimum's
   drive), measured and stated. The amplitude alone hardly depends on V₀ (the buncher's
   coupling grows with the speed, offsetting the drift angle), so the level asks for the
   output's phase too (a new potential goal, `phase`): 7.5° per volt, phase pushing. A flat
@@ -338,3 +338,14 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   way: a per-level macroparticle rate for temperature-limited cathodes (`particle_rate`),
   and the amplitude measure corrected (fitted together with the trend; the old fit took
   part of the sine with the line).
+- **The owner's review of the Klystron (2026-10-13):** "noise" in the picture, and no
+  indication of which electrodes a slider drives. The maps themselves were clean on this
+  machine (checked at gain 0 and 2 and in the electric map); the noise was the beam: every
+  segment of the cathode started its emission account at zero and, emitting at the same
+  rate, all fired together in volleys, which drew regular arcs (and made a coherent
+  fluctuation of the current: V9's quantization error was −0.9 %/+0.3 %, now 1e-4). Fixed
+  by a quiet start (PHYSICS.md §2.11), and many macroparticles are drawn fainter. The
+  supplies are numbered: each slider's row starts with a badge whose number is drawn on
+  the map beside every electrode it drives (linked ones too) or at a coil's or solenoid's
+  terminal; hovering a slider (or moving it), or an electrode on the map, outlines its
+  electrodes in cyan (`EM_FOCUS=<n>` holds one in a capture).

@@ -208,6 +208,7 @@ pub fn panel(
     mut contexts: EguiContexts,
     mut game: ResMut<Game>,
     radiation: Res<crate::radiation::RadiationView>,
+    camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let mut root = egui::Ui::new(
@@ -243,7 +244,90 @@ pub fn panel(
     // the board (and with it the node under the cursor).
     let left = ctx.viewport_rect().right() - PANEL_WIDTH;
     game.panel_left_px = Some(left * ctx.pixels_per_point());
+    supply_badges(ctx, game, *camera, left);
     Ok(())
+}
+
+/// The colour of a supply's badge and of its electrodes' highlight while it is in focus
+/// (none of the status colours: yellow unverified, orange lost, white computing, violet gate).
+pub const SUPPLY_FOCUS: egui::Color32 = egui::Color32::from_rgb(90, 240, 255);
+/// The tunable electrodes' frame (and an idle badge's ring).
+const SUPPLY_FRAME: egui::Color32 = egui::Color32::from_rgb(255, 217, 77);
+
+/// Each supply's number on the map, beside every electrode it drives (its tunable electrode
+/// and the electrodes linked to it), or at a coil's or solenoid's terminal: the same number
+/// as its slider's row in the panel.
+fn supply_badges(
+    ctx: &egui::Context,
+    game: &Game,
+    (cam, cam_transform): (&Camera, &GlobalTransform),
+    panel_left: f32,
+) {
+    let level = &game.editor.level;
+    let targets = level.supply_targets();
+    if targets.is_empty() {
+        return;
+    }
+    let focus = game.focused_supply();
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Middle,
+        egui::Id::new("supply badges"),
+    ));
+    let outlines = level.electrode_outlines(&[]);
+    for (k, (centre, target)) in targets.iter().enumerate() {
+        // Where its badges go: the upper right of each electrode it drives (world).
+        let anchors: Vec<physics::DVec3> = match target {
+            level::SupplyTarget::Electrode(_) => level
+                .supply_electrodes(*target)
+                .iter()
+                .filter_map(|&i| outlines.get(i))
+                .map(|o| match *o {
+                    level::Outline::Rect(c) => {
+                        let x = c.iter().map(|p| p.x).fold(f64::MIN, f64::max);
+                        let y = c.iter().map(|p| p.y).fold(f64::MIN, f64::max);
+                        physics::DVec3::new(x + 0.3, y + 0.3, 0.0)
+                    }
+                    level::Outline::Circle { center, radius: r }
+                    | level::Outline::Ring {
+                        center, outer: r, ..
+                    } => center + physics::DVec3::new(0.75 * r + 0.3, 0.75 * r + 0.3, 0.0),
+                })
+                .collect(),
+            _ => {
+                let p = level.grid.position(*centre);
+                vec![physics::DVec3::new(p.x + 0.45, p.y + 0.45, 0.0)]
+            }
+        };
+        let ring = if focus == Some(*centre) {
+            SUPPLY_FOCUS
+        } else {
+            SUPPLY_FRAME
+        };
+        for a in anchors {
+            #[allow(clippy::cast_possible_truncation)]
+            let world = Vec3::new(a.x as f32, a.y as f32, 0.0);
+            let Ok(v) = cam.world_to_viewport(cam_transform, world) else {
+                continue;
+            };
+            if v.x > panel_left - 10.0 {
+                continue;
+            }
+            let at = egui::pos2(v.x, v.y);
+            painter.circle(
+                at,
+                8.5,
+                egui::Color32::from_rgb(22, 24, 30),
+                egui::Stroke::new(1.6, ring),
+            );
+            painter.text(
+                at,
+                egui::Align2::CENTER_CENTER,
+                format!("{}", k + 1),
+                egui::FontId::proportional(11.0),
+                egui::Color32::WHITE,
+            );
+        }
+    }
 }
 
 fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::RadiationView) {
@@ -1949,7 +2033,8 @@ fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
              ring) to switch its supply on or to step it; S flips it, right click switches it \
              off.",
         );
-    for (centre, target) in targets {
+    let focus = game.focused_supply();
+    for (k, (centre, target)) in targets.into_iter().enumerate() {
         let (name, own) = match target {
             level::SupplyTarget::Electrode(i) => {
                 let own = match level.electrodes[i].bias {
@@ -1991,7 +2076,20 @@ fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         };
         let list = level.supply_list(target).to_vec();
         let current = game.editor.supply(centre);
-        ui.horizontal_wrapped(|ui| {
+        let row = ui.horizontal_wrapped(|ui| {
+            // Its number, as on the map beside the electrodes it drives.
+            let badge = if focus == Some(centre) {
+                SUPPLY_FOCUS
+            } else {
+                SUPPLY_FRAME
+            };
+            ui.label(
+                egui::RichText::new(format!(" {} ", k + 1))
+                    .strong()
+                    .color(egui::Color32::BLACK)
+                    .background_color(badge),
+            )
+            .on_hover_text("Its number on the map, beside every electrode it drives");
             ui.label(name);
             // A slider over the level's range, in every mode (the owner: values are tuned,
             // not picked from a list whose ends give the answer away).
@@ -2005,8 +2103,14 @@ fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 game.text_focus |= r.has_focus();
                 choice = on.then_some(v);
             }
+            if choice != current {
+                game.focus_supply(centre, 1.5);
+            }
             game.editor.set_supply(centre, choice);
         });
+        if ui.rect_contains_pointer(row.response.rect) {
+            game.focus_supply(centre, 0.15);
+        }
     }
 }
 

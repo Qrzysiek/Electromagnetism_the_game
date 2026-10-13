@@ -350,10 +350,21 @@ impl Tube {
             })
             .collect();
         TubeState {
+            // A quiet start: each segment's account begins at a different fraction of a
+            // macroparticle (the golden-ratio sequence), so that segments emitting at the
+            // same rate do not emit together in volleys.
             pending: self
                 .emitters
                 .iter()
-                .map(|e| vec![0.0; self.segments_of(e.electrode).count()])
+                .map(|e| {
+                    (0..self.segments_of(e.electrode).count())
+                        .map(|k| {
+                            #[allow(clippy::cast_precision_loss)]
+                            let f = ((k + 1) as f64 * 0.618_033_988_749_894_9).fract();
+                            f * e.weight
+                        })
+                        .collect()
+                })
                 .collect(),
             collected: vec![vec![0.0; self.emitters.len()]; n_el],
             launched: vec![false; self.projectiles.len()],
