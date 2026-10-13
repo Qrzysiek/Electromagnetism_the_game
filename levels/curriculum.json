@@ -325,7 +325,8 @@
           "name": "Introduction",
           "levels": [
             "vacuum_diode",
-            "sideways"
+            "sideways",
+            "bipolar_diode"
           ]
         },
         {

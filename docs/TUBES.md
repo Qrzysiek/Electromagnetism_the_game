@@ -298,3 +298,29 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   keeps its energy and is only detuned by (ω dt)²/12), resistive ones by backward Euler as
   before (no level changed). V17 (an LC tank to rounding), V18 (a tank between two
   electrodes), V16 with a coil (PHYSICS.md §2.11).
+- **The bipolar levels (owner, 2026-10-13):** the approved ion strips with a protected
+  cathode segment had a flaw (the ions that neutralize the cloud by the cathode land on
+  it beneath the cloud: no real decision), so the owner chose an introduction plus a
+  magnetically insulated ion diode. Done: rods and rings in tube levels (PHYSICS.md
+  §2.11, test `rods_and_rings`) and **Bipolar diode** (level 101: the anode's face emits
+  ions, q/m = 1/16; electrons ≥ 2.0 with ion wear ≤ 0.75 solve for 22.3–29.7 V; without
+  the ions the electron goal would need 41 V).
+- **The Ion diode, not shipped (2026-10-13; a question for the owner):** an inverted
+  coaxial diode (the ring the cathode, the rod the anode emitting ions) in the player's
+  solenoid. Its physics comes out as theory says (preview, 26 V, ring 10, rod 2, t =
+  20–30): the electrons leak 14 into the rod below Hull's cutoff (0.75), the leak stops at
+  ~2.3 times it, and the electron sheath raises the ion current from 3.8 (strong field) to
+  11 (just above the cutoff); the sheath keeps spreading towards the rod (still rising at
+  t = 80–90, the impedance collapse of real ion diodes). But the boost is dominated by the
+  macroparticles' noise, far above a real tube's shot noise: four times as many changed
+  the ion current at 28 V, B = 1.8 from 8.04 to 6.93 (the verification's 6.22), and the
+  preview runs 7–17 % above the verification where the sheath acts (4 % in the strong-field
+  limit; first-order convergence, refine 1, 2, 4: 4.94, 4.36, 4.08). With verdict bars of
+  15–25 % no placement of the goals verified cleanly at its reference while keeping the
+  slider rule. The two Hull cutoffs are robust, but with a realistic mass ratio their
+  window (√(m_i/m_e) b/a apart) is far wider than the rule allows (the solving interval
+  must stay between 0.55 and 0.95 of the range). Options: (a) reduce the noise first
+  (quieter emission, more macroparticles with a faster field sum: a treecode), which the
+  magnetron needs anyway, then return; (b) an artificial mass ratio of ~4 so that the two
+  cutoffs bound the field; (c) relax the slider rule for this level's field. The level's
+  design is kept in `scripts/levels.py` (`ion_diode`, not in the curriculum).

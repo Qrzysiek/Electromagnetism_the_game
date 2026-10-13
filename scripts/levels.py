@@ -158,10 +158,11 @@ def free_charge(x, y, q, angle_deg, speed):
 
 
 def plate(x, y, length, thickness=0.4, height=4.0, angle_deg=0.0, kind="grounded",
-          value=None, tunable=False, drive=None):
+          value=None, tunable=False, drive=None, shape=None):
     """A box electrode (plate, slab or wall) standing on the plane; `tunable`: the player
     sets its potential with a power supply (a driven plate's source level); `drive`: a
-    circuit (see `drive`)."""
+    circuit (see `drive`); `shape` (tube levels): "rod" (a circle of diameter `length`) or
+    "ring" (an annulus of mid-diameter `length`, wall `thickness`)."""
     bias = {"kind": kind}
     if value is not None:
         bias["value"] = value
@@ -171,6 +172,8 @@ def plate(x, y, length, thickness=0.4, height=4.0, angle_deg=0.0, kind="grounded
         e["tunable"] = True
     if drive is not None:
         e["drive"] = drive
+    if shape is not None:
+        e["shape"] = shape
     return e
 
 
@@ -253,7 +256,7 @@ def current_goal(electrode, lo, hi, start, end, carriers=None):
 
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
-         potentials=(), goals=(), ions=None):
+         potentials=(), goals=(), ions=None, step=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -269,6 +272,8 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
                  else []) + list(goals)
     if all_goals:
         t["goals"] = all_goals
+    if step is not None:
+        t["step"] = step
     if ions is not None:
         t["ions"] = {"electrode": ions[0], "charge_per_mass": ions[1]}
         if len(ions) > 2:
@@ -3071,6 +3076,41 @@ def sideways():
         reference=[supply(23, 21, 1.1)])
 
 
+def bipolar_diode():
+    # Designed with `generator tube-scan` (PHYSICS.md 2.11): Vacuum diode's tube with the
+    # anode's face emitting ions under the space-charge limit. The ions' q/m = 1/16 (16
+    # times heavier per charge than the electrons, not 1836 or more: in a static field the
+    # mass changes neither the paths nor the electrons' gain, only the time scale and the
+    # ion current, sqrt(m_e/m_i) of the electrons' in a planar diode; heavier ions would
+    # take longer to settle and longer runs). Preview over t = 20-30 (both currents settled:
+    # at q/m = 1/25 the electrons' was 2.540 there and 2.553 over 30-50): electrons into the
+    # anode 0.613 at 10 V, 1.723 at 20, 2.558 at 26, 3.496 at 32 (V^1.5; Vacuum diode's
+    # 1.29 at 26 without ions: the ions' charge doubles it, 1.86 in Langmuir's infinite
+    # planar diode), ions into the cathode 0.148, 0.410, 0.619, 0.830 (0.24 of the
+    # electrons'; the planar law: 0.25). The goals, electrons >= 2.0 and ions <= 0.75, ask
+    # for about 22 to 29.5 V in the preview; without the ions the electron goal would need
+    # 41 V, far beyond the wear limit.
+    return level(
+        "Bipolar diode",
+        "The same diode, but now the anode's face is coated with a salt that, hot, emits "
+        "positive ions (orange), as many as its field pulls off, just as the cathode emits "
+        "electrons. The ions fly the other way, and their positive charge cancels part of "
+        "the electrons' cloud: more electrons get through than in the vacuum diode at the "
+        "same voltage (1.86 times as many in an infinitely wide diode: Langmuir, 1929). But "
+        "the ions strike the cathode and wear it away. Set the anode's voltage so that at "
+        "least 2.0 of electrons reach the anode while at most 0.75 of ions strike the "
+        "cathode (both averaged over $t = 20$ to $30$). Both currents grow as "
+        "$I \\propto V^{3/2}$.",
+        grid=(24, 16), c=None, t_max=200.0,
+        electrodes=[plate(8, 8, 10, thickness=1.0, angle_deg=90.0),
+                    plate(16, 8, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
+        supplies=slider(40.0, 13.0, 26.0, 33.0),
+        tube=tube(0, 1, 2.0, 10.0, 20.0, 30.0, emit_toward_deg=0.0,
+                  ions=(1, 0.0625, 180.0),
+                  goals=[current_goal(0, 0.0, 0.75, 20.0, 30.0, carriers="ions")]),
+        reference=[supply(16, 8, 26.0)])
+
+
 def through_the_cloud():
     # Designed with `generator tube-scan` and verified with `check` (PHYSICS.md 2.11),
     # inside the tube's grounded envelope. The owner (2026-10-12) found the flow at 30 V
@@ -3139,6 +3179,55 @@ def electron_gun():
         plate_size=(3.0, 0.5, 4.0),
         tube=tube(0, 3, 0.24, 5.0, 20.0, 40.0, emit_toward_deg=0.0, saturation=0.2),
         reference=[player_plate(21, 13, 6.0), player_plate(21, 7, 6.0)])
+
+
+def ion_diode():
+    # Not in the curriculum (docs/TUBES.md, 2026-10-13): the sheath's boost of the ion
+    # current is dominated by the macroparticles' noise (four times as many changed it by
+    # 14 % at 28 V, B = 1.8: 8.04 -> 6.93), the verdicts' bars there are 15-25 %, and no
+    # placement of the goals gave a puzzle that verifies cleanly and keeps the slider rule.
+    # Designed with `generator tube-scan` (PHYSICS.md 2.11): an inverted coaxial diode, the
+    # cathode the ring (mid-diameter 10, wall 1: inner radius b = 4.5), the anode the rod
+    # (radius a = 1) emitting ions (q/m = 1/16, as in Bipolar diode) on every face, in the
+    # player's solenoid field. Hull's cutoff from r0 to r1 for a charge released at rest:
+    # B = sqrt(2 m V/q) 2 r1/|r0^2 - r1^2|: for the electrons (b to a) 0.75 at 26 V, for the
+    # ions (a to b) 4 * 2b/2a = 18 times that: the ions cross, the electrons are insulated
+    # in a sheath along the ring, whose charge draws more ions (the magnetically insulated
+    # ion diode). Preview at 26 V over t = 20-30 (step 1/20): ions onto the ring 5.55 at
+    # B = 0 (the electrons leak 14.4 into the rod), 5.86 at 0.6, 10.1 at 0.9 (leak 2.0), 11.0
+    # at 1.2 (0.54), 8.72 at 1.5 (0.10), 6.84 at 1.8 (0), 4.94 at 2.5, 3.79 at 5 (the ions'
+    # own space-charge limit): the boost is largest just above the cutoff, the leak stops
+    # only at ~2.3 times it. The sheath keeps spreading towards the rod (still rising at
+    # t = 80-90: the impedance collapse of real ion diodes), so the goal's window is a
+    # fixed time after switch-on. It converges at first order (refine 1, 2, 4 at 26 V and
+    # B = 1.2 on a ring of 12: 4.94, 4.36, 4.08) but the coarse run overstates the boosted
+    # sheath (refine 2 is 7-12 % lower where the boost acts, 4 % in the strong-field
+    # limit), so the verdicts' bars are ~15 %: hence a wide band. (V, B) grid in the preview
+    # (ions/leak): V = 24: 7.25/0.069 at B = 1.5, 5.75/0 at 1.8; V = 28: 8.04/0.012 at 1.8,
+    # 6.73/0.006 at 2.1, 5.85/0 at 2.4; V = 32: 8.98/0 at 2.1, 7.84/0 at 2.4, 6.49/0 at 3;
+    # V = 36: 9.93/0 at 2.4, 8.22/0 at 3. The goals (ions 5 to 9, leak <= 0.05) leave a
+    # diagonal strip, B roughly in proportion to sqrt(V); full voltage and field overshoot
+    # it, the sliders' middles fall short.
+    return level(
+        "Ion diode",
+        "An ion diode turned inside out: the ring is the cathode, emitting electrons from "
+        "its inner face, and the rod in its middle, on your supply, emits ions. Without a "
+        "magnetic field the electrons rush to the rod and waste the supply's current. Your "
+        "solenoid (the yellow coil, top right) curls them: above Hull's critical field they "
+        "cannot reach the rod, and stay in a sheath along the ring. The heavy ions still "
+        "cross, and the sheath's negative charge pulls more of them across. Deliver an ion "
+        "current between 4.5 and 9.5 to the ring while at most 0.05 of electrons leak to the "
+        "rod (averaged over $t = 20$ to $30$). The critical field grows with the voltage, "
+        "as $B \\propto \\sqrt{V}$, and the sheath helps the ions most just above it.",
+        grid=(24, 16), c=None, t_max=100.0,
+        electrodes=[plate(12, 8, 10, thickness=1.0, shape="ring"),
+                    plate(12, 8, 2, thickness=2.0, shape="rod", tunable=True)],
+        supplies=slider(40.0, 24.0, 28.0, 32.0),
+        solenoid_fields=slider(3.0, 1.85, 2.1, 2.4),
+        tube=tube(0, 1, 0.0, 0.05, 20.0, 30.0, solenoid=(23, 15), step=0.05,
+                  ions=(1, 0.0625),
+                  goals=[current_goal(0, 4.5, 9.5, 20.0, 30.0, carriers="ions")]),
+        reference=[supply(12, 8, 28.0), supply(23, 15, 1.85)])
 
 
 def rectifier():
@@ -3223,6 +3312,7 @@ ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
         ("sideways", sideways),
+        ("bipolar_diode", bipolar_diode),
     ]),
     ("Intermediate", [
         ("through_the_cloud", through_the_cloud),

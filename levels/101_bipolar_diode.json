@@ -1,0 +1,111 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Bipolar diode",
+  "description": "The same diode, but now the anode's face is coated with a salt that, hot, emits positive ions (orange), as many as its field pulls off, just as the cathode emits electrons. The ions fly the other way, and their positive charge cancels part of the electrons' cloud: more electrons get through than in the vacuum diode at the same voltage (1.86 times as many in an infinitely wide diode: Langmuir, 1929). But the ions strike the cathode and wear it away. Set the anode's voltage so that at least 2.0 of electrons reach the anode while at most 0.75 of ions strike the cathode (both averaged over $t = 20$ to $30$). Both currents grow as $I \\propto V^{3/2}$.",
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -40.0,
+      13.0,
+      26.0,
+      33.0,
+      40.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        16,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": 26.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        8,
+        8,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        16,
+        8,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goals": [
+      {
+        "electrode": 1,
+        "min": 2.0,
+        "max": 10.0,
+        "start": 20.0,
+        "end": 30.0
+      },
+      {
+        "electrode": 0,
+        "min": 0.0,
+        "max": 0.75,
+        "start": 20.0,
+        "end": 30.0,
+        "carriers": "ions"
+      }
+    ],
+    "ions": {
+      "electrode": 1,
+      "charge_per_mass": 0.0625,
+      "emit_toward_deg": 180.0
+    },
+    "emit_toward_deg": 0.0
+  }
+}
