@@ -1529,6 +1529,8 @@ fn edit_tube(
             b_z: 0.0,
             solenoid: None,
             particle_rate: TL_RATE,
+            particles: 1.0,
+            emitter_mesh: 1.0,
             step: DEFAULT_STEP,
             goals: vec![CurrentGoal {
                 electrode: 1,
@@ -1552,6 +1554,8 @@ fn edit_tube(
         b_z,
         solenoid,
         particle_rate,
+        particles,
+        emitter_mesh,
         step,
         goals,
         circuits,
@@ -1654,6 +1658,30 @@ fn edit_tube(
                 .has_focus();
         });
     }
+    ui.horizontal(|ui| {
+        ui.label("Macroparticles ×").on_hover_text(
+            "Every emitter's macroparticles times this: a magnetized sheath needs many more \
+             than a diode's flow (each preview costs about as many times more)",
+        );
+        focus |= ui
+            .add(
+                egui::DragValue::new(particles)
+                    .speed(0.1)
+                    .range(0.1..=100.0),
+            )
+            .has_focus();
+        ui.label("emitter mesh ×").on_hover_text(
+            "The emitters' segments this many times finer: the particles' release distance \
+             (a first-order error) shrinks with them",
+        );
+        focus |= ui
+            .add(
+                egui::DragValue::new(emitter_mesh)
+                    .speed(0.1)
+                    .range(1.0..=16.0),
+            )
+            .has_focus();
+    });
     // Ion source.
     let mut has_ions = ions.is_some();
     ui.checkbox(&mut has_ions, "Ion source (bipolar)")
@@ -1924,10 +1952,12 @@ fn edit_tube(
             } else {
                 *supply_offset = false;
             }
-            // Further electrodes on the same ideal source (a grid's wires), 1-based.
-            if *resistance == Some(0.0) {
-                ui.horizontal(|ui| {
-                    ui.label("linked electrodes");
+            // Further electrodes wired to this one (a grid's wires on an ideal source, a
+            // magnetron's strapped vanes on a tank), 1-based.
+            ui.horizontal(|ui| {
+                    ui.label("linked electrodes").on_hover_text(
+                        "Wired to this electrode: on an ideal source they follow it (a grid's                          wires); on a tank or a resistance they are one node with it (a                          magnetron's strapped vanes)",
+                    );
                     let mut text = linked
                         .iter()
                         .map(|e| (e + 1).to_string())
@@ -1944,9 +1974,6 @@ fn edit_tube(
                     }
                     focus |= r.has_focus();
                 });
-            } else {
-                linked.clear();
-            }
         });
     }
     if let Some(k) = remove {
@@ -2485,6 +2512,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             b_z,
             solenoid,
             particle_rate,
+            particles,
+            emitter_mesh,
             step,
             goals,
             circuits,
@@ -2495,7 +2524,9 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         let nonneg = |v: f64| (0.0..=MAX_POSITIVE).contains(&v);
         let angle = |a: &Option<f64>| a.is_none_or(|a| (-360.0..=360.0).contains(&a));
         let ratio_ok = (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass.abs())
-            && (1.0..=MAX_POSITIVE).contains(particle_rate);
+            && (1.0..=MAX_POSITIVE).contains(particle_rate)
+            && (0.1..=100.0).contains(particles)
+            && (1.0..=16.0).contains(emitter_mesh);
         let goal_ok = goals.len() <= MAX_COUNT as usize
             && goals.iter().all(|g| {
                 let CurrentGoal {

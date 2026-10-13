@@ -380,3 +380,15 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   goals that tolerate ~12 % and previews of ~3 s, or observables less sensitive than the
   sheath's current (a magnetron's frequency, set by its tanks; its onset above the
   Buneman–Hartree condition, with priming).
+- **Ion diode done (2026-10-13; level 104, the owner's B before A):** shipped with 8 times
+  the macroparticles and emitters meshed twice as finely (two new per-level fields,
+  `particles` and `emitter_mesh`): the sheath converged in the particles' number, and the
+  emitters' release layer was the rest of the preview's error. Bars ~9 % at the reference,
+  a preview of 3.4 s (the stage's costliest level), a verification of 13.6 s.
+- **Magnetron done (2026-10-13; level 108, the stage's Master tier):** straps (one node
+  over several electrodes, test V19) make the strapped vanes; the goal is the tank's
+  saturated swing (at least 10 over t = 90-120), robust where the start-up time is not
+  (PHYSICS.md §2.11, the magnetron). Frequency goals were not needed: the strapped π mode
+  rings at 3.03-3.11 wherever it oscillates. Left for later: a frequency measure (pushing,
+  a tuning plunger), the output's power as a goal, and the spokes' picture in the owner's
+  review.

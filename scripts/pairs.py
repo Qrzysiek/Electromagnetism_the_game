@@ -192,14 +192,16 @@ def make_tube_circuit(lv, pl, p, o, w):
 
 def make_tube_tank(lv, pl, p, o, w):
     """A tube level (`make_tube`) whose anode is an LC tank biased by its supply (a DC
-    source through R and a coil, C to ground: a cavity), with a second electrode joined to
-    it by a coil (a tank between two electrodes): the inductors of PHYSICS.md 2.11."""
+    source through R and a coil, C to ground: a cavity) with a third electrode strapped to
+    it (one node: a magnetron's vanes), and a second electrode joined to it by a coil (a
+    tank between two electrodes): the inductors and straps of PHYSICS.md 2.11."""
     make_tube(lv, pl, p, o, w)
     k = lv["tube"]["cathode"]
     lv["electrodes"].append(electrode((p[0] - 3, p[1] + 2), length=0.6, thickness=0.5))
+    lv["electrodes"].append(electrode((p[0] - 3, p[1] - 2), length=0.6, thickness=0.5))
     lv["tube"]["circuits"] = [
         {"electrode": k + 1, "source": {"kind": "dc", "value": 1.0}, "resistance": 1.0,
-         "capacitance": 1.0, "inductance": 2.0},
+         "capacitance": 1.0, "inductance": 2.0, "linked": [k + 3]},
         {"electrode": k + 2, "source": {"kind": "dc", "value": 0.0}, "resistance": 0.5,
          "inductance": 1.0, "return_to": k + 1},
     ]

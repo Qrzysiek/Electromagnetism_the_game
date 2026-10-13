@@ -58,6 +58,22 @@ pub struct TubeSpec {
     /// modulated at a high frequency needs many per period.
     #[serde(default = "default_rate", skip_serializing_if = "is_default_rate")]
     pub particle_rate: f64,
+    /// This many times the macroparticles of every emitter (1 by default): a magnetized
+    /// sheath needs many more than a diode's flow (PHYSICS.md §2.11; the tree code makes
+    /// them affordable).
+    #[serde(
+        default = "default_particles",
+        skip_serializing_if = "is_default_particles"
+    )]
+    pub particles: f64,
+    /// The emitters' segments this many times finer than `EMITTER_MESH` (1 by default):
+    /// their particles are released half a segment out, a first-order error a magnetized
+    /// sheath magnifies (PHYSICS.md §2.11).
+    #[serde(
+        default = "default_particles",
+        skip_serializing_if = "is_default_particles"
+    )]
+    pub emitter_mesh: f64,
     /// The preview's time step (the verification's is half).
     #[serde(default = "default_step", skip_serializing_if = "is_default_step")]
     pub step: f64,
@@ -94,7 +110,9 @@ pub struct TubeCircuit {
     pub capacitance: f64,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub supply_offset: bool,
-    /// Further electrodes on the same ideal source (resistance 0 only): a grid's wires.
+    /// Further electrodes wired to this one: on an ideal source, a grid's wires; on any
+    /// other circuit, straps (`physics::tube::Circuit::to`) making them one node with it
+    /// (a magnetron's alternate vanes on one tank).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub linked: Vec<usize>,
     /// An inductance in series with the resistance (`physics::tube::Circuit`): a tank's
@@ -166,6 +184,15 @@ fn default_step() -> f64 {
 
 fn default_rate() -> f64 {
     TL_RATE
+}
+
+fn default_particles() -> f64 {
+    1.0
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref, clippy::float_cmp)]
+fn is_default_particles(v: &f64) -> bool {
+    *v == 1.0
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref, clippy::float_cmp)]
@@ -267,12 +294,14 @@ where
 
 /// A tube run's resolution: `refine` divides the segments, the step, the macroparticles'
 /// weight and the softening (1: the preview, 2: the verification); `particles` and
-/// `softening` further multiply the macroparticles' number and the softening alone.
+/// `softening` further multiply the macroparticles' number and the softening alone, and
+/// `emitter` divides the emitters' segments (their particles' release distance) alone.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TubeResolution {
     pub refine: u32,
     pub particles: f64,
     pub softening: f64,
+    pub emitter: f64,
 }
 
 impl TubeResolution {
@@ -282,6 +311,7 @@ impl TubeResolution {
             refine,
             particles: 1.0,
             softening: 1.0,
+            emitter: 1.0,
         }
     }
 }
@@ -620,6 +650,11 @@ impl TubeSim {
     /// Macroparticles in flight now.
     pub fn in_flight(&self) -> usize {
         self.state.x.len()
+    }
+
+    /// The electrodes' potentials now.
+    pub fn potentials(&self) -> &[f64] {
+        &self.state.potentials
     }
 
     /// Each emitter's macroparticle weight.
@@ -1033,7 +1068,11 @@ impl Level {
         let sizes: Vec<f64> = (0..shapes.len())
             .map(|e| {
                 let emits = e == spec.cathode || spec.ions.is_some_and(|i| i.electrode == e);
-                if emits { size * EMITTER_MESH } else { size }
+                if emits {
+                    size * EMITTER_MESH / (res.emitter * spec.emitter_mesh)
+                } else {
+                    size
+                }
             })
             .collect();
         let prisms = Prisms::with_sizes(shapes, &[], &sizes);
@@ -1174,11 +1213,12 @@ impl Level {
                 .iter()
                 .map(|v| tube.emitting_charge(i, v))
                 .fold(0.0, f64::max);
-            let mut w = q.max(*fl).max(1e-300) / (PREVIEW_PARTICLES * r * res.particles);
+            let many = r * res.particles * spec.particles;
+            let mut w = q.max(*fl).max(1e-300) / (PREVIEW_PARTICLES * many);
             if i == 0
                 && let Some(j) = spec.saturation
             {
-                w = w.min(j * perimeter / (spec.particle_rate * r * res.particles));
+                w = w.min(j * perimeter / (spec.particle_rate * many));
             }
             tube.emitters[i].weight = w;
         }
@@ -1251,11 +1291,25 @@ impl Level {
                     inductance: c.inductance,
                     to: c.return_to,
                 };
-                // Linked electrodes follow the same ideal source.
+                // Linked electrodes follow the same ideal source, or are strapped to the
+                // circuit's electrode.
+                let ideal =
+                    primary.resistance == 0.0 && primary.inductance == 0.0 && primary.to.is_none();
                 std::iter::once(primary).chain(c.linked.iter().map(move |&e| {
-                    physics::tube::Circuit {
-                        electrode: e,
-                        ..primary
+                    if ideal {
+                        physics::tube::Circuit {
+                            electrode: e,
+                            ..primary
+                        }
+                    } else {
+                        physics::tube::Circuit {
+                            electrode: e,
+                            source: physics::circuit::Waveform::Dc(0.0),
+                            resistance: 0.0,
+                            capacitance: 0.0,
+                            inductance: 0.0,
+                            to: Some(primary.electrode),
+                        }
                     }
                 }))
             })
@@ -1450,6 +1504,12 @@ impl Level {
         if !(spec.particle_rate.is_finite() && spec.particle_rate >= 1.0) {
             out.push("Tube: the cathode's macroparticle rate must be at least 1.".into());
         }
+        if !(spec.particles.is_finite() && (0.1..=100.0).contains(&spec.particles)) {
+            out.push("Tube: the macroparticle factor must be between 0.1 and 100.".into());
+        }
+        if !(spec.emitter_mesh.is_finite() && (1.0..=16.0).contains(&spec.emitter_mesh)) {
+            out.push("Tube: the emitters' mesh factor must be between 1 and 16.".into());
+        }
         // Every electrode in at most one circuit (as its electrode or linked to it).
         let mut taken: Vec<usize> = Vec::new();
         for (k, c) in spec.circuits.iter().enumerate() {
@@ -1460,7 +1520,7 @@ impl Level {
                 .iter()
                 .enumerate()
                 .any(|(i, e)| taken.contains(e) || mine[..i].contains(e) || *e >= n)
-                || (!c.linked.is_empty() && (c.resistance != Some(0.0) || c.inductance != 0.0));
+                || c.return_to.is_some_and(|r| c.linked.contains(&r));
             // A coil needs a finite resistance (an open branch carries no current), and a
             // branch to another electrode a resistance or a coil (an ideal source has no
             // branch).
@@ -1487,9 +1547,8 @@ impl Level {
                 out.push(format!(
                     "Tube: circuit {} needs electrodes of its own, a valid source, a \
                      resistance, capacitance and inductance that are not negative (an offset \
-                     supply needs a sine; linked electrodes an ideal source, resistance 0 and no \
-                     coil; a coil a finite resistance; a return to another electrode a \
-                     resistance or a coil).",
+                     supply needs a sine; a coil a finite resistance; a return to another \
+                     electrode, not one linked to it, a resistance or a coil).",
                     k + 1
                 ));
             }

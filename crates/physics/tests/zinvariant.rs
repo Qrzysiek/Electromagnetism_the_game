@@ -1557,3 +1557,96 @@ fn v18_tank_between_two_electrodes() {
     assert!(worst_d < 1e-11, "V18 D {worst_d:.3e}");
     assert!(worst_q < 1e-11, "V18 charge {worst_q:.3e}");
 }
+
+/// V19: a strap (a branch with no resistance and no coil to another electrode: a wire).
+/// Four wires (radius 0.5) at 1.5 from the centre of a grounded cylinder (radius 3), at
+/// 0°, 90°, 180°, 270°: wires 0 and 2 strapped together (a magnetron's alternate vanes) and
+/// through a coil L = 1 to ground, wires 1 and 3 grounded; 0 and 2 start at potential 1. The
+/// strapped pair is one node of capacitance `C = C₀₀ + C₀₂ + C₂₀ + C₂₂`, so (as V17) the run
+/// must give both wires `V_n = cos(nθ)`, `θ = 2 atan(ω Δt/2)`, `ω = 1/√(LC)`, the same to
+/// the last bit, and keep `½ C V² + ½ L I²` (required 1e-11 over 4000 steps).
+#[test]
+fn v19_strapped_electrodes_are_one_node() {
+    use physics::circuit::Waveform;
+    use physics::tube::{Circuit, Tube};
+    let (l, dt) = (1.0, 0.01);
+    let wire = |deg: f64, bias: Bias| {
+        let a = deg.to_radians();
+        Electrode {
+            section: Section::Circle {
+                center: DVec3::new(1.5 * a.cos(), 1.5 * a.sin(), 0.0),
+                radius: 0.5,
+            },
+            bias,
+        }
+    };
+    let electrodes = Electrodes::new(
+        vec![
+            wire(0.0, Bias::Potential(1.0)),
+            wire(90.0, Bias::Grounded),
+            wire(180.0, Bias::Potential(1.0)),
+            wire(270.0, Bias::Grounded),
+            Electrode {
+                section: Section::Circle {
+                    center: DVec3::ZERO,
+                    radius: 3.0,
+                },
+                bias: Bias::Grounded,
+            },
+        ],
+        &[],
+        0.1,
+    );
+    let m = &electrodes.capacitance;
+    let (c00, c02) = (m[0][0], m[0][2]);
+    let c = m[0][0] + m[0][2] + m[2][0] + m[2][2];
+    let omega = 1.0 / (l * c).sqrt();
+    let theta = 2.0 * (0.5 * omega * dt).atan();
+    let tube = Tube {
+        electrodes,
+        emitters: Vec::new(),
+        projectiles: Vec::new(),
+        softening: 0.05,
+        dt,
+        arena: None,
+        b_z: 0.0,
+        circuits: vec![
+            Circuit {
+                electrode: 0,
+                source: Waveform::Dc(0.0),
+                resistance: 0.0,
+                capacitance: 0.0,
+                inductance: l,
+                to: None,
+            },
+            Circuit {
+                electrode: 2,
+                source: Waveform::Dc(0.0),
+                resistance: 0.0,
+                capacitance: 0.0,
+                inductance: 0.0,
+                to: Some(0),
+            },
+        ],
+    };
+    let mut s = tube.state();
+    let e0 = 0.5 * c;
+    let (mut worst_v, mut worst_e) = (0.0_f64, 0.0_f64);
+    for n in 1..=4000 {
+        tube.step(&mut s);
+        let (v, i) = (s.potentials[0], s.inductor_current[0]);
+        assert_eq!(
+            v.to_bits(),
+            s.potentials[2].to_bits(),
+            "V19: the strapped wire"
+        );
+        worst_v = worst_v.max((v - (f64::from(n) * theta).cos()).abs());
+        worst_e = worst_e.max(((0.5 * c * v * v + 0.5 * l * i * i) / e0 - 1.0).abs());
+    }
+    println!(
+        "V19: C = {c:.6} (C00 {:.6}, C02 {:.6}), omega = {omega:.6}; V against cos(n theta) to {worst_v:.1e}, energy to {worst_e:.1e}",
+        c00, c02
+    );
+    assert!(worst_v < 1e-11, "V19 V {worst_v:.3e}");
+    assert!(worst_e < 1e-11, "V19 energy {worst_e:.3e}");
+}

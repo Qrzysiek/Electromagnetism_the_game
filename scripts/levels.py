@@ -256,7 +256,8 @@ def current_goal(electrode, lo, hi, start, end, carriers=None):
 
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
-         potentials=(), goals=(), ions=None, step=None, particle_rate=None):
+         potentials=(), goals=(), ions=None, step=None, particle_rate=None, particles=None,
+         emitter_mesh=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -276,6 +277,10 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
         t["step"] = step
     if particle_rate is not None:
         t["particle_rate"] = particle_rate
+    if particles is not None:
+        t["particles"] = particles
+    if emitter_mesh is not None:
+        t["emitter_mesh"] = emitter_mesh
     if ions is not None:
         t["ions"] = {"electrode": ions[0], "charge_per_mass": ions[1]}
         if len(ions) > 2:
@@ -303,8 +308,9 @@ def tube_circuit(electrode, source, resistance=None, capacitance=0.0, supply_off
     `sine`) through `resistance` (0: an ideal source; None: floating) and `inductance` (a
     tank's coil) in series, and `capacitance` to ground; the branch ends on ground, or on
     electrode `return_to`; a tunable electrode's supply sets the source's level, or with
-    `supply_offset` a sine's offset; `linked`: further electrodes on the same ideal source
-    (a grid's wires)."""
+    `supply_offset` a sine's offset; `linked`: further electrodes wired to it (on an ideal
+    source a grid's wires; on a tank or a resistance one node with it: a magnetron's
+    strapped vanes)."""
     c = {"electrode": electrode, "source": source}
     if inductance:
         c["inductance"] = inductance
@@ -3189,32 +3195,34 @@ def electron_gun():
 
 
 def ion_diode():
-    # Not in the curriculum (docs/TUBES.md, 2026-10-13): the sheath's boost of the ion
-    # current is dominated by the macroparticles' noise (four times as many changed it by
-    # 14 % at 28 V, B = 1.8: 8.04 -> 6.93), the verdicts' bars there are 15-25 %, and no
-    # placement of the goals gave a puzzle that verifies cleanly and keeps the slider rule.
     # Designed with `generator tube-scan` (PHYSICS.md 2.11): an inverted coaxial diode, the
     # cathode the ring (mid-diameter 10, wall 1: inner radius b = 4.5), the anode the rod
     # (radius a = 1) emitting ions (q/m = 1/16, as in Bipolar diode) on every face, in the
     # player's solenoid field. Hull's cutoff from r0 to r1 for a charge released at rest:
-    # B = sqrt(2 m V/q) 2 r1/|r0^2 - r1^2|: for the electrons (b to a) 0.75 at 26 V, for the
+    # B = sqrt(2 m V/q) 2 r1/|r0^2 - r1^2|: for the electrons (b to a) 0.80 at 30 V, for the
     # ions (a to b) 4 * 2b/2a = 18 times that: the ions cross, the electrons are insulated
     # in a sheath along the ring, whose charge draws more ions (the magnetically insulated
-    # ion diode). Preview at 26 V over t = 20-30 (step 1/20): ions onto the ring 5.55 at
-    # B = 0 (the electrons leak 14.4 into the rod), 5.86 at 0.6, 10.1 at 0.9 (leak 2.0), 11.0
-    # at 1.2 (0.54), 8.72 at 1.5 (0.10), 6.84 at 1.8 (0), 4.94 at 2.5, 3.79 at 5 (the ions'
-    # own space-charge limit): the boost is largest just above the cutoff, the leak stops
-    # only at ~2.3 times it. The sheath keeps spreading towards the rod (still rising at
-    # t = 80-90: the impedance collapse of real ion diodes), so the goal's window is a
-    # fixed time after switch-on. It converges at first order (refine 1, 2, 4 at 26 V and
-    # B = 1.2 on a ring of 12: 4.94, 4.36, 4.08) but the coarse run overstates the boosted
-    # sheath (refine 2 is 7-12 % lower where the boost acts, 4 % in the strong-field
-    # limit), so the verdicts' bars are ~15 %: hence a wide band. (V, B) grid in the preview
-    # (ions/leak): V = 24: 7.25/0.069 at B = 1.5, 5.75/0 at 1.8; V = 28: 8.04/0.012 at 1.8,
-    # 6.73/0.006 at 2.1, 5.85/0 at 2.4; V = 32: 8.98/0 at 2.1, 7.84/0 at 2.4, 6.49/0 at 3;
-    # V = 36: 9.93/0 at 2.4, 8.22/0 at 3. The goals (ions 5 to 9, leak <= 0.05) leave a
-    # diagonal strip, B roughly in proportion to sqrt(V); full voltage and field overshoot
-    # it, the sliders' middles fall short.
+    # ion diode). The sheath keeps spreading towards the rod (the impedance collapse of real
+    # ion diodes), so the goal's window is a fixed time after switch-on. A first design (with
+    # the game's usual 150 macroparticles per emitting face) was shelved: the sheath's ion
+    # current depended mostly on the number of macroparticles (x1 to x8: 8.21, 7.42, 6.90,
+    # 6.66 at 28 V, B = 1.8) and the verdicts' bars were 15-25 %. With 8 times as many (the
+    # tree code makes them affordable: PHYSICS.md 2.11) it converges in their number (x16:
+    # 8.30 against 8.19 at 30 V, B = 1.7), and the rest of the preview's error was the
+    # emitters' release layer, which the sheath magnifies: emitters meshed twice as finely
+    # bring the preview within 7.3 % of the verification at B = 1.7 (4.8 % at 2.4): bars of
+    # ~10 %, a preview of ~3.4 s and a verification of ~13 s. (V, B) grid in the preview
+    # (ions onto the ring / electrons leaking into the rod, t = 20-30):
+    #   V \ B  1.5         1.7        1.9        2.2        2.6        3.0
+    #   24     5.55/0      4.82/0     4.39/0     3.97/0     3.64/0     3.46/0
+    #   27     7.09/0      6.12/0     5.52/0     4.92/0     4.47/0     4.21/0
+    #   30     8.87/0.006  7.78/0     6.80/0     6.01/0     5.40/0     5.05/0
+    #   33    11.84/0.094  9.88/0.002 8.31/0     7.20/0     6.42/0     5.95/0
+    #   36    14.81/0.171 11.32/0    10.06/0     8.55/0     7.53/0     6.95/0
+    # The boost is largest just above the cutoff (1.76 times the strong field's at 30 V).
+    # The goals (ions 5.5 to 8, leak <= 0.05) leave a diagonal strip, B roughly in proportion
+    # to sqrt(V): at the reference (30, 1.9) V ~ 27-32 and B ~ 1.66-2.55; full voltage and
+    # field (~8.1) overshoot it, the sliders' middles fall short.
     return level(
         "Ion diode",
         "An ion diode turned inside out: the ring is the cathode, emitting electrons from "
@@ -3223,18 +3231,18 @@ def ion_diode():
         "solenoid (the yellow coil, top right) curls them: above Hull's critical field they "
         "cannot reach the rod, and stay in a sheath along the ring. The heavy ions still "
         "cross, and the sheath's negative charge pulls more of them across. Deliver an ion "
-        "current between 4.5 and 9.5 to the ring while at most 0.05 of electrons leak to the "
+        "current between 5.5 and 8 to the ring while at most 0.05 of electrons leak to the "
         "rod (averaged over $t = 20$ to $30$). The critical field grows with the voltage, "
         "as $B \\propto \\sqrt{V}$, and the sheath helps the ions most just above it.",
         grid=(24, 16), c=None, t_max=100.0,
         electrodes=[plate(12, 8, 10, thickness=1.0, shape="ring"),
                     plate(12, 8, 2, thickness=2.0, shape="rod", tunable=True)],
-        supplies=slider(40.0, 24.0, 28.0, 32.0),
-        solenoid_fields=slider(3.0, 1.85, 2.1, 2.4),
+        supplies=slider(40.0, 27.0, 30.0, 33.0),
+        solenoid_fields=slider(3.0, 1.7, 1.9, 2.2),
         tube=tube(0, 1, 0.0, 0.05, 20.0, 30.0, solenoid=(23, 15), step=0.05,
-                  ions=(1, 0.0625),
-                  goals=[current_goal(0, 4.5, 9.5, 20.0, 30.0, carriers="ions")]),
-        reference=[supply(12, 8, 28.0), supply(23, 15, 1.85)])
+                  ions=(1, 0.0625), particles=8.0, emitter_mesh=2.0,
+                  goals=[current_goal(0, 5.5, 8.0, 20.0, 30.0, carriers="ions")]),
+        reference=[supply(12, 8, 30.0), supply(23, 15, 1.9)])
 
 
 def rectifier():
@@ -3381,6 +3389,78 @@ def klystron():
         reference=[supply(3, 10, -54.0), supply(17, 13, 11.0)])
 
 
+
+def magnetron():
+    # Designed with `generator tube-scan --trace` (PHYSICS.md 2.11; docs/TUBES.md). A strapped
+    # eight-vane magnetron in the z-invariant model: the cathode a rod (radius a = 2) on the
+    # player's supply, eight vanes (tips at b = 4.5; centres on grid nodes, so the diagonal
+    # ones are shorter) and the anode block, a ring (inner radius 8.5). The vanes at 0, 90,
+    # 180 and 270 degrees and the block are grounded; the diagonal ones are strapped onto one
+    # node and a tank to ground (L = 0.036 in series with R = 0.002, and 1.34 to ground: with
+    # the vanes' own 1.337 a cold resonance at 3.22, Q ~ 55; the added capacitance halves the
+    # electrons' pull on the frequency, which without it hopped between branches near 3.0 and
+    # 3.6). Its oscillation is the pi mode: four crests around the vanes, turning at omega/4.
+    # The oscillation starts from the switch-on transient (the cathode's step rings the tank
+    # to ~4) and the particles' noise, so its start-up time depends on the resolution (t ~ 20
+    # to 80); its saturated swing does not (45 V, B = 6: preview 14.6, verification 15.6, x4
+    # particles 16.0): the goal's window is late, after every resolution has started. An
+    # injected priming signal did not make the start reliable (below threshold the hub
+    # absorbs it) and is not used. Swing over t = 90-120 (preview; frequency from the
+    # up-crossings 3.03-3.11 where it oscillates):
+    #   V \ B   5.5    6      6.5
+    #   37.5    0.57   0.55   0.32
+    #   40      8.50   0.68   0.36
+    #   42.5    3.13   9.03   0.41
+    #   45      0.80  14.86   1.01
+    #   47.5    5.16* 14.55  15.99
+    #   50      4.20* 3.47   21.51
+    #   52.5    1.53   1.61  22.84
+    #   55      0.82   1.50   5.47   (* the other branch, near 3.6)
+    # The oscillating band follows the Buneman-Hartree condition, the electrons' drift in
+    # step with the wave, V = Omega B (b'^2 - a^2)/2 - Omega^2 b'^2/2 with Omega = omega/4 =
+    # 0.77 and an effective anode radius b' ~ 5 (between the vanes' tips and their roots):
+    # 37, 41 and 45 at B = 5.5, 6 and 6.5, the band's lower edges. Far above it the electrons
+    # outrun the wave and the oscillation stops (B = 6: none at 50, below Hull's cutoff 58.7);
+    # below Hull's critical field they cross to the vanes (at 45 V: 34 into the vanes at
+    # B = 4.4; the cutoff is ~4.5, Hull's with b' = 5). Just above it a second solution:
+    # at 45 V, B = 4.58-4.67 the tank swings 13.6 (omega 3.29) while 8.4 flows into the
+    # vanes, seven times the main band's current (B = 4.8-5.25: the other branch, 5.8-7.8,
+    # short of the goal). `generator window` at the reference: the supply 43.3-48.0 (2.9 %
+    # of the range), the solenoid 5.83-6.25 and that pocket (and their mirrors: the field's
+    # sign only turns the hub the other way); every middle verified.
+    return level(
+        "Magnetron",
+        "A magnetron, the heart of a microwave oven and of wartime radar. Electrons leave "
+        "the cathode in the middle (your supply sets its voltage below the vanes) and, in "
+        "your solenoid's field (the yellow coil, top right), curl around it instead of "
+        "crossing to the vanes. The vanes are strapped in two sets: one grounded with the "
+        "block, the other through a tuned circuit ringing near $\\omega = 3$. Its "
+        "oscillation is a wave of four crests running around the vanes at $\\omega/4$; "
+        "electrons drifting in step with it give it energy and gather into four spokes "
+        "that turn with it. Make the tuned circuit oscillate with a swing of at least 10 "
+        "(half its peak-to-peak, over $t = 90$ to $120$). The electrons drift at $E/B$: "
+        "to keep pace with the wave the voltage must rise with the field. Too weak a field "
+        "lets them straight onto the vanes; too fast a drift outruns the wave.",
+        grid=(24, 24), c=None, t_max=150.0,
+        electrodes=[plate(12, 12, 4, thickness=4.0, shape="rod", tunable=True),
+                    plate(18, 12, 3.0, thickness=0.6, angle_deg=0.0),
+                    plate(16, 16, 2.313708, thickness=0.6, angle_deg=45.0),
+                    plate(12, 18, 3.0, thickness=0.6, angle_deg=90.0),
+                    plate(8, 16, 2.313708, thickness=0.6, angle_deg=135.0),
+                    plate(6, 12, 3.0, thickness=0.6, angle_deg=180.0),
+                    plate(8, 8, 2.313708, thickness=0.6, angle_deg=225.0),
+                    plate(12, 6, 3.0, thickness=0.6, angle_deg=270.0),
+                    plate(16, 8, 2.313708, thickness=0.6, angle_deg=315.0),
+                    plate(12, 12, 18, thickness=1.0, shape="ring")],
+        supplies=slider(80.0, -38.0, -45.0, -52.0),
+        solenoid_fields=slider(10.0, 5.5, 6.0, 6.5),
+        tube=tube(0, None, 0.0, 0.0, 0.0, 0.0, solenoid=(23, 23), step=0.05,
+                  circuits=[tube_circuit(1, dc(0.0), resistance=0.0, linked=(3, 5, 7, 9)),
+                            tube_circuit(2, dc(0.0), resistance=0.002, inductance=0.036,
+                                         capacitance=1.34, linked=(4, 6, 8))],
+                  potentials=[potential_goal(2, "swing", 10.0, 1000.0, 90.0, 120.0)]),
+        reference=[supply(12, 12, -45.0), supply(23, 23, 6.0)])
+
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
@@ -3390,9 +3470,13 @@ ARCS.append(("Inside the components: vacuum tubes", [
     ("Intermediate", [
         ("through_the_cloud", through_the_cloud),
         ("electron_gun", electron_gun),
+        ("ion_diode", ion_diode),
         ("rectifier", rectifier),
         ("triode", triode),
         ("klystron", klystron),
+    ]),
+    ("Master", [
+        ("magnetron", magnetron),
     ]),
 ]))
 

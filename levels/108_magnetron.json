@@ -1,0 +1,265 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Magnetron",
+  "description": "A magnetron, the heart of a microwave oven and of wartime radar. Electrons leave the cathode in the middle (your supply sets its voltage below the vanes) and, in your solenoid's field (the yellow coil, top right), curl around it instead of crossing to the vanes. The vanes are strapped in two sets: one grounded with the block, the other through a tuned circuit ringing near $\\omega = 3$. Its oscillation is a wave of four crests running around the vanes at $\\omega/4$; electrons drifting in step with it give it energy and gather into four spokes that turn with it. Make the tuned circuit oscillate with a swing of at least 10 (half its peak-to-peak, over $t = 90$ to $120$). The electrons drift at $E/B$: to keep pace with the wave the voltage must rise with the field. Too weak a field lets them straight onto the vanes; too fast a drift outruns the wave.",
+  "grid": {
+    "nx": 24,
+    "ny": 24,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 150.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -80.0,
+      -52.0,
+      -45.0,
+      -38.0,
+      80.0
+    ],
+    "solenoid_fields": [
+      -10.0,
+      5.5,
+      6.0,
+      6.5,
+      10.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        12,
+        12,
+        0
+      ],
+      "kind": "supply",
+      "value": -45.0
+    },
+    {
+      "node": [
+        23,
+        23,
+        0
+      ],
+      "kind": "supply",
+      "value": 6.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        12,
+        12,
+        0
+      ],
+      "length": 4,
+      "thickness": 4.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "shape": "rod"
+    },
+    {
+      "center": [
+        18,
+        12,
+        0
+      ],
+      "length": 3.0,
+      "thickness": 0.6,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        16,
+        16,
+        0
+      ],
+      "length": 2.313708,
+      "thickness": 0.6,
+      "height": 4.0,
+      "angle_deg": 45.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        12,
+        18,
+        0
+      ],
+      "length": 3.0,
+      "thickness": 0.6,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        8,
+        16,
+        0
+      ],
+      "length": 2.313708,
+      "thickness": 0.6,
+      "height": 4.0,
+      "angle_deg": 135.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        6,
+        12,
+        0
+      ],
+      "length": 3.0,
+      "thickness": 0.6,
+      "height": 4.0,
+      "angle_deg": 180.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        8,
+        8,
+        0
+      ],
+      "length": 2.313708,
+      "thickness": 0.6,
+      "height": 4.0,
+      "angle_deg": 225.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        12,
+        6,
+        0
+      ],
+      "length": 3.0,
+      "thickness": 0.6,
+      "height": 4.0,
+      "angle_deg": 270.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        16,
+        8,
+        0
+      ],
+      "length": 2.313708,
+      "thickness": 0.6,
+      "height": 4.0,
+      "angle_deg": 315.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        12,
+        12,
+        0
+      ],
+      "length": 18,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "shape": "ring"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "step": 0.05,
+    "circuits": [
+      {
+        "electrode": 1,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "linked": [
+          3,
+          5,
+          7,
+          9
+        ],
+        "resistance": 0.0
+      },
+      {
+        "electrode": 2,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "inductance": 0.036,
+        "linked": [
+          4,
+          6,
+          8
+        ],
+        "resistance": 0.002,
+        "capacitance": 1.34
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 2,
+        "measure": "swing",
+        "min": 10.0,
+        "max": 1000.0,
+        "start": 90.0,
+        "end": 120.0
+      }
+    ],
+    "solenoid": [
+      23,
+      23,
+      0
+    ]
+  }
+}

@@ -136,14 +136,22 @@ pub struct Circuit {
     /// tank keeps its energy); one without, by backward Euler.
     pub inductance: f64,
     /// The branch's other end: this electrode instead of ground (a tank between two
-    /// electrodes). Its source's voltage adds to that electrode's potential.
+    /// electrodes). Its source's voltage adds to that electrode's potential. With no
+    /// resistance and no inductance the branch is a strap: a wire (its source unused), the
+    /// electrode at that one's potential (a magnetron's strapped vanes: one circuit node).
+    /// A strap's other end is not itself strapped.
     pub to: Option<usize>,
 }
 
 impl Circuit {
     /// An ideal source: the electrode follows it.
     fn is_ideal(&self) -> bool {
-        self.resistance == 0.0 && self.inductance == 0.0
+        self.resistance == 0.0 && self.inductance == 0.0 && self.to.is_none()
+    }
+
+    /// A strap: a wire to another electrode, whose potential this one follows.
+    fn is_strap(&self) -> bool {
+        self.resistance == 0.0 && self.inductance == 0.0 && self.to.is_some()
     }
 
     /// A branch with an inductance (and a finite resistance: an infinite one carries no
@@ -354,14 +362,15 @@ impl Tube {
                 potentials[c.electrode] = c.source.value(0.0);
             }
         }
+        self.follow_straps(&mut potentials);
         let cap = &self.electrodes.capacitance;
-        let node_charge = self
-            .nodes()
-            .iter()
-            .map(|n| {
-                let i = n.electrode;
-                (0..n_el).map(|j| cap[i][j] * potentials[j]).sum::<f64>()
-                    + n.capacitance * potentials[i]
+        let nodes = self.nodes();
+        let node_charge = (0..nodes.len())
+            .map(|r| {
+                self.members(&nodes, r)
+                    .map(|i| (0..n_el).map(|j| cap[i][j] * potentials[j]).sum::<f64>())
+                    .sum::<f64>()
+                    + nodes[r].capacitance * potentials[nodes[r].electrode]
             })
             .collect();
         TubeState {
@@ -399,7 +408,7 @@ impl Tube {
         let mut out: Vec<Node> = self
             .circuits
             .iter()
-            .filter(|c| !c.is_ideal())
+            .filter(|c| !c.is_ideal() && !c.is_strap())
             .map(|c| Node {
                 electrode: c.electrode,
                 conductance_dt: if c.resistance.is_finite() && !c.is_inductive() {
@@ -425,9 +434,38 @@ impl Tube {
         out
     }
 
-    /// The node index of an electrode, if it is a circuit node.
-    fn node_of(nodes: &[Node], electrode: usize) -> Option<usize> {
-        nodes.iter().position(|n| n.electrode == electrode)
+    /// The node index of an electrode, if it is a circuit node or strapped to one.
+    fn node_of(&self, nodes: &[Node], electrode: usize) -> Option<usize> {
+        let e = self.strap(electrode).unwrap_or(electrode);
+        nodes.iter().position(|n| n.electrode == e)
+    }
+
+    /// The electrode a strapped one follows.
+    fn strap(&self, electrode: usize) -> Option<usize> {
+        self.circuits
+            .iter()
+            .find(|c| c.electrode == electrode && c.is_strap())
+            .and_then(|c| c.to)
+    }
+
+    /// Node `r`'s electrodes: its own, then those strapped to it.
+    fn members<'a>(&'a self, nodes: &'a [Node], r: usize) -> impl Iterator<Item = usize> + 'a {
+        let own = nodes[r].electrode;
+        std::iter::once(own).chain(
+            self.circuits
+                .iter()
+                .filter(move |c| c.is_strap() && c.to == Some(own))
+                .map(|c| c.electrode),
+        )
+    }
+
+    /// Every strapped electrode at its other end's potential.
+    fn follow_straps(&self, potentials: &mut [f64]) {
+        for c in &self.circuits {
+            if let (true, Some(to)) = (c.is_strap(), c.to) {
+                potentials[c.electrode] = potentials[to];
+            }
+        }
     }
 
     /// The potentials at time `t`: ideal sources at their value, the nodes solved from
@@ -446,6 +484,7 @@ impl Tube {
                 s.potentials[c.electrode] = c.source.value(t);
             }
         }
+        self.follow_straps(&mut s.potentials);
         let nodes = self.nodes();
         if nodes.is_empty() {
             return;
@@ -459,29 +498,40 @@ impl Tube {
         let cap = &self.electrodes.capacitance;
         let mut a = vec![0.0; size * size];
         let mut b = vec![0.0; size];
-        // Charge balance of each node (its own resistive branch to ground as before).
+        // Charge balance of each node (its own resistive branch to ground as before), over
+        // its electrodes (its own and those strapped to it).
         for (r, n) in nodes.iter().enumerate() {
-            let i = n.electrode;
-            for (c, m) in nodes.iter().enumerate() {
-                a[r * size + c] = cap[i][m.electrode];
+            for c in 0..k {
+                a[r * size + c] = self
+                    .members(&nodes, r)
+                    .flat_map(|i| self.members(&nodes, c).map(move |j| cap[i][j]))
+                    .sum();
             }
             a[r * size + r] += n.capacitance + n.conductance_dt;
-            let fixed: f64 = (0..n_el)
-                .filter(|&j| Self::node_of(&nodes, j).is_none())
-                .map(|j| cap[i][j] * s.potentials[j])
+            let fixed: f64 = self
+                .members(&nodes, r)
+                .map(|i| {
+                    (0..n_el)
+                        .filter(|&j| self.node_of(&nodes, j).is_none())
+                        .map(|j| cap[i][j] * s.potentials[j])
+                        .sum::<f64>()
+                })
                 .sum();
-            b[r] = s.node_charge[r] + n.conductance_dt * n.source.value(t) - fixed - q_ind[i];
+            let induced: f64 = self.members(&nodes, r).map(|i| q_ind[i]).sum();
+            b[r] = s.node_charge[r] + n.conductance_dt * n.source.value(t) - fixed - induced;
         }
         // A resistive branch returning to another electrode: its potential in the
         // branch's drop, and the charge out of it if it is a node.
         for c in &self.circuits {
             let Some(to) = c.to else { continue };
-            if c.is_ideal() || c.is_inductive() || !c.resistance.is_finite() {
+            if c.is_ideal() || c.is_strap() || c.is_inductive() || !c.resistance.is_finite() {
                 continue;
             }
             let g = self.dt / c.resistance;
-            let r = Self::node_of(&nodes, c.electrode).expect("a circuit's electrode is a node");
-            match Self::node_of(&nodes, to) {
+            let r = self
+                .node_of(&nodes, c.electrode)
+                .expect("a circuit's electrode is a node");
+            match self.node_of(&nodes, to) {
                 Some(q) => {
                     a[r * size + q] -= g;
                     a[q * size + q] += g;
@@ -498,11 +548,13 @@ impl Tube {
             let c = &self.circuits[ci];
             let u = k + j;
             let i0 = s.inductor_current[ci];
-            let r = Self::node_of(&nodes, c.electrode).expect("a circuit's electrode is a node");
+            let r = self
+                .node_of(&nodes, c.electrode)
+                .expect("a circuit's electrode is a node");
             a[r * size + u] -= h;
             b[r] += h * i0;
             let (q, v_to0, v_to1) = match c.to {
-                Some(to) => (Self::node_of(&nodes, to), old[to], s.potentials[to]),
+                Some(to) => (self.node_of(&nodes, to), old[to], s.potentials[to]),
                 None => (None, 0.0, 0.0),
             };
             if let Some(q) = q {
@@ -522,6 +574,7 @@ impl Tube {
         for (r, n) in nodes.iter().enumerate() {
             s.potentials[n.electrode] = x[r];
         }
+        self.follow_straps(&mut s.potentials);
         // The charges the branches delivered.
         for (r, n) in nodes.iter().enumerate() {
             if n.conductance_dt == 0.0 {
@@ -540,7 +593,7 @@ impl Tube {
                 Some(to) => n.conductance_dt * (n.source.value(t) + s.potentials[to] - x[r]),
             };
             s.node_charge[r] += delivered;
-            if let Some(q) = circuit.to.and_then(|to| Self::node_of(&nodes, to)) {
+            if let Some(q) = circuit.to.and_then(|to| self.node_of(&nodes, to)) {
                 s.node_charge[q] -= delivered;
             }
             s.circuit_current[c] = delivered / self.dt;
@@ -549,9 +602,11 @@ impl Tube {
             let c = &self.circuits[ci];
             let i1 = x[k + j];
             let delivered = h * (s.inductor_current[ci] + i1);
-            let r = Self::node_of(&nodes, c.electrode).expect("a circuit's electrode is a node");
+            let r = self
+                .node_of(&nodes, c.electrode)
+                .expect("a circuit's electrode is a node");
             s.node_charge[r] += delivered;
-            if let Some(q) = c.to.and_then(|to| Self::node_of(&nodes, to)) {
+            if let Some(q) = c.to.and_then(|to| self.node_of(&nodes, to)) {
                 s.node_charge[q] -= delivered;
             }
             s.inductor_current[ci] = i1;
@@ -766,7 +821,7 @@ impl Tube {
         let nodes = self.nodes();
         // The emitted charge left its electrode.
         for (e, q) in emitted.iter().enumerate() {
-            if let Some(r) = Self::node_of(&nodes, e) {
+            if let Some(r) = self.node_of(&nodes, e) {
                 s.node_charge[r] -= q;
             }
         }
@@ -869,7 +924,7 @@ impl Tube {
                     s.collected[e][tag as usize] += s.charge[k];
                 }
                 // A circuit node keeps what it absorbs (projectiles' charge too).
-                if let Some(r) = hit.and_then(|e| Self::node_of(&nodes, e)) {
+                if let Some(r) = hit.and_then(|e| self.node_of(&nodes, e)) {
                     s.node_charge[r] += s.charge[k];
                 }
                 if hit.is_none() {

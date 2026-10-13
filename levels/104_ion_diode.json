@@ -1,0 +1,135 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Ion diode",
+  "description": "An ion diode turned inside out: the ring is the cathode, emitting electrons from its inner face, and the rod in its middle, on your supply, emits ions. Without a magnetic field the electrons rush to the rod and waste the supply's current. Your solenoid (the yellow coil, top right) curls them: above Hull's critical field they cannot reach the rod, and stay in a sheath along the ring. The heavy ions still cross, and the sheath's negative charge pulls more of them across. Deliver an ion current between 5.5 and 8 to the ring while at most 0.05 of electrons leak to the rod (averaged over $t = 20$ to $30$). The critical field grows with the voltage, as $B \\propto \\sqrt{V}$, and the sheath helps the ions most just above it.",
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 100.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -40.0,
+      27.0,
+      30.0,
+      33.0,
+      40.0
+    ],
+    "solenoid_fields": [
+      -3.0,
+      1.7,
+      1.9,
+      2.2,
+      3.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        12,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": 30.0
+    },
+    {
+      "node": [
+        23,
+        15,
+        0
+      ],
+      "kind": "supply",
+      "value": 1.9
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        12,
+        8,
+        0
+      ],
+      "length": 10,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "shape": "ring"
+    },
+    {
+      "center": [
+        12,
+        8,
+        0
+      ],
+      "length": 2,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "shape": "rod"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goals": [
+      {
+        "electrode": 1,
+        "min": 0.0,
+        "max": 0.05,
+        "start": 20.0,
+        "end": 30.0
+      },
+      {
+        "electrode": 0,
+        "min": 5.5,
+        "max": 8.0,
+        "start": 20.0,
+        "end": 30.0,
+        "carriers": "ions"
+      }
+    ],
+    "step": 0.05,
+    "particles": 8.0,
+    "emitter_mesh": 2.0,
+    "ions": {
+      "electrode": 1,
+      "charge_per_mass": 0.0625
+    },
+    "solenoid": [
+      23,
+      15,
+      0
+    ]
+  }
+}

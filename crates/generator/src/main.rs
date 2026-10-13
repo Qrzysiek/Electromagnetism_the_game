@@ -76,6 +76,13 @@ enum Command {
         /// Convergence studies: this many times the particles' softening, alone.
         #[arg(long, default_value_t = 1.0)]
         softening: f64,
+        /// Convergence studies: the emitters' segments this many times finer, alone.
+        #[arg(long, default_value_t = 1.0)]
+        emitter: f64,
+        /// Also print this electrode's (1-based) potential every step: `trace t V`
+        /// (a tank's oscillation, for designing).
+        #[arg(long)]
+        trace: Option<usize>,
     },
     /// Print the reference flight of one flight index: t, x, y, |p|, radiated energy.
     Trace {
@@ -102,7 +109,12 @@ fn most_elements(level: &Level) -> usize {
 }
 
 /// `generator tube-scan`: currents into every electrode for several placements.
-fn tube_scan(level: &Level, placements: &PathBuf, res: level::tube::TubeResolution) {
+fn tube_scan(
+    level: &Level,
+    placements: &PathBuf,
+    res: level::tube::TubeResolution,
+    trace: Option<usize>,
+) {
     let text = std::fs::read_to_string(placements).expect("placements file");
     let list: Vec<Vec<level::Element>> = serde_json::from_str(&text).expect("placements");
     let Some(spec) = &level.tube else {
@@ -127,9 +139,20 @@ fn tube_scan(level: &Level, placements: &PathBuf, res: level::tube::TubeResoluti
                 ..res
             },
         );
-        sim.advance_to(start);
+        let end = end.max(level.tube_verify_end());
+        let step = spec.step / f64::from(res.refine.max(1));
+        let advance = |sim: &mut level::tube::TubeSim, to: f64| match trace {
+            Some(e) => {
+                while sim.t() < to - 0.5 * step {
+                    sim.advance_to(sim.t() + step);
+                    println!("trace {:.6} {:.9}", sim.t(), sim.potentials()[e - 1]);
+                }
+            }
+            None => sim.advance_to(to),
+        };
+        advance(&mut sim, start);
         let (t0, q0, lost0) = (sim.t(), sim.collected().to_vec(), sim.lost());
-        sim.advance_to(end.max(level.tube_verify_end()));
+        advance(&mut sim, end);
         let dt = (sim.t() - t0).max(1e-300);
         let signs = [spec.charge_per_mass.signum(), 1.0];
         let currents: Vec<String> = sim
@@ -355,6 +378,8 @@ fn main() {
             refine,
             particles,
             softening,
+            emitter,
+            trace,
         } => tube_scan(
             &load(&path),
             &placements,
@@ -362,7 +387,9 @@ fn main() {
                 refine,
                 particles,
                 softening,
+                emitter,
             },
+            trace,
         ),
         Command::Trace {
             path,

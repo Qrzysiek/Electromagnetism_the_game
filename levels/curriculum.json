@@ -334,9 +334,16 @@
           "levels": [
             "through_the_cloud",
             "electron_gun",
+            "ion_diode",
             "rectifier",
             "triode",
             "klystron"
+          ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "magnetron"
           ]
         }
       ]
