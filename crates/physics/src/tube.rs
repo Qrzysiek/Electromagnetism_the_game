@@ -51,7 +51,14 @@ use crate::bem::{Bias, Lu};
 use crate::circuit::Waveform;
 use rayon::prelude::*;
 
+use crate::tree2d::{Source, Tree};
 use crate::zinv::{Electrodes, PAR_CHUNK, Section, line_charge, segment_field_fast};
+
+/// From this many particles in flight the step sums the fields and the induced charge's
+/// potentials by trees (`tree2d`) instead of directly: below it the direct sums are faster
+/// (and the tree's segment field more exact than `segment_field_fast`'s two terms, by up to
+/// 4.9e-5 of a segment's monopole, so results change slightly across it).
+pub const TREE_MIN: usize = 2000;
 
 /// Distance from the cathode at which macroparticles are released, in segment lengths:
 /// at the mesh's resolution, where a macroparticle's own image (the field w/h of the
@@ -567,6 +574,11 @@ impl Tube {
 
     /// The particles' induced surface density (all electrodes grounded).
     fn induced_density(&self, s: &TubeState) -> Vec<f64> {
+        if s.x.len() >= TREE_MIN {
+            let tree = Tree::new(s.x.iter().map(|p| Source::point(*p)).collect(), 0.0);
+            let m = tree.multipoles(&s.charge);
+            return self.electrodes.induced_by(|y| tree.potential(&m, y));
+        }
         self.electrodes.induced_by(|y| {
             s.x.iter()
                 .zip(&s.charge)
@@ -769,11 +781,31 @@ impl Tube {
             .map(|(a, b)| a + b)
             .collect();
         // In parallel, each particle's field whole by one thread (bit-identical).
-        let fields: Vec<DVec3> = (0..s.x.len())
-            .into_par_iter()
-            .with_min_len(PAR_CHUNK)
-            .map(|k| self.field(s, &sigma, s.x[k], Some(k)))
-            .collect();
+        let fields: Vec<DVec3> = if s.x.len() >= TREE_MIN {
+            // Many particles: the segments' and the particles' trees (`tree2d`, the direct
+            // sums to ~1e-11).
+            let segments = &self.electrodes.tree;
+            let segment_m = segments.multipoles(&sigma);
+            let particles = Tree::new(
+                s.x.iter().map(|p| Source::point(*p)).collect(),
+                self.softening,
+            );
+            let particle_m = particles.multipoles(&s.charge);
+            (0..s.x.len())
+                .into_par_iter()
+                .with_min_len(PAR_CHUNK)
+                .map(|k| {
+                    segments.field(&segment_m, s.x[k], None)
+                        + particles.field(&particle_m, s.x[k], Some(k))
+                })
+                .collect()
+        } else {
+            (0..s.x.len())
+                .into_par_iter()
+                .with_min_len(PAR_CHUNK)
+                .map(|k| self.field(s, &sigma, s.x[k], Some(k)))
+                .collect()
+        };
         for (((x, v), qm), e) in s.x.iter_mut().zip(&mut s.v).zip(&s.qm).zip(&fields) {
             let h = 0.5 * self.dt * qm;
             let minus = *v + *e * h;

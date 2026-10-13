@@ -371,3 +371,12 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   speed 0.05, 1.5 pictures per second): their particles now carry identities and the
   display interpolates between steps (particles, electrode charges, potentials, the
   projectiles along their tracks).
+- **Noise, stage 2 (2026-10-13):** the tree code (PHYSICS.md §2.11) makes 8 times as many
+  macroparticles affordable at about 3 s per preview (6.9 s with direct sums): the ion
+  diode's sheath then differs by 8.3 % between preview and verification instead of 16 %,
+  a verdict bar of ~12 % instead of ~24 %. The remaining difference is the mesh's and the
+  step's (first order); halving the preview's mesh would cost ~4 times more. So magnetized
+  sheaths stay the noisiest, costliest physics of the stage: levels built on them need
+  goals that tolerate ~12 % and previews of ~3 s, or observables less sensitive than the
+  sheath's current (a magnetron's frequency, set by its tanks; its onset above the
+  Buneman–Hartree condition, with priming).

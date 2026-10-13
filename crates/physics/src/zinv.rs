@@ -261,6 +261,9 @@ pub struct Electrodes {
     /// summed in order, instead of the LU's two triangular solves, which are serial and
     /// took most of a tube's step once its other loops ran in parallel.
     inverse: Vec<f64>,
+    /// The segments' tree (`tree2d`), for their field at many points (the tube's many
+    /// particles).
+    pub tree: crate::tree2d::Tree,
     unit: Vec<Vec<f64>>,
     /// Capacitance matrix per unit length: `capacitance[i][j]` the charge per unit
     /// length on `i` with `j` at unit potential and the others at 0.
@@ -391,11 +394,19 @@ impl Electrodes {
                 inverse[i * n + j] = *v;
             }
         }
+        let tree = crate::tree2d::Tree::new(
+            segments
+                .iter()
+                .map(|(a, b)| crate::tree2d::Source::segment(*a, *b))
+                .collect(),
+            0.0,
+        );
         Self {
             electrodes,
             segments,
             owner,
             inverse,
+            tree,
             unit,
             capacitance,
             sigma,
