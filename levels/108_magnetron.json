@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Magnetron",
-  "description": "A magnetron, the heart of a microwave oven and of wartime radar. Electrons leave the cathode in the middle (your supply sets its voltage below the vanes) and, in your solenoid's field (the yellow coil, top right), curl around it instead of crossing to the vanes. The vanes are strapped in two sets: one grounded with the block, the other through a tuned circuit ringing near $\\omega = 3$. Its oscillation is a wave of four crests running around the vanes at $\\omega/4$; electrons drifting in step with it give it energy and gather into four spokes that turn with it. Make the tuned circuit oscillate with a swing of at least 10 (half its peak-to-peak, over $t = 90$ to $120$). The electrons drift at $E/B$: to keep pace with the wave the voltage must rise with the field. Too weak a field lets them straight onto the vanes; too fast a drift outruns the wave.",
+  "description": "A magnetron, the heart of a microwave oven and of wartime radar. Electrons leave the cathode in the middle (your supply sets its voltage below the vanes) and, in your solenoid's field (the yellow coil, top right), curl around it instead of crossing to the vanes. The vanes are strapped in two sets: one grounded with the block, the other through a tuned circuit ringing near $\\omega = 3$. Its oscillation is a wave of four crests running around the vanes at $\\omega/4$; electrons drifting in step with it give it energy and gather into four spokes that turn with it. Make the tuned circuit oscillate with a swing of at least 10 (half its peak-to-peak, over $t = 90$ to $120$). The electrons drift at $E/B$: to keep pace with the wave the voltage must rise with the field. Too weak a field lets them straight onto the vanes; too fast a drift outruns the wave. The tuned circuit's load is the output: an antenna along the axis radiates what it absorbs, the microwaves of the picture below the goals.",
   "grid": {
     "nx": 24,
     "ny": 24,
@@ -215,6 +215,10 @@
     "cathode": 0,
     "charge_per_mass": -1.0,
     "step": 0.05,
+    "output": {
+      "circuit": 1,
+      "c": 50.0
+    },
     "circuits": [
       {
         "electrode": 1,

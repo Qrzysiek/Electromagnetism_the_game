@@ -48,7 +48,8 @@ struct Params {
     e_ref: f32,
     e_decades: f32,
     // Tube levels: the particles as a glow of their charge's density (z > 0): x = 1/(2 s^2)
-    // of a Gaussian of width s, y = 1/(|q| at full glow).
+    // of a Gaussian of width s, y and w = 1/(|q| at full glow) of the negative and the
+    // positive particles.
     glow: vec4<f32>,
 };
 
@@ -471,9 +472,15 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
             }
         }
         let gn = 1.0 - exp(-neg * params.glow.y);
-        let gp = 1.0 - exp(-pos * params.glow.y);
-        col = mix(col, vec3<f32>(0.6, 0.85, 1.0), 0.85 * gn);
-        col = mix(col, vec3<f32>(1.0, 0.7, 0.4), 0.85 * gp);
+        let gp = 1.0 - exp(-pos * params.glow.w);
+        // Both species where both are: their colours weighted by their glows, so that
+        // neither hides the other.
+        let any = 1.0 - (1.0 - gn) * (1.0 - gp);
+        if (any > 0.0) {
+            let tint = (gn * vec3<f32>(0.6, 0.85, 1.0) + gp * vec3<f32>(1.0, 0.7, 0.4))
+                / max(gn + gp, 1e-6);
+            col = mix(col, tint, 0.85 * any);
+        }
     }
     // Inside a solid.
     let inside = solid_distance(p);

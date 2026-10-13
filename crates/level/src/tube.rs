@@ -91,6 +91,50 @@ pub struct TubeSpec {
     /// Goals on electrodes' potentials over windows (their mean or their swing).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub potential_goals: Vec<PotentialGoal>,
+    /// The tube's radiated output (a magnetron's microwaves): one circuit's load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<TubeOutput>,
+}
+
+/// A tube's output (PHYSICS.md §2.11, the magnetron): the load of circuit `circuit` (its
+/// resistance) stands for an antenna along the tube's axis, which radiates what the load
+/// absorbs. The game draws the antenna's wave (`line_wave`) at the wave speed `c`, for the
+/// display only: the tube's own dynamics stay Newtonian (the electrons at a fraction of
+/// `c`).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TubeOutput {
+    /// The circuit (an index into `TubeSpec::circuits`) whose resistance is the load.
+    pub circuit: usize,
+    /// The speed of light of the radiated wave.
+    pub c: f64,
+}
+
+/// The field `E_z` (Gaussian units) at distance `r` and time `t` of a line current along z
+/// with the history `(t_k, I_k)` (linear between samples, zero before the first, which is
+/// at or after the switch-on): the 2D retarded solution
+/// `E_z = −(2/c²) ∫ İ(t − τ) dτ / √(τ² − (r/c)²)` over `τ > r/c`, exact for the piecewise
+/// linear current (each interval's `İ` times the kernel's integral,
+/// `acosh(τ₂ c/r) − acosh(τ₁ c/r)`). For a long sine `I₀ sin ωt` it tends to
+/// `(π ω I₀/c²) [Y₀(kr) cos ωt − J₀(kr) sin ωt]`, an outgoing cylindrical wave carrying
+/// `π ω I₀²/(2c²)` per unit length (tests `line_wave_*`).
+#[must_use]
+pub fn line_wave(history: &[(f64, f64)], t: f64, r: f64, c: f64) -> f64 {
+    let a = r / c;
+    if a <= 0.0 {
+        return 0.0;
+    }
+    let kernel = |tau: f64| libm::acosh((tau / a).max(1.0));
+    let mut sum = 0.0;
+    for w in history.windows(2) {
+        let ((t0, i0), (t1, i1)) = (w[0], w[1]);
+        // τ over the interval, the retarded part only.
+        let (hi, lo) = (t - t0, (t - t1).max(a));
+        if hi <= a || t1 <= t0 {
+            continue;
+        }
+        sum += (i1 - i0) / (t1 - t0) * (kernel(hi) - kernel(lo));
+    }
+    -2.0 / (c * c) * sum
 }
 
 /// An electrode's external circuit (per unit length along z): a source through a
@@ -402,6 +446,9 @@ pub struct TubeFrame {
     pub sigma: Vec<f32>,
     /// Every electrode's potential.
     pub potentials: Vec<f32>,
+    /// Per tube circuit (`TubeSpec::circuits`): the current through its branch (its
+    /// coil's, if it has one; 0 for an ideal source).
+    pub currents: Vec<f32>,
 }
 
 /// One run of a tube level (or a chunk of one being streamed: `TubeSim::take_chunk`).
@@ -518,6 +565,12 @@ impl TubeRun {
                 .potentials
                 .iter()
                 .zip(&b.potentials)
+                .map(|(u, v)| lerp(*u, *v))
+                .collect(),
+            currents: a
+                .currents
+                .iter()
+                .zip(&b.currents)
                 .map(|(u, v)| lerp(*u, *v))
                 .collect(),
         })
@@ -779,6 +832,25 @@ impl TubeSim {
                     .collect(),
                 potentials: s.potentials.iter().map(|v| *v as f32).collect(),
                 id: s.id.clone(),
+                currents: {
+                    // Each tube circuit's first physics circuit (its linked electrodes'
+                    // follow it).
+                    let mut at = 0;
+                    self.spec
+                        .circuits
+                        .iter()
+                        .map(|c| {
+                            let k = at;
+                            at += 1 + c.linked.len();
+                            let i = if self.tube.circuits[k].inductance > 0.0 {
+                                s.inductor_current[k]
+                            } else {
+                                s.circuit_current[k]
+                            };
+                            i as f32
+                        })
+                        .collect()
+                },
             };
             self.pending.frames.push(frame);
             // Each potential goal's measure over its window.
@@ -1510,6 +1582,20 @@ impl Level {
         if !(spec.emitter_mesh.is_finite() && (1.0..=16.0).contains(&spec.emitter_mesh)) {
             out.push("Tube: the emitters' mesh factor must be between 1 and 16.".into());
         }
+        if let Some(o) = spec.output {
+            let load = spec
+                .circuits
+                .get(o.circuit)
+                .and_then(|c| c.resistance)
+                .is_some_and(|r| r > 0.0 && r.is_finite());
+            if !load || !(o.c.is_finite() && o.c > 0.0) {
+                out.push(
+                    "Tube: the output needs a circuit with a resistance (its load) and a \
+                     positive wave speed."
+                        .into(),
+                );
+            }
+        }
         // Every electrode in at most one circuit (as its electrode or linked to it).
         let mut taken: Vec<usize> = Vec::new();
         for (k, c) in spec.circuits.iter().enumerate() {
@@ -1733,6 +1819,62 @@ impl Level {
 mod tests {
     use super::*;
 
+    /// `line_wave` for a ramp `I = t` (from t = 0, sampled every 0.05): `İ = 1`, so
+    /// `E_z = −(2/c²) acosh(ct/r)` for `t > r/c` and 0 before, exactly (the piecewise
+    /// linear current is the ramp itself). Required 1e-12 relative.
+    #[test]
+    fn line_wave_ramp() {
+        let c = 50.0;
+        #[allow(clippy::cast_precision_loss)]
+        let history: Vec<(f64, f64)> = (0..=400)
+            .map(|k| (0.05 * k as f64, 0.05 * k as f64))
+            .collect();
+        for (t, r) in [(5.0, 10.0), (12.3, 300.0), (20.0, 999.0), (3.0, 200.0)] {
+            let exact = if c * t > r {
+                -2.0 / (c * c) * libm::acosh(c * t / r)
+            } else {
+                0.0
+            };
+            let got = line_wave(&history, t, r, c);
+            assert!(
+                (got - exact).abs() <= 1e-12 * exact.abs().max(1e-30),
+                "t {t} r {r}: {got} against {exact}"
+            );
+        }
+    }
+
+    /// `line_wave` for `I = sin ωt` switched on at t = 0 (sampled every 0.01), at t = 400:
+    /// the steady cylindrical wave `(π ω/c²) [Y₀(kr) cos ωt − J₀(kr) sin ωt]`, `k = ω/c`.
+    /// Required 1 % of its amplitude (the display's accuracy; the sampling's error is
+    /// ~(ω dt)²/8 ≈ 1e-4 and the switch-on's fading tail ~1/(ωt) ≈ 1e-3).
+    #[test]
+    fn line_wave_steady_sine() {
+        let (c, omega, t) = (50.0, 3.0, 400.0);
+        #[allow(clippy::cast_precision_loss)]
+        let history: Vec<(f64, f64)> = (0..=40_000)
+            .map(|k| {
+                let tk = 0.01 * k as f64;
+                (tk, libm::sin(omega * tk))
+            })
+            .collect();
+        let k = omega / c;
+        for r in [5.0, 20.0, 60.0, 150.0, 400.0] {
+            let (j0, y0) = (libm::j0(k * r), libm::y0(k * r));
+            let scale = std::f64::consts::PI * omega / (c * c);
+            let exact = scale * (y0 * libm::cos(omega * t) - j0 * libm::sin(omega * t));
+            let amplitude = scale * libm::sqrt(j0 * j0 + y0 * y0);
+            let got = line_wave(&history, t, r, c);
+            println!(
+                "line wave r {r}: {got:.6e} against {exact:.6e} ({:.1e} of the amplitude)",
+                (got - exact).abs() / amplitude
+            );
+            assert!(
+                (got - exact).abs() < 0.01 * amplitude,
+                "r {r}: {got} against {exact}"
+            );
+        }
+    }
+
     /// The picture between two frames: a particle in both moves linearly, one absorbed
     /// before the second stays where it was, the surface densities and potentials are
     /// interpolated; before the first frame the first, after the last the last.
@@ -1746,6 +1888,7 @@ mod tests {
             id,
             sigma: vec![sigma; 3],
             potentials: vec![sigma; 2],
+            currents: Vec::new(),
         };
         let run = TubeRun {
             frames: vec![

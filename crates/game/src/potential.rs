@@ -90,8 +90,110 @@ impl Default for PotentialParams {
 /// Width of the particles' density glow (cells): a beam of macroparticles a fraction of a
 /// cell apart reads as one stream.
 const GLOW_WIDTH: f32 = 0.3;
-/// Overlapping macroparticles at full glow.
+/// Overlapping macroparticles at full glow, at least: a species whose crowded places hold
+/// more glows fully only there (its 99th percentile of the charge per glow-sized cell), so
+/// that each species shows its own gradients and a thin, fast stream beside a dense, slow
+/// cloud of the other species still shows.
 const GLOW_FULL: f32 = 4.0;
+/// The map draws at most about this many particles one by one; above it, each species'
+/// particles merged per cell of `MAP_BIN` cells (doubled until under it), at their
+/// charge's centroid: the map softens the space charge over `TUBE_MAP_SOFTENING` anyway,
+/// and the shader sums every item at every pixel.
+const MAP_PARTICLES: usize = 1500;
+const MAP_BIN: f64 = 0.25;
+
+/// A frame for the map (its potential, field arrows and glow): the particles merged per
+/// species and cell when they are many (`MAP_PARTICLES`), projectiles always one by one;
+/// a frame with few particles as it is.
+#[allow(clippy::cast_possible_truncation)]
+pub fn map_frame(frame: &level::tube::TubeFrame) -> std::borrow::Cow<'_, level::tube::TubeFrame> {
+    if frame.x.len() <= MAP_PARTICLES {
+        return std::borrow::Cow::Borrowed(frame);
+    }
+    let mut bin = MAP_BIN;
+    loop {
+        let mut cells: std::collections::BTreeMap<(i64, i64, u8), [f64; 3]> =
+            std::collections::BTreeMap::new();
+        let mut out = level::tube::TubeFrame {
+            t: frame.t,
+            x: Vec::new(),
+            q: Vec::new(),
+            kind: Vec::new(),
+            id: Vec::new(),
+            sigma: frame.sigma.clone(),
+            potentials: frame.potentials.clone(),
+            currents: frame.currents.clone(),
+        };
+        for ((x, q), kind) in frame.x.iter().zip(&frame.q).zip(&frame.kind) {
+            if *kind == level::tube::KIND_PROJECTILE {
+                out.x.push(*x);
+                out.q.push(*q);
+                out.kind.push(*kind);
+                continue;
+            }
+            let key = (
+                (f64::from(x[0]) / bin).floor() as i64,
+                (f64::from(x[1]) / bin).floor() as i64,
+                *kind,
+            );
+            let c = cells.entry(key).or_insert([0.0; 3]);
+            let q = f64::from(*q);
+            c[0] += q;
+            c[1] += q * f64::from(x[0]);
+            c[2] += q * f64::from(x[1]);
+        }
+        if cells.len() <= MAP_PARTICLES || bin > 4.0 {
+            for ((_, _, kind), c) in cells {
+                if c[0] != 0.0 {
+                    out.x.push([(c[1] / c[0]) as f32, (c[2] / c[0]) as f32]);
+                    out.q.push(c[0] as f32);
+                    out.kind.push(kind);
+                }
+            }
+            return std::borrow::Cow::Owned(out);
+        }
+        bin *= 2.0;
+    }
+}
+
+/// Each species' charge at full glow (negative, positive): see `GLOW_FULL`.
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+fn glow_full(frame: &level::tube::TubeFrame) -> (f32, f32) {
+    let mut out = [0.0_f32; 2];
+    for (s, kind) in [level::tube::KIND_NEGATIVE, level::tube::KIND_POSITIVE]
+        .iter()
+        .enumerate()
+    {
+        let qs: Vec<f32> = frame
+            .q
+            .iter()
+            .zip(&frame.kind)
+            .filter(|(_, k)| *k == kind)
+            .map(|(q, _)| q.abs())
+            .collect();
+        if qs.is_empty() {
+            continue;
+        }
+        let mean = qs.iter().sum::<f32>() / qs.len() as f32;
+        let mut cells: std::collections::BTreeMap<(i64, i64), f32> =
+            std::collections::BTreeMap::new();
+        let w = f64::from(GLOW_WIDTH);
+        for ((x, q), k) in frame.x.iter().zip(&frame.q).zip(&frame.kind) {
+            if k == kind {
+                let key = (
+                    (f64::from(x[0]) / w).floor() as i64,
+                    (f64::from(x[1]) / w).floor() as i64,
+                );
+                *cells.entry(key).or_insert(0.0) += q.abs();
+            }
+        }
+        let mut per: Vec<f32> = cells.into_values().collect();
+        per.sort_by(f32::total_cmp);
+        let p99 = per[(per.len() * 99 / 100).min(per.len() - 1)];
+        out[s] = p99.max(mean * GLOW_FULL);
+    }
+    (out[0], out[1])
+}
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct PotentialMaterial {
@@ -173,6 +275,7 @@ const TUBE_MAP_SOFTENING: f64 = level::tube::PREVIEW_SEGMENT;
 pub fn tube_params(
     run: &level::tube::TubeRun,
     frame: &level::tube::TubeFrame,
+    raw: &level::tube::TubeFrame,
     cathode: usize,
     sign: f64,
     electric: bool,
@@ -203,15 +306,15 @@ pub fn tube_params(
         items.push([x[0], x[1], *q, eps2 as f32]);
     }
     let particles = &frame.x;
-    // The glow's scale: a typical macroparticle's charge (each emitter's are alike).
-    #[allow(clippy::cast_precision_loss)]
-    let q_ref = frame.q.iter().map(|q| q.abs()).sum::<f32>() / frame.q.len().max(1) as f32;
-    let glow = if glow && q_ref > 0.0 {
+    // The glow's scale per species (see `GLOW_FULL`), from the particles one by one.
+    let (full_neg, full_pos) = glow_full(raw);
+    let inv = |f: f32| if f > 0.0 { 1.0 / f } else { 0.0 };
+    let glow = if glow && (full_neg > 0.0 || full_pos > 0.0) {
         Vec4::new(
             1.0 / (2.0 * GLOW_WIDTH * GLOW_WIDTH),
-            1.0 / (q_ref * GLOW_FULL),
+            inv(full_neg),
             1.0,
-            0.0,
+            inv(full_pos),
         )
     } else {
         Vec4::ZERO

@@ -162,6 +162,8 @@ pub struct Game {
     /// Tube levels: the electric field map's scale and arrows `(position, E)` of the
     /// preview's final state (computed when it arrives), with its revision.
     pub tube_field: Option<TubeField>,
+    /// Tube levels with an output: the radiated wave's picture.
+    pub emission: Option<ui::EmissionView>,
     /// What the field map was computed for (`MapKey`).
     pub map_key: MapKey,
     pub field_lines: Vec<DrawnFieldLine>,
@@ -267,6 +269,7 @@ impl Game {
             tube_preview: None,
             tube_verdict: None,
             tube_field: None,
+            emission: None,
             map_key: (0, 0, 0, false, None, false, 0, (0, 0)),
             field_lines: Vec::new(),
             field_line_spacing: 1.5,
@@ -1269,6 +1272,8 @@ fn update_map(
         let field = match (&level.tube, &game.tube_preview, shown, &picture) {
             (Some(spec), Some(v), Some(k), Some(picture)) if v.revision == game.sent_revision => {
                 let run = &v.run;
+                // Many particles merged for the map (the shader and the arrows sum them all).
+                let binned = potential::map_frame(picture);
                 let old = game
                     .tube_field
                     .as_ref()
@@ -1281,17 +1286,18 @@ fn update_map(
                         .filter(|f| f.t >= level.tube_verify_end())
                         .and_then(|_| run.frame_at(level.tube_verify_end()))
                     {
-                        Some(f) => (tube_field(level, run, f).0, true),
-                        None => (tube_field(level, run, picture).0, false),
+                        Some(f) => (tube_field(level, run, &potential::map_frame(f)).0, true),
+                        None => (tube_field(level, run, &binned).0, false),
                     },
                 };
                 let arrows = if mode == MapMode::Electric {
-                    tube_field(level, run, picture).1
+                    tube_field(level, run, &binned).1
                 } else {
                     Vec::new()
                 };
                 let (params, items) = potential::tube_params(
                     run,
+                    &binned,
                     picture,
                     spec.cathode,
                     spec.charge_per_mass.signum(),

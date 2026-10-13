@@ -392,3 +392,15 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   rings at 3.03-3.11 wherever it oscillates. Left for later: a frequency measure (pushing,
   a tuning plunger), the output's power as a goal, and the spokes' picture in the owner's
   review.
+- **Owner review 2026-10-13 (Ion diode glitchy and slow, its leak unreachable; the
+  magnetron's emission must be seen):** done. Ion diode: a grounded envelope removes the
+  arc of electrons drawn off the cathode's outer face by the open 2D boundary's field; the
+  leak is reachable with either slider (field off: 17.4 at 30 V; at B = 1.9 above ~50 V,
+  the supply now ±80) and visible (each species' glow scaled to its own density, the
+  goal labelled "the electron current"); the map merges particles above 1500 (~116 frames
+  per second instead of ~73 at ~6000 particles); the tree code's bit-identical speed-ups
+  and leaves of 24 bring a preview from 3.4 s to 2.9 s (a fast multipole method was built,
+  validated and found slower at these sizes). Magnetron: `tube.output` (the tank's load
+  radiates through an antenna on the axis), drawn as the exact 2D retarded wave of the load
+  current beside the tube (PHYSICS.md §2.11). New owner rule: whatever a level says can
+  happen must be possible within its sliders.

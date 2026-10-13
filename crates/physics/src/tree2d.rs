@@ -28,7 +28,7 @@ pub const ORDER: usize = 20;
 /// A node is summed by its series when its radius is below this fraction of its distance.
 pub const THETA: f64 = 0.5;
 /// Most sources in a leaf.
-const LEAF: usize = 32;
+const LEAF: usize = 24;
 /// Deepest subdivision (coincident sources stop it).
 const DEPTH: u32 = 40;
 
@@ -160,12 +160,18 @@ impl Tree {
     /// If `charges` has another length than the sources.
     pub fn multipoles(&self, charges: &[f64]) -> Multipoles {
         assert_eq!(charges.len(), self.sources.len());
-        let mut coeffs = vec![[C::ZERO; ORDER + 1]; self.nodes.len()];
-        // Children are stored after their parents: sum from the last node back.
-        for i in (0..self.nodes.len()).rev() {
-            let node = &self.nodes[i];
-            let mut a = [C::ZERO; ORDER + 1];
-            if node.children.is_empty() {
+        use rayon::prelude::*;
+        // The leaves' moments (in parallel), then each parent's from its children: children
+        // are stored after their parents, so from the last node back.
+        let mut coeffs: Vec<[C; ORDER + 1]> = (0..self.nodes.len())
+            .into_par_iter()
+            .with_min_len(8)
+            .map(|i| {
+                let node = &self.nodes[i];
+                let mut a = [C::ZERO; ORDER + 1];
+                if !node.children.is_empty() {
+                    return a;
+                }
                 for &k in &self.order[node.start..node.end] {
                     let s = &self.sources[k];
                     let d = s.middle().sub(node.center);
@@ -182,12 +188,19 @@ impl Tree {
                         self.shift_into(&own, d, &mut a);
                     }
                 }
-            } else {
-                for &c in &node.children {
-                    let d = self.nodes[c].center.sub(node.center);
-                    let own = coeffs[c];
-                    self.shift_into(&own, d, &mut a);
-                }
+                a
+            })
+            .collect();
+        for i in (0..self.nodes.len()).rev() {
+            let node = &self.nodes[i];
+            if node.children.is_empty() {
+                continue;
+            }
+            let mut a = [C::ZERO; ORDER + 1];
+            for &c in &node.children {
+                let d = self.nodes[c].center.sub(node.center);
+                let own = coeffs[c];
+                self.shift_into(&own, d, &mut a);
             }
             coeffs[i] = a;
         }
@@ -221,13 +234,16 @@ impl Tree {
         }
         let z = C::new(x.x, x.y);
         let h2 = self.rod * self.rod;
-        let mut stack = vec![0usize];
-        while let Some(i) = stack.pop() {
+        // At most three siblings wait per level.
+        let mut stack = [0usize; 4 * DEPTH as usize + 4];
+        let mut top = 1;
+        while top > 0 {
+            top -= 1;
+            let i = stack[top];
             let node = &self.nodes[i];
             let d = z.sub(node.center);
-            let dist2 = d.abs2();
-            let far = node.radius < THETA * libm::sqrt(dist2)
-                && libm::sqrt(dist2) > node.radius + self.rod;
+            let dist = libm::sqrt(d.abs2());
+            let far = node.radius < THETA * dist && dist > node.radius + self.rod;
             if far {
                 // E_x − i E_y = 2 Σ aₙ w^(n+1), w = 1/(z − z_c).
                 let w = d.inv();
@@ -255,7 +271,10 @@ impl Tree {
                 }
             } else {
                 // Children in reverse, so that they are visited in order.
-                stack.extend(node.children.iter().rev());
+                for &c in node.children.iter().rev() {
+                    stack[top] = c;
+                    top += 1;
+                }
             }
         }
         e
@@ -269,8 +288,11 @@ impl Tree {
             return phi;
         }
         let z = C::new(x.x, x.y);
-        let mut stack = vec![0usize];
-        while let Some(i) = stack.pop() {
+        let mut stack = [0usize; 4 * DEPTH as usize + 4];
+        let mut top = 1;
+        while top > 0 {
+            top -= 1;
+            let i = stack[top];
             let node = &self.nodes[i];
             let d = z.sub(node.center);
             let dist = libm::sqrt(d.abs2());
@@ -299,7 +321,10 @@ impl Tree {
                     }
                 }
             } else {
-                stack.extend(node.children.iter().rev());
+                for &c in node.children.iter().rev() {
+                    stack[top] = c;
+                    top += 1;
+                }
             }
         }
         phi
@@ -350,13 +375,19 @@ fn build(
     half: f64,
     depth: u32,
 ) -> usize {
-    let radius = order[start..end]
-        .iter()
-        .map(|&k| {
-            let s = &sources[k];
-            libm::sqrt(s.middle().sub(center).abs2()) + s.half_length()
-        })
-        .fold(0.0, f64::max);
+    // Line charges by their squared distance (one root: the root is monotonic and
+    // correctly rounded), segments wholly.
+    let (mut points, mut segments) = (0.0_f64, 0.0_f64);
+    for &k in &order[start..end] {
+        let s = &sources[k];
+        let d2 = s.middle().sub(center).abs2();
+        if s.is_point() {
+            points = points.max(d2);
+        } else {
+            segments = segments.max(libm::sqrt(d2) + s.half_length());
+        }
+    }
+    let radius = libm::sqrt(points).max(segments);
     let index = nodes.len();
     nodes.push(Node {
         center,
@@ -373,15 +404,19 @@ fn build(
         let m = sources[k].middle();
         usize::from(m.re >= center.re) + 2 * usize::from(m.im >= center.im)
     };
-    order[start..end].sort_by_key(|&k| quadrant(k));
+    let mut buckets: [Vec<usize>; 4] = Default::default();
+    for &k in &order[start..end] {
+        buckets[quadrant(k)].push(k);
+    }
+    let mut at = start;
+    for b in &buckets {
+        order[at..at + b.len()].copy_from_slice(b);
+        at += b.len();
+    }
     let mut children = Vec::new();
     let mut lo = start;
-    for q in 0..4 {
-        let hi = lo
-            + order[lo..end]
-                .iter()
-                .take_while(|&&k| quadrant(k) == q)
-                .count();
+    for (q, b) in buckets.iter().enumerate() {
+        let hi = lo + b.len();
         if hi > lo {
             let h = 0.5 * half;
             let c = C::new(

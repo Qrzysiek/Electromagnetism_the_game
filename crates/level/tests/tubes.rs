@@ -45,6 +45,7 @@ pub fn diode(v: f64) -> Level {
         particle_rate: level::tube::TL_RATE,
         particles: 1.0,
         emitter_mesh: 1.0,
+        output: None,
         step: level::tube::DEFAULT_STEP,
         goals: vec![CurrentGoal {
             electrode: 1,

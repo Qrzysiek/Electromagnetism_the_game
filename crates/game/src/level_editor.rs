@@ -10,7 +10,7 @@ use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::tube::{
     Carriers, CurrentGoal, DEFAULT_STEP, IonSource, Measure, PotentialGoal, ProjectileSpec,
-    TL_RATE, TubeCircuit, TubeSpec,
+    TL_RATE, TubeCircuit, TubeOutput, TubeSpec,
 };
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
@@ -1542,6 +1542,7 @@ fn edit_tube(
             }],
             circuits: Vec::new(),
             potential_goals: Vec::new(),
+            output: None,
         });
     }
     let Some(TubeSpec {
@@ -1560,6 +1561,7 @@ fn edit_tube(
         goals,
         circuits,
         potential_goals,
+        output,
     }) = tube
     else {
         return focus;
@@ -1682,6 +1684,37 @@ fn edit_tube(
             )
             .has_focus();
     });
+    // The radiated output (a magnetron's): one circuit's load.
+    let mut has_output = output.is_some();
+    ui.checkbox(&mut has_output, "Output (radiated)")
+        .on_hover_text(
+            "One circuit's load stands for an antenna along the tube's axis: what it absorbs is \
+         radiated, drawn as a wave at the wave speed c (display only)",
+        );
+    if has_output {
+        let o = output.get_or_insert(TubeOutput {
+            circuit: 0,
+            c: 50.0,
+        });
+        ui.horizontal(|ui| {
+            ui.label("  circuit");
+            let mut k = o.circuit + 1;
+            focus |= ui
+                .add(egui::DragValue::new(&mut k).range(1..=circuits.len().max(1)))
+                .has_focus();
+            o.circuit = k - 1;
+            ui.label("wave speed c");
+            focus |= ui
+                .add(
+                    egui::DragValue::new(&mut o.c)
+                        .speed(1.0)
+                        .range(MIN_POSITIVE..=MAX_POSITIVE),
+                )
+                .has_focus();
+        });
+    } else {
+        *output = None;
+    }
     // Ion source.
     let mut has_ions = ions.is_some();
     ui.checkbox(&mut has_ions, "Ion source (bipolar)")
@@ -2518,6 +2551,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             goals,
             circuits,
             potential_goals,
+            output,
         } = t;
         let n = electrodes.len();
         let any = |v: f64| (-MAX_POSITIVE..=MAX_POSITIVE).contains(&v);
@@ -2526,7 +2560,10 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         let ratio_ok = (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass.abs())
             && (1.0..=MAX_POSITIVE).contains(particle_rate)
             && (0.1..=100.0).contains(particles)
-            && (1.0..=16.0).contains(emitter_mesh);
+            && (1.0..=16.0).contains(emitter_mesh)
+            && output.is_none_or(|o| {
+                o.circuit < circuits.len() && (MIN_POSITIVE..=MAX_POSITIVE).contains(&o.c)
+            });
         let goal_ok = goals.len() <= MAX_COUNT as usize
             && goals.iter().all(|g| {
                 let CurrentGoal {

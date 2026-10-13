@@ -257,7 +257,7 @@ def current_goal(electrode, lo, hi, start, end, carriers=None):
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
          potentials=(), goals=(), ions=None, step=None, particle_rate=None, particles=None,
-         emitter_mesh=None):
+         emitter_mesh=None, output=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -281,6 +281,8 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
         t["particles"] = particles
     if emitter_mesh is not None:
         t["emitter_mesh"] = emitter_mesh
+    if output is not None:
+        t["output"] = {"circuit": output[0], "c": output[1]}
     if ions is not None:
         t["ions"] = {"electrode": ions[0], "charge_per_mass": ions[1]}
         if len(ions) > 2:
@@ -3222,7 +3224,14 @@ def ion_diode():
     # The boost is largest just above the cutoff (1.76 times the strong field's at 30 V).
     # The goals (ions 5.5 to 8, leak <= 0.05) leave a diagonal strip, B roughly in proportion
     # to sqrt(V): at the reference (30, 1.9) V ~ 27-32 and B ~ 1.66-2.55; full voltage and
-    # field (~8.1) overshoot it, the sliders' middles fall short.
+    # field (~8.1) overshoot it, the sliders' middles fall short. The leak the description
+    # promises is within both sliders (the owner, 2026-10-13: whatever a level says can
+    # happen must be possible): at 30 V the electrons pour into the rod with the field off
+    # (17.4 at B = 0, 0.76 at 1.2, 0.006 at 1.5), and at B = 1.9 above ~50 V (0.066 at 50,
+    # 0.25 at 60, 3.6 at 80): hence the supply's +-80. A grounded envelope (a thin ring
+    # around the cathode) closes the tube: without it the open 2D boundary left a field
+    # outside the cathode, which drew electrons off its outer face into an arc drifting
+    # round it (E x B) off the board.
     return level(
         "Ion diode",
         "An ion diode turned inside out: the ring is the cathode, emitting electrons from "
@@ -3233,11 +3242,14 @@ def ion_diode():
         "cross, and the sheath's negative charge pulls more of them across. Deliver an ion "
         "current between 5.5 and 8 to the ring while at most 0.05 of electrons leak to the "
         "rod (averaged over $t = 20$ to $30$). The critical field grows with the voltage, "
-        "as $B \\propto \\sqrt{V}$, and the sheath helps the ions most just above it.",
+        "as $B \\propto \\sqrt{V}$: too weak a field for your voltage lets the electrons "
+        "leak; the sheath helps the ions most just above it. The thin outer ring is the "
+        "tube's grounded envelope.",
         grid=(24, 16), c=None, t_max=100.0,
         electrodes=[plate(12, 8, 10, thickness=1.0, shape="ring"),
-                    plate(12, 8, 2, thickness=2.0, shape="rod", tunable=True)],
-        supplies=slider(40.0, 27.0, 30.0, 33.0),
+                    plate(12, 8, 2, thickness=2.0, shape="rod", tunable=True),
+                    plate(12, 8, 14.5, thickness=0.5, shape="ring")],
+        supplies=slider(80.0, 27.0, 30.0, 33.0),
         solenoid_fields=slider(3.0, 1.7, 1.9, 2.2),
         tube=tube(0, 1, 0.0, 0.05, 20.0, 30.0, solenoid=(23, 15), step=0.05,
                   ions=(1, 0.0625), particles=8.0, emitter_mesh=2.0,
@@ -3440,7 +3452,9 @@ def magnetron():
         "that turn with it. Make the tuned circuit oscillate with a swing of at least 10 "
         "(half its peak-to-peak, over $t = 90$ to $120$). The electrons drift at $E/B$: "
         "to keep pace with the wave the voltage must rise with the field. Too weak a field "
-        "lets them straight onto the vanes; too fast a drift outruns the wave.",
+        "lets them straight onto the vanes; too fast a drift outruns the wave. The tuned "
+        "circuit's load is the output: an antenna along the axis radiates what it absorbs, "
+        "the microwaves of the picture below the goals.",
         grid=(24, 24), c=None, t_max=150.0,
         electrodes=[plate(12, 12, 4, thickness=4.0, shape="rod", tunable=True),
                     plate(18, 12, 3.0, thickness=0.6, angle_deg=0.0),
@@ -3458,7 +3472,8 @@ def magnetron():
                   circuits=[tube_circuit(1, dc(0.0), resistance=0.0, linked=(3, 5, 7, 9)),
                             tube_circuit(2, dc(0.0), resistance=0.002, inductance=0.036,
                                          capacitance=1.34, linked=(4, 6, 8))],
-                  potentials=[potential_goal(2, "swing", 10.0, 1000.0, 90.0, 120.0)]),
+                  potentials=[potential_goal(2, "swing", 10.0, 1000.0, 90.0, 120.0)],
+                  output=(1, 50.0)),
         reference=[supply(12, 12, -45.0), supply(23, 23, 6.0)])
 
 ARCS.append(("Inside the components: vacuum tubes", [

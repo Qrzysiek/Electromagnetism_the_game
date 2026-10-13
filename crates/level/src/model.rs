@@ -462,6 +462,19 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
             },
         ));
     }
+    if let Some(o) = spec.output {
+        out.push(note(
+            false,
+            &format!(
+                "The output: circuit {}'s load stands for an antenna along the tube's axis, \
+                 radiating what the load absorbs. Its wave is the exact 2D retarded field of \
+                 the load's current, drawn at the wave speed c = {}: a picture only, the \
+                 carriers' motion stays Newtonian.",
+                o.circuit + 1,
+                o.c
+            ),
+        ));
+    }
     out.sort_by_key(|n| !n.exact);
     out
 }

@@ -194,7 +194,8 @@ def make_tube_tank(lv, pl, p, o, w):
     """A tube level (`make_tube`) whose anode is an LC tank biased by its supply (a DC
     source through R and a coil, C to ground: a cavity) with a third electrode strapped to
     it (one node: a magnetron's vanes), and a second electrode joined to it by a coil (a
-    tank between two electrodes): the inductors and straps of PHYSICS.md 2.11."""
+    tank between two electrodes), the tank's load radiating (an output): the inductors,
+    straps and outputs of PHYSICS.md 2.11."""
     make_tube(lv, pl, p, o, w)
     k = lv["tube"]["cathode"]
     lv["electrodes"].append(electrode((p[0] - 3, p[1] + 2), length=0.6, thickness=0.5))
@@ -209,6 +210,8 @@ def make_tube_tank(lv, pl, p, o, w):
         {"electrode": k + 1, "measure": "amplitude", "omega": 0.5, "min": 0.0, "max": 10.0,
          "start": 5.0, "end": 10.0},
     ]
+    # The tank's load radiates (a magnetron's output; display only).
+    lv["tube"]["output"] = {"circuit": 0, "c": 50.0}
 
 
 def make_tube(lv, pl, p, o, w):
