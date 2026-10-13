@@ -116,6 +116,9 @@ fn apply(state: &mut Option<State>, want: &mut Option<(u64, f64)>, r: EmRequest)
     }
 }
 
+/// How often a long catch-up shows its progress.
+const PROGRESS: std::time::Duration = std::time::Duration::from_millis(250);
+
 fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
     let mut state: Option<State> = None;
     let mut want: Option<(u64, f64)> = None;
@@ -147,8 +150,11 @@ fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
             s.em = Some(TubeEm::new(&s.level, &s.run));
         }
         let em = s.em.as_mut().expect("the field");
-        // Advance in slices, leaving the work to the next round if a request arrives.
+        // Advance in slices, leaving the work to the next round if a request arrives; a
+        // long way to go (the field left behind while another map was shown) shows its
+        // progress every `PROGRESS` of wall time.
         let mut next = None;
+        let mut shown = std::time::Instant::now();
         while em.fdtd.t + em.fdtd.dt <= t {
             let before = em.fdtd.t;
             em.advance_to(&s.run, (em.fdtd.t + SLICE).min(t));
@@ -158,6 +164,10 @@ fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
             if let Ok(r) = requests.try_recv() {
                 next = Some(r);
                 break;
+            }
+            if shown.elapsed() > PROGRESS {
+                let _ = out.send(snapshot(revision, Some(em)));
+                shown = std::time::Instant::now();
             }
         }
         let _ = out.send(snapshot(revision, Some(em)));

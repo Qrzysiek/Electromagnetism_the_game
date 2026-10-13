@@ -1112,23 +1112,24 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     }
     ui.label(egui::RichText::new("View").strong());
     if level.is_tube() {
-        // The z-invariant field: only its potential map (the field lines and the other
-        // maps are the 3D slice's).
-        ui.horizontal(|ui| {
-            ui.label("Map:");
-            ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential");
-            ui.selectable_value(&mut game.map, Some(MapMode::Electric), "electric field");
-        });
-        ui.horizontal(|ui| {
-            ui.label("     ");
+        // The z-invariant world's maps, in one row as every level's (V cycles them in this
+        // order).
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Map (V):")
+                .on_hover_text("What the background shows; V cycles through the maps");
+            ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential")
+                .on_hover_text("The carriers' potential energy at the time shown");
             ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B")
                 .on_hover_text(
                     "B_z of the electromagnetic field the run's charges and currents make, \
                      with retardation (computed as the animation plays)",
                 );
+            ui.selectable_value(&mut game.map, Some(MapMode::Electric), "electric field")
+                .on_hover_text("|E| and its direction at the time shown");
             ui.selectable_value(&mut game.map, Some(MapMode::EnergyFlow), "energy flow")
                 .on_hover_text("The Poynting vector of that field: where its energy goes");
-            ui.selectable_value(&mut game.map, None, "off");
+            ui.selectable_value(&mut game.map, None, "off")
+                .on_hover_text("No background map");
         });
         ui.horizontal(|ui| {
             use crate::TubeParticles;
@@ -1185,8 +1186,15 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                      charge: bright where strong, on a log scale over {:.1} decades below the \
                      field at the 99th percentile of the board; contours every quarter \
                      decade; arrows show its direction (a force on electrons the opposite \
-                     way). Inside metal it is 0.",
-                    game.tube_range_decades
+                     way). Inside metal it is 0.{}",
+                    game.tube_range_decades,
+                    if level.tube.as_ref().is_some_and(|t| t.output.is_some()) {
+                        " This is the run's own, instantaneous field: the waves the tube \
+                         radiates, which take time to travel, show on the magnetic and energy \
+                         flow maps."
+                    } else {
+                        ""
+                    }
                 ))
                 .small(),
             );
@@ -1437,6 +1445,10 @@ fn controls(ui: &mut egui::Ui) {
         ui.label("R rotate antenna (Shift+R back), W antenna frequency, M cycles kinds.");
         ui.label("Drag your elements with the mouse, or G to grab / drop and Esc to cancel.");
         ui.label("Hardcore (checkbox): sliders instead of fixed values; Q/E and W step ×1.1.");
+        ui.label(
+            "Tube levels: the wheel zooms, Z or Home shows the whole board; drag with the \
+             middle button, or the left one on empty board, or Ctrl + arrows to pan.",
+        );
     });
 }
 
@@ -1645,7 +1657,8 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             None => format!(
                 "Microwave output: the load absorbs {} (R times the mean of I squared). To \
                  see the waves the antenna radiates, choose the magnetic or energy flow map \
-                 (the mouse wheel zooms; Z shows the whole board).",
+                 (the mouse wheel zooms, a drag or Ctrl + arrows pans, Z shows the whole \
+                 board).",
                 fmt_num(absorbed)
             ),
         };

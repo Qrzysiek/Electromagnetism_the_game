@@ -3462,8 +3462,9 @@ def magnetron():
         "to keep pace with the wave the voltage must rise with the field. Too weak a field "
         "lets them straight onto the vanes; too fast a drift outruns the wave. The rod "
         "outside the block is the antenna, strapped to the tuned set of vanes: it radiates "
-        "the microwaves (the magnetic or energy flow map shows them leaving; the mouse wheel "
-        "zooms in on the spokes).",
+        "the microwaves: the magnetic or energy flow map shows them spreading over the "
+        "board once the oscillation has grown out of the noise, after about $t = 50$ (the "
+        "mouse wheel zooms in on the spokes, a drag pans).",
         grid=(96, 96), c=None, t_max=150.0,
         electrodes=[plate(48, 48, 4, thickness=4.0, shape="rod", tunable=True),
                     plate(54, 48, 3.0, thickness=0.6, angle_deg=0.0),

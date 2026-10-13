@@ -238,6 +238,8 @@ pub struct Game {
     /// when zoomed (world coordinates).
     pub zoom: f32,
     pub zoom_center: Option<Vec2>,
+    /// A zoomed tube level dragged by the pointer: the board point held under it.
+    pub pan_anchor: Option<Vec2>,
 }
 
 impl Game {
@@ -322,6 +324,7 @@ impl Game {
             panel_left_px: None,
             zoom: 1.0,
             zoom_center: None,
+            pan_anchor: None,
         }
     }
 
@@ -889,16 +892,7 @@ fn dev_capture(
                 game.tube_range_decades = d;
             }
             if let Ok(m) = std::env::var("EM_MAP") {
-                game.map = match m.as_str() {
-                    "magnetic" => Some(MapMode::Magnetic),
-                    "waves" => Some(MapMode::Waves),
-                    "particle" => Some(MapMode::ParticleField),
-                    "total" => Some(MapMode::Total),
-                    "electric" => Some(MapMode::Electric),
-                    "energy" => Some(MapMode::EnergyFlow),
-                    "off" => None,
-                    _ => Some(MapMode::Potential),
-                };
+                game.map = map_named(&m);
             }
             // The grid refinement (1-4, as the Grid buttons): EM_PLACE's nodes are then in
             // units of 1/n cell.
@@ -934,6 +928,31 @@ fn dev_capture(
             });
         }
         _ => {}
+    }
+    // EM_MAP_AT ("frame:map,..."): the map switched at those frames, as a player would (a
+    // regression check: a field map shown again after another kept playing).
+    if let Ok(seq) = std::env::var("EM_MAP_AT") {
+        for item in seq.split(',') {
+            if let Some((f, m)) = item.split_once(':')
+                && f.trim().parse::<u32>() == Ok(*frame)
+            {
+                game.map = map_named(m.trim());
+            }
+        }
+    }
+}
+
+/// A map by its capture name (`EM_MAP`).
+fn map_named(m: &str) -> Option<MapMode> {
+    match m {
+        "magnetic" => Some(MapMode::Magnetic),
+        "waves" => Some(MapMode::Waves),
+        "particle" => Some(MapMode::ParticleField),
+        "total" => Some(MapMode::Total),
+        "electric" => Some(MapMode::Electric),
+        "energy" => Some(MapMode::EnergyFlow),
+        "off" => None,
+        _ => Some(MapMode::Potential),
     }
 }
 
@@ -979,7 +998,9 @@ pub fn nearest_node(game: &Game, p: Vec2) -> [i64; 3] {
     [r(p.x), r(p.y), 0]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn input(
+    time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut wheel: MessageReader<MouseWheel>,
@@ -997,18 +1018,38 @@ fn input(
         } else {
             1
         };
+        // Ctrl + arrows pan a zoomed tube level (without a mouse: a laptop's touchpad).
+        let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
+        if ctrl && game.editor.level.is_tube() && game.zoom < 1.0 {
+            let dir = Vec2::new(
+                f32::from(u8::from(keys.pressed(KeyCode::ArrowRight)))
+                    - f32::from(u8::from(keys.pressed(KeyCode::ArrowLeft))),
+                f32::from(u8::from(keys.pressed(KeyCode::ArrowUp)))
+                    - f32::from(u8::from(keys.pressed(KeyCode::ArrowDown))),
+            );
+            if dir != Vec2::ZERO {
+                let b = game.editor.level.bounds();
+                #[allow(clippy::cast_possible_truncation)]
+                let span = (b.max.x - b.min.x).max(b.max.y - b.min.y) as f32;
+                // Most of the view across per second.
+                let shift = dir * (0.8 * game.zoom * span * time.delta_secs());
+                pan_by(game, shift);
+            }
+        }
         let e = &mut game.editor;
-        if keys.just_pressed(KeyCode::ArrowLeft) {
-            e.move_cursor(-step, 0);
-        }
-        if keys.just_pressed(KeyCode::ArrowRight) {
-            e.move_cursor(step, 0);
-        }
-        if keys.just_pressed(KeyCode::ArrowUp) {
-            e.move_cursor(0, step);
-        }
-        if keys.just_pressed(KeyCode::ArrowDown) {
-            e.move_cursor(0, -step);
+        if !ctrl {
+            if keys.just_pressed(KeyCode::ArrowLeft) {
+                e.move_cursor(-step, 0);
+            }
+            if keys.just_pressed(KeyCode::ArrowRight) {
+                e.move_cursor(step, 0);
+            }
+            if keys.just_pressed(KeyCode::ArrowUp) {
+                e.move_cursor(0, step);
+            }
+            if keys.just_pressed(KeyCode::ArrowDown) {
+                e.move_cursor(0, -step);
+            }
         }
         if keys.just_pressed(KeyCode::KeyG) {
             if e.grabbed.is_some() {
@@ -1113,6 +1154,20 @@ fn input(
     let Ok(world) = cam.viewport_to_world_2d(cam_transform, cursor) else {
         return;
     };
+    // A zoomed tube level pans by dragging: the middle button anywhere, the left one on
+    // empty board (where a press would place nothing); the point grabbed stays under the
+    // pointer.
+    let zoomed_tube = game.editor.level.is_tube() && game.zoom < 1.0;
+    if zoomed_tube && mouse.just_pressed(MouseButton::Middle) {
+        game.pan_anchor = Some(world);
+    }
+    if let Some(anchor) = game.pan_anchor {
+        if zoomed_tube && (mouse.pressed(MouseButton::Middle) || mouse.pressed(MouseButton::Left)) {
+            pan_by(game, anchor - world);
+            return;
+        }
+        game.pan_anchor = None;
+    }
     // The node under the pointer, if the pointer is on the grid.
     let node = nearest_node(game, world);
     let on_grid = game.editor.level.grid.contains(node);
@@ -1169,14 +1224,17 @@ fn input(
         }
         return;
     }
-    // Left press on one of the player's elements picks it up (drag), elsewhere places.
+    // Left press on one of the player's elements picks it up (drag), elsewhere places;
+    // where nothing can be placed on a zoomed tube level, it starts a pan.
     if on_grid && pressed {
         game.editor.set_cursor(node);
         if game.editor.grab() {
             game.mouse_drag = true;
-        } else {
-            let _ = game.editor.place();
+        } else if game.editor.place().is_err() && zoomed_tube {
+            game.pan_anchor = Some(world);
         }
+    } else if !on_grid && pressed && zoomed_tube {
+        game.pan_anchor = Some(world);
     }
     if game.mouse_drag && !mouse.pressed(MouseButton::Left) {
         game.mouse_drag = false;
@@ -1352,11 +1410,41 @@ fn update_map(
                     let Some(snap) = game.em_snapshot.as_ref() else {
                         break 'arm None;
                     };
-                    // The colour unit: the 99th percentile over the board (the tube's
-                    // inside, small and with the strongest fields, saturates; the
-                    // radiation around it shows).
+                    // The colour unit: the 99th percentile over the board; for a tube that
+                    // radiates (an output), over the board outside its rings: the radiation.
+                    // (Over the whole board the tube's inside, a few per cent of it with the
+                    // strongest fields, set the unit, and the radiation leaving the tube lay
+                    // decades below: black.) The inside then saturates.
+                    let max = level.grid.position(level.grid.max_node());
+                    let rings: Vec<(physics::DVec3, f64)> = level
+                        .electrodes
+                        .iter()
+                        .filter(|e| e.shape == level::ElectrodeShape::Ring)
+                        .map(|e| {
+                            (
+                                level.grid.position(e.center),
+                                0.5 * (e.length + e.thickness),
+                            )
+                        })
+                        .collect();
+                    let radiating = spec.output.is_some();
+                    #[allow(clippy::cast_precision_loss)]
+                    let counted = |n: usize| {
+                        let x = snap.origin.0 + ((n % snap.nx) as f64 + 0.5) * snap.spacing;
+                        let y = snap.origin.1 + ((n / snap.nx) as f64 + 0.5) * snap.spacing;
+                        !radiating
+                            || ((0.0..=max.x).contains(&x)
+                                && (0.0..=max.y).contains(&y)
+                                && rings.iter().all(|(c, r)| (x - c.x).hypot(y - c.y) > *r))
+                    };
                     let peak = |f: &dyn Fn(&[f32; 3]) -> f64| {
-                        let mut v: Vec<f64> = snap.samples.iter().map(f).collect();
+                        let mut v: Vec<f64> = snap
+                            .samples
+                            .iter()
+                            .enumerate()
+                            .filter(|(n, _)| counted(*n))
+                            .map(|(_, s)| f(s))
+                            .collect();
                         v.sort_by(f64::total_cmp);
                         #[allow(
                             clippy::cast_possible_truncation,
@@ -1409,6 +1497,16 @@ fn update_map(
                     .tube_field
                     .as_ref()
                     .filter(|f| f.revision == v.revision);
+                // The electric map's field, once per frame (summing every segment and
+                // particle at every arrow: on a large board twice per frame was a
+                // slideshow); its colour unit is the field at the verification window's end
+                // once the run has passed it, the frame's own until then.
+                let (now, arrows) = if mode == MapMode::Electric {
+                    let (s, a) = tube_field(level, run, &binned);
+                    (Some(s), a)
+                } else {
+                    (None, Vec::new())
+                };
                 let (scale, scale_final) = match old {
                     Some(f) if f.scale_final => (f.scale, true),
                     _ => match run
@@ -1417,14 +1515,11 @@ fn update_map(
                         .filter(|f| f.t >= level.tube_verify_end())
                         .and_then(|_| run.frame_at(level.tube_verify_end()))
                     {
-                        Some(f) => (tube_field(level, run, &potential::map_frame(f)).0, true),
-                        None => (tube_field(level, run, &binned).0, false),
+                        Some(f) if mode == MapMode::Electric => {
+                            (tube_field(level, run, &potential::map_frame(f)).0, true)
+                        }
+                        _ => (now.or(old.map(|f| f.scale)).unwrap_or(1.0), false),
                     },
-                };
-                let arrows = if mode == MapMode::Electric {
-                    tube_field(level, run, &binned).1
-                } else {
-                    Vec::new()
                 };
                 let (params, items) = potential::tube_params(
                     run,
@@ -1677,6 +1772,9 @@ fn poll_physics(mut game: ResMut<Game>, worker: Res<PhysicsWorker>) {
 /// Arrow spacing of the tube's electric field map (cells).
 const TUBE_ARROW_SPACING: usize = 2;
 
+/// The most arrows across a tube's electric map (larger boards space them wider).
+const TUBE_ARROWS: usize = 32;
+
 /// The energy flow map's arrows: the Poynting vector of the field's snapshot at the
 /// arrow grid's points (the nearest sample).
 #[allow(
@@ -1712,7 +1810,11 @@ fn update_em(mut game: ResMut<Game>) {
     let game = &mut *game;
     let field_map = game.editor.level.is_tube()
         && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow));
-    if !field_map {
+    // Once started for this run, the field follows the playback under the other maps too
+    // (switching back shows it at once, rather than catching up from where it was left).
+    let following =
+        game.editor.level.is_tube() && game.em.is_some() && game.em_run == Some(game.sent_revision);
+    if !field_map && !following {
         return;
     }
     let Some(v) = game
@@ -1765,12 +1867,16 @@ fn tube_field(
     frame: &level::tube::TubeFrame,
 ) -> (f64, TubeArrows) {
     let m = level.grid.max_node();
+    // At most about `TUBE_ARROWS` across (a large board's every second node was thousands
+    // of field sums per frame).
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let spacing = TUBE_ARROW_SPACING.max(m[0].max(m[1]).unsigned_abs() as usize / TUBE_ARROWS);
     let mut arrows = Vec::new();
     let mut magnitudes = Vec::new();
-    for y in (0..=m[1]).step_by(TUBE_ARROW_SPACING) {
-        for x in (0..=m[0]).step_by(TUBE_ARROW_SPACING) {
+    for y in (0..=m[1]).step_by(spacing) {
+        for x in (0..=m[0]).step_by(spacing) {
             let p = level.grid.position([x, y, 0]);
-            let e = run.field_at(frame, p).1;
+            let e = run.e_at(frame, p);
             magnitudes.push(e.length());
             arrows.push((draw::to_vec2(p), draw::to_vec2(e)));
         }
@@ -1839,22 +1945,38 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
     // it was over before the flow could be watched).
     let tube = level.is_tube();
     let rate = if tube { 1.0 } else { 4.0 };
+    let before = game.anim_time;
     game.anim_time += time.delta_secs_f64() * game.playback_speed * rate;
-    // The field maps' playback waits for the field (`update_em`); a capture at a set time
-    // (`EM_TIME`) waits for it instead (`dev_capture`).
+    // The field maps' playback waits for the field (`update_em`): it holds the time shown
+    // until the field catches up, never sets it back (a field left behind while another
+    // map was shown would pull the time back to it, and every earlier time asked for
+    // restarts the field from t = 0: the playback stuck near the start). A capture at a
+    // set time (`EM_TIME`) waits for it instead (`dev_capture`).
     if tube
         && std::env::var_os("EM_TIME").is_none()
         && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow))
         && let Some(s) = &game.em_snapshot
     {
         let ahead = 0.25 * game.playback_speed.max(0.25);
-        game.anim_time = game.anim_time.min(s.t + ahead);
+        game.anim_time = game.anim_time.min((s.t + ahead).max(before));
     }
     if streaming {
         game.anim_time = game.anim_time.min(end);
     } else if game.anim_time > end + 2.0 * game.playback_speed.max(0.25) {
         game.anim_time = 0.0;
     }
+}
+
+/// Moves a zoomed level's view by `shift` (board units), its centre kept on the board.
+fn pan_by(game: &mut Game, shift: Vec2) {
+    let b = game.editor.level.bounds();
+    #[allow(clippy::cast_possible_truncation)]
+    let (lo, hi) = (
+        Vec2::new(b.min.x as f32, b.min.y as f32),
+        Vec2::new(b.max.x as f32, b.max.y as f32),
+    );
+    let centre = game.zoom_center.unwrap_or((lo + hi) * 0.5);
+    game.zoom_center = Some((centre + shift).clamp(lo, hi));
 }
 
 /// Fits the level into the part of the window left of the side panel. The camera covers

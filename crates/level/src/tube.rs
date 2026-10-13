@@ -557,6 +557,22 @@ impl TubeRun {
         self.frames.get(k.saturating_sub(1))
     }
 
+    /// The field of a frame at `x` as `field_at` gives it, faster: far segments by their
+    /// multipoles (`physics::zinv::segment_field_fast`, within 5e-5): for the display's
+    /// arrows and colour scale, many points every frame.
+    pub fn e_at(&self, frame: &TubeFrame, x: DVec3) -> DVec3 {
+        let mut e = DVec3::ZERO;
+        for ((a, b), s) in self.segments.iter().zip(&frame.sigma) {
+            e += physics::zinv::segment_field_fast(*a, *b, x) * f64::from(*s);
+        }
+        let eps2 = PREVIEW_SEGMENT * PREVIEW_SEGMENT;
+        for (p, q) in frame.x.iter().zip(&frame.q) {
+            let r = DVec3::new(x.x - f64::from(p[0]), x.y - f64::from(p[1]), 0.0);
+            e += r * (2.0 * f64::from(*q) / (r.x * r.x + r.y * r.y + eps2));
+        }
+        e
+    }
+
     /// The potential and field of a frame at `x`, as the maps show them: the segments'
     /// charge exactly, the particles as line charges softened over `PREVIEW_SEGMENT` (the
     /// preview's resolution of its space charge).
