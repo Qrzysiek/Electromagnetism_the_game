@@ -229,6 +229,26 @@ def make_tube(lv, pl, p, o, w):
                            "end": 10.0}}
 
 
+def make_tube_metal(lv, pl, p, o, w):
+    """A tube level whose current flows through a metal (PHYSICS.md 2.11, the Drude
+    metal): a 4 x 4 conductor ending two cells left of p between two contacts (boxes along
+    its sides), the right one at 1 V collecting the goal's net current, so that the other
+    element lands beside, on or inside it. A metal must refuse electrodes, metals and
+    charges inside it (`metal_issues`)."""
+    lv["shots"] = []
+    es = lv.setdefault("electrodes", [])
+    k = len(es)
+    es.append(electrode((p[0] - 7, p[1]), length=4.0, thickness=2.0, bias={"kind": "grounded"}))
+    es.append(electrode((p[0] - 1, p[1]), length=4.0, thickness=2.0))
+    lv["tube"] = {"cathode": k, "charge_per_mass": -1.0, "step": 0.05,
+                  "goals": [{"electrode": k + 1, "min": 0.0, "max": 1.0, "start": 2.0,
+                             "end": 4.0, "carriers": "net"}],
+                  "metals": [{"corners": [node((p[0] - 6, p[1] - 2)), node((p[0] - 2, p[1] + 2))],
+                              "contacts": [k, k + 1], "density": 1.0, "charge_per_mass": -1.0,
+                              "thermal_speed": 1.0, "mean_free_path": 0.5,
+                              "core_radius": 0.005, "carriers_per_area": 20.0, "seed": 1}]}
+
+
 def make_tube_coax(lv, pl, p, o, w):
     """A coaxial tube level: a rod cathode (diameter 2) at p inside a ring anode
     (mid-diameter 7, wall 1, at 1 V) collecting the goal's current, so that the other
@@ -308,6 +328,7 @@ ELEMENTS = {
     "tube_circuit": make_tube_circuit,
     "tube_tank": make_tube_tank,
     "tube_coax": make_tube_coax,
+    "tube_metal": make_tube_metal,
     "player_charge": player(lambda p, o, w: {"node": node(p), "kind": "charge", "value": -1.0}),
     "player_magnet": player(lambda p, o, w: {"node": node(p), "kind": "magnet", "value": 2.0}),
     "player_antenna": player(lambda p, o, w: {"node": node(p), "kind": "antenna", "value": 1.0,

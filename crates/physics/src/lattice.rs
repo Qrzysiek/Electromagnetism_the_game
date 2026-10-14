@@ -74,6 +74,28 @@ pub struct Advance {
     pub collisions: u32,
 }
 
+/// The velocity of a carrier of a gas at thermal speed `sigma` crossing a wall along the
+/// unit normal `n` (the flux-weighted half-Maxwellian: the normal speed
+/// Rayleigh-distributed, `∝ v e^{−v²/2σ²}`, the tangential speed normal), from a hash of
+/// `key`: what a contact at the lattice's temperature gives off.
+#[must_use]
+pub fn flux_velocity(n: DVec3, sigma: f64, key: u64) -> DVec3 {
+    let h = mix(key ^ 0x00f1_0a5e);
+    let normal = sigma * libm::sqrt(-2.0 * libm::log(unit(h)));
+    let (g, _) = normals(unit(mix(h)), unit(mix(mix(h))));
+    let t = DVec3::new(-n.y, n.x, 0.0);
+    n * normal + t * (sigma * g)
+}
+
+/// A point's depth (a uniform fraction) in an ohmic contact's layer and a Maxwellian
+/// velocity at thermal speed `sigma` (each component normal), from a hash of `key`.
+#[must_use]
+pub fn layer_point(sigma: f64, key: u64) -> (f64, DVec3) {
+    let h = mix(key ^ 0x00a7_e0c5);
+    let (g1, g2) = normals(unit(mix(h)), unit(mix(mix(h))));
+    (unit(h), DVec3::new(g1, g2, 0.0) * sigma)
+}
+
 impl Lattice {
     /// A conductor (`lo`..`hi`), its background, cores and carriers; `cores` must lie in it.
     #[must_use]

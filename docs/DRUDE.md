@@ -134,5 +134,25 @@ the owner are marked **(owner)**; nothing is built until they are settled.
   exponential free paths; at `a² n_ion ≤ 0.005` the medium's own correction is ≤ 3 %.
 - **Levels' constraint:** `a² n_ion = a/(2ℓ) ≤ 0.005`: the cores are small against
   their spacing (`a/s ≤ 0.07`); they are drawn as dots, larger than their radius.
-- **Not yet:** D2 (AC conductivity), D5 (relaxation of an excess charge), D7 (Johnson
-  noise); the level format, the editor, the display (cores, heat), the levels.
+- **2026-10-14, the levels' machinery:** metals in tube levels (`MetalSpec`: a rectangle,
+  its contacts, the carriers' density, q/m and thermal speed, the mean free path and core
+  radius, macroparticles per area), setup checks (dense cores, the plasma period and the
+  mean free time resolved, nothing inside a metal), the editor's controls, a contact's
+  lead current (`Carriers::Net`), potential goals against another electrode (a Hall
+  voltmeter), the display (the outline, the cores, the carriers faint with a traced
+  sample showing the zigzag and the drift, the Joule heat), the maps' and the Maxwell
+  field's backgrounds, frames kept sparsely for long runs, the inspection tooltip.
+- **Contacts, changed twice:** the cathodes' space-charge limit made a contact a cold
+  reservoir (the Joule heat negative), then, releasing thermal carriers, a layer with
+  its own voltage in front of an injecting contact (a potentiometer read 8 for 10).
+  Ohmic contacts (the device Monte Carlo codes' condition: the layer in front of a
+  contact kept neutral) give the bulk field V/L to 0.2 % and the null at 9.5.
+- **The levels' material:** kT/q = 4 (thermal speed 2), small against the supplies' tens
+  so that the contacts' and walls' own voltages stay a few per cent; ℓ = 1, a = 0.01.
+- **Levels:** Ohm's law and Potentiometer (introduction), Hall probe (intermediate), in
+  the arc "Inside the components: metals".
+- **Open:** a background softened as the carriers are (the walls' depleted layer,
+  12 % within half a unit, ~3 % of a strip's conductance); D2 (AC conductivity), D5
+  (relaxation of an excess charge), D7 (Johnson noise); a warming lattice; the
+  geometry level (long and thin against short and wide); a Hall level with both signs of
+  carriers.

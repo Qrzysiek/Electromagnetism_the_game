@@ -602,11 +602,27 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             )
         });
     } else if let Some(t) = &level.tube {
-        ui.label(format!(
-            "Carriers: q/m = {} (electrons; Newtonian), emitted by electrode {}",
-            fmt_si(t.charge_per_mass),
-            t.cathode + 1
-        ));
+        if t.metal_of(t.cathode).is_none() {
+            ui.label(format!(
+                "Carriers: q/m = {} (electrons; Newtonian), emitted by electrode {}",
+                fmt_si(t.charge_per_mass),
+                t.cathode + 1
+            ));
+        }
+        for (k, m) in t.metals.iter().enumerate() {
+            let contacts: Vec<String> = m.contacts.iter().map(|e| (e + 1).to_string()).collect();
+            ui.label(format!(
+                "Metal {}: carriers q/m = {}, charge density {}, thermal speed {}, mean free \
+                 path {}; contacts: electrode{} {}",
+                k + 1,
+                fmt_si(m.charge_per_mass),
+                fmt_si(m.density),
+                fmt_si(m.thermal_speed),
+                fmt_si(m.mean_free_path),
+                if contacts.len() == 1 { "" } else { "s" },
+                contacts.join(", ")
+            ));
+        }
     }
     egui::CollapsingHeader::new("Physics model and its limits")
         .id_salt("model_notes")
@@ -1266,8 +1282,17 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                  difference; small differences (the space charge's dip) become visible",
             );
         }
+        let metals = level.tube.as_ref().is_some_and(|t| !t.metals.is_empty());
         ui.label(
-            egui::RichText::new(
+            egui::RichText::new(if metals {
+                "The carriers' potential energy at the time shown (live), relative to the \
+                 first contact then, in units of the largest potential difference the \
+                 electrodes reach divided by the gain: blue downhill, red uphill; contours \
+                 every quarter. It includes the carriers' charge and the ions' background: \
+                 inside a metal carrying a current they cancel but for a thin layer at its \
+                 surfaces, and the potential falls evenly from contact to contact (a uniform \
+                 field: Ohm's law)."
+            } else {
                 "The electrons' potential energy at the time shown (live), relative to the \
                  cathode then, in units of the largest potential difference to it the \
                  electrodes reach (their supplies over a period) divided by the gain: blue \
@@ -1275,8 +1300,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                  beyond about twice the unit; contours every quarter. It includes the \
                  electrons' own space charge and the charge it induces on the electrodes: \
                  the flat region in front of the cathode, where the field is pulled down to \
-                 zero, is the space charge that limits the current.",
-            )
+                 zero, is the space charge that limits the current."
+            })
             .small(),
         );
         ui.separator();
@@ -1581,6 +1606,16 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             level::tube::Carriers::Cathode if spec.charge_per_mass < 0.0 => "electron current",
             level::tube::Carriers::Cathode => "current",
             level::tube::Carriers::Ions => "ion current",
+            // A contact's lead: what it takes in less what it gives off.
+            level::tube::Carriers::Net
+                if spec
+                    .metal_of(g.electrode)
+                    .map_or(spec.charge_per_mass, |m| spec.metals[m].charge_per_mass)
+                    < 0.0 =>
+            {
+                "net electron current"
+            }
+            level::tube::Carriers::Net => "net current",
         };
         ui.label(format!(
             "Goal: the {whose} into electrode {} between {} and {}, averaged over t = {} to {}",
@@ -1647,8 +1682,11 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 fmt_num(g.omega)
             ),
         };
+        let against = g
+            .reference
+            .map_or(String::new(), |r| format!(" against electrode {}", r + 1));
         ui.label(format!(
-            "Goal: the {what} of electrode {} between {} and {}, over t = {} to {}",
+            "Goal: the {what} of electrode {}{against} between {} and {}, over t = {} to {}",
             g.electrode + 1,
             fmt_num(g.min),
             fmt_num(g.max),
@@ -1802,14 +1840,36 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             .and_then(|k| v.run.frames.get(k))
             .map_or(0, |f| f.x.len());
         ui.label(egui::RichText::new(format!("{shown} particles in flight now")).small());
+        // The Joule heat: the energy the metals' lattices took over the last time unit.
+        if !spec.metals.is_empty()
+            && let Some(k) = game.tube_frame()
+            && let Some(f1) = v.run.frames.get(k)
+        {
+            let k0 = v.run.frames.partition_point(|f| f.t < f1.t - 1.0);
+            if let Some(f0) = v.run.frames.get(k0).filter(|f0| f1.t > f0.t) {
+                ui.label(format!(
+                    "Joule heat: {} per unit length per time (the lattice takes it at the \
+                     collisions; less than the supply's I V: the electrons also carry \
+                     energy into the contact they reach, the Peltier heat)",
+                    fmt_num((f1.heat - f0.heat) / (f1.t - f0.t))
+                ));
+            }
+        }
     }
     ui.label(
-        egui::RichText::new(
+        egui::RichText::new(if spec.metals.is_empty() {
             "A z-invariant tube: every electrode is a long prism, the electrons (blue), ions \
              (orange) and projectiles (large) are long lines of charge, and currents are per \
              unit length. Emitters release as much as their field allows: the particles' own \
-             charge limits the current.",
-        )
+             charge limits the current."
+        } else {
+            "A z-invariant metal (the Drude model): its carriers (blue; a few traced) fly at \
+             the thermal speed and bounce off the ion cores (dots), a zigzag; the field adds \
+             a slow drift along it, the current. Each collision hands the lattice the energy \
+             the field gave: the Joule heat. Contacts take in the carriers that reach them \
+             and give off as many as keep the metal next to them neutral. A classical model \
+             of a metal (its real electrons are a quantum gas): see the physics notes."
+        })
         .small(),
     );
 }

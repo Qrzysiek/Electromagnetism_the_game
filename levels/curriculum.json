@@ -347,6 +347,24 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Inside the components: metals",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "ohms_law",
+            "potentiometer"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "hall_probe"
+          ]
+        }
+      ]
     }
   ]
 }

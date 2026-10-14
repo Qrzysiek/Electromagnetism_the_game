@@ -49,7 +49,8 @@ struct Params {
     e_decades: f32,
     // Tube levels: the particles as a glow of their charge's density (z > 0): x = 1/(2 s^2)
     // of a Gaussian of width s, y and w = 1/(|q| at full glow) of the negative and the
-    // positive particles.
+    // positive particles, z = 1 + the number of line charges that glow (the first ones;
+    // the metals' carriers and backgrounds after them do not).
     glow: vec4<f32>,
     // Mode 3 (a tube's electromagnetic field on a grid, after the line charges): origin
     // (x, y), spacing, the colour unit; samples across, up, quantity (0: B_z, 1: |S|),
@@ -511,7 +512,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     if (params.glow.z > 0.5) {
         var neg = 0.0;
         var pos = 0.0;
-        for (var i = 0u; i < params.line_charges; i = i + 1u) {
+        let glowing = min(u32(params.glow.z) - 1u, params.line_charges);
+        for (var i = 0u; i < glowing; i = i + 1u) {
             let c = items[first_line_charge() + i];
             let d = p - c.xy;
             let r2 = dot(d, d) * params.glow.x;

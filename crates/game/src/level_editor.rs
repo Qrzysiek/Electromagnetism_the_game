@@ -9,8 +9,8 @@
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::tube::{
-    Carriers, CurrentGoal, DEFAULT_STEP, IonSource, Measure, PotentialGoal, ProjectileSpec,
-    TL_RATE, TubeCircuit, TubeOutput, TubeSpec,
+    Carriers, CurrentGoal, DEFAULT_STEP, IonSource, Measure, MetalSpec, PotentialGoal,
+    ProjectileSpec, TL_RATE, TubeCircuit, TubeOutput, TubeSpec,
 };
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
@@ -1543,6 +1543,7 @@ fn edit_tube(
             circuits: Vec::new(),
             potential_goals: Vec::new(),
             output: None,
+            metals: Vec::new(),
         });
     }
     let Some(TubeSpec {
@@ -1562,6 +1563,7 @@ fn edit_tube(
         circuits,
         potential_goals,
         output,
+        metals,
     }) = tube
     else {
         return focus;
@@ -1753,7 +1755,107 @@ fn edit_tube(
     } else {
         *solenoid = None;
     }
-    // Current goals: each counts the cathode's carriers or the ions.
+    // Metals (the Drude model): resistors, Hall probes.
+    let mut remove_metal = None;
+    for (k, m) in metals.iter_mut().enumerate() {
+        ui.push_id(("metal", k), |ui| {
+            let MetalSpec {
+                corners,
+                contacts,
+                density,
+                charge_per_mass,
+                thermal_speed,
+                mean_free_path,
+                core_radius,
+                carriers_per_area,
+                seed,
+            } = m;
+            ui.horizontal(|ui| {
+                ui.label(format!("Metal {}", k + 1)).on_hover_text(
+                    "A conductor's interior: carriers over the ions' background, scattering \
+                     off ion cores placed at random (PHYSICS.md §2.11, the Drude metal)",
+                );
+                if ui.small_button("×").clicked() {
+                    remove_metal = Some(k);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("  corners");
+                focus |= node(ui, &mut corners[0], grid);
+                focus |= node(ui, &mut corners[1], grid);
+            });
+            let mut remove_contact = None;
+            ui.horizontal(|ui| {
+                ui.label("  contacts").on_hover_text(
+                    "Box electrodes along its sides (each face within a side): they take in \
+                     the carriers that reach them and give off carriers into the metal",
+                );
+                for (i, c) in contacts.iter_mut().enumerate() {
+                    let mut e = *c + 1;
+                    focus |= ui
+                        .add(egui::DragValue::new(&mut e).range(1..=last + 1))
+                        .has_focus();
+                    *c = (e - 1).min(last);
+                    if ui.small_button("×").clicked() {
+                        remove_contact = Some(i);
+                    }
+                }
+                if contacts.len() < MAX_COUNT as usize && ui.small_button("+").clicked() {
+                    contacts.push(0);
+                }
+            });
+            if let Some(i) = remove_contact {
+                contacts.remove(i);
+            }
+            ui.horizontal(|ui| {
+                ui.label("  charge density")
+                    .on_hover_text("The carriers' charge per area (the ions' is opposite)");
+                focus |= positive(ui, density, 0.01, MAX_POSITIVE);
+            });
+            focus |= ratio(ui, "  carriers' q/m", charge_per_mass, false);
+            ui.horizontal(|ui| {
+                ui.label("  thermal speed")
+                    .on_hover_text("√(kT/m) of the carriers and the lattice");
+                focus |= positive(ui, thermal_speed, 0.01, MAX_POSITIVE);
+            });
+            ui.horizontal(|ui| {
+                ui.label("  mean free path").on_hover_text(
+                    "ℓ = 1/(2 a n): with the cores' radius it sets their number per area \
+                     (a/2ℓ at most 0.005: dilute)",
+                );
+                focus |= positive(ui, mean_free_path, 0.01, MAX_POSITIVE);
+                ui.label("core radius");
+                focus |= positive(ui, core_radius, 0.0001, MAX_POSITIVE);
+            });
+            ui.horizontal(|ui| {
+                ui.label("  carriers per area").on_hover_text(
+                    "Macroparticles per unit area in the preview (the verification's twice as \
+                     many)",
+                );
+                focus |= positive(ui, carriers_per_area, 1.0, MAX_POSITIVE);
+                ui.label("seed");
+                focus |= ui.add(egui::DragValue::new(seed)).has_focus();
+            });
+        });
+    }
+    if let Some(k) = remove_metal {
+        metals.remove(k);
+    }
+    if metals.len() < MAX_COUNT as usize && ui.button("+ Metal").clicked() {
+        let m = grid.max_node();
+        metals.push(MetalSpec {
+            corners: [[m[0] / 4, m[1] / 3, 0], [3 * m[0] / 4, 2 * m[1] / 3, 0]],
+            contacts: Vec::new(),
+            density: 1.0,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+            mean_free_path: 0.5,
+            core_radius: 0.002,
+            carriers_per_area: 100.0,
+            seed: 0,
+        });
+    }
+    // Current goals: each counts the cathode's carriers, the ions, or a lead's net.
     let mut remove_goal = None;
     for (k, g) in goals.iter_mut().enumerate() {
         ui.push_id(("current goal", k), |ui| {
@@ -1766,6 +1868,7 @@ fn edit_tube(
                     .selected_text(match g.carriers {
                         Carriers::Cathode => "cathode's carriers",
                         Carriers::Ions => "ions",
+                        Carriers::Net => "net (a lead's)",
                     })
                     .show_ui(ui, |ui| {
                         ui.selectable_value(
@@ -1775,6 +1878,11 @@ fn edit_tube(
                         );
                         ui.selectable_value(&mut g.carriers, Carriers::Ions, "ions")
                             .on_hover_text("The ion source's ions (needs an ion source)");
+                        ui.selectable_value(&mut g.carriers, Carriers::Net, "net (a lead's)")
+                            .on_hover_text(
+                                "Every carrier the electrode takes in less what it gives off: \
+                                 the current in a metal's contact's lead",
+                            );
                     });
             });
             focus |= index(ui, "  Current into electrode", &mut g.electrode);
@@ -1784,7 +1892,7 @@ fn edit_tube(
                     .add(
                         egui::DragValue::new(&mut g.min)
                             .speed(0.01)
-                            .range(0.0..=MAX_POSITIVE),
+                            .range(-MAX_POSITIVE..=MAX_POSITIVE),
                     )
                     .has_focus();
                 ui.label("to");
@@ -1792,7 +1900,7 @@ fn edit_tube(
                     .add(
                         egui::DragValue::new(&mut g.max)
                             .speed(0.01)
-                            .range(0.0..=MAX_POSITIVE),
+                            .range(-MAX_POSITIVE..=MAX_POSITIVE),
                     )
                     .has_focus();
             });
@@ -2034,6 +2142,15 @@ fn edit_tube(
             }
         });
         focus |= index(ui, "  electrode", &mut g.electrode);
+        let mut relative = g.reference.is_some();
+        ui.checkbox(&mut relative, "  against another electrode")
+            .on_hover_text("A voltmeter across the two (a Hall probe's voltage)");
+        if relative {
+            let r = g.reference.get_or_insert(0);
+            focus |= index(ui, "    reference", r);
+        } else {
+            g.reference = None;
+        }
         ui.horizontal(|ui| {
             ui.selectable_value(&mut g.measure, Measure::Mean, "mean");
             ui.selectable_value(&mut g.measure, Measure::Swing, "swing")
@@ -2080,6 +2197,7 @@ fn edit_tube(
     if potential_goals.len() < MAX_COUNT as usize && ui.small_button("+ potential goal").clicked() {
         potential_goals.push(PotentialGoal {
             electrode: last,
+            reference: None,
             measure: Measure::Mean,
             omega: 0.0,
             min: 0.0,
@@ -2552,6 +2670,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             circuits,
             potential_goals,
             output,
+            metals,
         } = t;
         let n = electrodes.len();
         let any = |v: f64| (-MAX_POSITIVE..=MAX_POSITIVE).contains(&v);
@@ -2577,8 +2696,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     carriers: _,
                 } = *g;
                 electrode < n
-                    && nonneg(min)
-                    && nonneg(max)
+                    && any(min)
+                    && any(max)
                     && nonneg(start)
                     && (MIN_POSITIVE..=MAX_POSITIVE).contains(&end)
             });
@@ -2635,6 +2754,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             && potential_goals.iter().all(|g| {
                 let PotentialGoal {
                     electrode,
+                    reference,
                     measure: _,
                     omega,
                     min,
@@ -2643,13 +2763,39 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     end,
                 } = g;
                 *electrode < n
+                    && reference.is_none_or(|r| r < n)
                     && nonneg(*omega)
                     && any(*min)
                     && any(*max)
                     && nonneg(*start)
                     && (MIN_POSITIVE..=MAX_POSITIVE).contains(end)
             });
+        let metals_ok = metals.len() <= MAX_COUNT as usize
+            && metals.iter().all(|m| {
+                let MetalSpec {
+                    corners,
+                    contacts,
+                    density,
+                    charge_per_mass,
+                    thermal_speed,
+                    mean_free_path,
+                    core_radius,
+                    carriers_per_area,
+                    seed: _,
+                } = m;
+                let positive = |v: f64| (MIN_POSITIVE..=MAX_POSITIVE).contains(&v);
+                corners.iter().all(|c| grid.contains(*c))
+                    && contacts.len() <= MAX_COUNT as usize
+                    && contacts.iter().all(|e| *e < n)
+                    && positive(*density)
+                    && positive(charge_per_mass.abs())
+                    && positive(*thermal_speed)
+                    && positive(*mean_free_path)
+                    && positive(*core_radius)
+                    && positive(*carriers_per_area)
+            });
         let field_ok = circuits_ok
+            && metals_ok
             && potential_ok
             && solenoid.is_none_or(|n| grid.contains(n))
             && any(*b_z)

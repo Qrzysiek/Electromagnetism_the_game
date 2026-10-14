@@ -21,7 +21,7 @@ use physics::DVec3;
 use physics::fdtd2d::{Fdtd, Grid};
 use std::collections::HashMap;
 
-use crate::tube::{KIND_NEGATIVE, KIND_POSITIVE, KIND_PROJECTILE, TubeRun};
+use crate::tube::{KIND_NEGATIVE, KIND_PROJECTILE, TubeRun};
 use crate::{Level, Outline};
 
 /// Absorbing-layer cells of an open tube (one with an output).
@@ -76,9 +76,12 @@ pub struct TubeEm {
     pub leads: Vec<Option<Lead>>,
     /// The electrodes children first (each lead's charge includes its children's).
     order: Vec<usize>,
-    cathode: usize,
-    ions: Option<usize>,
-    negative_carriers: bool,
+    /// The emitting electrodes and whether their carriers are negative (the cathode, the
+    /// ion source, the metals' contacts): a newborn particle comes from the nearest of
+    /// its sign.
+    emitters: Vec<(usize, bool)>,
+    /// The metals' backgrounds (the ions' charge) on the grid's nodes: fixed.
+    background: Vec<f64>,
     /// Whether the grid is open (an absorbing layer inside its border).
     open: bool,
     /// The next frame interval to feed: frames `next`..`next + 1`.
@@ -369,8 +372,36 @@ impl TubeEm {
             .enumerate()
             .map(|(e, l)| l.map(|(from, to)| (snap(parent[e], from), snap(Some(e), to))))
             .collect();
+        // The metals' backgrounds: each cell's share of a rectangle, at the share's centre.
+        let mut background = vec![0.0; grid.nodes()];
+        for m in &run.metals {
+            let h = grid.h;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let (i0, i1, j0, j1) = (
+                ((m.lo.x - grid.origin.0) / h).floor().max(0.0) as usize,
+                ((m.hi.x - grid.origin.0) / h).ceil().max(0.0) as usize,
+                ((m.lo.y - grid.origin.1) / h).floor().max(0.0) as usize,
+                ((m.hi.y - grid.origin.1) / h).ceil().max(0.0) as usize,
+            );
+            for j in j0..j1.min(grid.ny) {
+                for i in i0..i1.min(grid.nx) {
+                    #[allow(clippy::cast_precision_loss)]
+                    let (cx0, cy0) = grid.node(i, j);
+                    let (ax, bx) = (cx0.max(m.lo.x), (cx0 + h).min(m.hi.x));
+                    let (ay, by) = (cy0.max(m.lo.y), (cy0 + h).min(m.hi.y));
+                    if bx > ax && by > ay {
+                        fdtd.add_charge(
+                            &mut background,
+                            m.background * (bx - ax) * (by - ay),
+                            0.5 * (ax + bx),
+                            0.5 * (ay + by),
+                        );
+                    }
+                }
+            }
+        }
         // The start: the electrostatic field of the first frame's potentials and charges.
-        let mut rho = vec![0.0; grid.nodes()];
+        let mut rho = background.clone();
         for (x, q) in first.x.iter().zip(&first.q) {
             fdtd.add_charge(&mut rho, f64::from(*q), f64::from(x[0]), f64::from(x[1]));
         }
@@ -396,9 +427,20 @@ impl TubeEm {
             parent,
             leads,
             order,
-            cathode: spec.cathode,
-            ions: spec.ions.map(|i| i.electrode),
-            negative_carriers: spec.charge_per_mass < 0.0,
+            emitters: std::iter::once((
+                spec.cathode,
+                spec.metal_of(spec.cathode)
+                    .map_or(spec.charge_per_mass, |m| spec.metals[m].charge_per_mass)
+                    < 0.0,
+            ))
+            .chain(spec.ions.map(|i| (i.electrode, false)))
+            .chain(spec.metals.iter().flat_map(|m| {
+                m.contacts
+                    .iter()
+                    .map(move |&e| (e, m.charge_per_mass < 0.0))
+            }))
+            .collect(),
+            background,
             open,
             next: 0,
             interval: None,
@@ -508,13 +550,24 @@ impl TubeEm {
                 continue;
             }
             let (x, q, kind) = (at(f1.x[j]), f64::from(f1.q[j]), f1.kind[j]);
-            let emitter = match kind {
-                KIND_PROJECTILE => None,
-                KIND_NEGATIVE if self.negative_carriers => Some(self.cathode),
-                KIND_POSITIVE if !self.negative_carriers => Some(self.cathode),
-                _ => self.ions,
+            if kind == KIND_PROJECTILE {
+                continue;
+            }
+            // From the nearest emitter of its sign.
+            let negative = kind == KIND_NEGATIVE;
+            let Some(e) = self
+                .emitters
+                .iter()
+                .filter(|(_, n)| *n == negative)
+                .map(|(e, _)| *e)
+                .min_by(|&a, &b| {
+                    self.outlines[a]
+                        .distance_to(x)
+                        .total_cmp(&self.outlines[b].distance_to(x))
+                })
+            else {
+                continue;
             };
-            let Some(e) = emitter else { continue };
             exchange[e] -= q;
             paths.push(Path {
                 q,
@@ -543,7 +596,7 @@ impl TubeEm {
     /// charge where it is now (Gauss's law must give it in vacuum).
     #[must_use]
     pub fn charge_density(&self) -> Vec<f64> {
-        let mut rho = vec![0.0; self.fdtd.grid.nodes()];
+        let mut rho = self.background.clone();
         if let Some(iv) = &self.interval {
             let g = ((self.fdtd.t - iv.t0) / (iv.t1 - iv.t0).max(1e-300)).clamp(0.0, 1.0);
             for p in &iv.paths {

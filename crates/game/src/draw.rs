@@ -1216,6 +1216,12 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
     }
 }
 
+/// A metal's carriers traced with their paths (about this many).
+const METAL_SAMPLE: usize = 40;
+
+/// The time over which a traced carrier's path is drawn.
+const METAL_TRAIL: f64 = 0.4;
+
 /// Tube levels: the preview's particles at the animation time (the frame at or before
 /// it; all frames when not animating: the last one), faded while a new setup computes.
 fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
@@ -1247,16 +1253,111 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     // tracks below. Many macroparticles (a weak, finely sampled beam) are drawn fainter, so
     // that the beam reads as its density, bright where they crowd (a bunch), rather than
     // as a snow of single dots.
+    // Metals (the Drude model): the conductor's outline and its ion cores (drawn larger
+    // than their radius, a few hundredths of their spacing: dots).
+    let stale = stale_fade(view.revision, game.sent_revision);
+    for m in &view.run.metals {
+        let (lo, hi) = (to_vec2(m.lo), to_vec2(m.hi));
+        gizmos.rect_2d(
+            (lo + hi) * 0.5,
+            hi - lo,
+            Color::srgb(0.78, 0.72, 0.62).with_alpha(0.9),
+        );
+        #[allow(clippy::cast_possible_truncation)]
+        let r = (m.core_radius as f32).max(0.028);
+        let core = Color::srgb(0.85, 0.78, 0.65).with_alpha(0.32 * stale);
+        for c in &m.cores {
+            gizmos
+                .circle_2d(Vec2::new(c[0], c[1]), r, core)
+                .resolution(6);
+        }
+    }
+    let in_metal = |x: &[f32; 2]| {
+        view.run.metals.iter().any(|m| {
+            f64::from(x[0]) >= m.lo.x
+                && f64::from(x[0]) <= m.hi.x
+                && f64::from(x[1]) >= m.lo.y
+                && f64::from(x[1]) <= m.hi.y
+        })
+    };
+    let in_metals = if view.run.metals.is_empty() {
+        0
+    } else {
+        frame.x.iter().filter(|x| in_metal(x)).count()
+    };
     #[allow(clippy::cast_precision_loss)]
-    let crowd = (200.0 / frame.x.len().max(1) as f32).clamp(0.3, 1.0);
-    let fade = 0.85 * crowd * stale_fade(view.revision, game.sent_revision);
-    for (x, kind) in frame.x.iter().zip(&frame.kind).filter(|_| dots) {
-        let color = match *kind {
-            level::tube::KIND_NEGATIVE => Color::srgb(0.6, 0.85, 1.0),
-            level::tube::KIND_POSITIVE => Color::srgb(1.0, 0.7, 0.4),
-            _ => continue,
+    let crowd = (200.0 / (frame.x.len() - in_metals).max(1) as f32).clamp(0.3, 1.0);
+    let fade = 0.85 * crowd * stale;
+    // Thousands of dots (a metal's carriers): coarser circles.
+    let resolution = if frame.x.len() > 1000 { 8 } else { 32 };
+    let color_of = |kind: u8| match kind {
+        level::tube::KIND_NEGATIVE => Some(Color::srgb(0.6, 0.85, 1.0)),
+        level::tube::KIND_POSITIVE => Some(Color::srgb(1.0, 0.7, 0.4)),
+        _ => None,
+    };
+    // A metal's carriers in every mode but "off" (the map's glow leaves them out).
+    let metal_dots = !matches!(game.tube_particles, crate::TubeParticles::Hidden);
+    for (x, kind) in frame.x.iter().zip(&frame.kind) {
+        let Some(color) = color_of(*kind) else {
+            continue;
         };
-        gizmos.circle_2d(Vec2::new(x[0], x[1]), 0.06, color.with_alpha(fade));
+        // A metal's carriers faint (their density), a sample of them traced below.
+        let (r, alpha) = if in_metals > 0 && in_metal(x) {
+            if !metal_dots {
+                continue;
+            }
+            (0.04, 0.12 * stale)
+        } else if dots {
+            (0.06, fade)
+        } else {
+            continue;
+        };
+        gizmos
+            .circle_2d(Vec2::new(x[0], x[1]), r, color.with_alpha(alpha))
+            .resolution(resolution);
+    }
+    // A sample of a metal's carriers with their paths over the last `METAL_TRAIL`: the
+    // thermal zigzag between collisions, the drift along the field.
+    if metal_dots && in_metals > 0 {
+        let every = (in_metals / METAL_SAMPLE).max(1);
+        let sample: std::collections::HashMap<u32, usize> = frame
+            .id
+            .iter()
+            .enumerate()
+            .filter(|(i, id)| {
+                (**id as usize).is_multiple_of(every)
+                    && in_metal(&frame.x[*i])
+                    && frame.kind[*i] != level::tube::KIND_PROJECTILE
+            })
+            .map(|(i, id)| (*id, i))
+            .collect();
+        let frames = &view.run.frames;
+        let k1 = frames.partition_point(|f| f.t <= frame.t);
+        let k0 = frames.partition_point(|f| f.t < frame.t - METAL_TRAIL);
+        let mut paths: std::collections::HashMap<u32, Vec<Vec2>> = std::collections::HashMap::new();
+        for f in &frames[k0..k1] {
+            for (i, id) in f.id.iter().enumerate() {
+                if sample.contains_key(id) {
+                    paths
+                        .entry(*id)
+                        .or_default()
+                        .push(Vec2::new(f.x[i][0], f.x[i][1]));
+                }
+            }
+        }
+        for (id, i) in &sample {
+            let Some(color) = color_of(frame.kind[*i]) else {
+                continue;
+            };
+            let now = Vec2::new(frame.x[*i][0], frame.x[*i][1]);
+            if let Some(path) = paths.get_mut(id) {
+                path.push(now);
+                gizmos.linestrip_2d(path.iter().copied(), color.with_alpha(0.75 * stale));
+            }
+            gizmos
+                .circle_2d(now, 0.07, color.with_alpha(stale))
+                .resolution(12);
+        }
     }
     // Projectiles (the level's, then the player's free charges): their detectors, their
     // tracks so far and where they are now.

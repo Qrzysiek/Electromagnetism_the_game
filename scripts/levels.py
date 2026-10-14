@@ -257,7 +257,7 @@ def current_goal(electrode, lo, hi, start, end, carriers=None):
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
          potentials=(), goals=(), ions=None, step=None, particle_rate=None, particles=None,
-         emitter_mesh=None, output=None):
+         emitter_mesh=None, output=None, metals=()):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -301,7 +301,39 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
         t["b_z"] = b_z
     if solenoid is not None:
         t["solenoid"] = [solenoid[0], solenoid[1], 0]
+    if metals:
+        t["metals"] = list(metals)
     return t
+
+
+def metal(lo, hi, contacts, density, thermal_speed, mean_free_path, core_radius,
+          carriers_per_area, seed=0, q_over_m=-1.0):
+    """A metal in a tube level (PHYSICS.md 2.11, the Drude metal): the rectangle from the
+    grid corner `lo` to `hi`, its `contacts` (electrodes: boxes along its sides), its
+    carriers' charge density (magnitude), q/m and thermal speed, its mean free path and
+    its ion cores' radius (their number per area follows: a/(2l) at most 0.005), its
+    macroparticles per area in the preview."""
+    return {"corners": [[lo[0], lo[1], 0], [hi[0], hi[1], 0]], "contacts": list(contacts),
+            "density": density, "charge_per_mass": q_over_m, "thermal_speed": thermal_speed,
+            "mean_free_path": mean_free_path, "core_radius": core_radius,
+            "carriers_per_area": carriers_per_area, "seed": seed}
+
+
+def contact(x, y, length, vertical=True, tunable=False):
+    """A metal's contact: a box 2 thick along one of its sides (its centre on the grid, its
+    face on the metal's edge)."""
+    return plate(x, y, length, thickness=2.0, angle_deg=90.0 if vertical else 0.0,
+                 tunable=tunable)
+
+
+# The metals' common material (docs/DRUDE.md, PHYSICS.md 2.11): carriers of charge density
+# 2, q/m = -1, thermal speed 2 (kT/q = 4, small against the supplies' tens: a contact's own
+# voltage stays a few per cent), mean free path 1 (a quarter of the strips' width), cores
+# of radius 0.01 (a/2l = 0.005), 50 macroparticles per area; the step resolves the plasma
+# oscillation (omega_p dt = 0.18).
+METAL = dict(density=2.0, thermal_speed=2.0, mean_free_path=1.0, core_radius=0.01,
+             carriers_per_area=50.0)
+METAL_STEP = 0.035
 
 
 def tube_circuit(electrode, source, resistance=None, capacitance=0.0, supply_offset=False,
@@ -339,14 +371,17 @@ def sine(amplitude, omega, offset=0.0, phase=0.0):
     return s
 
 
-def potential_goal(electrode, measure, lo, hi, start, end, omega=None):
+def potential_goal(electrode, measure, lo, hi, start, end, omega=None, reference=None):
     """A tube level's goal on an electrode's potential over t = start..end: its "mean", its
     "swing" (half the peak-to-peak) or its oscillation's "amplitude" at `omega` (a drift
-    removed) between lo and hi."""
+    removed) between lo and hi; against electrode `reference`'s potential if given (a
+    voltmeter across the two)."""
     g = {"electrode": electrode, "measure": measure, "min": lo, "max": hi,
          "start": start, "end": end}
     if omega is not None:
         g["omega"] = omega
+    if reference is not None:
+        g["reference"] = reference
     return g
 
 
@@ -3487,6 +3522,101 @@ def magnetron():
                   output=(1, 40.0)),
         reference=[supply(48, 48, -45.0), supply(95, 95, 6.0)])
 
+def ohms_law():
+    # Designed with `generator tube-scan` (PHYSICS.md 2.11, the Drude metal): a strip
+    # 16 x 4 between two contacts. Preview currents into the right contact over t = 5-35:
+    # 0.86 at 8, 1.61 at 16, 2.37 at 24, 3.03 at 32, 3.73 at 40, -2.59 at -24: in
+    # proportion to within a slow fall of I/V (0.107 to 0.093: the carriers warm in the
+    # field); the bulk theory gives 0.1175 V (the contacts' boundary layers and the walls'
+    # take ~15 %). The goal 2.6-3.2 asks for about 27-33.
+    return level(
+        "Ohm's law",
+        "Inside a metal. The rectangle is a conductor seen end-on: its electrons (blue; a "
+        "few traced with their paths) fly at their thermal speed and bounce off the "
+        "metal's ions (the dots), a zigzag. Your supply, on the contact at the right end, "
+        "adds a slow drift along the field to that random motion: a current, in "
+        "proportion to the voltage, $I = V/R$ (Ohm's law). Make a current between 2.6 and "
+        "3.2 flow into the right contact (averaged over $t = 10$ to $40$). At every "
+        "collision the electrons hand the ions the energy the field gave them: the Joule "
+        "heat, shown below. A classical model of a metal (its real electrons are a "
+        "quantum gas): see the physics notes.",
+        grid=(24, 16), c=None, t_max=200.0,
+        electrodes=[contact(3, 8, 4), contact(21, 8, 4, tunable=True)],
+        supplies=slider(40.0, 15.0, 30.0, 35.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP,
+                  goals=[current_goal(1, 2.6, 3.2, 10.0, 40.0, carriers="net")],
+                  metals=[metal((4, 6), (20, 10), [0, 1], seed=1, **METAL)]),
+        reference=[supply(21, 8, 30.0)])
+
+
+def potentiometer():
+    # Designed with `generator tube-scan`: a strip 18 x 4, its left end grounded, a side
+    # contact on its top a third of the way along (x 8-10). Preview with the right end at
+    # 30: the side contact's current (positive in) -0.41 at 8, -0.16 at 9, 0.17 at 10,
+    # 0.45 at 11, 0.65 at 12: none at about 9.5 (a uniform field gives 10; the ohmic
+    # contacts' layers take a little). The goals: 2.4-3.0 along the strip (the right end
+    # at about 27-33) and -0.35..0.35 through the side contact (about 8.3-10.6 at 30;
+    # +-0.25 left the verification uncertain: the side contact's current carries the
+    # strip's thermal noise, an error bar of ~0.18 with 50 macroparticles per area over
+    # t = 10-40; now 70 over 10-50).
+    return level(
+        "Potentiometer",
+        "A longer strip of metal with a third contact on its side, a third of the way "
+        "along, on your second supply. Inside a conductor carrying a steady current the "
+        "field is uniform: the potential falls evenly from one end to the other. Make a "
+        "current between 2.4 and 3.0 flow along the strip into its right end, and set the "
+        "side contact so that no current flows through it (between $-0.35$ and $0.35$, "
+        "averaged over $t = 10$ to $50$): it must sit at the potential the strip has "
+        "there. A potentiometer measures a voltage this way, drawing no current from it.",
+        grid=(24, 16), c=None, t_max=200.0,
+        electrodes=[contact(2, 8, 4), contact(22, 8, 4, tunable=True),
+                    contact(9, 11, 2, vertical=False, tunable=True)],
+        supplies=slider(40.0, 10.0, 15.0, 30.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP,
+                  goals=[current_goal(1, 2.4, 3.0, 10.0, 50.0, carriers="net"),
+                         current_goal(2, -0.35, 0.35, 10.0, 50.0, carriers="net")],
+                  metals=[metal((3, 6), (21, 10), [0, 1, 2], seed=2,
+                                **dict(METAL, carriers_per_area=70.0))]),
+        reference=[supply(22, 8, 30.0), supply(9, 11, 10.0)])
+
+
+def hall_probe():
+    # Designed with `generator tube-scan` (100 macroparticles per area: the floating
+    # contacts' voltage carries the resistor's thermal noise, ~0.1 over the window): a
+    # strip 16 x 4, the right end on the supply, two floating contacts on its sides at
+    # mid-length (C = 1 to ground). At 30 (I ~3.1) the top's potential against the
+    # bottom's: -0.58 at B = 0.4, -1.15 at 0.7, -1.44 at 1.0, -2.1 at 1.2, -2.33 at 1.6,
+    # +0.75 at -0.7 (electrons pushed to the top; about -0.15 at B = 0). Below the weak-field
+    # R_H I B = (4/pi) I B/rho as omega_c tau grows (0.4 B: the Hall factor falls towards 1)
+    # and the contacts short the strip's ends. The goals: 2.7-3.5 into the right end (about
+    # 26-34) and the top 1.0-1.9 below the bottom (B about 0.6-1.15 at 30).
+    hall = dict(METAL, carriers_per_area=100.0)
+    return level(
+        "Hall probe",
+        "A strip of metal carrying a current, in your solenoid's field (B along the "
+        "strip's length, out of the board when positive; the yellow coil, top right). The "
+        "field pushes the moving electrons sideways (the Lorentz force) until the charge "
+        "they pile on one side holds the rest back: a voltage across the strip, the Hall "
+        "voltage, $V_H \\approx I B/(n q)$ (per unit length). The two contacts on the "
+        "strip's sides read it, floating: no current flows through them. Make a current "
+        "between 2.7 and 3.5 flow into the right end and the top contact sit between 1.0 "
+        "and 1.9 below the bottom one (averaged over $t = 10$ to $50$). Which way must the "
+        "field point? Electrons are negative.",
+        grid=(24, 16), c=None, t_max=200.0,
+        electrodes=[contact(3, 8, 4), contact(21, 8, 4, tunable=True),
+                    contact(12, 11, 2, vertical=False), contact(12, 5, 2, vertical=False)],
+        supplies=slider(40.0, 15.0, 30.0, 35.0),
+        solenoid_fields=slider(3.0, -0.9, 0.5, 0.9),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 15),
+                  circuits=[tube_circuit(2, dc(0.0), capacitance=1.0),
+                            tube_circuit(3, dc(0.0), capacitance=1.0)],
+                  goals=[current_goal(1, 2.7, 3.5, 10.0, 50.0, carriers="net")],
+                  potentials=[potential_goal(2, "mean", -1.9, -1.0, 10.0, 50.0,
+                                             reference=3)],
+                  metals=[metal((4, 6), (20, 10), [0, 1, 2, 3], seed=3, **hall)]),
+        reference=[supply(21, 8, 30.0), supply(23, 15, 0.9)])
+
+
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
@@ -3503,6 +3633,16 @@ ARCS.append(("Inside the components: vacuum tubes", [
     ]),
     ("Master", [
         ("magnetron", magnetron),
+    ]),
+]))
+
+ARCS.append(("Inside the components: metals", [
+    ("Introduction", [
+        ("ohms_law", ohms_law),
+        ("potentiometer", potentiometer),
+    ]),
+    ("Intermediate", [
+        ("hall_probe", hall_probe),
     ]),
 ]))
 

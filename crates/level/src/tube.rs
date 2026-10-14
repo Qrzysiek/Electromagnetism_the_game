@@ -16,6 +16,7 @@
 //! refine 1→2 to 2→4), where it overshot by 4 %.
 
 use physics::DVec3;
+use physics::lattice::Lattice;
 use physics::tube::{Emitter, PROJECTILE_TAG, Projectile, Tube, TubeState};
 use physics::zinv::{Electrode as Prism, Electrodes as Prisms, Section};
 use serde::{Deserialize, Serialize};
@@ -94,6 +95,97 @@ pub struct TubeSpec {
     /// The tube's radiated output (a magnetron's microwaves): one circuit's load.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<TubeOutput>,
+    /// Conductors' interiors (the Drude metal): resistors, Hall probes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub metals: Vec<MetalSpec>,
+}
+
+/// The densest medium of cores a metal may have: `a² n_ion = a/(2ℓ)`. Beyond, the fixed
+/// cores' own correction to the conductivity passes 3 % (PHYSICS.md §2.11, the Drude
+/// metal: about `1.1 a²n ln(a²n)`).
+pub const MAX_CORE_DENSITY: f64 = 0.005;
+
+/// The plasma period resolved: at most this fraction of a radian of the plasma
+/// oscillation per preview step (`ω_p dt`, `ω_p² = 4π ρ |q/m|`).
+pub const MAX_PLASMA_STEP: f64 = 0.2;
+
+/// The particle-frames a run with metals keeps for display, at most (about 70 MB):
+/// `TubeSim` records a frame every so many steps to stay within it.
+pub const FRAME_BUDGET: f64 = 4.0e6;
+
+/// The most cores a metal may have (memory and the collision search's buckets).
+pub const MAX_CORES: f64 = 2.0e6;
+
+/// The most carriers the metals may have in the verification (a share of
+/// `physics::tube::MAX_PARTICLES`, so that the contacts can still emit).
+pub const MAX_METAL_CARRIERS: f64 = 15_000.0;
+
+/// Offsets a metal's seed for its carriers' random numbers (its cores use the seed).
+const METAL_SEED: u64 = 0x6d65_7461_6c73;
+
+/// A conductor's interior (PHYSICS.md §2.11, the Drude metal; `physics::lattice`):
+/// carriers over the ions' uniform background in an axis-aligned rectangle, scattering off
+/// ion cores placed at random. Its walls reflect the carriers, except where a contact
+/// touches it: a contact takes in the carriers that reach it and gives off carriers into
+/// the metal under the space-charge limit (which keeps the metal next to it neutral).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MetalSpec {
+    /// Two opposite corners of the rectangle.
+    pub corners: [Node; 2],
+    /// Its contacts (indices into the level's `electrodes`): boxes along its sides, each
+    /// touching one side with its whole face.
+    pub contacts: Vec<usize>,
+    /// The carriers' charge density (its magnitude; the background's is opposite) and
+    /// charge-to-mass ratio (electrons: negative).
+    pub density: f64,
+    #[serde(default = "electron_ratio")]
+    pub charge_per_mass: f64,
+    /// The carriers' thermal speed `√(kT/m)`.
+    pub thermal_speed: f64,
+    /// The mean free path `ℓ = 1/(2 a n_ion)` and the cores' radius `a`: the cores' number
+    /// per area follows.
+    pub mean_free_path: f64,
+    pub core_radius: f64,
+    /// Macroparticles per unit area in the preview (the verification's twice as many).
+    pub carriers_per_area: f64,
+    /// The cores' placement and the collisions' random numbers.
+    #[serde(default)]
+    pub seed: u64,
+}
+
+impl TubeSpec {
+    /// The metal whose contact the electrode `e` is.
+    #[must_use]
+    pub fn metal_of(&self, e: usize) -> Option<usize> {
+        self.metals.iter().position(|m| m.contacts.contains(&e))
+    }
+
+    /// A current goal's sign: positive for its carriers arriving (a lead's current: the
+    /// carriers of the metal its electrode is a contact of).
+    fn goal_sign(&self, g: &CurrentGoal) -> f64 {
+        match g.carriers {
+            Carriers::Cathode => self.charge_per_mass.signum(),
+            Carriers::Ions => 1.0,
+            Carriers::Net => self
+                .metal_of(g.electrode)
+                .map_or(self.charge_per_mass, |m| self.metals[m].charge_per_mass)
+                .signum(),
+        }
+    }
+}
+
+impl MetalSpec {
+    /// The cores' number per area.
+    #[must_use]
+    pub fn core_density(&self) -> f64 {
+        1.0 / (2.0 * self.core_radius * self.mean_free_path)
+    }
+
+    /// The plasma frequency `√(4π ρ |q/m|)`.
+    #[must_use]
+    pub fn plasma_frequency(&self) -> f64 {
+        libm::sqrt(4.0 * std::f64::consts::PI * self.density * self.charge_per_mass.abs())
+    }
 }
 
 /// A tube's output (PHYSICS.md §2.11, the magnetron): the load of circuit `circuit` (its
@@ -178,6 +270,10 @@ impl PotentialGoal {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PotentialGoal {
     pub electrode: usize,
+    /// Measured against this electrode's potential (a voltmeter across the two: a Hall
+    /// probe's voltage); None: against ground.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<usize>,
     pub measure: Measure,
     /// The angular frequency of `Measure::Amplitude` and `Measure::Phase`.
     #[serde(default, skip_serializing_if = "crate::is_zero")]
@@ -273,6 +369,9 @@ pub enum Carriers {
     /// The ion source's (`TubeSpec::ions`): e.g. the ion current into the cathode, its
     /// wear in a bipolar diode.
     Ions,
+    /// Every carrier's: what the electrode takes in less what it gives off, the current in
+    /// its lead (a metal's contact).
+    Net,
 }
 
 impl Carriers {
@@ -282,11 +381,12 @@ impl Carriers {
     }
 
     /// The emitter index of these carriers in a run (`TubeState::collected`'s second
-    /// index): the cathode is emitter 0, the ion source 1.
-    fn emitter(self) -> usize {
+    /// index): the cathode is emitter 0, the ion source 1; all of them for `Net`.
+    fn emitter(self) -> Option<usize> {
         match self {
-            Carriers::Cathode => 0,
-            Carriers::Ions => 1,
+            Carriers::Cathode => Some(0),
+            Carriers::Ions => Some(1),
+            Carriers::Net => None,
         }
     }
 }
@@ -422,6 +522,19 @@ pub struct TubeFrame {
     /// Per tube circuit (`TubeSpec::circuits`): the current through its branch (its
     /// coil's, if it has one; 0 for an ideal source).
     pub currents: Vec<f32>,
+    /// The Joule heat the metals' lattices have taken so far (per unit length).
+    pub heat: f64,
+}
+
+/// A metal as the display shows it (`TubeSpec::metals`): its rectangle, its background's
+/// charge per area (the ions'), its cores.
+#[derive(Clone, Debug, Default)]
+pub struct MetalView {
+    pub lo: DVec3,
+    pub hi: DVec3,
+    pub background: f64,
+    pub cores: Vec<[f32; 2]>,
+    pub core_radius: f64,
 }
 
 /// One run of a tube level (or a chunk of one being streamed: `TubeSim::take_chunk`).
@@ -455,6 +568,8 @@ pub struct TubeRun {
     /// sources over a period (the potential map's scale; at t = 0 alone an AC level's
     /// electrodes are all at 0).
     pub potential_range: (f64, f64),
+    /// The metals (their backgrounds are fixed charges of the maps).
+    pub metals: Vec<MetalView>,
 }
 
 impl TubeRun {
@@ -548,6 +663,7 @@ impl TubeRun {
                 .zip(&b.currents)
                 .map(|(u, v)| lerp(*u, *v))
                 .collect(),
+            heat: a.heat + (b.heat - a.heat) * f64::from(w),
         })
     }
 
@@ -570,6 +686,9 @@ impl TubeRun {
             let r = DVec3::new(x.x - f64::from(p[0]), x.y - f64::from(p[1]), 0.0);
             e += r * (2.0 * f64::from(*q) / (r.x * r.x + r.y * r.y + eps2));
         }
+        for m in &self.metals {
+            e += physics::zinv::rect_integrals(m.lo, m.hi, x).1 * m.background;
+        }
         e
     }
 
@@ -591,6 +710,11 @@ impl TubeRun {
             phi -= lambda * libm::log(r2);
             e += r * (2.0 * lambda / r2);
         }
+        for m in &self.metals {
+            let (f, g) = physics::zinv::rect_integrals(m.lo, m.hi, x);
+            phi += m.background * f;
+            e += g * m.background;
+        }
         (phi, e)
     }
 }
@@ -608,6 +732,8 @@ pub struct TubeSim {
     /// What has not been taken yet.
     pending: TubeRun,
     steps: u32,
+    /// A frame every this many steps (`FRAME_BUDGET`).
+    frame_stride: u32,
     currents: Vec<Option<f64>>,
     /// Each potential goal's window so far: sum, count, least, most, and the samples
     /// `(t, V)` (for `Measure::Amplitude`).
@@ -691,6 +817,18 @@ impl TubeSim {
         self.tube.electrodes.segments.len()
     }
 
+    /// The field at `x` now, as the carriers feel it (the physics' softening).
+    #[must_use]
+    pub fn field_at(&self, x: DVec3) -> DVec3 {
+        self.tube.field_at(&self.state, x)
+    }
+
+    /// The macroparticles' positions and charges now.
+    #[must_use]
+    pub fn particles(&self) -> (&[DVec3], &[f64]) {
+        (&self.state.x, &self.state.charge)
+    }
+
     /// Macroparticles in flight now.
     pub fn in_flight(&self) -> usize {
         self.state.x.len()
@@ -755,16 +893,24 @@ impl TubeSim {
                 self.pending.currents.resize(n_goals, None);
             }
             for (k, g) in self.spec.goals.iter().enumerate() {
-                // The carriers' charge collected, positive for arrivals.
-                let sign = match g.carriers {
-                    Carriers::Cathode => self.spec.charge_per_mass.signum(),
-                    Carriers::Ions => 1.0,
-                };
+                // The carriers' charge collected, positive for arrivals (a lead's: what
+                // its electrode takes in less what it gives off).
+                let sign = self.spec.goal_sign(g);
                 let collected = sign
-                    * s.collected[g.electrode]
-                        .get(g.carriers.emitter())
-                        .copied()
-                        .unwrap_or(0.0);
+                    * match g.carriers.emitter() {
+                        Some(i) => s.collected[g.electrode].get(i).copied().unwrap_or(0.0),
+                        None => {
+                            s.collected[g.electrode].iter().sum::<f64>()
+                                - self
+                                    .tube
+                                    .emitters
+                                    .iter()
+                                    .zip(&s.released)
+                                    .filter(|(em, _)| em.electrode == g.electrode)
+                                    .map(|(_, q)| q)
+                                    .sum::<f64>()
+                        }
+                    };
                 if self.at_start[k].is_none() && s.t >= g.start {
                     self.at_start[k] = Some((s.t, collected));
                 }
@@ -796,54 +942,59 @@ impl TubeSim {
                     }
                 }
             }
-            #[allow(clippy::cast_possible_truncation)]
-            let frame = TubeFrame {
-                t: s.t,
-                x: s.x.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
-                q: s.charge.iter().map(|q| *q as f32).collect(),
-                kind: s
-                    .tag
-                    .iter()
-                    .zip(&s.charge)
-                    .map(|(t, q)| {
-                        if *t >= PROJECTILE_TAG {
-                            KIND_PROJECTILE
-                        } else if *q < 0.0 {
-                            KIND_NEGATIVE
-                        } else {
-                            KIND_POSITIVE
-                        }
-                    })
-                    .collect(),
-                sigma: self
-                    .tube
-                    .surface_density(s)
-                    .iter()
-                    .map(|v| *v as f32)
-                    .collect(),
-                potentials: s.potentials.iter().map(|v| *v as f32).collect(),
-                id: s.id.clone(),
-                currents: {
-                    // Each tube circuit's first physics circuit (its linked electrodes'
-                    // follow it).
-                    let mut at = 0;
-                    self.spec
-                        .circuits
+            // A frame every `frame_stride` steps (a metal's thousands of carriers every
+            // step would fill gigabytes over a long run).
+            if self.steps.is_multiple_of(self.frame_stride) {
+                #[allow(clippy::cast_possible_truncation)]
+                let frame = TubeFrame {
+                    t: s.t,
+                    x: s.x.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
+                    q: s.charge.iter().map(|q| *q as f32).collect(),
+                    kind: s
+                        .tag
                         .iter()
-                        .map(|c| {
-                            let k = at;
-                            at += 1 + c.linked.len();
-                            let i = if self.tube.circuits[k].inductance > 0.0 {
-                                s.inductor_current[k]
+                        .zip(&s.charge)
+                        .map(|(t, q)| {
+                            if *t >= PROJECTILE_TAG {
+                                KIND_PROJECTILE
+                            } else if *q < 0.0 {
+                                KIND_NEGATIVE
                             } else {
-                                s.circuit_current[k]
-                            };
-                            i as f32
+                                KIND_POSITIVE
+                            }
                         })
-                        .collect()
-                },
-            };
-            self.pending.frames.push(frame);
+                        .collect(),
+                    sigma: self
+                        .tube
+                        .surface_density(s)
+                        .iter()
+                        .map(|v| *v as f32)
+                        .collect(),
+                    potentials: s.potentials.iter().map(|v| *v as f32).collect(),
+                    id: s.id.clone(),
+                    currents: {
+                        // Each tube circuit's first physics circuit (its linked electrodes'
+                        // follow it).
+                        let mut at = 0;
+                        self.spec
+                            .circuits
+                            .iter()
+                            .map(|c| {
+                                let k = at;
+                                at += 1 + c.linked.len();
+                                let i = if self.tube.circuits[k].inductance > 0.0 {
+                                    s.inductor_current[k]
+                                } else {
+                                    s.circuit_current[k]
+                                };
+                                i as f32
+                            })
+                            .collect()
+                    },
+                    heat: s.joule,
+                };
+                self.pending.frames.push(frame);
+            }
             // Each potential goal's measure over its window.
             if self.pending.potential.len() < self.potential.len() {
                 self.pending.potential.resize(self.potential.len(), None);
@@ -852,7 +1003,7 @@ impl TubeSim {
                 if s.t < g.start - 0.5 * self.tube.dt || self.potential[k].is_some() {
                     continue;
                 }
-                let v = s.potentials[g.electrode];
+                let v = s.potentials[g.electrode] - g.reference.map_or(0.0, |r| s.potentials[r]);
                 let w = &mut self.windows[k];
                 w.0 += v;
                 w.1 += 1.0;
@@ -1108,6 +1259,94 @@ impl Level {
         prisms
     }
 
+    /// A metal's rectangle (lower and upper corners).
+    #[must_use]
+    pub fn metal_rect(&self, m: &MetalSpec) -> (DVec3, DVec3) {
+        let (a, b) = (
+            self.grid.position(m.corners[0]),
+            self.grid.position(m.corners[1]),
+        );
+        (
+            DVec3::new(a.x.min(b.x), a.y.min(b.y), 0.0),
+            DVec3::new(a.x.max(b.x), a.y.max(b.y), 0.0),
+        )
+    }
+
+    /// An axis-aligned box electrode's corners (None for another shape or angle).
+    fn electrode_box(&self, e: usize) -> Option<(DVec3, DVec3)> {
+        let el = self.electrodes.get(e)?;
+        if el.shape != crate::ElectrodeShape::Box {
+            return None;
+        }
+        let quarter = libm::round(el.angle_deg / 90.0);
+        if (el.angle_deg - 90.0 * quarter).abs() > 1e-9 {
+            return None;
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let along_x = (quarter as i64).rem_euclid(2) == 0;
+        let (hx, hy) = if along_x {
+            (0.5 * el.length, 0.5 * el.thickness)
+        } else {
+            (0.5 * el.thickness, 0.5 * el.length)
+        };
+        let c = self.grid.position(el.center);
+        Some((
+            DVec3::new(c.x - hx, c.y - hy, 0.0),
+            DVec3::new(c.x + hx, c.y + hy, 0.0),
+        ))
+    }
+
+    /// The direction from contact `e` into metal `m`, if `e` is an axis-aligned box whose
+    /// face lies along one side of the metal, within it (it then gives off carriers into
+    /// the metal only).
+    #[must_use]
+    pub fn contact_side(&self, m: &MetalSpec, e: usize) -> Option<DVec3> {
+        let (b0, b1) = self.electrode_box(e)?;
+        let (lo, hi) = self.metal_rect(m);
+        let tol = 1e-9 * (1.0 + hi.x - lo.x + hi.y - lo.y);
+        let within = |a0: f64, a1: f64, s0: f64, s1: f64| a0 >= s0 - tol && a1 <= s1 + tol;
+        if (b1.x - lo.x).abs() < tol && within(b0.y, b1.y, lo.y, hi.y) {
+            Some(DVec3::X)
+        } else if (b0.x - hi.x).abs() < tol && within(b0.y, b1.y, lo.y, hi.y) {
+            Some(-DVec3::X)
+        } else if (b1.y - lo.y).abs() < tol && within(b0.x, b1.x, lo.x, hi.x) {
+            Some(DVec3::Y)
+        } else if (b0.y - hi.y).abs() < tol && within(b0.x, b1.x, lo.x, hi.x) {
+            Some(-DVec3::Y)
+        } else {
+            None
+        }
+    }
+
+    /// The depth of the layer a metal's contacts keep neutral: half a mean free path, at
+    /// most a quarter of the metal's width.
+    #[must_use]
+    pub fn contact_depth(&self, m: &MetalSpec) -> f64 {
+        let (lo, hi) = self.metal_rect(m);
+        (0.5 * m.mean_free_path).min(0.25 * (hi.x - lo.x).min(hi.y - lo.y))
+    }
+
+    /// A metal's lattice with `many` times its preview's carriers.
+    fn metal_lattice(&self, m: &MetalSpec, many: f64) -> Lattice {
+        let (lo, hi) = self.metal_rect(m);
+        let area = (hi.x - lo.x) * (hi.y - lo.y);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let cores = libm::round(area * m.core_density()) as usize;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let carriers = libm::round(area * m.carriers_per_area * many).max(1.0) as usize;
+        Lattice::new(
+            lo,
+            hi,
+            -m.charge_per_mass.signum() * m.density,
+            Lattice::random_cores(lo, hi, cores, m.core_radius, m.seed),
+            m.core_radius,
+            m.charge_per_mass,
+            m.thermal_speed,
+            carriers,
+            m.seed.wrapping_add(METAL_SEED),
+        )
+    }
+
     /// A tube run at `refine` = 1 (preview) or 2 (verification), at t = 0.
     ///
     /// # Panics
@@ -1130,7 +1369,9 @@ impl Level {
         let shapes = self.tube_prisms(player);
         let sizes: Vec<f64> = (0..shapes.len())
             .map(|e| {
-                let emits = e == spec.cathode || spec.ions.is_some_and(|i| i.electrode == e);
+                let emits = e == spec.cathode
+                    || spec.ions.is_some_and(|i| i.electrode == e)
+                    || spec.metal_of(e).is_some();
                 if emits {
                     size * EMITTER_MESH / (res.emitter * spec.emitter_mesh)
                 } else {
@@ -1166,14 +1407,40 @@ impl Level {
             .filter(|(k, _)| prisms.owner_of(*k) == spec.cathode)
             .map(|(_, (a, b))| (*b - *a).length())
             .sum();
+        // The metals, and their contacts as emitters of their carriers (at the carriers'
+        // weight, toward the metal).
+        let many = r * res.particles * spec.particles;
+        let lattices: Vec<Lattice> = spec
+            .metals
+            .iter()
+            .map(|m| self.metal_lattice(m, many))
+            .collect();
+        let contact = |e: usize| {
+            let k = spec.metal_of(e)?;
+            let m = &spec.metals[k];
+            Some(Emitter {
+                electrode: e,
+                charge_per_mass: m.charge_per_mass,
+                weight: lattices[k].carrier_charge().abs(),
+                emit_toward: self.contact_side(m, e),
+                saturation: None,
+                thermal_speed: m.thermal_speed,
+                ohmic: Some(physics::tube::OhmicContact {
+                    density: m.density,
+                    depth: self.contact_depth(m),
+                }),
+            })
+        };
         let mut floors = vec![floor(spec.cathode)];
-        let mut emitters = vec![Emitter {
+        let mut emitters = vec![contact(spec.cathode).unwrap_or(Emitter {
             electrode: spec.cathode,
             charge_per_mass: spec.charge_per_mass,
             weight: 1.0,
             emit_toward: toward(spec.emit_toward_deg),
             saturation: spec.saturation,
-        }];
+            thermal_speed: 0.0,
+            ohmic: None,
+        })];
         if let Some(ions) = spec.ions {
             floors.push(floor(ions.electrode));
             emitters.push(Emitter {
@@ -1182,7 +1449,16 @@ impl Level {
                 weight: 1.0,
                 emit_toward: toward(ions.emit_toward_deg),
                 saturation: None,
+                thermal_speed: 0.0,
+                ohmic: None,
             });
+        }
+        for m in &spec.metals {
+            for &e in &m.contacts {
+                if e != spec.cathode && spec.ions.is_none_or(|i| i.electrode != e) {
+                    emitters.extend(contact(e));
+                }
+            }
         }
         // The level's projectiles, then the player's free charges (thrown at t = 0).
         let mut projectiles: Vec<Projectile> = spec
@@ -1238,7 +1514,7 @@ impl Level {
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
             circuits: self.tube_circuits(player),
-            lattices: Vec::new(),
+            lattices,
         };
         // Each emitter's weight: 1/PREVIEW_PARTICLES of the largest charge its emitting face
         // holds (no particles) over 16 phases of the sources' longest period (t = 0 alone
@@ -1273,11 +1549,14 @@ impl Level {
             })
             .collect();
         for (i, fl) in floors.iter().enumerate() {
+            if spec.metal_of(tube.emitters[i].electrode).is_some() {
+                // A contact: its metal's carriers' weight.
+                continue;
+            }
             let q = samples
                 .iter()
                 .map(|v| tube.emitting_charge(i, v))
                 .fold(0.0, f64::max);
-            let many = r * res.particles * spec.particles;
             let mut w = q.max(*fl).max(1e-300) / (PREVIEW_PARTICLES * many);
             if i == 0
                 && let Some(j) = spec.saturation
@@ -1298,10 +1577,37 @@ impl Level {
                 .collect(),
             potentials: tube.electrodes.potentials.clone(),
             potential_range,
+            #[allow(clippy::cast_possible_truncation)]
+            metals: tube
+                .lattices
+                .iter()
+                .map(|l| MetalView {
+                    lo: l.lo,
+                    hi: l.hi,
+                    background: l.background,
+                    cores: l.cores.iter().map(|c| [c.x as f32, c.y as f32]).collect(),
+                    core_radius: l.core_radius,
+                })
+                .collect(),
             ..TubeRun::default()
         };
         let n_goals = spec.potential_goals.len();
         let n_currents = spec.goals.len();
+        // A metal's run keeps a frame every few steps: its particles over the whole run
+        // within `FRAME_BUDGET` (other tubes: every step).
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            clippy::cast_precision_loss
+        )]
+        let frame_stride = if spec.metals.is_empty() {
+            1
+        } else {
+            let steps = self.physics.t_max / tube.dt;
+            (steps * state.x.len() as f64 / FRAME_BUDGET)
+                .ceil()
+                .max(1.0) as u32
+        };
         TubeSim {
             tube,
             state,
@@ -1310,6 +1616,7 @@ impl Level {
             at_start: vec![None; n_currents],
             pending,
             steps: 0,
+            frame_stride,
             currents: vec![None; n_currents],
             windows: vec![(0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY); n_goals],
             series: vec![Vec::new(); n_goals],
@@ -1515,6 +1822,150 @@ impl Level {
         }
     }
 
+    /// What a tube level's metals refuse (PHYSICS.md §2.11, the Drude metal): a
+    /// rectangle off the board or crossing another metal or an electrode, contacts that
+    /// do not lie along a side, a medium of cores too dense for the model, a plasma period
+    /// or a mean free path the step does not resolve, too many carriers.
+    #[allow(clippy::too_many_lines)]
+    fn metal_issues(&self, spec: &TubeSpec, player: &[Element], out: &mut Vec<String>) {
+        let n = self.electrodes.len();
+        let max = self.grid.position(self.grid.max_node());
+        let mut carriers = 0.0;
+        for (k, m) in spec.metals.iter().enumerate() {
+            let (lo, hi) = self.metal_rect(m);
+            let name = format!("Metal {}", k + 1);
+            if !(hi.x > lo.x && hi.y > lo.y) {
+                out.push(format!("{name}: its corners must span a rectangle."));
+                continue;
+            }
+            if lo.x <= 0.0 || lo.y <= 0.0 || hi.x >= max.x || hi.y >= max.y {
+                out.push(format!("{name} must lie inside the board."));
+            }
+            let positive = |v: f64| v.is_finite() && v > 0.0;
+            if !(positive(m.density)
+                && m.charge_per_mass.is_finite()
+                && m.charge_per_mass != 0.0
+                && positive(m.thermal_speed)
+                && positive(m.mean_free_path)
+                && positive(m.core_radius)
+                && positive(m.carriers_per_area))
+            {
+                out.push(format!(
+                    "{name}: its density, thermal speed, mean free path, core radius and \
+                     carriers per area must be positive, its charge-to-mass ratio nonzero."
+                ));
+                continue;
+            }
+            let dense = m.core_radius / (2.0 * m.mean_free_path);
+            if dense > MAX_CORE_DENSITY {
+                out.push(format!(
+                    "{name}: its cores are too dense for the model (a²n = a/2ℓ = {dense:.4}, \
+                     at most {MAX_CORE_DENSITY}): make them smaller or the mean free path \
+                     longer."
+                ));
+            }
+            let width = (hi.x - lo.x).min(hi.y - lo.y);
+            if m.mean_free_path > 0.25 * width {
+                out.push(format!(
+                    "{name}: its mean free path must be at most a quarter of its width (the \
+                     carriers scatter off the cores, not off its walls)."
+                ));
+            }
+            let wp = m.plasma_frequency();
+            if wp * spec.step > MAX_PLASMA_STEP {
+                out.push(format!(
+                    "{name}: the time step does not resolve its plasma oscillation \
+                     (ω_p dt = {:.2}, at most {MAX_PLASMA_STEP}).",
+                    wp * spec.step
+                ));
+            }
+            if 4.0 * m.thermal_speed * spec.step > m.mean_free_path {
+                out.push(format!(
+                    "{name}: the time step must be at most a quarter of the mean free time \
+                     (ℓ over 4 thermal speeds)."
+                ));
+            }
+            let area = (hi.x - lo.x) * (hi.y - lo.y);
+            carriers += area * m.carriers_per_area;
+            #[allow(clippy::cast_precision_loss)]
+            let cores = area * m.core_density();
+            if cores > MAX_CORES {
+                out.push(format!("{name}: {cores:.0} cores, at most {MAX_CORES:.0}."));
+            }
+            if m.contacts.is_empty() {
+                out.push(format!("{name} needs a contact."));
+            }
+            for (i, &e) in m.contacts.iter().enumerate() {
+                if e >= n || m.contacts[..i].contains(&e) {
+                    out.push(format!("{name}: its contacts must be distinct electrodes."));
+                } else if self.contact_side(m, e).is_none() {
+                    out.push(format!(
+                        "{name}: electrode {} is not a contact: a box along one of its sides, \
+                         its face within the side.",
+                        e + 1
+                    ));
+                }
+                if spec.metals[..k].iter().any(|o| o.contacts.contains(&e)) {
+                    out.push(format!("Electrode {} is a contact of two metals.", e + 1));
+                }
+            }
+            if spec.metal_of(spec.cathode) == Some(k)
+                && (spec.charge_per_mass - m.charge_per_mass).abs()
+                    > 1e-12 * m.charge_per_mass.abs()
+            {
+                out.push(format!(
+                    "{name}: the cathode is its contact: their carriers' charge-to-mass ratios \
+                     must agree."
+                ));
+            }
+            if spec.ions.is_some_and(|i| m.contacts.contains(&i.electrode)) {
+                out.push(format!("{name}: the ion source cannot be its contact."));
+            }
+            // Nothing inside it: electrodes, other metals, projectiles, free charges.
+            let overlaps =
+                |a0: DVec3, a1: DVec3| a0.x < hi.x && a1.x > lo.x && a0.y < hi.y && a1.y > lo.y;
+            for e in 0..n {
+                let inside = match self.electrode_box(e) {
+                    Some((b0, b1)) => overlaps(b0, b1),
+                    None => {
+                        let c = self.grid.position(self.electrodes[e].center);
+                        let r = 0.5 * (self.electrodes[e].length + self.electrodes[e].thickness);
+                        overlaps(c - DVec3::new(r, r, 0.0), c + DVec3::new(r, r, 0.0))
+                    }
+                };
+                if inside {
+                    out.push(format!("{name} overlaps electrode {}.", e + 1));
+                }
+            }
+            for (j, o) in spec.metals.iter().enumerate().skip(k + 1) {
+                let (a0, a1) = self.metal_rect(o);
+                if overlaps(a0, a1) {
+                    out.push(format!("{name} overlaps metal {}.", j + 1));
+                }
+            }
+            let inside = |x: DVec3| x.x >= lo.x && x.x <= hi.x && x.y >= lo.y && x.y <= hi.y;
+            if spec
+                .projectiles
+                .iter()
+                .any(|p| inside(self.grid.position(p.node)))
+                || player
+                    .iter()
+                    .filter(|e| e.kind == ElementKind::Free)
+                    .any(|e| inside(self.grid.position(e.node)))
+            {
+                out.push(format!(
+                    "{name}: no projectile or free charge may start inside it."
+                ));
+            }
+        }
+        if 2.0 * carriers * spec.particles > MAX_METAL_CARRIERS {
+            out.push(format!(
+                "Tube: the metals' carriers ({:.0} in the verification) exceed {MAX_METAL_CARRIERS:.0}.",
+                2.0 * carriers * spec.particles
+            ));
+        }
+    }
+
     /// What a tube level refuses: everything that breaks z-invariance, and an
     /// inconsistent spec.
     #[allow(clippy::too_many_lines)]
@@ -1529,6 +1980,7 @@ impl Level {
             let emitter = match g.carriers {
                 Carriers::Cathode => Some(spec.cathode),
                 Carriers::Ions => spec.ions.map(|i| i.electrode),
+                Carriers::Net => None,
             };
             if g.carriers == Carriers::Ions && spec.ions.is_none() {
                 out.push("Tube: an ion current goal needs an ion source.".into());
@@ -1554,6 +2006,7 @@ impl Level {
         if !(spec.charge_per_mass.is_finite() && spec.charge_per_mass != 0.0) {
             out.push("Tube: the carriers' charge-to-mass ratio must be finite and nonzero.".into());
         }
+        self.metal_issues(spec, player, out);
         if let Some(ions) = spec.ions
             && (ions.electrode >= n
                 || ions.electrode == spec.cathode
@@ -1590,6 +2043,15 @@ impl Level {
                         .into(),
                 );
             }
+        }
+        if spec.potential_goals.iter().any(|g| {
+            g.reference
+                .is_some_and(|r| r >= self.electrodes.len() || r == g.electrode)
+        }) {
+            out.push(
+                "Tube: a potential goal's reference must be another of the level's electrodes."
+                    .into(),
+            );
         }
         // Every electrode in at most one circuit (as its electrode or linked to it).
         let mut taken: Vec<usize> = Vec::new();
@@ -1828,6 +2290,7 @@ mod tests {
             sigma: vec![sigma; 3],
             potentials: vec![sigma; 2],
             currents: Vec::new(),
+            heat: 0.0,
         };
         let run = TubeRun {
             frames: vec![
@@ -1870,6 +2333,7 @@ mod tests {
         }
         let goal = PotentialGoal {
             electrode: 0,
+            reference: None,
             measure: Measure::Phase,
             omega,
             min: 150.0,

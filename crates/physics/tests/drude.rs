@@ -12,7 +12,7 @@ use physics::DVec3;
 use physics::bem::Bias;
 use physics::circuit::Waveform;
 use physics::lattice::Lattice;
-use physics::tube::{Circuit, Emitter, Tube};
+use physics::tube::{Circuit, Emitter, OhmicContact, Tube};
 use physics::zinv::{Electrode, Electrodes, Section};
 use rayon::prelude::*;
 use std::f64::consts::{FRAC_PI_2, PI};
@@ -304,6 +304,11 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64) -> Tube {
         weight,
         emit_toward: Some(DVec3::new(toward, 0.0, 0.0)),
         saturation: None,
+        thermal_speed: 1.0,
+        ohmic: Some(OhmicContact {
+            density: 1.0,
+            depth: 0.5 * MEAN_FREE_PATH,
+        }),
     };
     let source = |electrode: usize, v: f64| Circuit {
         electrode,

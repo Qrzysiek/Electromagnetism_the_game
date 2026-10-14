@@ -462,6 +462,42 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
             },
         ));
     }
+    if !spec.metals.is_empty() {
+        out.push(note(
+            false,
+            "Metals (the Drude model): classical carriers over the ions' uniform charge, \
+             bouncing off fixed ion cores placed at random (an amorphous metal). A real \
+             metal's conduction electrons are a degenerate quantum gas, far denser and with \
+             far shorter free times: this is a scaled classical plasma, whose screening \
+             length and mean free path are well below the conductor's size, so that it \
+             conducts as a metal does. What carries over: Ohm's law, σ = n q² τ/m, the Joule \
+             heat, the Hall coefficient (1/(nq) times this model's Hall factor, 4/π). What \
+             does not: the thermal speed, the carriers' heat capacity.",
+        ));
+        out.push(note(
+            false,
+            "A collision is a mirror bounce off a core with a new speed drawn from the \
+             lattice's temperature: the lattice takes the energy the field gave (a bath at \
+             a fixed temperature: it does not warm). The mean free path ℓ = 1/(2 a n) of \
+             cores of radius a, n per area; the conductivity (3/8) √(π/2) ρ|q/m| ℓ/σ_v \
+             of the Boltzmann equation holds within 3 % for the dilute cores allowed \
+             (PHYSICS.md §2.11; the carriers warm a little in strong fields, lowering it).",
+        ));
+        out.push(note(
+            false,
+            "Contacts: a contact takes in the carriers that reach it and gives off, at \
+             rest, as many as keep the metal next to it neutral (space-charge limited); \
+             they gain the lattice's temperature at their first collision. A current goal \
+             on a contact counts what it takes in less what it gives off (its lead's \
+             current).",
+        ));
+        out.push(note(
+            false,
+            "The carriers' current fluctuates (the thermal, Johnson noise of a resistor): \
+             averaged over the goal's window it is uncertain by a few per cent, which the \
+             error bar covers.",
+        ));
+    }
     if let Some(o) = spec.output {
         out.push(note(
             false,

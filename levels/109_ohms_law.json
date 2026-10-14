@@ -1,0 +1,126 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Ohm's law",
+  "description": "Inside a metal. The rectangle is a conductor seen end-on: its electrons (blue; a few traced with their paths) fly at their thermal speed and bounce off the metal's ions (the dots), a zigzag. Your supply, on the contact at the right end, adds a slow drift along the field to that random motion: a current, in proportion to the voltage, $I = V/R$ (Ohm's law). Make a current between 2.6 and 3.2 flow into the right contact (averaged over $t = 10$ to $40$). At every collision the electrons hand the ions the energy the field gave them: the Joule heat, shown below. A classical model of a metal (its real electrons are a quantum gas): see the physics notes.",
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -40.0,
+      15.0,
+      30.0,
+      35.0,
+      40.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        21,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": 30.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        3,
+        8,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        21,
+        8,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goals": [
+      {
+        "electrode": 1,
+        "min": 2.6,
+        "max": 3.2,
+        "start": 10.0,
+        "end": 40.0,
+        "carriers": "net"
+      }
+    ],
+    "step": 0.035,
+    "metals": [
+      {
+        "corners": [
+          [
+            4,
+            6,
+            0
+          ],
+          [
+            20,
+            10,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 1
+      }
+    ]
+  }
+}

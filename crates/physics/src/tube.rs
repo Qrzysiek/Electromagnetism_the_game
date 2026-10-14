@@ -105,6 +105,27 @@ pub struct Emitter {
     /// of the cathode's temperature). Below it the space charge limits the emission,
     /// above it the temperature (the Langmuir knee). None: space-charge limited only.
     pub saturation: Option<f64>,
+    /// Released at rest (0), or at this thermal speed `√(kT/m)` as the carriers of a
+    /// gas at that temperature cross a wall into it (a metal's contact at the lattice's
+    /// temperature): the normal speed Rayleigh-distributed, the tangential normal
+    /// (`lattice::flux_velocity`).
+    pub thermal_speed: f64,
+    /// A metal's ohmic contact: in place of the space-charge limit, each emitting segment
+    /// keeps the layer in front of it neutral (the boundary condition of device Monte
+    /// Carlo codes), giving off what its carriers lack there.
+    pub ohmic: Option<OhmicContact>,
+}
+
+/// An ohmic contact's rule (`Emitter::ohmic`): the layer `depth` deep in front of each
+/// emitting segment holds `density` (the carriers' charge per area, its magnitude, the
+/// metal's background's opposite); what it lacks is given off, placed at random in the
+/// layer with Maxwellian velocities (`thermal_speed`). The space-charge limit instead
+/// (the field at its face held at zero, as a cathode's) piled carriers in front of an
+/// injecting contact: a layer with its own voltage (PHYSICS.md §2.11).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OhmicContact {
+    pub density: f64,
+    pub depth: f64,
 }
 
 /// A projectile: one line charge (not a macroparticle) launched at a time, with its own
@@ -247,6 +268,9 @@ pub struct TubeState {
     emitted: u64,
     /// Charge per unit length collected by each electrode so far, per emitter.
     pub collected: Vec<Vec<f64>>,
+    /// Charge per unit length each emitter has given off so far (signed): with
+    /// `collected`, a contact's current is what it takes in less what it gives off.
+    pub released: Vec<f64>,
     /// Charge per unit length that left the arena.
     pub lost: f64,
     /// Which projectiles have been launched, and where each ended.
@@ -402,6 +426,7 @@ impl Tube {
                 })
                 .collect(),
             collected: vec![vec![0.0; self.emitters.len() + self.lattices.len()]; n_el],
+            released: vec![0.0; self.emitters.len()],
             launched: vec![false; self.projectiles.len()],
             fates: vec![None; self.projectiles.len()],
             potentials,
@@ -797,6 +822,10 @@ impl Tube {
         for (i, em) in self.emitters.iter().enumerate() {
             let sign = em.charge_per_mass.signum();
             let segs: Vec<usize> = self.segments_of(em.electrode).collect();
+            if let Some(ohmic) = em.ohmic {
+                self.emit_ohmic(s, i, em, ohmic, &segs, &mut emitted);
+                continue;
+            }
             for (k, &j) in segs.iter().enumerate() {
                 let (a, b) = self.electrodes.segments[j];
                 let charge = sigma[j] * (b - a).length();
@@ -827,12 +856,71 @@ impl Tube {
                     }
                     let x = mid + out * (EMISSION_OFFSET * (b - a).length());
                     let tag = u32::try_from(i).unwrap_or(u32::MAX);
-                    self.add(s, x, DVec3::ZERO, sign * em.weight, em.charge_per_mass, tag);
+                    let v = if em.thermal_speed > 0.0 {
+                        crate::lattice::flux_velocity(out, em.thermal_speed, s.emitted)
+                    } else {
+                        DVec3::ZERO
+                    };
+                    self.add(s, x, v, sign * em.weight, em.charge_per_mass, tag);
                     emitted[em.electrode] += sign * em.weight;
+                    s.released[i] += sign * em.weight;
                 }
             }
         }
         emitted
+    }
+
+    /// An ohmic contact's emission (`OhmicContact`): per emitting segment of emitter `i`,
+    /// the carriers its layer lacks.
+    fn emit_ohmic(
+        &self,
+        s: &mut TubeState,
+        i: usize,
+        em: &Emitter,
+        ohmic: OhmicContact,
+        segs: &[usize],
+        emitted: &mut [f64],
+    ) {
+        let sign = em.charge_per_mass.signum();
+        let tag = u32::try_from(i).unwrap_or(u32::MAX);
+        for &j in segs {
+            let (a, b) = self.electrodes.segments[j];
+            let len = (b - a).length();
+            let t = (b - a) / len;
+            let out = self.outward(em.electrode, a, b, (a + b) * 0.5);
+            if em.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
+                continue;
+            }
+            // The carriers of its sign in the layer now.
+            let held: f64 =
+                s.x.iter()
+                    .zip(&s.charge)
+                    .zip(&s.tag)
+                    .filter(|((_, q), tag)| **tag < PROJECTILE_TAG && **q * sign > 0.0)
+                    .filter(|((x, _), _)| {
+                        let r = **x - a;
+                        let (u, w) = (r.dot(t), r.dot(out));
+                        (0.0..=len).contains(&u) && w > 0.0 && w <= ohmic.depth
+                    })
+                    .map(|((_, q), _)| q.abs())
+                    .sum();
+            let mut lack = ohmic.density * len * ohmic.depth - held;
+            while lack >= em.weight {
+                if s.x.len() >= MAX_PARTICLES {
+                    s.capped = true;
+                    break;
+                }
+                lack -= em.weight;
+                s.emitted += 1;
+                #[allow(clippy::cast_precision_loss)]
+                let f = (s.emitted as f64 * 0.618_033_988_749_894_9).fract();
+                let (g, v) = crate::lattice::layer_point(em.thermal_speed, s.emitted);
+                let x = a + t * (len * f) + out * (ohmic.depth * g);
+                self.add(s, x, v, sign * em.weight, em.charge_per_mass, tag);
+                emitted[em.electrode] += sign * em.weight;
+                s.released[i] += sign * em.weight;
+            }
+        }
     }
 
     /// One step: launches, emission, push (Boris: with B = 0 the kick-drift

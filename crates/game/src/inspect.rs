@@ -228,6 +228,15 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
             );
         }
     }
+    // A tube's metals (a contact is described with its electrode above).
+    if let Some(t) = &level.tube {
+        for (k, m) in t.metals.iter().enumerate() {
+            let (lo, hi) = level.metal_rect(m);
+            if p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y {
+                return Some(metal(level, k, m, lo, hi));
+            }
+        }
+    }
     // Detectors and gates.
     let inside = |d: &level::Detector| {
         let (a, b) = (pos(d.min), pos(d.max));
@@ -244,6 +253,46 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
         }
     }
     None
+}
+
+/// A metal (the Drude model): its rectangle, carriers, cores and contacts.
+fn metal(level: &Level, k: usize, m: &level::tube::MetalSpec, lo: DVec3, hi: DVec3) -> Inspection {
+    let area = (hi.x - lo.x) * (hi.y - lo.y);
+    let contacts: Vec<String> = m.contacts.iter().map(|e| (e + 1).to_string()).collect();
+    Inspection::new(format!("Metal {} (the Drude model)", k + 1))
+        .line(format!(
+            "{} × {}, from ({}, {}) to ({}, {})",
+            fmt_num(hi.x - lo.x),
+            fmt_num(hi.y - lo.y),
+            fmt_num(lo.x),
+            fmt_num(lo.y),
+            fmt_num(hi.x),
+            fmt_num(hi.y)
+        ))
+        .line(format!(
+            "carriers: charge density {}, q/m = {}, thermal speed {}",
+            fmt_num(m.density),
+            fmt_num(m.charge_per_mass),
+            fmt_num(m.thermal_speed)
+        ))
+        .line(format!(
+            "ion cores: radius {}, {} per area ({:.0} in all): mean free path {}",
+            fmt_num(m.core_radius),
+            fmt_num(m.core_density()),
+            area * m.core_density(),
+            fmt_num(m.mean_free_path)
+        ))
+        .line(format!(
+            "contacts: electrode{} {} (each keeps a layer {} deep neutral)",
+            if contacts.len() == 1 { "" } else { "s" },
+            contacts.join(", "),
+            fmt_num(level.contact_depth(m))
+        ))
+        .line(format!(
+            "{} macroparticles per area in the preview; plasma frequency {}",
+            fmt_num(m.carriers_per_area),
+            fmt_num(m.plasma_frequency())
+        ))
 }
 
 fn particle(s: &level::ParticleSpec) -> String {
@@ -467,7 +516,7 @@ fn electrode(level: &Level, placement: &[Element], k: usize) -> Inspection {
         i.chart = chart(&source, t_max);
     }
     if let Some(t) = &level.tube {
-        if k == t.cathode {
+        if k == t.cathode && t.metal_of(k).is_none() {
             i = i.line(format!(
                 "the cathode: emits carriers of q/m = {}{}",
                 fmt_num(t.charge_per_mass),
@@ -475,6 +524,13 @@ fn electrode(level: &Level, placement: &[Element], k: usize) -> Inspection {
                     ", at most {} per unit length",
                     fmt_num(j)
                 ))
+            ));
+        }
+        if let Some(m) = t.metal_of(k) {
+            i = i.line(format!(
+                "a contact of metal {}: takes in the carriers that reach it, gives off what \
+                 keeps the metal next to it neutral",
+                m + 1
             ));
         }
         if let Some(ions) = t.ions.filter(|ions| ions.electrode == k) {

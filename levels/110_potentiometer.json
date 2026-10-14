@@ -1,0 +1,159 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Potentiometer",
+  "description": "A longer strip of metal with a third contact on its side, a third of the way along, on your second supply. Inside a conductor carrying a steady current the field is uniform: the potential falls evenly from one end to the other. Make a current between 2.4 and 3.0 flow along the strip into its right end, and set the side contact so that no current flows through it (between $-0.35$ and $0.35$, averaged over $t = 10$ to $50$): it must sit at the potential the strip has there. A potentiometer measures a voltage this way, drawing no current from it.",
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -40.0,
+      10.0,
+      15.0,
+      30.0,
+      40.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        22,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": 30.0
+    },
+    {
+      "node": [
+        9,
+        11,
+        0
+      ],
+      "kind": "supply",
+      "value": 10.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        2,
+        8,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        22,
+        8,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    },
+    {
+      "center": [
+        9,
+        11,
+        0
+      ],
+      "length": 2,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goals": [
+      {
+        "electrode": 1,
+        "min": 2.4,
+        "max": 3.0,
+        "start": 10.0,
+        "end": 50.0,
+        "carriers": "net"
+      },
+      {
+        "electrode": 2,
+        "min": -0.35,
+        "max": 0.35,
+        "start": 10.0,
+        "end": 50.0,
+        "carriers": "net"
+      }
+    ],
+    "step": 0.035,
+    "metals": [
+      {
+        "corners": [
+          [
+            3,
+            6,
+            0
+          ],
+          [
+            21,
+            10,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1,
+          2
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 70.0,
+        "seed": 2
+      }
+    ]
+  }
+}

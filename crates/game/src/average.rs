@@ -80,6 +80,7 @@ impl MapAverage {
             sigma: self.sigma.iter().map(|s| *s as f32).collect(),
             potentials: self.potentials.iter().map(|v| *v as f32).collect(),
             currents: frame.currents.clone(),
+            heat: frame.heat,
             ..TubeFrame::default()
         };
         for (k, ((_, _, kind), c)) in self.cells.iter().enumerate() {

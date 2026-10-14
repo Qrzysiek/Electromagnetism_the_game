@@ -17,6 +17,12 @@
   "height_ex": 1.581,
   "baseline_ex": 0.05
  },
+ "50": {
+  "file": "1a6562590ef19d10.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
  "80": {
   "file": "48449a14a4ff7d79.svg",
   "width_ex": 2.262,
@@ -28,6 +34,12 @@
   "width_ex": 3.394,
   "height_ex": 1.557,
   "baseline_ex": 0.05
+ },
+ "-0.35": {
+  "file": "5715de40e45dc479.svg",
+  "width_ex": 5.783,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
  },
  "-105°": {
   "file": "eeb19777e857a086.svg",
@@ -52,6 +64,12 @@
   "width_ex": 6.826,
   "height_ex": 2.262,
   "baseline_ex": 0.566
+ },
+ "0.35": {
+  "file": "a976726b1d1bda3e.svg",
+  "width_ex": 4.023,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
  },
  "1/\\gamma": {
   "file": "8c1e0a7feacd2fae.svg",
@@ -107,6 +125,12 @@
   "height_ex": 2.262,
   "baseline_ex": 0.566
  },
+ "I = V/R": {
+  "file": "41892f0184ec55db.svg",
+  "width_ex": 8.746,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
  "I \\propto V^{3/2}": {
   "file": "469a7992512c8efb.svg",
   "width_ex": 8.619,
@@ -141,6 +165,12 @@
   "file": "2c004d91b9a831f6.svg",
   "width_ex": 21.542,
   "height_ex": 2.587,
+  "baseline_ex": 0.566
+ },
+ "V_H \\approx I B/(n q)": {
+  "file": "0225217c341f438d.svg",
+  "width_ex": 14.092,
+  "height_ex": 2.262,
   "baseline_ex": 0.566
  },
  "V_s": {

@@ -64,7 +64,9 @@ pub struct PotentialParams {
     pub e_ref: f32,
     pub e_decades: f32,
     /// Tube levels: the particles drawn as the density of their charge, a glow (z > 0):
-    /// x = 1/(2 s²) for a Gaussian of width s, y = 1/(|q| at full glow).
+    /// x = 1/(2 s²) for a Gaussian of width s, y and w = 1/(|q| at full glow) of each
+    /// species, z = 1 + the number of line charges that glow (the particles outside
+    /// metals: the metals' carriers and backgrounds after them do not).
     pub glow: Vec4,
     /// Tube levels' field maps (mode 3): the display grid's origin (x, y), its spacing
     /// and the colour scale's unit.
@@ -134,6 +136,7 @@ pub fn map_frame(frame: &level::tube::TubeFrame) -> std::borrow::Cow<'_, level::
             sigma: frame.sigma.clone(),
             potentials: frame.potentials.clone(),
             currents: frame.currents.clone(),
+            heat: frame.heat,
         };
         for ((x, q), kind) in frame.x.iter().zip(&frame.q).zip(&frame.kind) {
             if *kind == level::tube::KIND_PROJECTILE {
@@ -312,19 +315,62 @@ pub fn tube_params(
         items.push(v4(f64::from(*s), 0.0, 0.0, 0.0));
     }
     let eps2 = TUBE_MAP_SOFTENING * TUBE_MAP_SOFTENING;
-    #[allow(clippy::cast_possible_truncation)]
-    for (x, q) in frame.x.iter().zip(&frame.q) {
-        items.push([x[0], x[1], *q, eps2 as f32]);
+    // The particles: first those that glow, then a metal's carriers (its density is
+    // uniform: they would only veil the potential).
+    let in_metal = |x: &[f32; 2]| {
+        run.metals.iter().any(|m| {
+            (m.lo.x..=m.hi.x).contains(&f64::from(x[0]))
+                && (m.lo.y..=m.hi.y).contains(&f64::from(x[1]))
+        })
+    };
+    let mut glowing = 0;
+    for metal in [false, true] {
+        #[allow(clippy::cast_possible_truncation)]
+        for (x, q) in frame.x.iter().zip(&frame.q) {
+            if in_metal(x) == metal {
+                items.push([x[0], x[1], *q, eps2 as f32]);
+                glowing += usize::from(!metal);
+            }
+        }
     }
-    let particles = &frame.x;
+    // The metals' backgrounds (the ions' charge): fixed line charges on the cells the
+    // carriers are binned on (`map_frame`), so that a neutral metal reads neutral.
+    let mut charges = frame.x.len();
+    for m in &run.metals {
+        #[allow(clippy::cast_possible_truncation)]
+        let (i0, i1, j0, j1) = (
+            (m.lo.x / MAP_BIN).floor() as i64,
+            (m.hi.x / MAP_BIN).ceil() as i64,
+            (m.lo.y / MAP_BIN).floor() as i64,
+            (m.hi.y / MAP_BIN).ceil() as i64,
+        );
+        for j in j0..j1 {
+            for i in i0..i1 {
+                #[allow(clippy::cast_precision_loss)]
+                let (x0, y0) = (i as f64 * MAP_BIN, j as f64 * MAP_BIN);
+                let (ax, bx) = (x0.max(m.lo.x), (x0 + MAP_BIN).min(m.hi.x));
+                let (ay, by) = (y0.max(m.lo.y), (y0 + MAP_BIN).min(m.hi.y));
+                if bx > ax && by > ay {
+                    items.push(v4(
+                        0.5 * (ax + bx),
+                        0.5 * (ay + by),
+                        m.background * (bx - ax) * (by - ay),
+                        eps2,
+                    ));
+                    charges += 1;
+                }
+            }
+        }
+    }
     // The glow's scale per species (see `GLOW_FULL`), from the particles one by one.
     let (full_neg, full_pos) = glow_full(raw);
     let inv = |f: f32| if f > 0.0 { 1.0 / f } else { 0.0 };
     let glow = if glow && (full_neg > 0.0 || full_pos > 0.0) {
+        #[allow(clippy::cast_precision_loss)]
         Vec4::new(
             1.0 / (2.0 * GLOW_WIDTH * GLOW_WIDTH),
             inv(full_neg),
-            1.0,
+            1.0 + glowing as f32,
             inv(full_pos),
         )
     } else {
@@ -335,7 +381,7 @@ pub fn tube_params(
         phi_weight: (sign / scale) as f32,
         u_a: (sign * vc / scale) as f32,
         line_segments: count(run.segments.len()),
-        line_charges: count(particles.len()),
+        line_charges: count(charges),
         mode: u32::from(electric) * 2,
         e_ref: e_ref as f32,
         e_decades: decades as f32,
