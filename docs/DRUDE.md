@@ -142,17 +142,31 @@ the owner are marked **(owner)**; nothing is built until they are settled.
   voltmeter), the display (the outline, the cores, the carriers faint with a traced
   sample showing the zigzag and the drift, the Joule heat), the maps' and the Maxwell
   field's backgrounds, frames kept sparsely for long runs, the inspection tooltip.
-- **Contacts, changed twice:** the cathodes' space-charge limit made a contact a cold
-  reservoir (the Joule heat negative), then, releasing thermal carriers, a layer with
-  its own voltage in front of an injecting contact (a potentiometer read 8 for 10).
+- **Contacts, changed three times:** the cathodes' space-charge limit made a contact a
+  cold reservoir (the Joule heat negative), then, releasing thermal carriers, a layer
+  with its own voltage in front of an injecting contact (a potentiometer read 8 for 10).
   Ohmic contacts (the device Monte Carlo codes' condition: the layer in front of a
-  contact kept neutral) give the bulk field V/L to 0.2 % and the null at 9.5.
+  contact kept neutral) give the bulk field V/L to 0.2 %; first they placed Maxwellian
+  carriers in the layer (kT each, where those reaching the face bring 1.5 kT: every
+  contact a heat sink, found when a wide strip's lattice heat came out negative), now
+  they emit from the face as a thermal wall: the lattice takes 90 % of IV.
 - **The levels' material:** kT/q = 4 (thermal speed 2), small against the supplies' tens
   so that the contacts' and walls' own voltages stay a few per cent; ℓ = 1, a = 0.01.
 - **Levels:** Ohm's law and Potentiometer (introduction), Hall probe (intermediate), in
   the arc "Inside the components: metals".
-- **Open:** a background softened as the carriers are (the walls' depleted layer,
-  12 % within half a unit, ~3 % of a strip's conductance); D2 (AC conductivity), D5
-  (relaxation of an excess charge), D7 (Johnson noise); a warming lattice; the
-  geometry level (long and thin against short and wide); a Hall level with both signs of
+- **The walls' layer is physics:** a metal at a potential against its surroundings
+  carries a surface charge, spread here over the Debye length (0.4): depleted at the
+  walls when positive, accumulated when negative, uniform at 0 (PHYSICS.md §2.11).
+- **2026-10-14, D2 and D5:** the AC conductivity against the Boltzmann equation at
+  `ωτ ≈ 1` (2.3 %); screening within the Debye length (+1.0 %, once the carriers'
+  softening is well below it: at the levels' preview resolution the layers are ~8 % too
+  thick). D5 as planned (an excess charge relaxing) has no clean reference here: with
+  `τ ∝ 1/v` the slow carriers' long free times give the decay no single rate, and a
+  finite strip's depolarization field is not uniform.
+- **Levels:** Long and thin (introduction, after Ohm's law): two strips in series, the
+  junction on a second supply; equal currents need V₂/V₁ ≈ 1/5.3 (L/W alone gives 1/5;
+  the thin strip's stronger field warms its carriers). The Potentiometer and the Hall
+  probe retuned for the thermal-wall contacts (the null at 9.05 for 30; B on 1.0–1.4),
+  their goals averaged over t = 10–80 against the floating contacts' noise.
+- **Open:** D7 (Johnson noise); a warming lattice; a Hall level with both signs of
   carriers.

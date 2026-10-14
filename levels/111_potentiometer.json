@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "engine_version": "0.1.0",
-  "name": "Hall probe",
-  "description": "A strip of metal carrying a current, in your solenoid's field (B along the strip's length, out of the board when positive; the yellow coil, top right). The field pushes the moving electrons sideways (the Lorentz force) until the charge they pile on one side holds the rest back: a voltage across the strip, the Hall voltage, $V_H \\approx I B/(n q)$ (per unit length). The two contacts on the strip's sides read it, floating: no current flows through them. Make a current between 2.7 and 3.5 flow into the right end and the top contact sit between 1.0 and 1.9 below the bottom one (averaged over $t = 10$ to $50$). Which way must the field point? Electrons are negative.",
+  "name": "Potentiometer",
+  "description": "A longer strip of metal with a third contact on its side, a third of the way along, on your second supply. Inside a conductor carrying a steady current the field is uniform: the potential falls evenly from one end to the other (the contacts take a little). Make a current between 2.4 and 3.0 flow along the strip into its right end, and set the side contact so that no current flows through it (between $-0.5$ and $0.5$, averaged over $t = 10$ to $80$): it must sit at the potential the strip has there. A potentiometer measures a voltage this way, drawing no current from it.",
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -33,23 +33,16 @@
     "magnet_strengths": [],
     "supply_voltages": [
       -40.0,
+      10.0,
       15.0,
       30.0,
-      35.0,
       40.0
-    ],
-    "solenoid_fields": [
-      -3.0,
-      -0.9,
-      0.5,
-      0.9,
-      3.0
     ]
   },
   "reference_solution": [
     {
       "node": [
-        21,
+        22,
         8,
         0
       ],
@@ -58,18 +51,18 @@
     },
     {
       "node": [
-        23,
-        15,
+        9,
+        11,
         0
       ],
       "kind": "supply",
-      "value": 0.9
+      "value": 9.0
     }
   ],
   "electrodes": [
     {
       "center": [
-        3,
+        2,
         8,
         0
       ],
@@ -83,7 +76,7 @@
     },
     {
       "center": [
-        21,
+        22,
         8,
         0
       ],
@@ -98,7 +91,7 @@
     },
     {
       "center": [
-        12,
+        9,
         11,
         0
       ],
@@ -108,21 +101,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
-    },
-    {
-      "center": [
-        12,
-        5,
-        0
-      ],
-      "length": 2,
-      "thickness": 2.0,
-      "height": 4.0,
-      "angle_deg": 0.0,
-      "bias": {
-        "kind": "grounded"
-      }
+      },
+      "tunable": true
     }
   ],
   "tube": {
@@ -131,58 +111,32 @@
     "goals": [
       {
         "electrode": 1,
-        "min": 2.7,
-        "max": 3.5,
+        "min": 2.4,
+        "max": 3.0,
         "start": 10.0,
-        "end": 50.0,
+        "end": 80.0,
+        "carriers": "net"
+      },
+      {
+        "electrode": 2,
+        "min": -0.5,
+        "max": 0.5,
+        "start": 10.0,
+        "end": 80.0,
         "carriers": "net"
       }
     ],
     "step": 0.035,
-    "circuits": [
-      {
-        "electrode": 2,
-        "source": {
-          "kind": "dc",
-          "value": 0.0
-        },
-        "capacitance": 1.0
-      },
-      {
-        "electrode": 3,
-        "source": {
-          "kind": "dc",
-          "value": 0.0
-        },
-        "capacitance": 1.0
-      }
-    ],
-    "potential_goals": [
-      {
-        "electrode": 2,
-        "measure": "mean",
-        "min": -1.9,
-        "max": -1.0,
-        "start": 10.0,
-        "end": 50.0,
-        "reference": 3
-      }
-    ],
-    "solenoid": [
-      23,
-      15,
-      0
-    ],
     "metals": [
       {
         "corners": [
           [
-            4,
+            3,
             6,
             0
           ],
           [
-            20,
+            21,
             10,
             0
           ]
@@ -190,8 +144,7 @@
         "contacts": [
           0,
           1,
-          2,
-          3
+          2
         ],
         "density": 2.0,
         "charge_per_mass": -1.0,
@@ -199,7 +152,7 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 100.0,
-        "seed": 3
+        "seed": 2
       }
     ]
   }

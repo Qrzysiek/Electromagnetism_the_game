@@ -17,12 +17,6 @@
   "height_ex": 1.581,
   "baseline_ex": 0.05
  },
- "50": {
-  "file": "1a6562590ef19d10.svg",
-  "width_ex": 2.262,
-  "height_ex": 1.557,
-  "baseline_ex": 0.05
- },
  "80": {
   "file": "48449a14a4ff7d79.svg",
   "width_ex": 2.262,
@@ -35,9 +29,9 @@
   "height_ex": 1.557,
   "baseline_ex": 0.05
  },
- "-0.35": {
-  "file": "5715de40e45dc479.svg",
-  "width_ex": 5.783,
+ "-0.5": {
+  "file": "1b07b0cffa0b3f59.svg",
+  "width_ex": 4.652,
   "height_ex": 1.692,
   "baseline_ex": 0.186
  },
@@ -65,9 +59,9 @@
   "height_ex": 2.262,
   "baseline_ex": 0.566
  },
- "0.35": {
-  "file": "a976726b1d1bda3e.svg",
-  "width_ex": 4.023,
+ "0.5": {
+  "file": "d2cbad71ff333de6.svg",
+  "width_ex": 2.891,
   "height_ex": 1.557,
   "baseline_ex": 0.05
  },
@@ -148,6 +142,12 @@
   "width_ex": 4.404,
   "height_ex": 1.92,
   "baseline_ex": 0.375
+ },
+ "R = L/(\\sigma W)": {
+  "file": "c090c32d73340c65.svg",
+  "width_ex": 12.829,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
  },
  "R^2/d": {
   "file": "bb39ca033148ef2d.svg",

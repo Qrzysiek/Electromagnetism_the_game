@@ -355,6 +355,7 @@
           "name": "Introduction",
           "levels": [
             "ohms_law",
+            "long_and_thin",
             "potentiometer"
           ]
         },

@@ -118,10 +118,13 @@ pub struct Emitter {
 
 /// An ohmic contact's rule (`Emitter::ohmic`): the layer `depth` deep in front of each
 /// emitting segment holds `density` (the carriers' charge per area, its magnitude, the
-/// metal's background's opposite); what it lacks is given off, placed at random in the
-/// layer with Maxwellian velocities (`thermal_speed`). The space-charge limit instead
-/// (the field at its face held at zero, as a cathode's) piled carriers in front of an
-/// injecting contact: a layer with its own voltage (PHYSICS.md §2.11).
+/// metal's background's opposite); what it lacks is given off from the face as a gas at
+/// the lattice's temperature (`thermal_speed`) crosses a wall (`lattice::flux_velocity`),
+/// so that it gives back, on average, the energy the carriers it takes in bring. The
+/// space-charge limit instead (the field at its face held at zero, as a cathode's) piled
+/// carriers in front of an injecting contact: a layer with its own voltage; carriers
+/// placed in the layer with a Maxwellian's velocities (kT each, where those reaching the
+/// face bring 1.5 kT) made every contact a heat sink (PHYSICS.md §2.11).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OhmicContact {
     pub density: f64,
@@ -914,8 +917,11 @@ impl Tube {
                 s.emitted += 1;
                 #[allow(clippy::cast_precision_loss)]
                 let f = (s.emitted as f64 * 0.618_033_988_749_894_9).fract();
-                let (g, v) = crate::lattice::layer_point(em.thermal_speed, s.emitted);
-                let x = a + t * (len * f) + out * (ohmic.depth * g);
+                // From the face, as a gas at the lattice's temperature crosses a wall: the
+                // flux-weighted law, 1.5 kT each in the plane, what the carriers the contact
+                // takes in carry on average.
+                let v = crate::lattice::flux_velocity(out, em.thermal_speed, s.emitted);
+                let x = a + t * (len * f) + out * (EMISSION_OFFSET * len);
                 self.add(s, x, v, sign * em.weight, em.charge_per_mass, tag);
                 emitted[em.electrode] += sign * em.weight;
                 s.released[i] += sign * em.weight;

@@ -3524,11 +3524,11 @@ def magnetron():
 
 def ohms_law():
     # Designed with `generator tube-scan` (PHYSICS.md 2.11, the Drude metal): a strip
-    # 16 x 4 between two contacts. Preview currents into the right contact over t = 5-35:
-    # 0.86 at 8, 1.61 at 16, 2.37 at 24, 3.03 at 32, 3.73 at 40, -2.59 at -24: in
-    # proportion to within a slow fall of I/V (0.107 to 0.093: the carriers warm in the
-    # field); the bulk theory gives 0.1175 V (the contacts' boundary layers and the walls'
-    # take ~15 %). The goal 2.6-3.2 asks for about 27-33.
+    # 16 x 4 between two contacts. Preview currents into the right contact over t = 5-35
+    # (the contacts emitting as thermal walls): 0.91 at 8, 1.72 at 16, 2.43 at 24, 3.17 at
+    # 32, 3.84 at 40, -2.61 at -24: in proportion to within a slow fall of I/V (0.1135 to
+    # 0.096: the carriers warm in the field); the bulk theory gives 0.1175 V. The goal
+    # 2.6-3.2: the supply solves on 26-32 (`generator window`).
     return level(
         "Ohm's law",
         "Inside a metal. The rectangle is a conductor seen end-on: its electrons (blue; a "
@@ -3549,6 +3549,38 @@ def ohms_law():
         reference=[supply(21, 8, 30.0)])
 
 
+def long_and_thin():
+    # Designed with `generator tube-scan`: two strips of the same metal in series, the upper
+    # one 16 x 4 (L/W = 4), the lower one 8 x 8 (L/W = 1). Supply 1 on the upper strip's
+    # left end, supply 2 on the junction (the upper strip's right end, strapped to the lower
+    # strip's left end), the lower strip's right end grounded. Each strip alone (the
+    # contacts emitting as thermal walls): the upper 2.63 at 26.5, the lower 2.32 at 5.5:
+    # R = 10.1 and 2.37, a ratio of 4.3 (L/W gives 4; the thin strip's stronger field warms
+    # its carriers). The goals 2.0-2.8 each: at the reference (32, 5.5) supply 1 solves on
+    # 28-38, the junction on about 4.7-6.6 (the textbook ratio, V2 = V1/5 = 6.4, passes).
+    return level(
+        "Long and thin",
+        "Two strips of the same metal: the upper one long and thin, the lower one short and "
+        "wide. A strip's resistance grows with its length and falls with its width, "
+        "$R = L/(\\sigma W)$ (per unit length along it): the upper one has about four times "
+        "the lower one's. They are in series: your first supply holds the upper strip's "
+        "left end, your second the junction (the upper strip's right end, wired to the lower "
+        "strip's left end), and the lower strip's right end is grounded. Make a current "
+        "between 2.0 and 2.8 flow through each strip (into its left end, averaged over "
+        "$t = 10$ to $40$).",
+        grid=(24, 16), c=None, t_max=200.0,
+        electrodes=[contact(17, 5, 8), contact(3, 12, 4, tunable=True),
+                    contact(21, 12, 4, tunable=True), contact(7, 5, 8)],
+        supplies=slider(40.0, 5.5, 15.0, 32.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP,
+                  circuits=[tube_circuit(2, dc(0.0), resistance=0.0, linked=[3])],
+                  goals=[current_goal(1, 2.0, 2.8, 10.0, 40.0, carriers="net"),
+                         current_goal(3, 2.0, 2.8, 10.0, 40.0, carriers="net")],
+                  metals=[metal((4, 10), (20, 14), [1, 2], seed=4, **METAL),
+                          metal((8, 1), (16, 9), [3, 0], seed=5, **METAL)]),
+        reference=[supply(3, 12, 32.0), supply(21, 12, 5.5)])
+
+
 def potentiometer():
     # Designed with `generator tube-scan`: a strip 18 x 4, its left end grounded, a side
     # contact on its top a third of the way along (x 8-10). Preview with the right end at
@@ -3558,26 +3590,31 @@ def potentiometer():
     # at about 27-33) and -0.35..0.35 through the side contact (about 8.3-10.6 at 30;
     # +-0.25 left the verification uncertain: the side contact's current carries the
     # strip's thermal noise, an error bar of ~0.18 with 50 macroparticles per area over
-    # t = 10-40; now 70 over 10-50).
+    # t = 10-40; now 100 over 10-80). With the contacts emitting as a thermal wall (they
+    # had been heat sinks, PHYSICS.md 2.11) the side contact's current at 30 is -0.22 at 8,
+    # -0.02 at 9, 0.31 at 10: none at about 9.05 (V1/3 = 10: the contacts take ~1 V).
+    # The side contact's current verified with a bar of ~0.3 (+-0.35 left it uncertain):
+    # the window +-0.5, about 7.5-10.6 at 30.
     return level(
         "Potentiometer",
         "A longer strip of metal with a third contact on its side, a third of the way "
         "along, on your second supply. Inside a conductor carrying a steady current the "
-        "field is uniform: the potential falls evenly from one end to the other. Make a "
+        "field is uniform: the potential falls evenly from one end to the other (the "
+        "contacts take a little). Make a "
         "current between 2.4 and 3.0 flow along the strip into its right end, and set the "
-        "side contact so that no current flows through it (between $-0.35$ and $0.35$, "
-        "averaged over $t = 10$ to $50$): it must sit at the potential the strip has "
+        "side contact so that no current flows through it (between $-0.5$ and $0.5$, "
+        "averaged over $t = 10$ to $80$): it must sit at the potential the strip has "
         "there. A potentiometer measures a voltage this way, drawing no current from it.",
         grid=(24, 16), c=None, t_max=200.0,
         electrodes=[contact(2, 8, 4), contact(22, 8, 4, tunable=True),
                     contact(9, 11, 2, vertical=False, tunable=True)],
         supplies=slider(40.0, 10.0, 15.0, 30.0),
         tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP,
-                  goals=[current_goal(1, 2.4, 3.0, 10.0, 50.0, carriers="net"),
-                         current_goal(2, -0.35, 0.35, 10.0, 50.0, carriers="net")],
+                  goals=[current_goal(1, 2.4, 3.0, 10.0, 80.0, carriers="net"),
+                         current_goal(2, -0.5, 0.5, 10.0, 80.0, carriers="net")],
                   metals=[metal((3, 6), (21, 10), [0, 1, 2], seed=2,
-                                **dict(METAL, carriers_per_area=70.0))]),
-        reference=[supply(22, 8, 30.0), supply(9, 11, 10.0)])
+                                **dict(METAL, carriers_per_area=100.0))]),
+        reference=[supply(22, 8, 30.0), supply(9, 11, 9.0)])
 
 
 def hall_probe():
@@ -3589,7 +3626,11 @@ def hall_probe():
     # +0.75 at -0.7 (electrons pushed to the top; about -0.15 at B = 0). Below the weak-field
     # R_H I B = (4/pi) I B/rho as omega_c tau grows (0.4 B: the Hall factor falls towards 1)
     # and the contacts short the strip's ends. The goals: 2.7-3.5 into the right end (about
-    # 26-34) and the top 1.0-1.9 below the bottom (B about 0.6-1.15 at 30).
+    # 26-34) and the top 1.0-1.9 below the bottom (B about 0.6-1.15 at 30). With the
+    # contacts emitting as a thermal wall: -0.90 at B = 0.9, -1.44 at 1.2, -1.68 at 1.5,
+    # +0.22 at 0. `generator window` at the reference (30, 1.3): the supply solves on
+    # 26-34, the solenoid on 1.0-1.4 (its slider +-4, the middles at +-2), over t = 10-80
+    # (the floating contacts' noise).
     hall = dict(METAL, carriers_per_area=100.0)
     return level(
         "Hall probe",
@@ -3600,21 +3641,21 @@ def hall_probe():
         "voltage, $V_H \\approx I B/(n q)$ (per unit length). The two contacts on the "
         "strip's sides read it, floating: no current flows through them. Make a current "
         "between 2.7 and 3.5 flow into the right end and the top contact sit between 1.0 "
-        "and 1.9 below the bottom one (averaged over $t = 10$ to $50$). Which way must the "
+        "and 1.9 below the bottom one (averaged over $t = 10$ to $80$). Which way must the "
         "field point? Electrons are negative.",
         grid=(24, 16), c=None, t_max=200.0,
         electrodes=[contact(3, 8, 4), contact(21, 8, 4, tunable=True),
                     contact(12, 11, 2, vertical=False), contact(12, 5, 2, vertical=False)],
         supplies=slider(40.0, 15.0, 30.0, 35.0),
-        solenoid_fields=slider(3.0, -0.9, 0.5, 0.9),
+        solenoid_fields=slider(4.0, -1.3, 0.9, 1.3),
         tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 15),
                   circuits=[tube_circuit(2, dc(0.0), capacitance=1.0),
                             tube_circuit(3, dc(0.0), capacitance=1.0)],
-                  goals=[current_goal(1, 2.7, 3.5, 10.0, 50.0, carriers="net")],
-                  potentials=[potential_goal(2, "mean", -1.9, -1.0, 10.0, 50.0,
+                  goals=[current_goal(1, 2.7, 3.5, 10.0, 80.0, carriers="net")],
+                  potentials=[potential_goal(2, "mean", -1.9, -1.0, 10.0, 80.0,
                                              reference=3)],
                   metals=[metal((4, 6), (20, 10), [0, 1, 2, 3], seed=3, **hall)]),
-        reference=[supply(21, 8, 30.0), supply(23, 15, 0.9)])
+        reference=[supply(21, 8, 30.0), supply(23, 15, 1.3)])
 
 
 ARCS.append(("Inside the components: vacuum tubes", [
@@ -3639,6 +3680,7 @@ ARCS.append(("Inside the components: vacuum tubes", [
 ARCS.append(("Inside the components: metals", [
     ("Introduction", [
         ("ohms_law", ohms_law),
+        ("long_and_thin", long_and_thin),
         ("potentiometer", potentiometer),
     ]),
     ("Intermediate", [

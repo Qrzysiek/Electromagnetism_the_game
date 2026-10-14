@@ -1,0 +1,210 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Long and thin",
+  "description": "Two strips of the same metal: the upper one long and thin, the lower one short and wide. A strip's resistance grows with its length and falls with its width, $R = L/(\\sigma W)$ (per unit length along it): the upper one has about four times the lower one's. They are in series: your first supply holds the upper strip's left end, your second the junction (the upper strip's right end, wired to the lower strip's left end), and the lower strip's right end is grounded. Make a current between 2.0 and 2.8 flow through each strip (into its left end, averaged over $t = 10$ to $40$).",
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -40.0,
+      5.5,
+      15.0,
+      32.0,
+      40.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        3,
+        12,
+        0
+      ],
+      "kind": "supply",
+      "value": 32.0
+    },
+    {
+      "node": [
+        21,
+        12,
+        0
+      ],
+      "kind": "supply",
+      "value": 5.5
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        17,
+        5,
+        0
+      ],
+      "length": 8,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        3,
+        12,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    },
+    {
+      "center": [
+        21,
+        12,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    },
+    {
+      "center": [
+        7,
+        5,
+        0
+      ],
+      "length": 8,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goals": [
+      {
+        "electrode": 1,
+        "min": 2.0,
+        "max": 2.8,
+        "start": 10.0,
+        "end": 40.0,
+        "carriers": "net"
+      },
+      {
+        "electrode": 3,
+        "min": 2.0,
+        "max": 2.8,
+        "start": 10.0,
+        "end": 40.0,
+        "carriers": "net"
+      }
+    ],
+    "step": 0.035,
+    "circuits": [
+      {
+        "electrode": 2,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "linked": [
+          3
+        ],
+        "resistance": 0.0
+      }
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            4,
+            10,
+            0
+          ],
+          [
+            20,
+            14,
+            0
+          ]
+        ],
+        "contacts": [
+          1,
+          2
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 4
+      },
+      {
+        "corners": [
+          [
+            8,
+            1,
+            0
+          ],
+          [
+            16,
+            9,
+            0
+          ]
+        ],
+        "contacts": [
+          3,
+          0
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 5
+      }
+    ]
+  }
+}

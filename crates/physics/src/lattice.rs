@@ -87,15 +87,6 @@ pub fn flux_velocity(n: DVec3, sigma: f64, key: u64) -> DVec3 {
     n * normal + t * (sigma * g)
 }
 
-/// A point's depth (a uniform fraction) in an ohmic contact's layer and a Maxwellian
-/// velocity at thermal speed `sigma` (each component normal), from a hash of `key`.
-#[must_use]
-pub fn layer_point(sigma: f64, key: u64) -> (f64, DVec3) {
-    let h = mix(key ^ 0x00a7_e0c5);
-    let (g1, g2) = normals(unit(mix(h)), unit(mix(mix(h))));
-    (unit(h), DVec3::new(g1, g2, 0.0) * sigma)
-}
-
 impl Lattice {
     /// A conductor (`lo`..`hi`), its background, cores and carriers; `cores` must lie in it.
     #[must_use]

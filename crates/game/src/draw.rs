@@ -1319,7 +1319,16 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     // A sample of a metal's carriers with their paths over the last `METAL_TRAIL`: the
     // thermal zigzag between collisions, the drift along the field.
     if metal_dots && in_metals > 0 {
-        let every = (in_metals / METAL_SAMPLE).max(1);
+        // One carrier in `every` by identity, `every` fixed for the run (from its first
+        // frame): counted afresh each frame, the number in the metals wobbles as the
+        // contacts take and give carriers, and each step of `every` picked a whole new
+        // sample (the traces seemed to reset every few seconds, at random).
+        let first = view
+            .run
+            .frames
+            .first()
+            .map_or(in_metals, |f| f.x.iter().filter(|x| in_metal(x)).count());
+        let every = (first / METAL_SAMPLE).max(1);
         let sample: std::collections::HashMap<u32, usize> = frame
             .id
             .iter()

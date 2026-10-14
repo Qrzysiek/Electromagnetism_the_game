@@ -485,11 +485,11 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
         ));
         out.push(note(
             false,
-            "Contacts: a contact takes in the carriers that reach it and gives off, at \
-             rest, as many as keep the metal next to it neutral (space-charge limited); \
-             they gain the lattice's temperature at their first collision. A current goal \
-             on a contact counts what it takes in less what it gives off (its lead's \
-             current).",
+            "Contacts (ohmic): a contact takes in the carriers that reach it and gives off \
+             from its face, as a gas at the lattice's temperature crosses a wall, as many \
+             as keep the layer in front of it neutral (half a mean free path deep). A \
+             current goal on a contact counts what it takes in less what it gives off (its \
+             lead's current).",
         ));
         out.push(note(
             false,

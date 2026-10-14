@@ -1845,12 +1845,15 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             && let Some(k) = game.tube_frame()
             && let Some(f1) = v.run.frames.get(k)
         {
-            let k0 = v.run.frames.partition_point(|f| f.t < f1.t - 1.0);
+            // Over the last 10 time units: each collision's heat fluctuates by about kT,
+            // over one unit the rate was uncertain by a third.
+            let k0 = v.run.frames.partition_point(|f| f.t < f1.t - 10.0);
             if let Some(f0) = v.run.frames.get(k0).filter(|f0| f1.t > f0.t) {
                 ui.label(format!(
-                    "Joule heat: {} per unit length per time (the lattice takes it at the \
-                     collisions; less than the supply's I V: the electrons also carry \
-                     energy into the contact they reach, the Peltier heat)",
+                    "Joule heat: {} per unit length per time over the last 10 time units \
+                     (the lattice takes it at the collisions: about nine tenths of the \
+                     supplies' I V; the electrons bring the rest into the contact they \
+                     reach, the energy the field gave them since their last collision)",
                     fmt_num((f1.heat - f0.heat) / (f1.t - f0.t))
                 ));
             }

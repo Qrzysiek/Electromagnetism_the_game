@@ -2,11 +2,12 @@
 //! metals) against the Boltzmann equation of the model (derived in PHYSICS.md: specular
 //! hard-disc collisions at the rate `κ v`, `κ = 2 a n_ion`, `⟨cos θ⟩ = −1/3`, the speed
 //! redrawn from the collision-weighted thermal law). D1 the conductivity and the collision
-//! rate, D3 the Joule heat, D4 the conductivity in a magnetic field (the Hall effect), D6
-//! the Einstein relation: carriers in a box periodic both ways, stepped by the lattice's
-//! own collision step (`Lattice::advance`, as `Tube` steps them). The self-consistent
-//! resistor (Ohm's law with the carriers' own field and the contacts) is a measurement of
-//! a few minutes, run with `--ignored`.
+//! rate, D2 the AC conductivity, D3 the Joule heat, D4 the conductivity in a magnetic field
+//! (the Hall effect), D6 the Einstein relation: carriers in a box periodic both ways,
+//! stepped by the lattice's own collision step (`Lattice::advance`, as `Tube` steps them).
+//! D5 screening: a metal in `Tube`, its carriers' own field screening two plates' within the
+//! Debye length. The self-consistent resistor (Ohm's law with the carriers' own field and
+//! the contacts) is a measurement of a few minutes, run with `--ignored`.
 
 use physics::DVec3;
 use physics::bem::Bias;
@@ -40,14 +41,17 @@ struct BoxRun {
     kinetic: f64,
     /// The mean square displacement along x at the window's middle and end.
     msd: (f64, f64),
+    /// Under an oscillating acceleration: the drift's parts in phase with it and a
+    /// quarter period behind (its projections on cos ωt and sin ωt over the window).
+    ac: (f64, f64),
 }
 
 /// `carriers` carriers (thermal speed 1) in a box `side × side`, periodic both ways, over
-/// random cores (`A`, `MEAN_FREE_PATH`), under the acceleration `acc` along x and the
-/// rotation `omega` (`q B/m`: the velocity turns at `−omega`), for `t1` with the
-/// window from `t0`.
-#[allow(clippy::cast_precision_loss)]
-fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, t0: f64, t1: f64) -> BoxRun {
+/// random cores (`A`, `MEAN_FREE_PATH`), under the acceleration `acc` along x (times
+/// `cos(ac t)` if `ac` > 0) and the rotation `omega` (`q B/m`: the velocity turns at
+/// `−omega`), for `t1` with the window from `t0`.
+#[allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
+fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, ac: f64, t0: f64, t1: f64) -> BoxRun {
     let side = 8.0;
     let (lo, hi) = (DVec3::ZERO, DVec3::new(side, side, 0.0));
     let n_ion = 1.0 / (2.0 * A * MEAN_FREE_PATH);
@@ -69,6 +73,7 @@ fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, t0: f64, t1: f64) -> 
         .sum();
     let (sn, cs) = libm::sincos(-omega * dt);
     let (mut flux, mut hits, mut heat, mut work) = (DVec3::ZERO, 0u64, 0.0, 0.0);
+    let (mut in_phase, mut quadrature) = (0.0, 0.0);
     let mut msd_mid = 0.0;
     let mut t = 0.0;
     let mut step = 0u64;
@@ -76,6 +81,9 @@ fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, t0: f64, t1: f64) -> 
     while t < t1 - 0.5 * dt {
         step += 1;
         let inside = t >= t0 - 0.5 * dt;
+        // The step's kick (an oscillating drive at the step's middle).
+        let (drive_sin, drive_cos) = libm::sincos(ac * (t + 0.5 * dt));
+        let kick = if ac > 0.0 { kick * drive_cos } else { kick };
         let moves: Vec<(DVec3, f64, u32)> = state
             .par_iter_mut()
             .enumerate()
@@ -104,9 +112,11 @@ fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, t0: f64, t1: f64) -> 
             if inside {
                 flux += *dx;
                 hits += u64::from(*k);
+                in_phase += dx.x * drive_cos;
+                quadrature += dx.x * drive_sin;
             }
             heat += h;
-            work += acc * dx.x;
+            work += kick.x / dt * dx.x;
         }
         if inside {
             window += dt;
@@ -131,6 +141,10 @@ fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, t0: f64, t1: f64) -> 
         msd: (
             msd_mid,
             state.iter().map(|s| s.2.x * s.2.x).sum::<f64>() / n,
+        ),
+        ac: (
+            2.0 * in_phase / (window * n),
+            2.0 * quadrature / (window * n),
         ),
     }
 }
@@ -190,7 +204,7 @@ fn mobility(kappa: f64, omega: f64) -> (f64, f64) {
 #[test]
 fn d1_conductivity_and_collision_rate() {
     let acc = 0.2;
-    let r = run_box(200_000, 0.02, acc, 0.0, 5.0, 40.0);
+    let r = run_box(200_000, 0.02, acc, 0.0, 0.0, 5.0, 40.0);
     let theory = mobility(r.kappa, 0.0).0;
     let closed = 3.0 / 8.0 * libm::sqrt(FRAC_PI_2) / r.kappa;
     let rate = r.kappa * libm::sqrt(FRAC_PI_2);
@@ -209,6 +223,29 @@ fn d1_conductivity_and_collision_rate() {
     assert!((r.rate / rate - 1.0).abs() < 0.01);
 }
 
+/// D2, the AC conductivity: the same carriers under an acceleration `0.2 cos ωt`, ω = 2.5
+/// (about the collision rate: `ω τ ≈ 1`), over 14 periods from t = 5. The drift's parts in
+/// phase with the drive and a quarter period behind it against the Boltzmann equation's
+/// at that frequency: with time going as `e^{−iωt}` its collision term `κ v` becomes
+/// `κ v − iω`, so the mobility is `mobility` at `−ω` (Drude's `σ₀/(1 − iωτ)` for a rate
+/// independent of the speed). Required 5 % of its magnitude (as D1).
+#[test]
+fn d2_ac_conductivity() {
+    let (acc, w) = (0.2, 2.5);
+    let periods = 14.0 * std::f64::consts::TAU / w;
+    let r = run_box(200_000, 0.02, acc, 0.0, w, 5.0, 5.0 + periods);
+    let (tr, ti) = mobility(r.kappa, -w);
+    let (mr, mi) = (r.ac.0 / acc, r.ac.1 / acc);
+    let size = libm::sqrt(tr * tr + ti * ti);
+    let error = libm::sqrt((mr - tr) * (mr - tr) + (mi - ti) * (mi - ti)) / size;
+    println!(
+        "D2: drift/a in phase {mr:.5}, behind {mi:.5} against {tr:.5}, {ti:.5}: {:.2} % of its size (DC {:.5})",
+        100.0 * error,
+        mobility(r.kappa, 0.0).0
+    );
+    assert!(error < 0.05);
+}
+
 /// D3, the Joule heat: the heat the lattice takes at the collisions equals the work the
 /// field does on the carriers, less their kinetic energy's change (energy is conserved
 /// collision by collision: the path between collisions is the step's parabola). Required
@@ -216,7 +253,7 @@ fn d1_conductivity_and_collision_rate() {
 /// on the parabola (on the chord): 3.7e-4, the predicted `dt² κ⟨v⟩/(12 μ)`.
 #[test]
 fn d3_joule_heat_is_the_fields_work() {
-    let r = run_box(20_000, 0.02, 0.2, 0.0, 5.0, 40.0);
+    let r = run_box(20_000, 0.02, 0.2, 0.0, 0.0, 5.0, 40.0);
     let balance = r.work - r.heat - r.kinetic;
     println!(
         "D3: work {:.6}, heat {:.6}, kinetic change {:.6}: balance {:.3e} of the work",
@@ -236,7 +273,7 @@ fn d3_joule_heat_is_the_fields_work() {
 #[test]
 fn d4_conductivity_in_a_magnetic_field() {
     let (acc, omega) = (0.2, 1.25);
-    let r = run_box(200_000, 0.02, acc, omega, 5.0, 40.0);
+    let r = run_box(200_000, 0.02, acc, omega, 0.0, 5.0, 40.0);
     let (tx, ty) = mobility(r.kappa, omega);
     let (mx, my) = (r.drift.x / acc, r.drift.y / acc);
     let size = libm::sqrt(tx * tx + ty * ty);
@@ -255,12 +292,124 @@ fn d4_conductivity_in_a_magnetic_field() {
     assert!((hall / (4.0 / PI) - 1.0).abs() < 1e-4, "Hall factor {hall}");
 }
 
+/// D5, screening: a metal 16 × 4 (background 1, `q/m = −1`, thermal speed 1, the cores of
+/// the tests: collisions keep it at the lattice's temperature), no contacts (its carriers
+/// conserved), between a plate 1 above it at +0.5 and one 1 below at −0.5. The plates' field
+/// is screened within the Debye length `λ_D = σ_v/√(4πρ|q/m|)` = 0.282: the carriers'
+/// density departs from the background by `∝ e^{−d/λ_D}` at a distance d from either wall
+/// (the linearized Poisson–Boltzmann equation; `eφ/kT` ≈ 0.14 across the layer here). 32 000
+/// carriers (40 per Debye area: mean field), over t = 5–30; the decay length fitted to the
+/// departure's logarithm (bands weighted by their inverse variance), both walls together
+/// (the bottom's sign turned), over d < 0.6. The carriers' softening 0.025 (`h/λ_D` = 0.09,
+/// as a level's verification: converged, the same at 0.0125; at 0.05, about the
+/// macroparticles' spacing, the screening came out 8–13 % longer). Required 10 % (the
+/// finite plasma parameter and the nonlinearity, of order 1 %; the statistics ~4 %).
+#[test]
+fn d5_screening() {
+    let (l, w, v) = (16.0, 4.0, 0.5);
+    let plate = |y: f64, bias: Bias| Electrode {
+        section: Section::Rect {
+            center: DVec3::new(0.5 * l, y, 0.0),
+            angle: 0.0,
+            half_length: 0.5 * l,
+            half_thickness: 0.25,
+        },
+        bias,
+    };
+    let electrodes = Electrodes::new(
+        vec![
+            plate(w + 1.25, Bias::Potential(v)),
+            plate(-1.25, Bias::Potential(-v)),
+        ],
+        &[],
+        0.25,
+    );
+    let (lo, hi) = (DVec3::ZERO, DVec3::new(l, w, 0.0));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let count = libm::round(l * w / (2.0 * A * MEAN_FREE_PATH)) as usize;
+    let cores = Lattice::random_cores(lo, hi, count, A, 9);
+    let carriers = 32_000;
+    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, 13);
+    let tube = Tube {
+        electrodes,
+        emitters: Vec::new(),
+        projectiles: Vec::new(),
+        softening: 0.025,
+        dt: 0.02,
+        arena: Some((
+            DVec3::new(-2.0, -3.0, 0.0),
+            DVec3::new(l + 2.0, w + 3.0, 0.0),
+        )),
+        b_z: 0.0,
+        circuits: Vec::new(),
+        lattices: vec![lattice],
+    };
+    let mut s = tube.state();
+    let band = 0.05;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let bands = libm::round(w / band) as usize;
+    let mut density = vec![0.0; bands];
+    let mut samples = 0.0;
+    let mut next = 5.0;
+    while s.t < 30.0 {
+        tube.step(&mut s);
+        if s.t < next {
+            continue;
+        }
+        next += 0.2;
+        samples += 1.0;
+        // The middle half of the length (away from the strip's ends).
+        for (x, q) in s.x.iter().zip(&s.charge) {
+            if x.x > 0.25 * l && x.x < 0.75 * l && x.y >= 0.0 && x.y < w {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let b = ((x.y / band) as usize).min(bands - 1);
+                density[b] += q.abs();
+            }
+        }
+    }
+    let area = 0.5 * l * band;
+    let n: Vec<f64> = density.iter().map(|d| d / (samples * area)).collect();
+    // The departure from the background near each wall (the top gains carriers, the
+    // bottom loses them), and the decay length fitted to its logarithm by least squares,
+    // each band weighted by the inverse of its logarithm's variance (∝ departure², the
+    // density's noise being about the same in every band; unweighted, the noisy tail set
+    // the slope: +14 %).
+    let lambda_d = 1.0 / libm::sqrt(4.0 * std::f64::consts::PI);
+    let fit_bands = 12;
+    let (mut sw, mut sx, mut sy, mut sxx, mut sxy) = (0.0, 0.0, 0.0, 0.0, 0.0);
+    let mut profile = Vec::new();
+    for k in 0..fit_bands {
+        let d = (f64::from(u32::try_from(k).unwrap_or(0)) + 0.5) * band;
+        let excess = 0.5 * ((n[bands - 1 - k] - 1.0) - (n[k] - 1.0));
+        profile.push(excess);
+        let y = libm::log(excess.max(1e-9));
+        let wt = excess * excess;
+        sw += wt;
+        sx += wt * d;
+        sy += wt * y;
+        sxx += wt * d * d;
+        sxy += wt * d * y;
+    }
+    let slope = (sw * sxy - sx * sy) / (sw * sxx - sx * sx);
+    let lambda = -1.0 / slope;
+    println!(
+        "D5: decay length {lambda:.4} against the Debye length {lambda_d:.4} ({:+.2} %); departure by band: {}",
+        100.0 * (lambda / lambda_d - 1.0),
+        profile
+            .iter()
+            .map(|e| format!("{e:.4}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    assert!((lambda / lambda_d - 1.0).abs() < 0.10);
+}
+
 /// D6, the Einstein relation: without a field, the carriers spread with
 /// `⟨Δx²⟩ = 2 D t` (the slope between the window's middle and end, past the ballistic
 /// start), `D = μ kT/m` with D1's `μ`: required 5 % (as D1).
 #[test]
 fn d6_einstein_relation() {
-    let r = run_box(200_000, 0.02, 0.0, 0.0, 5.0, 45.0);
+    let r = run_box(200_000, 0.02, 0.0, 0.0, 0.0, 5.0, 45.0);
     let d = (r.msd.1 - r.msd.0) / (2.0 * 20.0);
     let theory = mobility(r.kappa, 0.0).0;
     println!(
