@@ -26,6 +26,9 @@ use crate::{Level, Outline};
 
 /// Absorbing-layer cells of an open tube (one with an output).
 pub const EM_PML: usize = 16;
+
+/// Free space between an open level's board and its absorbing layer (board cells).
+pub const EM_MARGIN: f64 = 1.0;
 /// Grid cells per board cell.
 pub const EM_PER_CELL: f64 = 4.0;
 /// The display's speed of light of a tube without an output, in units of its carriers'
@@ -198,13 +201,23 @@ impl TubeEm {
         let open = spec.output.is_some();
         let b = level.bounds();
         let h = 1.0 / EM_PER_CELL;
-        let nx = ((b.max.x - b.min.x) / h).ceil() as usize;
-        let ny = ((b.max.y - b.min.y) / h).ceil() as usize;
+        // An open level's grid reaches past the board: `EM_MARGIN` of free space, then the
+        // absorbing layer, so that all the board shows is free field (with the layer on
+        // the board its outer cells damped the waves: the fronts seemed to stick to the
+        // edge).
+        #[allow(clippy::cast_precision_loss)]
+        let margin = if open {
+            EM_MARGIN + EM_PML as f64 * h
+        } else {
+            0.0
+        };
+        let nx = ((b.max.x - b.min.x + 2.0 * margin) / h).ceil() as usize;
+        let ny = ((b.max.y - b.min.y + 2.0 * margin) / h).ceil() as usize;
         let grid = Grid {
             nx,
             ny,
             h,
-            origin: (b.min.x, b.min.y),
+            origin: (b.min.x - margin, b.min.y - margin),
         };
         let outlines = level.electrode_outlines(&[]);
         let n_el = outlines.len();

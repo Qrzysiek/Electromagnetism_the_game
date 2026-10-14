@@ -1952,10 +1952,13 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
     // map was shown would pull the time back to it, and every earlier time asked for
     // restarts the field from t = 0: the playback stuck near the start). A capture at a
     // set time (`EM_TIME`) waits for it instead (`dev_capture`).
+    // Once the field has reached the run's end it can go no further: the playback runs
+    // on to the end's pause and loops (held at the field's time it stopped at the end).
     if tube
         && std::env::var_os("EM_TIME").is_none()
         && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow))
         && let Some(s) = &game.em_snapshot
+        && (streaming || s.t < end - 0.5)
     {
         let ahead = 0.25 * game.playback_speed.max(0.25);
         game.anim_time = game.anim_time.min((s.t + ahead).max(before));
