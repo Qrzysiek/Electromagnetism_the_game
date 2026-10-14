@@ -245,7 +245,51 @@ pub fn panel(
     let left = ctx.viewport_rect().right() - PANEL_WIDTH;
     game.panel_left_px = Some(left * ctx.pixels_per_point());
     supply_badges(ctx, game, *camera, left);
+    inspect_tooltip(ctx, game, *camera);
     Ok(())
+}
+
+/// The tooltip over the object under the pointer: its kind, every parameter that defines
+/// it, and a time-dependent source's signal (`inspect.rs`).
+fn inspect_tooltip(
+    ctx: &egui::Context,
+    game: &Game,
+    (camera, transform): (&Camera, &GlobalTransform),
+) {
+    let Some(world) = game.hover_world else {
+        return;
+    };
+    // The pointer, or (a capture's EM_HOVER) the point's place on the screen.
+    let Some(pointer) = ctx.pointer_hover_pos().or_else(|| {
+        let v = camera
+            .world_to_viewport(transform, world.extend(0.0))
+            .ok()?;
+        Some(egui::pos2(v.x, v.y))
+    }) else {
+        return;
+    };
+    let level = &game.editor.level;
+    let at = physics::DVec3::new(f64::from(world.x), f64::from(world.y), 0.0);
+    let Some(info) = crate::inspect::inspect_at(level, &game.editor.placement, at) else {
+        return;
+    };
+    egui::Area::new(egui::Id::new("inspect_tooltip"))
+        .order(egui::Order::Tooltip)
+        .fixed_pos(pointer + egui::vec2(18.0, 18.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.set_max_width(300.0);
+                ui.label(egui::RichText::new(&info.title).strong());
+                for line in &info.lines {
+                    ui.label(egui::RichText::new(line).small());
+                }
+                if let Some((what, samples)) = &info.chart {
+                    ui.label(egui::RichText::new(what).small());
+                    circuit_plot(ui, samples, &[]);
+                }
+            });
+        });
 }
 
 /// The colour of a supply's badge and of its electrodes' highlight while it is in focus
@@ -1144,6 +1188,17 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             ui.selectable_value(&mut game.tube_particles, TubeParticles::Hidden, "off")
                 .on_hover_text("The map alone");
         });
+        ui.add(
+            egui::Slider::new(&mut game.map_tau, 0.0..=20.0)
+                .logarithmic(true)
+                .smallest_positive(0.1)
+                .text("average τ"),
+        )
+        .on_hover_text(
+            "A meter's view: the maps averaged over time with this time constant (a \
+             first-order low-pass, as an RC meter or a power meter integrates). 0: the \
+             instantaneous field, every fluctuation of the real physics.",
+        );
         if matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow)) {
             ui.add(
                 egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),
@@ -1457,7 +1512,7 @@ fn controls(ui: &mut egui::Ui) {
 /// A tube level's numbers (currents, their errors, times): plain decimals with about
 /// three significant digits (SI prefixes, as `fmt_si` writes them, read oddly here:
 /// "850m" for 0.85).
-fn fmt_num(v: f64) -> String {
+pub(crate) fn fmt_num(v: f64) -> String {
     let a = v.abs();
     if a != 0.0 && !(1e-3..1e4).contains(&a) {
         format!("{v:.2e}")

@@ -2,10 +2,12 @@
 
 #![allow(clippy::disallowed_methods)] // pictures only: the flights come from `physics`
 
+mod average;
 mod curriculum;
 mod draw;
 mod editor;
 mod em;
+mod inspect;
 mod level_editor;
 mod math;
 mod potential;
@@ -217,6 +219,10 @@ pub struct Game {
     /// slider hovered or moved, or one of its electrodes hovered on the map.
     pub supply_focus: Option<(level::Node, std::time::Instant)>,
     pub tube_range_decades: f64,
+    /// The maps' time average (a meter's time constant; 0: the instantaneous field) and
+    /// its state (`average.rs`).
+    pub map_tau: f64,
+    pub map_average: average::MapAverage,
     /// Tube levels: how the particles are drawn.
     pub tube_particles: TubeParticles,
     pub animate: bool,
@@ -240,6 +246,9 @@ pub struct Game {
     pub zoom_center: Option<Vec2>,
     /// A zoomed tube level dragged by the pointer: the board point held under it.
     pub pan_anchor: Option<Vec2>,
+    /// The board point under the pointer (None over the panel, off the window, or while
+    /// something is dragged): what the tooltip inspects (`inspect.rs`).
+    pub hover_world: Option<Vec2>,
 }
 
 impl Game {
@@ -312,6 +321,8 @@ impl Game {
             supply_focus: None,
             tube_particles: TubeParticles::Density,
             tube_range_decades: 1.5,
+            map_tau: 0.0,
+            map_average: average::MapAverage::default(),
             animate: true,
             playback_speed: 1.0,
             anim_time: 0.0,
@@ -325,6 +336,7 @@ impl Game {
             zoom: 1.0,
             zoom_center: None,
             pan_anchor: None,
+            hover_world: None,
         }
     }
 
@@ -878,6 +890,9 @@ fn dev_capture(
             if std::env::var("EM_AVERAGE").is_ok_and(|v| v == "0") {
                 game.flow_average = false;
             }
+            if let Some(tau) = std::env::var("EM_TAU").ok().and_then(|v| v.parse().ok()) {
+                game.map_tau = tau;
+            }
             if let Some(d) = std::env::var("EM_RANGE").ok().and_then(|v| v.parse().ok()) {
                 game.field_range_decades = d;
             }
@@ -1140,6 +1155,14 @@ fn input(
         return;
     }
     let (cam, cam_transform) = *camera;
+    // Captures inspect a point of the board without a pointer: EM_HOVER=x,y.
+    game.hover_world = std::env::var("EM_HOVER").ok().and_then(|v| {
+        let (x, y) = v.split_once(',')?;
+        Some(Vec2::new(x.trim().parse().ok()?, y.trim().parse().ok()?))
+    });
+    if game.hover_world.is_some() {
+        return;
+    }
     let Some(cursor) = window.cursor_position() else {
         return;
     };
@@ -1154,6 +1177,9 @@ fn input(
     let Ok(world) = cam.viewport_to_world_2d(cam_transform, cursor) else {
         return;
     };
+    if !game.mouse_drag && game.arrow_drag.is_none() && game.pan_anchor.is_none() {
+        game.hover_world = Some(world);
+    }
     // A zoomed tube level pans by dragging: the middle button anywhere, the left one on
     // empty board (where a press would place nothing); the point grabbed stays under the
     // pointer.
@@ -1363,7 +1389,7 @@ fn update_map(
             0
         },
         (
-            game.tube_gain_decades.to_bits(),
+            game.tube_gain_decades.to_bits() ^ game.map_tau.to_bits().rotate_left(7),
             game.tube_range_decades.to_bits()
                 ^ (game.tube_particles as u64)
                 ^ game
@@ -1381,6 +1407,20 @@ fn update_map(
     ) = game.map
     else {
         return;
+    };
+    // A tube level's maps averaged over time (the player's meter), before the level is
+    // borrowed below.
+    let (averaged, em_averaged) = if game.editor.level.is_tube() && game.map_tau > 0.0 {
+        let (tau, revision) = (game.map_tau, game.sent_revision);
+        let picture = game.tube_display_frame();
+        let snap = game.em_snapshot.clone();
+        let g = &mut *game;
+        (
+            picture.map(|p| g.map_average.frame(revision, &p, tau)),
+            snap.map(|s| g.map_average.snapshot(&s, tau)),
+        )
+    } else {
+        (None, None)
     };
     let level = &game.editor.level;
     let bounds = level.bounds();
@@ -1403,11 +1443,16 @@ fn update_map(
         let field = match (&level.tube, &game.tube_preview, shown, &picture) {
             (Some(spec), Some(v), Some(k), Some(picture)) if v.revision == game.sent_revision => 'arm: {
                 let run = &v.run;
-                // Many particles merged for the map (the shader and the arrows sum them all).
-                let binned = potential::map_frame(picture);
+                // Many particles merged for the map (the shader and the arrows sum them
+                // all); averaged over time, the meter's cells.
+                let binned = match &averaged {
+                    Some(a) => std::borrow::Cow::Borrowed(a),
+                    None => potential::map_frame(picture),
+                };
+                let picture = averaged.as_ref().unwrap_or(picture);
                 // The electromagnetic field's maps (`em.rs`).
                 if matches!(mode, MapMode::Magnetic | MapMode::EnergyFlow) {
-                    let Some(snap) = game.em_snapshot.as_ref() else {
+                    let Some(snap) = em_averaged.as_ref().or(game.em_snapshot.as_ref()) else {
                         break 'arm None;
                     };
                     // The colour unit: the 99th percentile over the board; for a tube that
