@@ -1,0 +1,340 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot,injection}
+\DocFingerprint{b6910f86734d5696}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One particle ($q = \val{q}$, $m = \val{m}$) is launched from $(\val{xLaunch}, \val{yLaunch})$
+along $+x$, with kinetic energy $T_0 = \val{Tzero}$. Nine equal charges stand in a wall at
+$x = \val{xWall}$, from $y = \val{yWallLo}$ to $y = \val{yWallHi}$, and block that line.
+The detector is the rectangle $\val{xDlo} \le x \le \val{xDhi}$,
+$\val{yDlo} \le y \le \val{yDhi}$. An entry counts only when the velocity there lies within
+$\val{halfDeg}^\circ$ of $+x$. The player places at most $\val{maxCharges}$ charges, of
+either sign, from the magnitudes in the level file, and no magnets. A flight ends when the
+particle touches a charge, leaves the world, enters the detector or runs out of time
+(\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$.
+
+The reference solution adds $Q = \val{Qup}$ at $(\val{xUp}, \val{yUp})$ and
+$Q = \val{Qat}$ at $(\val{xAt}, \val{yAt})$. The first stands just ahead of and above the
+launch and pushes the beam down. The second sits below the wall and attracts, so the beam
+passes under the wall and climbs back. It meets the detector on the left face, at
+$\val{angE}^\circ$ to $+x$, inside the cone. This document integrates the motion of the
+eleven charges and applies the cone of \levelref{injection}.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the particle has radius $a = \val{aRad}$, and every charge has
+radius $R = \val{R}$. The launch has
+\[
+  \gamma_0 = 1 + \frac{T_0}{mc^2} = \val{gammaZero}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T_0^2}{c^2} + 2mT_0} = \val{pZero}, \qquad
+  v_0 = \frac{\abs{\vect{p}_0}}{\gamma_0 m} = \val{vZero}.
+\]
+The direction in the file is $+x$. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$. The wall is $\val{nWall}$ charges of value $\val{Qwall}$, so
+each coupling is $\kappa = qQ = \val{kWall}$. The two added couplings are
+$\kappa_\mathrm{u} = \val{kUp}$ and $\kappa_\mathrm{a} = \val{kAt}$. The cone's axis is
+the angle $\val{axisDeg}^\circ$ and its half-angle is $\val{halfDeg}^\circ$, so the axis
+is the unit vector $\uvec{e} = (1, 0)$ and the half-angle in radians is
+$\delta = \val{halfRad}$. The detector sets no condition on the kinetic energy.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.88\linewidth, xmin=-1.6, xmax=32.6, ymin=-2.2, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \draw[black!50] (0,0) rectangle (30,20);
+  \fill[green!50!black, fill opacity=0.16] (28,8) rectangle (30,12);
+  \draw[green!40!black] (28,8) rectangle (30,12);
+  \fill[teal, fill opacity=0.30] (\rawval{coneOx},\rawval{coneOy}) --
+    (\rawval{coneXp},\rawval{coneYp}) -- (\rawval{coneXm},\rawval{coneYm}) -- cycle;
+  \addplot[only marks, mark=*, mark size=1.15pt, red!75!black] table {wall.dat};
+  \fill[blue!70!black, fill opacity=0.35] (15,1) circle[radius=0.3];
+  \draw[blue!70!black] (15,1) circle[radius=0.3];
+  \fill[red!70!black] (2,13) circle[radius=0.22];
+  \addplot[thin, black!55] table {pathup.dat};
+  \addplot[thick, orange!80!black] table {pathat.dat};
+  \addplot[very thick, blue!70!black] table {path.dat};
+  \draw[-{Stealth[length=6pt]}, thick] (\rawval{xLaunch},\rawval{yLaunch}) --
+    (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.11];
+  \node[font=\scriptsize, red!60!black, anchor=south] at (2,13.35) {$Q_\mathrm{u}$};
+  \node[font=\scriptsize, blue!50!black, anchor=west] at (15.45,1) {$Q_\mathrm{a}$};
+  \node[font=\scriptsize, red!60!black, anchor=south] at (15,14.35) {wall};
+  \node[font=\scriptsize, green!30!black, anchor=south] at (29,12.15) {detector};
+  \node[font=\scriptsize, teal!80!black, anchor=west] at (30.55,10) {$\pm 8^\circ$};
+\end{axis}
+\end{tikzpicture}
+\caption{The reference flight (blue) passes under the wall and the attracting charge, then
+enters the left face of the detector. The teal wedge is the cone of accepted directions,
+$\pm\val{halfDeg}^\circ$ about $+x$, drawn from the middle of that face. The upper charge
+alone (grey) and the attracting charge alone (orange) both leave through the floor of the
+world. The circle on $Q_\mathrm{a}$ has radius $R$.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch} and the energy \xeqref{foundations}{eq:energy}. The
+    motion stays in the plane (\xsecref{foundations}{sec:plane}).
+  \item The board's rules (\xsecref{foundations}{sec:board}). The first entry into the
+    detector decides, and the velocity there has to lie in the cone
+    \xeqref{injection}{eq:cone}.
+  \item The classical Runge--Kutta method \xeqref{foundations}{eq:rk4} and the fixed-step
+    flight of \xsecref{slingshot}{sec:method}. With two or more centres the orbit equation
+    does not separate (\xeqref{slingshot}{eq:noseparation}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, with the acceleration
+    \xeqref{first_bend}{eq:acceleration}, summed by Simpson's rule
+    \xeqref{foundations}{eq:simpson}.
+\end{principles}
+
+The level has no magnets, so $\vect{B} = \vect{0}$. With the charges at
+$\vect{r}_i$ and couplings $\kappa_i = qQ_i$, in the file's order (the wall, then the
+charges the player added), the force is
+\begin{equation}\label{eq:force}
+  \vect{F}(\vect{x}) = \sum_{i=1}^{N} \kappa_i \frac{\vect{x} - \vect{r}_i}{\abs{\vect{x} - \vect{r}_i}^3},
+  \qquad N = \val{nCharges}
+\end{equation}
+on the reference placement. The state $(x, y, p_x, p_y)$ obeys \xeqref{foundations}{eq:eom}
+with this force until the first event. The same superposition gives the potential energy
+$V$ in
+\begin{equation}\label{eq:energy}
+  W = \gamma mc^2 + V(\vect{x}) = \gamma_0 mc^2 + V(\vect{x}_0).
+\end{equation}
+
+\begin{assumption}{The charges are held in place}\label{as:fixed}
+None of the charges recoils. That is a rule of the game
+(\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy is not taken from the particle. Along the reference flight it is
+$\val{Erad}$, the fraction $\val{radFrac}$ of $T_0$ (§\ref{sec:hand}). The two flights of
+§\ref{sec:others} radiate $\val{UpRad}$ and $\val{AtRad}$. The game makes the same
+approximation and reports the same integral (\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize, so \xeqref{foundations}{eq:sphereforce} is
+exact. On the reference flight the closest approach to the attracting charge is
+$\val{rClose}$, which is $\val{rOverR}$ times $R$, a clearance of $\val{clearAt}$. The
+nearest charge of the wall stays $\val{rWall}$ away, a clearance of $\val{clearWall}$.
+\end{assumption}
+
+\begin{assumption}{The step resolves the close pass}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates the error of the reference end
+state as $\val{errRef}$ (§\ref{sec:hand}). That is far below the half-angle
+$\delta = \val{halfRad}$ and far below the height of the detector. The tolerance used in
+§\ref{sec:comparison} is ten times this estimate.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{What the energy allows}
+
+At the launch the upper charge is a distance $\val{rUp}$ away and the attracting charge a
+distance $\val{rAt}$, so $V(\vect{x}_0) = \val{VZero}$ and
+\[
+  W - mc^2 = T_0 + V(\vect{x}_0) = \val{Wbind}.
+\]
+This is positive. Far from every charge $V \to 0$, which is below the bound, so
+\eqref{eq:energy} does not confine the particle: leaving the world is allowed, and the
+integration has to decide whether it does. The force at the launch is
+$(\val{FxZero}, \val{FyZero})$. Both player charges point it downward. The upper one
+contributes $\val{FyUp}$ and the attracting one $\val{FyAtLaunch}$.
+
+\subsection{Why the flight is integrated}\label{sec:noseparation}
+
+With one charge, angular momentum closes the motion into the orbit of
+\levelref{first_bend}. Two fixed centres already fail to separate in the relativistic
+problem: the term \xeqref{slingshot}{eq:noseparation} does not split. Eleven centres give
+that obstruction no symmetry that would remove it. The flight is the initial-value problem
+for \eqref{eq:force}, and §\ref{sec:method} computes it to a stated accuracy.
+
+\subsection{The direction cone}\label{sec:cone}
+
+The test is the one derived in \levelref{injection}. The level file stores the cone as an
+axis $\alpha = \val{axisDeg}^\circ$ and a half-angle $\delta = \val{halfDeg}^\circ$. The
+axis is $\uvec{e} = (1, 0)$. If $\vect{v}$ is the velocity at the first entry into the box,
+\begin{equation}\label{eq:cone}
+  \beta = \operatorname{atan2}\bigl(\abs{\vect{v}\times\uvec{e}},\, \vect{v}\cdot\uvec{e}\bigr),
+\end{equation}
+which is \xeqref{injection}{eq:cone}, and the entry counts when $\beta \le \delta$ with
+$\delta$ in radians. The outcome is then Arrived. When the particle has entered and
+$\beta > \delta$, the box absorbs it and the entry does not count: the outcome is Rejected
+(\physref{6.1}). A flight that never enters the box is not tested. Since
+$\vect{v} = \vect{p}/(\gamma m)$ with $\gamma m > 0$, the same $\beta$ comes from
+$\vect{p}$. Here that is $\beta = \operatorname{atan2}(\abs{p_y}, p_x)$.
+
+\subsection{The method}\label{sec:method}
+
+The state is advanced by the classical Runge--Kutta method \xeqref{foundations}{eq:rk4} at
+the fixed step $h$, as in \xsecref{slingshot}{sec:method}. After each step the position on
+that step is the cubic Hermite interpolant \xeqref{slingshot}{eq:hermite}, sampled at
+$\val{nSample}$ points. The speed is less than $c$, and the velocity terms of the
+interpolant add less than $ch$, so the sample stays inside the box of the step's two ends
+enlarged by $ch$. A sphere, the world's edge or the detector is tested only when that box
+meets it. The samples are read in the board's order
+(\xsecref{foundations}{sec:board}): a sphere of radius $R + a$ about a charge, then the
+world's edge, then the detector. The earliest sample wins, and a tie keeps that order. The
+first instant of the winning event is then the bisection of the interpolant,
+$\val{nBisect}$ iterations. The position reported is the interpolant at that instant. The
+momentum is one further step of the method, of that length.
+
+When the event is a face of a box and the free coordinate lies in that face, the face
+coordinate is set to the face value. The residual of the interpolant, before that
+assignment, is the check that the step really did cross the face. The error of the
+reported step is a fifteenth of its difference from the step $2h$
+(\xsecref{foundations}{sec:numerics}). The energy \eqref{eq:energy} is a second check, one
+that does not use the game.
+
+The closest approach quoted below is the minimum of the same interpolant. On a step whose
+start lies more than $2ch$ beyond the minimum already found, that charge is skipped: the
+distance to it cannot fall by more than that.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} (\xeqref{foundations}{eq:launch}):
+    $\gamma_0 = \val{gammaZero}$ and $\abs{\vect{p}_0} = \val{pZero}$, aimed along $+x$.
+    The force is $(\val{FxZero}, \val{FyZero})$, so the beam starts downward.
+  \item\label{st:energy} \emph{The energy} \eqref{eq:energy}: $W = \val{W}$ and
+    $W - mc^2 = \val{Wbind} > 0$. The world's edge is energetically open.
+  \item\label{st:flight} \emph{The flight}: the method of §\ref{sec:method} with
+    $h = \val{H}$. The states every five time units, and the drift of \eqref{eq:energy}:
+    \begin{center}\small\val{states}\end{center}
+    At $t = \val{tFive}$ the particle is at $(\val{xFive}, \val{yFive})$, with
+    $p_y = \val{pyFive}$. At $t = \val{tFifteen}$ it is at
+    $(\val{xFifteen}, \val{yFifteen})$ and $p_y = \val{pyFifteen}$ is still negative.
+    The lowest point is $(\val{xDip}, \val{yDip})$ at $t = \val{tDip}$. The path crosses
+    the wall's line $x = \val{xWall}$ at $y = \val{yPass}$, below the wall, and the
+    nearest wall charge (the one at $y = \val{yWallHit}$) is $\val{rWall}$ away.
+  \item\label{st:dip} \emph{Under the attracting charge}: the closest approach is
+    $\val{rClose}$, at $(\val{xClose}, \val{yClose})$ and $t = \val{tClose}$, a clearance
+    $\val{clearAt}$ outside the sphere. The force there is
+    $(\val{FxClose}, \val{FyClose})$, upward. At $x = \val{xRise}$ the height is
+    $\val{yRise}$. By $t = \val{tTwentyFive}$ the particle has climbed to
+    $(\val{xTwentyFive}, \val{yTwentyFive})$ with $p_y = \val{pyTwentyFive} > 0$.
+    At $t = \val{tThirty}$ it is at $(\val{xThirty}, \val{yThirty})$, still climbing,
+    with $p_y = \val{pyThirty}$.
+  \item\label{st:entry} \emph{The entry}: the step from $t_n = \val{tBefore}$, at
+    $(\val{xBefore}, \val{yBefore})$, ends at $(\val{xAfter}, \val{yAfter})$. The
+    interpolant crosses the \val{faceE} face at the fraction $u = \val{uE}$. The residual
+    before the face coordinate is assigned is $\val{faceRes}$, so
+    $x_\mathrm{e} = \val{xE}$, $y_\mathrm{e} = \val{yE}$ and
+    $t_\mathrm{e} = \val{tE}$, after $\val{steps}$ steps. One step of length
+    $t_\mathrm{e} - t_n$ gives $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$.
+  \item\label{st:cone} \emph{The cone} \eqref{eq:cone}:
+    $\beta = \val{betaE}$ radians, which is $\val{angE}^\circ$. The margin under
+    $\val{halfDeg}^\circ$ is $\val{marginDeg}^\circ$, so the entry counts.
+  \item\label{st:check} \emph{The checks}: the energy gives
+    $\gamma_\mathrm{e} = (W - V(\vect{x}_\mathrm{e}))/(mc^2) = \val{gammaE}$ and
+    $\abs{\vect{p}_\mathrm{e}} = mc\sqrt{\gamma_\mathrm{e}^2 - 1} = \val{pEnergy}$, which
+    the integration matches to $\val{pDiff}$. Along the flight the energy stays within
+    $\val{wDev}$ of $W$. Halving the step estimates the error of the end state as
+    $\val{errRef}$. Coarser steps cross the same face:
+    \begin{center}\small\val{convergence}\end{center}
+  \item\label{st:rad} \emph{The radiation}: the power \xeqref{foundations}{eq:larmor} with
+    the acceleration \xeqref{first_bend}{eq:acceleration}, summed by Simpson's rule on the
+    steps of $h/2$. The integral is $\val{Erad}$, the fraction $\val{radFrac}$ of $T_0$.
+    The relative difference from the same sum at step $h$, divided by fifteen, is
+    $\val{radErr}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The particle enters the detector through its left face at $(\val{xE}, \val{yE})$ at
+$t_\mathrm{e} = \val{tE}$, with momentum $(\val{pxE}, \val{pyE})$. The direction is
+$\val{angE}^\circ$ from $+x$, inside the cone by $\val{marginDeg}^\circ$. The level is
+solved.
+\end{result}
+
+By hand, Step~\ref{st:flight} is $\val{steps}$ steps of four evaluations of \eqref{eq:force}.
+The close pass at a distance $\val{rClose}$ is what sets the step: the error estimate
+$\val{errRef}$ is the reference flight's, and the two smoother flights of §\ref{sec:others}
+come out smaller.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The three outcomes agree. The tolerance on a state is $\val{tolFlight}$: ten times
+$\val{errRef}$, the largest of the three step-halving estimates, and at least $10^{-9}$.
+It was fixed from those estimates before the comparison. The largest absolute difference
+is the reference ordinate, $\val{cmpRefYDiff}$. The estimate for that flight is
+$\val{errRef}$, and the game's verified positions are good to about $10^{-10}$
+(\xsecref{foundations}{sec:verification}), so a difference of this size is what the two
+errors allow. The reference abscissa differs by $\val{cmpRefXDiff}$. The two floor
+ordinates differ by $\val{cmpUpYDiff}$ and $\val{cmpAtYDiff}$.
+
+The single-charge estimates are $\val{UpErr}$ and $\val{AtErr}$. Their absolute
+differences stay smaller than the reference ordinate's. The radiated energies are compared
+relatively, with tolerance $10^{-4}$, set the same way and wider than the quadrature
+uncertainties $\val{radErr}$, $\val{UpRadErr}$ and $\val{AtRadErr}$. The largest relative
+difference is the attracting charge's, $\val{cmpAtRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+Either added charge, without the other, leaves the world through the floor. The method of
+§\ref{sec:method} integrates both (\code{placements.json}), each at $h = \val{H}$ and at
+$2h$.
+\begin{enumerate}[label=\arabic*.]
+  \item $Q = \val{Qup}$ at $(\val{xUp}, \val{yUp})$ only. The particle leaves through the
+    \val{UpFace} of the world at $(\val{UpX}, \val{UpY})$, at $t = \val{UpT}$.
+
+    The momentum is $(\val{UpPx}, \val{UpPy})$. Its horizontal part is negative, and the
+    exit is still to the left of the wall: the charge has turned the beam back, and the
+    beam falls out of the board. The step-halving estimate is $\val{UpErr}$. The radiated
+    energy is $\val{UpRad}$.
+  \item $Q = \val{Qat}$ at $(\val{xAt}, \val{yAt})$ only. The particle leaves through the
+    \val{AtFace} at $(\val{AtX}, \val{AtY})$, at $t = \val{AtT}$.
+
+    The momentum is $(\val{AtPx}, \val{AtPy})$. Its horizontal part is still positive, and
+    the exit is still to the left of the wall: the charge pulls the beam through the floor
+    before the beam can pass under the wall. The estimate is $\val{AtErr}$. The radiated
+    energy is $\val{AtRad}$.
+\end{enumerate}
+
+The reference needs both charges. The upper one supplies the downward push at launch
+(Step~\ref{st:launch}); the attracting one supplies the upward force at the bottom of the
+dip (Step~\ref{st:dip}), which is what brings the beam back up to the detector and into
+the cone. Figure~\ref{fig:board} shows the three paths.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{foundations}{eq:eom} with its eighth-order Runge--Kutta method
+at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). It finds the crossing on its
+interpolant (\physref{6}) and applies \eqref{eq:cone} to the velocity at that entry
+(\physref{6.1}). It verifies the outcome by comparing its two runs (\physref{7}). The
+model is this document's, including \ref{as:radiation} (\physref{8}). The agreement in
+§\ref{sec:comparison} is between the fixed-step flight of §\ref{sec:method}, the cone
+\eqref{eq:cone} and that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{slingshot}: the fixed-step method, the Hermite crossing, and the reason
+    two fixed centres have no closed relativistic orbit.
+  \item \levelref{injection}: the cone \eqref{eq:cone}. There a single charge bends one
+    ray into the same $\pm 8^\circ$ of $+x$.
+  \item \levelref{first_bend}: the acceleration that enters the radiated power.
+  \item \xsecref{foundations}{sec:board} and \xsecref{foundations}{sec:numerics}: the
+    order of events, and the step-halving estimate.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
