@@ -1,0 +1,460 @@
+\documentclass{leveldoc}
+\DocUses{foundations}
+\DocFingerprint{2e96020ecfcc7872}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+\leveldescription
+
+One positive ion is launched along $+x$ from the left edge, on the mid-line
+between two metal plates. The upper plate is held at a negative potential and
+the lower plate at the opposite positive potential, so the field in the gap
+points upward and a positive ion is pushed upward. The plates are finite, so
+the field bulges out at their ends, and a charge placed nearby rearranges the
+charge on the metal. The player may add up to three charges, of either sign,
+from the listed magnitudes, inside the marked region. There are no magnets.
+
+The ion must enter the detector. The shot has no acceptance window, no kinetic
+window and no gate. A flight ends when the ion touches a charge or a plate,
+leaves the world, or enters the detector
+(\xsecref{foundations}{sec:board}). A plate's obstacle is its box plus a
+contact shell of thickness $\val{contact}$. A fixed charge has radius
+$\val{Rcharge}$, and the ion's radius is $0$.
+
+The reference adds one positive charge below the launch, at the near corner of
+the region. The plates alone lift the ion, and it still leaves through the
+right edge of the world below the detector. The added charge supplies the rest
+of the upward push, and the ion meets the detector's lower edge. This document
+states the boundary-element problem for the plates, gives the uniform-gap field
+as the analytic limit, and integrates the flight in the panel field by the
+classical Runge--Kutta method.
+
+\section{Setup}\label{sec:setup}
+
+\setuptable
+
+The speed of light is $c = \val{cLight}$. The ion has charge $q = \val{qPart}$,
+mass $m = \val{mPart}$ and radius $0$, and it is launched with kinetic energy
+$T_0 = \val{T0}$. The launch is at $(\val{xLaunch}, \val{yLaunch})$, straight
+along $+x$. Then $\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$ and
+$v_0 = \val{v0} = \val{vOverC}\,c$ (\xeqref{foundations}{eq:launch}).
+
+The upper plate occupies $\val{xTop0} \le x \le \val{xTop1}$,
+$\val{yTop0} \le y \le \val{yTop1}$, at potential $V_\mathrm{top} = \val{vTop}$.
+The lower plate occupies $\val{xBot0} \le x \le \val{xBot1}$,
+$\val{yBot0} \le y \le \val{yBot1}$, at potential $V_\mathrm{bot} = \val{vBot}$.
+Both stand on the plane of the slice, symmetric about $z = 0$, with the height
+given in the level file. The gap between the inner faces is $g = \val{gap}$.
+The reference charge is $Q = \val{QPlay}$ at $(\val{xPlay}, \val{yPlay})$.
+
+The detector is $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$. The reported time step is $h = \val{H}$. The
+reported mesh uses rectangles of edge $\val{panelFine}$, $\val{nPanels}$ of
+them on the upper half of the two plates.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth,
+  xmin=-1.5, xmax=32.5, ymin=-2, ymax=22.5,
+  xlabel={$x$}, ylabel={$y$}, tick label style={font=\small}]
+  \draw[black!40, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!25] (0,0) rectangle (30,20);
+  \fill[green!50!black, fill opacity=0.18]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \fill[black!20]
+    (\rawval{xTop0},\rawval{yTop0}) rectangle (\rawval{xTop1},\rawval{yTop1});
+  \draw[black!70]
+    (\rawval{xTop0},\rawval{yTop0}) rectangle (\rawval{xTop1},\rawval{yTop1});
+  \fill[black!20]
+    (\rawval{xBot0},\rawval{yBot0}) rectangle (\rawval{xBot1},\rawval{yBot1});
+  \draw[black!70]
+    (\rawval{xBot0},\rawval{yBot0}) rectangle (\rawval{xBot1},\rawval{yBot1});
+  \fill[red!70!black] (\rawval{xPlay},\rawval{yPlay}) circle[radius=\rawval{Rcharge}];
+  \addplot[orange!80!black] table {pathbare.dat};
+  \addplot[very thick, blue!60!black] table {pathref.dat};
+  \draw[-{Stealth[length=5pt]}, thick] (\rawval{xLaunch},\rawval{yLaunch}) -- (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.08];
+\end{axis}
+\end{tikzpicture}
+\caption{The plates and the two flights. The gray rectangles are the plates and
+the disc is the reference charge; the green box is the detector. Blue is the
+reference flight: it climbs through the gap and meets the bottom of the
+detector. Orange is the same launch with that charge removed: the plates lift
+it, and it leaves through the right edge of the world, below the detector.
+Both paths stay outside the plates.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a point charge \xeqref{foundations}{eq:coulomb}, and the
+    force on a non-polarizable particle \xeqref{foundations}{eq:sphereforce}.
+    There is no magnetic field.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the
+    launch \xeqref{foundations}{eq:launch}, and energy in a static field
+    \xeqref{foundations}{eq:energy}. Away from charge the potential is harmonic,
+    $\nabla^2\phi = -4\pi\rho$ as stated with that Coulomb field. The motion
+    stays in the plane (\xsecref{foundations}{sec:plane}).
+  \item A metal plate is an equipotential. Its relaxation is instantaneous on
+    the flight's time scale (\physref{2.7}). The surface charge is constant on
+    each rectangle of \S\ref{sec:panel}, fixed by collocation
+    \eqref{eq:collocation}.
+  \item The board's rules (\xsecref{foundations}{sec:board}): obstacles first,
+    then the world, then the detector. The classical Runge--Kutta method and
+    the cubic Hermite location of an event
+    (\xsecref{foundations}{sec:numerics}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, summed by Simpson's
+    rule \xeqref{foundations}{eq:simpson}. It is not put back into the force.
+\end{principles}
+
+On the plates the potential equals the electrode potential. Off the metal the
+electric field is the Coulomb field of the placed charges plus the field of the
+surface charge and of its mirror in the plane $z = 0$. The ion is not part of
+that surface charge. The state $(\vect{x}, \vect{p})$ obeys
+\xeqref{foundations}{eq:eom} with $\vect{B} = \vect{0}$ and with that
+$\vect{E}$, from the launch until the first ending event.
+
+\begin{assumption}{Electrostatic plates}\label{as:static}
+The metal answers at once. That drops the retardation across the board. The
+launch speed is $\val{vOverC}\,c$. The game uses the same static plates
+(\physref{2.7}), so this is the model being compared.
+\end{assumption}
+
+\begin{assumption}{No radiation reaction}\label{as:radiation}
+The ion radiates \xeqref{foundations}{eq:larmor}, and that energy is not taken
+from the flight. On the reference flight the radiated energy is a fraction
+$\val{RefRadFrac}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{No image of the ion}\label{as:image}
+The ion's own surface charge on the plates is left out: a new solve at every
+force evaluation. The game leaves it out for the same reason (\physref{2.7}).
+The neglected force is bounded by $q^2/d^2$, with the distance $d$ to the metal
+floored at $10^{-3}$, and the bound is taken relative to
+$\max(\abs{q\vect{E}}, T_0)$. Along the reference samples the ratio reaches
+$\val{RefImage}$; along the plates-alone samples it reaches $\val{BareImage}$.
+The samples are the step ends and the ending point. The engine asks for the
+ratio to stay below $10^{-10}$.
+\end{assumption}
+
+\begin{assumption}{Equal rectangles}\label{as:panels}
+The surface charge is constant on equal rectangles of edge $\val{panelFine}$.
+The engine collocates the same boundary condition on graded triangles
+(\physref{2.7}). Replacing the edge by $\val{panelCoarse}$ moves an end state
+by $\val{errMesh}$. That change is the discretization estimate of this mesh.
+\end{assumption}
+
+\begin{assumption}{The fixed step}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates an end state by
+$\val{errStep}$ (\xsecref{foundations}{sec:numerics}). Ten times the panel-size
+estimate $\val{errMesh}$ lies above $10^{-9}$, and it is larger than the
+step-halving estimate $\val{errStep}$, so the tolerance on a state is that
+product, $\val{tolFlight}$. Between samples the ion moves at most
+$\val{stepReach}$, while the smallest sampled clearance of either plate is
+$\val{RefDmin}$ on the reference flight and $\val{BareDmin}$ on the plates alone.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The uniform gap}\label{sec:gap}
+
+Inside the gap, and away from the placed charges, $\nabla^2\phi = 0$. For two
+infinite plates the potential depends only on $y$, so $\mathrm{d}^2\phi/\mathrm{d}y^2 = 0$ and
+$\phi$ is linear in $y$. Matching the two potentials gives
+$\mathrm{d}\phi/\mathrm{d}y = (V_\mathrm{top} - V_\mathrm{bot})/g$, and
+$\vect{E} = -\nabla\phi$ then has
+\begin{equation}\label{eq:uniform}
+  E_y = \frac{V_\mathrm{bot} - V_\mathrm{top}}{g}.
+\end{equation}
+With these plates that value is $\val{eUniform}$, pointing from the positive
+plate up toward the negative one. Equation \eqref{eq:uniform} is the field of
+an infinite pair. These plates are finite: the panel field at the centre,
+computed next, is lower.
+
+With the plates alone, the panel field of \S\ref{sec:panel} is evaluated
+halfway along the plates, on the launch line $y = \val{yLaunch}$, which is the
+midpoint of the two centres. Its potential is $\val{phiCenter}$, the roundoff
+of the cancellation between equal and opposite plates, and its upward field is
+$\val{eCenter}$.
+Relative to \eqref{eq:uniform} the difference is $\val{eUniformRel}$. The
+flight is not integrated in the uniform field. The uniform field is the limit,
+and $\val{eUniformRel}$ is how far the centre of this gap sits from that limit.
+
+\subsection{One rectangle}\label{sec:panel}
+
+A rectangle in the plane $z = z_0$, covering $x \in [x_0, x_1]$ and
+$y \in [y_0, y_1]$, carries a constant density $\sigma$. Set
+$u = x - x'$, $v = y - y'$, $w = z - z_0$ and $r = \sqrt{u^2 + v^2 + w^2}$.
+Differentiating the logarithm gives the inner integral of $1/r$:
+\begin{equation}\label{eq:log}
+  \frac{\partial r}{\partial u} = \frac{u}{r}, \qquad
+  \frac{\partial}{\partial u}\ln(u + r)
+    = \frac{1 + u/r}{u + r} = \frac{1}{r}.
+\end{equation}
+The primitive in both variables, for the potential, is
+\begin{equation}\label{eq:primitive}
+  P(u, v, w) = u\ln(v + r) + v\ln(u + r)
+    - \abs{w}\,\operatorname{atan2}\!\big(uv,\,\abs{w}\,r\big),
+\end{equation}
+where a logarithm whose argument is not positive is omitted. For $w > 0$ write
+$\theta = \operatorname{atan2}(uv, wr)$, so the last term is $w\theta$. Its
+derivative in $u$, and the two logarithms, are
+\begin{align*}
+  \frac{\partial}{\partial u}\big[u\ln(v + r)\big]
+    &= \ln(v + r) + \frac{u^2}{r(v + r)}, \\
+  \frac{\partial}{\partial u}\big[v\ln(u + r)\big]
+    &= \frac{v}{r}, \\
+  \frac{\partial}{\partial u}(w\theta)
+    &= \frac{w^2 v}{r(u^2 + w^2)}.
+\end{align*}
+The angle derivative uses
+$\partial\operatorname{atan2}(y, x)/\partial u = (x\,y_u - y\,x_u)/(x^2 + y^2)$
+with $y = uv$ and $x = wr$: the numerator is
+$(wv/r)(r^2 - u^2) = (wv/r)(v^2 + w^2)$, and the denominator is
+$w^2 r^2 + u^2 v^2 = (u^2 + w^2)(v^2 + w^2)$. Collecting the three derivatives,
+\begin{equation}\label{eq:p-u}
+  \frac{\partial P}{\partial u}
+    = \ln(v + r) + \frac{u^2}{r(v + r)} + \frac{v}{r}
+      - \frac{w^2 v}{r(u^2 + w^2)}.
+\end{equation}
+The last three terms equal $u^2/(u^2 + w^2)$. Multiplied by $r$ they are
+$u^2/(v + r) + v - w^2 v/(u^2 + w^2)$. The first two of those simplify by
+$u^2 + v^2 = r^2 - w^2$:
+\[
+  \frac{u^2}{v + r} + v = r - \frac{w^2}{v + r},
+\]
+so the three terms, times $r$, equal
+$r - w^2/(v + r) - w^2 v/(u^2 + w^2)$. This equals $r\,u^2/(u^2 + w^2)$ because
+\[
+  \frac{w^2}{v + r} + \frac{w^2 v}{u^2 + w^2} = \frac{r\,w^2}{u^2 + w^2},
+\]
+which clears to $u^2 + w^2 + v(v + r) = r(v + r)$, that is $r^2 + vr = r(r + v)$.
+Therefore
+\begin{equation}\label{eq:p-u-simple}
+  \frac{\partial P}{\partial u} = \ln(v + r) + \frac{u^2}{u^2 + w^2}.
+\end{equation}
+The second term does not depend on $v$. The same reduction as \eqref{eq:log},
+with $v$ in place of $u$, gives $\partial\ln(v + r)/\partial v = 1/r$, so
+\begin{equation}\label{eq:mixed}
+  \frac{\partial^2 P}{\partial v\,\partial u} = \frac{1}{r}.
+\end{equation}
+Integrating \eqref{eq:mixed} from $u = x - x_1$ to $u = x - x_0$ and from
+$v = y - y_1$ to $v = y - y_0$ produces the corner sum below. Those limits are
+the rectangle, because $\mathrm{d}x' = -\mathrm{d}u$ and $\mathrm{d}y' = -\mathrm{d}v$:
+\begin{equation}\label{eq:rectangle}
+\begin{aligned}
+  \phi &= \sigma\Big[
+      P(x - x_0, y - y_0, w) - P(x - x_0, y - y_1, w) \\
+      &\quad - P(x - x_1, y - y_0, w) + P(x - x_1, y - y_1, w)
+    \Big].
+\end{aligned}
+\end{equation}
+The field is $\vect{E} = -\nabla\phi$, from the same corner sum. Replacing $w$
+by $\abs{w}$ in the last term of \eqref{eq:primitive} makes $P$ even in $w$ and
+leaves \eqref{eq:mixed} unchanged for $w \neq 0$. The potential of a sheet is
+therefore the same on both sides, the in-plane field is even, and the normal
+field is odd. On the sheet itself $1/r$ is integrable, so the potential at a
+centroid, which lies in the interior of its rectangle, is finite.
+
+\subsection{The plates}\label{sec:plates}
+
+Each plate is a box. Only the upper half is meshed: the four side faces from
+$z = 0$ up to half the height, and the top face. The mid-plane is the interior
+of the metal, so it is not a face. Each edge from $a$ to $b$ is split into
+$n = \max(1, \operatorname{round}((b - a)/\val{panelFine}))$ equal parts, and
+the face is the grid of those parts. The mirror of a panel through $z = 0$
+carries the same density and is not an extra unknown. The reported mesh has
+$\val{nPanels}$ upper rectangles.
+
+Let $\vect{r}_i$ be the centroid of upper rectangle $i$, belonging to electrode
+$e(i)$, and let $\phi_j$ be the potential \eqref{eq:rectangle} of that
+rectangle at unit density. Collocation asks
+\begin{equation}\label{eq:collocation}
+  \sum_j \sigma_j \big(\phi_j(\vect{r}_i) + \phi_j^\mathrm{mirror}(\vect{r}_i)\big)
+    = V_{e(i)} - \phi_\mathrm{ext}(\vect{r}_i).
+\end{equation}
+Here $\phi_\mathrm{ext}$ is the Coulomb potential of the placed charges. The
+ion is absent from $\phi_\mathrm{ext}$ and from the panels, which is
+assumption~\ref{as:image}. A placed charge changes every density through the
+right-hand side: the plates' charge rearranges. With no placed charge,
+$\phi_\mathrm{ext} = 0$. The densities are the solution of this dense linear
+system. The residual $\max\abs{G\sigma - b}$ on the reported mesh is
+$\val{solveRes}$.
+
+Off the centroids the piecewise-constant density does not hold the potential
+exactly. On the inner face of each plate, in the plane $z = 0$, at two stations
+that miss the centroids, and with the reference charge present, the potential
+differs from the plate potential by at most $\val{surfRes}$.
+
+In the plane $z = 0$ the normal fields of a panel and its mirror cancel, so
+$E_z = 0$ and the ion stays in the plane. The field on the ion is the in-plane
+field of the panels and the mirrors, plus the Coulomb field of the placed
+charges.
+
+\subsection{The flight}\label{sec:flight}
+
+There is no closed orbit. The state is advanced by \xeqref{foundations}{eq:rk4}
+with the fixed step $h = \val{H}$. After each step the cubic Hermite
+interpolant of the two ends is sampled at thirty-two fractions of the step. The
+first sample that has touched an obstacle, left the world or entered the
+detector is refined by bisection, sixty halvings
+(\xsecref{foundations}{sec:numerics}). Obstacles are tested before the world,
+and the world before the detector. A face coordinate is assigned when the
+residual is below $10^{-6}$.
+
+The conserved energy is \xeqref{foundations}{eq:energy}. The rest energy
+$mc^2$ does not depend on the state, so the diagnostic is the kinetic energy
+plus the potential of the panels, the mirrors and the placed charges,
+\begin{equation}\label{eq:flight-energy}
+  W = (\gamma - 1)mc^2 + q\,\phi(\vect{x}).
+\end{equation}
+There is no image term: the ion is not in $\phi$. The error of the fine step
+is $\abs{y_h - y_{2h}}/15$. The same rule estimates the Simpson error of the
+radiated energy. The panel-size estimate is the change in the end state when
+the rectangle edge doubles, not divided by $15$. Both flights give the same
+outcome at $h$ and at $2h$, and on both meshes.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} \xeqref{foundations}{eq:launch}.
+    $\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$, so
+    $\vect{p}_0 = (\val{p0}, 0)$ and $v_0 = \val{v0}$.
+  \item\label{st:gap} \emph{The gap, as a limit.} Equation \eqref{eq:uniform}
+    gives $E_y = \val{eUniform}$. The panel field at the centre of the gap,
+    with the plates alone, is $\val{eCenter}$, lower by the relative amount
+    $\val{eUniformRel}$. The potential there is $\val{phiCenter}$. The march
+    uses the panels, not this uniform value.
+  \item\label{st:panels} \emph{The panels.} Build the upper-half rectangles of
+    edge $\val{panelFine}$ as in \S\ref{sec:plates}: $\val{nPanels}$ of them,
+    plus the mirrors. Solve \eqref{eq:collocation} with the reference charge on
+    the right-hand side. The residual at the centroids is $\val{solveRes}$. On
+    the inner faces, off the centroids, the potential is off by at most
+    $\val{surfRes}$.
+  \item\label{st:march} \emph{The march.} Advance \eqref{eq:flight-energy} and
+    \xeqref{foundations}{eq:eom} by \xeqref{foundations}{eq:rk4} with step
+    $\val{H}$, and locate the ending face as in \S\ref{sec:flight}. The state
+    every five time units:
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:end} \emph{The arrival.} The ion meets the \val{RefFace} face
+    of the detector at $(\val{RefX}, \val{RefY})$, at $t = \val{RefT}$, with
+    momentum $(\val{RefPx}, \val{RefPy})$, at an angle $\val{RefAng}$ degrees
+    above $+x$. The ordinate is the detector's lower edge. The run takes
+    $\val{RefSteps}$ steps. The path only climbs: its lowest point is the
+    launch, and its highest is $\val{RefYmax}$.
+  \item\label{st:check} \emph{The checks.} Along the flight, $W$ drifts by at
+    most $\val{RefWdev}$. The step-halving estimate of the end state is
+    $\val{RefErr}$, and the larger of the two flights is $\val{errStep}$. The
+    panel-size estimate is $\val{errMesh}$. The sampled clearance of the plates
+    is $\val{RefDmin}$, outside the shell $\val{contact}$, and the ion moves at
+    most $\val{stepReach}$ in one step. The image-force ratio reaches
+    $\val{RefImage}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on steps of $h/2$
+    gives $\val{RefRad}$, a fraction $\val{RefRadFrac}$ of $T_0$. Halving that
+    step again changes the integral by the relative amount $\val{RefRadErr}$.
+    This is our field's integral. It is not a row of the comparison: the
+    engine's triangles are a different field.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The ion enters the detector through its lower edge at
+$(\val{RefX}, \val{RefY})$ at $t = \val{RefT}$, with momentum
+$(\val{RefPx}, \val{RefPy})$. The level is solved.
+\end{result}
+
+The march is a few thousand steps of four field evaluations. Each evaluation
+sums the $\val{nPanels}$ rectangles, their mirrors, and the one placed charge.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+Eight comparisons are in the table: the reference outcome, time and end
+position, and the outcome, time and end position of the plates with no added
+charge. The tolerance on a state is $\val{tolFlight}$. Ten times the panel-size
+estimate $\val{errMesh}$ lies above $10^{-9}$, and it is larger than the
+step-halving estimate $\val{errStep}$, so the tolerance is that product. The
+tolerance on a state was fixed from these estimates before the comparison.
+
+The largest absolute difference is the bare ordinate, $\val{cmpBareYDiff}$. It
+matches the panel-size estimate $\val{errMesh}$: the two are the same size, and
+the difference lies under the tolerance. The next is the reference abscissa,
+$\val{cmpRefXDiff}$, the same size again. The reference time differs by
+$\val{cmpRefTDiff}$ and the bare time by $\val{cmpBareTDiff}$, both smaller.
+The step estimate $\val{errStep}$ is far below all four: the panels, not the
+time step, set the difference. The outcomes agree.
+
+The reference ordinate and the bare abscissa agree exactly. Each is a face the
+flight meets, the detector's lower edge and the world's right edge.
+
+\section{Other solutions}\label{sec:others}
+
+The plates alone, which is the empty placement in \code{placements.json}, do
+not solve the level. There is no slider, and the panel solve is too slow for a
+map of every charge.
+
+The ion leaves along $+x$. The plates push it upward, and the flight leaves
+through the \val{BareFace} edge of the world at $(\val{BareX}, \val{BareY})$,
+at $t = \val{BareT}$, at an angle $\val{BareAng}$ degrees. The ordinate
+$\val{BareY}$ stays below the detector, which begins at $\val{yDetLo}$. The
+path only climbs, from the launch $\val{yLaunch}$ to $\val{BareYmax}$. The
+sampled clearance of the plates is $\val{BareDmin}$, the energy drifts by
+$\val{BareWdev}$, and the run takes $\val{BareSteps}$ steps.
+
+The reference charge is positive and sits below the launch, so it repels the
+ion upward, and it rearranges the charge on the plates through
+\eqref{eq:collocation}. That extra lift is the difference between the two
+curves in Figure~\ref{fig:board}: the reference meets the detector still
+rising, with clearance $\val{RefDmin}$.
+
+\section{What the game computes}\label{sec:engine}
+
+The engine solves the same boundary condition (\physref{2.7}). The surfaces are
+cut into flat triangles with constant density, graded toward the edges, and the
+potential of a triangle is the closed integral named there. Only the upper half
+is meshed, and the mirror is applied exactly. The linear system is a dense LU
+factorization. Preview flights use panels of half a cell, and verification
+repeats them at a finer grade. Pictures use a coarser mesh and are not the
+flight.
+
+This document collocates the same condition, equation \eqref{eq:collocation},
+on equal rectangles of edge $\val{panelFine}$ with the integral
+\eqref{eq:rectangle}. The factorization is again a dense LU. The end states
+move by $\val{errMesh}$ when that edge doubles, and the differences in
+\S\ref{sec:comparison} are the same size. The two meshes are not the same
+discretization, so the agreement asked of them is the tolerance
+$\val{tolFlight}$, ten times that estimate.
+
+The ion's image force is omitted on both sides. The bound sampled here reaches
+$\val{RefImage}$, under the engine's limit $10^{-10}$. The obstacle is the box
+plus the contact shell $\val{contact}$. Because the panel field is a gradient,
+$W$ in \eqref{eq:flight-energy} drifts only by $\val{RefWdev}$ on the reference
+flight.
+
+The flight itself, in the engine, is the adaptive eighth-order Runge--Kutta
+method of \physref{5} and \physref{6}, verified as in \physref{7}. Once the
+field is fixed, a verified end state is good to about $10^{-10}$. Our step
+estimate $\val{errStep}$ is of that order; the larger difference is the
+panels. Radiation is integrated and not applied to the momentum
+(\xsecref{foundations}{sec:radiation}, \physref{8}). The fraction
+$\val{RefRadFrac}$ is our integral of our field.
+
+\section{Further reading}\label{sec:reading}
+
+The motion, the energy, the Runge--Kutta step, the Hermite location of an
+event and the Simpson rule are in the Foundations
+(\xsecref{foundations}{sec:numerics}, \xeqref{foundations}{eq:energy},
+\xsecref{foundations}{sec:radiation}). The uniform gap \eqref{eq:uniform} and
+the rectangle collocation \eqref{eq:collocation} are derived above; later plate
+levels cite them. The engine's electrodes are \physref{2.7}.
+
+\levelfileappendix
+
+\end{document}
