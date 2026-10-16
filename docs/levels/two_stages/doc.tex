@@ -1,0 +1,274 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend}
+\DocFingerprint{fc835eddf67ec7b5}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One particle ($q = \val{q}$, $m = \val{m}$) is launched from $(0, 10)$ along $+x$ with kinetic
+energy $T_0 = \val{Tzero}$. The detector is the rectangle $\val{xD} \le x \le 30$,
+$\val{yDlo} \le y \le \val{yDhi}$, with no condition on direction or energy. Before that
+entry counts, the particle must have passed one gate, the rectangle
+$\val{xGlo} \le x \le \val{xGhi}$, $\val{yGlo} \le y \le \val{yGhi}$, also with no further
+condition. The player places up to three charges, of either sign and of the magnitudes in
+the level file, on any node. A flight ends when the particle touches a charge, leaves the
+world, enters the detector or runs out of time (\xsecref{foundations}{sec:board});
+$t_{\max} = \val{tmax}$. Passing the gate does not end the flight.
+
+The reference solution is the charge $Q = \val{Q}$ at the origin. It is the charge of
+\levelref{first_bend}, and the launch is that level's launch, so the trajectory is that
+level's orbit. The detector here begins two cells lower, and the arrival of Level~1 still
+lands on its left face. The gate lies on the same orbit, and the particle enters it first.
+This document cites that orbit and derives the gate.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the particle has radius $a = 0$, and the charge has radius
+$R = \val{R}$. The coupling is $\kappa = qQ = \val{kappa}$. The launch has
+\[
+  \gamma_0 = 1 + \frac{T_0}{mc^2} = \val{gammaZero}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T_0^2}{c^2} + 2mT_0} = \val{pZero},
+\]
+and the direction in the file is $(1, 0)$. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le 21$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \fill[green!50!black, fill opacity=0.22] (27,14) rectangle (30,20);
+  \draw[green!40!black] (27,14) rectangle (30,20);
+  \draw[violet, dashed, thick] (10,11) rectangle (13,14);
+  \addplot[thin, black!45] table {pathfree.dat};
+  \addplot[thick, orange!80!black] table {pathhalf.dat};
+  \addplot[very thick, blue!70!black] table {path.dat};
+  \fill[red!70!black] (0,0) circle[radius=0.28];
+  \node[font=\small, red!60!black, anchor=south west] at (0.35,0.25) {$Q$};
+  \draw[-{Stealth[length=6pt]}, thick] (0,10) -- (2.2,10);
+  \fill (0,10) circle[radius=0.12];
+  \node[font=\small, violet, anchor=south] at (11.5,14.15) {gate};
+  \node[font=\small, green!30!black, anchor=west] at (27.2,18.2) {detector};
+\end{axis}
+\end{tikzpicture}
+\caption{The reference orbit (blue) enters the gate through its left face and the detector
+through its left face. The weaker charge (orange; §\ref{sec:others}) also crosses the gate,
+then leaves the world. With no charge the ray (grey) stays on $y = 10$.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch}, and the orbit of one charge
+    \xeqref{first_bend}{eq:general}, in the apsis form \xeqref{first_bend}{eq:reference}.
+  \item The board's rules (\xsecref{foundations}{sec:board}), plus the gate of
+    §\ref{sec:gate}.
+  \item Newton's method (\xsecref{foundations}{sec:numerics}) for a face, and the
+    elementary time \xeqref{first_bend}{eq:time}.
+\end{principles}
+
+With the charge at the origin the state obeys the equation of Level~1,
+\xeqref{first_bend}{eq:eom-level}, from $\vect{x}_0 = (0, 10)$ and
+$\vect{p}_0 = \abs{\vect{p}_0}\,(1, 0)$. The launch is perpendicular to the radius, so it
+is an apsis. The motion stays in the plane (\xsecref{foundations}{sec:plane}).
+
+\begin{assumption}{The charge is held in place}\label{as:fixed}
+The charge does not recoil. That is a rule of the game
+(\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the particle. Along
+the reference flight it is $\val{Erad}$, a fraction $\val{EradFrac}$ of $T_0$
+(§\ref{sec:hand}). The game makes the same approximation and reports the same integral
+(\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize, so \xeqref{foundations}{eq:sphereforce} is
+exact. The launch is the closest approach (\xsecref{first_bend}{sec:reference-orbit}), at
+$r_0 = \val{rZero}$, far outside the sphere of radius $R$.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The orbit}\label{sec:orbit}
+
+Level~1 derives the orbit about a charge at the origin for this launch. With
+$\sigma = -1$, $\theta$ the angle swept clockwise from the launch, and $u = 1/r$,
+\begin{equation}\label{eq:orbit}
+  u(\theta) = A\cos\Gamma\theta + B, \qquad
+  x(\theta) = \frac{\sin\theta}{u(\theta)}, \qquad
+  y(\theta) = \frac{\cos\theta}{u(\theta)},
+\end{equation}
+which is \xeqref{first_bend}{eq:reference} and \xeqref{first_bend}{eq:position}. The
+constants $A$, $B$ and $\Gamma$ are those of \xeqref{first_bend}{eq:orbit}, and the time
+along the orbit is \xeqref{first_bend}{eq:time}--\xeqref{first_bend}{eq:i2}. Nothing in
+that derivation uses the detector, so it holds for every positive charge at the origin
+and for the gate as well as for the arrival.
+
+Level~1 also shows that $x$ increases and $y$ never falls while $y > 0$
+(\xsecref{first_bend}{sec:first-event}). The reason is the sign of the force and not the
+size of $\kappa$: $\dot p_x = \kappa x/r^3$ and $\dot p_y = \kappa y/r^3$ with
+$\kappa > 0$, so while $x \ge 0$ and $y > 0$ neither component of $\vect{p}$ decreases.
+They start at $(\abs{\vect{p}_0}, 0)$, hence $p_x$ stays positive and $p_y$ stays
+non-negative. The same holds for the weaker charge of §\ref{sec:others}. Consequences,
+as in that section: no collision, since $r \ge r_0 > R$; the world is left through
+$x = \val{xWorld}$, if the detector has not already been entered; and a box to the right
+of the launch is entered through its left face or its bottom face.
+
+Differentiating \eqref{eq:orbit}, with $u' = -A\Gamma\sin\Gamma\theta$, gives the slope
+Newton's method uses on a vertical face,
+\begin{equation}\label{eq:dx}
+  \deriv{x}{\theta} = \frac{u\cos\theta - u'\sin\theta}{u^2}.
+\end{equation}
+The ordinate has the companion $\dd y/\dd\theta = -(u\sin\theta + u'\cos\theta)/u^2$.
+
+\subsection{The gate}\label{sec:gate}
+
+A gate is a box the flight must enter, and the flight continues through it. This level
+lists one, with no condition on the state at the entry. The detector counts only after
+that entry. Entering the detector while the gate has not been entered ends the flight:
+the outcome is a skipped gate, and the index is the gate's place in the list. In symbols,
+if $t_G$ is the first time $\vect{x}(t)$ lies in the gate and $t_D$ the first time it lies
+in the detector,
+\begin{equation}\label{eq:gate}
+  \text{the detector counts only when } t_G \text{ exists and } t_G < t_D.
+\end{equation}
+Otherwise an existing $t_D$ is a skipped gate. This is the rule the level's text states,
+and it is what the game enforces (\physref{6.2}).
+
+On a path whose $x$ and $y$ both increase, and which starts below and to the left of the
+box, $t_G$ is found from two roots. Let $y_L$ be the ordinate at the gate's left face
+$x = x_G$. If $y_G \le y_L \le y_G'$, the particle enters through that face. If
+$y_L < y_G$, let $x_B$ be the abscissa at $y = y_G$. If $x_G \le x_B \le x_G'$, the
+particle enters through the bottom. Otherwise the box is missed: the ray passes under it,
+or climbs past $y_G$ only after $x$ has passed $x_G'$. The same test, with the detector's
+edges, decides $t_D$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} \xeqref{foundations}{eq:launch}:
+    $\gamma_0 = \val{gammaZero}$ and $\abs{\vect{p}_0} = \val{pZero}$. The speed is
+    $v_0 = \abs{\vect{p}_0}/(\gamma_0 m) = \val{vZero}$.
+  \item\label{st:orbit} \emph{The orbit} \eqref{eq:orbit}. The radius is
+    $r_0 = \val{rZero}$, the angular momentum $L = r_0\abs{\vect{p}_0} = \val{L}$, and
+    the energy $W = \val{W}$. Then $\Gamma = \val{Gamma}$, $B = \val{B}$ and
+    $A = \val{A}$. The energy route to $A$, \xeqref{first_bend}{eq:amplitude}, agrees to
+    $\val{Adiff}$.
+  \item\label{st:gate} \emph{The gate.} Newton's method \xeqref{foundations}{eq:newton} on
+    $x(\theta) = \val{xGlo}$, with \eqref{eq:dx}:
+    \begin{center}\small\val{gateNewton}\end{center}
+    After these corrections, $\theta_G = \val{thetaG}$ and the ordinate is
+    $y_L = \val{yG}$. That lies between $\val{yGlo}$ and $\val{yGhi}$, so the entry is the
+    left face, at $(\val{xG}, \val{yG})$. The root of $y = \val{yGlo}$ lies at
+    $x_B = \val{xAtBottom}$, still to the left of the gate, which is why the bottom is not
+    the entry. The time \xeqref{first_bend}{eq:time} at $\theta_G$ is $t_G = \val{tG}$.
+  \item\label{st:detector} \emph{The detector.} The same method on $x(\theta) = \val{xD}$,
+    started at $\theta = 1$ as in Level~1:
+    \begin{center}\small\val{newton}\end{center}
+    After $\val{newtonSteps}$ corrections, $\theta_\mathrm{e} = \val{thetaE}$. The
+    ordinate is $y_\mathrm{e} = \val{yE}$, inside $\val{yDlo} \le y \le \val{yDhi}$, so
+    the particle enters through the left face. This is after the gate:
+    $\theta_G < \theta_\mathrm{e}$.
+  \item\label{st:time} \emph{The time and the momentum.} With $I_1 = \val{IOne}$ and
+    $I_2 = \val{ITwo}$, \xeqref{first_bend}{eq:time} gives $t_\mathrm{e} = \val{tE}$, far
+    below $t_{\max}$. The momentum \xeqref{first_bend}{eq:momentum} is
+    $(\val{pxE}, \val{pyE})$, at $\val{angE}^\circ$ to the launch. The kinetic energy is
+    $\val{TE}$.
+  \item\label{st:radiation} \emph{The radiated energy.} Simpson's rule
+    \xeqref{foundations}{eq:simpson} on the power \xeqref{foundations}{eq:larmor}, with
+    the acceleration \xeqref{first_bend}{eq:acceleration}, using $8000$ panels:
+    $E_\mathrm{rad} = \val{Erad}$, uncertain by the relative amount $\val{radErr}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The particle enters the gate through $x = \val{xGlo}$ at $(\val{xG}, \val{yG})$, at
+$t_G = \val{tG}$. It enters the detector through $x = \val{xD}$ at
+$(\val{xD}, \val{yE})$, at $t_\mathrm{e} = \val{tE}$, with momentum
+$(\val{pxE}, \val{pyE})$. Both entries are on the orbit of Level~1. The level is solved.
+\end{result}
+
+The arithmetic is that of Level~1. The two Newton tables are the only iterations, and the
+radiated energy is the only numerical integral.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The orbit and the time are closed forms, evaluated at 40 significant digits. The
+tolerance on a state is $10^{-9}$, ten times the accuracy of a verified flight
+(\xsecref{foundations}{sec:verification}); on a radiated energy it is $10^{-4}$ relative.
+Both were set from those estimates. The quadrature of the radiated energy is uncertain by
+$\val{radErr}$ on the reference and by $\val{halfRadErr}$ on the weaker charge.
+
+The largest absolute difference in the table is $\val{cmpYDiff}$, the reference ordinate.
+The weaker charge ends on the world's edge $x = \val{xWorld}$, and that abscissa agrees
+exactly; so does the straight ray's ordinate, which is the launch line. The radiated
+energies agree to the relative differences $\val{cmpRadDiff}$ and $\val{cmpHalfRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+Two placements besides the reference, each compared above.
+
+\begin{enumerate}
+  \item No charge. The momentum never changes, so the ray is the line $y = \val{freeY}$ at
+    speed $\val{vZero}$. It meets $x = \val{xWorld}$ at $t = \val{freeT}$. The ordinate
+    lies below the gate and below the detector for the whole flight, so both boxes are
+    missed and the outcome is that the particle left the world. The gate's veto never
+    arises, because the detector is not entered either.
+  \item $Q = \val{halfQ}$ at the origin, so $\kappa = \val{halfK}$. The orbit and the
+    monotonicity are unchanged in form. At the gate's left face the ordinate is
+    $\val{halfYLeft}$, still below $\val{yGlo}$, and the bottom $y = \val{yGlo}$ is
+    crossed at $x = \val{halfXg}$, which lies on that face. The gate is passed. At the
+    detector's left face the ordinate is only $\val{halfY27}$, below $\val{yDlo}$. The
+    floor $y = \val{yDlo}$ is reached at $x = \val{halfX14}$, past the detector's right
+    side. The flight therefore ends on the world edge, at
+    $(\val{halfX}, \val{halfY})$, at $t = \val{halfT}$, travelling at $\val{halfAng}^\circ$.
+    Passing the gate is not enough: the detector is a second stage.
+\end{enumerate}
+
+The reference works because $\kappa = \val{kappa}$ lifts the ray through the gate by
+$x = \val{xGlo}$ and on into the detector. Half that coupling still clears the gate, and
+the ray then passes under the detector. With no charge the ray misses both boxes.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{first_bend}{eq:eom-level} with its eighth-order Runge--Kutta
+method at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). It finds the gate and
+the detector on its interpolant (\physref{6}) and accepts the detector only when the gate
+has been entered (\physref{6.2}). It verifies the outcome by comparing its two runs
+(\physref{7}). The model is this document's, including \ref{as:radiation} (\physref{8}).
+The agreement in §\ref{sec:comparison} is between the orbit \eqref{eq:orbit} and that
+integration. The gate entry of §\ref{sec:hand} is not a number the game reports at the end
+of the flight; the arrival, as against a skipped gate, is the check that the entry
+happened first.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{first_bend}: the orbit, the time and the proof that $x$ increases and
+    $y$ never falls. The flight here is that flight, with a gate on the way and a
+    detector that begins at $y = \val{yDlo}$.
+  \item \xsecref{foundations}{sec:board}: what ends a flight. The gate is the addition
+    derived in §\ref{sec:gate}.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
