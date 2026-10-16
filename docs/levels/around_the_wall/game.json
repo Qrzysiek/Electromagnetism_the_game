@@ -1,0 +1,201 @@
+{
+ "level_file": "levels/08_around_the_wall.json",
+ "level_sha256": "b6910f86734d5696",
+ "golden_hash": "df9ac3f85e867025",
+ "recorded": "2026-10-16",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        1.1068152868442354,
+        0.10033742251581267,
+        0.0
+       ],
+       "t": 32.5969634183924,
+       "x": [
+        28.000000000000004,
+        8.987646884856401,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.9162405823512927e-10,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 5.881084106947105e-13,
+      "steps": 97
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.1068152870802785,
+        0.10033742166230412,
+        0.0
+       ],
+       "t": 32.59696341812107,
+       "x": [
+        28.000000000000004,
+        8.987646877992383,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 4.5496939549138915e-12,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 5.881084170417358e-13,
+      "steps": 129
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      2,
+      13,
+      0
+     ],
+     "value": 500000.0
+    },
+    {
+     "kind": "charge",
+     "node": [
+      15,
+      1,
+      0
+     ],
+     "value": -4000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        -0.4260254777334906,
+        -0.961698114981221,
+        0.0
+       ],
+       "t": 24.9919726519564,
+       "x": [
+        8.106712097657855,
+        -1.0000000000000013,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.796241016511658e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 8.236981802871037e-16,
+      "steps": 28
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.4260254777110295,
+        -0.9616981150059121,
+        0.0
+       ],
+       "t": 24.99197265134268,
+       "x": [
+        8.106712098045866,
+        -1.0000000000000004,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.9606538614880265e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 8.236981828573826e-16,
+      "steps": 44
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      2,
+      13,
+      0
+     ],
+     "value": 500000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        0.17391110763724363,
+        -1.3699170982399433,
+        0.0
+       ],
+       "t": 23.897045596053346,
+       "x": [
+        10.10064187317574,
+        -1.0000000000000027,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 6.016054321378306e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 1.726224820082736e-15,
+      "steps": 28
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.17391110762849443,
+        -1.369917098164427,
+        0.0
+       ],
+       "t": 23.89704559601571,
+       "x": [
+        10.100641872735263,
+        -1.0000000000000007,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.198152688175469e-12,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 1.726224850438663e-15,
+      "steps": 42
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      15,
+      1,
+      0
+     ],
+     "value": -4000000.0
+    }
+   ]
+  }
+ ]
+}
