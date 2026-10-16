@@ -1,0 +1,368 @@
+\documentclass{leveldoc}
+\DocUses{foundations,deflection_plates,power_supply}
+\DocFingerprint{50fc18a32d73bf35}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+\leveldescription
+
+Three positive ions are launched from the left edge, one straight along $+x$
+and two at small angles to it. Three metal apertures stand on the launch
+line. The outer apertures are grounded. Each half of the middle aperture has
+its own supply. The player sets those two supplies. At the reference both are
+$\val{vSupply}$. A positive middle aperture slows a positive ion as the ion
+climbs the potential, and the transverse field in the openings turns the
+angled rays back toward the launch line.
+
+Each ion must enter the detector. No shot has an acceptance window, a kinetic
+window or a gate. A flight ends when the ion touches a plate, leaves the
+world, or enters the detector (\xsecref{foundations}{sec:board}). A plate's
+obstacle is its box plus a contact shell of thickness $\val{contact}$. Each
+ion's radius is $0$.
+
+With both supplies off, the on-axis ray still follows the launch line into
+the detector, and the angled rays stay apart and miss it. This document uses
+the deflection plates' rectangle collocation, with each supply entered as the
+potential of the electrode it sits on, and integrates the three flights by
+the classical Runge--Kutta method.
+
+\section{Setup}\label{sec:setup}
+
+\setuptable
+
+The speed of light is $c = \val{cLight}$. Each ion has charge $q = \val{qPart}$,
+mass $m = \val{mPart}$ and radius $0$, and each is launched with kinetic
+energy $T_0 = \val{T0}$ from $(\val{xLaunch}, \val{yLaunch})$. Then
+$\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$ and
+$v_0 = \val{v0} = \val{vOverC}\,c$ (\xeqref{foundations}{eq:launch}). The
+three directions make angles $\val{aLow}$, $\val{aAxis}$ and $\val{aHigh}$
+degrees with $+x$.
+
+The apertures stand at $x = \val{xIn}$, $x = \val{xMid}$ and $x = \val{xOut}$.
+Each is a pair of plates. A plate's long direction is $y$ and its thickness
+is along $x$, from $\val{xP0a}$ to $\val{xP0b}$ at the first aperture and the
+same thickness at the other two. The upper plates run from $\val{yP0a}$ to
+$\val{yP0b}$, and the lower plates from $\val{yP1a}$ to $\val{yP1b}$. The
+opening between the inner rims is $\val{opening}$, from $\val{yRimLo}$ to
+$\val{yRimHi}$. In the reference the two halves at $x = \val{xMid}$ are at
+$V = \val{vSupply}$. The four outer halves are at $\val{vOuter}$. The slider
+runs from $-\val{vSlider}$ to $\val{vSlider}$.
+
+The detector, the same one for every shot, is $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$. The reported time step is $h = \val{H}$. The mesh
+is the deflection plates' mesh: rectangles of edge $\val{panelFine}$,
+$\val{nPanels}$ of them on the upper half.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth,
+  xmin=-1.5, xmax=32.5, ymin=-2, ymax=22.5,
+  xlabel={$x$}, ylabel={$y$}, tick label style={font=\small}]
+  \draw[black!40, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!25] (0,0) rectangle (30,20);
+  \fill[green!50!black, fill opacity=0.18]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \fill[black!20] (\rawval{xP0a},\rawval{yP0a}) rectangle (\rawval{xP0b},\rawval{yP0b});
+  \fill[black!20] (\rawval{xP1a},\rawval{yP1a}) rectangle (\rawval{xP1b},\rawval{yP1b});
+  \fill[black!20] (\rawval{xP4a},\rawval{yP4a}) rectangle (\rawval{xP4b},\rawval{yP4b});
+  \fill[black!20] (\rawval{xP5a},\rawval{yP5a}) rectangle (\rawval{xP5b},\rawval{yP5b});
+  \fill[black!20] (\rawval{xP2a},\rawval{yP2a}) rectangle (\rawval{xP2b},\rawval{yP2b});
+  \draw[orange!80!black]
+    (\rawval{xP2a},\rawval{yP2a}) rectangle (\rawval{xP2b},\rawval{yP2b});
+  \fill[black!20] (\rawval{xP3a},\rawval{yP3a}) rectangle (\rawval{xP3b},\rawval{yP3b});
+  \draw[orange!80!black]
+    (\rawval{xP3a},\rawval{yP3a}) rectangle (\rawval{xP3b},\rawval{yP3b});
+  \addplot[orange!80!black] table {pathofflow.dat};
+  \addplot[orange!80!black] table {pathoffhigh.dat};
+  \addplot[orange!80!black] table {pathoffaxis.dat};
+  \addplot[blue!60!black] table {pathlow.dat};
+  \addplot[very thick, blue!60!black] table {pathaxis.dat};
+  \addplot[blue!60!black] table {pathhigh.dat};
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.08];
+\end{axis}
+\end{tikzpicture}
+\caption{The six aperture plates and the six flights. The two outlined plates
+are the middle aperture, at the supply potential. The other four are
+grounded. The green box is the detector. Blue paths are the reference. The
+downward ray bends back up and the upward ray bends back down, and all three
+meet the left side of the detector on their own side of the launch line. The
+on-axis reference path is that straight line. Orange paths are the same
+launches with both supplies off. The on-axis orange path lies on the same
+straight line and also meets the detector. The other two stay straight and
+leave through the right edge of the world, one below the detector and one
+above it. Every path stays outside the plates.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the
+    launch \xeqref{foundations}{eq:launch}, and energy in a static field
+    \xeqref{foundations}{eq:energy}. There is no magnetic field, and the motion
+    stays in the plane (\xsecref{foundations}{sec:plane}).
+  \item A supply sets the potential of the electrode it sits on
+    (\xsecref{power_supply}{sec:gap}, \physref{2.7}). A grounded electrode is
+    potential $0$. The surface charge is the deflection plates' collocation
+    \xeqref{deflection_plates}{eq:collocation}, with the rectangle integral
+    \xeqref{deflection_plates}{eq:rectangle}.
+  \item The two halves of an aperture are at the same potential, so reflection
+    through the launch line is a symmetry of the plates. The focusing force is
+    the panel field in the openings. The flight uses that field.
+  \item The board's rules (\xsecref{foundations}{sec:board}) and the classical
+    Runge--Kutta method with cubic Hermite event location
+    (\xsecref{foundations}{sec:numerics}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, summed by Simpson's
+    rule \xeqref{foundations}{eq:simpson}. It is not put back into the force.
+\end{principles}
+
+The reference potential on each middle half is the supply value, and the
+outer halves are grounded. Off the metal the field is the field of the
+surface charge and of its mirror. There is no placed charge. The state
+$(\vect{x}, \vect{p})$ obeys \xeqref{foundations}{eq:eom} with
+$\vect{B} = \vect{0}$, from the launch until the first ending event.
+
+\begin{assumption}{The supplies are static}\label{as:static}
+Each potential equals its slider value at once. There is no resistor and no
+ramp. The launch speed is $\val{vOverC}\,c$. The game uses the same static
+supply (\physref{2.7}).
+\end{assumption}
+
+\begin{assumption}{No radiation reaction}\label{as:radiation}
+Each ion radiates, and that energy is not taken from the flight. The largest
+of the three reference integrals is a fraction $\val{radFracMax}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{No image of the ion}\label{as:image}
+The ion's own surface charge is left out, as the deflection plates leave it
+out and as the game leaves it out (\physref{2.7}). The neglected force is
+bounded by $q^2/d^2$, with the distance $d$ floored at $10^{-3}$, relative to
+$\max(\abs{q\vect{E}}, T_0)$. The reference samples reach $\val{refImage}$,
+under the engine's limit $10^{-10}$. With the supplies off, the angled rays
+pass closer to the metal and those samples reach $\val{offImage}$. The
+samples are the step ends and the ending point.
+\end{assumption}
+
+\begin{assumption}{Equal rectangles}\label{as:panels}
+The mesh is the one stated for the deflection plates: equal rectangles of edge
+$\val{panelFine}$, not the engine's graded triangles. Replacing the edge by
+$\val{panelCoarse}$ moves an end state by $\val{errMesh}$. With every
+electrode grounded the density is zero on every mesh, so that change does not
+move the bare rays.
+\end{assumption}
+
+\begin{assumption}{The fixed step}\label{as:step}
+The reported step is $h = \val{H}$, coarser than the step used for the
+deflection plates. Doubling it estimates an end state by $\val{errStep}$.
+Ten times the panel-size estimate $\val{errMesh}$ lies above $10^{-9}$, and
+it is larger than the step estimate $\val{errStep}$, so the tolerance on a
+state is that product, $\val{tolFlight}$. Between samples the ion moves at
+most $\val{stepReach}$. The smallest sampled clearance is $\val{refDmin}$ on
+the reference flights and $\val{offDmin}$ with the supplies off.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The supplies and the axis}\label{sec:axis}
+
+The two supply elements sit on the two halves of the aperture at
+$x = \val{xMid}$. In the reference each value is $\val{vSupply}$, so those
+two electrodes are at that potential and the other four are at $\val{vOuter}$.
+With the supplies omitted, all six potentials are $0$.
+
+The two halves of every aperture are at the same potential, and the plates
+are placed symmetrically about $y = \val{yLaunch}$. Reflection through that
+line leaves the metal and the potentials unchanged, so the transverse field
+on the line vanishes,
+\begin{equation}\label{eq:axis}
+  E_y(x, \val{yLaunch}) = 0.
+\end{equation}
+The panel solution leaves a leftover $\val{eAxis}$ at the middle of the
+opening. An ion launched on the line stays on it. Only its speed changes.
+
+The conserved diagnostic is the deflection plates' flight energy
+\xeqref{deflection_plates}{eq:flight-energy}. On this line the kinetic energy
+is therefore
+\begin{equation}\label{eq:slow}
+  T = T_0 - q\bigl(\phi - \phi_\mathrm{launch}\bigr).
+\end{equation}
+At the launch, $\phi = \val{phiLaunch}$. In the middle opening,
+$\phi = \val{phiMid}$, so $T = \val{Tmid}$. The ion gives up a fraction
+$\val{slowFrac}$ of $T_0$ and is still moving forward. On the launch line the
+potential is $\val{phiIn}$ at the entrance aperture and $\val{phiOut}$ at the
+exit aperture, both below the middle value. The march uses the panels.
+
+\subsection{The focusing field and the panels}\label{sec:focus}
+
+Above the launch line, at $(\val{xMid}, \val{yAbove})$, the panel field is
+$\val{eAbove}$, toward the line. Below it, at $(\val{xMid}, \val{yBelow})$,
+the field is $\val{eBelow}$, also toward the line. A positive ion is pushed
+toward the launch line from either side. That is the focus. The rectangles,
+the mirror and the collocation are
+\xeqref{deflection_plates}{eq:rectangle} and
+\xeqref{deflection_plates}{eq:collocation}. The right-hand side is the
+electrode potential, because there is no placed charge. The reported mesh has
+$\val{nPanels}$ upper rectangles. The residual at the centroids is
+$\val{solveRes}$. On the large faces, off the centroids, the potential
+differs from the electrode potential by at most $\val{surfRes}$.
+
+The middle aperture carries charge $\val{qMid}$. The four grounded halves
+together carry $\val{qOuter}$. The state is advanced by
+\xeqref{foundations}{eq:rk4} with step $h = \val{H}$. Events are located as
+on the deflection plates: thirty-two Hermite samples on the step, then sixty
+bisections, obstacles before the world, and the world before the detector.
+A face coordinate is assigned when the residual is below $10^{-6}$. The
+step-doubling estimate divides the change by $15$; the panel-size estimate
+is the change itself when the edge doubles.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launches} \xeqref{foundations}{eq:launch}.
+    $\gamma_0 = \val{gamma0}$ and $\abs{\vect{p}_0} = \val{p0}$, so
+    $v_0 = \val{v0}$. The three angles are $\val{aLow}$, $\val{aAxis}$ and
+    $\val{aHigh}$ degrees.
+  \item\label{st:supply} \emph{The supplies.} Set both halves at
+    $x = \val{xMid}$ to $\val{vSupply}$ and leave the other four electrodes
+    at $\val{vOuter}$. The opening is $\val{opening}$.
+  \item\label{st:panels} \emph{The panels.} Solve
+    \xeqref{deflection_plates}{eq:collocation} on the mesh of
+    \S\ref{sec:focus}. The centroid residual is $\val{solveRes}$. The
+    off-centroid discrepancy on the large faces is $\val{surfRes}$. The
+    middle aperture carries $\val{qMid}$ and the grounded halves carry
+    $\val{qOuter}$. On the launch line the potential is $\val{phiLaunch}$ at
+    the launch, $\val{phiIn}$ in the entrance opening, $\val{phiMid}$ in the
+    middle opening and $\val{phiOut}$ in the exit opening.
+  \item\label{st:slow} \emph{The slowing and the focus.}
+    \eqref{eq:slow} gives $T = \val{Tmid}$ in the middle opening. The
+    transverse field there is $\val{eAbove}$ above the line and
+    $\val{eBelow}$ below it, each toward the line. The leftover on the line
+    is $\val{eAxis}$.
+  \item\label{st:march} \emph{The on-axis march.} Advance
+    \xeqref{deflection_plates}{eq:flight-energy} and
+    \xeqref{foundations}{eq:eom} by \xeqref{foundations}{eq:rk4} with step
+    $\val{H}$. The same march, with the launch direction changed, is used for
+    the angled rays. The on-axis state every five time units:
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:end} \emph{The arrivals.} The downward ray meets the
+    \val{LowFace} face of the detector at $(\val{LowX}, \val{LowY})$, at
+    $t = \val{LowT}$, with momentum $(\val{LowPx}, \val{LowPy})$, at an angle
+    $\val{LowAng}$ degrees from $+x$. Its lowest point is $\val{LowYmin}$,
+    above the rim $\val{yRimLo}$, and its highest is the launch line. The
+    on-axis ray meets the \val{AxisFace} face at $(\val{AxisX}, \val{AxisY})$,
+    at $t = \val{AxisT}$, with momentum $(\val{AxisPx}, \val{AxisPy})$, at an
+    angle $\val{AxisAng}$ degrees from $+x$. The upward ray meets the
+    \val{HighFace} face at $(\val{HighX}, \val{HighY})$, at
+    $t = \val{HighT}$, with momentum $(\val{HighPx}, \val{HighPy})$, at an
+    angle $\val{HighAng}$ degrees from $+x$. Its highest point is
+    $\val{HighYmax}$, below the rim $\val{yRimHi}$. All three abscissae are
+    the detector's left edge, and all three ordinates lie between
+    $\val{yDetLo}$ and $\val{yDetHi}$. The runs take $\val{LowSteps}$,
+    $\val{AxisSteps}$ and $\val{HighSteps}$ steps.
+  \item\label{st:check} \emph{The checks.} Along the three flights, $W$ drifts
+    by at most $\val{LowWdev}$, $\val{AxisWdev}$ and $\val{HighWdev}$. The
+    step-doubling estimates are $\val{LowErr}$, $\val{AxisErr}$ and
+    $\val{HighErr}$, and the largest of the flights is $\val{errStep}$. The
+    panel-size estimate is $\val{errMesh}$. The sampled clearance is
+    $\val{refDmin}$, outside the shell $\val{contact}$. The image-force ratio
+    reaches $\val{refImage}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on steps of $h/2$
+    gives $\val{LowRad}$, $\val{AxisRad}$ and $\val{HighRad}$. The largest
+    fraction of $T_0$ is $\val{radFracMax}$. Halving the quadrature step again
+    changes the angled integrals by the relative amount $\val{LowRadErr}$.
+    These integrals are not rows of the comparison.
+\end{procedure}
+
+\begin{result}[The reference flights]
+All three ions enter the detector through its left side, at
+$(\val{LowX}, \val{LowY})$, $(\val{AxisX}, \val{AxisY})$ and
+$(\val{HighX}, \val{HighY})$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+Twenty-four comparisons are in the table: outcome, time and end position for
+each of the three reference rays, and the same four numbers with both
+supplies off. The tolerance on a state is $\val{tolFlight}$. Ten times the
+panel-size estimate $\val{errMesh}$ lies above $10^{-9}$, and it is larger
+than the step-doubling estimate $\val{errStep}$, so the tolerance is that
+product. The tolerance on a state was fixed from these estimates before the
+comparison.
+
+The largest absolute differences are the lower reference ordinate,
+$\val{cmpLowYDiff}$, and the upper reference ordinate, $\val{cmpHighYDiff}$.
+Each lies above the panel-size estimate $\val{errMesh}$ and under the
+tolerance. The lower and upper reference times differ by $\val{cmpLowTDiff}$
+and $\val{cmpHighTDiff}$. The step estimate $\val{errStep}$ is far below
+those ordinates: the panels, not the time step, set that difference. The
+outcomes agree.
+
+The three reference abscissae agree exactly, and each is the detector's left
+edge. The three bare abscissae agree exactly: the angled rays at the world's
+right edge, and the on-axis ray at the detector's left edge. The bare on-axis
+ordinate agrees exactly, and it is the launch line. The reference on-axis
+ordinate differs by $\val{cmpAxisYDiff}$, under the panel-size estimate. The
+bare times and the bare angled ordinates lie under the step estimate.
+
+\section{Other solutions}\label{sec:others}
+
+Both supplies off, which is the empty placement in \code{placements.json},
+does not solve the level. Every electrode is then grounded, the panel density
+is zero, and each ray flies in a straight line. The on-axis ray still meets
+the \val{OffAxisFace} face of the detector at
+$(\val{OffAxisX}, \val{OffAxisY})$, at $t = \val{OffAxisT}$, with momentum
+$(\val{OffAxisPx}, \val{OffAxisPy})$. That time is shorter than the reference
+on-axis time $\val{AxisT}$, because the reference ion climbs the potential
+in \eqref{eq:slow}. The downward ray leaves through the \val{OffLowFace} edge
+of the world at $(\val{OffLowX}, \val{OffLowY})$, at $t = \val{OffLowT}$, at
+an angle $\val{OffLowAng}$ degrees from $+x$. The ordinate lies below
+$\val{yDetLo}$. The upward ray leaves through the \val{OffHighFace} edge at
+$(\val{OffHighX}, \val{OffHighY})$, at $t = \val{OffHighT}$, at an angle
+$\val{OffHighAng}$ degrees from $+x$, above $\val{yDetHi}$.
+
+The sampled clearance with the supplies off is $\val{offDmin}$, and the
+image-force ratio reaches $\val{offImage}$. The energy drift on these three
+flights is $\val{OffLowWdev}$, $\val{OffAxisWdev}$ and $\val{OffHighWdev}$.
+The slider's half-range is $\val{vSlider}$. This document integrates the
+reference setting and the off setting.
+
+\section{What the game computes}\label{sec:engine}
+
+A power supply sets the potential of the tunable electrode it sits on, and
+the factorization of the panel system is reused when only that potential
+changes (\physref{2.7}). The outer electrodes are grounded. The surface charge
+is the engine's triangle collocation, the same boundary condition as
+\xeqref{deflection_plates}{eq:collocation}. This document uses the equal
+rectangles of the deflection plates. The end states move by $\val{errMesh}$
+when that edge doubles, and the angled reference ordinates in
+\S\ref{sec:comparison} lie above that estimate and under ten times it.
+
+The ion's image force is omitted on both sides. The bound sampled on the
+reference flights reaches $\val{refImage}$, under the engine's limit
+$10^{-10}$. The flight in the engine is the adaptive method of \physref{5}
+and \physref{6}, verified as in \physref{7}. Our step estimate is
+$\val{errStep}$. Radiation is integrated and not applied to the momentum
+(\xsecref{foundations}{sec:radiation}, \physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+The rectangle integral, the collocation and the flight energy are derived for
+the deflection plates (\xeqref{deflection_plates}{eq:rectangle},
+\xeqref{deflection_plates}{eq:collocation},
+\xeqref{deflection_plates}{eq:flight-energy}). A supply sets the electrode it
+sits on in the power-supply level (\xsecref{power_supply}{sec:gap}). The
+motion and the Runge--Kutta step are in the Foundations
+(\xsecref{foundations}{sec:numerics}). The engine's supplies and electrodes
+are \physref{2.7}.
+
+\levelfileappendix
+
+\end{document}
