@@ -1,0 +1,319 @@
+\documentclass{leveldoc}
+\DocUses{foundations,deflection_plates,injection}
+\DocFingerprint{a28f747aa7d73b98}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+\leveldescription
+
+One positive ion leaves the left edge at an upward angle. The steering charge
+of Injection is built in, below a grounded metal wall, and the wall lies
+between that charge and the beam. The player adds charges on the beam's side
+of the wall. There are no magnets and no power supplies.
+
+The ion must enter the detector moving along $+x$, inside a cone. The shot
+has no kinetic window and no gate. A flight ends when the ion touches a
+charge or the wall, leaves the world, or enters the detector
+(\xsecref{foundations}{sec:board}). Entering the box counts only when the
+direction lies inside the cone (\xeqref{injection}{eq:cone}); otherwise the
+outcome is Rejected. The wall's obstacle is its box plus a contact shell of
+thickness $\val{contact}$. Each charge's obstacle radius is $\val{Rcharge}$.
+The ion's radius is $0$.
+
+The reference adds one charge above the wall. The ion climbs less steeply and
+meets the bottom edge of the detector inside the cone. With no added charge
+the built-in charge is screened, the ray stays near its launch direction, and
+the detector rejects it. This document uses the deflection plates' rectangle
+collocation. Both charges are external, on the right-hand side. There is one
+wall, so there is no uniform gap. The flight is integrated by the classical
+Runge--Kutta method.
+
+\section{Setup}\label{sec:setup}
+
+\setuptable
+
+The speed of light is $c = \val{cLight}$. The ion has charge $q = \val{qPart}$,
+mass $m = \val{mPart}$ and radius $0$, and it is launched with kinetic energy
+$T_0 = \val{T0}$. The launch is at $(\val{xLaunch}, \val{yLaunch})$, at
+$\val{launchAng}$ degrees to $+x$. Then $\gamma_0 = \val{gamma0}$,
+$\abs{\vect{p}_0} = \val{p0}$ and $v_0 = \val{v0} = \val{vOverC}\,c$
+(\xeqref{foundations}{eq:launch}).
+
+The built-in charge is $Q = \val{qBuilt}$ at $(\val{xBuilt}, \val{yBuilt})$.
+The wall is centred at $(\val{xPlateC}, \val{yPlateC})$, grounded at
+$V = \val{vPlate}$, with length $\val{plateL}$ along $x$, thickness
+$\val{plateT}$ and height $\val{plateH}$. It occupies
+$\val{xPlate0} \le x \le \val{xPlate1}$,
+$\val{yPlate0} \le y \le \val{yPlate1}$. That slab lies between the built-in
+charge and the launch. The reference charge is $Q = \val{qSteer}$ at
+$(\val{xSteer}, \val{ySteer})$, on the beam's side of the wall. The largest
+magnitude on offer is $\val{qMag}$.
+
+The detector is $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$. Its cone has axis $\val{axisDeg}$
+degrees and half-angle $\val{halfDeg}$ degrees. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$. The reported time
+step is $h = \val{H}$. The mesh uses rectangles of edge $\val{panelFine}$,
+$\val{nPanels}$ of them on the upper half of the wall.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth,
+  xmin=-1.5, xmax=32.5, ymin=-2, ymax=22.5,
+  xlabel={$x$}, ylabel={$y$}, tick label style={font=\small}]
+  \draw[black!40, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!25] (0,0) rectangle (30,20);
+  \fill[green!50!black, fill opacity=0.18]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!50!black]
+    (\rawval{coneOx},\rawval{coneOy}) -- (\rawval{coneXp},\rawval{coneYp});
+  \draw[green!50!black]
+    (\rawval{coneOx},\rawval{coneOy}) -- (\rawval{coneXm},\rawval{coneYm});
+  \fill[black!20]
+    (\rawval{xPlate0},\rawval{yPlate0}) rectangle (\rawval{xPlate1},\rawval{yPlate1});
+  \draw[black!70]
+    (\rawval{xPlate0},\rawval{yPlate0}) rectangle (\rawval{xPlate1},\rawval{yPlate1});
+  \fill[violet] (\rawval{xBuilt},\rawval{yBuilt}) circle[radius=\rawval{Rcharge}];
+  \fill[violet] (\rawval{xSteer},\rawval{ySteer}) circle[radius=\rawval{Rcharge}];
+  \addplot[orange!80!black] table {pathbare.dat};
+  \addplot[very thick, blue!60!black] table {pathref.dat};
+  \draw[-{Stealth[length=5pt]}, thick]
+    (\rawval{xLaunch},\rawval{yLaunch}) -- (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.08];
+\end{axis}
+\end{tikzpicture}
+\caption{The wall, the two charges and the two flights. The gray slab is the
+grounded wall. Both discs are negative: the lower one is built in, and the
+upper one is the reference charge. The green box is the detector, and the
+green wedge is the accepted cone about $+x$. Blue is the reference: the ion
+meets the bottom edge. Orange keeps the wall and the built-in charge and
+meets the left edge.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the
+    launch \xeqref{foundations}{eq:launch}, and energy in a static field
+    \xeqref{foundations}{eq:energy}. There is no magnetic field.
+  \item The wall is a grounded metal box (\physref{2.7}). Its surface charge
+    is the deflection plates' collocation
+    \xeqref{deflection_plates}{eq:collocation}, with the rectangle integral
+    \xeqref{deflection_plates}{eq:rectangle}. Both charges are external.
+  \item The detector counts an entry only inside the cone
+    \xeqref{injection}{eq:cone}.
+  \item The board's rules (\xsecref{foundations}{sec:board}) and the classical
+    Runge--Kutta method (\xsecref{foundations}{sec:numerics}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, summed by Simpson's
+    rule \xeqref{foundations}{eq:simpson}. It is not put back into the force.
+\end{principles}
+
+The reference has the grounded wall, the built-in charge and the reference
+charge. The state obeys \xeqref{foundations}{eq:eom} with $\vect{B} = \vect{0}$
+until the first ending event. The cone is applied to that event when it is an
+entry.
+
+\begin{assumption}{A static wall}\label{as:static}
+The potential equals the grounded value at once, and the charges are fixed.
+The launch speed is $\val{vOverC}\,c$. The game uses the same static wall
+(\physref{2.7}).
+\end{assumption}
+
+\begin{assumption}{No radiation reaction}\label{as:radiation}
+The radiated energy is not taken from the flight. On the reference flight it
+is a fraction $\val{RefRadFrac}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{No image of the ion}\label{as:image}
+The ion's own surface charge is left out, as on the deflection plates and as
+in the game (\physref{2.7}). The bound $q^2/d^2$, with $d$ floored at
+$10^{-3}$ and taken relative to $\max(\abs{q\vect{E}}, T_0)$, reaches
+$\val{RefImage}$ on the reference samples and $\val{OffImage}$ with no added
+charge. Both lie under the engine's limit $10^{-10}$.
+\end{assumption}
+
+\begin{assumption}{Equal rectangles}\label{as:panels}
+The mesh is equal rectangles of edge $\val{panelFine}$. Replacing the edge by
+$\val{panelCoarse}$ moves an end state by $\val{errMesh}$. Both flights use
+the wall, so both enter that estimate.
+\end{assumption}
+
+\begin{assumption}{The fixed step}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates an end state by
+$\val{errStep}$. The tolerance on a state is ten times the larger of that
+estimate and the panel-size estimate, and at least $10^{-9}$. Here the
+panel-size estimate is the larger one, so the tolerance is $\val{tolFlight}$.
+Between samples the ion moves at most $\val{stepReach}$. The clearance of the
+wall is sampled at the ends of the steps and at the ending point. It reaches
+$\val{RefDmin}$ on the reference and $\val{OffDmin}$ with no added charge.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The wall}\label{sec:wall}
+
+The rectangles, the mirror and the collocation are
+\xeqref{deflection_plates}{eq:rectangle} and
+\xeqref{deflection_plates}{eq:collocation}. The wall potential on the
+right-hand side is $\val{vPlate}$, and each charge's potential is subtracted
+there. The ion is not in the linear system. The reported mesh has
+$\val{nPanels}$ upper rectangles. The residual at the centroids is
+$\val{solveRes}$. On the long faces, off the centroids, the potential differs
+from the grounded value by at most $\val{surfRes}$.
+
+There is no second plate, so the uniform-gap field does not apply. One cell
+above the wall, over the built-in charge, the point-charge field is
+$\val{eCoulomb}$ along $-y$ and the potential is $\val{phiCoulomb}$. With the
+wall, and without the reference charge, the field at the same station is
+$\val{eScreen}$ along $+y$ and the potential is $\val{phiScreen}$. The ratio
+of the magnitudes is $\val{screenRel}$. The induced charge on the wall and its
+mirror is $\val{qWall}$, the fraction $\val{wallFrac}$ of $\abs{Q}$ and of the
+opposite sign. On the straight launch line at the same abscissa the
+point-charge field is $\val{eRayCoulomb}$ along $-y$, and the wall leaves
+$\val{eRay}$, still along $-y$, the fraction $\val{rayRel}$. The march uses
+the panels: the ion's clearance of the metal is $\val{RefDmin}$.
+
+\subsection{The cone}\label{sec:cone}
+
+The test is \xeqref{injection}{eq:cone}. The axis is $+x$ and the half-angle
+is $\val{halfDeg}$ degrees. The momentum at the geometric entry gives
+$\beta$. The entry counts when $\beta$ is at most that half-angle. A larger
+$\beta$ rejects the ion at the entry point, and the flight stops there.
+
+\subsection{The flight}\label{sec:flight}
+
+The diagnostic is \xeqref{deflection_plates}{eq:flight-energy}. The state is
+advanced by \xeqref{foundations}{eq:rk4} with step $h = \val{H}$. Events are
+located as on the deflection plates: thirty-two Hermite samples, then sixty
+bisections, obstacles before the world, and the world before the detector.
+The cone is applied after that geometric entry. The step-halving estimate
+divides the change by $15$; the panel-size estimate is the change itself when
+the edge doubles.
+
+On the straight line above the reference charge, that charge's field is
+$\val{eSteer}$ along $-y$, and the field of the wall plus the built-in charge
+is $\val{ePipe}$. The ratio is $\val{steerRel}$. A positive ion is pulled
+downward by the reference charge, and that field dominates the screened
+charge.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} \xeqref{foundations}{eq:launch}.
+    $\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$ and
+    $v_0 = \val{v0}$. The direction is the file's, at $\val{launchAng}$
+    degrees to $+x$.
+  \item\label{st:wall} \emph{The wall.} Keep $Q = \val{qBuilt}$ at
+    $(\val{xBuilt}, \val{yBuilt})$. The wall is centred at
+    $(\val{xPlateC}, \val{yPlateC})$, at potential $\val{vPlate}$. Solve
+    \xeqref{deflection_plates}{eq:collocation}. The centroid residual is
+    $\val{solveRes}$ and the off-centroid discrepancy is $\val{surfRes}$.
+    The induced charge is $\val{qWall}$.
+  \item\label{st:steer} \emph{The reference charge.} Place
+    $Q = \val{qSteer}$ at $(\val{xSteer}, \val{ySteer})$ and solve the
+    collocation again. The wall then carries $\val{qWallRef}$.
+  \item\label{st:march} \emph{The march.} Advance
+    \xeqref{deflection_plates}{eq:flight-energy} and
+    \xeqref{foundations}{eq:eom} by \xeqref{foundations}{eq:rk4} with step
+    $\val{H}$. The state every five time units:
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:end} \emph{The arrival.} The ion meets the \val{RefFace}
+    face of the detector at $(\val{RefX}, \val{RefY})$, at $t = \val{RefT}$,
+    with momentum $(\val{RefPx}, \val{RefPy})$, at an angle $\val{RefAng}$
+    degrees from $+x$. The ordinate is the detector's bottom edge. The cone
+    angle is $\val{RefBeta}$ degrees, inside the half-angle $\val{halfDeg}$
+    degrees, so the outcome is \val{RefOutcome}. The run takes
+    $\val{RefSteps}$ steps. The path only climbs: its lowest point is the
+    launch, and its highest is $\val{RefYmax}$.
+  \item\label{st:check} \emph{The checks.} $W$ drifts by at most
+    $\val{RefWdev}$. The step-halving estimate is $\val{RefErr}$, and the
+    larger of the two flights is $\val{errStep}$. The panel-size estimate is
+    $\val{errMesh}$. The sampled clearance is $\val{RefDmin}$, outside the
+    shell $\val{contact}$. The image-force ratio reaches $\val{RefImage}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on steps of $h/2$
+    gives $\val{RefRad}$, a fraction $\val{RefRadFrac}$ of $T_0$. Halving
+    that step again changes the integral by the relative amount
+    $\val{RefRadErr}$. This integral is not a row of the comparison.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The ion enters the detector through its bottom edge at
+$(\val{RefX}, \val{RefY})$ at $t = \val{RefT}$, at $\val{RefBeta}$ degrees
+to $+x$, inside the cone. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The table holds the outcome, the time and the end position of the reference,
+and the same three for the empty placement. The tolerance on a state is
+$\val{tolFlight}$. Ten times the panel-size estimate $\val{errMesh}$ lies
+above $10^{-9}$, and it is larger than the step-halving estimate
+$\val{errStep}$, so the tolerance is that product. The tolerance on a state
+was fixed from these estimates before the comparison.
+
+The largest absolute difference is the reference abscissa,
+$\val{cmpRefXDiff}$. It lies above the panel-size estimate and under the
+tolerance. The reference time differs by $\val{cmpRefTDiff}$, also above the
+panel-size estimate and under the tolerance. The empty-placement time differs
+by $\val{cmpOffTDiff}$ and its ordinate by $\val{cmpOffYDiff}$, both under
+the panel-size estimate. The outcomes agree.
+
+The reference ordinate agrees exactly. It is the detector's bottom edge. The
+empty placement's abscissa agrees exactly. It is the detector's left edge.
+
+\section{Other solutions}\label{sec:others}
+
+The empty placement in \code{placements.json} keeps the wall and the built-in
+charge and adds nothing. It does not solve the level. The ion meets the
+\val{OffFace} face of the detector at $(\val{OffX}, \val{OffY})$, at
+$t = \val{OffT}$, with momentum $(\val{OffPx}, \val{OffPy})$. The cone angle
+is $\val{OffBeta}$ degrees, outside the half-angle, so the outcome is
+\val{OffOutcome}. The ordinate lies $\val{straightGap}$ above the
+straight-ray ordinate $\val{straightY}$. The energy drifts by $\val{OffWdev}$,
+and the run takes $\val{OffSteps}$ steps. The sampled clearance is
+$\val{OffDmin}$.
+
+The reference charge is what brings the cone angle from $\val{OffBeta}$
+degrees down to $\val{RefBeta}$ degrees, and the meeting point from the left
+face down to the bottom edge. This document integrates that charge and the
+empty placement.
+
+\section{What the game computes}\label{sec:engine}
+
+The wall is a grounded electrode (\physref{2.7}). The surface charge is the
+engine's triangle collocation, the same boundary condition as
+\xeqref{deflection_plates}{eq:collocation}, with both charges on the
+right-hand side. This document uses the equal rectangles of the deflection
+plates. The end states move by $\val{errMesh}$ when that edge doubles, and
+the reference abscissa in \S\ref{sec:comparison} lies above that estimate and
+under ten times it.
+
+The direction test is \xeqref{injection}{eq:cone}. The ion's image force is
+omitted on both sides. The bound sampled on the reference flight reaches
+$\val{RefImage}$, under the engine's limit $10^{-10}$. The flight in the
+engine is the adaptive method of \physref{5} and \physref{6}, verified as in
+\physref{7}. Our step estimate is $\val{errStep}$. Radiation is integrated
+and not applied to the momentum (\xsecref{foundations}{sec:radiation},
+\physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+The rectangle integral, the collocation and the flight energy are derived for
+the deflection plates (\xeqref{deflection_plates}{eq:rectangle},
+\xeqref{deflection_plates}{eq:collocation},
+\xeqref{deflection_plates}{eq:flight-energy}). The cone is derived for
+Injection (\xeqref{injection}{eq:cone}). The motion and the Runge--Kutta step
+are in the Foundations (\xsecref{foundations}{sec:numerics}). The engine's
+electrodes are \physref{2.7}.
+
+\levelfileappendix
+
+\end{document}
