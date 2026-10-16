@@ -374,6 +374,50 @@ fn supply_badges(
     }
 }
 
+/// The level's document and the Foundations (docs/levels/README.md), opened in the system's PDF
+/// viewer; nothing for a level without a document yet.
+fn level_doc_buttons(ui: &mut egui::Ui, game: &Game) {
+    use crate::level_docs::{Doc, FOUNDATIONS};
+    let Some(path) = game.level_paths.get(game.level_index) else {
+        return;
+    };
+    let doc = crate::level_docs::for_level(path);
+    if matches!(doc, Doc::Missing) {
+        return;
+    }
+    ui.horizontal(|ui| {
+        match &doc {
+            Doc::Ready(pdf) => {
+                if ui
+                    .button("The physics of this level")
+                    .on_hover_text(
+                        "This level derived from first principles, down to the numbers the game \
+                         computes (a PDF: docs/levels/)",
+                    )
+                    .clicked()
+                {
+                    crate::level_docs::open(pdf);
+                }
+            }
+            Doc::NotBuilt(command) => {
+                ui.add_enabled(false, egui::Button::new("The physics of this level"))
+                    .on_disabled_hover_text(format!("Not typeset yet: {command}"));
+            }
+            Doc::Missing => {}
+        }
+        if let Doc::Ready(pdf) = crate::level_docs::find(FOUNDATIONS)
+            && ui
+                .button("Foundations")
+                .on_hover_text(
+                    "The units, principles and conventions every level's document builds on",
+                )
+                .clicked()
+        {
+            crate::level_docs::open(&pdf);
+        }
+    });
+}
+
 fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::RadiationView) {
     game.text_focus = false;
     ui.horizontal(|ui| {
@@ -662,6 +706,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     .weak(),
             );
         });
+    if !game.sandbox.active {
+        level_doc_buttons(ui, game);
+    }
     if level.has_drives() {
         egui::CollapsingHeader::new("Circuits")
             .id_salt("circuits")

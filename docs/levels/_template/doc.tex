@@ -1,0 +1,114 @@
+\documentclass{leveldoc}
+% Level @NUMBER@ (@TITLE@): the physics of this level, derived from first principles.
+% Written to docs/levels/README.md and docs/levels/GROK.md; the examples are
+% docs/levels/first_bend (a closed form) and docs/levels/slingshot (a numerical solution).
+% Every number comes from calc.py (\val{...}); every comment starting with "TEMPLATE" is
+% replaced or deleted before the document is done.
+%
+% \DocUses: the documents cited by equation or section; always foundations, then earlier
+% levels only (e.g. \DocUses{foundations,first_bend}).
+\DocUses{foundations}
+% The level file's fingerprint the text was last checked against: set by
+% `python scripts/level_docs.py new`; when the level changes, `check` warns and prints the
+% new value, to be set after the text has been reviewed.
+\DocFingerprint{@FINGERPRINT@}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+% TEMPLATE. The puzzle in physical terms: what is launched, from where, where it must go,
+% what the player controls (the limits), and what ends a flight
+% (\xsecref{foundations}{sec:board}). State the goal exactly (boxes, acceptance windows,
+% goal values and their time windows). Name the reference solution and say in one sentence
+% why it works. Say what this document does: a closed form, or a numerical solution.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+% TEMPLATE. The symbols for every quantity the derivation uses, each with its value from
+% calc.py (\val{...}), and the geometry (positions, boxes, the world, t_max). A figure of the
+% board (TikZ/pgfplots; coordinates in cells; data from calc.py with doc.data and
+% \addplot table {name.dat}) helps; use \rawval{...} for numbers inside TikZ coordinates.
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  % TEMPLATE. Each principle with its source: an equation of the Foundations
+  % (\xeqref{foundations}{eq:...}), of an earlier level (\xeqref{slug}{eq:...}), or a
+  % textbook (\Jackson{§...}, \LandauII{§...}, ...: cite a section only where checked).
+  \item
+\end{principles}
+
+% TEMPLATE. The model as equations: the equations of motion (or of the fields) specialised to
+% this level, with their initial and boundary conditions and the rule that ends the flight.
+% Then every assumption or approximation, each in its own box with what it neglects and how
+% large that is (a number from calc.py). Approximations the game makes too, and the ones only
+% this document makes, are both listed; say which is which.
+
+\begin{assumption}{TEMPLATE: a short name}\label{as:first}
+TEMPLATE. What is assumed, why it holds, and the size of what it neglects.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+% TEMPLATE. From the principles to formulas that can be evaluated: every step shown or cited
+% (no "it can be shown"). Subsections as needed. Number every equation that is used later
+% (\label{eq:...}). Where an earlier document derived something, cite it instead of
+% repeating it. Where no closed form exists, state the exact mathematical problem and the
+% numerical method that solves it (the Foundations' toolkit: \xsecref{foundations}{sec:numerics})
+% with its error estimate. Where a conserved quantity or a limit gives an independent check,
+% derive it.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+% TEMPLATE. The formulas evaluated for the reference solution, as numbered steps a student
+% can follow with a calculator (and, where needed, a stated numerical method run for long
+% enough). Every intermediate value from calc.py. End with the result.
+
+\begin{procedure}
+  \item\label{st:first} TEMPLATE.
+\end{procedure}
+
+\begin{result}[The reference flight]
+TEMPLATE. Where and when the level's goal is met, with the numbers.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+% TEMPLATE. Discuss the differences: are they the size the error estimates predict (the
+% game's verified accuracy, \xsecref{foundations}{sec:verification}; this document's own
+% method and approximations)? The tolerances in calc.py were set from those estimates before
+% comparing; never widen one to make a row pass.
+
+\section{Other solutions}\label{sec:others}
+
+% TEMPLATE. Why the reference works and what else does: the other placements that solve the
+% level, a map of them if it is cheap to compute (a family in placements.json, see
+% docs/levels/first_bend), and a few alternatives checked in detail against the game
+% (placements.json "detailed"). Where the level's sliders have a window, explain its edges.
+
+\section{What the game computes}\label{sec:engine}
+
+% TEMPLATE. The engine's method for this level (integrator, field solver, events, verification)
+% with references to PHYSICS.md (\physref{...}), what in it is exact and what approximate, and
+% why its numbers and this document's agree (or how far they may differ).
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  % TEMPLATE. Textbook sections on this level's physics (checked), and earlier levels that
+  % build up to it (\levelref{slug}).
+  \item
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}

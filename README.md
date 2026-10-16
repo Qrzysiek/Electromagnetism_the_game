@@ -4,6 +4,8 @@ A puzzle game built on accurate classical electrodynamics. Place charges so that
 
 - `SPEC.md`: what the game is and the development stages.
 - `PHYSICS.md`: the implemented physics, numerics and measured validation results.
+- `docs/levels/`: the physics of each level derived from first principles, down to the game's
+  numbers (a PDF per level, opened from the level panel; `docs/levels/README.md`).
 
 ## Running
 
@@ -28,6 +30,15 @@ source until the levels are rebuilt. A formula is never broken across lines (it 
 as a whole, like a word): write a long relation as several `$...$` pieces split at its
 relation signs. The build warns about formulas over 30 ex (about 60 % of the panel), and
 the game shrinks a formula wider than the panel to fit.
+
+## The physics of each level (PDFs)
+
+`python scripts/level_docs.py build` typesets the level documents (`docs/levels/<slug>/doc.tex`)
+and the Foundations into `docs/levels/pdf/` (generated, not committed); the level panel's "The
+physics of this level" and "Foundations" open them in the system's PDF viewer. Needs LuaLaTeX
+(MiKTeX or TeX Live), Python 3 with numpy, scipy, mpmath and sympy, and the generator
+(`cargo build --release -p generator`). `python scripts/level_docs.py status` lists which levels
+have a document. `docs/levels/README.md` describes the system.
 
 ## Sandbox (level editor)
 

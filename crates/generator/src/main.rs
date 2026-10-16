@@ -105,6 +105,17 @@ enum Command {
         #[arg(long, default_value_t = 20)]
         every: usize,
     },
+    /// For each placement in a JSON file (a list of placements, each a list of elements;
+    /// without a file, the reference solution): the verdict of every flight, beam and tube
+    /// goal, and each flight's end, as JSON at full precision. The game's numbers for the
+    /// level documents (`scripts/level_docs.py game`, docs/levels/README.md).
+    Scan {
+        path: PathBuf,
+        placements: Option<PathBuf>,
+        /// Also list every accepted step of each verified flight (t, x, p).
+        #[arg(long)]
+        samples: bool,
+    },
 }
 
 fn load(path: &PathBuf) -> Level {
@@ -118,6 +129,121 @@ fn most_elements(level: &Level) -> usize {
     let l = &level.limits;
     let supplies = level.electrodes.iter().filter(|e| e.tunable).count();
     (l.max_charges + l.max_magnets + l.max_antennas + l.max_plates) as usize + supplies
+}
+
+/// `generator scan`: the verdicts of several placements, as JSON.
+fn scan(level: &Level, placements: Option<&PathBuf>, samples: bool) {
+    let list: Vec<Vec<level::Element>> = placements.map_or_else(
+        || vec![level.reference_solution.clone()],
+        |p| {
+            let text = std::fs::read_to_string(p).expect("placements file");
+            serde_json::from_str(&text).expect("placements")
+        },
+    );
+    let out: Vec<serde_json::Value> = list
+        .iter()
+        .map(|placement| scan_one(level, placement, samples))
+        .collect();
+    println!("{}", serde_json::to_string_pretty(&out).expect("JSON"));
+}
+
+/// One placement's verdicts (`scan`).
+fn scan_one(level: &Level, placement: &[level::Element], samples: bool) -> serde_json::Value {
+    use serde_json::json;
+    let mut refused = level.setup_issues(placement);
+    if let Err(e) = level.check_placement(placement) {
+        refused.push(format!("{e:?}"));
+    }
+    if !refused.is_empty() {
+        return json!({ "placement": placement, "refused": refused });
+    }
+    let state = |s: &physics::trajectory::Sample| json!({ "t": s.t, "x": [s.x.x, s.x.y, s.x.z], "p": [s.p.x, s.p.y, s.p.z] });
+    let flight = |t: &physics::trajectory::Trajectory| {
+        let mut f = json!({
+            "outcome": format!("{:?}", t.outcome),
+            "end": state(&t.end),
+            "kinetic_initial": t.kinetic_initial,
+            "energy_max_abs_error": t.energy_max_abs_error,
+            "radiated_energy": t.radiated_energy,
+            "steps": t.stats.n_step,
+        });
+        if let Some(r) = t.radiation {
+            f["radiation_per_sr"] = json!(r);
+        }
+        if samples {
+            f["samples"] = t.samples.iter().map(state).collect();
+        }
+        f
+    };
+    let mut out = json!({ "placement": placement });
+    if let Some(spec) = &level.tube {
+        let v = level.tube_verdict(placement);
+        let goal = |c: &level::tube::CurrentVerdict, min: f64, max: f64| {
+            json!({ "value": c.fine, "error": c.error, "preview": c.preview,
+                    "min": min, "max": max, "status": format!("{:?}", c.status) })
+        };
+        out["tube"] = json!({
+            "currents": v.currents.iter().zip(&spec.goals)
+                .map(|(c, g)| goal(c, g.min, g.max)).collect::<Vec<_>>(),
+            "potentials": v.potential.iter().zip(&spec.potential_goals)
+                .map(|(c, g)| goal(c, g.min, g.max)).collect::<Vec<_>>(),
+            "arrivals": v.arrivals.iter().map(|(j, a, b, s)| json!({
+                "projectile": j + 1, "preview": a, "verification": b,
+                "status": format!("{s:?}") })).collect::<Vec<_>>(),
+            "capped": v.capped,
+            "status": format!("{:?}", v.status),
+        });
+    }
+    if level.has_beams() {
+        let beams: Vec<serde_json::Value> = level
+            .verify_beams(placement)
+            .iter()
+            .enumerate()
+            .map(|(d, v)| {
+                let shots: Vec<serde_json::Value> = (0..level.shots.len())
+                    .map(|s| {
+                        let (ok, n) = v.transmitted(s);
+                        json!({ "shot": s + 1, "arrived_verified": ok, "particles": n })
+                    })
+                    .collect();
+                let particles: Vec<serde_json::Value> = v
+                    .verified
+                    .trajectories
+                    .iter()
+                    .zip(&v.status)
+                    .zip(&v.shot)
+                    .map(|((t, st), s)| {
+                        let mut f = flight(t);
+                        f["shot"] = json!(s + 1);
+                        f["status"] = json!(format!("{st:?}"));
+                        f
+                    })
+                    .collect();
+                json!({ "disturbance": d + 1, "shots": shots, "particles": particles,
+                        "energy_max_rel_error": v.verified.energy_max_rel_error })
+            })
+            .collect();
+        out["beams"] = json!(beams);
+    } else if !level.shots.is_empty() {
+        let flights: Vec<serde_json::Value> = level
+            .verify_flights(placement)
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let (shot, d) = level.flight_of(i);
+                json!({
+                    "shot": shot + 1,
+                    "disturbance": d + 1,
+                    "outcome": format!("{:?}", v.outcome()),
+                    "status": format!("{:?}", v.status),
+                    "verified": flight(&v.verified),
+                    "preview": flight(&v.preview),
+                })
+            })
+            .collect();
+        out["flights"] = json!(flights);
+    }
+    out
 }
 
 /// `generator tube-scan`: currents into every electrode for several placements.
@@ -449,6 +575,11 @@ fn main() {
             trace,
         ),
         Command::TubeField { path, every, end } => tube_field(&load(&path), every, end),
+        Command::Scan {
+            path,
+            placements,
+            samples,
+        } => scan(&load(&path), placements.as_ref(), samples),
         Command::Trace {
             path,
             flight,

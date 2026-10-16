@@ -1,0 +1,443 @@
+\documentclass{leveldoc}
+\DocUses{foundations}
+\DocFingerprint{f1b0bc198773f85c}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+A positive particle is launched from the left edge of the board, straight to the right. The
+detector sits in the upper right corner. The player places up to three fixed charges, each
+of magnitude \num{1e6}, \num{2e6} or \num{4e6} and of either sign, on any nodes of the grid,
+to bend the flight into the detector. The level is solved when the flight enters the detector
+before it touches a charge, leaves the world or runs out of time (\xsecref{foundations}{sec:board}).
+
+The reference solution places a single charge $Q = \val{Q}$ at the origin, the corner below
+the launch point: it repels the particle upwards. This document derives the flight exactly:
+the orbit of a relativistic charge about a fixed charge has a closed form.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols (\xsecref{foundations}{sec:notation}): the particle has charge $q = \val{q}$, mass
+$m = \val{m}$ and radius $a = 0$; the speed of light is $c = \val{c}$. It starts at
+$\vect{x}_0 = (0, 10)$ along $+x$ with kinetic energy $T_0 = \val{Tzero}$. The reference charge
+$Q = \val{Q}$ sits at $\vect{r}_\mathrm{c} = (0, 0)$ with radius $R = \val{R}$, and the coupling
+is $\kappa = qQ = \val{kappa}$ (repulsive). The detector is the rectangle
+$27 \le x \le 30$, $16 \le y \le 20$, whose left face lies at $x_D = \val{xD}$; the world is
+$-1 \le x \le 31$, $-1 \le y \le 21$; the time limit is $t_{\max} = \val{tmax}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \fill[green!50!black, fill opacity=0.18] (27,16) rectangle (30,20);
+  \draw[green!40!black] (27,16) rectangle (30,20);
+  \node[font=\small, green!30!black] at (28.5,18) {detector};
+  \addplot[very thick, blue!70!black] table {orbit.dat};
+  \fill[red!75!black] (0,0) circle[radius=0.3];
+  \node[font=\small, red!60!black, anchor=south west] at (0.3,0.2) {$Q$};
+  \draw[-{Stealth[length=6pt]}, thick] (0,10) -- (3,10);
+  \fill (0,10) circle[radius=0.15];
+  \node[font=\small, anchor=south] at (1.5,10.2) {launch};
+  \fill[blue!70!black] (27,\rawval{yE}) circle[radius=0.2];
+  \node[font=\small, anchor=east] at (26.6,\rawval{yE}) {$\vect{x}_\mathrm{e}$};
+\end{axis}
+\end{tikzpicture}
+\caption{The board of the level with the reference solution: the charge $Q$ at the origin, the
+exact orbit of \S\ref{sec:derivation} from the launch to the entry into the detector, and the
+world's edge (dashed).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere outside it and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom} and the launch
+    \xeqref{foundations}{eq:launch}.
+  \item The conservation of energy \xeqref{foundations}{eq:energy} and of angular momentum in a
+    central field \xeqref{foundations}{eq:angmom}; motion in the plane
+    (\xsecref{foundations}{sec:plane}).
+  \item The board's rules: the world, collisions, the detector, the outcome
+    (\xsecref{foundations}{sec:board}).
+\end{principles}
+
+With one charge $Q$ at $\vect{r}_\mathrm{c}$, the particle's state $(\vect{x}, \vect{p})$ obeys
+\begin{equation}\label{eq:eom-level}
+  \deriv{\vect{x}}{t} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t} = \kappa\,\frac{\vect{x}-\vect{r}_\mathrm{c}}{\abs{\vect{x}-\vect{r}_\mathrm{c}}^3},
+  \qquad \gamma = \sqrt{1 + \frac{\abs{\vect{p}}^2}{m^2c^2}},
+\end{equation}
+from $\vect{x}(0) = \vect{x}_0$, $\vect{p}(0) = \abs{\vect{p}_0}\,\uvec{x}$, until the first
+event of \xsecref{foundations}{sec:board}. This is classical electrodynamics for this setup,
+with these assumptions:
+
+\begin{assumption}{The charge is held in place}\label{as:fixed}
+The charge does not recoil: something holds it. This is a rule of the game, not an
+approximation of the physics it describes.
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The particle radiates while it is accelerated \xeqref{foundations}{eq:larmor}; the energy this
+carries off is not taken from it. Along the reference flight the radiated energy is
+$\val{Erad}$, a fraction $\val{EradFrac}$ of the launch energy (§\ref{sec:hand}, Step~7): it
+changes the arrival point by a relative amount of the same order, far below anything that
+matters here.
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+The particle's radius is $a = 0$, and it does not polarize: \xeqref{foundations}{eq:sphereforce}
+is exact.
+\end{assumption}
+
+The motion stays in the plane $z = 0$ (\xsecref{foundations}{sec:plane}); from here on vectors
+have two components.
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{Polar coordinates and the conserved quantities}
+
+Take polar coordinates about the charge, $\vect{x} - \vect{r}_\mathrm{c} = r(\cos\varphi, \sin\varphi)$.
+The velocity is $\dot r\,\uvec{r} + r\dot\varphi\,\uvec{\varphi}$, so the momentum has the
+radial and azimuthal components $p_r = \gamma m\dot r$ and $p_\varphi = \gamma m r\dot\varphi$.
+The angular momentum \xeqref{foundations}{eq:angmom} has only a $z$-component,
+$L_z = r p_\varphi = \gamma m r^2\dot\varphi$, and it is constant. Unless the particle moves
+along a radius ($L_z = 0$, §\ref{sec:others}), $\varphi$ therefore changes monotonically. Let
+$\sigma = \operatorname{sign} L_z$, $L = \abs{L_z}$, and let
+\begin{equation}\label{eq:theta}
+  \theta = \sigma\,(\varphi - \varphi_0), \qquad \dot\theta = \frac{L}{\gamma m r^2} > 0,
+\end{equation}
+be the angle swept since the launch. The energy \xeqref{foundations}{eq:energy} with the
+potential $\phi = Q/r$ is
+\begin{equation}\label{eq:energy}
+  W = \gamma mc^2 + \frac{\kappa}{r} = \gamma_0 mc^2 + \frac{\kappa}{r_0}.
+\end{equation}
+
+\subsection{The orbit equation}
+
+Use $\theta$ as the variable along the orbit and $u = 1/r$, with $u' = \dd u/\dd\theta$. Then
+$\dot r = (\dd r/\dd\theta)\,\dot\theta = -(u'/u^2)\,L u^2/(\gamma m)$, and
+\begin{equation}\label{eq:radial}
+  p_r = -L\,u', \qquad p_\varphi = \sigma L u.
+\end{equation}
+The energy relation $(\gamma mc^2)^2 = m^2c^4 + c^2(p_r^2 + p_\varphi^2)$ with
+$\gamma mc^2 = W - \kappa u$ from \eqref{eq:energy} becomes
+\begin{equation}\label{eq:energy-u}
+  (W - \kappa u)^2 = m^2c^4 + c^2L^2\left(u'^2 + u^2\right).
+\end{equation}
+Differentiating with respect to $\theta$ gives
+$-2\kappa(W - \kappa u)\,u' = 2c^2L^2\,u'(u'' + u)$; where $u' \ne 0$ we divide by
+$2c^2L^2u'$, and since the solution is smooth the result holds where $u' = 0$ as well:
+\begin{equation}\label{eq:orbit}
+  u'' + \Gamma^2 u = -\frac{\kappa W}{c^2L^2}, \qquad \Gamma^2 = 1 - \frac{\kappa^2}{c^2L^2}.
+\end{equation}
+A linear equation with constant coefficients. For $\Gamma^2 > 0$ its solution from the launch
+values $u_0 = 1/r_0$ and $u'_0 = -p_{r,0}/L$ \eqref{eq:radial} is
+\begin{equation}\label{eq:general}
+  u(\theta) = B + (u_0 - B)\cos\Gamma\theta + \frac{u'_0}{\Gamma}\sin\Gamma\theta,
+  \qquad B = -\frac{\kappa W}{c^2L^2\Gamma^2},
+\end{equation}
+and for $\Gamma^2 < 0$ the same with $\cos\Gamma\theta \to \cosh\abs{\Gamma}\theta$ and
+$(\sin\Gamma\theta)/\Gamma \to (\sinh\abs{\Gamma}\theta)/\abs{\Gamma}$. As $c\to\infty$, $\Gamma \to 1$ and
+$W/c^2 \to m$: \eqref{eq:orbit} becomes Binet's equation $u'' + u = -\kappa m/L^2$ of the
+Newtonian Kepler problem (\Goldstein{§3.5}). Relativity enters through $\Gamma < 1$: the orbit
+turns more slowly in $\theta$ than a Newtonian one.
+
+\subsection{The reference orbit}\label{sec:reference-orbit}
+
+In the reference, $\vect{r}_\mathrm{c} = 0$ and $\vect{x}_0 = (0, 10)$: $r_0 = 10$ and
+$\varphi_0 = \pi/2$. The launch momentum points along $+x$, perpendicular to the radius, so
+$p_{r,0} = 0$: the launch is an apsis, $u'_0 = 0$, and $L_z = -r_0\abs{\vect{p}_0} < 0$: the
+particle turns clockwise, $\sigma = -1$, $\theta = \pi/2 - \varphi$. Then \eqref{eq:general}
+reads
+\begin{equation}\label{eq:reference}
+  u(\theta) = A\cos\Gamma\theta + B, \qquad A = u_0 - B,
+\end{equation}
+and the position is
+\begin{equation}\label{eq:position}
+  x(\theta) = \frac{\sin\theta}{u(\theta)}, \qquad y(\theta) = \frac{\cos\theta}{u(\theta)}.
+\end{equation}
+The energy relation \eqref{eq:energy-u} at the apsis ($u' = 0$, $u = A + B$) is a quadratic
+for $A + B$; its positive root gives $A$ independently of the launch values,
+\begin{equation}\label{eq:amplitude}
+  A = \sqrt{B^2 + \frac{W^2 - m^2c^4}{c^2L^2\Gamma^2}},
+\end{equation}
+a check of the numbers (Step~3). Here $\kappa > 0$ makes $B < 0$, while $A + B = u_0 > 0$: $r$ grows
+from $r_0$ without bound as $\theta$ approaches the asymptote
+$\theta_\infty = \arccos(-B/A)/\Gamma$. The launch is the closest approach.
+
+\subsection{Which event comes first}\label{sec:first-event}
+
+By \eqref{eq:eom-level} with $\vect{r}_\mathrm{c} = 0$ and $\kappa > 0$,
+$\dot p_x = \kappa x/r^3$ and $\dot p_y = \kappa y/r^3$. At the launch $x = 0$, $y = 10$,
+$p_x = \abs{\vect{p}_0} > 0$, $p_y = 0$. While $x \ge 0$ and $y > 0$, neither component of
+$\vect{p}$ decreases, so $p_x \ge \abs{\vect{p}_0} > 0$ and $p_y \ge 0$: $x$ increases and $y$
+does not decrease, which keeps $x \ge 0$ and $y > 0$. So along the whole flight $x$ grows
+strictly and $y$ never falls. Hence:
+\begin{itemize}
+  \item no collision: $r \ge r_0 = 10 > R + a$;
+  \item the world's left and bottom edges are never reached; its right edge $x = 31$ only
+    after $x = x_D$; its top edge $y = 21$ only after $y$ exceeds its value at $x = x_D$;
+  \item the detector, which lies at $x \ge x_D$, can be entered first through its left face
+    $x = x_D$, when $x$ reaches $x_D$, if $16 \le y \le 20$ there.
+\end{itemize}
+So the flight ends at the angle $\theta_\mathrm{e}$ where $x(\theta_\mathrm{e}) = x_D$, entering
+the detector, provided $16 \le y(\theta_\mathrm{e}) \le 20$ and the time $t(\theta_\mathrm{e})$
+is below $t_{\max}$ (Steps 4--6 show both). By \eqref{eq:position}, $\theta_\mathrm{e}$ solves
+\begin{equation}\label{eq:crossing}
+  f(\theta) = \sin\theta - x_D\left(A\cos\Gamma\theta + B\right) = 0,
+\end{equation}
+the condition $x = x_D$ multiplied by $u > 0$.
+
+\subsection{The time}\label{sec:time}
+
+From \eqref{eq:theta} and $\gamma m = (W - \kappa u)/c^2$,
+\begin{equation}\label{eq:dtdth}
+  \deriv{t}{\theta} = \frac{\gamma m r^2}{L} = \frac{W - \kappa u}{c^2 L u^2}.
+\end{equation}
+For the reference orbit \eqref{eq:reference}, with $s = \Gamma\theta$,
+\begin{equation}\label{eq:time}
+  t(\theta) = \frac{W\,I_2(\Gamma\theta) - \kappa\,I_1(\Gamma\theta)}{c^2 L\,\Gamma},
+  \qquad I_n(s) = \int_0^s \frac{\dd s'}{(A\cos s' + B)^n}.
+\end{equation}
+Both integrals are elementary. With $\tau = \tan(s'/2)$,
+$\cos s' = (1-\tau^2)/(1+\tau^2)$ and $\dd s' = 2\,\dd\tau/(1+\tau^2)$, so
+$A\cos s' + B = \left((A+B) - (A-B)\tau^2\right)/(1+\tau^2)$ and, since $A > \abs{B}$ here,
+\begin{equation}\label{eq:i1}
+  I_1(s) = \int_0^{\tan(s/2)} \frac{2\,\dd\tau}{(A+B) - (A-B)\tau^2}
+  = \frac{2}{\sqrt{A^2-B^2}}\,\operatorname{artanh}\!\left(\sqrt{\frac{A-B}{A+B}}\,\tan\frac{s}{2}\right),
+\end{equation}
+valid up to the asymptote, where the argument of $\operatorname{artanh}$ reaches $1$. And
+because
+$\dd/\dd s\left[\sin s/(A\cos s + B)\right] = (A + B\cos s)/(A\cos s + B)^2$ with
+$A + B\cos s = (B/A)(A\cos s + B) + (A^2 - B^2)/A$,
+\begin{equation}\label{eq:i2}
+  I_2(s) = \frac{A\sin s}{(A^2-B^2)(A\cos s + B)} - \frac{B}{A^2-B^2}\,I_1(s).
+\end{equation}
+
+\subsection{The momentum at the entry}
+
+At the entry, $\gamma_\mathrm{e} = (W - \kappa u_\mathrm{e})/(mc^2)$ by \eqref{eq:energy} and
+$\abs{\vect{p}_\mathrm{e}} = mc\sqrt{\gamma_\mathrm{e}^2 - 1}$. Its direction follows from
+\eqref{eq:radial} with $\uvec{r} = (\cos\varphi, \sin\varphi)$,
+$\uvec{\varphi} = (-\sin\varphi, \cos\varphi)$:
+\begin{equation}\label{eq:momentum}
+  \vect{p} = p_r\,\uvec{r} + p_\varphi\,\uvec{\varphi}, \qquad p_r = -L\,u'(\theta), \quad
+  p_\varphi = \sigma L\,u(\theta).
+\end{equation}
+
+\subsection{The radiated energy}
+
+For \ref{as:radiation}: along the orbit the force is
+$\vect{F} = \kappa(\vect{x}-\vect{r}_\mathrm{c})/r^3$, and from $\dot{\vect{p}} = \vect{F}$ with
+$\dd(\gamma mc^2)/\dd t = \vect{v}\cdot\vect{F}$ the acceleration is
+\begin{equation}\label{eq:acceleration}
+  \vect{a} = \frac{1}{\gamma m}\left(\vect{F} - \frac{(\vect{v}\cdot\vect{F})\,\vect{v}}{c^2}\right).
+\end{equation}
+The power \xeqref{foundations}{eq:larmor} integrated over the flight,
+$E_\mathrm{rad} = \int_0^{\theta_\mathrm{e}} P\,(\dd t/\dd\theta)\,\dd\theta$, is a smooth
+integral, done with Simpson's rule \xeqref{foundations}{eq:simpson}.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} \xeqref{foundations}{eq:launch}:
+    $\gamma_0 = 1 + T_0/(mc^2) = \val{gammaZero}$,
+    $\abs{\vect{p}_0} = \sqrt{T_0^2/c^2 + 2mT_0} = \val{pZero}$, and the speed
+    $v_0 = \abs{\vect{p}_0}/(\gamma_0 m) = \val{vZero} = \val{betaZero}\,c$ (Newtonian
+    mechanics would give $\sqrt{2T_0/m} = \val{vNewton}$).
+  \item \emph{The conserved quantities} \eqref{eq:energy}: $r_0 = \val{rZero}$,
+    $W = \gamma_0 mc^2 + \kappa/r_0 = \val{W}$, and $L = r_0\abs{\vect{p}_0} = \val{L}$.
+  \item\label{st:constants} \emph{The orbit} \eqref{eq:orbit}, \eqref{eq:reference}:
+    $\kappa/(cL) = \val{eta}$, so $\Gamma = \val{Gamma}$; $B = \val{B}$ and
+    $A = u_0 - B = \val{A}$. The energy gives the same $A$ \eqref{eq:amplitude}, to
+    $\val{Adiff}$. The asymptote lies at $\theta_\infty = \val{psiInf}$
+    ($\val{psiInfDeg}^\circ$).
+  \item\label{st:newton} \emph{The crossing of $x = x_D$}: Newton's method
+    \xeqref{foundations}{eq:newton} on \eqref{eq:crossing}, with
+    $f'(\theta) = \cos\theta + x_D A\Gamma\sin\Gamma\theta$, from $\theta = 1$:
+    \begin{center}\small\val{newton}\end{center}
+    The digits double each step: $\theta_\mathrm{e} = \val{psiE}$ ($\val{psiEdeg}^\circ$).
+  \item \emph{The entry point} \eqref{eq:position}: $u_\mathrm{e} = A\cos\Gamma\theta_\mathrm{e} + B
+    = \val{uE}$, $r_\mathrm{e} = \val{rE}$, and $y_\mathrm{e} = \cos\theta_\mathrm{e}/u_\mathrm{e}
+    = \val{yE}$: between 16 and 20, so the particle enters the detector through its left face
+    at $(\val{xD}, \val{yE})$ (§\ref{sec:first-event}).
+  \item \emph{The time} \eqref{eq:time}--\eqref{eq:i2}: with $s_\mathrm{e} = \Gamma\theta_\mathrm{e}
+    = \val{sE}$, $I_1 = \val{IOne}$ and $I_2 = \val{ITwo}$, so $t_\mathrm{e} = \val{tE}$,
+    far within $t_{\max} = \val{tmax}$. (A quadrature of \eqref{eq:dtdth} gives the same to
+    $\val{tEquadDiff}$.)
+  \item\label{st:momentum} \emph{The momentum and the radiation}: $\gamma_\mathrm{e} = \val{gammaE}$
+    (kinetic energy $\val{TE}$, gained from the repulsion), $\abs{\vect{p}_\mathrm{e}} = \val{pE}$,
+    with $p_r = \val{prE}$ and $p_\varphi = \val{pphiE}$ \eqref{eq:momentum}:
+    $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$, $\val{angleE}^\circ$ above the $x$-axis.
+    The radiated energy is $E_\mathrm{rad} = \val{Erad}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The particle enters the detector through its left face at $\vect{x}_\mathrm{e} = (\val{xD},
+\val{yE})$ at $t_\mathrm{e} = \val{tE}$, with momentum
+$\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$: the level is solved.
+\end{result}
+
+Every step is arithmetic with the functions $\sin$, $\cos$, $\tan$, $\arccos$ and
+$\operatorname{artanh}$, which tables or series give to any accuracy; only Step~\ref{st:newton}
+iterates, and its table shows how few iterations it needs. The radiated energy (Step
+\ref{st:momentum}) needs a numerical integral; it matters only for \ref{as:radiation}.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The document's numbers come from closed forms evaluated with 40 significant digits, so they are
+exact for all purposes here. The game's differ from them by $\val{cmpTDiff}$ in the time and
+$\val{cmpYDiff}$ in the entry height, the accuracy of its verified integration
+(\xsecref{foundations}{sec:verification}), well inside the tolerance of $10^{-9}$ set from it.
+The game's diagnostic of the radiated energy, its own quadrature of the same power, agrees to
+$\val{cmpRadDiff}$ (relative). The table also checks three more placements in detail and every
+single-charge placement's first event (§\ref{sec:others}).
+
+\section{Other solutions}\label{sec:others}
+
+\subsection{One charge anywhere}
+
+With one charge of any value at any node, the flight is still the orbit about a single centre,
+and \eqref{eq:general} with \eqref{eq:dtdth} gives it exactly; only the launch is no longer an
+apsis ($u'_0 \ne 0$), and the orbit may be attractive ($\kappa < 0$). Three cases need care:
+\begin{itemize}
+  \item A charge on the launch line ($y = 10$, ahead of the launch) gives $L = 0$: the particle
+    moves along the line. An attractive charge pulls it in (a collision); a repulsive one stops
+    it at the distance $r_t$ where its kinetic energy vanishes, $W = mc^2 + \kappa/r_t$, i.e.
+    \begin{equation}\label{eq:radial-motion}
+      r_t = \frac{\kappa}{W - mc^2},
+    \end{equation}
+    and sends it back out through the world's left edge (unless $r_t \le R + a$).
+  \item An attractive charge with $cL < \abs{\kappa}$ has $\Gamma^2 < 0$: $u$ grows like
+    $\cosh\abs{\Gamma}\theta$ and the particle spirals into the charge, the relativistic
+    \emph{fall to the centre} (\LandauII{§39}).
+  \item An attractive charge with $W < mc^2$ binds the particle: the orbit is a rosette that
+    precesses by $2\pi(1/\Gamma - 1)$ per turn, and runs until it touches the charge, leaves the
+    world or enters the detector, or until $t_{\max}$.
+\end{itemize}
+To find the first event along an exact orbit, follow it in steps of
+$\Delta\theta = \num{4e-4}$, test each chord against the detector, the charge's sphere of
+radius $R + a$, the world and $t_{\max}$ (the time from \eqref{eq:dtdth} by the trapezoidal
+rule), and take the first chord with an event. A chord departs from the arc by at most
+$r\Delta\theta^2/8 \approx \num{1e-6}$ cells, so only a flight that passes that close to a
+boundary could be misjudged; the agreement with the game on every placement (below) shows that
+none does. Testing the chords, not only their end points, matters: placement~1 below enters the
+detector $\val{cornerGap}$ cells from its corner and would leave it through the right face after
+$\val{sliverAngle}$~rad, no more than $\val{sliverDepth}$ cells deep, a sliver that points
+$\Delta\theta$ apart step over.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 2, horizontal sep=0.6cm, vertical sep=1.0cm},
+  axis equal image, width=0.37\linewidth, xmin=-1, xmax=31, ymin=-1, ymax=21,
+  xtick={0,10,20,30}, ytick={0,10,20}, tick label style={font=\scriptsize},
+  title style={font=\small, yshift=-4pt}]
+  \nextgroupplot[title={$Q = \num{1e6}$: \val{nPlusOne}}]
+    \fill[green!50!black, fill opacity=0.2] (27,16) rectangle (30,20);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \addplot[only marks, mark=*, mark size=1.1pt, red!70!black] table {map_plusone.dat};
+    \fill (0,10) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{2e6}$: \val{nPlusTwo}}]
+    \fill[green!50!black, fill opacity=0.2] (27,16) rectangle (30,20);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \addplot[only marks, mark=*, mark size=1.1pt, red!70!black] table {map_plustwo.dat};
+    \fill (0,10) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{4e6}$: \val{nPlusFour}}]
+    \fill[green!50!black, fill opacity=0.2] (27,16) rectangle (30,20);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \addplot[only marks, mark=*, mark size=1.1pt, red!70!black] table {map_plusfour.dat};
+    \fill (0,10) circle[radius=0.4];
+    \draw[blue!70!black, thick] (0,0) circle[radius=0.9];
+  \nextgroupplot[title={$Q = \num{-1e6}$: \val{nMinusOne}}]
+    \fill[green!50!black, fill opacity=0.2] (27,16) rectangle (30,20);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \addplot[only marks, mark=*, mark size=1.1pt, blue!70!black] table {map_minusone.dat};
+    \fill (0,10) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{-2e6}$: \val{nMinusTwo}}]
+    \fill[green!50!black, fill opacity=0.2] (27,16) rectangle (30,20);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \addplot[only marks, mark=*, mark size=1.1pt, blue!70!black] table {map_minustwo.dat};
+    \fill (0,10) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{-4e6}$: \val{nMinusFour}}]
+    \fill[green!50!black, fill opacity=0.2] (27,16) rectangle (30,20);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \addplot[only marks, mark=*, mark size=1.1pt, blue!70!black] table {map_minusfour.dat};
+    \fill (0,10) circle[radius=0.4];
+\end{groupplot}
+\end{tikzpicture}
+\caption{Every node where a single charge solves the level, for each charge the player may
+place (and how many nodes), from the exact orbits: repelling charges (red) below the launch
+line, attracting ones (blue) above it. The black dot is the launch; the blue ring marks the
+reference.}
+\label{fig:map}
+\end{figure}
+
+Of the $\val{nNodes}$ nodes and six charge values, $\val{nSolving}$ single-charge placements
+solve the level (Figure~\ref{fig:map}). Each family is a band: a charge repels the particle
+upwards from below the launch line, or attracts it upwards from above, and the deflection must
+fall within the angular window that leads into the detector; weaker charges must sit closer to
+the flight. All $\val{cmpMapTotal}$ placements' first events agree with the game's verdicts
+(Table~\ref{tab:comparison}, row \emph{every single-charge placement}).
+
+Three of them in detail (\code{placements.json}), each by the exact orbit, its entry found by
+Newton's method on the face it crosses:
+\begin{enumerate}[label=\arabic*.]
+  \item $Q = \val{detOneQ}$ at $\val{detOneNode}$: enters through the \val{detOneFace} face at
+    $(\val{detOneX}, \val{detOneY})$, at $t = \val{detOneT}$, $\val{cornerGap}$ cells from the
+    corner.
+  \item $Q = \val{detTwoQ}$ at $\val{detTwoNode}$: through the \val{detTwoFace} face at
+    $(\val{detTwoX}, \val{detTwoY})$, at $t = \val{detTwoT}$.
+  \item $Q = \val{detThreeQ}$ at $\val{detThreeNode}$: through the \val{detThreeFace} face at
+    $(\val{detThreeX}, \val{detThreeY})$, at $t = \val{detThreeT}$.
+\end{enumerate}
+
+\subsection{More charges}
+
+The level allows three charges. With two or more the force is no longer central, the angular
+momentum is not conserved, and the orbit has no closed form; the flight is then a numerical
+solution of \eqref{eq:eom-level} with the fields added, which \levelref{slingshot} carries out.
+Energy is still conserved \xeqref{foundations}{eq:energy}, which checks any such computation.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \eqref{eq:eom-level}, the sum of the placed charges' fields
+\xeqref{foundations}{eq:coulomb} in the order of the level file, with its eighth-order
+Runge--Kutta method at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}); the reference
+flight takes 19 steps in the verified run. It locates the entry into the detector on the
+method's interpolant with a search that cannot miss a crossing (\physref{6}), and verifies
+the outcome by comparing the two runs (\physref{7}). Its model is this document's: no
+approximation beyond \ref{as:radiation}, whose size it reports from the same
+power \xeqref{foundations}{eq:larmor} (\physref{8}). The engine's own tests check it against
+this exact orbit: test T3 compares the deflection angle of relativistic Coulomb scattering,
+$\theta = \abs{\pi - (2/\Gamma)\arccos(-B/A)}$, the asymptote of \eqref{eq:reference}, with the
+integrated flights (\physref{9}).
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \LandauII{§39}: the relativistic motion in a Coulomb field, the orbit
+    \eqref{eq:general}, the precession of bound orbits and the fall to the centre.
+  \item \Goldstein{§§3.5 and 3.10}: Binet's equation and Rutherford scattering, the Newtonian
+    limit of this level.
+  \item \Jackson{§12.1}: the relativistic equations of motion of a charge in external fields;
+    §14.2 for the radiated power.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}

@@ -1,0 +1,358 @@
+\documentclass{leveldoc}
+% The Foundations: what every level document builds on. Written with the system
+% (docs/levels/README.md); level documents cite it as \xeqref{foundations}{eq:...}.
+
+\begin{document}
+
+\tableofcontents
+
+\section{How to read the level documents}\label{sec:reading}
+
+Every level of the game has a document like this one. It derives what happens in the level
+from principles found in any textbook of classical electrodynamics, and it carries the
+derivation down to numbers: where the particle arrives, when, and how fast. A reader who
+knows Maxwell's equations, the Lorentz force and special relativity, and has unlimited time,
+should be able to reproduce every number of the game by hand from the level's document, the
+documents it cites, and this one.
+
+\emph{By hand} means that nothing is left to a black box. Where the answer has a closed form,
+the document derives it. Where it has none (most levels with more than one element), the
+document states the exact mathematical problem (equations, initial values, the rule that
+ends the flight) and a numerical method, with its error estimate, that a person could carry
+out with pencil and paper (§\ref{sec:numerics}). A computer only does that faster.
+
+Each level document has the same nine sections:
+\begin{enumerate}[label=\arabic*.]
+  \item \emph{What the level asks}: the puzzle, in physical terms, and its goal exactly.
+  \item \emph{Setup}: every number of the level file, and the symbols for them.
+  \item \emph{Principles and model}: the principles used and every assumption, each with the
+    size of what it neglects.
+  \item \emph{Derivation}: from the principles to formulas that can be evaluated.
+  \item \emph{The reference solution by hand}: the formulas evaluated for the level's
+    reference solution, step by step.
+  \item \emph{Comparison with the game}: the document's numbers against the game's.
+  \item \emph{Other solutions}: what else solves the level, and why.
+  \item \emph{What the game computes}: the engine's method for this level, and why it agrees.
+  \item \emph{Further reading}.
+\end{enumerate}
+An appendix reproduces the level file verbatim.
+
+\paragraph{Numbering and references.} Equations carry their document's number: (1.7) is the
+seventh equation of Level~1's document, (F.3) the third of this one, in every document.
+Sections are cited as §1.4, the engine's own documentation (\textsf{PHYSICS.md}, which
+describes the implemented physics and its validation tests) as \textsf{PHYSICS.md}~§5.
+A later level cites an earlier one instead of repeating its derivation.
+
+\paragraph{The numbers.} Every number in a document is computed by a short program beside it
+(\code{calc.py}) from the level file, with the document's formulas, independently of the
+game. The same program compares the results with the game's own (§\ref{sec:verification});
+the table in each document's comparison section is its output, so the text and the
+comparison cannot drift apart.
+
+\section{Units}\label{sec:units}
+
+The game computes in dimensionless units. A world is fixed by four reference values: a length
+$L_0$ (the side of a grid cell), a charge $Q_0$, a mass $M_0$, and the Coulomb constant
+$k = 1/(4\pi\varepsilon_0)$, which is set to $1$. The other units follow:
+\begin{equation}\label{eq:units}
+  T_0 = \sqrt{\frac{M_0 L_0^3}{k Q_0^2}}, \qquad
+  E_0 = \frac{k Q_0^2}{L_0}, \qquad
+  V_0 = \frac{L_0}{T_0},
+\end{equation}
+for time, energy and speed. The speed of light becomes a pure number, $c = c_{\mathrm{SI}}/V_0$,
+which each level sets (\code{physics.c} in the level file; absent, it is infinite and the
+mechanics is Newtonian).
+
+With $k = 1$ the constants of the vacuum are
+\begin{equation}\label{eq:vacuum}
+  \varepsilon_0 = \frac{1}{4\pi}, \qquad \mu_0 = \frac{4\pi}{c^2}, \qquad
+  \text{so that}\quad \varepsilon_0\mu_0 = \frac{1}{c^2}, \quad \frac{\mu_0}{4\pi} = \frac{1}{c^2}.
+\end{equation}
+These are SI's equations with these values: every formula of an SI textbook holds after
+the substitution \eqref{eq:vacuum}.
+
+\begin{remark}
+A level with a test charge $q = 10^{-6}$ and sources of $10^{6}$ is not exotic: in the
+non-relativistic limit a trajectory depends only on $qQ/m$ and on the energies, so the
+puzzle is the same as with charges of order one. The small $q$ keeps the particle's own
+radiation negligible (§\ref{sec:radiation}).
+\end{remark}
+
+\section{Maxwell's equations and the Lorentz force}\label{sec:maxwell}
+
+\begin{principles}
+  \item Maxwell's equations and the Lorentz force law (\Jackson{§§6.1, 6.7};
+    \Griffiths{Ch.~7}), in the units of §\ref{sec:units}.
+\end{principles}
+
+In these units, Maxwell's equations read
+\begin{equation}\label{eq:maxwell}
+  \nabla\cdot\vect{E} = 4\pi\rho, \qquad
+  \nabla\cdot\vect{B} = 0, \qquad
+  \nabla\times\vect{E} = -\pderiv{\vect{B}}{t}, \qquad
+  \nabla\times\vect{B} = \frac{4\pi}{c^2}\vect{J} + \frac{1}{c^2}\pderiv{\vect{E}}{t},
+\end{equation}
+and a charge $q$ moving with velocity $\vect{v}$ feels the force
+\begin{equation}\label{eq:lorentz}
+  \vect{F} = q\left(\vect{E} + \vect{v}\times\vect{B}\right).
+\end{equation}
+
+\subsection{The field of a point charge}\label{sec:coulomb}
+
+For charges at rest the fields do not change, and \eqref{eq:maxwell} gives
+$\nabla\times\vect{E} = 0$: there is a potential $\phi$ with $\vect{E} = -\nabla\phi$, and
+$\nabla^2\phi = -4\pi\rho$. For a charge $Q$ at the origin, spherically symmetric, the field
+is radial, $\vect{E} = E(r)\,\uvec{r}$. Gauss's law (the first equation of
+\eqref{eq:maxwell} integrated over a ball of radius $r$ enclosing all of the charge, with the
+divergence theorem) gives $4\pi r^2 E(r) = 4\pi Q$:
+\begin{equation}\label{eq:coulomb}
+  \vect{E}(\vect{x}) = \frac{Q\,\vect{x}}{\abs{\vect{x}}^3}, \qquad
+  \phi(\vect{x}) = \frac{Q}{\abs{\vect{x}}},
+\end{equation}
+the potential chosen to vanish at infinity. The same argument holds for any spherically
+symmetric charge of total $Q$ and radius $R$, outside it ($r > R$): the shell theorem. The
+equations are linear, so the fields of several charges add:
+$\phi(\vect{x}) = \sum_i Q_i/\abs{\vect{x}-\vect{r}_i}$.
+
+\subsection{The force between two charged spheres}\label{sec:spheres}
+
+The game's fixed charges are rigid spheres of radius $R$ (\code{physics.charge\_radius}) with
+a spherically symmetric charge, and its particles are rigid spheres of radius $a$ (often $0$)
+that do not polarize. Outside each other, the force on the particle is exactly
+\begin{equation}\label{eq:sphereforce}
+  \vect{F} = q\,\vect{E}_Q(\vect{x}) = \frac{qQ\,(\vect{x}-\vect{r})}{\abs{\vect{x}-\vect{r}}^3},
+\end{equation}
+with $\vect{x}$ and $\vect{r}$ the centres: by the shell theorem the particle's field outside
+it is that of a point charge at its centre, so the force it exerts on the source is that of a
+point charge; by Newton's third law for the pairwise central Coulomb forces between their
+elements, the force on the particle is the opposite, which is \eqref{eq:sphereforce}.
+
+\subsection{Static magnetic fields}
+
+Steady currents make a magnetic field by the Biot--Savart law, in these units
+\begin{equation}\label{eq:biotsavart}
+  \vect{B}(\vect{x}) = \frac{1}{c^2}\oint \frac{I\,\dd\vect{l}\times(\vect{x}-\vect{l})}{\abs{\vect{x}-\vect{l}}^3}
+\end{equation}
+(\Jackson{§5.2}, with $\mu_0/4\pi = 1/c^2$). The levels with magnets and coils derive what
+they need from it.
+
+\section{The motion of a charge}\label{sec:mechanics}
+
+\begin{principles}
+  \item Special relativity: the momentum of a particle of mass $m$ is
+    $\vect{p} = \gamma m\vect{v}$, its energy $\gamma mc^2$ (\LandauII{§9}).
+  \item Newton's second law in the form $\dd\vect{p}/\dd t = \vect{F}$, which holds in
+    relativity with the Lorentz force (\LandauII{§17}; \Jackson{§12.1}).
+\end{principles}
+
+The state of a particle is its position $\vect{x}$ and momentum $\vect{p}$, and
+\begin{equation}\label{eq:eom}
+  \deriv{\vect{x}}{t} = \vect{v} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t} = q\left(\vect{E}(\vect{x},t) + \vect{v}\times\vect{B}(\vect{x},t)\right), \qquad
+  \gamma = \sqrt{1 + \frac{\abs{\vect{p}}^2}{m^2c^2}}.
+\end{equation}
+Then $\abs{\vect{v}} = \abs{\vect{p}}c/\sqrt{m^2c^2+\abs{\vect{p}}^2} < c$ for every finite
+momentum. As $c\to\infty$, $\gamma\to 1$ and \eqref{eq:eom} becomes Newton's mechanics.
+
+\paragraph{The launch.} A particle launched with kinetic energy
+$T_0 = (\gamma_0-1)mc^2$ has
+\begin{equation}\label{eq:launch}
+  \gamma_0 = 1 + \frac{T_0}{mc^2}, \qquad
+  \abs{\vect{p}_0} = mc\sqrt{\gamma_0^2-1} = \sqrt{\frac{T_0^2}{c^2} + 2mT_0},
+\end{equation}
+along the launch direction.
+
+\subsection{Energy}\label{sec:energy}
+
+The energy $\mathcal{E} = \gamma mc^2 = \sqrt{m^2c^4 + \abs{\vect{p}}^2c^2}$ changes at the
+rate $\dd\mathcal{E}/\dd t = c^2\,\vect{p}\cdot\dot{\vect{p}}/\mathcal{E} = \vect{v}\cdot\dot{\vect{p}}$.
+The magnetic force does no work ($\vect{v}\cdot(\vect{v}\times\vect{B}) = 0$). In a static
+electric field $\vect{E} = -\nabla\phi$ the rest is
+$q\,\vect{v}\cdot\vect{E} = -q\,\vect{v}\cdot\nabla\phi = -q\,\dd\phi(\vect{x}(t))/\dd t$, so
+\begin{equation}\label{eq:energy}
+  W = \gamma mc^2 + q\,\phi(\vect{x})
+\end{equation}
+is constant along the flight. Equivalently, the kinetic energy $T = (\gamma-1)mc^2$ satisfies
+$T + q\phi(\vect{x}) = T_0 + q\phi(\vect{x}_0)$.
+
+\subsection{Angular momentum}\label{sec:angmom}
+
+The angular momentum about a point $\vect{r}$ is
+$\vect{L} = (\vect{x}-\vect{r})\times\vect{p}$, and
+$\dd\vect{L}/\dd t = \vect{v}\times\vect{p} + (\vect{x}-\vect{r})\times\vect{F}$. The first term
+vanishes ($\vect{p}\parallel\vect{v}$). If the force points along $\vect{x}-\vect{r}$, as the
+field of a single charge at $\vect{r}$ does \eqref{eq:sphereforce}, the second vanishes too:
+\begin{equation}\label{eq:angmom}
+  \vect{L} = (\vect{x}-\vect{r})\times\vect{p} \quad\text{is constant in a central field,}
+\end{equation}
+in relativity as in Newton's mechanics.
+
+\subsection{Motion in the plane}\label{sec:plane}
+
+Most levels lie in the plane $z = 0$: their charges sit in it and their particles are launched
+along it. The field of charges in the plane is mirror-symmetric, $E_z(x, y, 0) = 0$, and a
+magnetic field of currents in the plane is perpendicular to it there, so
+$(\vect{v}\times\vect{B})_z = 0$ for $\vect{v}$ in the plane. Then $z(t) = 0$, $p_z(t) = 0$
+solves \eqref{eq:eom}, and by the uniqueness of solutions of ordinary differential equations
+with smooth right-hand sides, it is the solution. Plane polar coordinates $(r,\varphi)$ about
+a point serve wherever a level has one centre.
+
+\section{The board}\label{sec:board}
+
+\paragraph{The grid.} Elements sit on the nodes of a grid: node $(i,j,k)$ is the point
+$(i,j,k)/s$, with $s$ the grid's subdivision (\code{grid.subdivision}, usually 1). A planar
+level (\code{grid.nz} = 0) has nodes $0\le i\le n_x$, $0\le j\le n_y$ in the plane $z = 0$.
+
+\paragraph{The world.} The world is the grid's box enlarged by one cell on every side:
+$-1\le x\le n_x/s+1$, $-1\le y\le n_y/s+1$ and $-1\le z\le n_z/s+1$. A flight that leaves it
+ends, lost.
+
+\paragraph{Shots.} A shot launches a particle (charge $q$, mass $m$, radius $a$) from a node,
+along a direction (normalised), with kinetic energy $T_0$, at $t = 0$.
+
+\paragraph{Fixed charges.} A charge element at node $\vect{r}$ is a sphere of radius $R$
+(\code{physics.charge\_radius}) with charge $Q$. A flight that comes within $R + a$ of
+$\vect{r}$ ends, a collision.
+
+\paragraph{The detector.} Each shot has a detector, an axis-aligned box (in a planar level a
+slab through the plane, $-1\le z\le 1$: in the plane, a rectangle). The first entry decides:
+if the detector sets conditions on the arriving particle (a cone of directions, a band of
+kinetic energies), the state at the moment of entry must meet them.
+
+\paragraph{The time limit.} A flight that has not ended by \code{physics.t\_max} times out.
+
+\paragraph{The outcome.} The earliest of these events ends the flight: the particle touches
+a charge or another obstacle, leaves the world, enters its detector, or runs out of time.
+Should two happen at the same instant, an obstacle counts before the world's edge, and that
+before the detector. A level is solved when every shot's flight arrives in its detector and
+meets its conditions (with disturbances, in every one of them), and the game has verified it
+(§\ref{sec:verification}).
+
+The levels with gates, beams of many particles, conductors, coils, waves, circuits or the
+tubes' $z$-invariant world add their rules in the first level of their arc; its document
+derives them, and the later ones cite it.
+
+\section{What the game verifies}\label{sec:verification}
+
+The game integrates every flight twice, at two error tolerances of its integrator (the
+\emph{preview}, usually $10^{-10}$, and the \emph{verification}, $10^{-12}$:
+\code{physics.tolerances}), and computes for every boundary the closest approach to it, or
+how deep the flight went in. A result is \emph{verified} when both runs agree on the
+outcome and every margin is at least ten times the two runs' difference
+(\physref{7}). The difference estimates the preview's error; the verification's error is
+about a hundred times smaller. Measured on orbits with exact solutions, the verified run's
+positions are accurate to about $10^{-10}$ cells (\physref{5}).
+
+So when a level's physics has an exact solution, the document's numbers and the game's agree
+to about $10^{-10}$ (in cells and time units); a tolerance of $10^{-9}$ in the comparison is
+then a test of both. Where the document approximates, its tolerance is its own error
+estimate.
+
+\section{Radiation and other neglected effects}\label{sec:radiation}
+
+An accelerated charge radiates. A particle of charge $q$ with velocity $\vect{v}$ and
+acceleration $\vect{a}$ radiates the power (Liénard's generalization of Larmor's formula,
+\Jackson{§14.2}, in the units of §\ref{sec:units})
+\begin{equation}\label{eq:larmor}
+  P = \frac{2}{3}\,\frac{q^2}{c^3}\,\gamma^6\left(\abs{\vect{a}}^2 - \frac{\abs{\vect{v}\times\vect{a}}^2}{c^2}\right).
+\end{equation}
+Unless a level includes radiation reaction (its document then derives it), the game ignores
+the energy this carries away; it integrates $\int P\,\dd t$ along each flight as a check, and
+every shipped level keeps it below $10^{-10}\,T_0$. By hand: near a charge $Q$ at distance $r$
+the acceleration is about $qQ/(m r^2)$ for a duration of about $r/v$, so the radiated
+fraction of the kinetic energy is of order $(q^2/mc^2)/r$ times powers of $v/c$ and $qQ/(rT)$.
+With $q = 10^{-6}$, $m = 1$ this is far below $10^{-10}$.
+
+Other effects the game leaves out, unless a level says otherwise: the recoil of the fixed
+charges (held in place), the polarization of the particle, and the particle's field acting
+back on the sources (\physref{8}).
+
+\section{Computing by hand}\label{sec:numerics}
+
+These methods carry out what a closed form cannot. Each comes with an error estimate, so that
+a hand computation can be made as accurate as a comparison needs
+(\HairerI{§§II.1, II.4} for the Runge--Kutta methods).
+
+\paragraph{Roots.} To solve $f(s) = 0$ on an interval $[s_a, s_b]$ where $f$ changes sign:
+\emph{bisection} halves the interval, keeping the half where the sign changes; after $n$
+halvings the root is known to $(s_b-s_a)/2^n$. \emph{Newton's method},
+\begin{equation}\label{eq:newton}
+  s_{k+1} = s_k - \frac{f(s_k)}{f'(s_k)},
+\end{equation}
+converges quadratically near a simple root (the number of correct digits roughly doubles each
+step); stop when $\abs{s_{k+1}-s_k}$ is below the accuracy needed, and fall back to bisection
+if a step leaves the interval.
+
+\paragraph{Integrals.} The composite Simpson rule with an even number $n$ of steps
+$h = (s_b-s_a)/n$,
+\begin{equation}\label{eq:simpson}
+  \int_{s_a}^{s_b} f\,\dd s \approx \frac{h}{3}\left(f_0 + 4f_1 + 2f_2 + 4f_3 + \dots + 4f_{n-1} + f_n\right),
+\end{equation}
+has an error $-(s_b-s_a)h^4 f^{(4)}(\xi)/180$; halving $h$ and comparing estimates the error as
+$(S_h - S_{2h})/15$.
+
+\paragraph{Ordinary differential equations.} For $\dd y/\dd t = f(t,y)$, the classical
+Runge--Kutta method advances $y_n$ by a step $h$:
+\begin{equation}\label{eq:rk4}
+  \begin{aligned}
+    k_1 &= f(t_n, y_n), &
+    k_2 &= f\!\left(t_n + \tfrac{h}{2}, y_n + \tfrac{h}{2}k_1\right), \\
+    k_3 &= f\!\left(t_n + \tfrac{h}{2}, y_n + \tfrac{h}{2}k_2\right), &
+    k_4 &= f(t_n + h, y_n + hk_3), \\
+    y_{n+1} &= y_n + \tfrac{h}{6}\left(k_1 + 2k_2 + 2k_3 + k_4\right). &&
+  \end{aligned}
+\end{equation}
+Its global error is of order $h^4$: integrating with $h$ and with $h/2$ and comparing
+estimates the error of the finer run as $(y_{h/2}-y_h)/15$. For a flight, $y = (\vect{x},\vect{p})$
+and $f$ is the right-hand side of \eqref{eq:eom}.
+
+\paragraph{Where a flight ends.} An event (entering a box, touching a sphere) is the first
+zero of a function $g(\vect{x})$ of the position: the signed distance to the boundary,
+positive outside. After each step, check the sign of $g$. In the step where it changes, the
+cubic polynomial that matches the position and velocity at both ends of the step (cubic
+Hermite interpolation; its error is of order $h^4$, like the method's) gives $\vect{x}(t)$ in
+between, and bisection or Newton's method on $g(\vect{x}(t))$ finds the instant. A step longer
+than the boundary's distance divided by the speed can jump over a thin corner; keep steps
+shorter than that near boundaries.
+
+\paragraph{What the game does instead.} The engine integrates with an eighth-order
+Runge--Kutta method with step-size control (Dormand--Prince 8(5,3), \HairerI{§II.10}),
+locates events on its seventh-order interpolant with a search that cannot miss a crossing,
+and verifies every result as in §\ref{sec:verification} (\physref{5}, \physref{6}). For
+a hand computation the simpler methods above suffice: only their error estimates matter.
+
+\section{Notation}\label{sec:notation}
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$q$, $m$, $a$ & the particle's charge, mass and radius \\
+$Q$, $R$ & a fixed charge and its radius (\code{physics.charge\_radius}) \\
+$\kappa = qQ$ & the coupling of particle and charge ($k = 1$); $\kappa > 0$ repels \\
+$c$ & the speed of light (\code{physics.c}) \\
+$T$, $T_0$ & kinetic energy, at launch \\
+$\gamma$, $\vect{p}$, $\vect{v}$ & Lorentz factor, momentum, velocity \\
+$W$ & the conserved energy \eqref{eq:energy} \\
+$\vect{L}$, $L$ & angular momentum \eqref{eq:angmom}, its magnitude \\
+$r$, $\varphi$ & plane polar coordinates about a charge \\
+$u = 1/r$ & the inverse radius (orbits) \\
+$t_\mathrm{e}$, $\vect{x}_\mathrm{e}$, $\vect{p}_\mathrm{e}$ & time, position and momentum at the event that ends a flight \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Further reading}\label{sec:reading-list}
+
+\begin{itemize}
+  \item \Jackson{Chs.~1, 5, 6, 12 and 14}: electrostatics, magnetostatics, Maxwell's
+    equations, relativistic dynamics of charges, radiation of moving charges.
+  \item \LandauII{§§8--17 and 39}: relativistic mechanics, charges in fields, motion in a
+    Coulomb field.
+  \item \Griffiths{Chs.~2, 5, 7, 12}: the same at an undergraduate level, in SI units.
+  \item \HairerI{Ch.~II}: Runge--Kutta methods, error estimation and step-size control.
+\end{itemize}
+
+\end{document}

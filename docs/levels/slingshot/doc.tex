@@ -1,0 +1,313 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend}
+\DocFingerprint{dda3f5d66f42d420}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+The particle is launched straight up from $(6, 3)$, but the detector lies behind it, in the
+corner below and to the left. A fixed charge $Q_1 = \val{QOne}$ at $\val{rOne}$ attracts it,
+and not enough to turn it around. The player places up to three charges (as in
+\levelref{first_bend}) to bring the particle back into the detector before it touches a
+charge, leaves the world or runs out of time (\xsecref{foundations}{sec:board}).
+
+The reference solution places $Q_2 = \val{QTwo}$ at $\val{rTwo}$: together the two attractions
+bind the particle. It climbs, slows almost to rest, and falls back into the detector through its
+top face. With two centres the orbit has no closed form, so this document computes the flight
+numerically, with a method a person could carry out by hand, and with an error estimate.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: the particle has charge $q = \val{q}$, mass $m = \val{m}$, radius $a = 0$; the
+speed of light is $c = \val{c}$. It starts at $\vect{x}_0 = (6, 3)$ with kinetic energy
+$T_0 = \val{Tzero}$ along the direction of the level file, $(\val{dirX}, 1)$: the computed
+$(\cos 90^\circ, \sin 90^\circ)$, whose first component, a rounding error, moves the flight by
+less than $10^{-14}$ cells. The charges are $Q_1 = \val{QOne}$ at $\vect{r}_1 = \val{rOne}$ (the
+level's) and $Q_2 = \val{QTwo}$ at $\vect{r}_2 = \val{rTwo}$ (the reference's), each of radius
+$R = \val{R}$, with couplings $\kappa_i = qQ_i$: $\kappa_1 = \val{kOne}$ and
+$\kappa_2 = \val{kTwo}$ (both attractive). The detector is the rectangle $0 \le x \le 3$,
+$0 \le y \le 4$; the world is $-1 \le x \le 31$, $-1 \le y \le 21$; $t_{\max} = \val{tmax}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \fill[green!50!black, fill opacity=0.18] (0,0) rectangle (3,4);
+  \draw[green!40!black] (0,0) rectangle (3,4);
+  \addplot[thick, dashed, orange!80!black] table {zvc.dat};
+  \addplot[very thick, blue!70!black] table {path.dat};
+  \fill[blue!75!black] (15,12) circle[radius=0.3];
+  \node[font=\small, blue!60!black, anchor=south west] at (15.3,12.2) {$Q_1$};
+  \fill[blue!75!black] (2,0) circle[radius=0.3];
+  \node[font=\small, blue!60!black, anchor=south west] at (2.3,0.2) {$Q_2$};
+  \draw[-{Stealth[length=6pt]}, thick] (6,3) -- (6,5.5);
+  \fill (6,3) circle[radius=0.15];
+  \node[font=\small, anchor=west] at (6.3,3.3) {launch};
+  \node[font=\small, green!30!black, anchor=north] at (1.5,-0.1) {detector};
+\end{axis}
+\end{tikzpicture}
+\caption{The board with the reference solution: the two attracting charges, the computed flight
+(§\ref{sec:hand}) from the launch to the entry into the detector, and the edge of the region the
+particle's energy allows (dashed, \eqref{eq:allowed}). The flight turns where it nearly touches
+that edge.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The fields of charged spheres, superposed, and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom} and the launch
+    \xeqref{foundations}{eq:launch}; the conservation of energy \xeqref{foundations}{eq:energy}.
+  \item The board's rules (\xsecref{foundations}{sec:board}).
+  \item The classical Runge--Kutta method, cubic Hermite interpolation and the error estimate
+    by halving the step (\xsecref{foundations}{sec:numerics}).
+\end{principles}
+
+With the charges $Q_i$ at $\vect{r}_i$, the state $(\vect{x}, \vect{p})$ obeys
+\begin{equation}\label{eq:eom-two}
+  \deriv{\vect{x}}{t} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t} = \sum_{i=1}^{2} \kappa_i\,\frac{\vect{x}-\vect{r}_i}{\abs{\vect{x}-\vect{r}_i}^3},
+  \qquad \gamma = \sqrt{1 + \frac{\abs{\vect{p}}^2}{m^2c^2}},
+\end{equation}
+from $\vect{x}_0$ and $\vect{p}_0 = \abs{\vect{p}_0}(\val{dirX}, 1)$, until the first event. The
+motion stays in the plane (\xsecref{foundations}{sec:plane}). The assumptions are those of
+\levelref{first_bend}, for two charges:
+
+\begin{assumption}{The charges are held in place}\label{as:fixed}
+Neither charge recoils (a rule of the game).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the particle. Along the
+reference flight it is $\val{Erad}$, a fraction $\val{EradFrac}$ of the launch energy
+(§\ref{sec:hand}): its effect on the flight is of that relative order, far below the accuracy of
+the game's integration or of this document's.
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize: \xeqref{foundations}{eq:sphereforce} is exact.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{Why there is no orbit equation}
+
+With one charge, the conservation of angular momentum turned the flight into a single linear
+equation for $u = 1/r$, \xeqref{first_bend}{eq:orbit}. With two the force is not central, and
+the angular momentum about either charge changes. In Newton's mechanics the problem of two fixed
+centres can still be solved (Euler's problem): in elliptic coordinates
+$(\sigma,\tau)$ with the charges at the foci, $r_{1,2} = d(\sigma \pm \tau)$ ($2d$ apart), the
+Hamilton--Jacobi equation separates (\Goldstein{Ch.~10} for the method). Relativistically, the
+square of the energy relation brings in $V^2$, and the product
+$(\sigma^2-\tau^2)\,V^2$ that the separation needs to split into a function of $\sigma$ plus one
+of $\tau$ contains
+\begin{equation}\label{eq:noseparation}
+  \frac{\kappa_1^2}{d^2}\,\frac{\sigma - \tau}{\sigma + \tau} + \frac{\kappa_2^2}{d^2}\,\frac{\sigma + \tau}{\sigma - \tau},
+\end{equation}
+which does not. We know of no closed form for this flight; the method of
+§\ref{sec:method} computes it to any accuracy.
+
+\subsection{What energy alone says}
+
+The energy \xeqref{foundations}{eq:energy} with the potential energy
+$V(\vect{x}) = \sum_i \kappa_i/\abs{\vect{x}-\vect{r}_i}$ is
+\begin{equation}\label{eq:energy-two}
+  W = \gamma mc^2 + V(\vect{x}) = \gamma_0 mc^2 + V(\vect{x}_0).
+\end{equation}
+Since $\gamma \ge 1$, the particle can only be where
+\begin{equation}\label{eq:allowed}
+  V(\vect{x}) \le W - mc^2 = T_0 + V(\vect{x}_0).
+\end{equation}
+At the launch, $\abs{\vect{x}_0 - \vect{r}_1} = \val{rOneZero}$ and
+$\abs{\vect{x}_0-\vect{r}_2} = \val{rTwoZero}$, so $V(\vect{x}_0) = \val{VZero}$ and
+$W - mc^2 = \val{Wbind}$: negative. As $V \to 0$ far away, \eqref{eq:allowed} confines the
+particle to a bounded region around the two charges (Figure~\ref{fig:board}): it cannot escape,
+and it must turn back. Energy says no more: where in that region it goes, and whether it ever
+reaches the detector, needs the equations of motion.
+
+\subsection{The method}\label{sec:method}
+
+The state $y = (x, y, p_x, p_y)$ evolves by \eqref{eq:eom-two}. The classical Runge--Kutta
+method \xeqref{foundations}{eq:rk4} advances it by a fixed step $h$, its right-hand side
+evaluated four times per step. After each step, check whether the step's path met an event
+boundary: the detector's box, a sphere of radius $R + a$ about either charge, the world's edge.
+On the step $[t_n, t_n + h]$ the position is interpolated by the cubic polynomial that matches the
+positions and velocities at both ends (\xsecref{foundations}{sec:numerics}),
+\begin{equation}\label{eq:hermite}
+  \vect{x}(t_n + uh) = h_{00}(u)\,\vect{x}_n + h_{10}(u)\,h\vect{v}_n + h_{01}(u)\,\vect{x}_{n+1} + h_{11}(u)\,h\vect{v}_{n+1},
+\end{equation}
+with $h_{00} = 2u^3 - 3u^2 + 1$, $h_{10} = u^3 - 2u^2 + u$, $h_{01} = -2u^3 + 3u^2$,
+$h_{11} = u^3 - u^2$ and $\vect{v} = \vect{p}/(\gamma m)$, sampled at 64 points of the step;
+bisection on $u$ then finds the first instant inside the box. The state at that instant comes
+from one more step of the method, of length $t_\mathrm{e} - t_n$. The method's error is of order
+$h^4$; repeating the computation with $h/2$ estimates it as a fifteenth of the difference
+\xsecref{foundations}{sec:numerics}. The energy \eqref{eq:energy-two} gives an independent check
+of every step.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item \emph{The launch} \xeqref{foundations}{eq:launch}: $\gamma_0 = \val{gammaZero}$ and
+    $\abs{\vect{p}_0} = \val{pZero}$, so $\vect{p}_0 = (0, \val{pZero})$ up to the rounding of the
+    direction.
+  \item \emph{The energy} \eqref{eq:energy-two}: $W = \val{W}$ and $W - mc^2 = \val{Wbind}$: the
+    particle is bound \eqref{eq:allowed}.
+  \item\label{st:integrate} \emph{The flight}: the method of §\ref{sec:method} with
+    $h = \val{HTable}$, from $t = 0$. The states every five time units, with the energy's drift
+    as a check of the arithmetic:
+    \begin{center}\small\val{states}\end{center}
+    The particle climbs to the upper left, slows to its smallest momentum near $(0.9, 12.3)$,
+    where it almost touches the edge of the allowed region (Figure~\ref{fig:board}), and falls
+    back towards $Q_2$.
+  \item \emph{The entry}: with $h = \val{H}$ the step from $t_n = \val{tBefore}$, at
+    $(\val{xBefore}, \val{yBefore})$, ends at $(\val{xAfter}, \val{yAfter})$, inside the detector,
+    which the path entered through its \val{faceE} face $y = 4$. The interpolant
+    \eqref{eq:hermite} crosses $y = 4$ at $u = \val{uE}$: $t_\mathrm{e} = \val{tE}$ and
+    $x_\mathrm{e} = \val{xE}$, after \val{steps} steps.
+  \item \emph{The momentum at the entry}: one step of length $t_\mathrm{e} - t_n$ gives
+    $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$. The energy alone gives
+    $\gamma_\mathrm{e} = (W - V(\vect{x}_\mathrm{e}))/(mc^2) = \val{gammaE}$ and
+    $\abs{\vect{p}_\mathrm{e}} = mc\sqrt{\gamma_\mathrm{e}^2-1} = \val{pEnergy}$, which the
+    integration matches to $\val{pDiff}$.
+  \item \emph{The error}: halving the step estimates the error of $t_\mathrm{e}$ as $\val{errT}$
+    and of $x_\mathrm{e}$ as $\val{errX}$; along the whole flight the energy stays within
+    $\val{wDev}$ of $W$. The step can be much coarser for a rough answer:
+    \begin{center}\small\val{convergence}\end{center}
+  \item \emph{The radiation}: the power \xeqref{foundations}{eq:larmor} with the acceleration
+    \xeqref{first_bend}{eq:acceleration}, summed over the steps by Simpson's rule
+    \xeqref{foundations}{eq:simpson}: $E_\mathrm{rad} = \val{Erad}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The particle enters the detector through its top face at $(\val{xE}, 4)$ at
+$t_\mathrm{e} = \val{tE}$, with momentum $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$: the
+level is solved.
+\end{result}
+
+By hand, Step~\ref{st:integrate} is long: $\val{tableSteps}$ steps of four evaluations of
+\eqref{eq:eom-two} each at $h = \val{HTable}$. The convergence table shows what a patient
+calculator gains from fewer: at $h = 0.04$, $\val{roughSteps}$ steps, the arrival is still right
+to $\val{roughErr}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The method's own error is about $10^{-12}$ (Step~6), so the differences in the table are the
+game's: below $10^{-10}$ for the reference flight, as its verified integration promises
+(\xsecref{foundations}{sec:verification}). The largest, $\val{cmpDetThreeTDiff}$, belongs to the
+longest flight, placement~3's of $\val{detThreeT}$ time units, over which the game's error grows;
+the tolerance of $10^{-9}$, set from the game's accuracy before comparing, still holds it. The
+radiated energy agrees to $\val{cmpRadDiff}$ (relative).
+
+\section{Other solutions}\label{sec:others}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 2, horizontal sep=0.6cm, vertical sep=1.0cm},
+  axis equal image, width=0.37\linewidth, xmin=-1, xmax=31, ymin=-1, ymax=21,
+  xtick={0,10,20,30}, ytick={0,10,20}, tick label style={font=\scriptsize},
+  title style={font=\small, yshift=-4pt}]
+  \nextgroupplot[title={$Q = \num{1e6}$: \val{nplusone}}]
+    \fill[green!50!black, fill opacity=0.2] (0,0) rectangle (3,4);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \fill[blue!60!black] (15,12) circle[radius=0.5];
+    \addplot[only marks, mark=*, mark size=1.1pt, red!70!black] table {map_plusone.dat};
+    \fill (6,3) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{2e6}$: \val{nplustwo}}]
+    \fill[green!50!black, fill opacity=0.2] (0,0) rectangle (3,4);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \fill[blue!60!black] (15,12) circle[radius=0.5];
+    \addplot[only marks, mark=*, mark size=1.1pt, red!70!black] table {map_plustwo.dat};
+    \fill (6,3) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{4e6}$: \val{nplusfour}}]
+    \fill[green!50!black, fill opacity=0.2] (0,0) rectangle (3,4);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \fill[blue!60!black] (15,12) circle[radius=0.5];
+    \addplot[only marks, mark=*, mark size=1.1pt, red!70!black] table {map_plusfour.dat};
+    \fill (6,3) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{-1e6}$: \val{nminusone}}]
+    \fill[green!50!black, fill opacity=0.2] (0,0) rectangle (3,4);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \fill[blue!60!black] (15,12) circle[radius=0.5];
+    \addplot[only marks, mark=*, mark size=1.1pt, blue!70!black] table {map_minusone.dat};
+    \fill (6,3) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{-2e6}$: \val{nminustwo}}]
+    \fill[green!50!black, fill opacity=0.2] (0,0) rectangle (3,4);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \fill[blue!60!black] (15,12) circle[radius=0.5];
+    \addplot[only marks, mark=*, mark size=1.1pt, blue!70!black] table {map_minustwo.dat};
+    \fill (6,3) circle[radius=0.4];
+  \nextgroupplot[title={$Q = \num{-4e6}$: \val{nminusfour}}]
+    \fill[green!50!black, fill opacity=0.2] (0,0) rectangle (3,4);
+    \draw[black!40] (0,0) rectangle (30,20);
+    \fill[blue!60!black] (15,12) circle[radius=0.5];
+    \addplot[only marks, mark=*, mark size=1.1pt, blue!70!black] table {map_minusfour.dat};
+    \fill (6,3) circle[radius=0.4];
+    \draw[red!70!black, thick] (2,0) circle[radius=0.9];
+\end{groupplot}
+\end{tikzpicture}
+\caption{The game's verdicts: every node where a single added charge solves the level, for each
+charge the player may place (repelling red, attracting blue), with the level's fixed charge $Q_1$
+(large dot) and the launch (black). The ring marks the reference. These maps are the game's, not
+derived here; three of their placements are checked below.}
+\label{fig:map}
+\end{figure}
+
+Of the $\val{nFamily}$ single-charge placements, the game finds $\val{nSolving}$ that solve the
+level (Figure~\ref{fig:map}). Most are strong attracting charges below and to the left of the
+launch, which catch the particle as $Q_2$ does; a few are repelling charges above it, which push it
+back down. The method of §\ref{sec:method} checks three of them independently (\code{placements.json};
+each with its error estimate from halving the step):
+\begin{enumerate}[label=\arabic*.]
+  \item $Q = \val{detOneQ}$ at $\val{detOneNode}$: through the \val{detOneFace} face at
+    $(\val{detOneX}, \val{detOneY})$, at $t = \val{detOneT}$ (error $\val{detOneErr}$).
+  \item $Q = \val{detTwoQ}$ at $\val{detTwoNode}$, repelling: through the \val{detTwoFace} face at
+    $(\val{detTwoX}, \val{detTwoY})$, at $t = \val{detTwoT}$ (error $\val{detTwoErr}$), pushed straight
+    back before it climbs.
+  \item $Q = \val{detThreeQ}$ at $\val{detThreeNode}$: through the \val{detThreeFace} face at
+    $(\val{detThreeX}, \val{detThreeY})$, at $t = \val{detThreeT}$ (error $\val{detThreeErr}$), after
+    several loops about the two attracting charges.
+\end{enumerate}
+With two or three charges the possibilities multiply; each is a flight of the same kind, and the
+method above computes any of them.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \eqref{eq:eom-two} with its eighth-order Runge--Kutta method and step-size
+control at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). Where this document takes
+\val{steps} steps of a fourth-order method, the game's verified run takes
+$\val{gameSteps}$: large steps where the force changes slowly, small ones near the charges. It
+finds the entry into the detector on its method's interpolant with a search that cannot miss a
+crossing (\physref{6}), and verifies the outcome by comparing its two runs (\physref{7}). The model
+is this document's; only \ref{as:radiation} is an approximation, and the game reports its size
+(\physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{first_bend}: the flight about one charge, in closed form, which this one
+    reduces to near either charge.
+  \item \HairerI{§§II.1 and II.4}: the Runge--Kutta methods, their errors and step-size control;
+    §II.6 for dense output.
+  \item \Goldstein{Ch.~10}: the Hamilton--Jacobi equation and the separation of variables that
+    solves the Newtonian problem of two fixed centres, and fails here.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
