@@ -1,0 +1,364 @@
+\documentclass{leveldoc}
+\DocUses{foundations,deflection_plates,tune_the_lens,injection,two_stages}
+\DocFingerprint{c5366cdec29942ce}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+\leveldescription
+
+Three positive ions leave the left edge, at $\val{aLow}$, $\val{aAxis}$ and
+$\val{aHigh}$ degrees. A condenser of three apertures, a crossover gate, one
+deflection plate and a fixed charge are built in. The player sets the middle
+aperture's two supplies, the deflector's supply, and charges beside the fixed
+charge. There are no magnets.
+
+Each ion must pass the gate and then enter the detector moving along $+x$,
+inside a cone. The gate has no direction condition
+(\xeqref{two_stages}{eq:gate}). The cone is \xeqref{injection}{eq:cone}.
+There is no kinetic window. A flight ends when the ion touches a charge or an
+electrode, leaves the world, or enters the detector
+(\xsecref{foundations}{sec:board}). Entering the detector before the gate is
+a skipped gate, and the cone is not applied to that ending. An electrode's
+obstacle is its box plus a contact shell of thickness $\val{contact}$. Each
+charge's obstacle radius is $\val{Rcharge}$. The ion's radius is $0$.
+
+The reference holds both halves of the middle aperture at one positive
+potential and the deflector at a higher positive potential, and it adds one
+positive charge. All three ions pass the gate and meet the detector's left
+side inside the cone. With the supplies off and that charge omitted, none of
+them does. This document uses the deflection plates' rectangle collocation.
+The fixed charge and the added charge are external. There is no uniform gap.
+The flight is integrated by the classical Runge--Kutta method.
+
+\section{Setup}\label{sec:setup}
+
+\setuptable
+
+The speed of light is $c = \val{cLight}$. Each ion has charge $q = \val{qPart}$,
+mass $m = \val{mPart}$ and radius $0$, and it is launched with kinetic energy
+$T_0 = \val{T0}$ from $(\val{xLaunch}, \val{yLaunch})$. Then
+$\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$ and
+$v_0 = \val{v0} = \val{vOverC}\,c$ (\xeqref{foundations}{eq:launch}).
+
+The condenser is three apertures. The outer pairs are grounded. The reference
+holds the middle pair, at $x = \val{xMid}$, at $V = \val{vMid}$. The opening
+is $\val{yRimLo} \le y \le \val{yRimHi}$. The gate is
+$\val{xGate0} \le x \le \val{xGate1}$, $\val{yGate0} \le y \le \val{yGate1}$.
+The deflector is centred at $x = \val{xDef}$, and the reference holds it at
+$V = \val{vDef}$. It occupies $\val{xDef0} \le x \le \val{xDef1}$,
+$\val{yDef0} \le y \le \val{yDef1}$. The supply range is symmetric out to
+$\val{vHalf}$. The fixed charge is $Q = \val{qPump}$ at
+$(\val{xPump}, \val{yPump})$. The reference charge is $Q = \val{qSteer}$ at
+$(\val{xSteer}, \val{ySteer})$. The largest magnitude on offer is $\val{qMag}$.
+
+The detector is $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$. Its cone has axis $\val{axisDeg}$
+degrees and half-angle $\val{halfDeg}$ degrees. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$. The reported time
+step is $h = \val{H}$. The mesh uses rectangles of edge $\val{panelFine}$,
+$\val{nPanels}$ of them on the upper halves of the seven electrodes.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth,
+  xmin=-1.5, xmax=42.5, ymin=-2, ymax=22.5,
+  xlabel={$x$}, ylabel={$y$}, tick label style={font=\small}]
+  \draw[black!40, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!25] (0,0) rectangle (40,20);
+  \fill[teal!40, fill opacity=0.25]
+    (\rawval{xGate0},\rawval{yGate0}) rectangle (\rawval{xGate1},\rawval{yGate1});
+  \draw[teal!60!black]
+    (\rawval{xGate0},\rawval{yGate0}) rectangle (\rawval{xGate1},\rawval{yGate1});
+  \fill[green!50!black, fill opacity=0.18]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!50!black]
+    (\rawval{coneOx},\rawval{coneOy}) -- (\rawval{coneXp},\rawval{coneYp});
+  \draw[green!50!black]
+    (\rawval{coneOx},\rawval{coneOy}) -- (\rawval{coneXm},\rawval{coneYm});
+  \fill[black!20] (\rawval{xP0a},\rawval{yP0a}) rectangle (\rawval{xP0b},\rawval{yP0b});
+  \fill[black!20] (\rawval{xP1a},\rawval{yP1a}) rectangle (\rawval{xP1b},\rawval{yP1b});
+  \fill[black!20] (\rawval{xP4a},\rawval{yP4a}) rectangle (\rawval{xP4b},\rawval{yP4b});
+  \fill[black!20] (\rawval{xP5a},\rawval{yP5a}) rectangle (\rawval{xP5b},\rawval{yP5b});
+  \draw[orange!80!black, thick]
+    (\rawval{xP2a},\rawval{yP2a}) rectangle (\rawval{xP2b},\rawval{yP2b});
+  \draw[orange!80!black, thick]
+    (\rawval{xP3a},\rawval{yP3a}) rectangle (\rawval{xP3b},\rawval{yP3b});
+  \draw[orange!80!black, thick]
+    (\rawval{xP6a},\rawval{yP6a}) rectangle (\rawval{xP6b},\rawval{yP6b});
+  \fill[red!70!black] (\rawval{xPump},\rawval{yPump}) circle[radius=\rawval{Rcharge}];
+  \fill[red!70!black] (\rawval{xSteer},\rawval{ySteer}) circle[radius=\rawval{Rcharge}];
+  \addplot[orange!80!black] table {pathofflow.dat};
+  \addplot[orange!80!black] table {pathoffaxis.dat};
+  \addplot[orange!80!black] table {pathoffhigh.dat};
+  \addplot[blue!60!black] table {pathlow.dat};
+  \addplot[blue!60!black] table {pathaxis.dat};
+  \addplot[very thick, blue!60!black] table {pathhigh.dat};
+  \draw[-{Stealth[length=5pt]}, thick]
+    (\rawval{xLaunch},\rawval{yLaunch}) -- (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.08];
+\end{axis}
+\end{tikzpicture}
+\caption{The column and the six flights. The outlined plates are the middle
+aperture and the deflector, at the reference potentials. The gray plates are
+grounded. The lower red disc is the fixed charge and the upper red disc is
+the reference charge. The teal box is the gate and the green box is the
+detector; the green wedge is the accepted cone. Blue paths are the reference,
+and each meets the detector's left edge. Orange paths leave the supplies off
+and omit the reference charge: one leaves through the right edge below the
+gate, one leaves through the right edge above the launch line, and one meets
+the deflector.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the
+    launch \xeqref{foundations}{eq:launch}, and energy in a static field
+    \xeqref{foundations}{eq:energy}. There is no magnetic field.
+  \item Each electrode is a metal box at the potential its supply sets, or
+    grounded when the supply is off (\physref{2.7}). The surface charge is
+    the deflection plates' collocation
+    \xeqref{deflection_plates}{eq:collocation}, with the rectangle integral
+    \xeqref{deflection_plates}{eq:rectangle}. Both charges are external.
+  \item The gate is \xeqref{two_stages}{eq:gate}. The detector then counts an
+    entry only inside the cone \xeqref{injection}{eq:cone}.
+  \item The board's rules (\xsecref{foundations}{sec:board}) and the classical
+    Runge--Kutta method (\xsecref{foundations}{sec:numerics}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, summed by Simpson's
+    rule \xeqref{foundations}{eq:simpson}. It is not put back into the force.
+\end{principles}
+
+The reference raises three electrodes and adds one charge. The fixed charge
+stays in every flight. The state obeys \xeqref{foundations}{eq:eom} with
+$\vect{B} = \vect{0}$ until the first ending event. Passing the gate does not
+end the flight.
+
+\begin{assumption}{Static electrodes}\label{as:static}
+Each supply is a fixed potential, with no ramp. The launch speed is
+$\val{vOverC}\,c$. The game uses the same static supplies (\physref{2.7}).
+\end{assumption}
+
+\begin{assumption}{No radiation reaction}\label{as:radiation}
+The radiated energy is not taken from the flight. The largest of the three
+reference integrals is a fraction $\val{radFracMax}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{No image of the ion}\label{as:image}
+The ion's own surface charge is left out, as on the deflection plates and as
+in the game (\physref{2.7}). The bound $q^2/d^2$, with $d$ floored at
+$10^{-3}$ and taken relative to $\max(\abs{q\vect{E}}, T_0)$, reaches
+$\val{refImage}$ on the reference samples, under the engine's limit
+$10^{-10}$. The empty upward ray strikes the deflector, and its sampled ratio
+reaches $\val{offImage}$, above that limit, because the distance falls to the
+contact shell.
+\end{assumption}
+
+\begin{assumption}{Equal rectangles}\label{as:panels}
+The mesh is equal rectangles of edge $\val{panelFine}$. Replacing the edge by
+$\val{panelCoarse}$ moves an end state by $\val{errMesh}$. Both placements
+carry electrode charge, so every ray enters that estimate.
+\end{assumption}
+
+\begin{assumption}{The fixed step}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates an end state by
+$\val{errStep}$. The tolerance on a state is ten times the larger of that
+estimate and the panel-size estimate, and at least $10^{-9}$. Here the
+panel-size estimate is the larger one, so the tolerance is $\val{tolFlight}$.
+Between samples the ion moves at most $\val{stepReach}$. The clearance of the
+metal, sampled at the ends of the steps and at the ending point, reaches
+$\val{refDmin}$ on the reference flights.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The condenser}\label{sec:lens}
+
+The rectangles, the mirror and the collocation are
+\xeqref{deflection_plates}{eq:rectangle} and
+\xeqref{deflection_plates}{eq:collocation}. A supply replaces the potential of
+the electrode it sits on. The charges' potential is subtracted on the
+right-hand side. The ion is not in the linear system. The reported mesh has
+$\val{nPanels}$ upper rectangles. The residual at the centroids is
+$\val{solveRes}$. On the long faces, off the centroids, the potential differs
+from the electrode potential by at most $\val{surfRes}$.
+
+The middle pair is at one potential and the outer pairs are grounded, which is
+the aperture lens of Tune the lens. On the launch line at the middle aperture
+the transverse field is $\val{eAxis}$. Off that line, halfway to each rim, it
+is $\val{eAbove}$ above and $\val{eBelow}$ below, toward the axis. The
+downstream plate and the charges leave the remainder $\val{eAxis}$
+(\xeqref{tune_the_lens}{eq:axis} would give zero for the lens alone). The
+potential on the launch line is $\val{phiIn}$ in the first aperture,
+$\val{phiMid}$ in the middle and $\val{phiOut}$ in the third, so it peaks in
+the middle. \xeqref{tune_the_lens}{eq:slow} then gives $T = \val{Tmid}$ there,
+the fraction $\val{slowFrac}$ of $T_0$ having gone into potential. The middle
+pair carries $\val{qMid}$ and the grounded electrodes carry $\val{qOuter}$.
+
+\subsection{The gate}\label{sec:gate}
+
+The rule is \xeqref{two_stages}{eq:gate}. This level lists one gate and gives
+it no direction condition. The flight continues through the gate. The detector
+counts only after that entry. Entering the detector while the gate has not
+been entered ends the flight as a skipped gate, and this document does not
+then apply the cone.
+
+\subsection{The deflector and the charges}\label{sec:drop}
+
+There is no second plate opposite the deflector, so the uniform-gap field does
+not apply. The deflector is positive. Half a cell under it the field is
+$\val{eDef}$, along $-y$, so a positive ion is pushed down. The deflector
+carries $\val{qDef}$. One cell above the fixed charge, that charge alone
+produces $\val{eyPump}$ along $+y$, and the full field there is still
+$\val{eyOver}$ along $+y$: the charge repels a positive ion upward. The
+reference charge sits on the launch line, between the deflector and the
+detector.
+
+\subsection{The flight and the cone}\label{sec:flight}
+
+The diagnostic is \xeqref{deflection_plates}{eq:flight-energy}. The state is
+advanced by \xeqref{foundations}{eq:rk4} with step $h = \val{H}$. Events are
+located as on the deflection plates: thirty-two Hermite samples, then sixty
+bisections, obstacles before the world, and the world before the detector.
+The gate is recorded when the step enters it, and the flight goes on. The
+cone \xeqref{injection}{eq:cone} is applied only to a detector entry that
+already passed the gate. The axis is $+x$ and the half-angle is
+$\val{halfDeg}$ degrees. The step-halving estimate divides the change by $15$;
+the panel-size estimate is the change itself when the edge doubles.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launches} \xeqref{foundations}{eq:launch}.
+    $\gamma_0 = \val{gamma0}$ and $\abs{\vect{p}_0} = \val{p0}$, so
+    $v_0 = \val{v0}$. The three angles are $\val{aLow}$, $\val{aAxis}$ and
+    $\val{aHigh}$ degrees.
+  \item\label{st:lens} \emph{The condenser.} Hold both halves at
+    $x = \val{xMid}$ at $\val{vMid}$, and leave the outer apertures grounded.
+    The opening is $\val{opening}$. On the launch line,
+    \xeqref{tune_the_lens}{eq:slow} gives $T = \val{Tmid}$ in the middle.
+  \item\label{st:gate} \emph{The gate} \xeqref{two_stages}{eq:gate}. Each
+    reference ray enters through the left face, at $x = \val{xGate0}$. The
+    ordinates are $\val{LowGY}$, $\val{AxisGY}$ and $\val{HighGY}$, all
+    between $\val{yGate0}$ and $\val{yGate1}$, at $t = \val{LowGT}$,
+    $\val{AxisGT}$ and $\val{HighGT}$.
+  \item\label{st:drop} \emph{The deflector and the charges.} Hold the
+    deflector at $\val{vDef}$. Keep $Q = \val{qPump}$ at
+    $(\val{xPump}, \val{yPump})$ and place $Q = \val{qSteer}$ at
+    $(\val{xSteer}, \val{ySteer})$. Solve the collocation again. The centroid
+    residual is $\val{solveRes}$.
+  \item\label{st:march} \emph{The marches.} Advance
+    \xeqref{deflection_plates}{eq:flight-energy} and
+    \xeqref{foundations}{eq:eom} by \xeqref{foundations}{eq:rk4} with step
+    $\val{H}$, once for each launch direction. The on-axis state every five
+    time units:
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:end} \emph{The arrivals.} Each ion meets the left face of the
+    detector. The downward ray ends at $(\val{LowX}, \val{LowY})$, at
+    $t = \val{LowT}$, at an angle $\val{LowAng}$ degrees from $+x$. The
+    on-axis ray ends at $(\val{AxisX}, \val{AxisY})$, at $t = \val{AxisT}$,
+    at $\val{AxisAng}$ degrees. The upward ray ends at
+    $(\val{HighX}, \val{HighY})$, at $t = \val{HighT}$, at $\val{HighAng}$
+    degrees. The cone angles are $\val{LowBeta}$, $\val{AxisBeta}$ and
+    $\val{HighBeta}$ degrees, all inside the half-angle, so each outcome is
+    Arrived. The downward ray only falls, from the launch to $\val{LowY}$.
+    The upward ray climbs to $\val{HighYmax}$ and then falls, and its ending
+    is the lowest of the three.
+  \item\label{st:check} \emph{The checks.} $W$ drifts by at most
+    $\val{LowWdev}$, $\val{AxisWdev}$ and $\val{HighWdev}$. The step-halving
+    estimate on the largest flight is $\val{errStep}$. The panel-size estimate
+    is $\val{errMesh}$. The sampled clearance is $\val{refDmin}$, outside the
+    shell $\val{contact}$. The image-force ratio reaches $\val{refImage}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on steps of $h/2$
+    gives $\val{LowRad}$, $\val{AxisRad}$ and $\val{HighRad}$. The largest
+    fraction of $T_0$ is $\val{radFracMax}$. Halving that step again changes
+    the largest of those integrals by at most the relative amount
+    $\val{HighRadErr}$. These integrals are not rows of the comparison.
+\end{procedure}
+
+\begin{result}[The reference flights]
+All three ions pass the gate and enter the detector through its left side,
+inside the cone. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The table holds the outcome, the time and the end position of each reference
+ray, and the same three for the empty placement. The tolerance on a state is
+$\val{tolFlight}$. Ten times the panel-size estimate $\val{errMesh}$ lies
+above $10^{-9}$, and it is larger than the step-halving estimate
+$\val{errStep}$, so the tolerance is that product. The tolerance on a state
+was fixed from these estimates before the comparison.
+
+The largest absolute difference is the upward reference time,
+$\val{cmpHighTDiff}$. It lies above the panel-size estimate and under the
+tolerance. The downward reference time differs by $\val{cmpLowTDiff}$, also
+above the panel-size estimate and under the tolerance. The outcomes agree.
+
+The three reference abscissae agree exactly. Each is the detector's left edge.
+The empty downward abscissa and the empty on-axis abscissa agree exactly, and
+each is the world's right edge. The empty upward abscissa agrees exactly: the
+ray meets the deflector's contact shell.
+
+\section{Other solutions}\label{sec:others}
+
+The empty placement in \code{placements.json} turns the supplies off and adds
+no charge. The fixed charge and the grounded electrodes remain. It does not
+solve the level.
+
+The downward ray misses the gate and leaves through the right edge of the
+world at $(\val{OffLowX}, \val{OffLowY})$, at $t = \val{OffLowT}$, at an angle
+$\val{OffLowAng}$ degrees from $+x$. The on-axis ray does pass the gate, at
+$(\val{OffAxisGX}, \val{OffAxisGY})$, and then leaves through the right edge
+at $(\val{OffAxisX}, \val{OffAxisY})$, at $t = \val{OffAxisT}$, at
+$\val{OffAxisAng}$ degrees. That ordinate is above the launch line. The
+upward ray misses the gate and meets the deflector at
+$(\val{OffHighX}, \val{OffHighY})$, at $t = \val{OffHighT}$, so the outcome is
+\val{OffHighOutcome}. Its image-force ratio reaches $\val{OffHighImage}$.
+
+The reference supplies and the added charge are what bring the three rays from
+those three endings onto the detector, inside the cone. This document
+integrates the reference and the empty placement.
+
+\section{What the game computes}\label{sec:engine}
+
+The electrodes are metal boxes, and a supply sets the potential of the
+electrode it sits on (\physref{2.7}). The surface charge is the engine's
+triangle collocation, the same boundary condition as
+\xeqref{deflection_plates}{eq:collocation}, with the charges on the
+right-hand side. This document uses the equal rectangles of the deflection
+plates. The end states move by $\val{errMesh}$ when that edge doubles, and
+the upward reference time in \S\ref{sec:comparison} lies above that estimate
+and under ten times it.
+
+The gate is \xeqref{two_stages}{eq:gate} and the cone is
+\xeqref{injection}{eq:cone}. The ion's image force is omitted on both sides.
+The bound sampled on the reference flights reaches $\val{refImage}$, under
+the engine's limit $10^{-10}$. The flight in the engine is the adaptive
+method of \physref{5} and \physref{6}, verified as in \physref{7}. Our step
+estimate is $\val{errStep}$. Radiation is integrated and not applied to the
+momentum (\xsecref{foundations}{sec:radiation}, \physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+The rectangle integral, the collocation and the flight energy are derived for
+the deflection plates (\xeqref{deflection_plates}{eq:rectangle},
+\xeqref{deflection_plates}{eq:collocation},
+\xeqref{deflection_plates}{eq:flight-energy}). The aperture lens is derived
+for Tune the lens (\xeqref{tune_the_lens}{eq:axis},
+\xeqref{tune_the_lens}{eq:slow}). The gate is derived for Two stages
+(\xeqref{two_stages}{eq:gate}). The cone is derived for Injection
+(\xeqref{injection}{eq:cone}). The motion and the Runge--Kutta step are in
+the Foundations (\xsecref{foundations}{sec:numerics}). The engine's
+electrodes are \physref{2.7}.
+
+\levelfileappendix
+
+\end{document}
