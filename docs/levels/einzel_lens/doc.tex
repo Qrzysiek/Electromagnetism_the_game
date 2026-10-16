@@ -1,0 +1,378 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot,around_the_wall}
+\DocFingerprint{2e4791b0671ac730}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Three shots leave $(\val{xLaunch}, \val{yLaunch})$ with the same particle
+($q = \val{q}$, $m = \val{m}$) and the same kinetic energy $T_0 = \val{Tzero}$.
+The directions stored in the file are unit vectors at exactly $-12^\circ$, $0^\circ$
+and $+12^\circ$. On every shot the detector is the rectangle
+$\val{xDlo} \le x \le \val{xDhi}$, $\val{yDlo} \le y \le \val{yDhi}$.
+An entry counts at every direction and every kinetic energy: the small height of the
+box is the whole requirement. The player places at most $\val{maxCharges}$ charges,
+of the particle's sign only, inside the region
+$\val{xRegLo} \le x \le \val{xRegHi}$, $\val{yRegLo} \le y \le \val{yRegHi}$,
+and no magnets. A flight ends when the particle touches a charge, leaves the world,
+enters the detector or runs out of time
+(\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$.
+
+The reference solution adds $Q = \val{Qlo}$ at $(\val{xLo}, \val{yLo})$ and
+$Q = \val{Qhi}$ at $(\val{xHi}, \val{yHi})$. Both have the particle's sign, so the
+potential between them is positive and the rays slow down as they approach: a
+decelerating lens, staggered and unequal. All three rays then enter the detector
+through its left face. This document integrates those two-charge flights, and the
+flight of each charge alone, by the fixed-step method of \levelref{around_the_wall}.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the particle has radius $a = \val{aRad}$, and every charge
+has radius $R = \val{R}$. The launch has
+\[
+  \gamma_0 = 1 + \frac{T_0}{mc^2} = \val{gammaZero}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T_0^2}{c^2} + 2mT_0} = \val{pZero}, \qquad
+  v_0 = \frac{\abs{\vect{p}_0}}{\gamma_0 m} = \val{vZero}.
+\]
+The same $\gamma_0$, $\abs{\vect{p}_0}$ and $v_0$ start every shot; only the direction
+changes. The world is $-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+The two couplings are $\kappa_\mathrm{l} = qQ_\mathrm{l} = \val{kLo}$ and
+$\kappa_\mathrm{h} = qQ_\mathrm{h} = \val{kHi}$. The level file gives the charges in
+that order.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.88\linewidth, xmin=-1.8, xmax=32.4, ymin=-1.8, ymax=21.8,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \draw[black!50] (0,0) rectangle (30,20);
+  \draw[black!40, dashed] (8,1) rectangle (18,19);
+  \fill[green!50!black, fill opacity=0.16] (28,9) rectangle (30,11);
+  \draw[green!40!black] (28,9) rectangle (30,11);
+  \fill[red!70!black, fill opacity=0.35] (\rawval{xLo},\rawval{yLo}) circle[radius=0.3];
+  \draw[red!70!black] (\rawval{xLo},\rawval{yLo}) circle[radius=0.3];
+  \fill[red!70!black, fill opacity=0.35] (\rawval{xHi},\rawval{yHi}) circle[radius=0.3];
+  \draw[red!70!black] (\rawval{xHi},\rawval{yHi}) circle[radius=0.3];
+  \addplot[thick, orange!80!black] table {pathdown.dat};
+  \addplot[very thick, blue!70!black] table {pathaxis.dat};
+  \addplot[thick, purple!70!black] table {pathup.dat};
+  \draw[-{Stealth[length=6pt]}, thick, orange!80!black] (\rawval{xLaunch},\rawval{yLaunch}) --
+    (\rawval{arrowDx},\rawval{arrowDy});
+  \draw[-{Stealth[length=6pt]}, very thick, blue!70!black] (\rawval{xLaunch},\rawval{yLaunch}) --
+    (\rawval{arrowX},\rawval{arrowY});
+  \draw[-{Stealth[length=6pt]}, thick, purple!70!black] (\rawval{xLaunch},\rawval{yLaunch}) --
+    (\rawval{arrowUx},\rawval{arrowUy});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.11];
+  \node[font=\scriptsize, red!60!black, anchor=north] at (8,6.55) {$Q_\mathrm{l}$};
+  \node[font=\scriptsize, red!60!black, anchor=south] at (12,15.45) {$Q_\mathrm{h}$};
+  \node[font=\scriptsize, green!30!black, anchor=south] at (29,11.15) {detector};
+\end{axis}
+\end{tikzpicture}
+\caption{The three rays of the reference. Orange is $-12^\circ$, blue is the axis, purple
+is $+12^\circ$. All three enter the left face of the detector. The discs are the two
+repelling charges, each of radius $R$. The dashed rectangle is the region in which the
+player may place charges.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch} and the energy \xeqref{foundations}{eq:energy}. The
+    motion stays in the plane (\xsecref{foundations}{sec:plane}).
+  \item The board's rules (\xsecref{foundations}{sec:board}). The first entry into the
+    detector decides. This level adds no direction and no kinetic window.
+  \item The classical Runge--Kutta method \xeqref{foundations}{eq:rk4} and the fixed-step
+    flight of \xsecref{around_the_wall}{sec:method}. With two centres the orbit equation
+    does not separate (\xeqref{slingshot}{eq:noseparation}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, with the acceleration
+    \xeqref{first_bend}{eq:acceleration}, summed by Simpson's rule
+    \xeqref{foundations}{eq:simpson}.
+\end{principles}
+
+The level has no magnets, so $\vect{B} = \vect{0}$. The reference potential is the sum
+of the two spheres,
+\begin{equation}\label{eq:potential}
+  V(\vect{x})
+  = \frac{\kappa_\mathrm{l}}{\abs{\vect{x} - \vect{r}_\mathrm{l}}}
+  + \frac{\kappa_\mathrm{h}}{\abs{\vect{x} - \vect{r}_\mathrm{h}}}.
+\end{equation}
+The force is \xeqref{around_the_wall}{eq:force} with $N = \val{nCharges}$, the charges
+in the file's order. The state $(x, y, p_x, p_y)$ obeys \xeqref{foundations}{eq:eom}
+with that force until the first event. The energy is
+\xeqref{around_the_wall}{eq:energy}, so the kinetic energy at a point is
+\begin{equation}\label{eq:kinetic}
+  T(\vect{x}) = W - mc^2 - V(\vect{x}).
+\end{equation}
+
+\begin{assumption}{The charges are held in place}\label{as:fixed}
+None of the charges recoils. That is a rule of the game
+(\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy is not taken from the particle. Over the nine flights of this
+document the largest fraction of $T_0$ is $\val{radFracMax}$ (§\ref{sec:hand}). The
+game makes the same approximation and reports the same integral (\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize, so \xeqref{foundations}{eq:sphereforce} is
+exact. On the three reference rays the closest approach to either charge is
+$\val{rClose}$, on the \val{rCloseRay} ray, to the \val{rCloseCharge} charge. The
+clearance outside the sphere is $\val{clearClose}$. The samples that locate it are at
+most $\val{sampleArc}$ apart (§\ref{sec:method}), far below that clearance.
+\end{assumption}
+
+\begin{assumption}{The step resolves the lens}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates the largest error of an end
+state as $\val{errMax}$ (§\ref{sec:hand}). That is far below the height of the
+detector, from $\val{yDlo}$ to $\val{yDhi}$. The tolerance used in
+§\ref{sec:comparison} is the larger of $10^{-9}$ and ten times this estimate.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{What the energy allows}
+
+At the launch, \eqref{eq:potential} gives $V(\vect{x}_0) = \val{VZero}$, so
+\[
+  W = \val{W}, \qquad W - mc^2 = T_0 + V(\vect{x}_0) = \val{Wbind}.
+\]
+This is positive. Far from both charges $V$ falls to $0$, which lies below the bound,
+so \eqref{eq:kinetic} allows the particle to leave the world. The integration has to
+decide whether it does. On the axis ray the force at the launch is
+$(\val{FxZero}, \val{FyZero})$. The horizontal part is negative: both charges stand
+ahead of the particle and repel, so the lens retards the beam. The lower charge sits
+below the launch and the upper charge above it, so their transverse pushes oppose, and
+the sum is the small positive $\val{FyZero}$.
+
+Both couplings are positive, so $V$ is positive everywhere and largest near the charges.
+Along a ray that passes between them, \eqref{eq:kinetic} falls and then rises again.
+That dip is the decelerating lens. The axis ray's minimum, computed in
+§\ref{sec:hand}, is $\val{TminAxis}$, below $T_0$. At the detector the potential has
+fallen below its value at the launch, and the arrival kinetic energies lie above $T_0$.
+
+\subsection{Why the flight is integrated}\label{sec:noseparation}
+
+With one charge, angular momentum closes the motion into the orbit of
+\levelref{first_bend}. Two fixed centres already fail to separate in the relativistic
+problem: the term \xeqref{slingshot}{eq:noseparation} does not split. The pair here is
+staggered and unequal, so it has no symmetry that would remove the obstruction. Each
+ray is the initial-value problem for \xeqref{around_the_wall}{eq:force} at
+$N = \val{nCharges}$, and §\ref{sec:method} computes it to a stated accuracy.
+
+\subsection{The method}\label{sec:method}
+
+The state is advanced by the classical Runge--Kutta method \xeqref{foundations}{eq:rk4}
+at the fixed step $h$, and the crossing of a boundary is the cubic Hermite interpolant
+\xeqref{slingshot}{eq:hermite}, exactly as specified in
+\xsecref{around_the_wall}{sec:method}. After each step the interpolant is sampled at
+$\val{nSample}$ points. The speed is less than $c$, and the velocity terms of the
+interpolant add less than $ch$, so the sample stays inside the box of the step's two
+ends enlarged by $ch$. A sphere, the world's edge or the detector is tested only when
+that box meets it. The samples are read in the board's order
+(\xsecref{foundations}{sec:board}): a sphere of radius $R + a$ about a charge, then the
+world's edge, then the detector. The earliest sample wins, and a tie keeps that order.
+The first instant of the winning event is then the bisection of the interpolant,
+$\val{nBisect}$ iterations. The position reported is the interpolant at that instant.
+The momentum is one further step of the method, of that length.
+
+When the event is a face of a box and the free coordinate lies in that face, the face
+coordinate is set to the face value. The residual of the interpolant, before that
+assignment, is the check that the step really did cross the face. The error of the
+reported step is a fifteenth of its difference from the step $2h$
+(\xsecref{foundations}{sec:numerics}). The energy
+\xeqref{around_the_wall}{eq:energy} is a second check, one that does not use the game.
+
+On each step the same interpolant is also sampled at nine equally spaced fractions,
+including the endpoints. \eqref{eq:kinetic} at those samples gives the kinetic-energy
+dip, and the distances to the two centres give the closest approach. The samples are an
+eighth of a step apart in time. Since the speed is less than $c$, a point between them
+lies within $\val{sampleArc}$ of a sample. The dip and the closest approach are
+therefore located to that tolerance, which is coarser than the end-state estimate and
+is used only for those two quantities.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} (\xeqref{foundations}{eq:launch}):
+    $\gamma_0 = \val{gammaZero}$ and $\abs{\vect{p}_0} = \val{pZero}$ on every shot,
+    aimed at $-12^\circ$, along $+x$, and at $+12^\circ$. On the axis ray the force is
+    $(\val{FxZero}, \val{FyZero})$, so the beam starts under a retarding force.
+  \item\label{st:energy} \emph{The energy} \eqref{eq:kinetic}: $W = \val{W}$ and
+    $W - mc^2 = \val{Wbind} > 0$. The world's edge is energetically open.
+  \item\label{st:flight} \emph{The axis flight}: the method of §\ref{sec:method} with
+    $h = \val{H}$. The states every five time units, and the drift of the energy:
+    \begin{center}\small\val{states}\end{center}
+    The kinetic energy falls to $\val{TminAxis}$ at $t = \val{tTmin}$, at
+    $(\val{xTmin}, \val{yTmin})$. That point is $\val{rDipLo}$ from the lower charge
+    and $\val{rDipHi}$ from the upper charge, between them. The lowest kinetic energies
+    on the outer rays are $\val{RefDownTmin}$ and $\val{RefUpTmin}$.
+  \item\label{st:entry} \emph{The three entries.} The axis step from
+    $t_n = \val{tBefore}$, at $(\val{xBefore}, \val{yBefore})$, ends at
+    $(\val{xAfter}, \val{yAfter})$. The interpolant crosses the \val{faceE} face at the
+    fraction $u = \val{uE}$. The residual before the face coordinate is assigned is
+    $\val{faceRes}$, so $x_\mathrm{e} = \val{xE}$, $y_\mathrm{e} = \val{yE}$ and
+    $t_\mathrm{e} = \val{tE}$, after $\val{steps}$ steps. One step of length
+    $t_\mathrm{e} - t_n$ gives $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$, at
+    $\val{angE}^\circ$ to $+x$.
+
+    The $-12^\circ$ ray enters the \val{RefDownFace} face at
+    $(\val{RefDownX}, \val{RefDownY})$ at $t = \val{RefDownT}$, with momentum
+    $(\val{RefDownPx}, \val{RefDownPy})$, at $\val{RefDownAng}^\circ$.
+
+    The $+12^\circ$ ray enters the \val{RefUpFace} face at
+    $(\val{RefUpX}, \val{RefUpY})$ at $t = \val{RefUpT}$, with momentum
+    $(\val{RefUpPx}, \val{RefUpPy})$, at $\val{RefUpAng}^\circ$.
+
+    All three ordinates lie between $\val{yDlo}$ and $\val{yDhi}$.
+  \item\label{st:check} \emph{The checks}: along the axis flight the energy stays within
+    $\val{wDev}$ of $W$. The arrival kinetic energies from \eqref{eq:kinetic} are
+    $\val{TarrDown}$, $\val{TarrAxis}$ and $\val{TarrUp}$, each above $\val{Tzero}$.
+    Halving the step estimates the three end states as $\val{RefDownErr}$,
+    $\val{errAxis}$ and $\val{RefUpErr}$. The same outcomes appear at $h$ and at $2h$.
+  \item\label{st:rad} \emph{The radiation}: the power \xeqref{foundations}{eq:larmor}
+    with the acceleration \xeqref{first_bend}{eq:acceleration}, summed by Simpson's rule
+    on the steps of $h/2$. On the axis ray the integral is $\val{Erad}$, the fraction
+    $\val{radFrac}$ of $T_0$. The relative difference from the same sum at step $h$,
+    divided by fifteen, is $\val{radErr}$. The outer rays radiate $\val{RefDownRad}$
+    and $\val{RefUpRad}$.
+\end{procedure}
+
+\begin{result}[The three rays]
+All three enter the detector through its left face. The $-12^\circ$ ray arrives at
+$(\val{RefDownX}, \val{RefDownY})$ at $t = \val{RefDownT}$, the axis ray at
+$(\val{xE}, \val{yE})$ at $t = \val{tE}$, and the $+12^\circ$ ray at
+$(\val{RefUpX}, \val{RefUpY})$ at $t = \val{RefUpT}$. Each ordinate lies between
+$\val{yDlo}$ and $\val{yDhi}$. The level is solved.
+\end{result}
+
+By hand, Step~\ref{st:flight} is $\val{steps}$ steps of four evaluations of the force,
+for the axis ray, and the same method for the two outer rays. The three step-halving
+estimates are the ones in Step~\ref{st:check}. Across all nine flights of this document
+the largest is $\val{errMax}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The nine outcomes agree, and so do the nine end positions and times. The reference
+momenta are compared as well. The tolerance on a state is $\val{tolFlight}$. Ten times
+the largest step-halving estimate $\val{errMax}$ lies below $10^{-9}$, so the tolerance
+is that floor. The three reference radiated energies are compared relatively, with
+tolerance $10^{-4}$. The state tolerance and the radiation tolerance were fixed from
+these estimates before the comparison.
+
+The largest absolute difference is the time of the reference $+12^\circ$ ray,
+$\val{cmpRefUpTDiff}$. Two ordinates of the upper charge alone equal it: the axis ray,
+$\val{cmpHighAxisYDiff}$, and the $+12^\circ$ ray, $\val{cmpHighUpYDiff}$. The
+difference is a few times $\val{errMax}$. The game's verified end states are good to
+about $10^{-10}$ (\xsecref{foundations}{sec:verification}), so a difference of this
+size is what that accuracy allows when two centres are summed.
+
+The abscissae of the three reference entries agree exactly, as do the lower charge's
+axis abscissa and the upper charge's downward and upward abscissae. The other three
+abscissae differ by $\val{cmpLowDownXDiff}$, $\val{cmpLowUpXDiff}$ and
+$\val{cmpHighAxisXDiff}$.
+
+The axis ray's quadrature uncertainty is $\val{radErr}$, and the reference outer rays
+give $\val{RefDownRadErr}$ and $\val{RefUpRadErr}$, all inside the relative tolerance.
+The largest relative difference is the reference $-12^\circ$ ray,
+$\val{cmpRefDownRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+Either added charge, without the other, fails to bring all three rays into the
+detector. The method of §\ref{sec:method} integrates both (\code{placements.json}),
+each ray at $h = \val{H}$ and at $2h$.
+\begin{enumerate}[label=\arabic*.]
+  \item $Q = \val{Qlo}$ at $(\val{xLo}, \val{yLo})$ only. All three rays leave through
+    the right face of the world, above the detector.
+
+    The $-12^\circ$ ray leaves at $(\val{LowDownX}, \val{LowDownY})$, at
+    $t = \val{LowDownT}$.
+
+    The momentum is $(\val{LowDownPx}, \val{LowDownPy})$, at $\val{LowDownAng}^\circ$
+    to $+x$. The ordinate lies above $\val{yDhi}$. The step-halving estimate is
+    $\val{LowDownErr}$. The radiated energy is $\val{LowDownRad}$.
+
+    The axis ray leaves at $(\val{LowAxisX}, \val{LowAxisY})$, at $t = \val{LowAxisT}$.
+
+    The momentum is $(\val{LowAxisPx}, \val{LowAxisPy})$, at $\val{LowAxisAng}^\circ$.
+    The estimate is $\val{LowAxisErr}$. The radiated energy is $\val{LowAxisRad}$.
+
+    The $+12^\circ$ ray leaves at $(\val{LowUpX}, \val{LowUpY})$, at
+    $t = \val{LowUpT}$.
+
+    The momentum is $(\val{LowUpPx}, \val{LowUpPy})$, at $\val{LowUpAng}^\circ$. The
+    estimate is $\val{LowUpErr}$. The radiated energy is $\val{LowUpRad}$.
+  \item $Q = \val{Qhi}$ at $(\val{xHi}, \val{yHi})$ only. The $-12^\circ$ ray and the
+    axis ray leave through the right face of the world, below the detector. The
+    $+12^\circ$ ray enters the detector.
+
+    The $-12^\circ$ ray leaves at $(\val{HighDownX}, \val{HighDownY})$, at
+    $t = \val{HighDownT}$.
+
+    The momentum is $(\val{HighDownPx}, \val{HighDownPy})$, at
+    $\val{HighDownAng}^\circ$. The ordinate lies below $\val{yDlo}$. The estimate is
+    $\val{HighDownErr}$. The radiated energy is $\val{HighDownRad}$.
+
+    The axis ray leaves at $(\val{HighAxisX}, \val{HighAxisY})$, at
+    $t = \val{HighAxisT}$.
+
+    The momentum is $(\val{HighAxisPx}, \val{HighAxisPy})$, at
+    $\val{HighAxisAng}^\circ$. The estimate is $\val{HighAxisErr}$. The radiated energy
+    is $\val{HighAxisRad}$.
+
+    The $+12^\circ$ ray enters the \val{HighUpFace} face of the detector at
+    $(\val{HighUpX}, \val{HighUpY})$, at $t = \val{HighUpT}$.
+
+    The momentum is $(\val{HighUpPx}, \val{HighUpPy})$, at $\val{HighUpAng}^\circ$, so
+    the ray is still heading downward as it enters. The estimate is $\val{HighUpErr}$.
+    The radiated energy is $\val{HighUpRad}$.
+\end{enumerate}
+
+The reference needs both charges. The lower one turns the rays upward; alone, they
+leave above the detector. The upper one turns them downward; alone, the $-12^\circ$ ray
+and the axis ray leave below the detector, and the $+12^\circ$ ray enters while still
+heading down. Together the three rays of Figure~\ref{fig:board} meet the box.
+Section~\ref{sec:comparison} records the outcomes.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{foundations}{eq:eom} with its eighth-order Runge--Kutta
+method at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). It finds the crossing
+on its interpolant (\physref{6}) and takes the first entry into the box as the outcome
+(\xsecref{foundations}{sec:board}). It verifies that outcome by comparing its two runs
+(\physref{7}). The model is this document's, including \ref{as:radiation} (\physref{8}).
+The agreement in §\ref{sec:comparison} is between the fixed-step flight of
+§\ref{sec:method} and that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{around_the_wall}: the force of several centres and the fixed-step
+    method with the enlarged-box test, used here at $N = \val{nCharges}$.
+  \item \levelref{slingshot}: why two fixed centres have no closed relativistic orbit,
+    and the Hermite crossing.
+  \item \levelref{first_bend}: the acceleration that enters the radiated power.
+  \item \xsecref{foundations}{sec:board} and \xsecref{foundations}{sec:numerics}: the
+    order of events, and the step-halving estimate.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
