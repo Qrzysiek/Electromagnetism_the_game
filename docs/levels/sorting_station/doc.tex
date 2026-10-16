@@ -1,0 +1,403 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot,around_the_wall,two_stages,thomson_crt}
+\DocFingerprint{5ac8ae436c5bcb3c}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Six shots leave $(\val{xLaunch}, \val{yLaunch})$. Three have kinetic energy
+$T = \val{Tslow}$ and three have $T = \val{Tfast}$, in the ratio $\val{ratioT}$.
+Each energy is launched at $\val{angSlowDown}^\circ$, $\val{angSlowAxis}^\circ$
+and $\val{angSlowUp}^\circ$ to $+x$: the directions stored in the file. The
+particle is the same on every shot, $q = \val{q}$ and $m = \val{m}$. There is
+no direction cone and no kinetic window.
+
+One gate stands in front of the spots,
+$\val{xGlo} \le x \le \val{xGhi}$, $\val{yGlo} \le y \le \val{yGhi}$, with no
+condition on the state at the entry. The detector counts only after that entry
+(\xeqref{two_stages}{eq:gate}). The three slow shots are counted in the upper
+spot $\val{xSlowLo} \le x \le \val{xSlowHi}$,
+$\val{ySlowLo} \le y \le \val{ySlowHi}$. The three fast shots are counted in the
+lower spot $\val{xFastLo} \le x \le \val{xFastHi}$,
+$\val{yFastLo} \le y \le \val{yFastHi}$. The player may place at most
+$\val{maxCharges}$ charges, of either sign, inside
+$\val{xRegLo} \le x \le \val{xRegHi}$, $\val{yRegLo} \le y \le \val{yRegHi}$,
+and no magnets. A flight ends when the particle touches a charge, leaves the
+world, enters its detector or runs out of time
+(\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$.
+
+The reference solution is six charges, all of the particle's sign:
+$Q_1 = \val{Q1}$ at $(\val{x1}, \val{y1})$,
+$Q_2 = \val{Q2}$ at $(\val{x2}, \val{y2})$,
+$Q_3 = \val{Q3}$ at $(\val{x3}, \val{y3})$,
+$Q_4 = \val{Q4}$ at $(\val{x4}, \val{y4})$,
+$Q_5 = \val{Q5}$ at $(\val{x5}, \val{y5})$ and
+$Q_6 = \val{Q6}$ at $(\val{x6}, \val{y6})$.
+The first pair brings every ray through the gate. The four behind it send the
+slow rays up into the upper spot and the fast rays down into the lower spot.
+This document integrates the six rays, and the same rays with only the first
+pair, by the fixed-step method of \levelref{around_the_wall}.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the particle has radius $a = \val{aRad}$, and every
+charge has radius $R = \val{R}$. The slow launch has
+\[
+  \gamma_0 = \val{gammaSlow}, \qquad \abs{\vect{p}_0} = \val{pSlow}, \qquad
+  v_0 = \val{vSlow},
+\]
+and the fast launch has $\gamma_0 = \val{gammaFast}$,
+$\abs{\vect{p}_0} = \val{pFast}$ and $v_0 = \val{vFast}$. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$. The couplings are
+$\kappa_1 = \val{k1}$, $\kappa_2 = \val{k2}$, $\kappa_3 = \val{k3}$,
+$\kappa_4 = \val{k4}$, $\kappa_5 = \val{k5}$ and $\kappa_6 = \val{k6}$, in the
+file's order, so the reference flight has $N = \val{nCharges}$ centres. The
+lens placement keeps the first two and has $N = \val{nLens}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.5, xmax=42.5, ymin=-1.5, ymax=21.5,
+  xtick={0,5,...,40}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!45, dashed] (-1,-1) rectangle (41,21);
+  \draw[black!50] (0,0) rectangle (40,20);
+  \draw[black!35, dashed] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \fill[orange!70, fill opacity=0.25] (\rawval{xGlo},\rawval{yGlo}) rectangle (\rawval{xGhi},\rawval{yGhi});
+  \draw[orange!70!black] (\rawval{xGlo},\rawval{yGlo}) rectangle (\rawval{xGhi},\rawval{yGhi});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xSlowLo},\rawval{ySlowLo}) rectangle (\rawval{xSlowHi},\rawval{ySlowHi});
+  \draw[green!40!black] (\rawval{xSlowLo},\rawval{ySlowLo}) rectangle (\rawval{xSlowHi},\rawval{ySlowHi});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xFastLo},\rawval{yFastLo}) rectangle (\rawval{xFastHi},\rawval{yFastHi});
+  \draw[green!40!black] (\rawval{xFastLo},\rawval{yFastLo}) rectangle (\rawval{xFastHi},\rawval{yFastHi});
+  \fill[red!70!black, fill opacity=0.4] (\rawval{x1},\rawval{y1}) circle[radius=\rawval{R}];
+  \fill[red!70!black, fill opacity=0.4] (\rawval{x2},\rawval{y2}) circle[radius=\rawval{R}];
+  \fill[red!70!black, fill opacity=0.4] (\rawval{x3},\rawval{y3}) circle[radius=\rawval{R}];
+  \fill[red!70!black, fill opacity=0.4] (\rawval{x4},\rawval{y4}) circle[radius=\rawval{R}];
+  \fill[red!70!black, fill opacity=0.4] (\rawval{x5},\rawval{y5}) circle[radius=\rawval{R}];
+  \fill[red!70!black, fill opacity=0.4] (\rawval{x6},\rawval{y6}) circle[radius=\rawval{R}];
+  \addplot[orange!80!black] table {pathfastdown.dat};
+  \addplot[purple!70!black] table {pathfastup.dat};
+  \addplot[very thick, red!75!black] table {pathfastaxis.dat};
+  \addplot[blue!70] table {pathslowdown.dat};
+  \addplot[cyan!70!blue] table {pathslowup.dat};
+  \addplot[very thick, blue!55!black] table {pathslowaxis.dat};
+  \draw[-{Stealth[length=5pt]}, thick] (\rawval{xLaunch},\rawval{yLaunch}) -- (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.08];
+  \node[font=\scriptsize, orange!60!black, anchor=south] at (19,11.15) {gate};
+  \node[font=\scriptsize, green!30!black, anchor=west] at (40.2,14) {slow};
+  \node[font=\scriptsize, green!30!black, anchor=west] at (40.2,6) {fast};
+\end{axis}
+\end{tikzpicture}
+\caption{The six reference rays. Blue is $T = \val{Tslow}$: the three rays meet
+the left face of the upper spot, and the cyan ray is the one launched upward.
+Red and orange are $T = \val{Tfast}$: the thick red ray meets the top of the
+lower spot, and the orange and purple rays meet its left face. Every ray has
+passed the gate. The discs are the six charges.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch} and the energy \xeqref{foundations}{eq:energy}. The
+    motion stays in the plane (\xsecref{foundations}{sec:plane}).
+  \item The board's rules (\xsecref{foundations}{sec:board}), and the gate
+    \xeqref{two_stages}{eq:gate}. The detector counts only after the gate has been
+    entered. This level adds no direction cone and no kinetic window.
+  \item The classical Runge--Kutta method \xeqref{foundations}{eq:rk4} and the fixed-step
+    flight of \xsecref{around_the_wall}{sec:method}. With two or more centres the orbit
+    equation does not separate (\xeqref{slingshot}{eq:noseparation}).
+  \item The transverse kick of a straight flyby scales as $1/T$
+    (\xeqref{thomson_crt}{eq:impulse}). That is why the slower rays can be steered
+    onto a different spot. The paths here are not that flyby, so the landing is the
+    integral of the force.
+  \item The radiated power \xeqref{foundations}{eq:larmor}, with the acceleration
+    \xeqref{first_bend}{eq:acceleration}, summed by Simpson's rule
+    \xeqref{foundations}{eq:simpson}.
+\end{principles}
+
+The level has no magnets, so $\vect{B} = \vect{0}$. The force is
+\xeqref{around_the_wall}{eq:force} with $N = \val{nCharges}$ on the reference,
+the charges in the file's order. The state $(x, y, p_x, p_y)$ obeys
+\xeqref{foundations}{eq:eom} with that force until the first ending event. The
+potential in \xeqref{around_the_wall}{eq:energy} is the same superposition. A
+gate entry is not an ending: the flight continues, and only a later detector
+entry is kept, and only when the gate time is earlier
+(\xeqref{two_stages}{eq:gate}, \physref{6.2}).
+
+\begin{assumption}{The charges are held in place}\label{as:fixed}
+None of the charges recoils. That is a rule of the game
+(\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy is not taken from the particle. Over the twelve flights of
+this document the largest fraction of the launch energy is $\val{radFracMax}$
+(§\ref{sec:hand}). The game makes the same approximation and reports the same
+integral (\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = \val{aRad}$, and the particle does not polarize, so
+\xeqref{foundations}{eq:sphereforce} is exact. The closest approach in the
+twelve flights is $\val{rCloseMin}$, on the fast downward reference ray, a
+clearance of $\val{clearMin}$ outside the sphere. The samples that locate it are
+at most $\val{sampleArc}$ apart (§\ref{sec:method}), well below that clearance.
+\end{assumption}
+
+\begin{assumption}{The step resolves the gate and the spots}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates the largest error of an
+end state as $\val{errMax}$ (§\ref{sec:hand}). That is far below the height of
+either spot and far below the height of the gate. The tolerance used in
+§\ref{sec:comparison} is the larger of $10^{-9}$ and ten times this estimate.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The gate}\label{sec:gate}
+
+The rule is \xeqref{two_stages}{eq:gate}. This level lists one gate and gives it
+no condition on the velocity or the energy. If $t_G$ is the first time the
+position lies in the gate and $t_D$ the first time it lies in that shot's
+detector, the detector counts only when $t_G$ exists and $t_G < t_D$. An entry
+of the detector with the gate still ahead is a skipped gate, the first in the
+list. Leaving the world, or touching a charge, ends the flight on its own
+outcome whether or not the gate was entered. On a path that has already curved,
+$t_G$ is not a root of a separated orbit: it is the crossing found by
+§\ref{sec:method}, and the flight is then continued from that step.
+
+\subsection{Why the slower ray can be sorted}\label{sec:sort}
+
+\xeqref{thomson_crt}{eq:impulse} is the angle of a straight flyby past one
+charge, from $-\infty$ to $\infty$: it is proportional to $1/T$. The same
+charges therefore turn a slower ray through a larger angle. The reference is
+not that flyby. Two charges stand in front of the gate and four behind it, and
+the rays leave the straight line at once. The formula is used here only for the
+direction of the sort. The landings are the integral.
+
+On the two axis rays the launch is along $+x$, so the angle at the gate is the
+whole turn. The slow ray has turned by $\val{turnSlow}^\circ$ and the fast ray
+by $\val{turnFast}^\circ$. The turns are in the ratio $\val{turnRatio}$; the
+energies are in the ratio $\val{ratioT}$. The products of turn and energy are
+$\val{kickSlow}$ and $\val{kickFast}$. A single straight flyby would make those
+products equal. They are not. The slower ray has nevertheless turned further,
+and §\ref{sec:hand} finds it in the upper spot while the faster ray meets the
+lower one.
+
+\subsection{Why the flight is integrated}\label{sec:noseparation}
+
+With one charge, angular momentum closes the motion into the orbit of
+\levelref{first_bend}. Two fixed centres already fail to separate in the
+relativistic problem: the term \xeqref{slingshot}{eq:noseparation} does not
+split. Six centres give that obstruction nothing that would remove it. Each ray
+is the initial-value problem for \xeqref{around_the_wall}{eq:force}, and
+§\ref{sec:method} computes it to a stated accuracy.
+
+\subsection{The method}\label{sec:method}
+
+The state is advanced by the method of \xsecref{around_the_wall}{sec:method}:
+the classical Runge--Kutta method \xeqref{foundations}{eq:rk4} at the fixed step
+$h = \val{H}$, a crossing on the cubic Hermite interpolant
+\xeqref{slingshot}{eq:hermite}, $\val{nSample}$ samples and $\val{nBisect}$
+bisections, and the enlarged-box test. A gate entry is recorded and the step
+continues. A collision, the world's edge or the detector ends the flight, in
+that order (\xsecref{foundations}{sec:board}). The face coordinate is then set
+to the face value. If the ending is the detector and the gate has not been
+entered, the outcome is a skipped gate. The error of the reported step is a
+fifteenth of its difference from the step $2h$
+(\xsecref{foundations}{sec:numerics}).
+
+On each step the interpolant is also sampled at nine fractions, up to the
+ending when the step contains one. Those samples give the closest approach and
+the range of $y$. A point between them lies within $\val{sampleArc}$ of a
+sample. The end state is held to the step-halving estimate.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} (\xeqref{foundations}{eq:launch}).
+    The slow rays have $\gamma_0 = \val{gammaSlow}$ and
+    $\abs{\vect{p}_0} = \val{pSlow}$, the fast rays $\gamma_0 = \val{gammaFast}$
+    and $\abs{\vect{p}_0} = \val{pFast}$. The aims are $\val{angSlowDown}^\circ$,
+    $\val{angSlowAxis}^\circ$ and $\val{angSlowUp}^\circ$.
+  \item\label{st:energy} \emph{The energy.} At the common launch point,
+    $V = \val{RefSlowAxisVzero}$. Then $W - mc^2$ is $\val{RefSlowAxisWbind}$ on
+    a slow ray and $\val{RefFastAxisWbind}$ on a fast ray. Both are positive, so
+    the world's edge is open and the integration decides who reaches a spot.
+  \item\label{st:gate} \emph{The gate} \xeqref{two_stages}{eq:gate}, on the slow
+    axis ray. The crossing is the \val{RefSlowAxisGface} face at
+    $(\val{RefSlowAxisGx}, \val{RefSlowAxisGy})$, at
+    $t = \val{RefSlowAxisGt}$, with the velocity at $\val{RefSlowAxisGang}^\circ$
+    to $+x$. The residual is $\val{RefSlowAxisGres}$.
+
+    The other five reference rays also enter the gate, all before any detector.
+    The slow downward ray enters the \val{RefSlowDownGface} face at
+    $(\val{RefSlowDownGx}, \val{RefSlowDownGy})$, and the slow upward ray the
+    \val{RefSlowUpGface} face at $(\val{RefSlowUpGx}, \val{RefSlowUpGy})$.
+
+    The fast downward ray enters the \val{RefFastDownGface} face at
+    $(\val{RefFastDownGx}, \val{RefFastDownGy})$, the fast axis ray the
+    \val{RefFastAxisGface} face at $(\val{RefFastAxisGx}, \val{RefFastAxisGy})$,
+    and the fast upward ray the \val{RefFastUpGface} face at
+    $(\val{RefFastUpGx}, \val{RefFastUpGy})$.
+  \item\label{st:flight} \emph{The slow axis flight} after the gate, at
+    $h = \val{H}$. The states every five time units, and the drift of the energy:
+    \begin{center}\small\val{states}\end{center}
+    The ray, which crossed the gate heading down, is turned upward. It enters
+    the \val{RefSlowAxisFace} face of the upper spot at
+    $(\val{RefSlowAxisX}, \val{RefSlowAxisY})$, at $t = \val{RefSlowAxisT}$,
+    after $\val{RefSlowAxisSteps}$ steps. The momentum is
+    $(\val{RefSlowAxisPx}, \val{RefSlowAxisPy})$, at
+    $\val{RefSlowAxisAng}^\circ$ to $+x$. The ordinate lies between
+    $\val{ySlowLo}$ and $\val{ySlowHi}$.
+  \item\label{st:others} \emph{The other five arrivals.} Each has passed the
+    gate, and each is Arrived.
+
+    The slow downward ray meets the \val{RefSlowDownFace} face at
+    $(\val{RefSlowDownX}, \val{RefSlowDownY})$, at $t = \val{RefSlowDownT}$,
+    heading $\val{RefSlowDownAng}^\circ$.
+
+    The slow upward ray climbs to $\val{RefSlowUpYmax}$ and meets the
+    \val{RefSlowUpFace} face at $(\val{RefSlowUpX}, \val{RefSlowUpY})$, at
+    $t = \val{RefSlowUpT}$, heading $\val{RefSlowUpAng}^\circ$.
+
+    The fast downward ray meets the \val{RefFastDownFace} face of the lower
+    spot at $(\val{RefFastDownX}, \val{RefFastDownY})$, at
+    $t = \val{RefFastDownT}$, heading $\val{RefFastDownAng}^\circ$.
+
+    The fast axis ray meets the \val{RefFastAxisFace} face at
+    $(\val{RefFastAxisX}, \val{RefFastAxisY})$, at $t = \val{RefFastAxisT}$,
+    heading $\val{RefFastAxisAng}^\circ$. The ordinate is the top of the spot.
+
+    The fast upward ray meets the \val{RefFastUpFace} face at
+    $(\val{RefFastUpX}, \val{RefFastUpY})$, at $t = \val{RefFastUpT}$, heading
+    $\val{RefFastUpAng}^\circ$.
+  \item\label{st:check} \emph{The checks.} Along the slow axis flight the energy
+    stays within $\val{RefSlowAxisWdev}$ of $W$. Halving the step estimates the
+    six reference end states as $\val{RefSlowDownErr}$, $\val{RefSlowAxisErr}$,
+    $\val{RefSlowUpErr}$, $\val{RefFastDownErr}$, $\val{RefFastAxisErr}$ and
+    $\val{RefFastUpErr}$. The same outcomes appear at $h$ and at $2h$. The
+    forward momentum stays positive on every reference ray; the smallest value
+    is $\val{RefSlowUpPxMin}$, on the slow upward ray. The closest approach is
+    $\val{RefFastDownRclose}$.
+  \item\label{st:rad} \emph{The radiation}, on the two axis rays: Simpson's rule
+    on the steps of $h/2$. The slow axis ray radiates $\val{RefSlowAxisRad}$ and
+    the fast axis ray $\val{RefFastAxisRad}$. The relative differences from the
+    same sums at step $h$, divided by fifteen, are $\val{RefSlowAxisRadErr}$ and
+    $\val{RefFastAxisRadErr}$.
+\end{procedure}
+
+\begin{result}[Six rays, two spots]
+Every reference ray enters the gate and then its own spot. The three slow rays
+meet the left face of the upper spot, at ordinates $\val{RefSlowDownY}$,
+$\val{RefSlowAxisY}$ and $\val{RefSlowUpY}$. The fast downward and fast upward
+rays meet the left face of the lower spot, at $\val{RefFastDownY}$ and
+$\val{RefFastUpY}$. The fast axis ray meets the top of that spot, at
+$x = \val{RefFastAxisX}$. The level is solved.
+\end{result}
+
+By hand, the slow axis ray is $\val{RefSlowAxisSteps}$ steps of four evaluations
+of the force, and the other five rays are the same method. Across the twelve
+flights the largest step-halving estimate is $\val{errMax}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+Thirty-eight comparisons are in the table. For each reference ray the outcome,
+the time and the end position are compared. For the first two charges alone,
+marked L, the outcome and the time are compared; the end positions are in
+§\ref{sec:others}. The radiated energy is compared on the two reference axis
+rays. The tolerance on a state is $\val{tolFlight}$. Ten times the largest
+step-halving estimate $\val{errMax}$ lies above $10^{-9}$, so the tolerance is
+that product rather than the floor. The radiation tolerance is $10^{-4}$,
+relative. The state tolerance and the radiation tolerance were fixed from these
+estimates before the comparison.
+
+The largest absolute difference is the ordinate of the fast downward ray,
+$\val{cmpRefFastDownYDiff}$. The next is the ordinate of the slow upward ray,
+$\val{cmpRefSlowUpYDiff}$. Both are smaller than $\val{errMax}$ and a fraction
+of the tolerance. The game's verified end states are good to about $10^{-10}$
+(\xsecref{foundations}{sec:verification}).
+
+The abscissae of the five rays that meet a detector's left face agree exactly.
+The fast axis ray meets the top face, so its abscissa is not that coordinate;
+it differs by $\val{cmpRefFastAxisXDiff}$. The quadrature uncertainties are
+$\val{RefSlowAxisRadErr}$ and $\val{RefFastAxisRadErr}$. The larger relative
+difference of the two is the fast axis ray, $\val{cmpRefFastAxisRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+The first two charges, and nothing behind the gate, do not solve the level.
+This is the lens placement in \code{placements.json}: $Q_1$ and $Q_2$ only.
+The method of §\ref{sec:method} integrates all six rays at $h = \val{H}$ and at
+$2h$. Every one of them still enters the gate. What happens afterwards is not
+one outcome.
+\begin{enumerate}[label=\arabic*.]
+  \item The three slow rays leave through the right face of the world, under
+    the lower spot. The downward ray leaves at
+    $(\val{LensSlowDownX}, \val{LensSlowDownY})$, at $t = \val{LensSlowDownT}$.
+    The axis ray leaves at $(\val{LensSlowAxisX}, \val{LensSlowAxisY})$, at
+    $t = \val{LensSlowAxisT}$. The upward ray leaves at
+    $(\val{LensSlowUpX}, \val{LensSlowUpY})$, at $t = \val{LensSlowUpT}$.
+    None of these ordinates reaches $\val{ySlowLo}$.
+  \item The fast downward ray does arrive. It meets the
+    \val{LensFastDownFace} face of the lower spot at
+    $(\val{LensFastDownX}, \val{LensFastDownY})$, at $t = \val{LensFastDownT}$.
+  \item The fast axis ray also arrives. It meets the \val{LensFastAxisFace}
+    face at $(\val{LensFastAxisX}, \val{LensFastAxisY})$, at
+    $t = \val{LensFastAxisT}$.
+  \item The fast upward ray misses the lower spot. It leaves through the right
+    face of the world at $(\val{LensFastUpX}, \val{LensFastUpY})$, at
+    $t = \val{LensFastUpT}$. The ordinate is above $\val{yFastHi}$.
+\end{enumerate}
+
+The pair in front of the gate is enough to pass all six rays through it, and
+enough to land the fast downward ray and the fast axis ray. It does not lift
+the slow rays, and the fast upward ray stays just above the lower spot. The
+four charges behind the gate are what turn the slow rays up into the upper spot
+and bring that last fast ray down into the lower one. The two fast rays that
+already arrived still arrive, on the faces reported in §\ref{sec:hand}.
+Section~\ref{sec:comparison} records the outcomes.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{foundations}{eq:eom} with its eighth-order
+Runge--Kutta method at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}).
+It finds each crossing on its interpolant (\physref{6}), continues through the
+gate, and counts the detector only after that entry (\physref{6.2}). It
+verifies the outcome by comparing its two runs (\physref{7}). The model is this
+document's, including \ref{as:radiation} (\physref{8}). The agreement in
+§\ref{sec:comparison} is between the fixed-step flight of §\ref{sec:method},
+the gate of §\ref{sec:gate}, and that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{two_stages}: the gate \xeqref{two_stages}{eq:gate}, applied
+    here to six rays.
+  \item \levelref{thomson_crt}: the kick proportional to $1/T$
+    (\xeqref{thomson_crt}{eq:impulse}), which says why the slower rays can be
+    placed on the other spot.
+  \item \levelref{around_the_wall}: the force of several centres and the
+    fixed-step method, used here at $N = \val{nCharges}$.
+  \item \levelref{slingshot}: why two fixed centres have no closed relativistic
+    orbit, and the Hermite crossing.
+  \item \levelref{first_bend}: the acceleration that enters the radiated power.
+  \item \xsecref{foundations}{sec:board} and \xsecref{foundations}{sec:numerics}:
+    the order of events, and the step-halving estimate.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
