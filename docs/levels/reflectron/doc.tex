@@ -1,0 +1,339 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot,around_the_wall,einzel_lens}
+\DocFingerprint{1fa34953959d976d}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Two ions ($q = \val{q}$, $m = \val{m}$) leave $(\val{xLaunch}, \val{yLaunch})$ along $+x$,
+with kinetic energies $T = \val{Tslow}$ and $T = \val{Tfast}$. On both shots the detector
+is the rectangle $\val{xDlo} \le x \le \val{xDhi}$, $\val{yDlo} \le y \le \val{yDhi}$,
+beside the source and below it. An entry counts at every direction and every kinetic
+energy. The player places at most $\val{maxCharges}$ charges, of the particle's sign
+only, inside the region $\val{xRegLo} \le x \le \val{xRegHi}$,
+$\val{yRegLo} \le y \le \val{yRegHi}$, and no magnets. A flight ends when the particle
+touches a charge, leaves the world, enters the detector or runs out of time
+(\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$.
+
+The reference solution adds $Q = \val{Qlo}$ at $(\val{xLo}, \val{yLo})$ and
+$Q = \val{Qhi}$ at $(\val{xHi}, \val{yHi})$. Both have the particle's sign, so they
+stand in front of the ions and repel. Each ion slows, turns, and comes back into the
+detector: the slower one through the right face, the faster one through the top face.
+The level asks for those two arrivals. This document integrates the two-charge flights,
+and the flight of each charge alone, by the fixed-step method of
+\levelref{around_the_wall}.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the particle has radius $a = \val{aRad}$, and every charge
+has radius $R = \val{R}$. The two launches are
+\[
+  \gamma = 1 + \frac{T}{mc^2}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T^2}{c^2} + 2mT}, \qquad
+  v_0 = \frac{\abs{\vect{p}_0}}{\gamma m}.
+\]
+For $T = \val{Tslow}$ this is $\gamma = \val{gammaSlow}$,
+$\abs{\vect{p}_0} = \val{pSlow}$ and $v_0 = \val{vSlow}$. For $T = \val{Tfast}$ it is
+$\gamma = \val{gammaFast}$, $\abs{\vect{p}_0} = \val{pFast}$ and $v_0 = \val{vFast}$.
+The direction in the file is $+x$ on both shots. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$. The couplings are $\kappa_\mathrm{l} = \val{kLo}$ and
+$\kappa_\mathrm{h} = \val{kHi}$, in the file's order.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.88\linewidth, xmin=-1.8, xmax=32.4, ymin=-2.2, ymax=22.2,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \draw[black!50] (0,0) rectangle (30,20);
+  \draw[black!40, dashed] (18,0) rectangle (29,20);
+  \fill[green!50!black, fill opacity=0.18] (0,4) rectangle (2,7);
+  \draw[green!40!black] (0,4) rectangle (2,7);
+  \fill[red!70!black, fill opacity=0.35] (\rawval{xLo},\rawval{yLo}) circle[radius=0.3];
+  \draw[red!70!black] (\rawval{xLo},\rawval{yLo}) circle[radius=0.3];
+  \fill[red!70!black, fill opacity=0.35] (\rawval{xHi},\rawval{yHi}) circle[radius=0.3];
+  \draw[red!70!black] (\rawval{xHi},\rawval{yHi}) circle[radius=0.3];
+  \addplot[thin, black!55] table {pathlo.dat};
+  \addplot[thin, purple!70!black] table {pathhi.dat};
+  \addplot[very thick, blue!70!black] table {pathslow.dat};
+  \addplot[thick, orange!80!black] table {pathfast.dat};
+  \draw[-{Stealth[length=6pt]}, thick] (\rawval{xLaunch},\rawval{yLaunch}) --
+    (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.11];
+  \node[font=\scriptsize, red!60!black, anchor=north] at (18,10.55) {$Q_\mathrm{l}$};
+  \node[font=\scriptsize, red!60!black, anchor=south] at (21,17.45) {$Q_\mathrm{h}$};
+  \node[font=\scriptsize, green!30!black, anchor=east] at (-0.15,5.5) {detector};
+\end{axis}
+\end{tikzpicture}
+\caption{The reference ions turn and enter the detector. Blue is the slower ion, orange
+the faster one. Grey is the lower charge alone, on the slower ion: it leaves through the
+top of the world. Purple is the upper charge alone, on the slower ion: it leaves through
+the floor. The discs are the two repelling charges, each of radius $R$. The dashed
+rectangle is the region in which the player may place charges.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch} and the energy \xeqref{foundations}{eq:energy}. The
+    motion stays in the plane (\xsecref{foundations}{sec:plane}).
+  \item The board's rules (\xsecref{foundations}{sec:board}). The first entry into the
+    detector decides. This level adds no direction and no kinetic window.
+  \item The classical Runge--Kutta method \xeqref{foundations}{eq:rk4} and the fixed-step
+    flight of \xsecref{around_the_wall}{sec:method}. With two centres the orbit equation
+    does not separate (\xeqref{slingshot}{eq:noseparation}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, with the acceleration
+    \xeqref{first_bend}{eq:acceleration}, summed by Simpson's rule
+    \xeqref{foundations}{eq:simpson}.
+\end{principles}
+
+The level has no magnets, so $\vect{B} = \vect{0}$. The potential and the kinetic energy
+are \xeqref{einzel_lens}{eq:potential} and \xeqref{einzel_lens}{eq:kinetic}, here with
+$\kappa_\mathrm{l} = \val{kLo}$ at $(\val{xLo}, \val{yLo})$ and
+$\kappa_\mathrm{h} = \val{kHi}$ at $(\val{xHi}, \val{yHi})$. The force is
+\xeqref{around_the_wall}{eq:force} with $N = \val{nCharges}$, the charges in the file's
+order. The state $(x, y, p_x, p_y)$ obeys \xeqref{foundations}{eq:eom} with that force
+until the first event.
+
+\begin{assumption}{The charges are held in place}\label{as:fixed}
+None of the charges recoils. That is a rule of the game
+(\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy is not taken from the particle. Over the six flights of this
+document the largest fraction of the launch energy is $\val{radFracMax}$
+(§\ref{sec:hand}). The game makes the same approximation and reports the same integral
+(\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize, so \xeqref{foundations}{eq:sphereforce} is
+exact. On the two reference flights the closest approach to either charge is
+$\val{rClose}$, on the \val{rCloseShot} ion, to the \val{rCloseCharge} charge. The
+clearance outside the sphere is $\val{clearClose}$. The samples that locate it are at
+most $\val{sampleArc}$ apart (§\ref{sec:method}), far below that clearance.
+\end{assumption}
+
+\begin{assumption}{The step resolves the turn}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates the largest error of an end
+state as $\val{errMax}$ (§\ref{sec:hand}). That is far below the height of the
+detector, from $\val{yDlo}$ to $\val{yDhi}$. The tolerance used in
+§\ref{sec:comparison} is the larger of $10^{-9}$ and ten times this estimate.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{What the energy allows}
+
+At the launch the potential is $V(\vect{x}_0) = \val{VZero}$ for both ions, since they
+leave the same point. Then
+\[
+  W - mc^2 = T + V(\vect{x}_0)
+\]
+is $\val{WbindSlow}$ for the slower ion and $\val{WbindFast}$ for the faster one. Both
+are positive. Far from the charges $V$ falls to $0$, which lies below either bound, so
+\xeqref{einzel_lens}{eq:kinetic} allows an ion to leave the world. The force at the
+launch is $(\val{FxZero}, \val{FyZero})$. The horizontal part is negative: both charges
+stand ahead of the ion and repel, so the mirror retards the beam. The lower charge sits
+below the launch and pushes upward; the upper charge sits above it and pushes downward.
+The upper coupling is the larger one, and the sum $\val{FyZero}$ points downward.
+
+Both couplings are positive, so $V$ rises as an ion approaches the charges and
+\xeqref{einzel_lens}{eq:kinetic} falls. On the reference flights the kinetic energy
+reaches $\val{TminSlow}$ and $\val{TminFast}$, far below the launch values, and the
+horizontal momentum changes sign. That is the mirror. At the detector the potential has
+fallen below its value at the launch, and the arrival kinetic energies
+$\val{TarrSlow}$ and $\val{TarrFast}$ lie above $\val{Tslow}$ and $\val{Tfast}$.
+
+\subsection{Why the flight is integrated}\label{sec:noseparation}
+
+Two fixed centres fail to separate in the relativistic problem
+(\xeqref{slingshot}{eq:noseparation}), and this pair is staggered, so the obstruction
+stands. Each ion is the initial-value problem for \xeqref{around_the_wall}{eq:force}
+at $N = \val{nCharges}$. Section~\ref{sec:method} computes it to a stated accuracy.
+
+\subsection{The method}\label{sec:method}
+
+The state is advanced by the classical Runge--Kutta method \xeqref{foundations}{eq:rk4}
+at the fixed step $h$, and a boundary is crossed on the cubic Hermite interpolant
+\xeqref{slingshot}{eq:hermite}, as specified in \xsecref{around_the_wall}{sec:method}.
+After each step the interpolant is sampled at $\val{nSample}$ points. A sphere, the
+world's edge or the detector is tested only when the box of the step's ends, enlarged
+by $ch$, meets it. The samples are read in the board's order
+(\xsecref{foundations}{sec:board}). The first instant of the winning event is the
+bisection of the interpolant, $\val{nBisect}$ iterations. The position reported is the
+interpolant at that instant, and the face coordinate is then set to the face value.
+The momentum is one further step of the method, of that length. The error of the
+reported step is a fifteenth of its difference from the step $2h$
+(\xsecref{foundations}{sec:numerics}).
+
+On each step the same interpolant is also sampled at nine equally spaced fractions.
+\xeqref{einzel_lens}{eq:kinetic} at those samples gives the kinetic-energy dip, the
+distances to the two centres give the closest approach, and the greatest abscissa gives
+the turn. The samples are an eighth of a step apart in time, so a point between them
+lies within $\val{sampleArc}$ of a sample. Those three quantities are located to that
+tolerance. The end state is held to the step-halving estimate.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launches} (\xeqref{foundations}{eq:launch}):
+    the slower ion has $\gamma = \val{gammaSlow}$ and $\abs{\vect{p}_0} = \val{pSlow}$;
+    the faster ion has $\gamma = \val{gammaFast}$ and $\abs{\vect{p}_0} = \val{pFast}$.
+    Both are aimed along $+x$. The force is $(\val{FxZero}, \val{FyZero})$, retarding
+    and downward.
+  \item\label{st:energy} \emph{The energy}: $W = \val{WSlow}$ and
+    $W - mc^2 = \val{WbindSlow}$ for the slower ion, and $W = \val{WFast}$ and
+    $W - mc^2 = \val{WbindFast}$ for the faster one. For both ions the world's
+    edge is energetically open.
+  \item\label{st:flight} \emph{The slower ion}: the method of §\ref{sec:method} with
+    $h = \val{H}$. The states every five time units, and the drift of the energy:
+    \begin{center}\small\val{states}\end{center}
+    The kinetic energy falls to $\val{TminSlow}$ at $t = \val{tTmin}$, at
+    $(\val{xTmin}, \val{yTmin})$. The rightmost sample is $(\val{xTurnSlow},
+    \val{yTurnSlow})$ at $t = \val{tTurnSlow}$. The ion has almost stopped between the
+    two charges, and the horizontal momentum in the table changes sign there.
+  \item\label{st:entry} \emph{The two entries.} The slower ion's step from
+    $t_n = \val{tBefore}$, at $(\val{xBefore}, \val{yBefore})$, ends at
+    $(\val{xAfter}, \val{yAfter})$. The interpolant crosses the \val{faceE} face at the
+    fraction $u = \val{uE}$. The residual before the face coordinate is assigned is
+    $\val{faceRes}$, so $x_\mathrm{e} = \val{xE}$, $y_\mathrm{e} = \val{yE}$ and
+    $t_\mathrm{e} = \val{tE}$, after $\val{steps}$ steps. One step of length
+    $t_\mathrm{e} - t_n$ gives $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$, at
+    $\val{angE}^\circ$ to $+x$. The horizontal part is negative: the ion is coming back.
+
+    The faster ion's kinetic energy falls to $\val{TminFast}$, and its rightmost sample
+    is $(\val{xTurnFast}, \val{yTurnFast})$ at $t = \val{tTurnFast}$, farther in than
+    the slower ion's turn. It then enters the \val{RefFastFace} face at
+    $(\val{RefFastX}, \val{RefFastY})$, at $t = \val{RefFastT}$, with momentum
+    $(\val{RefFastPx}, \val{RefFastPy})$, at $\val{RefFastAng}^\circ$.
+
+    The slower ordinate lies between $\val{yDlo}$ and $\val{yDhi}$. The faster abscissa
+    lies between $\val{xDlo}$ and $\val{xDhi}$.
+  \item\label{st:check} \emph{The checks}: along the slower flight the energy stays
+    within $\val{wDev}$ of $W$. The arrival kinetic energies from
+    \xeqref{einzel_lens}{eq:kinetic} are $\val{TarrSlow}$ and $\val{TarrFast}$. Halving
+    the step estimates the two end states as $\val{RefSlowErr}$ and $\val{RefFastErr}$.
+    The same outcomes appear at $h$ and at $2h$.
+  \item\label{st:rad} \emph{The radiation}: the power \xeqref{foundations}{eq:larmor}
+    with the acceleration \xeqref{first_bend}{eq:acceleration}, summed by Simpson's rule
+    on the steps of $h/2$. The slower ion radiates $\val{RefSlowRad}$ and the faster
+    ion $\val{RefFastRad}$. The relative differences from the same sums at step $h$,
+    divided by fifteen, are $\val{RefSlowRadErr}$ and $\val{RefFastRadErr}$.
+\end{procedure}
+
+\begin{result}[Both ions return]
+The slower ion enters the detector through its right face at $(\val{xE}, \val{yE})$ at
+$t = \val{tE}$, coming back. The faster ion enters through the top face at
+$(\val{RefFastX}, \val{RefFastY})$ at $t = \val{RefFastT}$, also coming back. The level
+is solved.
+\end{result}
+
+By hand, Step~\ref{st:flight} is $\val{steps}$ steps of four evaluations of the force,
+for the slower ion, and the same method for the faster one. Across all six flights the
+largest step-halving estimate is $\val{errMax}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The six outcomes agree. The tolerance on a state is $\val{tolFlight}$. Ten times the
+largest step-halving estimate $\val{errMax}$ lies below $10^{-9}$, so the tolerance is
+that floor. The radiated energies are compared relatively, with tolerance $10^{-4}$.
+The state tolerance and the radiation tolerance were fixed from these estimates before
+the comparison.
+
+The largest absolute difference is the slower ion's arrival time,
+$\val{cmpRefSlowTDiff}$. Its ordinate differs by $\val{cmpRefSlowYDiff}$. The
+difference is many times $\val{errMax}$ and a small fraction of the tolerance. The
+game's verified end states are good to about $10^{-10}$
+(\xsecref{foundations}{sec:verification}), so a difference of this size is what that
+accuracy allows when two centres are summed.
+
+The faster ion's ordinate agrees exactly, and so do both ordinates of the lower charge
+alone. The slower ion's abscissa differs by $\val{cmpRefSlowXDiff}$.
+
+The quadrature uncertainties of the two reference ions are $\val{RefSlowRadErr}$ and
+$\val{RefFastRadErr}$, inside the relative tolerance. The largest relative difference
+is the lower charge's faster ion, $\val{cmpLoFastRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+Either added charge, without the other, sends both ions out of the world. The method
+of §\ref{sec:method} integrates both (\code{placements.json}), each ion at
+$h = \val{H}$ and at $2h$.
+\begin{enumerate}[label=\arabic*.]
+  \item $Q = \val{Qlo}$ at $(\val{xLo}, \val{yLo})$ only. The charge sits below the
+    launch, so it pushes the beam upward. Both ions leave through the top face of the
+    world.
+
+    The slower ion leaves at $(\val{LoSlowX}, \val{LoSlowY})$, at $t = \val{LoSlowT}$.
+
+    The momentum is $(\val{LoSlowPx}, \val{LoSlowPy})$, at $\val{LoSlowAng}^\circ$ to
+    $+x$. The horizontal part is still positive. The estimate is $\val{LoSlowErr}$.
+    The radiated energy is $\val{LoSlowRad}$.
+
+    The faster ion leaves at $(\val{LoFastX}, \val{LoFastY})$, at $t = \val{LoFastT}$.
+
+    The momentum is $(\val{LoFastPx}, \val{LoFastPy})$, at $\val{LoFastAng}^\circ$.
+    The estimate is $\val{LoFastErr}$. The radiated energy is $\val{LoFastRad}$.
+  \item $Q = \val{Qhi}$ at $(\val{xHi}, \val{yHi})$ only. The charge sits above the
+    launch, so it pushes the beam downward. Both ions leave through the bottom face of
+    the world.
+
+    The slower ion leaves at $(\val{HiSlowX}, \val{HiSlowY})$, at $t = \val{HiSlowT}$.
+
+    The momentum is $(\val{HiSlowPx}, \val{HiSlowPy})$, at $\val{HiSlowAng}^\circ$.
+    The estimate is $\val{HiSlowErr}$. The radiated energy is $\val{HiSlowRad}$.
+
+    The faster ion leaves at $(\val{HiFastX}, \val{HiFastY})$, at $t = \val{HiFastT}$.
+
+    The momentum is $(\val{HiFastPx}, \val{HiFastPy})$, at $\val{HiFastAng}^\circ$.
+    The estimate is $\val{HiFastErr}$. The radiated energy is $\val{HiFastRad}$.
+\end{enumerate}
+
+The reference needs both charges. The lower one supplies the upward push that keeps the
+beam off the floor; the upper one supplies the downward push that keeps it off the
+ceiling. Together the beam slows almost to a stop (Step~\ref{st:flight}) and returns
+to the detector, as in Figure~\ref{fig:board}. Section~\ref{sec:comparison} records the
+outcomes.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{foundations}{eq:eom} with its eighth-order Runge--Kutta
+method at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). It finds the crossing
+on its interpolant (\physref{6}) and takes the first entry into the box as the outcome
+(\xsecref{foundations}{sec:board}). It verifies that outcome by comparing its two runs
+(\physref{7}). The model is this document's, including \ref{as:radiation} (\physref{8}).
+The agreement in §\ref{sec:comparison} is between the fixed-step flight of
+§\ref{sec:method} and that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{einzel_lens}: the two-charge potential and the kinetic energy, used
+    here for a mirror instead of a lens that the rays pass through.
+  \item \levelref{around_the_wall}: the force of several centres and the fixed-step
+    method with the enlarged-box test.
+  \item \levelref{slingshot}: why two fixed centres have no closed relativistic orbit.
+  \item \levelref{first_bend}: the acceleration that enters the radiated power.
+  \item \xsecref{foundations}{sec:board} and \xsecref{foundations}{sec:numerics}: the
+    order of events, and the step-halving estimate.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
