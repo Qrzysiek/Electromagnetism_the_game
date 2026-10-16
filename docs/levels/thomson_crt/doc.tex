@@ -1,0 +1,337 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,twin_beams}
+\DocFingerprint{c6e1d284c3444def}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Two electrons ($q = \val{q}$, $m = \val{m}$) are launched from $(\val{xLaunch}, \val{yLaunch})$
+along $+x$. One has kinetic energy $T = \val{Tslow}$ and must hit the one-cell spot
+$\val{xS} \le x \le \val{xSlowHi}$, $\val{ySlowLo} \le y \le \val{ySlowHi}$. The other has
+$T = \val{Tfast}$ and must hit $\val{xF} \le x \le \val{xFastHi}$,
+$\val{yFastLo} \le y \le \val{yFastHi}$. Neither spot sets a direction or an energy window.
+Each electron is tested only against its own spot. The player places up to three charges,
+of either sign and of the magnitudes in the level file, inside the rectangle
+$\val{xRlo} \le x \le \val{xRhi}$, $\val{yRlo} \le y \le \val{yRhi}$. A flight ends when
+the electron touches a charge, leaves the world, enters its spot or runs out of time
+(\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$.
+
+The reference solution is the charge $Q = \val{Q}$ at $(\val{xC}, \val{yC})$, below the
+rays. Both the electrons and the charge are negative, so $\kappa = qQ = \val{kappa}$ and
+the force is repulsive: both rays bend upward. The slower electron bends more and meets
+the higher spot. This document cites the orbit of one charge and derives the impulse that
+makes the deflection fall as $1/T$.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, each electron has radius $a = 0$, and the charge has radius
+$R = \val{R}$. The launches are
+\[
+  \gamma = 1 + \frac{T}{mc^2}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T^2}{c^2} + 2mT}.
+\]
+For the slower electron, $\gamma = \val{gammaSlow}$ and $\abs{\vect{p}_0} = \val{pSlow}$.
+For the faster, $\gamma = \val{gammaFast}$ and $\abs{\vect{p}_0} = \val{pFast}$. Both
+directions in the file are $(1, 0)$. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$. The vertical offset of the charge below the rays is
+$b = \val{b}$.
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch}, the energy \xeqref{foundations}{eq:energy} and the
+    angular momentum \xeqref{foundations}{eq:angmom}. With one charge, the orbit
+    \xeqref{first_bend}{eq:general}.
+  \item The board's rules (\xsecref{foundations}{sec:board}): two shots are one puzzle,
+    solved only when every shot arrives in its own detector.
+  \item Newton's method and Simpson's rule (\xsecref{foundations}{sec:numerics}).
+  \item The transverse impulse of a straight passage, \eqref{eq:impulse}. It estimates
+    how the deflection depends on $T$. The arrival compared below is the orbit at the
+    screen.
+\end{principles}
+
+With the charge at $\vect{r}_\mathrm{c}$ the force on either electron is
+$\kappa(\vect{x}-\vect{r}_\mathrm{c})/\abs{\vect{x}-\vect{r}_\mathrm{c}}^3$, and the state
+obeys \xeqref{foundations}{eq:eom} from its own launch until the first event. The two
+flights do not interact. The motion stays in the plane (\xsecref{foundations}{sec:plane}).
+
+\begin{assumption}{The charge is held in place}\label{as:fixed}
+The charge does not recoil. That is a rule of the game (\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the electron. Along
+the two reference flights it is the fractions $\val{EradFracSlow}$ and $\val{EradFracFast}$
+of the launch energy (§\ref{sec:hand}). The game makes the same approximation and reports
+the same integral (\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the electron does not polarize, so \xeqref{foundations}{eq:sphereforce} is
+exact. The closest approaches on the reference flights are $\val{rminSlow}$ and
+$\val{rminFast}$, both far outside the sphere of radius $R$.
+\end{assumption}
+
+\begin{assumption}{Where the impulse applies}\label{as:impulse}
+\eqref{eq:impulse} uses a straight path at constant speed, Newtonian $T = mv^2/2$, and a
+flight that runs from infinity to infinity. Here each electron is launched at
+$r_0 = \val{rSlow}$ from the charge, the screen cuts the orbit at $x = \val{xS}$, and
+$\Gamma$ falls short of $1$ by $\val{gGap}$. The formula and the arrival angle differ by
+$\val{impGapSlow}^\circ$ on the slow flight and by $\val{impGapFast}^\circ$ on the fast
+one (§\ref{sec:impulse}). The comparison uses the orbit at the screen, which assumes none
+of this.
+\end{assumption}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.88\linewidth, xmin=-1.6, xmax=32.2, ymin=-1.6, ymax=22,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \draw[violet, dashed] (8,3) rectangle (17,17);
+  \fill[green!50!black, fill opacity=0.35] (29,17) rectangle (30,18);
+  \fill[green!50!black, fill opacity=0.35] (29,14) rectangle (30,15);
+  \draw[green!40!black] (29,17) rectangle (30,18);
+  \draw[green!40!black] (29,14) rectangle (30,15);
+  \addplot[thin, red!70!black] table {pathhardslow.dat};
+  \addplot[thin, red!70!black] table {pathhardfast.dat};
+  \addplot[thin, black!40] table {pathweakslow.dat};
+  \addplot[thin, black!40] table {pathweakfast.dat};
+  \addplot[very thick, blue!70!black] table {pathslow.dat};
+  \addplot[very thick, orange!80!black] table {pathfast.dat};
+  \fill[red!70!black] (8,4) circle[radius=0.28];
+  \node[font=\small, red!60!black, anchor=south] at (8,4.35) {$Q$};
+  \draw[-{Stealth[length=6pt]}, thick] (0,10) -- (\rawval{arrowX},\rawval{arrowY});
+  \fill (0,10) circle[radius=0.12];
+  \node[font=\scriptsize, green!30!black, anchor=south] at (29.5,18.15) {$0.4$};
+  \node[font=\scriptsize, green!30!black, anchor=north] at (29.5,13.85) {$0.6$};
+\end{axis}
+\end{tikzpicture}
+\caption{The slower electron (blue) meets the upper spot and the faster electron (orange)
+meets the lower spot. The dashed rectangle is where a charge may be placed. A weaker
+charge at the same point (grey; §\ref{sec:others}) leaves both rays short of their spots.
+A stronger charge (red) drives the slower electron into the ceiling and the faster
+electron out above its own spot.}
+\label{fig:board}
+\end{figure}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The orbit of one electron}\label{sec:orbit}
+
+Take polar coordinates about the charge and let $u = 1/r$. With
+$\sigma = \operatorname{sign} L_z$, $L = \abs{L_z}$, $\theta = \sigma(\varphi - \varphi_0)$
+and $u'_0 = -p_{r,0}/L$,
+\begin{equation}\label{eq:orbit}
+  u(\theta) = B + (u_0 - B)\cos\Gamma\theta + \frac{u'_0}{\Gamma}\sin\Gamma\theta,
+\end{equation}
+where $\Gamma^2 = 1 - \kappa^2/(c^2 L^2)$ and $B = -\kappa W/(c^2 L^2 \Gamma^2)$. This is
+\xeqref{first_bend}{eq:general}. The time element and the momentum are
+\xeqref{first_bend}{eq:dtdth} and \xeqref{first_bend}{eq:momentum}.
+
+Both launches point along $+x$ from the same point, so the radius $r_0$ and the direction
+$\varphi_0$ are shared, and $u'_0$ is shared as well: $p_{r,0}$ and $L$ both scale with
+$\abs{\vect{p}_0}$. The radial momentum points toward the charge, $u'_0 = \val{duSlow}$,
+so the launch is not an apsis. $L_z < 0$ on both flights. Repulsion from a charge below
+the ray pushes each electron up, and the slower one, with the smaller $L$, is turned
+through a larger angle.
+
+\subsection{The screen}\label{sec:face}
+
+The position on the orbit is
+\begin{equation}\label{eq:position}
+  x(\theta) = x_\mathrm{c} + \frac{\cos\varphi}{u(\theta)}, \qquad
+  y(\theta) = y_\mathrm{c} + \frac{\sin\varphi}{u(\theta)}, \qquad
+  \varphi = \varphi_0 + \sigma\theta,
+\end{equation}
+and $\dd x/\dd\theta$ is the derivative used in \xsecref{twin_beams}{sec:face}. Which
+boundary comes first is read off the orbit. Walk $\theta$ from $0$ in steps of $10^{-3}$.
+On each chord, in the board's order (\xsecref{foundations}{sec:board}): a radius
+$r \le R$ is a collision; a point outside the world ends the flight through the side the
+chord reaches first; a point inside that electron's own spot ends it through the side the
+chord reaches first. The root is polished by Newton's method
+\xeqref{foundations}{eq:newton}, started at the middle of the crossing chord. The face
+coordinate of the root is set to the face value.
+
+On both reference flights the first event is the screen face $x = x_S = \val{xS}$. The
+root of
+\begin{equation}\label{eq:face}
+  f(\theta) = x(\theta) - x_S = 0
+\end{equation}
+is the arrival, and the ordinate there decides whether it lies in the spot.
+
+\subsection{The time and the radiated energy}\label{sec:time}
+
+The time along the orbit is the integral of \xeqref{first_bend}{eq:dtdth}. Level~1
+evaluates it in closed form when $u'_0 = 0$. Here $u'_0 \ne 0$, and the number compared
+below is Simpson's rule \xeqref{foundations}{eq:simpson} with $\val{nSimp}$ panels, as in
+\xsecref{twin_beams}{sec:time}. Halving the panel count estimates the error as
+$(S_n - S_{2n})/15$.
+
+The radiated energy is the same rule on the power. The acceleration is
+\xeqref{first_bend}{eq:acceleration} and the power is \xeqref{foundations}{eq:larmor}.
+The integral uses $\val{nRad}$ panels; the uncertainty is the relative step-doubling error.
+
+\subsection{The impulse, and the factor $1/T$}\label{sec:impulse}
+
+Suppose instead that the electron held the straight line $y = y_0$ at a constant speed
+$v$, with the charge a distance $b$ below that line, and that the line ran from
+$x = -\infty$ to $x = \infty$. The transverse force is $\kappa b/r^3$ with
+$r^2 = (x - x_\mathrm{c})^2 + b^2$, and $\dd t = \dd x/v$, so the kick is
+\[
+  \Delta p_y = \frac{\kappa b}{v}\int_{-\infty}^{\infty}\frac{\dd x}{(x^2 + b^2)^{3/2}}.
+\]
+The antiderivative is $x/(b^2\sqrt{x^2 + b^2})$: differentiating it brings down
+$b^2/(x^2 + b^2)^{3/2}$ over $b^2$. The definite integral equals $2/b^2$, and
+\[
+  \Delta p_y = \frac{2\kappa}{vb}.
+\]
+In Newtonian mechanics $T = mv^2/2$ and $p = mv$, so $vp = 2T$. For a small kick the
+ray turns through
+\begin{equation}\label{eq:impulse}
+  \theta \approx \frac{\Delta p_y}{p} = \frac{\kappa}{Tb}.
+\end{equation}
+The angle is proportional to $1/T$. Two energies on the same charge and the same offset
+therefore turn in the ratio of the energies, and a screen far downstream separates them
+by that ratio.
+
+Read with $b = \val{b}$ and with $\kappa = \val{kappa}$, \eqref{eq:impulse} gives
+$\val{impSlow}^\circ$ for the slow electron and $\val{impFast}^\circ$ for the fast one.
+The momenta at the screen make $\val{angSlow}^\circ$ and $\val{angFast}^\circ$ with $+x$.
+\ref{as:impulse} records the difference. The rises of the two orbits from the launch line,
+$y - y_0$, are in the ratio $\val{ratioDy}$, against $T_\mathrm{fast}/T_\mathrm{slow}
+= \val{ratioT}$. The formula is why the higher spot belongs to the lower energy. The
+arrival is \eqref{eq:position} at the root of \eqref{eq:face}.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launches} (\xeqref{foundations}{eq:launch}). Slow:
+    $\gamma = \val{gammaSlow}$, $\abs{\vect{p}_0} = \val{pSlow}$. Fast:
+    $\gamma = \val{gammaFast}$, $\abs{\vect{p}_0} = \val{pFast}$. Both aim along $+x$.
+  \item\label{st:orbit} \emph{The slow orbit} \eqref{eq:orbit}, about $(\val{xC}, \val{yC})$.
+    The launch radius is $r_0 = \val{rSlow}$ at $\varphi_0 = \val{phiSlow}$, and
+    \begin{align*}
+      L_z &= \val{LzSlow}, & W &= \val{WSlow}, & \Gamma &= \val{GammaSlow}, \\
+      B &= \val{BSlow}, & u_0 &= \val{uSlow}, & u'_0 &= \val{duSlow}.
+    \end{align*}
+    The fast orbit has the same $r_0$, $\varphi_0$ and $u'_0$, with
+    $L_z = \val{LzFast}$, $W = \val{WFast}$, $\Gamma = \val{GammaFast}$ and
+    $B = \val{BFast}$.
+  \item\label{st:face} \emph{The first event}, by the walk of §\ref{sec:face}. Both
+    electrons meet $x = \val{xS}$ before a collision or a world edge. Points of the two
+    orbits:
+    \begin{center}\small\val{samples}\end{center}
+    Newton's method on \eqref{eq:face} for the slow electron, started at
+    $\theta = \val{thGuess}$:
+    \begin{center}\small\val{newton}\end{center}
+    After $\val{newtonSteps}$ corrections the residual is $\val{newtonResSlow}$, and
+    $\theta = \val{thetaSlow}$. The ordinate is $\val{ySlow}$, inside the upper spot.
+    The same method on the fast electron gives $\theta = \val{thetaFast}$ with residual
+    $\val{newtonResFast}$, and the ordinate $\val{yFast}$ lies inside the lower spot.
+    The closest approaches are at $\theta = \val{thMinSlow}$ and $\theta = \val{thMinFast}$,
+    where $r = \val{rminSlow}$ and $r = \val{rminFast}$.
+  \item\label{st:time} \emph{The time and the momentum.} Simpson's rule with
+    $\val{nSimp}$ panels gives $t = \val{tSlow}$ and $t = \val{tFast}$, uncertain by
+    $\val{terrSlow}$ and $\val{terrFast}$, both far below $t_{\max}$. The momenta are
+    $(\val{pxSlow}, \val{pySlow})$ and $(\val{pxFast}, \val{pyFast})$, at
+    $\val{angSlow}^\circ$ and $\val{angFast}^\circ$ to $+x$.
+  \item\label{st:impulse} \emph{The impulse, as a check of the layout.}
+    \eqref{eq:impulse} gives $\val{impSlow}^\circ$ and $\val{impFast}^\circ$. The rises
+    from $y = \val{yLaunch}$ are $\val{dySlow}$ and $\val{dyFast}$, in the ratio
+    $\val{ratioDy}$.
+  \item\label{st:radiation} \emph{The radiated energy}, with $\val{nRad}$ panels:
+    $\val{EradSlow}$ and $\val{EradFast}$, uncertain by the relative amounts
+    $\val{radErrSlow}$ and $\val{radErrFast}$.
+\end{procedure}
+
+\begin{result}[The reference flights]
+The slower electron enters its spot through $x = \val{xS}$ at $(\val{xSlow}, \val{ySlow})$,
+at $t = \val{tSlow}$. The faster electron enters its spot through the same face at
+$(\val{xFast}, \val{yFast})$, at $t = \val{tFast}$. Both ordinates lie in their spots.
+The level is solved.
+\end{result}
+
+The orbits are the closed form \eqref{eq:orbit}. One Newton table is printed; the fast
+root is the same method. The quadratures are specified in §\ref{sec:time}.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The orbits are exact. The time quadratures are uncertain by $\val{terrSlow}$ and
+$\val{terrFast}$ on the reference, and on the other flights by at most
+$\val{HardSlowErr}$, all far below $10^{-12}$. The tolerance on a state is $10^{-9}$,
+ten times the accuracy of a verified flight (\xsecref{foundations}{sec:verification}).
+The tolerance on a radiated energy is $10^{-4}$ relative. Both were set from those
+estimates. The radiated integrals are uncertain by at most $\val{WeakFastRadErr}$
+relative.
+
+The faster electron and the two weaker-charge flights stop on a vertical edge, and the
+slower electron of the stronger charge stops on the ceiling, so those face coordinates
+agree exactly. The largest absolute difference in the table is $\val{cmpHardSlowTDiff}$,
+the time at which that stronger charge drives the slow electron into the ceiling. It sits
+at the game's accuracy, above the quadrature error. The largest relative difference
+among the radiated energies is $\val{cmpWeakFastRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+Two further charges at the same node $(\val{xC}, \val{yC})$, each flown by the same orbit
+and compared above. Both miss the spots.
+
+\begin{enumerate}
+  \item $Q = \val{WeakQ}$, so $\kappa = \val{WeakK}$. Both electrons leave the world
+    through $x = \val{xWorld}$. The slow one is then at $y = \val{WeakSlowY}$, below its
+    spot, at $t = \val{WeakSlowT}$ and at $\val{WeakSlowAng}^\circ$. The fast one is at
+    $y = \val{WeakFastY}$, below its spot, at $\val{WeakFastAng}^\circ$. The impulse
+    \eqref{eq:impulse} has three quarters of the reference kick, and neither rise reaches
+    its spot.
+  \item $Q = \val{HardQ}$, so $\kappa = \val{HardK}$. The slow electron meets the ceiling
+    $y = \val{yWorld}$ at $x = \val{HardSlowX}$, at $t = \val{HardSlowT}$ and at
+    $\val{HardSlowAng}^\circ$, above its spot. The fast electron leaves through
+    $x = \val{xWorld}$ at $y = \val{HardFastY}$, above its spot, at $\val{HardFastAng}^\circ$.
+    One and a half times the reference kick carries the slow ray into the ceiling before
+    the screen can catch it.
+\end{enumerate}
+
+The reference works because $\kappa = \val{kappa}$ and $b = \val{b}$ put the two rises,
+in the ratio of the energies, one in each one-cell spot. A weaker charge at that point
+undershoots both spots. A stronger charge overshoots them.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{foundations}{eq:eom} for each electron separately, with its
+eighth-order Runge--Kutta method at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}).
+It finds each crossing on its interpolant (\physref{6}) and verifies the outcome by
+comparing its two runs (\physref{7}). The model is this document's, including
+\ref{as:radiation} (\physref{8}). The impulse \eqref{eq:impulse} is not part of what the
+game computes. The agreement in §\ref{sec:comparison} is between the orbit
+\eqref{eq:orbit} and that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{first_bend}: the orbit \eqref{eq:orbit}, the time element and the
+    momentum. There the launch is an apsis, so the time is a closed form.
+  \item \levelref{twin_beams}: the same orbit with $u'_0 \ne 0$, and Simpson's rule for
+    the time. There the two rays are mirrors. Here they differ by their energy, and the
+    separation is \eqref{eq:impulse}.
+  \item \xsecref{foundations}{sec:board}: several shots form one puzzle. Each electron
+    has its own spot.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
