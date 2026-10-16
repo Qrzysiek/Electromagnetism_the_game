@@ -1,0 +1,6 @@
+{
+  "detailed": [
+    [{"node": [24, 10, 0], "kind": "charge", "value": 1000000.0}],
+    [{"node": [22, 10, 0], "kind": "charge", "value": 2000000.0}]
+  ]
+}
