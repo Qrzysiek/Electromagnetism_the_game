@@ -1,0 +1,382 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot,around_the_wall,einzel_lens}
+\DocFingerprint{57aff31382571059}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One shot leaves $(\val{xLaunch}, \val{yLaunch})$ with charge $q = \val{q}$, mass
+$m = \val{m}$ and kinetic energy $T_0 = \val{Tzero}$, aimed along $+x$. The
+detector is the rectangle $\val{xDlo} \le x \le \val{xDhi}$,
+$\val{yDlo} \le y \le \val{yDhi}$. An entry counts only when the kinetic energy
+lies in $[T_{\min}, T_{\max}] = [\val{Tlo}, \val{Thi}]$. There is no direction
+cone. The description's quarter of the launch energy is $\val{Tquarter}$; the
+file's ceiling is lower than that quarter by $\val{quarterGap}$, and the file
+also refuses an arrival below $\val{Tlo}$.
+
+Two electrodes are already on the board, $Q = \val{Qlo}$ at
+$(\val{xLo}, \val{yLo})$ and $Q = \val{Qhi}$ at $(\val{xHi}, \val{yHi})$. The
+player may add at most $\val{maxCharges}$ further charges, of either sign, inside
+the region $\val{xRegLo} \le x \le \val{xRegHi}$,
+$\val{yRegLo} \le y \le \val{yRegHi}$, and no magnets. A flight ends when the
+particle touches a charge, leaves the world, enters the detector or runs out of
+time (\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$.
+
+The reference solution adds $Q = \val{Qref}$ at $(\val{xRef}, \val{yRef})$, the
+particle's sign. The added charge and the two electrodes brake the ion, and it
+enters the box inside the window without the forward momentum changing sign.
+This document integrates that three-charge flight, the two electrodes alone, and
+the same node with half the added charge, by the fixed-step method of
+\levelref{around_the_wall}, and applies the kinetic window at the entry.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the particle has radius $a = \val{aRad}$, and every
+charge has radius $R = \val{R}$. The launch has
+\[
+  \gamma_0 = 1 + \frac{T_0}{mc^2} = \val{gammaZero}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T_0^2}{c^2} + 2mT_0} = \val{pZero}, \qquad
+  v_0 = \frac{\abs{\vect{p}_0}}{\gamma_0 m} = \val{vZero},
+\]
+at $\val{angLaunch}^\circ$ to $+x$. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$. The electrodes are equal and sit symmetrically about
+$y = \val{yMid}$, which is the launch height. Their couplings are
+$\kappa_\mathrm{l} = qQ_\mathrm{l} = \val{kLo}$ and
+$\kappa_\mathrm{h} = qQ_\mathrm{h} = \val{kHi}$. The reference adds
+$\kappa = \val{kRef}$ at $(\val{xRef}, \val{yRef})$, so the reference flight has
+$N = \val{nRef}$ centres. The electrodes alone have $N = \val{nPair}$. The third
+placement puts $\kappa = \val{kHalf}$ at the same node $(\val{xHalf}, \val{yHalf})$,
+and has $N = \val{nHalf}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.88\linewidth, xmin=-1.8, xmax=32.4, ymin=-1.8, ymax=21.8,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \draw[black!50] (0,0) rectangle (30,20);
+  \draw[black!40, dashed] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \fill[green!50!black, fill opacity=0.16] (\rawval{xDlo},\rawval{yDlo}) rectangle (\rawval{xDhi},\rawval{yDhi});
+  \draw[green!40!black] (\rawval{xDlo},\rawval{yDlo}) rectangle (\rawval{xDhi},\rawval{yDhi});
+  \fill[blue!70!black, fill opacity=0.35] (\rawval{xLo},\rawval{yLo}) circle[radius=\rawval{R}];
+  \draw[blue!70!black] (\rawval{xLo},\rawval{yLo}) circle[radius=\rawval{R}];
+  \fill[blue!70!black, fill opacity=0.35] (\rawval{xHi},\rawval{yHi}) circle[radius=\rawval{R}];
+  \draw[blue!70!black] (\rawval{xHi},\rawval{yHi}) circle[radius=\rawval{R}];
+  \fill[red!70!black, fill opacity=0.35] (\rawval{xRef},\rawval{yRef}) circle[radius=\rawval{R}];
+  \draw[red!70!black] (\rawval{xRef},\rawval{yRef}) circle[radius=\rawval{R}];
+  \addplot[thick, purple!70!black] table {pathpair.dat};
+  \addplot[thick, black!55] table {pathhalf.dat};
+  \addplot[very thick, blue!70!black] table {pathref.dat};
+  \draw[-{Stealth[length=6pt]}, very thick, blue!70!black] (\rawval{xLaunch},\rawval{yLaunch}) --
+    (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.11];
+  \node[font=\scriptsize, blue!50!black, anchor=north] at (\rawval{xLo},\rawval{yLo}) {$Q_\mathrm{l}$};
+  \node[font=\scriptsize, blue!50!black, anchor=south] at (\rawval{xHi},\rawval{yHi}) {$Q_\mathrm{h}$};
+  \node[font=\scriptsize, red!60!black, anchor=north] at (\rawval{xRef},\rawval{yRef}) {$Q$};
+  \node[font=\scriptsize, green!30!black, anchor=west] at (30.15,10) {detector};
+\end{axis}
+\end{tikzpicture}
+\caption{Blue is the reference flight: it rises, turns down, and enters the left
+face of the detector. Purple is the two electrodes alone, straight along the
+launch line into that same face. Grey is half the added charge, at the same red
+node: it passes above the detector and leaves through the right edge of the
+world. The blue discs are the electrodes and the red disc is the added charge.
+The dashed rectangle is the region in which the player may place charges.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch} and the energy \xeqref{foundations}{eq:energy}. The
+    motion stays in the plane (\xsecref{foundations}{sec:plane}).
+  \item The board's rules (\xsecref{foundations}{sec:board}). The first entry into the
+    detector decides. This level adds a kinetic window and no direction cone.
+  \item The classical Runge--Kutta method \xeqref{foundations}{eq:rk4} and the fixed-step
+    flight of \xsecref{around_the_wall}{sec:method}. With two or more centres the orbit
+    equation does not separate (\xeqref{slingshot}{eq:noseparation}).
+  \item The kinetic energy \xeqref{einzel_lens}{eq:kinetic}. The window below is the
+    condition that this energy, at the entry, lie between the file's two bounds.
+  \item The radiated power \xeqref{foundations}{eq:larmor}, with the acceleration
+    \xeqref{first_bend}{eq:acceleration}, summed by Simpson's rule
+    \xeqref{foundations}{eq:simpson}.
+\end{principles}
+
+The level has no magnets, so $\vect{B} = \vect{0}$. The force is
+\xeqref{around_the_wall}{eq:force} with $N = \val{nRef}$ on the reference, the
+centres in the file's order: the lower electrode, the upper electrode, then the
+added charge. The state $(x, y, p_x, p_y)$ obeys \xeqref{foundations}{eq:eom}
+with that force until the first event. The potential $V$ in
+\xeqref{around_the_wall}{eq:energy} is the same superposition, and the kinetic
+energy at a point is \xeqref{einzel_lens}{eq:kinetic}.
+
+\begin{assumption}{The charges are held in place}\label{as:fixed}
+None of the charges recoils. That is a rule of the game
+(\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy is not taken from the particle. Over the three flights of this
+document the largest fraction of $T_0$ is $\val{radFracMax}$ (§\ref{sec:hand}). The
+game makes the same approximation and reports the same integral (\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = \val{aRad}$, and the particle does not polarize, so
+\xeqref{foundations}{eq:sphereforce} is exact. The closest approach on the
+reference flight is $\val{RefRclose}$, to the \val{RefRname}, a clearance of
+$\val{RefClear}$ outside the sphere. The electrodes alone stay $\val{PairClear}$
+clear, and the half-charge flight stays $\val{HalfClear}$ clear. The samples that
+locate these distances are at most $\val{sampleArc}$ apart (§\ref{sec:method}),
+far below the clearances.
+\end{assumption}
+
+\begin{assumption}{The step resolves the landing}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates the largest error of an
+end state as $\val{errMax}$ (§\ref{sec:hand}). That is far below the height of the
+detector and far below the gap between the reference arrival energy and either
+edge of the window. The tolerance used in §\ref{sec:comparison} is the larger of
+$10^{-9}$ and ten times this estimate.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The kinetic window}\label{sec:window}
+
+The launch fixes $\gamma_0$ by \xeqref{foundations}{eq:launch}, so the kinetic
+energy carried by a momentum is
+\begin{equation}\label{eq:arrival}
+  T(\vect{p}) = (\gamma - 1)\,mc^2, \qquad
+  \gamma = \sqrt{1 + \frac{\abs{\vect{p}}^2}{m^2 c^2}}.
+\end{equation}
+While \xeqref{around_the_wall}{eq:energy} holds, this is the same number as
+\xeqref{einzel_lens}{eq:kinetic}. Substituting $W = \gamma_0 mc^2 + V(\vect{x}_0)$
+and $\gamma_0 mc^2 = mc^2 + T_0$ gives
+\begin{equation}\label{eq:from-potential}
+  T(\vect{x}) = T_0 + V(\vect{x}_0) - V(\vect{x}).
+\end{equation}
+The file accepts an entry only when
+\begin{equation}\label{eq:window}
+  T_{\min} \le T \le T_{\max},
+\end{equation}
+with $T_{\min} = \val{Tlo}$ and $T_{\max} = \val{Thi}$. For the potential
+expression that is a bound on the rise of $V$ between the launch and the entry,
+\begin{equation}\label{eq:rise}
+  T_0 - T_{\max} \le V(\vect{x}_\mathrm{e}) - V(\vect{x}_0) \le T_0 - T_{\min}.
+\end{equation}
+The lower bound is $\val{riseMin}$ and the upper bound is $\val{riseMax}$. The
+ion must be slowed by at least $\val{riseMin}$, and by no more than $\val{riseMax}$.
+The description's quarter, $\val{Tquarter}$, would have asked only for a rise of
+$T_0 - \val{Tquarter}$. The file asks for $\val{quarterGap}$ more, and it also
+rejects a landing below $\val{Tlo}$.
+
+The test itself uses \eqref{eq:arrival} at the entry momentum, not
+\eqref{eq:from-potential}. The signed margin is
+\begin{equation}\label{eq:margin}
+  \mu = \frac{\min\bigl(T - T_{\min},\, T_{\max} - T\bigr)}{\abs{T_{\max}}}.
+\end{equation}
+The entry counts when $\mu \ge 0$, so both endpoints belong to the window. When
+$\mu < 0$ the outcome is Rejected and the reported state stays the entry
+(\physref{6.1}). A flight that never enters the box is not tested. On the flights
+below, \eqref{eq:arrival} and \eqref{eq:from-potential} differ by less than the
+drift of $W$ (§\ref{sec:hand}), so the rise \eqref{eq:rise} decides the same
+question as the margin.
+
+\subsection{Why the flight is integrated}\label{sec:noseparation}
+
+With one charge, angular momentum closes the motion into the orbit of
+\levelref{first_bend}. Two fixed centres already fail to separate in the
+relativistic problem: the term \xeqref{slingshot}{eq:noseparation} does not split.
+Three centres, two of them symmetric and the third off the axis, give that
+obstruction nothing that would remove it. Each flight is the initial-value
+problem for \xeqref{around_the_wall}{eq:force}, and §\ref{sec:method} computes it
+to a stated accuracy.
+
+\subsection{The method}\label{sec:method}
+
+The state is advanced by the method of \xsecref{around_the_wall}{sec:method}: the
+classical Runge--Kutta method \xeqref{foundations}{eq:rk4} at the fixed step
+$h = \val{H}$, the crossing on the cubic Hermite interpolant
+\xeqref{slingshot}{eq:hermite}, $\val{nSample}$ samples and $\val{nBisect}$
+bisections of that interpolant, and the enlarged-box test. The position reported
+on a face has its face coordinate set to the face value. The momentum is one
+further step of the method, of the length up to the crossing, and
+\eqref{eq:window} is applied to \eqref{eq:arrival} for that momentum. The error of
+the reported step is a fifteenth of its difference from the step $2h$
+(\xsecref{foundations}{sec:numerics}).
+
+On each step the same interpolant is sampled at nine equally spaced fractions,
+and only up to the crossing when the step contains the event. Those samples give
+the kinetic-energy minimum, the smallest forward momentum, and the closest
+approach. A point between them lies within $\val{sampleArc}$ of a sample, so
+those three quantities are located to that tolerance. The end state is held to
+the step-halving estimate.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} (\xeqref{foundations}{eq:launch}):
+    $\gamma_0 = \val{gammaZero}$ and $\abs{\vect{p}_0} = \val{pZero}$, aimed at
+    $\val{angLaunch}^\circ$. The force is $(\val{RefFx}, \val{RefFy})$. The
+    horizontal part is negative: every charge stands ahead of the particle and
+    repels. The vertical part is positive. The added charge sits below the beam,
+    so it pushes the particle up; the electrodes cancel on the axis.
+  \item\label{st:energy} \emph{The energy}: $V(\vect{x}_0) = \val{RefVzero}$,
+    $W = \val{RefW}$ and $W - mc^2 = \val{RefWbind} > 0$. The world's edge is
+    energetically open. \eqref{eq:rise} asks the potential to rise by at least
+    $\val{riseMin}$ and by at most $\val{riseMax}$.
+  \item\label{st:flight} \emph{The flight}: the method of §\ref{sec:method} with
+    $h = \val{H}$. The states every five time units, and the drift of the energy:
+    \begin{center}\small\val{states}\end{center}
+    The path climbs to $y = \val{RefYmax}$ and then comes down. The kinetic energy
+    falls to $\val{RefTmin}$ at $t = \val{RefTTmin}$, at
+    $(\val{RefXTmin}, \val{RefYTmin})$, near the upper electrode. The smallest
+    forward momentum on the samples is $\val{RefPxMin}$, at
+    $t = \val{RefTPxMin}$. It stays positive, so the particle does not turn back.
+  \item\label{st:entry} \emph{The entry.} The step from $t_n = \val{RefTbefore}$,
+    at $(\val{RefXbefore}, \val{RefYbefore})$, crosses the \val{RefFace} face of
+    the detector at the fraction $u = \val{RefU}$. The residual before the face
+    coordinate is assigned is $\val{RefFaceRes}$, so $x_\mathrm{e} = \val{RefX}$,
+    $y_\mathrm{e} = \val{RefY}$ and $t_\mathrm{e} = \val{RefT}$, after
+    $\val{RefSteps}$ steps. One step of length $t_\mathrm{e} - t_n$ gives
+    $\vect{p}_\mathrm{e} = (\val{RefPx}, \val{RefPy})$, at $\val{RefAng}^\circ$
+    to $+x$. The ordinate lies between $\val{yDlo}$ and $\val{yDhi}$.
+  \item\label{st:window} \emph{The window} \eqref{eq:window}. From the entry
+    momentum, \eqref{eq:arrival} gives $T = \val{RefTarr}$. The potential
+    expression \eqref{eq:from-potential} gives $\val{RefTarrV}$. They differ by
+    $\val{RefTgap}$. The rise of $V$ is $\val{RefRise}$, which lies between
+    $\val{riseMin}$ and $\val{riseMax}$. The margin \eqref{eq:margin} is
+    $\val{RefMargin} > 0$: the arrival sits $\val{RefRoomLo}$ above the floor and
+    $\val{RefRoomHi}$ below the ceiling. The entry counts.
+  \item\label{st:check} \emph{The checks}: the energy stays within $\val{RefWdev}$
+    of $W$. Halving the step estimates the end state as $\val{RefErr}$. The same
+    outcome appears at $h$ and at $2h$. The closest approach, $\val{RefRclose}$ to
+    the \val{RefRname}, leaves a clearance $\val{RefClear}$.
+  \item\label{st:rad} \emph{The radiation}: the power \xeqref{foundations}{eq:larmor}
+    with the acceleration \xeqref{first_bend}{eq:acceleration}, summed by Simpson's
+    rule on the steps of $h/2$. The integral is $\val{RefRad}$, the fraction
+    $\val{RefRadFrac}$ of $T_0$. The relative difference from the same sum at step
+    $h$, divided by fifteen, is $\val{RefRadErr}$.
+\end{procedure}
+
+\begin{result}[A landing inside the window]
+The reference enters the detector through its left face at
+$(\val{RefX}, \val{RefY})$, at $t = \val{RefT}$, with kinetic energy
+$\val{RefTarr}$ inside $[\val{Tlo}, \val{Thi}]$, heading $\val{RefAng}^\circ$
+to $+x$. The forward momentum has stayed at least $\val{RefPxMin}$. The level
+is solved.
+\end{result}
+
+By hand, Step~\ref{st:flight} is $\val{RefSteps}$ steps of four evaluations of
+the force. Across the three flights of this document the largest step-halving
+estimate is $\val{errMax}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The three outcomes agree, and so do the three end positions, times and momenta.
+The arrival kinetic energy is compared on the two flights that enter the box,
+with the state tolerance, because \eqref{eq:arrival} is computed from the entry
+momentum. The tolerance on a state is $\val{tolFlight}$. Ten times the largest
+step-halving estimate $\val{errMax}$ lies below $10^{-9}$, so the tolerance is
+that floor. The three radiated energies are compared relatively, with tolerance
+$10^{-4}$. The state tolerance and the radiation tolerance were fixed from these
+estimates before the comparison.
+
+The largest absolute difference is the reference time, $\val{cmpRefTDiff}$. The
+reference ordinate differs by $\val{cmpRefYDiff}$. The difference is many times
+$\val{errMax}$ and a fraction of the tolerance. The game's verified end states are
+good to about $10^{-10}$ (\xsecref{foundations}{sec:verification}), so a
+difference of this size is what that accuracy allows when three centres are
+summed.
+
+The reference abscissa agrees exactly, as do the electrodes-only ordinate and its
+vertical momentum. The quadrature uncertainties are $\val{RefRadErr}$,
+$\val{PairRadErr}$ and $\val{HalfRadErr}$, all inside the relative tolerance. The
+largest relative difference is the electrodes-only flight, $\val{cmpPairRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+The electrodes are not enough, and half the reference charge misses the box. The
+method of §\ref{sec:method} integrates both (\code{placements.json}), each at
+$h = \val{H}$ and at $2h$.
+\begin{enumerate}[label=\arabic*.]
+  \item The two electrodes alone. They are equal and symmetric about
+    $y = \val{yMid}$, so the launch force is $(\val{PairFx}, \val{PairFy})$ and
+    the ordinate never leaves $\val{yLaunch}$: the deviation is $\val{PairYdev}$.
+    The particle enters the \val{PairFace} face at $(\val{PairX}, \val{PairY})$,
+    at $t = \val{PairT}$, with momentum $(\val{PairPx}, \val{PairPy})$, at
+    $\val{PairAng}^\circ$.
+
+    The rise of $V$ is $\val{PairRise}$, short of the $\val{riseMin}$ that
+    \eqref{eq:rise} requires. The arrival energy is $\val{PairTarr}$, above
+    $\val{Thi}$. The margin is $\val{PairMargin} < 0$, so the outcome is Rejected
+    and the reported state stays the entry. The forward momentum stays at least
+    $\val{PairPxMin}$. The kinetic energy never falls below $\val{PairTmin}$,
+    which is itself above the ceiling. The estimate is $\val{PairErr}$. The
+    radiated energy is $\val{PairRad}$.
+  \item Half the added charge, $Q = \val{Qhalf}$ at $(\val{xHalf}, \val{yHalf})$.
+    The path rises to $\val{HalfYmax}$. At the detector's left edge,
+    $x = \val{xDlo}$, the ordinate is $\val{HalfYDlo}$, which is
+    $\val{HalfAboveDlo}$ above the top of the box. At the right edge,
+    $x = \val{xDhi}$, it is $\val{HalfYDhi}$, still $\val{HalfAboveDhi}$ above
+    the top. The particle never enters the box. It leaves through the
+    \val{HalfFace} face of the world at $(\val{HalfX}, \val{HalfY})$, at
+    $t = \val{HalfT}$, with momentum $(\val{HalfPx}, \val{HalfPy})$, at
+    $\val{HalfAng}^\circ$.
+
+    The window is not tested. Along the whole flight the kinetic energy stays at
+    least $\val{HalfTmin}$, above $\val{Thi}$, so an entry anywhere would have
+    failed \eqref{eq:window} as well. The forward momentum stays at least
+    $\val{HalfPxMin}$. The estimate is $\val{HalfErr}$. The radiated energy is
+    $\val{HalfRad}$.
+\end{enumerate}
+
+The reference needs the full added charge. The electrodes alone brake the ion,
+and not enough: it arrives on the target with $\val{PairTarr}$, above
+$\val{Thi}$. Half the added charge lifts the path just over the box and never lands.
+The full charge lifts it further, the upper electrode turns it back down into the
+box, and the three centres together produce the rise $\val{RefRise}$.
+Figure~\ref{fig:board} shows the three paths. Section~\ref{sec:comparison}
+records the outcomes.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{foundations}{eq:eom} with its eighth-order Runge--Kutta
+method at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). It finds the
+crossing on its interpolant (\physref{6}) and applies \eqref{eq:window} to
+\eqref{eq:arrival} at that entry (\physref{6.1}). It verifies the outcome by
+comparing its two runs (\physref{7}). The model is this document's, including
+\ref{as:radiation} (\physref{8}). The agreement in §\ref{sec:comparison} is
+between the fixed-step flight of §\ref{sec:method}, the window of
+§\ref{sec:window}, and that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{einzel_lens}: the kinetic energy \xeqref{einzel_lens}{eq:kinetic},
+    from which the window \eqref{eq:window} is derived here.
+  \item \levelref{around_the_wall}: the force of several centres, the conserved
+    energy, and the fixed-step method, used here at $N = \val{nRef}$.
+  \item \levelref{slingshot}: why two fixed centres have no closed relativistic
+    orbit, and the Hermite crossing.
+  \item \levelref{first_bend}: the acceleration that enters the radiated power.
+  \item \xsecref{foundations}{sec:board} and \xsecref{foundations}{sec:numerics}:
+    the order of events, and the step-halving estimate.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
