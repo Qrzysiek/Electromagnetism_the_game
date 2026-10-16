@@ -1,0 +1,121 @@
+{
+ "level_file": "levels/25_beam_pipe.json",
+ "level_sha256": "a28f747aa7d73b98",
+ "golden_hash": "e62c1842865086b6",
+ "recorded": "2026-10-17",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        1.0216348750755884,
+        0.10940446469434068,
+        0.0
+       ],
+       "t": 28.136836380361185,
+       "x": [
+        28.286065989700145,
+        12.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.743760774137627e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 5.210736976251768e-17,
+      "steps": 23
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.0216393467777436,
+        0.1094868910397477,
+        0.0
+       ],
+       "t": 28.12959690051735,
+       "x": [
+        28.278238363021696,
+        12.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 4.953260024365136e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 5.208388520406263e-17,
+      "steps": 37
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      15,
+      4,
+      0
+     ],
+     "value": -2000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Rejected",
+     "preview": {
+      "end": {
+       "p": [
+        0.954455130229785,
+        0.3415930396885997,
+        0.0
+       ],
+       "t": 30.08379949785149,
+       "x": [
+        28.0,
+        15.29488651794692,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.823252742700788e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Rejected",
+      "radiated_energy": 1.522663676943536e-19,
+      "steps": 14
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.954438359750308,
+        0.34161895442487583,
+        0.0
+       ],
+       "t": 30.08414044058147,
+       "x": [
+        28.0,
+        15.295189292312022,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.279842981067759e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Rejected",
+      "radiated_energy": 1.5187437057431957e-19,
+      "steps": 21
+     }
+    }
+   ],
+   "placement": []
+  }
+ ]
+}
