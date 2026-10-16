@@ -1,0 +1,406 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot}
+\DocFingerprint{30908b90c2beabdd}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+An alpha particle ($q = \val{q}$, $m = \val{m}$) is launched from $(0, 11)$ along $+x$ with
+kinetic energy $T_0 = \val{Tzero}$. A fixed nucleus $Q_\mathrm{N} = \val{Qn}$ sits at
+$\val{rN}$. The detector is the rectangle $0 \le x \le 1$, $18 \le y \le 20$, with no
+condition on direction or energy: the first entry solves the shot. The player places up to
+three charges, of either sign and of the magnitudes in the level file, inside the rectangle
+$2 \le x \le 10$, $2 \le y \le 18$. The flight ends when the alpha touches a charge, leaves
+the world or runs out of time (\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$.
+
+The reference solution places one charge, $Q_\mathrm{S} = \val{Qs}$, at $\val{rS}$. It is
+attractive, and it sits below the launch, so it pulls the alpha down onto a close pass of the
+nucleus. The nucleus turns the alpha back up toward the left, and the alpha enters the
+detector through its right face. The formula in the level's text is the Newtonian scattering
+angle of one charge for a particle that comes from infinity; it is derived in
+§\ref{sec:formula} and it says how close that pass must be. The flight itself has two
+centres, so the arrival is computed numerically, by the method of \levelref{slingshot}.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the alpha has radius $a = 0$, and each charge has radius
+$R = \val{R}$. The couplings are $\kappa_\mathrm{N} = qQ_\mathrm{N} = \val{kN}$ and
+$\kappa_\mathrm{S} = qQ_\mathrm{S} = \val{kS}$. The launch direction in the file is
+$(\val{dirX}, 0)$. The world is $-1 \le x \le 31$, $-1 \le y \le 21$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \fill[black!6] (2,2) rectangle (10,18);
+  \draw[black!30] (2,2) rectangle (10,18);
+  \fill[green!50!black, fill opacity=0.25] (0,18) rectangle (1,20);
+  \draw[green!40!black] (0,18) rectangle (1,20);
+  \addplot[thin, dashed, black!55] table {sphere.dat};
+  \addplot[thin, black!45] table {pathbare.dat};
+  \addplot[thick, orange!80!black] table {pathweak.dat};
+  \addplot[very thick, blue!70!black] table {path.dat};
+  \fill[red!70!black] (18,10) circle[radius=0.28];
+  \node[font=\small, red!60!black, anchor=south west] at (18.4,10.15) {$Q_\mathrm{N}$};
+  \fill[blue!75!black] (2,2) circle[radius=0.28];
+  \node[font=\small, blue!60!black, anchor=south west] at (2.4,2.15) {$Q_\mathrm{S}$};
+  \draw[-{Stealth[length=6pt]}, thick] (0,11) -- (2.2,11);
+  \fill (0,11) circle[radius=0.12];
+  \node[font=\small, anchor=south] at (1.1,11.15) {launch};
+  \node[font=\small, green!30!black, anchor=west] at (1.3,19) {detector};
+\end{axis}
+\end{tikzpicture}
+\caption{The reference flight (blue) from the launch to the detector, the same launch with a
+weaker steering charge (orange; §\ref{sec:others}) and with the nucleus alone (grey). The
+dashed circle, of radius $\val{Rsphere}$ about the nucleus, is where §\ref{sec:circle} reads
+the encounter off. The pale rectangle is where the player may place charges.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}, superposed for
+    two charges.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch}, and the conservation of energy
+    \xeqref{foundations}{eq:energy}. With one charge, the orbit
+    \xeqref{first_bend}{eq:general}.
+  \item The board's rules (\xsecref{foundations}{sec:board}).
+  \item The classical Runge--Kutta method, cubic Hermite interpolation and the error estimate
+    by halving the step (\xsecref{foundations}{sec:numerics}, \xsecref{slingshot}{sec:method}).
+\end{principles}
+
+With the nucleus and the steering charge the state $(\vect{x}, \vect{p})$ obeys
+\begin{equation}\label{eq:motion}
+  \deriv{\vect{x}}{t} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t}
+    = \kappa_\mathrm{N}\,\frac{\vect{x}-\vect{r}_\mathrm{N}}{\abs{\vect{x}-\vect{r}_\mathrm{N}}^3}
+    + \kappa_\mathrm{S}\,\frac{\vect{x}-\vect{r}_\mathrm{S}}{\abs{\vect{x}-\vect{r}_\mathrm{S}}^3},
+  \qquad \gamma = \sqrt{1 + \frac{\abs{\vect{p}}^2}{m^2c^2}},
+\end{equation}
+from $\vect{x}_0 = (0, 11)$ and $\vect{p}_0 = \abs{\vect{p}_0}\,(1, 0)$, until the first
+event. The motion stays in the plane (\xsecref{foundations}{sec:plane}).
+
+\begin{assumption}{The charges are held in place}\label{as:fixed}
+Neither charge recoils. That is a rule of the game, and it is the idealization the
+Geiger--Marsden experiment itself uses for a nucleus much heavier than an alpha particle.
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the alpha. Along the
+reference flight it is $\val{Erad}$, a fraction $\val{EradFrac}$ of $T_0$
+(§\ref{sec:hand}). The game makes the same approximation and reports the same integral
+(\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the alpha does not polarize, so \xeqref{foundations}{eq:sphereforce} is exact.
+The closest approach to the nucleus is $\val{rMin}$, far outside the sphere of radius $R$.
+\end{assumption}
+
+\begin{assumption}{Where the scattering formula applies}\label{as:formula}
+The formula \eqref{eq:chi-tan} is Newtonian, has a single charge, and takes the kinetic
+energy and the impact parameter at infinity. On this board $c$ is finite, a second charge
+is present, and the alpha is launched a finite distance away. Section~\ref{sec:circle}
+measures each of those three: relativity moves the one-centre scattering angle by
+$\val{chiRelGap}^\circ$, the second charge moves the turn inside the circle by
+$\val{turnGap}^\circ$, and reading $T$ and $b$ at the launch instead of at infinity moves
+the unsteered angle by $\val{chiReadGap}^\circ$ (§\ref{sec:unsteered}). The arrival
+compared with the game is the integral of \eqref{eq:motion}, which assumes none of this.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The scattering angle of one charge}\label{sec:formula}
+
+In the Newtonian limit $c \to \infty$, Level~1's orbit equation
+\xeqref{first_bend}{eq:orbit} becomes Binet's equation $u'' + u = -\kappa m/L^2$
+(\Goldstein{§3.5}), with $u = 1/r$. Consider a repulsive charge, $\kappa > 0$, and a
+particle that comes from infinity with kinetic energy $T$ and impact parameter $b > 0$:
+the perpendicular distance from the charge to the incoming asymptote. Then
+$\abs{\vect{p}_\infty} = \sqrt{2mT}$ and $L = \abs{\vect{p}_\infty}\,b$, so
+\begin{equation}\label{eq:alpha}
+  \alpha = \frac{\kappa m}{L^2} = \frac{\kappa}{2Tb^2}.
+\end{equation}
+Put the apsis, the point of closest approach, at $\theta = 0$. The orbit with
+$u'(0) = 0$ is
+\begin{equation}\label{eq:hyperbola}
+  u(\theta) = A\cos\theta - \alpha,
+\end{equation}
+the Newtonian case of \xeqref{first_bend}{eq:general}. It reaches infinity, $u = 0$, at
+$\theta = \pm\theta_\infty$ with $\cos\theta_\infty = \alpha/A$, so the radius sweeps
+$2\theta_\infty$ from one asymptote to the other. The particle's direction changes by the
+supplement of that angle, the scattering angle
+\begin{equation}\label{eq:chi-geom}
+  \chi = \pi - 2\theta_\infty.
+\end{equation}
+
+It remains to find $A$. The Newtonian energy $T = L^2(u'^2 + u^2)/(2m) + \kappa u$ holds
+along the whole orbit. With \eqref{eq:hyperbola}, $u' = -A\sin\theta$ and
+$u'^2 + u^2 = A^2 + \alpha^2 - 2A\alpha\cos\theta$. Also $L^2/(2m) = Tb^2$, and
+\eqref{eq:alpha} gives $\kappa = 2\alpha Tb^2$, so the energy reads
+\[
+  Tb^2\bigl(A^2 + \alpha^2 - 2A\alpha\cos\theta\bigr) + 2\alpha Tb^2\bigl(A\cos\theta - \alpha\bigr) = T.
+\]
+The coefficients of $\cos\theta$ cancel, $-2A\alpha + 2A\alpha = 0$, and what is left is
+$Tb^2(A^2 - \alpha^2) = T$, hence
+\begin{equation}\label{eq:amplitude}
+  A^2 = \alpha^2 + \frac{1}{b^2}.
+\end{equation}
+Then $\sin\theta_\infty = 1/(Ab)$. From \eqref{eq:chi-geom},
+$\chi/2 = \pi/2 - \theta_\infty$, so $\sin(\chi/2) = \cos\theta_\infty = \alpha/A$ and
+$\cos(\chi/2) = \sin\theta_\infty = 1/(Ab)$, and
+\begin{equation}\label{eq:chi-tan}
+  \tan\frac{\chi}{2} = \alpha b = \frac{\kappa}{2Tb}.
+\end{equation}
+This is the formula in the level's text, with $\kappa = qQ$ and with $T$ and $b$ taken at
+infinity. Both expressions, \eqref{eq:chi-geom} and \eqref{eq:chi-tan}, are evaluated in
+§\ref{sec:hand}; they agree to $\val{chiAlg}$.
+
+A larger deflection needs a smaller impact parameter. The detector sits back on the launch
+side and above the launch line, so the alpha has to leave the nucleus going up and to the
+left: a scattering angle well past a right angle, which \eqref{eq:chi-tan} gives only for a
+small $b$.
+
+\subsection{The unsteered alpha}\label{sec:unsteered}
+
+With the nucleus alone the launch velocity is horizontal and the nucleus lies one cell below
+the line $y = 11$, so the perpendicular distance is $b = \val{bLaunch}$. The formula with
+the launch energy $T_0$ then gives $\chi = \val{chiNaive}^\circ$. That number uses $T$ and
+$b$ at the launch, and the launch is not at infinity: $\kappa_\mathrm{N}/r_0 = \val{kN}$
+over $\val{rNZero}$ cells. The energy the one-centre problem carries out to infinity is
+$T_\infty = T_0 + \kappa_\mathrm{N}/r_0 = \val{TbareInf}$, and the impact parameter that
+belongs to it is $b_\infty = \val{bBareInf}$ (the Newtonian angular momentum $L/\gamma$
+divided by $\sqrt{2mT_\infty}$). With those, \eqref{eq:chi-tan} gives
+$\chi = \val{chiBareInf}^\circ$.
+
+Level~1's orbit through the same launch state, extended to both asymptotes by solving
+$u(\theta) = 0$ (\xeqref{first_bend}{eq:general}; the roots by stepping $10^{-3}$ and
+bisecting), sweeps a relativistic scattering angle $\chi = \val{chiBare}^\circ$. The two
+differ by $\val{chiBareGap}^\circ$: on this board relativity barely moves the angle. The
+flight with the nucleus alone is integrated in §\ref{sec:others}. It leaves through the top
+of the world at an angle $\val{bareAng}^\circ$, already close to that asymptote, and it
+never enters the detector. Steering has to cut the impact parameter down.
+
+\subsection{Two charges}\label{sec:two}
+
+The steering charge makes the force non-central, so the angular momentum about the nucleus
+is not constant and \eqref{eq:hyperbola} does not describe the flight. The relativistic
+problem of two fixed centres has no separated solution: the term that prevents it is
+\xeqref{slingshot}{eq:noseparation}. The flight is the initial-value problem
+\eqref{eq:motion}, solved by the method of \xsecref{slingshot}{sec:method}.
+
+The state $y = (x, y, p_x, p_y)$ is advanced by the classical Runge--Kutta method
+\xeqref{foundations}{eq:rk4} with a fixed step $h$. On each step the position is
+interpolated by the cubic Hermite polynomial \xeqref{slingshot}{eq:hermite}, sampled at
+$64$ points. The first sample past an event boundary starts a bisection. Events are taken
+in the board's order: a collision with either charge ($R + a$), then the world's edge, then
+the detector. The state at the event is one more step of the method, of length
+$t_\mathrm{e} - t_n$; the reported position is the interpolant's. The error is of order
+$h^4$, and a run at $h/2$ estimates it as a fifteenth of the difference. The energy
+\begin{equation}\label{eq:energy}
+  W = \gamma mc^2 + \frac{\kappa_\mathrm{N}}{\abs{\vect{x}-\vect{r}_\mathrm{N}}}
+    + \frac{\kappa_\mathrm{S}}{\abs{\vect{x}-\vect{r}_\mathrm{S}}}
+\end{equation}
+is constant, and $\abs{\vect{p}}$ at the entry computed from it is an independent check.
+
+What the energy does say on its own is how close the alpha can come. Split off the
+nucleus,
+\begin{equation}\label{eq:channel}
+  E_\mathrm{N} = T + \frac{\kappa_\mathrm{N}}{r_\mathrm{N}}
+    = \bigl(W - mc^2\bigr) - \frac{\kappa_\mathrm{S}}{r_\mathrm{S}}.
+\end{equation}
+A head-on alpha with energy $E_\mathrm{N}$ stops where $\kappa_\mathrm{N}/r = E_\mathrm{N}$.
+At the launch $E_\mathrm{N} = \val{EnucLaunch}$, above $T_0$ because the steering charge is
+attractive there. The distance $\kappa_\mathrm{N}/T_0 = \val{headOn}$ is only the answer
+for an alpha that stops head-on with nothing but its launch energy.
+
+\subsection{The encounter, read off a circle}\label{sec:circle}
+
+The sharp turn happens near the nucleus, where the steering charge is comparatively far.
+To separate the two, take the circle of radius $R_\mathrm{s} = \val{Rsphere}$ about the
+nucleus (Figure~\ref{fig:board}) and record the state where the integrated flight crosses
+it, inward and outward, with the same interpolant as an event.
+
+From the inward state, continue with the nucleus alone. That is Level~1's orbit
+\xeqref{first_bend}{eq:general} from that state: $u(\theta)$ as written there, with this
+state's $r$, $p_r$ and $L_z$. Three angles come out of it.
+\begin{itemize}
+  \item The change in the direction of $\vect{p}$ between the two crossings of the circle,
+    the turn the nucleus alone produces inside it. The outgoing crossing is the root of
+    $u(\theta) = 1/R_\mathrm{s}$ after closest approach.
+  \item The scattering angle of that same orbit from asymptote to asymptote, the root pair
+    of $u(\theta) = 0$. This is the relativistic $\chi$ of the one-centre problem defined
+    by the inward state.
+  \item The Newtonian $\chi$ of \eqref{eq:chi-tan} with the $T_\infty$ and $b_\infty$ of
+    that problem: $T_\infty = T + \kappa_\mathrm{N}/R_\mathrm{s}$, and $b_\infty$ from
+    $L/\gamma$ and $\sqrt{2mT_\infty}$.
+\end{itemize}
+The two-centre turn is the change in the direction of $\vect{p}$ between the same two
+crossings of the integrated flight. Section~\ref{sec:hand} evaluates all four. The gap
+between the two-centre turn and the one-centre turn is the steering charge's effect during
+the encounter; the gap between the relativistic and the Newtonian scattering angles is
+relativity. On the circle itself $\kappa_\mathrm{N}/R_\mathrm{s} = \val{potIn}$, a fraction
+$\val{potFrac}$ of the local kinetic energy, so $T$ and $b$ read off on the circle are not
+the $T$ and $b$ of \eqref{eq:chi-tan}.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} \xeqref{foundations}{eq:launch}:
+    $\gamma_0 = \val{gammaZero}$ and $\abs{\vect{p}_0} = \val{pZero}$, so
+    $\vect{p}_0 = (\val{pZero}, 0)$.
+  \item\label{st:energy} \emph{The energy} \eqref{eq:energy}: the launch distances are
+    $r_\mathrm{N} = \val{rNZero}$ and $r_\mathrm{S} = \val{rSZero}$, so
+    $V(\vect{x}_0) = \val{VZero}$, $W = \val{W}$ and $W - mc^2 = \val{Wbind}$.
+    By \eqref{eq:channel}, $E_\mathrm{N} = \val{EnucLaunch}$ at the launch.
+  \item\label{st:unsteered} \emph{No steering charge.} With $b = \val{bLaunch}$ and
+    $T = T_0$, \eqref{eq:chi-tan} gives $\chi = \val{chiNaive}^\circ$. With the asymptotic
+    values $T_\infty = \val{TbareInf}$ and $b_\infty = \val{bBareInf}$ it gives
+    $\chi = \val{chiBareInf}^\circ$, and Level~1's orbit gives $\chi = \val{chiBare}^\circ$
+    (§\ref{sec:unsteered}). The alpha is turned upward, not back into the detector.
+  \item\label{st:flight} \emph{The reference flight}: the method of §\ref{sec:two} with
+    $h = \val{H}$. The states every two time units, and the drift of \eqref{eq:energy}:
+    \begin{center}\small\val{states}\end{center}
+    The alpha drifts down as $Q_\mathrm{S}$ pulls on it, then between $t = 12$ and
+    $t = 16$ the nucleus turns it around. The closest approach is $r = \val{rMin}$ at
+    $t = \val{tMin}$, at $(\val{xMin}, \val{yMin})$, where the kinetic energy has fallen to
+    $T = \val{Tmin}$. There $E_\mathrm{N} = \val{EnucMin}$, whose head-on stopping distance
+    is $\val{rStop}$: the pass is close to head-on and still misses, since
+    $\val{rMin} > R$. The steering charge is then $\val{rSteerMin}$ away, and its force is
+    a fraction $\val{forceRatio}$ of the nuclear force. The turn is the nucleus's.
+  \item\label{st:entry} \emph{The entry.} The step from $t_n = \val{tBefore}$ starts at
+    $(\val{xBefore}, \val{yBefore})$, with momentum $(\val{pxBefore}, \val{pyBefore})$.
+    It ends at $(\val{xAfter}, \val{yAfter})$, inside the detector. The interpolant crosses
+    the right face $x = 1$ at the fraction $u = \val{uE}$ of the step, so
+    $t_\mathrm{e} = \val{tE}$ and $y_\mathrm{e} = \val{yE}$, which lies between $18$ and
+    $20$. One step of length $t_\mathrm{e} - t_n$ gives
+    $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$, at $\val{angE}^\circ$ to $+x$ and with
+    kinetic energy $\val{TE}$. The energy gives
+    $\abs{\vect{p}_\mathrm{e}} = \val{pEnergy}$, and the integration matches it to
+    $\val{pDiff}$. The alpha has not met a charge or the world's edge, and
+    $t_\mathrm{e} \ll t_{\max}$, so the outcome is arrival.
+  \item\label{st:error} \emph{The error.} Halving the step moves the entry by
+    $\val{errStep}$, of which the time contributes $\val{errT}$. Both runs stop on the face
+    $x = 1$, so the abscissa does not move. Along the flight the energy stays within
+    $\val{wDev}$ of $W$. The same arrival, coarser:
+    \begin{center}\small\val{convergence}\end{center}
+    At $h = 0.04$, $\val{roughSteps}$ steps, the entry is still right to $\val{roughErr}$,
+    far inside the cell the detector occupies.
+  \item\label{st:circle} \emph{The circle} $R_\mathrm{s} = \val{Rsphere}$. The flight
+    crosses inward at $t = \val{tIn}$, at $(\val{xIn}, \val{yIn})$, with momentum
+    $(\val{pxIn}, \val{pyIn})$: direction $\val{angIn}^\circ$, kinetic energy
+    $T = \val{Tin}$, angular momentum $L = \val{Lin}$ and perpendicular distance
+    $b = \val{bIn}$. It crosses outward at $t = \val{tOut}$, at
+    $(\val{xOut}, \val{yOut})$, in the direction $\val{angOut}^\circ$. The direction has
+    changed by $\val{turnTwo}^\circ$.
+  \item\label{st:orbit} \emph{The nucleus alone, from that state.} Level~1's orbit leaves
+    the circle after sweeping $\theta = \val{thetaExit}$, in the direction
+    $\val{angOne}^\circ$: a turn of $\val{turnOne}^\circ$, which is $\val{turnGap}^\circ$
+    less than the two-centre turn. Extended to its asymptotes the same orbit scatters by
+    $\chi = \val{chiRel}^\circ$. For it, $\Gamma^2 = \val{gammaTwo}$
+    (\xeqref{first_bend}{eq:orbit}, with $\kappa_\mathrm{N}/(cL) = \val{eta}$). Its
+    asymptotic energy and impact parameter are $T_\infty = \val{Tinf}$ and
+    $b_\infty = \val{bInf}$, and \eqref{eq:chi-tan} with those gives
+    $\chi = \val{chiInf}^\circ$, within $\val{chiRelGap}^\circ$ of the relativistic orbit.
+    The same formula with the local $T$ and $b$ instead gives $\chi = \val{chiTan}^\circ$
+    (\eqref{eq:chi-geom} gives $\val{chiGeom}^\circ$; the two differ by $\val{chiAlg}$).
+    That is \ref{as:formula}: the formula, fed with the values it asks for, agrees with
+    the one-centre orbit; the second charge, not relativity, is what moves the turn.
+  \item\label{st:radiation} \emph{The radiation.} The power
+    \xeqref{foundations}{eq:larmor} with the acceleration
+    \xeqref{first_bend}{eq:acceleration}, summed over the steps by Simpson's rule
+    \xeqref{foundations}{eq:simpson}: $E_\mathrm{rad} = \val{Erad}$. Halving the step
+    changes it by the relative amount $\val{radErr}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The alpha enters the detector through its right face at $(1, \val{yE})$ at
+$t_\mathrm{e} = \val{tE}$, with momentum $(\val{pxE}, \val{pyE})$. The level is solved.
+The nucleus did the turning: inside the circle of radius $\val{Rsphere}$ the direction
+changes by $\val{turnTwo}^\circ$, of which the nucleus alone accounts for
+$\val{turnOne}^\circ$, against $\val{chiInf}^\circ$ from \eqref{eq:chi-tan}.
+\end{result}
+
+By hand, Step~\ref{st:flight} is $\val{steps}$ steps of four evaluations of
+\eqref{eq:motion}. The convergence table is the shorter route: $\val{roughSteps}$ steps
+already place the entry to $\val{roughErr}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The step-halving error of the reference entry is $\val{errStep}$, and of the two other
+flights $\val{weakErr}$ and $\val{bareErr}$, all far below $10^{-10}$. The differences in
+the table are therefore the game's. The largest is $\val{cmpWeakXDiff}$, on the abscissa
+where the weaker charge leaves the world; it sits at the accuracy the verified integration
+has (\xsecref{foundations}{sec:verification}). The tolerance $10^{-9}$ was set from that
+accuracy, and from this method's own error, before the comparison. The radiated energy
+agrees to the relative difference $\val{cmpRadDiff}$, against a quadrature uncertainty of
+$\val{radErr}$.
+
+\section{Other solutions}\label{sec:others}
+
+Two placements besides the reference, each integrated by the same method and compared above.
+
+\begin{enumerate}
+  \item The nucleus alone. The alpha leaves through the top of the world,
+    $y = 21$, at $(\val{bareX}, \val{bareY})$ at $t = \val{bareT}$, travelling at
+    $\val{bareAng}^\circ$. The closest approach is $\val{bareRmin}$. This is the
+    backscatter of §\ref{sec:unsteered}: real, and aimed at the ceiling rather than at the
+    detector. A single impact parameter of one cell is not small enough.
+  \item $Q = \val{detOneQ}$ at $\val{detOneNode}$, so $\kappa = \val{detOneK}$ instead of
+    $\kappa_\mathrm{S} = \val{kS}$. The alpha still reaches $r = \val{weakRmin}$ and still
+    comes back, leaving at $\val{weakAng}^\circ$ through the same edge, at
+    $(\val{weakX}, \val{weakY})$ at $t = \val{weakT}$. That ray crosses $y = 21$ while
+    $x = \val{weakX}$ is still to the right of the detector. The reference charge pulls
+    the alpha lower before the encounter, and the outgoing ray passes through the cell
+    $18 \le y \le 20$ at $x = 1$.
+\end{enumerate}
+
+The reference works because $\kappa_\mathrm{S}$ is attractive and placed below the launch:
+it reduces the impact parameter from $\val{bLaunch}$ to the $b_\infty = \val{bInf}$ of the
+encounter, and \eqref{eq:chi-tan} then gives $\chi = \val{chiInf}^\circ$. During
+the encounter itself the steering force is the small fraction $\val{forceRatio}$ of the
+nuclear force, and the turn moves by $\val{turnGap}^\circ$. Any charge that arranges a
+pass of about this $b$ and this energy will do the same; the two failures above are passes
+that come back too high.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \eqref{eq:motion} with its eighth-order Runge--Kutta method and
+step-size control at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). The verified
+run of the reference takes $\val{gameSteps}$ steps, where this document takes
+$\val{steps}$ steps of a fourth-order method at fixed $h$. It finds each crossing on its
+interpolant (\physref{6}) and verifies the outcome by comparing its two runs (\physref{7}).
+The model is this document's, including \ref{as:radiation} (\physref{8}). The scattering
+formula is not part of what the game computes: the agreement in §\ref{sec:comparison} is
+between two integrations of \eqref{eq:motion}.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{first_bend}: the orbit about one charge, of which \eqref{eq:hyperbola}
+    is the Newtonian limit and which §\ref{sec:circle} continues through the encounter.
+  \item \levelref{slingshot}: two charges, the absence of a separated solution, and the
+    numerical method used here.
+  \item \Goldstein{§3.5}: Binet's equation. The scattering angle \eqref{eq:chi-tan} is
+    derived from it in §\ref{sec:formula}.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
