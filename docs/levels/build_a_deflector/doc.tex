@@ -1,0 +1,279 @@
+\documentclass{leveldoc}
+\DocUses{foundations,deflection_plates}
+\DocFingerprint{9647748f8bfc4567}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+\leveldescription
+
+One positive ion is launched along $+x$ from the left edge. The board starts
+with no metal. The player places up to three plates, each at a potential from
+the slider, inside the marked region. A positive plate pushes a positive ion
+away. There are no charges and no magnets.
+
+The ion must enter the detector. The shot has no acceptance window, no kinetic
+window and no gate. A flight ends when the ion touches a plate, leaves the
+world, or enters the detector (\xsecref{foundations}{sec:board}). A plate's
+obstacle is its box plus a contact shell of thickness $\val{contact}$. The
+ion's radius is $0$.
+
+The reference places one positive plate above the launch line. The ion is
+pushed downward and meets the detector's left side. With no plate the ion
+flies straight, and the launch line passes above the detector. This document
+uses the deflection plates' rectangle collocation. There is no second plate,
+so there is no uniform gap: the check on the plate is its net charge seen from
+the launch, and the empty board is an exact zero field. The flight is
+integrated by the classical Runge--Kutta method.
+
+\section{Setup}\label{sec:setup}
+
+\setuptable
+
+The speed of light is $c = \val{cLight}$. The ion has charge $q = \val{qPart}$,
+mass $m = \val{mPart}$ and radius $0$, and it is launched with kinetic energy
+$T_0 = \val{T0}$. The launch is at $(\val{xLaunch}, \val{yLaunch})$, straight
+along $+x$. Then $\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$ and
+$v_0 = \val{v0} = \val{vOverC}\,c$ (\xeqref{foundations}{eq:launch}).
+
+The level file does not list a plate size, so the plate is the engine's
+default: length $\val{plateL}$ along $x$, thickness $\val{plateT}$ and height
+$\val{plateH}$. The reference plate is centred at
+$(\val{xPlateC}, \val{yPlateC})$, at potential $V = \val{vPlate}$, and it
+occupies $\val{xPlate0} \le x \le \val{xPlate1}$,
+$\val{yPlate0} \le y \le \val{yPlate1}$. The slider runs from $-\val{vSlider}$
+to $\val{vSlider}$.
+
+The detector is $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$. The reported time step is $h = \val{H}$. The mesh
+uses rectangles of edge $\val{panelFine}$, $\val{nPanels}$ of them on the
+upper half of the one plate.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth,
+  xmin=-1.5, xmax=32.5, ymin=-2, ymax=22.5,
+  xlabel={$x$}, ylabel={$y$}, tick label style={font=\small}]
+  \draw[black!40, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!25] (0,0) rectangle (30,20);
+  \fill[green!50!black, fill opacity=0.18]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \fill[black!20]
+    (\rawval{xPlate0},\rawval{yPlate0}) rectangle (\rawval{xPlate1},\rawval{yPlate1});
+  \draw[black!70]
+    (\rawval{xPlate0},\rawval{yPlate0}) rectangle (\rawval{xPlate1},\rawval{yPlate1});
+  \addplot[orange!80!black] table {pathbare.dat};
+  \addplot[very thick, blue!60!black] table {pathref.dat};
+  \draw[-{Stealth[length=5pt]}, thick] (\rawval{xLaunch},\rawval{yLaunch}) -- (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.08];
+\end{axis}
+\end{tikzpicture}
+\caption{The plate and the two flights. The gray rectangle is the reference
+plate, above the launch line; the green box is the detector. Blue is the
+reference flight: the positive plate pushes the ion down, and the ion meets
+the left side of the detector. Orange is the same launch with no plate: the
+ion stays on the launch line and leaves through the right edge of the world,
+above the detector. The blue path stays outside the plate.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the
+    launch \xeqref{foundations}{eq:launch}, and energy in a static field
+    \xeqref{foundations}{eq:energy}. There is no magnetic field.
+  \item A player plate is a metal box at the potential the player sets
+    (\physref{2.7}). Its surface charge is the deflection plates' collocation
+    \xeqref{deflection_plates}{eq:collocation}, with the rectangle integral
+    \xeqref{deflection_plates}{eq:rectangle}.
+  \item With no metal and no charges the field is zero, so the motion is
+    uniform. That flight is exact.
+  \item The board's rules (\xsecref{foundations}{sec:board}) and the classical
+    Runge--Kutta method (\xsecref{foundations}{sec:numerics}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, summed by Simpson's
+    rule \xeqref{foundations}{eq:simpson}. It is not put back into the force.
+\end{principles}
+
+The reference has one plate at $V = \val{vPlate}$ and no other charge. The
+state obeys \xeqref{foundations}{eq:eom} with $\vect{B} = \vect{0}$ until the
+first ending event.
+
+\begin{assumption}{A static plate}\label{as:static}
+The potential equals the slider value at once. The launch speed is
+$\val{vOverC}\,c$. The game uses the same static plate (\physref{2.7}).
+\end{assumption}
+
+\begin{assumption}{No radiation reaction}\label{as:radiation}
+The radiated energy is not taken from the flight. On the reference flight it
+is a fraction $\val{RefRadFrac}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{No image of the ion}\label{as:image}
+The ion's own surface charge is left out, as on the deflection plates and as
+in the game (\physref{2.7}). The bound $q^2/d^2$, with $d$ floored at
+$10^{-3}$ and taken relative to $\max(\abs{q\vect{E}}, T_0)$, reaches
+$\val{RefImage}$ on the reference samples. The empty board has no metal. The
+engine asks for the ratio to stay below $10^{-10}$.
+\end{assumption}
+
+\begin{assumption}{Equal rectangles}\label{as:panels}
+The mesh is equal rectangles of edge $\val{panelFine}$. Replacing the edge by
+$\val{panelCoarse}$ moves an end state by $\val{errMesh}$. The empty board has
+no panels, so that flight does not depend on the mesh.
+\end{assumption}
+
+\begin{assumption}{The fixed step}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates an end state by
+$\val{errStep}$. Ten times the panel-size estimate $\val{errMesh}$ lies above
+$10^{-9}$, and it is larger than the step-halving estimate $\val{errStep}$, so
+the tolerance on a state is that product, $\val{tolFlight}$. Between samples
+the ion moves at most $\val{stepReach}$. The sampled clearance of the plate is
+$\val{RefDmin}$.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{One plate}\label{sec:plate}
+
+A player plate is an electrode. The rectangles, the mirror and the collocation
+are \xeqref{deflection_plates}{eq:rectangle} and
+\xeqref{deflection_plates}{eq:collocation}, with the plate potential on the
+right-hand side and with no external charge. The reported mesh has
+$\val{nPanels}$ upper rectangles. The residual at the centroids is
+$\val{solveRes}$. On the face toward the beam, off the centroids, the
+potential differs from $V$ by at most $\val{surfRes}$.
+
+There is no second plate, so the uniform-gap field does not apply. Two checks
+replace it. On the launch line under the plate's centre the panel field is
+$\val{eUnder}$, downward, and the potential is $\val{phiUnder}$. The net charge
+of the plate and its mirror is $\val{qNet}$. At the launch, a distance
+$\val{rLaunch}$ from the plate's centre, that charge would produce the Coulomb
+potential $\val{phiMono}$. The panel potential there is $\val{phiLaunch}$, and
+the relative difference is $\val{monoRel}$. That is the size of treating the
+plate as a point at the launch. The march uses the panels, because the ion
+passes $\val{RefDmin}$ from the metal, where the point charge is not the field.
+
+With the plate omitted there is no charge and no metal, so $\vect{E} = \vect{0}$.
+The field sampled on the launch line is $\val{eBare}$.
+
+\subsection{The flight}\label{sec:flight}
+
+The diagnostic is \xeqref{deflection_plates}{eq:flight-energy}. The state is
+advanced by \xeqref{foundations}{eq:rk4} with step $h = \val{H}$. Events are
+located as on the deflection plates: thirty-two Hermite samples, then sixty
+bisections, obstacles before the world, and the world before the detector. The
+step-halving estimate divides the change by $15$; the panel-size estimate is
+the change itself when the edge doubles.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} \xeqref{foundations}{eq:launch}.
+    $\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$, so
+    $\vect{p}_0 = (\val{p0}, 0)$ and $v_0 = \val{v0}$.
+  \item\label{st:plate} \emph{The plate.} Centre
+    $(\val{xPlateC}, \val{yPlateC})$, potential $\val{vPlate}$, size
+    $\val{plateL}$ by $\val{plateT}$ by $\val{plateH}$. Solve
+    \xeqref{deflection_plates}{eq:collocation}. The centroid residual is
+    $\val{solveRes}$ and the off-centroid discrepancy is $\val{surfRes}$. The
+    net charge is $\val{qNet}$. At the launch the panel potential and the
+    point-charge potential differ by the relative amount $\val{monoRel}$.
+  \item\label{st:march} \emph{The march.} Advance
+    \xeqref{deflection_plates}{eq:flight-energy} and
+    \xeqref{foundations}{eq:eom} by \xeqref{foundations}{eq:rk4} with step
+    $\val{H}$. The state every five time units:
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:end} \emph{The arrival.} The ion meets the \val{RefFace} face
+    of the detector at $(\val{RefX}, \val{RefY})$, at $t = \val{RefT}$, with
+    momentum $(\val{RefPx}, \val{RefPy})$, at an angle $\val{RefAng}$ degrees
+    from $+x$. The abscissa is the detector's left edge, and the ordinate lies
+    between $\val{yDetLo}$ and $\val{yDetHi}$. The run takes $\val{RefSteps}$
+    steps. The path only falls: its highest point is the launch, and its
+    lowest is $\val{RefYmin}$.
+  \item\label{st:check} \emph{The checks.} $W$ drifts by at most
+    $\val{RefWdev}$. The step-halving estimate is $\val{RefErr}$, and the
+    larger of the two flights is $\val{errStep}$. The panel-size estimate is
+    $\val{errMesh}$. The sampled clearance is $\val{RefDmin}$, outside the
+    shell $\val{contact}$. The image-force ratio reaches $\val{RefImage}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on steps of $h/2$
+    gives $\val{RefRad}$, a fraction $\val{RefRadFrac}$ of $T_0$. Halving that
+    step again changes the integral by the relative amount $\val{RefRadErr}$.
+    This integral is not a row of the comparison.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The ion enters the detector through its left side at
+$(\val{RefX}, \val{RefY})$ at $t = \val{RefT}$, with momentum
+$(\val{RefPx}, \val{RefPy})$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+Eight comparisons are in the table: the reference outcome, time and end
+position, and the outcome, time and end position with no plate. The tolerance
+on a state is $\val{tolFlight}$. Ten times the panel-size estimate
+$\val{errMesh}$ lies above $10^{-9}$, and it is larger than the step-halving
+estimate $\val{errStep}$, so the tolerance is that product. The tolerance on a
+state was fixed from these estimates before the comparison.
+
+The largest absolute difference is the reference ordinate,
+$\val{cmpRefYDiff}$. It lies above the panel-size estimate $\val{errMesh}$ and
+under the tolerance. The reference time differs by $\val{cmpRefTDiff}$, and
+the bare time by $\val{cmpBareTDiff}$. The outcomes agree.
+
+The reference abscissa, the bare abscissa and the bare ordinate agree exactly.
+The reference abscissa is the detector's left edge, the bare abscissa is the
+world's right edge, and the bare ordinate is the launch line.
+
+\section{Other solutions}\label{sec:others}
+
+No plate, which is the empty placement in \code{placements.json}, does not
+solve the level. The field is zero, and the ion stays on the launch line. It
+leaves through the \val{BareFace} edge of the world at
+$(\val{BareX}, \val{BareY})$, at $t = \val{BareT}$, with momentum
+$(\val{BarePx}, \val{BarePy})$. The ordinate $\val{BareY}$ is above the
+detector, which ends at $\val{yDetHi}$. The energy drifts by $\val{BareWdev}$,
+and the run takes $\val{BareSteps}$ steps.
+
+The reference works because the plate is positive and sits above the launch, so
+the ion is pushed down from $\val{yLaunch}$ to $\val{RefY}$, inside the
+detector. The slider's half-range is $\val{vSlider}$. This document integrates
+the reference plate and the empty board, not the other slider values and not
+a second or third plate.
+
+\section{What the game computes}\label{sec:engine}
+
+A player plate is the same boundary-element electrode as a level plate, with
+the default size when the level file omits it (\physref{2.7}). This document
+collocates \xeqref{deflection_plates}{eq:collocation} on equal rectangles.
+The end states move by $\val{errMesh}$ when that edge doubles, and the
+reference ordinate in \S\ref{sec:comparison} lies above that estimate and under
+ten times it. The empty board is exact on both sides: there is nothing to
+mesh.
+
+The ion's image force is omitted on both sides. The bound sampled on the
+reference flight reaches $\val{RefImage}$, under the engine's limit
+$10^{-10}$. The flight in the engine is the adaptive method of \physref{5} and
+\physref{6}, verified as in \physref{7}. Our step estimate is $\val{errStep}$.
+Radiation is integrated and not applied to the momentum
+(\xsecref{foundations}{sec:radiation}, \physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+The rectangle integral and the collocation are derived for the deflection
+plates (\xeqref{deflection_plates}{eq:rectangle},
+\xeqref{deflection_plates}{eq:collocation}). The motion and the Runge--Kutta
+step are in the Foundations (\xsecref{foundations}{sec:numerics}). The
+engine's player plates are \physref{2.7}.
+
+\levelfileappendix
+
+\end{document}

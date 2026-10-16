@@ -1,0 +1,121 @@
+{
+ "level_file": "levels/20_build_a_deflector.json",
+ "level_sha256": "9647748f8bfc4567",
+ "golden_hash": "2430d7d201ce30b3",
+ "recorded": "2026-10-16",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        1.0063432745446015,
+        -0.08787560514077075,
+        0.0
+       ],
+       "t": 27.71625493068023,
+       "x": [
+        27.0,
+        8.516282321669468,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.8617552771947885e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 5.356123518716922e-18,
+      "steps": 30
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.0063458129737457,
+        -0.08792762517527183,
+        0.0
+       ],
+       "t": 27.71654293416663,
+       "x": [
+        27.0,
+        8.515400848481857,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 4.86166662483356e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 5.359058491705076e-18,
+      "steps": 47
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "plate",
+     "node": [
+      10,
+      12,
+      0
+     ],
+     "value": 75000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 31.46307595443989,
+       "x": [
+        31.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 5
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 31.463075954439894,
+       "x": [
+        31.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 7
+     }
+    }
+   ],
+   "placement": []
+  }
+ ]
+}
