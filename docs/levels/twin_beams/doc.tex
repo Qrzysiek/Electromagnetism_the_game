@@ -1,0 +1,364 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,geiger_marsden}
+\DocFingerprint{b9ed631a76c036fc}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Two particles, each with $q = \val{q}$, $m = \val{m}$ and kinetic energy $T_0 = \val{Tzero}$,
+leave the nodes $(0, 13)$ and $(0, 7)$ along $+x$. Each has its own detector, and neither
+detector sets a condition on direction or on energy: the first entry solves that shot. The
+upper detector is the rectangle $27 \le x \le 30$, $15 \le y \le 19$; the lower one is
+$27 \le x \le 30$, $1 \le y \le 5$. The player places up to three charges, of either sign
+and of the magnitudes in the level file, on any node of the grid. There are no fixed
+elements. A flight ends when the particle touches a charge, leaves the world or runs out of
+time (\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$. The level is solved when
+both shots arrive.
+
+The reference solution is a single charge $Q = \val{Q}$ at $\val{rC}$. It is repulsive, and
+it sits between the two rays, four cells below the upper launch and two cells above the
+lower one. It pushes the rays apart. The upper particle, on the wider offset, turns upward
+into the high detector; the lower particle, on the narrower offset, turns downward more
+sharply into the low detector. Each flight is the orbit about one charge, the closed form
+of \levelref{first_bend}, evaluated at the detector's left face. The time is Simpson's rule
+on that orbit.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, each particle has radius $a = 0$, and the charge has radius
+$R = \val{R}$. The coupling of the reference charge is $\kappa = qQ = \val{kappa}$. Both
+launches have
+\[
+  \gamma_0 = 1 + \frac{T_0}{mc^2} = \val{gammaZero}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T_0^2}{c^2} + 2mT_0} = \val{pZero},
+\]
+and the direction in the file is $(1, 0)$. The world is $-1 \le x \le 31$, $-1 \le y \le 21$.
+The two launches and the two detectors are mirror images through the line $y = 10$
+(§\ref{sec:mirror}). The reference charge is one cell below that line.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \draw[black!35, dashed] (0,10) -- (30,10);
+  \fill[green!50!black, fill opacity=0.22] (27,15) rectangle (30,19);
+  \fill[green!50!black, fill opacity=0.22] (27,1) rectangle (30,5);
+  \draw[green!40!black] (27,15) rectangle (30,19);
+  \draw[green!40!black] (27,1) rectangle (30,5);
+  \addplot[very thick, blue!70!black] table {pathup.dat};
+  \addplot[very thick, orange!80!black] table {pathdown.dat};
+  \fill[red!70!black] (24,9) circle[radius=0.28];
+  \node[font=\small, red!60!black, anchor=south] at (24,9.35) {$Q$};
+  \draw[-{Stealth[length=6pt]}, thick] (0,13) -- (2.1,13);
+  \draw[-{Stealth[length=6pt]}, thick] (0,7) -- (2.1,7);
+  \fill (0,13) circle[radius=0.12];
+  \fill (0,7) circle[radius=0.12];
+  \node[font=\small, anchor=south west] at (2.2,13.05) {upper};
+  \node[font=\small, anchor=north west] at (2.2,6.9) {lower};
+  \node[font=\small, green!30!black, anchor=west] at (27.15,17) {upper};
+  \node[font=\small, green!30!black, anchor=west] at (27.15,3) {lower};
+\end{axis}
+\end{tikzpicture}
+\caption{The reference flights. The upper particle (blue) and the lower particle (orange)
+each enter its detector through the face $x = 27$. The dashed horizontal line is the mirror
+$y = 10$ of §\ref{sec:mirror}; the charge sits one cell below it.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch}, the energy \xeqref{foundations}{eq:energy} and the
+    angular momentum \xeqref{foundations}{eq:angmom}. With one charge, the orbit
+    \xeqref{first_bend}{eq:general}.
+  \item The board's rules (\xsecref{foundations}{sec:board}): a level with several shots is
+    solved when every shot arrives.
+  \item Newton's method and Simpson's rule (\xsecref{foundations}{sec:numerics}).
+  \item The Newtonian scattering angle of one charge for a particle that comes from
+    infinity, \xeqref{geiger_marsden}{eq:chi-tan}. It estimates the turn; the arrival
+    compared below is the orbit at the face.
+\end{principles}
+
+With one charge at $\vect{r}_\mathrm{c}$ the state of either particle obeys
+\begin{equation}\label{eq:motion}
+  \deriv{\vect{x}}{t} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t} = \kappa\,\frac{\vect{x}-\vect{r}_\mathrm{c}}{\abs{\vect{x}-\vect{r}_\mathrm{c}}^3},
+  \qquad \gamma = \sqrt{1 + \frac{\abs{\vect{p}}^2}{m^2c^2}},
+\end{equation}
+from its own launch, until the first event. The motion stays in the plane
+(\xsecref{foundations}{sec:plane}). The two flights do not interact: each particle flies
+alone.
+
+\begin{assumption}{The charge is held in place}\label{as:fixed}
+The charge does not recoil. That is a rule of the game (\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the particle. Along
+the two reference flights it is $\val{EradUp}$ and $\val{EradDown}$, fractions
+$\val{EradFracUp}$ and $\val{EradFracDown}$ of $T_0$ (§\ref{sec:hand}). The game makes the
+same approximation and reports the same integral (\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize, so \xeqref{foundations}{eq:sphereforce} is
+exact. The closest approaches are $\val{rminUp}$ and $\val{rminDown}$, both far outside
+the sphere of radius $R$.
+\end{assumption}
+
+\begin{assumption}{Where the scattering formula applies}\label{as:formula}
+The formula \xeqref{geiger_marsden}{eq:chi-tan} is Newtonian, has a single charge, and
+takes the kinetic energy and the impact parameter at infinity. Here $c$ is finite and each
+particle is launched a finite distance from the charge. At launch the potential energy is
+the fraction $\val{potUp}$ of $T_0$ on the upper shot and $\val{potDown}$ on the lower,
+while $\Gamma$ falls short of $1$ by $\val{gGapUp}$ and $\val{gGapDown}$. Continued to
+infinity, the relativistic orbit turns by $\val{chiGapUp}^\circ$ and
+$\val{chiGapDown}^\circ$ less than the formula (§\ref{sec:formula}). The comparison uses
+the orbit at the face, which assumes none of this.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The orbit of one shot}\label{sec:orbit}
+
+Take polar coordinates about the charge,
+$\vect{x} - \vect{r}_\mathrm{c} = r(\cos\varphi, \sin\varphi)$, and let $u = 1/r$. Level~1
+derives the orbit. With $\sigma = \operatorname{sign} L_z$, $L = \abs{L_z}$,
+$\theta = \sigma(\varphi - \varphi_0)$ and $u'_0 = -p_{r,0}/L$,
+\begin{equation}\label{eq:orbit}
+  u(\theta) = B + (u_0 - B)\cos\Gamma\theta + \frac{u'_0}{\Gamma}\sin\Gamma\theta,
+\end{equation}
+where $\Gamma^2 = 1 - \kappa^2/(c^2 L^2)$ and $B = -\kappa W/(c^2 L^2 \Gamma^2)$, and $W$ is
+the energy \xeqref{first_bend}{eq:energy}. This is \xeqref{first_bend}{eq:general}.
+Differentiating it gives the slope the face condition needs,
+\begin{equation}\label{eq:uprime}
+  u'(\theta) = -\Gamma(u_0 - B)\sin\Gamma\theta + u'_0\cos\Gamma\theta.
+\end{equation}
+The time and the momentum along the same orbit are \xeqref{first_bend}{eq:dtdth} and
+\xeqref{first_bend}{eq:momentum}.
+
+Both launches point along $+x$, so $L = b\,\abs{\vect{p}_0}$ with
+$b = \abs{y_\mathrm{c} - y_0}$ the vertical offset, and
+$p_{r,0} = \abs{\vect{p}_0}\,(x_0 - x_\mathrm{c})/r_0$. The launch is not an apsis:
+$u'_0 \ne 0$. For the reference charge the upper launch has $b = \val{bUp}$ and
+$L_z < 0$, and the lower launch has $b = \val{bDown}$ and $L_z > 0$. Repulsion pushes the
+upper particle up and the lower particle down.
+
+\subsection{The face}\label{sec:face}
+
+The position on the orbit is
+\begin{equation}\label{eq:position}
+  x(\theta) = x_\mathrm{c} + \frac{\cos\varphi}{u(\theta)}, \qquad
+  y(\theta) = y_\mathrm{c} + \frac{\sin\varphi}{u(\theta)}, \qquad
+  \varphi = \varphi_0 + \sigma\theta.
+\end{equation}
+The detector begins at the face $x = x_D = \val{xFace}$. While $u > 0$,
+\begin{equation}\label{eq:dx}
+  \deriv{x}{\theta} = -\frac{\sigma\sin\varphi}{u} - \frac{\cos\varphi}{u^2}\,u',
+\end{equation}
+and the same differentiation gives $\dd y/\dd\theta$. The crossing of the face is the root
+of
+\begin{equation}\label{eq:face}
+  f(\theta) = x(\theta) - x_D = 0.
+\end{equation}
+
+Which boundary comes first is read off the orbit, not assumed. Walk $\theta$ from $0$ in
+steps of $10^{-3}$, up to $\theta = 3$. On the chord from $\theta_k$ to $\theta_{k+1}$, in
+the board's order (\xsecref{foundations}{sec:board}): if $r(\theta_{k+1}) \le R$, the
+flight collides; if the point at $\theta_{k+1}$ lies outside the world, the flight leaves,
+through the side the chord reaches first; if that point lies inside the detector, the
+flight arrives, through the side the chord reaches first. The side is the one whose value
+the chord attains at the smallest fraction of its length. Both reference shots meet the
+face $x = x_D$ first. The root of \eqref{eq:face} is then polished by Newton's method
+\xeqref{foundations}{eq:newton}, started at the middle of that chord,
+$\theta_k + 5\times 10^{-4}$, with the derivative \eqref{eq:dx}.
+
+The closest approach on the orbit is the unique root of $u' = 0$ \eqref{eq:uprime}. On
+both reference flights that root lies before the face, and $r$ there is more than ten
+times $R$ (§\ref{sec:hand}), so the sphere is never reached.
+
+\subsection{The time and the radiated energy}\label{sec:time}
+
+Level~1 evaluates
+\[
+  t(\theta) = \int_0^\theta \deriv{t}{\theta'}\,\dd\theta', \qquad
+  \deriv{t}{\theta} = \frac{W - \kappa u}{c^2 L u^2},
+\]
+in closed form, because its launch is an apsis and $u = A\cos\Gamma\theta + B$
+(\xeqref{first_bend}{eq:time}, \xeqref{first_bend}{eq:i1}, \xeqref{first_bend}{eq:i2}).
+The same antiderivatives apply here once \eqref{eq:orbit} is written as a phase-shifted
+cosine: $u'_0 \ne 0$ only moves the origin of that cosine. The number compared below is
+Simpson's rule \xeqref{foundations}{eq:simpson} on $\dd t/\dd\theta$, with $\val{nSimp}$
+panels. Halving the panel count estimates the error as $(S_n - S_{2n})/15$.
+
+The radiated energy is the same rule applied to the power. The force is
+$\vect{F} = \kappa(\vect{x} - \vect{r}_\mathrm{c})/r^3$, the acceleration is
+\xeqref{first_bend}{eq:acceleration}, and the power is \xeqref{foundations}{eq:larmor}.
+The integral uses $8000$ panels; the uncertainty is the relative step-doubling error.
+
+\subsection{What the scattering formula estimates}\label{sec:formula}
+
+For a repulsive charge and a particle that comes from infinity with kinetic energy $T$ and
+impact parameter $b$, Level~3 derives
+\begin{equation}\label{eq:chi}
+  \tan\frac{\chi}{2} = \frac{\kappa}{2Tb}
+\end{equation}
+(\xeqref{geiger_marsden}{eq:chi-tan}). Read with $T = T_0$ and with the geometric offset
+$b$, it gives $\val{chiFormUp}^\circ$ for the upper shot and $\val{chiFormDown}^\circ$ for
+the lower. The relativistic orbit, continued until $u$ crosses zero on both sides of the
+launch, turns by $\val{chiRelUp}^\circ$ and $\val{chiRelDown}^\circ$ between its
+asymptotes. \ref{as:formula} records the difference.
+
+The momentum at the face makes an angle $\val{angUp}^\circ$ with the launch direction on
+the upper shot and $\val{angDown}^\circ$ on the lower. Those angles and the
+asymptote-to-asymptote turns differ by $\val{angLeftUp}^\circ$ and $\val{angLeftDown}^\circ$.
+The face lies three cells past the charge, so each orbit is cut off before the outgoing
+asymptote, and each launch sits off the incoming asymptote. The formula explains which ray
+turns more. The arrival is \eqref{eq:position} at the root of \eqref{eq:face}.
+
+\subsection{The mirror}\label{sec:mirror}
+
+The reflection $\mathcal{M}:(x, y) \mapsto (x,\, 20 - y)$ fixes the line $y = 10$ and
+exchanges the two launches, the two detectors and the two edges $y = -1$ and $y = 21$. The
+Coulomb field of a charge on that line has $E_x$ even and $E_y$ odd under $\mathcal{M}$,
+and both launches have $p_y = 0$. The equation \eqref{eq:motion} therefore sends mirror
+initial states to mirror flights: the flight times are equal, the momenta have opposite
+$p_y$, and one particle enters its detector if and only if the other enters the image
+detector. A charge off the line has no such duty. The reference charge is at $y = 9$, and
+the two offsets are $\val{bUp}$ and $\val{bDown}$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch}, the same for both shots
+    (\xeqref{foundations}{eq:launch}): $\gamma_0 = \val{gammaZero}$ and
+    $\abs{\vect{p}_0} = \val{pZero}$.
+  \item\label{st:constants} \emph{The upper orbit} \eqref{eq:orbit}. The offset is
+    $b = \val{bUp}$, so $L = b\,\abs{\vect{p}_0} = \val{LUp}$ and
+    $r_0 = \val{rUp}$. Then $W = \val{WUp}$, $\Gamma = \val{GammaUp}$,
+    $B = \val{BUp}$, $u_0 = \val{uUp}$ and $u'_0 = \val{duUp}$.
+  \item\label{st:scan} \emph{The first event}, by the walk of §\ref{sec:face}. The upper
+    shot meets $x = x_D$ before a collision, a world edge or any other face of its
+    detector. Five points of the orbit, from the same formula:
+    \begin{center}\small\val{samples}\end{center}
+    The root of $u' = 0$ lies at $\theta = \val{thMinUp}$, where $r = \val{rminUp}$.
+    Sampling $r$ at $401$ angles reproduces it to $\val{rminGapUp}$.
+  \item\label{st:newton} \emph{The crossing.} Newton's method on \eqref{eq:face}, with
+    \eqref{eq:dx}, from the middle of the bracketing chord:
+    \begin{center}\small\val{newton}\end{center}
+    After $\val{newtonSteps}$ corrections, $\theta_\mathrm{e} = \val{thetaUp}$.
+  \item\label{st:state} \emph{The state at the face} \eqref{eq:position},
+    \xeqref{first_bend}{eq:momentum}. The ordinate is $y_\mathrm{e} = \val{yUp}$, inside
+    $15 \le y \le 19$, and the momentum is $(\val{pxUp}, \val{pyUp})$, at
+    $\val{angUp}^\circ$ to the launch. The kinetic energy, from
+    \xeqref{foundations}{eq:energy}, is $\val{TUp}$.
+  \item\label{st:time} \emph{The time}, Simpson's rule with $\val{nSimp}$ panels
+    (§\ref{sec:time}): $t_\mathrm{e} = \val{tUp}$, uncertain by $\val{terrUp}$, and far
+    below $t_{\max}$.
+  \item\label{st:lower} \emph{The lower shot}, by the same steps. Its constants and its
+    result:
+    \begin{center}\small\val{orbits}\end{center}
+    The second row is the lower shot. The root is $\theta_\mathrm{e} = \val{thetaDown}$,
+    the ordinate $\val{yDown}$ lies inside $1 \le y \le 5$, the time is
+    $\val{tDown}$ (uncertain by $\val{terrDown}$), and the momentum is
+    $(\val{pxDown}, \val{pyDown})$, at $\val{angDown}^\circ$. The closest approach is
+    $r = \val{rminDown}$ at $\theta = \val{thMinDown}$, reproduced by the same sampling to
+    $\val{rminGapDown}$, and the kinetic energy is $\val{TDown}$.
+  \item\label{st:radiation} \emph{The radiated energy} (§\ref{sec:time}):
+    $\val{EradUp}$ and $\val{EradDown}$, with relative uncertainties $\val{radErrUp}$ and
+    $\val{radErrDown}$.
+\end{procedure}
+
+\begin{result}[The reference flights]
+Both particles enter their detectors through the face $x = \val{xFace}$. The upper
+particle arrives at $t = \val{tUp}$ with ordinate $\val{yUp}$, just inside the edge
+$y = 15$, and momentum $(\val{pxUp}, \val{pyUp})$. The lower particle arrives at
+$t = \val{tDown}$ with ordinate $\val{yDown}$ and momentum $(\val{pxDown}, \val{pyDown})$.
+Both times lie below $t_{\max}$. The level is solved.
+\end{result}
+
+Steps \ref{st:launch}--\ref{st:state} and \ref{st:lower} use arithmetic, $\sin$, $\cos$ and
+$\arctan$, and the short Newton table. The two quadratures are specified in
+§\ref{sec:time}; their errors sit far below $10^{-9}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The orbit is exact, and the quadratures are uncertain by $\val{terrUp}$ and
+$\val{terrDown}$ in the time and by the relative amounts $\val{radErrUp}$ and
+$\val{radErrDown}$ in the radiated energy. The tolerance on a state is $10^{-9}$, ten
+times the accuracy of a verified flight (\xsecref{foundations}{sec:verification}); the
+tolerance on a radiated energy is $10^{-4}$ relative. Both were set from those estimates.
+
+Both reference integrations stop on the face $x = \val{xFace}$, so those abscissae agree
+exactly. The largest absolute difference in the table is $\val{cmpHardUpXDiff}$, the
+abscissa where the stronger charge's flights leave the world (§\ref{sec:others}); the two
+flights share it. On the reference, the largest is $\val{cmpUpYDiff}$, the upper arrival
+ordinate. All of them sit at the game's accuracy, above the quadrature errors. The radiated
+energies agree to the relative differences $\val{cmpUpRadDiff}$ and $\val{cmpDownRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+Two further placements, each flown by the same orbit and compared above. Both charges lie
+on $y = 10$, so §\ref{sec:mirror} applies: equal times, opposite angles, and ordinates that
+sum to $20$.
+
+\begin{enumerate}
+  \item $Q = \val{SymQ}$ at $\val{SymNode}$, so $\kappa = \val{SymK}$, the reference
+    magnitude on the mirror line. Both shots arrive. Each takes $t = \val{SymUpT}$
+    (quadrature $\val{SymUpErr}$). The ordinates are $\val{SymUpY}$ and $\val{SymDownY}$,
+    and the directions are $\pm\val{SymUpAng}^\circ$. The detectors are mirrors, so one
+    arrival forces the other. The reference charge, one cell lower, is the unsymmetric way
+    to do the same job: the narrower offset turns more (\eqref{eq:chi}).
+  \item $Q = \val{HardQ}$ at $\val{HardNode}$, so $\kappa = \val{HardK}$, twice the
+    coupling and two cells closer to the launches. Both shots leave the world, at
+    $t = \val{HardUpT}$, through $y = \val{HardUpY}$ and $y = \val{HardDownY}$, at
+    $x = \val{HardUpX}$ and at $\pm\val{HardUpAng}^\circ$. The face $x = \val{xFace}$ is
+    never reached. The turn has become large enough to hit the ceiling and the floor.
+\end{enumerate}
+
+The reference works because the two offsets differ by two cells. \eqref{eq:chi} then turns
+the lower ray about twice as far as the upper one, and the detectors are placed one above
+the launch line and one below it. A charge on the mirror line also works, with one common
+angle. A stronger charge on that line turns both rays into the edges of the world.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \eqref{eq:motion} for each shot separately, with its eighth-order
+Runge--Kutta method and step-size control at the tolerances $10^{-10}$ and $10^{-12}$
+(\physref{5}). It finds each crossing on its interpolant (\physref{6}) and verifies the
+outcome by comparing its two runs (\physref{7}). The model is this document's, including
+\ref{as:radiation} (\physref{8}). The scattering formula is not part of what the game
+computes. The agreement in §\ref{sec:comparison} is between the orbit
+\eqref{eq:orbit} and that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{first_bend}: the orbit \eqref{eq:orbit}, the time element and the
+    momentum. There the launch is an apsis; here $u'_0 \ne 0$, and the time is the
+    quadrature of §\ref{sec:time}.
+  \item \levelref{geiger_marsden}: the scattering angle \eqref{eq:chi}, and the three ways
+    it misses a flight that does not come from infinity.
+  \item \xsecref{foundations}{sec:board}: several shots form one puzzle, solved only when
+    every shot arrives. This is the first level that asks for that.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
