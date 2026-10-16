@@ -1,0 +1,432 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend}
+\DocFingerprint{7e6dc5c9554c57da}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Three shots leave $(\val{xLaunch}, \val{yLaunch})$ with the same particle
+($q = \val{q}$, $m = \val{m}$) and the same direction, $+x$. The kinetic energies are
+$T = \val{TLow}$, $T = \val{TMid}$ and $T = \val{THigh}$. Each shot has its own
+detector, a rectangle of width $\val{xDhi} - \val{xDlo}$ standing just to the left of
+$x = \val{xC}$: $\val{yDloLow} \le y \le \val{yDhiLow}$ for the lowest energy,
+$\val{yDloMid} \le y \le \val{yDhiMid}$ for the middle one, and
+$\val{yDloHigh} \le y \le \val{yDhiHigh}$ for the highest. An entry counts at every
+direction and every kinetic energy. The higher energy has the lower box. The player
+places at most $\val{maxCharges}$ charges, of either sign, inside the region
+$\val{xRegLo} \le x \le \val{xRegHi}$, $\val{yRegLo} \le y \le \val{yRegHi}$, and no
+magnets. A flight ends when the particle touches a charge, leaves the world, enters
+the detector or runs out of time (\xsecref{foundations}{sec:board});
+$t_{\max} = \val{tmax}$.
+
+The reference solution is one attractive charge, $Q = \val{Q}$ at
+$(\val{xC}, \val{yC})$, directly below the source. The coupling has magnitude
+$\val{kAbs}$. Each energy then meets the right face of its own detector. This
+document follows the three orbits in closed form, and the same charge at the two
+neighbouring magnitudes $\val{kAbsWeak}$ and $\val{kAbsStrong}$.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the particle has radius $a = \val{aRad}$, and the charge
+has radius $R = \val{R}$. The launch radius, from the charge to the source, is
+$r_0 = \val{rZero}$. The direction is perpendicular to that radius. For a kinetic
+energy $T$,
+\[
+  \gamma_0 = 1 + \frac{T}{mc^2}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T^2}{c^2} + 2mT}, \qquad
+  v_0 = \frac{\abs{\vect{p}_0}}{\gamma_0 m}.
+\]
+At $T = \val{TMid}$ this is $\gamma_0 = \val{gammaMid}$,
+$\abs{\vect{p}_0} = \val{pMid}$ and $v_0 = \val{vMid}$. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$. The reference coupling is
+$\kappa = qQ = \val{kappa}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.88\linewidth, xmin=-1.8, xmax=32.4, ymin=-1.8, ymax=21.8,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \draw[black!50] (0,0) rectangle (30,20);
+  \draw[black!40, dashed] (1,3) rectangle (12,16);
+  \fill[green!50!black, fill opacity=0.22] (1,4) rectangle (3,5);
+  \draw[green!40!black] (1,4) rectangle (3,5);
+  \fill[green!50!black, fill opacity=0.22] (1,3) rectangle (3,4);
+  \draw[green!40!black] (1,3) rectangle (3,4);
+  \fill[green!50!black, fill opacity=0.22] (1,1) rectangle (3,2);
+  \draw[green!40!black] (1,1) rectangle (3,2);
+  \fill[red!70!black, fill opacity=0.35] (\rawval{xC},\rawval{yC}) circle[radius=0.3];
+  \draw[red!70!black] (\rawval{xC},\rawval{yC}) circle[radius=0.3];
+  \addplot[very thick, blue!70!black] table {pathlow.dat};
+  \addplot[thick, orange!80!black] table {pathmid.dat};
+  \addplot[thick, purple!70!black] table {pathhigh.dat};
+  \addplot[thin, black!55] table {pathfloor.dat};
+  \addplot[thin, red!60!black] table {pathleft.dat};
+  \draw[-{Stealth[length=6pt]}, thick] (\rawval{xLaunch},\rawval{yLaunch}) --
+    (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.11];
+  \node[font=\scriptsize, red!60!black, anchor=south] at (4,10.45) {$Q$};
+  \node[font=\scriptsize, green!30!black, anchor=east] at (0.85,4.5) {low};
+  \node[font=\scriptsize, green!30!black, anchor=east] at (0.85,3.5) {mid};
+  \node[font=\scriptsize, green!30!black, anchor=east] at (0.85,1.5) {high};
+\end{axis}
+\end{tikzpicture}
+\caption{The reference charge bends three energies into three detectors. Blue is
+$T = \val{TLow}$, orange $T = \val{TMid}$, purple $T = \val{THigh}$. Each enters its
+box through the right face. Grey is the weaker charge on the highest energy: it meets
+the floor. Thin red is the stronger charge on the lowest energy: it meets the left
+edge of the world. The disc has radius $R$. The dashed rectangle is the region in
+which the player may place charges.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch} and the energy \xeqref{foundations}{eq:energy}. The
+    motion stays in the plane (\xsecref{foundations}{sec:plane}).
+  \item The board's rules (\xsecref{foundations}{sec:board}). The first entry into the
+    detector decides. This level adds no direction and no kinetic window.
+  \item One fixed centre separates. The orbit is \xeqref{first_bend}{eq:general}, and
+    the time of an apsidal launch is \xeqref{first_bend}{eq:time}.
+  \item Newton's method \xeqref{foundations}{eq:newton} for the face, and Simpson's
+    rule \xeqref{foundations}{eq:simpson} for the radiated power
+    \xeqref{foundations}{eq:larmor}, with the acceleration
+    \xeqref{first_bend}{eq:acceleration}.
+\end{principles}
+
+The level has no magnets, so $\vect{B} = \vect{0}$. Outside the charge the force is
+the Coulomb force of $\kappa$ placed at $(\val{xC}, \val{yC})$.
+
+\begin{assumption}{The charge is held in place}\label{as:fixed}
+The charge does not recoil. That is a rule of the game
+(\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy is not taken from the particle. Over the nine flights of this
+document the largest fraction of the launch energy is $\val{radFracMax}$
+(§\ref{sec:hand}). The game makes the same approximation and reports the same integral
+(\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize, so \xeqref{foundations}{eq:sphereforce}
+is exact. On the reference orbits the closest approach is $\val{rMinLow}$, on the
+lowest energy, with clearance $\val{clearLow}$ outside the charge. The highest energy
+is closest at the launch, where the clearance is $\val{clearHigh}$. Both are exact
+values of the closed orbit (§\ref{sec:orbit}), far above $R$.
+\end{assumption}
+
+\begin{assumption}{The face root is exact for this comparison}\label{as:step}
+The orbit and the time are closed forms. The face is a root of Newton's method whose
+residual is at most $\val{faceResMid}$ (§\ref{sec:hand}), and the time agrees with an
+independent quadrature to $\val{tQuadDiff}$. The tolerance in §\ref{sec:comparison} is
+$10^{-9}$, ten times the accuracy of a verified flight.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The circular condition}\label{sec:circle}
+
+On a circle the force is perpendicular to the velocity, so
+\xeqref{first_bend}{eq:acceleration} reduces to $\vect{a} = \vect{F}/(\gamma m)$. The
+speed is constant and the path has curvature $1/r$, so $\abs{\vect{a}} = v^2/r$. With
+$\abs{\vect{F}} = \abs{\kappa}/r^2$ this is
+\begin{equation}\label{eq:circle}
+  \abs{\kappa} = \gamma m v^2 r = p\,v\,r,
+\end{equation}
+since $p = \gamma m v$. The level's condition is \eqref{eq:circle} at the launch
+radius $r_0$. It is not the Newtonian $2Tr_0$: that limit replaces $pv$ by $2T$ only
+as $v/c \to 0$.
+
+At the three launch energies, $p_0 v_0 r_0$ equals $\gamma_0 m v_0^2 r_0$: the two
+writings are $\val{circLow}$ and $\val{circAltLow}$, $\val{circMid}$ and
+$\val{circAltMid}$, $\val{circHigh}$ and $\val{circAltHigh}$. The reference magnitude
+is $\val{kAbs}$. The differences $p_0 v_0 r_0 - \abs{\kappa}$ are $\val{circGapLow}$,
+$\val{circGapMid}$ and $\val{circGapHigh}$. The lowest energy and the middle energy
+are more tightly bound than the circle; the highest energy is less tightly bound.
+None of the three is the circle. The middle energy is the nearest: its gap is the
+small negative $\val{circGapMid}$.
+
+\subsection{What the energy allows}
+
+The potential at the launch is $\kappa/r_0 = \val{VZeroMid}$. Then
+$W - mc^2 = T + \kappa/r_0$ is $\val{WbindLow}$, $\val{WbindMid}$ and
+$\val{WbindHigh}$. All three are negative. Far from the charge the potential falls to
+$0$, which lies above $W - mc^2$, so \xeqref{foundations}{eq:energy} does not allow
+the particle to reach infinity. The orbit stays at a finite radius, and the
+integration has to decide which boundary it meets.
+
+\subsection{The orbit}\label{sec:orbit}
+
+The launch radius is vertical and the momentum is horizontal, so
+$p_{r,0} = \val{prZero}$ and $u'_0 = \val{duZero}$. The launch is an apsis. The
+angular momentum is negative, $L_z = -r_0\abs{\vect{p}_0}$, so $\sigma = \val{sigma}$:
+the particle turns clockwise from the top, and $\theta$ is the angle swept from the
+launch. \xeqref{first_bend}{eq:general} at $u'_0 = 0$ is
+\[
+  u(\theta) = B + A\cos\Gamma\theta, \qquad A = u_0 - B,
+\]
+with $B$ and $\Gamma^2$ as in \xeqref{first_bend}{eq:orbit} and
+\xeqref{first_bend}{eq:general}. Here $\Gamma^2 > 0$. The positive root of
+\xeqref{first_bend}{eq:amplitude} equals $\abs{A}$; the sign of $A$ is the sign of
+$u_0 - B$.
+
+$A < 0$ means the launch is the outer apsis: $u$ increases and the orbit falls
+inward. That is the lowest energy, $A = \val{ALow}$, and the middle energy,
+$A = \val{AMid}$. $A > 0$ means the launch is the inner apsis and the orbit swings
+outward. That is the highest energy, $A = \val{AHigh}$. On every flight of this
+document $B > \abs{A}$, so $u$ stays positive and the particle never reaches
+infinity, in agreement with the sign of $W - mc^2$.
+
+$\Gamma$ is less than $1$ by $\val{oneGLow}$, $\val{oneGMid}$ and $\val{oneGHigh}$.
+The relativistic orbit is this apsidal form, not a fixed ellipse: the radial period
+and a full turn differ by that fraction. Over the arc to the detector the whole
+effect is of that size.
+
+The position is the polar angle $\varphi_0 + \sigma\theta$ about
+$(\val{xC}, \val{yC})$, with $\varphi_0 = \val{phiZero}$. Because the charge is
+directly below the source, $\varphi_0$ is a right angle, and
+\[
+  x(\theta) = \val{xC} + \frac{\sin\theta}{u(\theta)}, \qquad
+  y(\theta) = \val{yC} + \frac{\cos\theta}{u(\theta)}.
+\]
+The bottom of the orbit is $\theta = \pi$. The detectors sit at $x = \val{xDhi}$, one
+cell to the left of the charge, so a clockwise particle meets that line only after
+passing the bottom.
+
+\subsection{The time}\label{sec:time}
+
+\xeqref{first_bend}{eq:dtdth} and the change of variable $s = \Gamma\theta$ give
+\xeqref{first_bend}{eq:time},
+\[
+  t(\theta) = \frac{W\,I_2(\Gamma\theta) - \kappa\,I_1(\Gamma\theta)}{c^2 L\,\Gamma},
+  \qquad I_n(s) = \int_0^s \frac{\dd s'}{(A\cos s' + B)^n}.
+\]
+\xeqref{first_bend}{eq:i2} still gives $I_2$ from $I_1$. Its derivation is a
+differentiation and uses $A \ne 0$, which holds here: the smallest $\abs{A}$ is
+$\val{AMid}$, on the energy nearest the circle. \xeqref{first_bend}{eq:i1} does not
+carry over. That antiderivative is an $\operatorname{artanh}$ because $A > \abs{B}$ on
+the repulsive orbit of Level~1. Here $B > \abs{A}$, so the same half-angle
+substitution produces an arctangent. With $\Delta = \sqrt{B^2 - A^2}$ and
+$0 \le s < \pi$,
+\begin{equation}\label{eq:i1attr}
+  I_1(s) = \frac{2}{\Delta}
+  \arctan\!\left(\tan\frac{s}{2}\sqrt{\frac{B - A}{B + A}}\right).
+\end{equation}
+As $s \to \pi$ this tends to $\pi/\Delta$. For $\pi \le s < 2\pi$ the angle
+$s - \pi$ runs through a cosine of the opposite sign, $\cos(s'+\pi) = -\cos s'$, and
+\[
+  I_1(s) = \frac{\pi}{\Delta} + \frac{2}{\Delta}
+  \arctan\!\left(\tan\frac{s - \pi}{2}\sqrt{\frac{B + A}{B - A}}\right).
+\]
+Every flight of this document has $s < 2\pi$, which is checked. The three reference
+values $\val{sLow}$, $\val{sMid}$ and $\val{sHigh}$ all exceed $\pi$, so those times
+use the split.
+
+\subsection{Which face, and where}\label{sec:event}
+
+The first event is read from chords of angle $\val{dth}$. On these nine flights the
+greatest distance from a chord to the orbit at the chord's midpoint is
+$\val{sagMax}$, far below the one-cell height of a detector, so a chord cannot skip a
+face or reorder two events. A tie would keep the board's order
+(\xsecref{foundations}{sec:board}): the charge, then the world, then the detector.
+The winning face is then solved by Newton's method \xeqref{foundations}{eq:newton} on
+$f(\theta) = x(\theta) - x_\mathrm{f}$ or $f(\theta) = y(\theta) - y_\mathrm{f}$, with
+the derivative of §\ref{sec:orbit}. The reported face coordinate is the face value.
+The residual of $f$, before that assignment, is the check that the root lies on the
+face. The momentum is \xeqref{first_bend}{eq:momentum} at the same $\theta$, and the
+time is §\ref{sec:time}.
+
+The radiated energy is $\int P\,(\dd t/\dd\theta)\,\dd\theta$ from the launch to that
+root. The integrand is evaluated in binary64 and summed by Simpson's rule with
+$\val{nSimp}$ panels. Halving the panel count estimates the relative error as
+$(S_n - S_{n/2})/15$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launches} (\xeqref{foundations}{eq:launch}).
+    The lowest energy has $\gamma_0 = \val{gammaLow}$ and
+    $\abs{\vect{p}_0} = \val{pLow}$. The middle energy has
+    $\gamma_0 = \val{gammaMid}$ and $\abs{\vect{p}_0} = \val{pMid}$. The highest has
+    $\gamma_0 = \val{gammaHigh}$ and $\abs{\vect{p}_0} = \val{pHigh}$. All three are
+    aimed along $+x$, and each is an apsis.
+  \item\label{st:circle} \emph{The circle} \eqref{eq:circle}. Against
+    $\abs{\kappa} = \val{kAbs}$ the three values of $p_0 v_0 r_0$ leave the gaps
+    $\val{circGapLow}$, $\val{circGapMid}$ and $\val{circGapHigh}$.
+  \item\label{st:orbit} \emph{The constants.} $W - mc^2$ is $\val{WbindLow}$,
+    $\val{WbindMid}$ and $\val{WbindHigh}$, all negative. The orbit constants are
+    $L = \val{LLow}$, $\Gamma = \val{GLow}$, $A = \val{ALow}$, $B = \val{BLow}$ for
+    the lowest energy; $L = \val{LMid}$, $\Gamma = \val{GMid}$, $A = \val{AMid}$,
+    $B = \val{BMid}$ for the middle; and $L = \val{LHigh}$, $\Gamma = \val{GHigh}$,
+    $A = \val{AHigh}$, $B = \val{BHigh}$ for the highest. The amplitude check differs
+    from $\abs{A}$ by $\val{AdiffLow}$, $\val{AdiffMid}$ and $\val{AdiffHigh}$.
+  \item\label{st:newton} \emph{The middle energy, on $x = \val{xDhi}$.} Newton's
+    method from the chord that first meets the face:
+    \begin{center}\small\val{newton}\end{center}
+    Four iterations leave the residual $\val{faceResMid}$. The root is
+    $\theta_\mathrm{e} = \val{thMid}$, which is $\val{pastMid}^\circ$ past the bottom,
+    and $s_\mathrm{e} = \val{sMid}$. Then $I_1 = \val{IOne}$, $I_2 = \val{ITwo}$ and
+    $t_\mathrm{e} = \val{RefMidT}$. The same integral by quadrature differs by
+    $\val{tQuadDiff}$. The entry is $(\val{RefMidX}, \val{RefMidY})$, so
+    $y_\mathrm{e}$ lies between $\val{yDloMid}$ and $\val{yDhiMid}$. The momentum is
+    $(\val{RefMidPx}, \val{RefMidPy})$, at $\val{angMid}^\circ$ to $+x$. Its radial
+    and angular parts are $\val{prE}$ and $\val{pphiE}$.
+  \item\label{st:entries} \emph{The other two energies.} The lowest meets the same
+    face at $\theta = \val{thLow}$, $\val{pastLow}^\circ$ past the bottom, at
+    $(\val{RefLowX}, \val{RefLowY})$ and $t = \val{RefLowT}$, with momentum
+    $(\val{RefLowPx}, \val{RefLowPy})$, at $\val{angLow}^\circ$. The ordinate lies
+    between $\val{yDloLow}$ and $\val{yDhiLow}$.
+
+    The highest meets it at $\theta = \val{thHigh}$, $\val{pastHigh}^\circ$ past the
+    bottom, at $(\val{RefHighX}, \val{RefHighY})$ and $t = \val{RefHighT}$, with
+    momentum $(\val{RefHighPx}, \val{RefHighPy})$, at $\val{angHigh}^\circ$. The
+    ordinate lies between $\val{yDloHigh}$ and $\val{yDhiHigh}$.
+
+    The three residuals are $\val{faceResLow}$, $\val{faceResMid}$ and
+    $\val{faceResHigh}$. The low-energy residual is zero.
+  \item\label{st:check} \emph{The checks.} The arrival kinetic energies are
+    $\val{TarrLow}$, $\val{TarrMid}$ and $\val{TarrHigh}$. The two that fall inward
+    arrive above their launch energy; the one that swings outward arrives below it.
+    The closest approaches are $\val{rMinLow}$, $\val{rMinMid}$ and $\val{rMinHigh}$,
+    each well above $R$. Every reference time matches its quadrature to the tolerance
+    of Step~\ref{st:newton}.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule as in §\ref{sec:event}
+    gives $\val{RefLowRad}$, $\val{RefMidRad}$ and $\val{RefHighRad}$. The relative
+    step-halving uncertainties are $\val{RefLowRadErr}$, $\val{RefMidRadErr}$ and
+    $\val{RefHighRadErr}$.
+\end{procedure}
+
+\begin{result}[Three energies, three boxes]
+The lowest energy enters its detector at $(\val{RefLowX}, \val{RefLowY})$ at
+$t = \val{RefLowT}$. The middle energy enters at $(\val{RefMidX}, \val{RefMidY})$ at
+$t = \val{RefMidT}$. The highest energy enters at $(\val{RefHighX}, \val{RefHighY})$
+at $t = \val{RefHighT}$. Each ordinate lies in its own box, and each arrival is past
+the bottom of the orbit. The level is solved.
+\end{result}
+
+The arithmetic is the closed form of §\ref{sec:orbit} and §\ref{sec:time}. The only
+iteration is Step~\ref{st:newton}, and the same root on the other two energies. The
+radiated energy is the one numerical integral, used for \ref{as:radiation}.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The nine outcomes agree, and so do the nine end positions and times. The reference
+momenta are compared as well. The tolerance on a state is $\val{tolFlight}$. The
+three reference radiated energies are compared relatively, with tolerance
+$\val{tolRad}$. Ten times the largest Simpson uncertainty $\val{radErrMax}$ lies
+below $10^{-4}$, so the radiation tolerance is that floor. The state tolerance and
+the radiation tolerance were fixed from these estimates before the comparison.
+
+The largest absolute difference is the time of the weaker charge's highest energy,
+$\val{cmpWeakHighTDiff}$. Its free coordinate, the abscissa at the floor, differs by
+$\val{cmpWeakHighXDiff}$. The document's root and time are closed forms: the time
+matches a quadrature to $\val{tQuadDiff}$, and the face residual is at most
+$\val{faceResMid}$. The difference is the size of the game's verified accuracy, about
+$10^{-10}$ (\xsecref{foundations}{sec:verification}).
+
+The quadrature uncertainties of the three reference flights are
+$\val{RefLowRadErr}$, $\val{RefMidRadErr}$ and $\val{RefHighRadErr}$, inside the
+relative tolerance. The largest relative difference is the highest energy,
+$\val{cmpRefHighRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+The same point with either neighbouring magnitude fails every shot. Both flights are
+the orbit of §\ref{sec:orbit} with the face of §\ref{sec:event}.
+\begin{enumerate}[label=\arabic*.]
+  \item $Q = \val{Qweak}$, so $\abs{\kappa} = \val{kAbsWeak}$, which is below every
+    $p_0 v_0 r_0$. All three orbits swing outward. The lowest and the middle energy
+    pass the line $x = \val{xDhi}$ underneath their detectors and leave through the
+    left edge of the world. The highest energy meets the floor first.
+
+    The lowest energy crosses $x = \val{xDhi}$ at $y = \val{WeakLowCrossY}$, below
+    $\val{yDloLow}$, and leaves at $(\val{WeakLowX}, \val{WeakLowY})$, at
+    $t = \val{WeakLowT}$.
+
+    The momentum there is $(\val{WeakLowPx}, \val{WeakLowPy})$, at
+    $\val{WeakLowAng}^\circ$. The radiated energy is $\val{WeakLowRad}$.
+
+    The middle energy crosses $x = \val{xDhi}$ at $y = \val{WeakMidCrossY}$, below
+    $\val{yDloMid}$, and leaves at $(\val{WeakMidX}, \val{WeakMidY})$, at
+    $t = \val{WeakMidT}$.
+
+    The momentum is $(\val{WeakMidPx}, \val{WeakMidPy})$, at $\val{WeakMidAng}^\circ$.
+    The radiated energy is $\val{WeakMidRad}$.
+
+    The highest energy meets the bottom face of the world at
+    $(\val{WeakHighX}, \val{WeakHighY})$, at $t = \val{WeakHighT}$.
+
+    The momentum is $(\val{WeakHighPx}, \val{WeakHighPy})$, at
+    $\val{WeakHighAng}^\circ$, still outward of the charge. The radiated energy is
+    $\val{WeakHighRad}$.
+  \item $Q = \val{Qstrong}$, so $\abs{\kappa} = \val{kAbsStrong}$, which is above
+    every $p_0 v_0 r_0$. All three orbits fall inward, cross $x = \val{xDhi}$ above
+    their detectors, and leave through the left edge of the world.
+
+    The lowest energy crosses at $y = \val{StrongLowCrossY}$, above $\val{yDhiLow}$,
+    and leaves at $(\val{StrongLowX}, \val{StrongLowY})$, at $t = \val{StrongLowT}$.
+
+    The momentum is $(\val{StrongLowPx}, \val{StrongLowPy})$, at
+    $\val{StrongLowAng}^\circ$. The radiated energy is $\val{StrongLowRad}$.
+
+    The middle energy crosses at $y = \val{StrongMidCrossY}$, above $\val{yDhiMid}$,
+    and leaves at $(\val{StrongMidX}, \val{StrongMidY})$, at $t = \val{StrongMidT}$.
+
+    The momentum is $(\val{StrongMidPx}, \val{StrongMidPy})$, at
+    $\val{StrongMidAng}^\circ$. The radiated energy is $\val{StrongMidRad}$.
+
+    The highest energy crosses at $y = \val{StrongHighCrossY}$, above
+    $\val{yDhiHigh}$, and leaves at $(\val{StrongHighX}, \val{StrongHighY})$, at
+    $t = \val{StrongHighT}$.
+
+    The momentum is $(\val{StrongHighPx}, \val{StrongHighPy})$, at
+    $\val{StrongHighAng}^\circ$. The radiated energy is $\val{StrongHighRad}$.
+\end{enumerate}
+
+The reference magnitude is the one that places each crossing of $x = \val{xDhi}$
+inside its own box. One step weaker, the crossings fall below the boxes, and the
+highest energy meets the floor before that line. One step stronger, the crossings
+rise above the boxes. Section~\ref{sec:comparison} records the outcomes, and
+Figure~\ref{fig:board} draws the two misses that leave through the floor and through
+the left edge.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{foundations}{eq:eom} with its eighth-order Runge--Kutta
+method at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). It finds the crossing
+on its interpolant (\physref{6}) and takes the first entry into the box as the outcome
+(\xsecref{foundations}{sec:board}). It verifies that outcome by comparing its two runs
+(\physref{7}). The model is this document's, including \ref{as:radiation} (\physref{8}).
+The agreement in §\ref{sec:comparison} is between the closed orbit of §\ref{sec:orbit}
+and that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{first_bend}: the orbit \xeqref{first_bend}{eq:general}, the apsidal
+    time \xeqref{first_bend}{eq:time}, and the momentum at a point of the orbit. The
+    integral $I_1$ there is an $\operatorname{artanh}$; \eqref{eq:i1attr} is the same
+    integral for $B > \abs{A}$.
+  \item \xsecref{foundations}{sec:numerics}: Newton's method and Simpson's rule.
+  \item \xsecref{foundations}{sec:board}: the order of events.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
