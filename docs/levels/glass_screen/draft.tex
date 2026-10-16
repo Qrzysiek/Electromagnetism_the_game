@@ -1,0 +1,44 @@
+\documentclass{leveldoc}
+\DocUses{foundations,deflection_plates}
+\DocFingerprint{32b784856b744a9e}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+\leveldescription
+
+This draft does not pass the comparison. The numbers below are the rectangle
+calculation. See \code{NOTES.md}.
+
+One positive ion is launched along $+x$. A fixed charge sits above a glass
+slab of permittivity $\val{eps}$. The reference adds one charge below the
+launch. The slab's bound charge is
+$\sigma = (\lambda / 2\pi)\, \bar E_n$ with $\lambda = \val{lam}$.
+
+\section{The calculation}\label{sec:derivation}
+
+The rectangles and the mirror are \xeqref{deflection_plates}{eq:rectangle}.
+The normal-field condition is averaged on four Gauss points. The panel's own
+normal field is left out of the average. One constant per body enforces
+neutrality of the bound charge. There are $\val{nPanels}$ upper rectangles.
+The centroid residual of that system is $\val{solveRes}$.
+
+Inside the slab the field is $\val{eInside}$, the fraction $\val{insideRel}$
+of the point-charge field $\val{eInsideC}$. On the launch line it is
+$\val{eGlass}$, the fraction $\val{screenRel}$ of $\val{eCoulomb}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+The mesh gap is $\val{errMesh}$ and the step gap is $\val{errStep}$. The
+tolerance set from them is $\val{tolFlight}$.
+
+The reference leaves through the \val{RefFace} edge at
+$(\val{RefX}, \val{RefY})$. The game arrives in the detector. The ordinate
+differs by $\val{cmpRefYDiff}$ and the abscissa by $\val{cmpRefXDiff}$. With
+no player charge the abscissa differs by $\val{cmpBareXDiff}$. The same player
+charge with the slab removed ends as \val{HitOutcome}.
+
+\levelfileappendix
+
+\end{document}
