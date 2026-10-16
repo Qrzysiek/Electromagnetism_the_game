@@ -1,0 +1,338 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,twin_beams}
+\DocFingerprint{6246e4478f92f6bb}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One particle ($q = \val{q}$, $m = \val{m}$) is launched from $(\val{xLaunch}, \val{yLaunch})$
+at $\val{launchAng}^\circ$ above $+x$, with kinetic energy $T_0 = \val{Tzero}$. The detector
+is the rectangle $\val{xD} \le x \le \val{xDhi}$, $\val{yDlo} \le y \le \val{yDhi}$. An entry
+counts only when the velocity there lies within $\val{halfDeg}^\circ$ of the $+x$ axis. The
+player places up to three charges, of either sign and of the magnitudes in the level file,
+on any node. A flight ends when the particle touches a charge, leaves the world, enters the
+detector or runs out of time (\xsecref{foundations}{sec:board}); $t_{\max} = \val{tmax}$.
+
+The reference solution is the charge $Q = \val{Q}$ at $(\val{xC}, \val{yC})$. The coupling
+$\kappa = qQ = \val{kappa}$ is attractive, and the charge sits below the ray, so the ray is
+bent down. It meets the detector on the floor, travelling at $\val{angE}^\circ$ to $+x$,
+inside the cone. This document cites the orbit of one charge and derives the cone.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: $c = \val{c}$, the particle has radius $a = 0$, and the charge has radius
+$R = \val{R}$. The launch has
+\[
+  \gamma_0 = 1 + \frac{T_0}{mc^2} = \val{gammaZero}, \qquad
+  \abs{\vect{p}_0} = \sqrt{\frac{T_0^2}{c^2} + 2mT_0} = \val{pZero}, \qquad
+  v_0 = \frac{\abs{\vect{p}_0}}{\gamma_0 m} = \val{vZero}.
+\]
+The direction stored in the file makes the angle $\val{launchAng}^\circ$ with $+x$. That
+angle and $20^\circ$ differ by $\val{dirResidual}$ radians, and the stored components
+differ in length from $1$ by $\val{dirNormGap}$, so the aim used below is the file's. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$. The cone's axis is the angle
+$\val{axisDeg}^\circ$ and its half-angle is $\val{halfDeg}^\circ$, so the axis is the unit
+vector $\uvec{e} = (1, 0)$ and the half-angle in radians is $\delta = \val{halfRad}$. The
+detector sets no condition on the kinetic energy.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=33, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \fill[green!50!black, fill opacity=0.18] (28,12) rectangle (30,17);
+  \draw[green!40!black] (28,12) rectangle (30,17);
+  \fill[teal, fill opacity=0.28] (\rawval{coneOx},\rawval{coneOy}) --
+    (\rawval{coneXp},\rawval{coneYp}) -- (\rawval{coneXm},\rawval{coneYm}) -- cycle;
+  \draw[teal, thick] (\rawval{coneOx},\rawval{coneOy}) -- (\rawval{coneXp},\rawval{coneYp});
+  \draw[teal, thick] (\rawval{coneOx},\rawval{coneOy}) -- (\rawval{coneXm},\rawval{coneYm});
+  \addplot[thin, black!45] table {pathfree.dat};
+  \addplot[thick, orange!80!black] table {pathhalf.dat};
+  \addplot[very thick, blue!70!black] table {path.dat};
+  \fill[red!70!black] (21,0) circle[radius=0.28];
+  \node[font=\small, red!60!black, anchor=south] at (21,0.35) {$Q$};
+  \draw[-{Stealth[length=6pt]}, thick] (\rawval{xLaunch},\rawval{yLaunch}) --
+    (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.12];
+  \node[font=\small, green!30!black, anchor=south] at (29,17.25) {detector};
+  \node[font=\small, teal, anchor=west] at (32.05,14.5) {$\pm 8^\circ$};
+\end{axis}
+\end{tikzpicture}
+\caption{The reference orbit (blue) meets the floor of the detector. The teal wedge is the
+cone of accepted directions, $\pm\val{halfDeg}^\circ$ about $+x$, drawn from the middle of
+the entrance. The weaker charge (orange; §\ref{sec:others}) and the straight ray (grey)
+both enter through the left face, at $\val{halfAng}^\circ$ and $\val{freeAng}^\circ$.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a charged sphere and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the launch
+    \xeqref{foundations}{eq:launch}, the energy \xeqref{foundations}{eq:energy} and the
+    angular momentum \xeqref{foundations}{eq:angmom}. With one charge, the orbit
+    \xeqref{first_bend}{eq:general}.
+  \item The board's rules (\xsecref{foundations}{sec:board}). The first entry into the
+    detector decides, and the state at that entry has to lie in the cone of §\ref{sec:cone}.
+  \item Newton's method and Simpson's rule (\xsecref{foundations}{sec:numerics}).
+\end{principles}
+
+With the charge at $\vect{r}_\mathrm{c}$ the force is
+$\kappa(\vect{x}-\vect{r}_\mathrm{c})/\abs{\vect{x}-\vect{r}_\mathrm{c}}^3$, and the state
+obeys \xeqref{foundations}{eq:eom} until the first event. The motion stays in the plane
+(\xsecref{foundations}{sec:plane}).
+
+\begin{assumption}{The charge is held in place}\label{as:fixed}
+The charge does not recoil. That is a rule of the game (\xsecref{foundations}{sec:radiation}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the particle. Along
+the reference flight it is the fraction $\val{EradFrac}$ of $T_0$, and along the weaker
+charge of §\ref{sec:others} the fraction $\val{halfEradFrac}$ (§\ref{sec:hand}). With no
+charge the acceleration is zero, so the radiated energy is zero. The game makes the same
+approximation and reports the same integral (\physref{8}).
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize, so \xeqref{foundations}{eq:sphereforce} is
+exact. On the reference flight the closest approach is $\val{rmin}$, which is
+$\val{rOverR}$ times $R$. The weaker charge stays at least $\val{halfRmin}$ away.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The orbit}\label{sec:orbit}
+
+Take polar coordinates about the charge,
+$\vect{x} - \vect{r}_\mathrm{c} = r(\cos\varphi, \sin\varphi)$, and let $u = 1/r$. Level~1
+derives the orbit. With $\sigma = \operatorname{sign} L_z$, $L = \abs{L_z}$,
+$\theta = \sigma(\varphi - \varphi_0)$ and $u'_0 = -p_{r,0}/L$,
+\begin{equation}\label{eq:orbit}
+  u(\theta) = B + (u_0 - B)\cos\Gamma\theta + \frac{u'_0}{\Gamma}\sin\Gamma\theta,
+\end{equation}
+where $\Gamma^2 = 1 - \kappa^2/(c^2 L^2)$ and $B = -\kappa W/(c^2 L^2 \Gamma^2)$, and $W$ is
+the energy \xeqref{foundations}{eq:energy}. This is \xeqref{first_bend}{eq:general}.
+Differentiating it gives
+\begin{equation}\label{eq:uprime}
+  u'(\theta) = -\Gamma(u_0 - B)\sin\Gamma\theta + u'_0\cos\Gamma\theta.
+\end{equation}
+The time element and the momentum along the same orbit are \xeqref{first_bend}{eq:dtdth}
+and \xeqref{first_bend}{eq:momentum}. Here $\Gamma^2 > 0$: it falls short of $1$ by
+$\val{gGap}$.
+
+The launch sits up and to the left of the charge, and the momentum has a component toward
+it. The radial momentum is $p_{r,0} = \val{prZero}$, so $u'_0 = \val{duZero}$ and the
+launch is off any apsis. $L_z = \val{Lz} < 0$, so $\sigma = \val{sigma}$: the polar angle
+about the charge decreases as the particle flies.
+
+\subsection{The face}\label{sec:face}
+
+The position on the orbit is
+\begin{equation}\label{eq:position}
+  x(\theta) = x_\mathrm{c} + \frac{\cos\varphi}{u(\theta)}, \qquad
+  y(\theta) = y_\mathrm{c} + \frac{\sin\varphi}{u(\theta)}, \qquad
+  \varphi = \varphi_0 + \sigma\theta.
+\end{equation}
+While $u > 0$,
+\begin{equation}\label{eq:dx}
+  \deriv{x}{\theta} = -\frac{\sigma\sin\varphi}{u} - \frac{\cos\varphi}{u^2}\,u',
+\end{equation}
+and the same differentiation gives $\dd y/\dd\theta$. A face $x = \mathrm{const}$ or
+$y = \mathrm{const}$ is a root of one of those coordinates.
+
+Which boundary comes first is read off the orbit. Walk $\theta$ from $0$ in steps of
+$10^{-3}$, up to $\theta = 3$. On the chord from $\theta_k$ to $\theta_{k+1}$, in the
+board's order (\xsecref{foundations}{sec:board}): if $r(\theta_{k+1}) \le R$, the flight
+collides; if the point at $\theta_{k+1}$ lies outside the world, the flight leaves,
+through the side the chord reaches first; if that point lies inside the detector, the
+flight enters it, through the side the chord reaches first. The side is the one whose
+value the chord attains at the smallest fraction of its length. The root is then polished
+by Newton's method \xeqref{foundations}{eq:newton}, started at the middle of that chord,
+with the derivative \eqref{eq:dx} or its partner for $y$. The face coordinate of the
+accepted root is that face's value.
+
+The reference walk meets the floor $y = y_D = \val{yDlo}$ while $x$ is between $\val{xD}$
+and $\val{xDhi}$. The root of
+\begin{equation}\label{eq:face}
+  f(\theta) = y(\theta) - y_D = 0
+\end{equation}
+is the entry. The same orbit crosses the line $x = \val{xD}$ earlier, at an ordinate
+still below $y_D$, so that line is outside the detector and is not an entry.
+
+The closest approach on the orbit is the maximum of $u$ on the flight, a root of
+$u' = 0$ \eqref{eq:uprime} when that root lies between the launch and the face. It is
+far outside the sphere (§\ref{sec:hand}).
+
+\subsection{The time and the radiated energy}\label{sec:time}
+
+Along the orbit,
+\[
+  t(\theta) = \int_0^\theta \deriv{t}{\theta'}\,\dd\theta', \qquad
+  \deriv{t}{\theta} = \frac{W - \kappa u}{c^2 L u^2},
+\]
+which is \xeqref{first_bend}{eq:dtdth}. Level~1 evaluates the integral in closed form when
+$u'_0 = 0$ (\xeqref{first_bend}{eq:time}). Here $u'_0 \ne 0$, and the number compared
+below is Simpson's rule \xeqref{foundations}{eq:simpson} on $\dd t/\dd\theta$, with
+$\val{nSimp}$ panels, as in \xsecref{twin_beams}{sec:time}. Halving the panel count
+estimates the error as $(S_n - S_{2n})/15$.
+
+The radiated energy is the same rule applied to the power. The acceleration is
+\xeqref{first_bend}{eq:acceleration} and the power is \xeqref{foundations}{eq:larmor}.
+The integral uses $\val{nRad}$ panels; the uncertainty is the relative step-doubling error.
+
+\subsection{The direction cone}\label{sec:cone}
+
+The level file gives the cone as two angles in degrees, an axis $\alpha$ and a half-angle
+$\delta$. The axis direction is the unit vector
+$\uvec{e} = (\cos\alpha, \sin\alpha)$. Let $\vect{v}$ be the velocity at the first entry
+into the detector box, and let $\beta$ be the angle from $\uvec{e}$ to $\vect{v}$, taken
+in $[0, \pi]$. Then $\vect{v}\cdot\uvec{e} = \abs{\vect{v}}\cos\beta$ and
+$\abs{\vect{v}\times\uvec{e}} = \abs{\vect{v}}\sin\beta$, so
+\begin{equation}\label{eq:cone}
+  \beta = \operatorname{atan2}\bigl(\abs{\vect{v}\times\uvec{e}},\, \vect{v}\cdot\uvec{e}\bigr).
+\end{equation}
+The entry counts when $\beta \le \delta$, with $\delta$ in radians. The outcome is then
+Arrived. When the particle has entered the box and $\beta > \delta$, the box absorbs it
+and the entry does not count: the outcome is Rejected (\physref{6.1}). A flight that
+never enters the box is not tested.
+
+Since $\vect{v} = \vect{p}/(\gamma m)$ with $\gamma m > 0$, the same $\beta$ is obtained
+from $\vect{p}$. With $\uvec{e} = (1, 0)$ and $p_x > 0$,
+$\beta = \operatorname{atan2}(\abs{p_y}, p_x)$. The test uses the state at the root of
+\eqref{eq:face}, the moment of entry.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} (\xeqref{foundations}{eq:launch}):
+    $\gamma_0 = \val{gammaZero}$, $\abs{\vect{p}_0} = \val{pZero}$, and the direction is
+    the file's, at $\val{launchAng}^\circ$ to $+x$.
+  \item\label{st:orbit} \emph{The orbit} \eqref{eq:orbit}, about
+    $(\val{xC}, \val{yC})$. The launch radius is $r_0 = \val{rZero}$ at
+    $\varphi_0 = \val{phiZero}$, and
+    $L = \abs{L_z} = \val{L}$ and
+    \begin{align*}
+      L_z &= \val{Lz}, & W &= \val{W}, & \Gamma &= \val{Gamma}, \\
+      B &= \val{B}, & u_0 &= \val{uZero}, & u'_0 &= \val{duZero}.
+    \end{align*}
+  \item\label{st:face} \emph{The first event}, by the walk of §\ref{sec:face}. Five points
+    of the orbit:
+    \begin{center}\small\val{samples}\end{center}
+    The line $x = \val{xD}$ is crossed at $\theta = \val{thetaLeft}$, where
+    $y = \val{yAtLeft}$, below the floor $y_D = \val{yDlo}$. The walk then meets the
+    floor while $x$ is inside the detector. Newton's method on \eqref{eq:face}, started
+    at $\theta = \val{thGuess}$:
+    \begin{center}\small\val{newton}\end{center}
+    After $\val{newtonSteps}$ corrections the residual is $\val{newtonRes}$, and
+    $\theta_\mathrm{e} = \val{thetaE}$. The entry is
+    $(\val{xE}, \val{yE})$, on the floor. The closest approach is at
+    $\theta = \val{thMin}$, where $r = \val{rmin}$.
+  \item\label{st:time} \emph{The time and the momentum.} Simpson's rule with
+    $\val{nSimp}$ panels gives $t_\mathrm{e} = \val{tE}$, uncertain by $\val{terr}$, and
+    far below $t_{\max}$. The momentum \xeqref{first_bend}{eq:momentum} is
+    $(\val{pxE}, \val{pyE})$. The kinetic energy, which this detector does not test, is
+    $\val{TE}$.
+  \item\label{st:cone} \emph{The cone} \eqref{eq:cone}. Both components of the momentum
+    are positive, so $\beta = \operatorname{atan2}(\abs{p_y}, p_x) = \val{devE}$
+    radians, which is $\val{angE}^\circ$. The half-angle is $\val{halfDeg}^\circ$, and
+    the margin is $\val{marginE}^\circ$. The entry counts.
+  \item\label{st:radiation} \emph{The radiated energy.} Simpson's rule on the power, with
+    $\val{nRad}$ panels: $E_\mathrm{rad} = \val{Erad}$, uncertain by the relative amount
+    $\val{radErr}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The particle enters the detector through the floor $y = \val{yDlo}$ at
+$(\val{xE}, \val{yE})$, at $t_\mathrm{e} = \val{tE}$, with momentum
+$(\val{pxE}, \val{pyE})$. The arrival direction is $\val{angE}^\circ$ from $+x$, inside
+the cone of half-angle $\val{halfDeg}^\circ$. The level is solved.
+\end{result}
+
+The orbit is the closed form \eqref{eq:orbit}. The Newton table is the iteration for the
+face, and the two quadratures are specified in §\ref{sec:time}; the time is uncertain by
+$\val{terr}$ and the radiated energy by the relative amount $\val{radErr}$.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The orbit is exact. The time quadratures are uncertain by $\val{terr}$ on the reference
+and by $\val{halfTerr}$ on the weaker charge, both far below $10^{-12}$. The tolerance on
+a state, and on the deviation $\beta$, is $10^{-9}$, ten times the accuracy of a verified
+flight (\xsecref{foundations}{sec:verification}). The tolerance on a radiated energy is
+$10^{-4}$ relative, and those integrals are uncertain by $\val{radErr}$ and
+$\val{halfRadErr}$. Both tolerances were set from those estimates. With no charge the power is
+identically zero, so that radiated energy is compared absolutely.
+
+The reference integration stops on the floor, so the ordinates agree exactly. The straight
+ray and the weaker charge stop on $x = \val{xD}$, so those abscissae agree exactly. The
+largest absolute difference in the table is $\val{cmpRefTDiff}$, the reference arrival
+time. It sits at the game's accuracy, above the quadrature error. The radiated energies of
+the two charged flights agree to the relative differences $\val{cmpRefRadDiff}$ and
+$\val{cmpHalfRadDiff}$.
+
+\section{Other solutions}\label{sec:others}
+
+Two further placements, each compared above. Both enter the detector. The cone is what
+rejects them.
+
+\begin{enumerate}
+  \item No charge. The momentum never changes, so the ray is uniform motion at speed
+    $\val{vZero}$ along the launch direction. It meets the left face $x = \val{xD}$ at
+    $t = \val{freeT}$, at the point $(\val{freeX}, \val{freeY})$, before it would leave
+    the world. The ordinate lies between $\val{yDlo}$ and $\val{yDhi}$, so this is an
+    entry. The direction is the launch direction, $\beta = \val{freeAng}^\circ$, and the
+    margin is $\val{freeMargin}^\circ$. The entry does not count.
+  \item $Q = \val{halfQ}$ at $\val{halfNode}$, so $\kappa = \val{halfK}$: the reference
+    point, with half the coupling. The flight is the orbit \eqref{eq:orbit}. The walk
+    meets the left face while the ordinate $\val{halfY}$ is inside the detector, at
+    $t = \val{halfT}$ (quadrature $\val{halfTerr}$). The momentum is $(\val{halfPx}, \val{halfPy})$, so
+    $\beta = \val{halfAng}^\circ$ and the margin is $\val{halfMargin}^\circ$. The bend
+    has lowered the ray from the straight flight, and the direction is still outside the
+    cone. The closest approach is $\val{halfRmin}$, and the radiated energy is
+    $\val{halfErad}$.
+\end{enumerate}
+
+The reference works because $\kappa = \val{kappa}$ is strong enough to drop the arrival
+from $\val{freeAng}^\circ$ to $\val{angE}^\circ$, and the floor crossing at
+$x = \val{xE}$ is still inside the detector. Half that coupling leaves the entry on the
+left face at $\val{halfAng}^\circ$. With no charge the ray enters at the launch angle.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates \xeqref{foundations}{eq:eom} with its eighth-order Runge--Kutta method
+at the tolerances $10^{-10}$ and $10^{-12}$ (\physref{5}). It finds the crossing on its
+interpolant (\physref{6}) and applies \eqref{eq:cone} to the velocity at that entry
+(\physref{6.1}). It verifies the outcome by comparing its two runs (\physref{7}). The
+model is this document's, including \ref{as:radiation} (\physref{8}). The agreement in
+§\ref{sec:comparison} is between the orbit \eqref{eq:orbit}, the cone \eqref{eq:cone} and
+that integration.
+
+\section{Further reading}\label{sec:reading}
+
+\begin{itemize}
+  \item \levelref{first_bend}: the orbit \eqref{eq:orbit}, the time element and the
+    momentum. There the charge is at the origin and the launch is an apsis, so the time
+    is a closed form.
+  \item \levelref{twin_beams}: the same orbit with $u'_0 \ne 0$, and Simpson's rule for
+    the time.
+  \item \xsecref{foundations}{sec:board}: a detector may require a direction. The angle
+    is \eqref{eq:cone}, derived in §\ref{sec:cone}.
+\end{itemize}
+
+\levelfileappendix
+
+\end{document}
