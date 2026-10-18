@@ -426,3 +426,16 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   resistance as the solver measures it (the power leaving the board matches the load's
   R⟨I²⟩ to ~3 %). The inset of the antenna's wave is gone. Left: the interior's B_z is
   speckled by the macroparticles' individual currents (a current filter would smooth it).
+- **Owner 2026-10-18: the magnetic views were buggy.** In every tube level without an
+  output (a closed, perfectly conducting box) the magnetic and energy-flow maps showed
+  random blotches that grew with time (Triode, Hall probe) or standing bands across the
+  board (Klystron). Two causes, both fixed (PHYSICS.md §2.11, "A closed box's
+  smoothing"): a lossless box keeps every wave radiated in it, and the macroparticles
+  radiate far more than real electrons (mostly when they stop on an electrode): on Triode
+  the field's fluctuation reached 140 times its mean's energy by t = 36, still growing; and
+  Klystron's display c put its box's lowest mode only 9 % above the buncher's frequency, a
+  resonator. A closed box's field is now shown smoothed in time (four low-passes at
+  `τ = 2/ω₁`: the field of the run's currents; F7, `closed_box_map_shows_the_circuit`),
+  and its c puts the lowest mode twelve times above the run's fastest frequency. The maps
+  now show the circuits' loops (the leads' convention) and the beams' fields. The
+  magnetron (open) is unchanged.

@@ -344,8 +344,14 @@ fn tube_field(level: &Level, every: f64, end: Option<f64>) {
     let mut em = level::tube_em::TubeEm::new(level, &run);
     let g = em.fdtd.grid;
     println!(
-        "run {ran:.1} s; field grid {} x {} (h {}), c {}, dt {:.5}",
-        g.nx, g.ny, g.h, em.fdtd.c, em.fdtd.dt
+        "run {ran:.1} s; field grid {} x {} (h {}), c {}, dt {:.5}, shown {:.3} later \
+         (a closed box's smoothing)",
+        g.nx,
+        g.ny,
+        g.h,
+        em.fdtd.c,
+        em.fdtd.dt,
+        em.delay()
     );
     let spec = level.tube.as_ref().expect("a tube level");
     let load = spec.output.and_then(|o| {
@@ -357,7 +363,7 @@ fn tube_field(level: &Level, every: f64, end: Option<f64>) {
     let started = std::time::Instant::now();
     let mut t = every;
     while t <= end + 1e-9 {
-        em.advance_to(&run, t);
+        em.show(&run, t);
         let absorbed = load.map_or(0.0, |(k, r)| {
             let i2: Vec<f64> = run
                 .frames
@@ -369,11 +375,21 @@ fn tube_field(level: &Level, every: f64, end: Option<f64>) {
             let mean = i2.iter().sum::<f64>() / i2.len().max(1) as f64;
             r * mean
         });
+        // The field's energy and its magnetic part, the field's own and the shown one's (a
+        // closed box keeps everything radiated in it; its smoothing shows the run's
+        // currents' field).
+        let magnetic = |bz: &[f64]| {
+            bz.iter().map(|b| b * b).sum::<f64>() * g.h * g.h / (8.0 * std::f64::consts::PI)
+        };
         println!(
-            "t {:7.2}: radiated {:.5e}, load R<I^2> {:.5e}",
-            em.fdtd.t,
+            "t {:7.2}: radiated {:.5e}, load R<I^2> {:.5e}, field energy {:.5e} (magnetic \
+             {:.5e}; shown {:.5e})",
+            em.shown().t,
             em.mean_outflow(2.0),
-            absorbed
+            absorbed,
+            em.fdtd.energy(),
+            magnetic(&em.fdtd.bz),
+            magnetic(em.shown().bz)
         );
         t += every;
     }

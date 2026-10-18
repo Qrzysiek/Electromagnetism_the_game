@@ -359,6 +359,9 @@ impl Game {
         self.tube_preview = None;
         self.tube_verdict = None;
         self.tube_field = None;
+        // The previous level's electromagnetic field (a tube's).
+        self.em_run = None;
+        self.em_snapshot = None;
         self.active_shot = 0;
         self.active_disturbance = 0;
         self.anim_time = 0.0;
@@ -724,6 +727,23 @@ fn main() {
         .run();
 }
 
+/// Whether a level offers a map (its panel's choices). Tube levels: their potential,
+/// magnetic, electric and energy-flow maps (the other views are the 3D slice's); those
+/// two only there.
+pub fn map_available(level: &Level, map: Option<MapMode>) -> bool {
+    match map {
+        _ if level.is_tube() => matches!(
+            map,
+            Some(MapMode::Potential | MapMode::Electric | MapMode::Magnetic | MapMode::EnergyFlow)
+                | None
+        ),
+        Some(MapMode::Waves) => radiation::waves_available(level),
+        Some(MapMode::ParticleField) => radiation::particle_field_available(level),
+        Some(MapMode::Electric | MapMode::EnergyFlow) => false,
+        _ => true,
+    }
+}
+
 /// Next map in the V-key cycle, skipping views the level has nothing to show in.
 pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
     let order = [
@@ -736,23 +756,10 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
         Some(MapMode::EnergyFlow),
         None,
     ];
-    // Tube levels: their potential and electric field only (the other views are the 3D
-    // slice's); the electric map only there.
-    let available = |m: Option<MapMode>| match m {
-        _ if level.is_tube() => matches!(
-            m,
-            Some(MapMode::Potential | MapMode::Electric | MapMode::Magnetic | MapMode::EnergyFlow)
-                | None
-        ),
-        Some(MapMode::Waves) => radiation::waves_available(level),
-        Some(MapMode::ParticleField) => radiation::particle_field_available(level),
-        Some(MapMode::Electric | MapMode::EnergyFlow) => false,
-        _ => true,
-    };
     let i = order.iter().position(|&m| m == map).unwrap_or(0);
     (1..=order.len())
         .map(|k| order[(i + k) % order.len()])
-        .find(|&m| available(m))
+        .find(|&m| map_available(level, m))
         .unwrap_or(None)
 }
 
@@ -767,6 +774,7 @@ pub fn next_map(level: &Level, map: Option<MapMode>) -> Option<MapMode> {
 fn dev_capture(
     mut commands: Commands,
     mut game: ResMut<Game>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
     mut frame: Local<u32>,
     mut shot_at: Local<Option<u32>>,
     mut exit: MessageWriter<AppExit>,
@@ -954,6 +962,29 @@ fn dev_capture(
             {
                 game.map = map_named(m.trim());
             }
+        }
+    }
+    // EM_LEVEL_AT ("frame:level,..."): the level (1-based) selected at those frames, as
+    // the level list does (a regression check: a view of the previous level once stayed
+    // over the next one).
+    if let Ok(seq) = std::env::var("EM_LEVEL_AT") {
+        for item in seq.split(',') {
+            if let Some((f, l)) = item.split_once(':')
+                && f.trim().parse::<u32>() == Ok(*frame)
+                && let Ok(i) = l.trim().parse::<usize>()
+                && (1..=game.levels.len()).contains(&i)
+            {
+                game.select_level(i - 1);
+            }
+        }
+    }
+    // EM_MINIMIZE=1: the window minimized at frame 20 and restored at frame 40 (a
+    // regression check: minimizing once crashed the game).
+    if std::env::var("EM_MINIMIZE").is_ok_and(|v| v == "1") {
+        match *frame {
+            20 => window.set_minimized(true),
+            40 => window.set_minimized(false),
+            _ => {}
         }
     }
 }
@@ -1357,6 +1388,12 @@ fn update_map(
     mut buffers: ResMut<Assets<bevy::render::storage::ShaderBuffer>>,
     mut transforms: Query<&mut Transform>,
 ) {
+    // A map the level does not offer (after a level switch or an edit) gives way to the
+    // potential map: it stayed shown with no choice in the panel to switch it off (a
+    // particle field's radiation part over a tube level).
+    if !map_available(&game.editor.level, game.map) {
+        game.map = Some(MapMode::Potential);
+    }
     // The energy unit depends on the flight (particles launched at rest): redraw when it
     // arrives.
     let has_flight = if game.editor.level.is_tube() {
@@ -1998,13 +2035,14 @@ fn animate(time: Res<Time>, mut game: ResMut<Game>) {
     // map was shown would pull the time back to it, and every earlier time asked for
     // restarts the field from t = 0: the playback stuck near the start). A capture at a
     // set time (`EM_TIME`) waits for it instead (`dev_capture`).
-    // Once the field has reached the run's end it can go no further: the playback runs
-    // on to the end's pause and loops (held at the field's time it stopped at the end).
+    // Once the field has reached the run's end it can go no further (a closed box's
+    // smoothed field shows a time its smoothing's delay before that): the playback runs
+    // on to the end's pause and loops.
     if tube
         && std::env::var_os("EM_TIME").is_none()
         && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow))
         && let Some(s) = &game.em_snapshot
-        && (streaming || s.t < end - 0.5)
+        && (streaming || !s.at_end)
     {
         let ahead = 0.25 * game.playback_speed.max(0.25);
         game.anim_time = game.anim_time.min((s.t + ahead).max(before));
@@ -2037,17 +2075,23 @@ fn fit_camera(
     window: Single<&Window, With<PrimaryWindow>>,
     camera: Single<(&mut Projection, &mut Transform), With<Camera2d>>,
 ) {
+    // A minimized window has no area (0 × 0 on Windows): nothing to fit, the camera stays
+    // as it was for the restored window. (Its width once made the clamp below
+    // `clamp(0, −49)`, which panics: the game crashed on minimizing.)
+    if window.physical_width() == 0 || window.physical_height() == 0 {
+        return;
+    }
     let (mut proj, mut transform) = camera.into_inner();
     let b = game.editor.level.bounds();
     let size = b.max - b.min;
     let center = (b.max + b.min) * 0.5;
-    let win_w = window.physical_width().max(1) as f32;
-    let win_h = window.physical_height().max(1) as f32;
+    let win_w = window.physical_width() as f32;
+    let win_h = window.physical_height() as f32;
     let panel_px = (win_w
         - game
             .panel_left_px
             .unwrap_or(win_w - PANEL_WIDTH * window.scale_factor()))
-    .clamp(0.0, win_w - 50.0);
+    .clamp(0.0, (win_w - 50.0).max(0.0));
     let avail_w = win_w - panel_px;
     // Room for the receivers of radiation goals, drawn just outside the edge.
     let margin = if game.editor.level.has_radiation_goal() {

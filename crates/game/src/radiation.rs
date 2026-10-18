@@ -437,8 +437,16 @@ pub fn update(
     mut buffers: ResMut<Assets<ShaderBuffer>>,
     mut quads: Query<(&mut Visibility, &mut Transform)>,
 ) {
+    let level = &game.editor.level;
+    // Nothing to show: another map, a level without shots (a tube level: its own maps), or
+    // waves without a finite speed of light. The view is hidden then: one left as it was
+    // stayed over the next level (its picture and arrows) after a level switch.
     let mode = match game.map {
-        Some(m @ (MapMode::Waves | MapMode::ParticleField | MapMode::Total)) => m,
+        Some(m @ (MapMode::Waves | MapMode::ParticleField | MapMode::Total))
+            if !level.shots.is_empty() && (level.c().is_finite() || m != MapMode::Waves) =>
+        {
+            m
+        }
         _ => {
             if let Ok((mut v, _)) = quads.get_mut(view.entity) {
                 *v = Visibility::Hidden;
@@ -448,10 +456,6 @@ pub fn update(
             return;
         }
     };
-    let level = &game.editor.level;
-    if level.shots.is_empty() || (!level.c().is_finite() && mode == MapMode::Waves) {
-        return;
-    }
     let c = level.c();
     let flight = game.active_flight();
     let (shot, _) = level.flight_of(flight);

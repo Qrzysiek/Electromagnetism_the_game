@@ -570,6 +570,9 @@ pub struct TubeRun {
     pub potential_range: (f64, f64),
     /// The metals (their backgrounds are fixed charges of the maps).
     pub metals: Vec<MetalView>,
+    /// The uniform magnetic field along z of the run (the level's, or its solenoid's
+    /// supply).
+    pub b_z: f64,
 }
 
 impl TubeRun {
@@ -1589,6 +1592,7 @@ impl Level {
                     core_radius: l.core_radius,
                 })
                 .collect(),
+            b_z: tube.b_z,
             ..TubeRun::default()
         };
         let n_goals = spec.potential_goals.len();

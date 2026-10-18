@@ -172,6 +172,12 @@ fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
 
 // Coverage of a line of `width_px` pixels at distance `d` (in the units of `fw`).
 fn line_cover(d: f32, fw: f32, width_px: f32) -> f32 {
+    // A field that does not vary crosses no level: no line. (Exactly on a level, as a
+    // field that vanishes everywhere is, smoothstep(0, 0, 0) drew one over the whole
+    // board: a level without magnets showed its magnetic map grey.)
+    if (fw <= 0.0) {
+        return 0.0;
+    }
     return 1.0 - smoothstep(0.5 * width_px * fw, (0.5 * width_px + 1.0) * fw, d);
 }
 

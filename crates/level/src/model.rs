@@ -510,6 +510,16 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
                 o.c
             ),
         ));
+    } else {
+        out.push(note(
+            false,
+            "The magnetic and energy-flow maps show the run's electromagnetic field in the \
+             grounded envelope, a closed, perfectly conducting box, smoothed in time over a \
+             few of the box's light-crossing times: the field of the run's currents averaged \
+             so. Unsmoothed, the waves the macroparticles radiate (each far heavier than an \
+             electron, so far stronger than a real tube's) would stay in the lossless box for \
+             ever and cover the map.",
+        ));
     }
     out.sort_by_key(|n| !n.exact);
     out

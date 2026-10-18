@@ -1267,11 +1267,26 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),
             )
             .on_hover_text("How many decades below the run's strongest field are still coloured");
-            let (c, t) = game.em_snapshot.as_ref().map_or((0.0, 0.0), |s| (s.c, s.t));
+            let (c, t, delay) = game
+                .em_snapshot
+                .as_ref()
+                .map_or((0.0, 0.0, 0.0), |s| (s.c, s.t, s.delay));
             let what = if game.map == Some(MapMode::Magnetic) {
                 "B_z, out of the plane (orange) or into it (teal)"
             } else {
                 "the energy flow |S| = (c/4π)|E × B| (arrows: its direction)"
+            };
+            let smoothed = if delay > 0.0 {
+                format!(
+                    " The tube's envelope is a closed, lossless box: the field is shown \
+                     smoothed over about {} (a few of the box's light-crossing times), the \
+                     field of the run's currents; unsmoothed, the waves its macroparticles \
+                     radiate (far stronger than a real tube's electrons') would stay in the \
+                     box and cover the map.",
+                    fmt_num(delay)
+                )
+            } else {
+                String::new()
             };
             ui.label(
                 egui::RichText::new(format!(
@@ -1282,7 +1297,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                      percentile); field at t = {}. Every \
                      electrode is a perfect conductor; each one's circuit current comes \
                      along a straight lead from the enclosing grounded ring or the board's \
-                     edge (a convention: a z-invariant tube's circuit runs in the plane).",
+                     edge (a convention: a z-invariant tube's circuit runs in the \
+                     plane).{smoothed}",
                     fmt_num(c),
                     game.tube_range_decades,
                     fmt_num(t),

@@ -34,6 +34,16 @@ pub const EM_PER_CELL: f64 = 4.0;
 /// The display's speed of light of a tube without an output, in units of its carriers'
 /// largest speed (`√(2 |q/m| ΔV)`): fast enough that the field is nearly quasi-static.
 pub const EM_C_FACTOR: f64 = 10.0;
+/// A closed tube's speed of light also puts its box's lowest mode (`πc/L`, L the box's
+/// longer side) at least this many times above the run's fastest frequency
+/// (`fastest_frequency`): the box then responds to the run quasi-statically, not as a
+/// resonator (Klystron's drive lay 9 % below the lowest mode and rang it).
+pub const EM_MODE_FACTOR: f64 = 12.0;
+/// A closed tube's field is shown smoothed in time by this many first-order low-passes
+/// in cascade (`Smoothing`).
+pub const EM_SMOOTH_STAGES: usize = 4;
+/// Each stage's time constant in units of `1/ω₁`, ω₁ = πc/L the box's lowest mode.
+pub const EM_SMOOTH_RATIO: f64 = 2.0;
 /// The time step's fraction of the stability limit.
 const COURANT: f64 = 0.9;
 
@@ -84,11 +94,14 @@ pub struct TubeEm {
     background: Vec<f64>,
     /// Whether the grid is open (an absorbing layer inside its border).
     open: bool,
+    /// A closed box's field smoothed in time (None: open, shown as it is).
+    smoothing: Option<Smoothing>,
     /// The next frame interval to feed: frames `next`..`next + 1`.
     next: usize,
     interval: Option<Interval>,
     /// The energy per unit length that has flowed out through the contour (a rectangle
-    /// three cells inside the absorbing layer, or the border), and its history `(t, W)`.
+    /// three cells inside the absorbing layer), and its history `(t, W)`: an open grid's
+    /// (a closed box's stays 0).
     pub radiated: f64,
     history: Vec<(f64, f64)>,
 }
@@ -178,11 +191,120 @@ fn nearest_node(
     p
 }
 
+/// The fastest frequency of a tube level's run in a field `b_z` along z, as far as its
+/// level fixes it: its sources' (a sine's ω, a pulse's edges' `1/rise`) and its carriers'
+/// cyclotron frequency `|q/m| B`.
+#[must_use]
+pub fn fastest_frequency(level: &Level, b_z: f64) -> f64 {
+    let Some(spec) = level.tube.as_ref() else {
+        return 0.0;
+    };
+    let sources = spec
+        .circuits
+        .iter()
+        .map(|c| match c.source {
+            crate::Source::Dc { .. } => 0.0,
+            crate::Source::Sine { omega, .. } => omega.abs(),
+            crate::Source::Pulse { rise, fall, .. } => [rise, fall]
+                .into_iter()
+                .filter(|&s| s > 0.0)
+                .map(|s| 1.0 / s)
+                .fold(0.0, f64::max),
+        })
+        .fold(0.0, f64::max);
+    let ratio = spec
+        .ions
+        .iter()
+        .map(|i| i.charge_per_mass.abs())
+        .chain(spec.metals.iter().map(|m| m.charge_per_mass.abs()))
+        .fold(spec.charge_per_mass.abs(), f64::max);
+    sources.max(ratio * b_z.abs())
+}
+
+/// A closed box's field smoothed in time: `EM_SMOOTH_STAGES` first-order low-passes in
+/// cascade, each step's field into the first (`y += α (x − y)`, `α = 1 − e^{−dt/τ}`).
+/// A lossless box keeps every wave radiated in it, and the run's macroparticles radiate
+/// far more than its real carriers would (their weight times: each one's impact on an
+/// electrode, its graininess, its path's kinks between frames), so the raw field's
+/// fluctuations grow without bound; they ring at the box's modes, `ω ≥ ω₁ = πc/L`, which
+/// the cascade passes as `(1 + (ωτ)²)^{−n/2}`, while static fields pass unchanged. Being
+/// linear, it is the field of the run's currents smoothed by the same kernel (a gamma
+/// distribution of mean delay `nτ`): the field shown is taken that much later.
+#[derive(Clone, Debug)]
+struct Smoothing {
+    alpha: f64,
+    /// Per field (`E_x`, `E_y`, `B_z`): every stage's value, element by element
+    /// (`EM_SMOOTH_STAGES` in a row: one pass takes a step through all of them).
+    stages: [Vec<f64>; 3],
+    /// Per field: the last stage's values (shown).
+    out: [Vec<f64>; 3],
+    /// The kernel's mean delay (each stage's `dt (1 − α)/α`).
+    delay: f64,
+}
+
+/// Elements per parallel task of the smoothing's pass.
+const SMOOTH_CHUNK: usize = 2048;
+
+impl Smoothing {
+    /// Stages of time constant `tau`, all starting at `fdtd`'s field (a static start
+    /// stays as it is).
+    fn new(fdtd: &Fdtd, tau: f64) -> Self {
+        let alpha = 1.0 - libm::exp(-fdtd.dt / tau);
+        #[allow(clippy::cast_precision_loss)]
+        let delay = EM_SMOOTH_STAGES as f64 * fdtd.dt * (1.0 - alpha) / alpha;
+        let fields = [&fdtd.ex, &fdtd.ey, &fdtd.bz];
+        Self {
+            alpha,
+            stages: fields.map(|f| {
+                f.iter()
+                    .flat_map(|&v| std::iter::repeat_n(v, EM_SMOOTH_STAGES))
+                    .collect()
+            }),
+            out: fields.map(Clone::clone),
+            delay,
+        }
+    }
+
+    /// Takes in a step's field.
+    fn update(&mut self, fdtd: &Fdtd) {
+        use rayon::prelude::*;
+        const N: usize = EM_SMOOTH_STAGES;
+        let a = self.alpha;
+        let inputs = [&fdtd.ex, &fdtd.ey, &fdtd.bz];
+        for ((stages, out), x) in self.stages.iter_mut().zip(&mut self.out).zip(inputs) {
+            stages
+                .par_chunks_mut(N * SMOOTH_CHUNK)
+                .zip(out.par_chunks_mut(SMOOTH_CHUNK))
+                .zip(x.par_chunks(SMOOTH_CHUNK))
+                .for_each(|((ys, out), x)| {
+                    for ((ys, o), &v) in ys.as_chunks_mut::<N>().0.iter_mut().zip(out).zip(x) {
+                        let mut v = v;
+                        for y in ys {
+                            *y += a * (v - *y);
+                            v = *y;
+                        }
+                        *o = v;
+                    }
+                });
+        }
+    }
+}
+
+/// The field a map shows (`TubeEm::shown`): its time and `E_x`, `E_y`, `B_z` on the
+/// field's grid (`Fdtd`'s layout).
+pub struct Shown<'a> {
+    pub t: f64,
+    pub ex: &'a [f64],
+    pub ey: &'a [f64],
+    pub bz: &'a [f64],
+}
+
 impl TubeEm {
     /// The field of `level`'s tube run `run` (its first frame at least), at the display's
-    /// speed of light (the output's, or `EM_C_FACTOR` times the carriers' largest speed),
-    /// on a grid of `EM_PER_CELL` cells per board cell over the board, open (an absorbing
-    /// layer inside the border) when the level has an output, otherwise a closed box.
+    /// speed of light (the output's, or `EM_C_FACTOR` times the carriers' largest speed
+    /// and enough for `EM_MODE_FACTOR`), on a grid of `EM_PER_CELL` cells per board cell
+    /// over the board, open (an absorbing layer inside the border) when the level has an
+    /// output, otherwise a closed box, shown smoothed in time (`Smoothing`).
     ///
     /// # Panics
     /// If the level is not a tube level or the run has no frame.
@@ -196,13 +318,30 @@ impl TubeEm {
     pub fn new(level: &Level, run: &TubeRun) -> Self {
         let spec = level.tube.as_ref().expect("a tube level");
         let first = run.frames.first().expect("a frame");
+        // The carriers' largest speed: what the potentials give them, or a metal's thermal
+        // speed (4 √(kT/m): the fastest of its thousands of carriers), or a projectile's.
         let (lo, hi) = run.potential_range;
         let speed = (2.0 * spec.charge_per_mass.abs() * (hi - lo).abs())
             .sqrt()
             .max(1.0);
-        let c = spec.output.map_or(EM_C_FACTOR * speed, |o| o.c);
+        let speed = spec
+            .metals
+            .iter()
+            .map(|m| 4.0 * m.thermal_speed)
+            .chain(spec.projectiles.iter().map(|p| p.speed))
+            .fold(speed, f64::max);
         let open = spec.output.is_some();
         let b = level.bounds();
+        let longer = (b.max.x - b.min.x).max(b.max.y - b.min.y);
+        let c = spec.output.map_or_else(
+            || {
+                (EM_C_FACTOR * speed).max(
+                    EM_MODE_FACTOR * fastest_frequency(level, run.b_z) * longer
+                        / std::f64::consts::PI,
+                )
+            },
+            |o| o.c,
+        );
         let h = 1.0 / EM_PER_CELL;
         // An open level's grid reaches past the board: `EM_MARGIN` of free space, then the
         // absorbing layer, so that all the board shows is free field (with the layer on
@@ -419,6 +558,8 @@ impl TubeEm {
         );
         fdtd.set_static(&phi);
         fdtd.t = first.t;
+        let smoothing = (!open)
+            .then(|| Smoothing::new(&fdtd, EM_SMOOTH_RATIO * longer / (std::f64::consts::PI * c)));
         Self {
             fdtd,
             outlines,
@@ -442,6 +583,7 @@ impl TubeEm {
             .collect(),
             background,
             open,
+            smoothing,
             next: 0,
             interval: None,
             radiated: 0.0,
@@ -615,6 +757,43 @@ impl TubeEm {
             .all(|a| (j.saturating_sub(1)..=j + 1).all(|b| !self.fdtd.is_metal(a, b)))
     }
 
+    /// How much later than the field's own time the shown field is (`Smoothing`; 0 when
+    /// shown as it is).
+    #[must_use]
+    pub fn delay(&self) -> f64 {
+        self.smoothing.as_ref().map_or(0.0, |s| s.delay)
+    }
+
+    /// The field the maps show: a closed box's smoothed (at the field's time less the
+    /// delay), an open one's as it is.
+    #[must_use]
+    pub fn shown(&self) -> Shown<'_> {
+        let f = &self.fdtd;
+        match &self.smoothing {
+            Some(s) => {
+                let [ex, ey, bz] = &s.out;
+                Shown {
+                    t: f.t - s.delay,
+                    ex,
+                    ey,
+                    bz,
+                }
+            }
+            None => Shown {
+                t: f.t,
+                ex: &f.ex,
+                ey: &f.ey,
+                bz: &f.bz,
+            },
+        }
+    }
+
+    /// Advances the field until the shown field reaches time `t` (as far as the run's
+    /// frames reach).
+    pub fn show(&mut self, run: &TubeRun, t: f64) {
+        self.advance_to(run, t + self.delay());
+    }
+
     /// Advances the field to time `t` (as far as the run's frames reach).
     pub fn advance_to(&mut self, run: &TubeRun, t: f64) {
         let dt = self.fdtd.dt;
@@ -656,8 +835,128 @@ impl TubeEm {
                 s0 = e;
             }
             self.fdtd.step();
-            self.radiated += self.outflow() * dt;
-            self.history.push((self.fdtd.t, self.radiated));
+            if let Some(s) = &mut self.smoothing {
+                s.update(&self.fdtd);
+            }
+            // A closed box radiates nothing out (its border is a conductor).
+            if self.open {
+                self.radiated += self.outflow() * dt;
+                self.history.push((self.fdtd.t, self.radiated));
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f64::consts::PI;
+
+    /// Least-squares fit of `y ≈ a₀ + a cos ωt + b sin ωt`: `(a₀, a, −b)`, the static part
+    /// and the complex amplitude `C = a − i b` of `Re[C e^{iωt}]`.
+    #[allow(clippy::needless_range_loop)]
+    fn fit(samples: &[(f64, f64)], omega: f64) -> (f64, f64, f64) {
+        let mut m = [[0.0; 3]; 3];
+        let mut r = [0.0; 3];
+        for &(t, y) in samples {
+            let f = [1.0, libm::cos(omega * t), libm::sin(omega * t)];
+            for i in 0..3 {
+                for j in 0..3 {
+                    m[i][j] += f[i] * f[j];
+                }
+                r[i] += f[i] * y;
+            }
+        }
+        // Gaussian elimination (the normal equations are well conditioned over whole
+        // periods).
+        for k in 0..3 {
+            for i in k + 1..3 {
+                let q = m[i][k] / m[k][k];
+                for j in k..3 {
+                    m[i][j] -= q * m[k][j];
+                }
+                r[i] -= q * r[k];
+            }
+        }
+        let mut x = [0.0; 3];
+        for i in (0..3).rev() {
+            let s: f64 = (i + 1..3).map(|j| m[i][j] * x[j]).sum();
+            x[i] = (r[i] - s) / m[i][i];
+        }
+        (x[0], x[1], -x[2])
+    }
+
+    /// F7: a closed box's smoothing (`Smoothing`) on F1's ringing TE₁₀ mode (a perfectly
+    /// conducting square box, side 20, h = 0.5, c = 1) over a uniform `B_z` of 3 (a static
+    /// solution), at `ωτ = EM_SMOOTH_RATIO`. After the transients (70 time constants) the
+    /// shown field must be the static part unchanged and the mode times the cascade's exact
+    /// discrete transfer `H(ω)ⁿ`, `H = α/(1 − (1 − α) e^{−iωΔt})` at the scheme's
+    /// discrete ω: the complex amplitudes fitted over 10 periods, required 1e-6 (the
+    /// transients' remainder and rounding), the static part 1e-9.
+    #[test]
+    fn f7_smoothing_of_a_cavity_mode() {
+        let (n, h, c, l, b0) = (40, 0.5, 1.0, 20.0, 3.0);
+        let grid = Grid {
+            nx: n,
+            ny: n,
+            h,
+            origin: (0.0, 0.0),
+        };
+        let mut f = Fdtd::new(grid, c, 0.9, 0, vec![false; grid.nodes()]);
+        let k = PI / l;
+        for j in 0..n {
+            for i in 0..n {
+                #[allow(clippy::cast_precision_loss)]
+                let x = (i as f64 + 0.5) * h;
+                f.bz[i + n * j] = b0 + libm::cos(k * x);
+            }
+        }
+        let omega = 2.0 / f.dt * libm::asin(c * f.dt / h * libm::sin(k * h / 2.0));
+        let tau = EM_SMOOTH_RATIO / omega;
+        let mut s = Smoothing::new(&f, tau);
+        let period = 2.0 * PI / omega;
+        let start = 70.0 * tau;
+        let cell = 3 + n * 7;
+        let (mut raw, mut shown) = (Vec::new(), Vec::new());
+        while f.t < start + 10.0 * period {
+            f.step();
+            s.update(&f);
+            if f.t >= start {
+                raw.push((f.t, f.bz[cell]));
+                shown.push((f.t, s.out[2][cell]));
+            }
+        }
+        let (r0, rr, ri) = fit(&raw, omega);
+        let (s0, sr, si) = fit(&shown, omega);
+        // H(ω)ⁿ.
+        let a = s.alpha;
+        let (cr, ci) = (
+            1.0 - (1.0 - a) * libm::cos(omega * f.dt),
+            (1.0 - a) * libm::sin(omega * f.dt),
+        );
+        let d = cr * cr + ci * ci;
+        let (hr, hi) = (a * cr / d, -a * ci / d);
+        let (mut pr, mut pi) = (1.0, 0.0);
+        for _ in 0..EM_SMOOTH_STAGES {
+            (pr, pi) = (pr * hr - pi * hi, pr * hi + pi * hr);
+        }
+        // The measured transfer: shown / raw.
+        let q = rr * rr + ri * ri;
+        let (mr, mi) = ((sr * rr + si * ri) / q, (si * rr - sr * ri) / q);
+        let error = libm::hypot(mr - pr, mi - pi) / libm::hypot(pr, pi);
+        #[allow(clippy::cast_precision_loss)]
+        let continuum = libm::pow(
+            1.0 + EM_SMOOTH_RATIO * EM_SMOOTH_RATIO,
+            -0.5 * EM_SMOOTH_STAGES as f64,
+        );
+        println!(
+            "F7: |H^n| measured {:.8}, exact {:.8} (continuum {continuum:.8}), relative \
+             error {error:.1e}; static part {s0} for {r0} (raw)",
+            libm::hypot(mr, mi),
+            libm::hypot(pr, pi),
+        );
+        assert!(error < 1e-6, "F7 transfer {error:e}");
+        assert!((s0 / b0 - 1.0).abs() < 1e-9, "F7 static {s0}");
+        assert!((r0 / b0 - 1.0).abs() < 1e-9, "F7 raw static {r0}");
     }
 }

@@ -498,6 +498,48 @@ fn em_field_keeps_gauss_law() {
     assert!(checks > 5 && worst < 1e-9, "EM Gauss {worst:e}");
 }
 
+/// A closed box's magnetic map shows the run's currents (PHYSICS.md §2.11, the smoothing):
+/// on Vacuum diode's reference preview, the shown `B_z` sampled every 0.05 over its
+/// steady current (t = 12–20) must fluctuate about its mean by less than 1 % of the mean's
+/// energy (10 % in amplitude, below what the map's logarithmic colours show). The field's
+/// own `B_z`, which keeps every wave the macroparticles radiate in the lossless box, is
+/// measured beside it (printed).
+#[test]
+fn closed_box_map_shows_the_circuit() {
+    let level = level::shipped("vacuum_diode");
+    let run = level.tube_run(&level.reference_solution, 1, 22.0);
+    let mut em = level::tube_em::TubeEm::new(&level, &run);
+    let (mut shown, mut own) = (Vec::new(), Vec::new());
+    for k in 0..=160 {
+        em.show(&run, 12.0 + 0.05 * f64::from(k));
+        shown.push(em.shown().bz.to_vec());
+        own.push(em.fdtd.bz.clone());
+    }
+    // The energies of the mean and of the fluctuation about it.
+    let split = |samples: &[Vec<f64>]| {
+        #[allow(clippy::cast_precision_loss)]
+        let n = samples.len() as f64;
+        let (mut mean, mut fluctuation) = (0.0, 0.0);
+        for c in 0..samples[0].len() {
+            let m = samples.iter().map(|s| s[c]).sum::<f64>() / n;
+            mean += m * m;
+            fluctuation += samples.iter().map(|s| (s[c] - m).powi(2)).sum::<f64>() / n;
+        }
+        (mean, fluctuation)
+    };
+    let (m, f) = split(&shown);
+    let (om, of) = split(&own);
+    println!(
+        "closed box: shown B_z's fluctuation {:.2e} of its mean's energy; the field's own \
+         {:.2e} (c = {:.1}, shown {:.3} later)",
+        f / m,
+        of / om,
+        em.fdtd.c,
+        em.delay()
+    );
+    assert!(f < 0.01 * m, "fluctuation {f:e} against {m:e}");
+}
+
 /// The magnetron's antenna radiates its load (PHYSICS.md §2.11): on the reference's preview
 /// run, the electromagnetic field's power out of the board over t = 98–100 (the field
 /// solver's) against the tank load's R⟨I²⟩ over the same span (the circuit's): two

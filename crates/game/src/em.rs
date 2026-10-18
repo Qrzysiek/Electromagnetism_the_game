@@ -46,6 +46,10 @@ pub struct EmSnapshot {
     /// The power per unit length radiated out of the board (the energy flow through a
     /// contour inside its edge), averaged over the last two time units.
     pub radiated: f64,
+    /// The field has reached the end of the run's frames so far (it can go no further).
+    pub at_end: bool,
+    /// A closed box's smoothing's mean delay (`TubeEm::delay`; 0: the field as it is).
+    pub delay: f64,
 }
 
 /// The field's thread.
@@ -146,18 +150,21 @@ fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
         if s.run.frames.len() < 2 {
             continue;
         }
-        if s.em.as_ref().is_none_or(|em| em.fdtd.t > t + 1e-9) {
+        if s.em.as_ref().is_none_or(|em| em.shown().t > t + 1e-9) {
             s.em = Some(TubeEm::new(&s.level, &s.run));
         }
         let em = s.em.as_mut().expect("the field");
+        // The field shown at t is the field's own at t + its smoothing's delay.
+        let target = t + em.delay();
+        let last = s.run.frames.last().map_or(0.0, |f| f.t);
         // Advance in slices, leaving the work to the next round if a request arrives; a
         // long way to go (the field left behind while another map was shown) shows its
         // progress every `PROGRESS` of wall time.
         let mut next = None;
         let mut shown = std::time::Instant::now();
-        while em.fdtd.t + em.fdtd.dt <= t {
+        while em.fdtd.t + em.fdtd.dt <= target {
             let before = em.fdtd.t;
-            em.advance_to(&s.run, (em.fdtd.t + SLICE).min(t));
+            em.advance_to(&s.run, (em.fdtd.t + SLICE).min(target));
             if em.fdtd.t <= before {
                 break; // the frames end here
             }
@@ -166,11 +173,11 @@ fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
                 break;
             }
             if shown.elapsed() > PROGRESS {
-                let _ = out.send(snapshot(revision, Some(em)));
+                let _ = out.send(snapshot(revision, Some(em), last));
                 shown = std::time::Instant::now();
             }
         }
-        let _ = out.send(snapshot(revision, Some(em)));
+        let _ = out.send(snapshot(revision, Some(em), last));
         if let Some(r) = next {
             apply(&mut state, &mut want, r);
             dirty = true;
@@ -183,7 +190,7 @@ fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
     clippy::cast_sign_loss,
     clippy::cast_precision_loss
 )]
-fn snapshot(revision: u64, em: Option<&TubeEm>) -> EmSnapshot {
+fn snapshot(revision: u64, em: Option<&TubeEm>, last: f64) -> EmSnapshot {
     let Some(em) = em else {
         return EmSnapshot {
             revision,
@@ -195,8 +202,12 @@ fn snapshot(revision: u64, em: Option<&TubeEm>) -> EmSnapshot {
             samples: Vec::new(),
             c: 1.0,
             radiated: 0.0,
+            at_end: false,
+            delay: 0.0,
         };
     };
+    // The field the maps show (a closed box's smoothed in time).
+    let field = em.shown();
     let g = em.fdtd.grid;
     let spacing = 1.0 / SAMPLES_PER_CELL;
     let (w, hgt) = (g.nx as f64 * g.h, g.ny as f64 * g.h);
@@ -211,9 +222,9 @@ fn snapshot(revision: u64, em: Option<&TubeEm>) -> EmSnapshot {
     for j in 0..gy {
         for i in 0..gx {
             let c = i + gx * j;
-            let bz = em.fdtd.bz[c];
-            let ex = 0.5 * (em.fdtd.ex[i + gx * j] + em.fdtd.ex[i + gx * (j + 1)]);
-            let ey = 0.5 * (em.fdtd.ey[i + (gx + 1) * j] + em.fdtd.ey[i + 1 + (gx + 1) * j]);
+            let bz = field.bz[c];
+            let ex = 0.5 * (field.ex[i + gx * j] + field.ex[i + gx * (j + 1)]);
+            let ey = 0.5 * (field.ey[i + (gx + 1) * j] + field.ey[i + 1 + (gx + 1) * j]);
             b[c] = bz;
             sx[c] = k * ey * bz;
             sy[c] = -k * ex * bz;
@@ -249,7 +260,7 @@ fn snapshot(revision: u64, em: Option<&TubeEm>) -> EmSnapshot {
         .collect();
     EmSnapshot {
         revision,
-        t: em.fdtd.t,
+        t: field.t,
         origin: g.origin,
         spacing,
         nx,
@@ -257,6 +268,8 @@ fn snapshot(revision: u64, em: Option<&TubeEm>) -> EmSnapshot {
         samples,
         c: em.fdtd.c,
         radiated: em.mean_outflow(2.0),
+        at_end: em.fdtd.t + em.fdtd.dt > last,
+        delay: em.delay(),
     }
 }
 
