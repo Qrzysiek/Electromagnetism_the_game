@@ -543,8 +543,8 @@ fn closed_box_map_shows_the_circuit() {
 /// The magnetron's antenna radiates its load (PHYSICS.md §2.11): on the reference's preview
 /// run, the electromagnetic field's power out of the board over t = 98–100 (the field
 /// solver's) against the tank load's R⟨I²⟩ over the same span (the circuit's): two
-/// independent calculations of the same energy. Required 10 % (measured ~3 % when the
-/// load was set to the antenna's radiation resistance).
+/// independent calculations of the same energy. Required 10 % (measured within ~3 % at
+/// t = 90–130 when the load was set to the antenna's radiation resistance; +4.6 % now).
 #[test]
 fn magnetron_antenna_radiates_its_load() {
     let level = level::shipped("magnetron");

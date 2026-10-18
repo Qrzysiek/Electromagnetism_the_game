@@ -50,9 +50,6 @@ const COURANT: f64 = 0.9;
 /// A lead: from its parent's metal (or the border) to its electrode's.
 pub type Lead = ((f64, f64), (f64, f64));
 
-/// A charge moved from one point to another within a step.
-type Move = (f64, (f64, f64), (f64, f64));
-
 /// A path a charge takes over a frame interval (from `a` at its start to `b` at its end).
 #[derive(Clone, Copy, Debug)]
 struct Path {
@@ -67,8 +64,11 @@ struct Interval {
     t0: f64,
     t1: f64,
     paths: Vec<Path>,
-    /// Per electrode: the charge its lead carries over the interval.
-    leads: Vec<f64>,
+    /// The current of every path's and lead's whole move as if made in one step
+    /// (`Fdtd::deposit_to`; `(edge, J)` of `E_x`'s and `E_y`'s edges): each step takes its
+    /// share of the interval.
+    jx: Vec<(usize, f64)>,
+    jy: Vec<(usize, f64)>,
 }
 
 /// The field of a tube run, advanced along it.
@@ -265,28 +265,32 @@ impl Smoothing {
         }
     }
 
-    /// Takes in a step's field.
+    /// Takes in a step's field: the three fields' chunks in one parallel pass (a pass per
+    /// field paid the thread pool's start three times a step).
     fn update(&mut self, fdtd: &Fdtd) {
         use rayon::prelude::*;
         const N: usize = EM_SMOOTH_STAGES;
         let a = self.alpha;
         let inputs = [&fdtd.ex, &fdtd.ey, &fdtd.bz];
+        let mut tasks = Vec::new();
         for ((stages, out), x) in self.stages.iter_mut().zip(&mut self.out).zip(inputs) {
-            stages
-                .par_chunks_mut(N * SMOOTH_CHUNK)
-                .zip(out.par_chunks_mut(SMOOTH_CHUNK))
-                .zip(x.par_chunks(SMOOTH_CHUNK))
-                .for_each(|((ys, out), x)| {
-                    for ((ys, o), &v) in ys.as_chunks_mut::<N>().0.iter_mut().zip(out).zip(x) {
-                        let mut v = v;
-                        for y in ys {
-                            *y += a * (v - *y);
-                            v = *y;
-                        }
-                        *o = v;
-                    }
-                });
+            tasks.extend(
+                stages
+                    .chunks_mut(N * SMOOTH_CHUNK)
+                    .zip(out.chunks_mut(SMOOTH_CHUNK))
+                    .zip(x.chunks(SMOOTH_CHUNK)),
+            );
         }
+        tasks.into_par_iter().for_each(|((ys, out), x)| {
+            for ((ys, o), &v) in ys.as_chunks_mut::<N>().0.iter_mut().zip(out).zip(x) {
+                let mut v = v;
+                for y in ys {
+                    *y += a * (v - *y);
+                    v = *y;
+                }
+                *o = v;
+            }
+        });
     }
 }
 
@@ -726,11 +730,37 @@ impl TubeEm {
                 .sum();
             leads[e] = q1[e] - q0[e] - exchange[e] + children;
         }
+        // The interval's current, deposited once (it was each step's share of every move,
+        // a step's cost growing with the particles: Klystron's field ran slower than its
+        // playback). A path's charge then passes from its start to its end in proportion
+        // to the time (`charge_density`), not along the path: within a frame interval, a
+        // few cells at most.
+        let g = self.fdtd.grid;
+        let mut dense_x = vec![0.0; g.nx * (g.ny + 1)];
+        let mut dense_y = vec![0.0; (g.nx + 1) * g.ny];
+        let moves = paths.iter().map(|p| (p.q, p.a, p.b)).chain(
+            leads
+                .iter()
+                .zip(&self.leads)
+                .filter_map(|(q, l)| l.map(|(a, b)| (*q, a, b))),
+        );
+        for (q, a, b) in moves {
+            if q != 0.0 {
+                self.fdtd.deposit_to(q, a, b, &mut dense_x, &mut dense_y);
+            }
+        }
+        let sparse = |d: Vec<f64>| -> Vec<(usize, f64)> {
+            d.into_iter()
+                .enumerate()
+                .filter(|(_, j)| *j != 0.0)
+                .collect()
+        };
         Interval {
             t0: f0.t,
             t1: f1.t,
             paths,
-            leads,
+            jx: sparse(dense_x),
+            jy: sparse(dense_y),
         }
     }
 
@@ -740,10 +770,13 @@ impl TubeEm {
     pub fn charge_density(&self) -> Vec<f64> {
         let mut rho = self.background.clone();
         if let Some(iv) = &self.interval {
+            // Each path's charge passes from its start to its end in proportion to the time
+            // (the interval's current is spread evenly over it).
             let g = ((self.fdtd.t - iv.t0) / (iv.t1 - iv.t0).max(1e-300)).clamp(0.0, 1.0);
             for p in &iv.paths {
-                let x = (p.a.0 + (p.b.0 - p.a.0) * g, p.a.1 + (p.b.1 - p.a.1) * g);
-                self.fdtd.add_charge(&mut rho, p.q, x.0, x.1);
+                self.fdtd
+                    .add_charge(&mut rho, p.q * (1.0 - g), p.a.0, p.a.1);
+                self.fdtd.add_charge(&mut rho, p.q * g, p.b.0, p.b.1);
             }
         }
         rho
@@ -812,26 +845,7 @@ impl TubeEm {
                 let iv = self.interval.as_ref().expect("an interval");
                 let e = s1.min(iv.t1);
                 let span = (iv.t1 - iv.t0).max(1e-300);
-                let (g0, g1) = ((s0 - iv.t0) / span, (e - iv.t0) / span);
-                let lerp = |a: (f64, f64), b: (f64, f64), g: f64| {
-                    (a.0 + (b.0 - a.0) * g, a.1 + (b.1 - a.1) * g)
-                };
-                let moves: Vec<Move> = iv
-                    .paths
-                    .iter()
-                    .map(|p| (p.q, lerp(p.a, p.b, g0), lerp(p.a, p.b, g1)))
-                    .chain(
-                        iv.leads
-                            .iter()
-                            .zip(&self.leads)
-                            .filter_map(|(q, l)| l.map(|(a, b)| (q * (g1 - g0), a, b))),
-                    )
-                    .collect();
-                for (q, a, b) in moves {
-                    if q != 0.0 {
-                        self.fdtd.deposit(q, a, b);
-                    }
-                }
+                self.fdtd.add_current(&iv.jx, &iv.jy, (e - s0) / span);
                 s0 = e;
             }
             self.fdtd.step();

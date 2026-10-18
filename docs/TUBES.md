@@ -439,3 +439,12 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   and its c puts the lowest mode twelve times above the run's fastest frequency. The maps
   now show the circuits' loops (the leads' convention) and the beams' fields. The
   magnetron (open) is unchanged.
+- **Owner 2026-10-19: Klystron's magnetic view laggy, the field and the electrons
+  jumping.** Its new c (1200) made the field ten times costlier, about a second of work
+  per time unit, slower than the playback, and the field's thread showed its progress in
+  slices of half a time unit, so the field (and the playback held to it) jumped half a
+  period at a time. Now each frame interval's current is deposited once instead of at
+  every field step, the smoothing runs in one parallel pass, the field's thread has its
+  own thread pool and shows its progress every 16 ms: 0.36 s per time unit, real time at
+  speed 1 once the verification is done (measured by capture: t = 3.6 at 6.2 s, 7.7 at
+  10.4 s).

@@ -12,8 +12,10 @@ use level::tube_em::TubeEm;
 
 /// Display samples per board cell.
 const SAMPLES_PER_CELL: f64 = 3.0;
-/// The thread advances in slices of this much time, looking for new requests between.
-const SLICE: f64 = 0.5;
+/// The thread advances in slices of this much time, looking for new requests between and
+/// showing its progress. (Slices of 0.5 made a field slower than the playback jump half a
+/// time unit at a time, the playback held back with it: Klystron's half a period.)
+const SLICE: f64 = 0.02;
 
 /// What the game asks of the field's thread.
 pub enum EmRequest {
@@ -63,9 +65,22 @@ impl EmWorker {
     pub fn start() -> Self {
         let (tx, requests) = channel::<EmRequest>();
         let (out, rx) = channel::<EmSnapshot>();
+        // A thread pool of its own, half the cores: in the shared one each of the field's
+        // small parallel steps waited behind the preview's and verification's long tasks,
+        // and the field (and the playback that waits for it) crawled while they ran.
+        let threads = std::thread::available_parallelism().map_or(4, |n| (n.get() / 2).clamp(2, 8));
         std::thread::Builder::new()
             .name("tube field".into())
-            .spawn(move || run(&requests, &out))
+            .spawn(move || {
+                match rayon::ThreadPoolBuilder::new()
+                    .num_threads(threads)
+                    .thread_name(|i| format!("tube field {i}"))
+                    .build()
+                {
+                    Ok(pool) => pool.install(move || run(&requests, &out)),
+                    Err(_) => run(&requests, &out),
+                }
+            })
             .expect("the field's thread");
         Self {
             tx,
@@ -120,14 +135,16 @@ fn apply(state: &mut Option<State>, want: &mut Option<(u64, f64)>, r: EmRequest)
     }
 }
 
-/// How often a long catch-up shows its progress.
-const PROGRESS: std::time::Duration = std::time::Duration::from_millis(250);
+/// How often a catch-up shows its progress (a display frame's time).
+const PROGRESS: std::time::Duration = std::time::Duration::from_millis(16);
 
 fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
     let mut state: Option<State> = None;
     let mut want: Option<(u64, f64)> = None;
     // Work left from an interrupted request (no need to wait for another).
     let mut dirty = false;
+    // When the last snapshot was sent.
+    let mut shown = std::time::Instant::now();
     loop {
         if !dirty {
             match requests.recv() {
@@ -157,11 +174,11 @@ fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
         // The field shown at t is the field's own at t + its smoothing's delay.
         let target = t + em.delay();
         let last = s.run.frames.last().map_or(0.0, |f| f.t);
-        // Advance in slices, leaving the work to the next round if a request arrives; a
-        // long way to go (the field left behind while another map was shown) shows its
-        // progress every `PROGRESS` of wall time.
+        // Advance in slices, leaving the work to the next round if a request arrives (one
+        // comes with every displayed frame while the animation plays); while catching up,
+        // the field shows its progress every `PROGRESS` of wall time, and at once when it
+        // reaches the time asked for.
         let mut next = None;
-        let mut shown = std::time::Instant::now();
         while em.fdtd.t + em.fdtd.dt <= target {
             let before = em.fdtd.t;
             em.advance_to(&s.run, (em.fdtd.t + SLICE).min(target));
@@ -177,7 +194,10 @@ fn run(requests: &Receiver<EmRequest>, out: &Sender<EmSnapshot>) {
                 shown = std::time::Instant::now();
             }
         }
-        let _ = out.send(snapshot(revision, Some(em), last));
+        if next.is_none() || shown.elapsed() > PROGRESS {
+            let _ = out.send(snapshot(revision, Some(em), last));
+            shown = std::time::Instant::now();
+        }
         if let Some(r) = next {
             apply(&mut state, &mut want, r);
             dirty = true;

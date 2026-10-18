@@ -89,6 +89,91 @@ impl Profile {
     }
 }
 
+/// The move of a line charge `q` from `a` to `b` over one step `dt` of `grid` (Esirkepov's
+/// scheme, in pieces of at most half a cell), added to the currents `jx`, `jy`.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn deposit_move(
+    grid: Grid,
+    dt: f64,
+    q: f64,
+    a: (f64, f64),
+    b: (f64, f64),
+    jx: &mut [f64],
+    jy: &mut [f64],
+) {
+    let g = grid;
+    let (du, dv) = ((b.0 - a.0) / g.h, (b.1 - a.1) / g.h);
+    let pieces = (2.0 * du.abs().max(dv.abs())).ceil().max(1.0);
+    let n = pieces as usize;
+    let (u0, v0) = ((a.0 - g.origin.0) / g.h, (a.1 - g.origin.1) / g.h);
+    for k in 0..n {
+        #[allow(clippy::cast_precision_loss)]
+        let (s0, s1) = (k as f64 / pieces, (k + 1) as f64 / pieces);
+        deposit_piece(
+            g,
+            dt,
+            q,
+            (u0 + du * s0, v0 + dv * s0),
+            (u0 + du * s1, v0 + dv * s1),
+            jx,
+            jy,
+        );
+    }
+}
+
+/// One piece (grid units, shorter than a cell): Esirkepov's `W` and the currents summed
+/// from the window's low side.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+fn deposit_piece(
+    g: Grid,
+    dt: f64,
+    q: f64,
+    a: (f64, f64),
+    b: (f64, f64),
+    jx: &mut [f64],
+    jy: &mut [f64],
+) {
+    let (nx, h) = (g.nx, g.h);
+    let bi = libm::floor(a.0.min(b.0)) as usize;
+    let bj = libm::floor(a.1.min(b.1)) as usize;
+    let shape = |u: f64, base: usize| -> [f64; 4] {
+        let mut s = [0.0; 4];
+        for (k, sk) in s.iter_mut().enumerate() {
+            *sk = (1.0 - (u - (base + k) as f64).abs()).max(0.0);
+        }
+        s
+    };
+    let (sx0, sx1) = (shape(a.0, bi), shape(b.0, bi));
+    let (sy0, sy1) = (shape(a.1, bj), shape(b.1, bj));
+    let f = -q / (h * dt);
+    for l in 0..4 {
+        let mut acc = 0.0;
+        for k in 0..3 {
+            let wx = (sx1[k] - sx0[k]) * (sy0[l] + 0.5 * (sy1[l] - sy0[l]));
+            acc += f * wx;
+            let (i, j) = (bi + k, bj + l);
+            if acc != 0.0 && i < nx && j <= g.ny {
+                jx[i + nx * j] += acc;
+            }
+        }
+    }
+    for k in 0..4 {
+        let mut acc = 0.0;
+        for l in 0..3 {
+            let wy = (sy1[l] - sy0[l]) * (sx0[k] + 0.5 * (sx1[k] - sx0[k]));
+            acc += f * wy;
+            let (i, j) = (bi + k, bj + l);
+            if acc != 0.0 && i <= nx && j < g.ny {
+                jy[i + (nx + 1) * j] += acc;
+            }
+        }
+    }
+}
+
 /// The field on a grid, its conductors and its absorbing layer.
 #[derive(Clone, Debug)]
 pub struct Fdtd {
@@ -311,67 +396,24 @@ impl Fdtd {
     /// (Esirkepov's scheme, in pieces of at most half a cell): the current that carries its
     /// charge density from the one place to the other, exactly. Both ends must lie at
     /// least a cell inside the grid.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn deposit(&mut self, q: f64, a: (f64, f64), b: (f64, f64)) {
-        let g = self.grid;
-        let (du, dv) = ((b.0 - a.0) / g.h, (b.1 - a.1) / g.h);
-        let pieces = (2.0 * du.abs().max(dv.abs())).ceil().max(1.0);
-        let n = pieces as usize;
-        let (u0, v0) = ((a.0 - g.origin.0) / g.h, (a.1 - g.origin.1) / g.h);
-        for k in 0..n {
-            #[allow(clippy::cast_precision_loss)]
-            let (s0, s1) = (k as f64 / pieces, (k + 1) as f64 / pieces);
-            self.deposit_piece(
-                q,
-                (u0 + du * s0, v0 + dv * s0),
-                (u0 + du * s1, v0 + dv * s1),
-            );
-        }
+        deposit_move(self.grid, self.dt, q, a, b, &mut self.jx, &mut self.jy);
     }
 
-    /// One piece (grid units, shorter than a cell): Esirkepov's `W` and the currents
-    /// summed from the window's low side.
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
-    fn deposit_piece(&mut self, q: f64, a: (f64, f64), b: (f64, f64)) {
-        let g = self.grid;
-        let (nx, h, dt) = (g.nx, g.h, self.dt);
-        let bi = libm::floor(a.0.min(b.0)) as usize;
-        let bj = libm::floor(a.1.min(b.1)) as usize;
-        let shape = |u: f64, base: usize| -> [f64; 4] {
-            let mut s = [0.0; 4];
-            for (k, sk) in s.iter_mut().enumerate() {
-                *sk = (1.0 - (u - (base + k) as f64).abs()).max(0.0);
-            }
-            s
-        };
-        let (sx0, sx1) = (shape(a.0, bi), shape(b.0, bi));
-        let (sy0, sy1) = (shape(a.1, bj), shape(b.1, bj));
-        let f = -q / (h * dt);
-        for l in 0..4 {
-            let mut acc = 0.0;
-            for k in 0..3 {
-                let wx = (sx1[k] - sx0[k]) * (sy0[l] + 0.5 * (sy1[l] - sy0[l]));
-                acc += f * wx;
-                let (i, j) = (bi + k, bj + l);
-                if acc != 0.0 && i < nx && j <= g.ny {
-                    self.jx[i + nx * j] += acc;
-                }
-            }
+    /// As `deposit`, into the current arrays `jx`, `jy` (laid out as `ex`, `ey`) instead of
+    /// the step's: a move to be spread over several steps (`add_current`).
+    pub fn deposit_to(&self, q: f64, a: (f64, f64), b: (f64, f64), jx: &mut [f64], jy: &mut [f64]) {
+        deposit_move(self.grid, self.dt, q, a, b, jx, jy);
+    }
+
+    /// Adds `w` times the currents `(index, J)` (of `E_x`'s and of `E_y`'s edges) to the
+    /// step being taken.
+    pub fn add_current(&mut self, x: &[(usize, f64)], y: &[(usize, f64)], w: f64) {
+        for &(k, j) in x {
+            self.jx[k] += w * j;
         }
-        for k in 0..4 {
-            let mut acc = 0.0;
-            for l in 0..3 {
-                let wy = (sy1[l] - sy0[l]) * (sx0[k] + 0.5 * (sx1[k] - sx0[k]));
-                acc += f * wy;
-                let (i, j) = (bi + k, bj + l);
-                if acc != 0.0 && i <= nx && j < g.ny {
-                    self.jy[i + (nx + 1) * j] += acc;
-                }
-            }
+        for &(k, j) in y {
+            self.jy[k] += w * j;
         }
     }
 
@@ -401,54 +443,51 @@ impl Fdtd {
                     }
                 });
         }
-        // E_x.
-        {
-            let bz = &self.bz;
-            let py = &self.py;
-            let four_pi = 4.0 * std::f64::consts::PI;
-            self.ex
-                .par_chunks_mut(nx)
-                .zip(self.psi_ex.par_chunks_mut(nx))
-                .zip(self.jx.par_chunks_mut(nx))
-                .zip(self.dead_x.par_chunks(nx))
-                .enumerate()
-                .for_each(|(j, (((ex, ps), jx), dead))| {
-                    for i in 0..nx {
-                        if dead[i] {
-                            ex[i] = 0.0;
-                        } else {
-                            let dy = bz[i + nx * j] - bz[i + nx * (j - 1)];
-                            ps[i] = py.b[2 * j] * ps[i] + py.a[2 * j] * dy;
-                            ex[i] += cdt * (dy + ps[i]) - four_pi * dt * jx[i];
+        // E_x and E_y together (each reads only B_z).
+        let (bz, px, py) = (&self.bz, &self.px, &self.py);
+        let four_pi = 4.0 * std::f64::consts::PI;
+        let (ex, psi_ex, jx, dead_x) = (&mut self.ex, &mut self.psi_ex, &mut self.jx, &self.dead_x);
+        let (ey, psi_ey, jy, dead_y) = (&mut self.ey, &mut self.psi_ey, &mut self.jy, &self.dead_y);
+        rayon::join(
+            || {
+                ex.par_chunks_mut(nx)
+                    .zip(psi_ex.par_chunks_mut(nx))
+                    .zip(jx.par_chunks_mut(nx))
+                    .zip(dead_x.par_chunks(nx))
+                    .enumerate()
+                    .for_each(|(j, (((ex, ps), jx), dead))| {
+                        for i in 0..nx {
+                            if dead[i] {
+                                ex[i] = 0.0;
+                            } else {
+                                let dy = bz[i + nx * j] - bz[i + nx * (j - 1)];
+                                ps[i] = py.b[2 * j] * ps[i] + py.a[2 * j] * dy;
+                                ex[i] += cdt * (dy + ps[i]) - four_pi * dt * jx[i];
+                            }
+                            jx[i] = 0.0;
                         }
-                        jx[i] = 0.0;
-                    }
-                });
-        }
-        // E_y.
-        {
-            let bz = &self.bz;
-            let px = &self.px;
-            let four_pi = 4.0 * std::f64::consts::PI;
-            self.ey
-                .par_chunks_mut(nx + 1)
-                .zip(self.psi_ey.par_chunks_mut(nx + 1))
-                .zip(self.jy.par_chunks_mut(nx + 1))
-                .zip(self.dead_y.par_chunks(nx + 1))
-                .enumerate()
-                .for_each(|(j, (((ey, ps), jy), dead))| {
-                    for i in 0..=nx {
-                        if dead[i] {
-                            ey[i] = 0.0;
-                        } else {
-                            let dx = bz[i + nx * j] - bz[i - 1 + nx * j];
-                            ps[i] = px.b[2 * i] * ps[i] + px.a[2 * i] * dx;
-                            ey[i] -= cdt * (dx + ps[i]) + four_pi * dt * jy[i];
+                    });
+            },
+            || {
+                ey.par_chunks_mut(nx + 1)
+                    .zip(psi_ey.par_chunks_mut(nx + 1))
+                    .zip(jy.par_chunks_mut(nx + 1))
+                    .zip(dead_y.par_chunks(nx + 1))
+                    .enumerate()
+                    .for_each(|(j, (((ey, ps), jy), dead))| {
+                        for i in 0..=nx {
+                            if dead[i] {
+                                ey[i] = 0.0;
+                            } else {
+                                let dx = bz[i + nx * j] - bz[i - 1 + nx * j];
+                                ps[i] = px.b[2 * i] * ps[i] + px.a[2 * i] * dx;
+                                ey[i] -= cdt * (dx + ps[i]) + four_pi * dt * jy[i];
+                            }
+                            jy[i] = 0.0;
                         }
-                        jy[i] = 0.0;
-                    }
-                });
-        }
+                    });
+            },
+        );
         self.t += self.dt;
     }
 
