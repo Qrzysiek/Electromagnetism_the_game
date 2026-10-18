@@ -170,3 +170,11 @@ the owner are marked **(owner)**; nothing is built until they are settled.
   their goals averaged over t = 10–80 against the floating contacts' noise.
 - **Open:** D7 (Johnson noise); a warming lattice; a Hall level with both signs of
   carriers.
+- **2026-10-18, D7:** fluctuation and dissipation as Nyquist's: a shorted resistor's
+  charge carried spreads as `2kT/R` (−1.4 %, statistics 1.7 %, 16 seeds; PHYSICS.md
+  §2.11), with kT a macroparticle's. **No noise level**, as the levels' sketch had
+  planned: a macroparticle is a line of charge infinite along z moving as one, so the
+  noise is the model's graininess (it halves when the macroparticles double); a real
+  conductor's carriers fluctuate independently along z and its noise vanishes in a
+  z-invariant world. A noise goal would be neither verifiable (preview and verification
+  disagree by design) nor real physics.

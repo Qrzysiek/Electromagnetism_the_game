@@ -7,7 +7,8 @@
 //! stepped by the lattice's own collision step (`Lattice::advance`, as `Tube` steps them).
 //! D5 screening: a metal in `Tube`, its carriers' own field screening two plates' within the
 //! Debye length. The self-consistent resistor (Ohm's law with the carriers' own field and
-//! the contacts) is a measurement of a few minutes, run with `--ignored`.
+//! the contacts) and D7, its thermal noise against Nyquist's, are measurements of minutes,
+//! run with `--ignored`.
 
 use physics::DVec3;
 use physics::bem::Bias;
@@ -422,8 +423,8 @@ fn d6_einstein_relation() {
 /// A conductor `l × w` between two contacts (boxes one cell thick at its ends, the right
 /// at `v`, the left grounded, both emitting carriers into it where the field pulls them
 /// out), random cores (`A`, `MEAN_FREE_PATH`), the background 1 per area, carriers of
-/// `q/m = −1` and thermal speed 1.
-fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64) -> Tube {
+/// `q/m = −1` and thermal speed 1; `seed` places the cores and the carriers.
+fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64, seed: u64) -> Tube {
     let contact = |x: f64, bias: Bias| Electrode {
         section: Section::Rect {
             center: DVec3::new(x, 0.5 * w, 0.0),
@@ -444,8 +445,8 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64) -> Tube {
     let (lo, hi) = (DVec3::ZERO, DVec3::new(l, w, 0.0));
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(l * w / (2.0 * A * MEAN_FREE_PATH)) as usize;
-    let cores = Lattice::random_cores(lo, hi, count, A, 7);
-    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, 11);
+    let cores = Lattice::random_cores(lo, hi, count, A, seed);
+    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, seed + 4);
     let weight = lattice.carrier_charge().abs();
     let emitter = |electrode: usize, toward: f64| Emitter {
         electrode,
@@ -493,7 +494,7 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64) -> Tube {
 #[ignore = "a measurement (about 100 s in release): run with --ignored (PHYSICS.md §2.11)"]
 fn d1_ohms_law_in_a_resistor() {
     let (l, w, n, dt) = (16.0, 4.0, 16_000, 0.02);
-    let tube = resistor(l, w, 3.2, n, dt);
+    let tube = resistor(l, w, 3.2, n, dt, 7);
     #[allow(clippy::cast_precision_loss)]
     let kappa = 2.0 * A * tube.lattices[0].cores.len() as f64 / (l * w);
     let theory = mobility(kappa, 0.0).0;
@@ -553,4 +554,94 @@ fn d1_ohms_law_in_a_resistor() {
         100.0 * libm::sqrt(sj * sj + se * se)
     );
     assert!((sigma / theory - 1.0).abs() < 0.05);
+}
+
+/// The charge the carriers carry along a conductor `l` long, `Σ q Δx / l` from their moves,
+/// summed from `t0` and sampled every step until `t1`.
+fn carried(tube: &Tube, l: f64, t0: f64, t1: f64) -> Vec<f64> {
+    let mut s = tube.state();
+    let mut q = 0.0;
+    let mut out = Vec::new();
+    while s.t < t1 {
+        let before: std::collections::HashMap<u32, f64> =
+            s.id.iter().zip(&s.x).map(|(id, x)| (*id, x.x)).collect();
+        tube.step(&mut s);
+        if s.t < t0 {
+            continue;
+        }
+        q +=
+            s.id.iter()
+                .zip(&s.x)
+                .zip(&s.charge)
+                .filter_map(|((id, x), c)| before.get(id).map(|x0| c * (x.x - x0)))
+                .sum::<f64>()
+                / l;
+        out.push(q);
+    }
+    out
+}
+
+/// `⟨(Q(t + lag) − Q(t))²⟩` over a series sampled every `dt`.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+fn spread(q: &[f64], lag: f64, dt: f64) -> f64 {
+    let n = libm::round(lag / dt) as usize;
+    let m = q.len() - n;
+    (0..m).map(|k| (q[k + n] - q[k]).powi(2)).sum::<f64>() / m as f64
+}
+
+/// D7, Johnson–Nyquist (fluctuation–dissipation in the model): the resistor of D1 (16 × 4,
+/// 2000 carriers, dt 0.02) at 1.6 V (`qEℓ/kT` = 0.05: the carriers' warming, which lowers
+/// σ by about 1.3 % at 0.1, is 0.3 % here), 16 seeds of the cores and carriers, each over
+/// t = 8–1608. The charge carried along it, `Q(t)`, gives the resistance `R = V/⟨I⟩` and,
+/// about its mean drift, the spread `⟨(ΔQ − ⟨I⟩T)²⟩`, which grows as `2 kT T/R` once the
+/// current's correlations have decayed (by T ≈ 0.5 here; the slope between T = 1 and 4,
+/// which drops the short-time offset). `kT` is a macroparticle's: `|q_c| σ_v²/|q/m|`
+/// (the noise of a line of charge, which a z-invariant world's real carriers would not
+/// have: PHYSICS.md). Required 5 % (as D1: a transport coefficient; the statistics, from
+/// the seeds' scatter, ~1.7 %).
+#[test]
+#[ignore = "a measurement (about 20 min in release): run with --ignored (PHYSICS.md §2.11)"]
+#[allow(clippy::cast_precision_loss)]
+fn d7_johnson_nyquist() {
+    let (l, w, n, dt, v) = (16.0, 4.0, 2000, 0.02, 1.6);
+    let (t0, t1) = (8.0, 1608.0);
+    let started = std::time::Instant::now();
+    let runs: Vec<(f64, f64)> = (0..16_u64)
+        .into_par_iter()
+        .map(|k| {
+            let tube = resistor(l, w, v, n, dt, 101 + 17 * k);
+            let kt = tube.lattices[0].carrier_charge().abs();
+            let q = carried(&tube, l, t0, t1);
+            let current = q.last().copied().unwrap_or(0.0) / (t1 - t0);
+            let r = v / current.abs();
+            // About the mean drift.
+            let detrended: Vec<f64> = q
+                .iter()
+                .enumerate()
+                .map(|(i, x)| x - current * dt * (i + 1) as f64)
+                .collect();
+            let slope = (spread(&detrended, 4.0, dt) - spread(&detrended, 1.0, dt)) / 3.0;
+            (r, slope * r / (2.0 * kt))
+        })
+        .collect();
+    let m = runs.len() as f64;
+    let mean = runs.iter().map(|r| r.1).sum::<f64>() / m;
+    let error =
+        libm::sqrt(runs.iter().map(|r| (r.1 - mean).powi(2)).sum::<f64>() / (m * (m - 1.0)));
+    let r = runs.iter().map(|r| r.0).sum::<f64>() / m;
+    println!(
+        "D7: the charge's spread against 2kT/R: {mean:.4} +- {error:.4} over {} seeds (R \
+         {r:.3} on average; each: {}); {:.0} s",
+        runs.len(),
+        runs.iter()
+            .map(|r| format!("{:.3}", r.1))
+            .collect::<Vec<_>>()
+            .join(" "),
+        started.elapsed().as_secs_f64()
+    );
+    assert!((mean - 1.0).abs() < 0.05, "D7 {mean} +- {error}");
 }
