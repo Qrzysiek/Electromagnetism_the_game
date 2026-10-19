@@ -7,8 +7,22 @@ meanwhile. Resolved entries stay, marked resolved. Maintained with the `open-pro
 
 ## OP-1: Eddy currents in an elongated strip of the scaled Drude metal
 
-- **Status:** open since 2026-10-19 (open to our knowledge; the search was limited to two web
-  searches, below).
+- **Status:** resolved 2026-10-19: not the eddy currents, and not a bug of the particles. A
+  grounded electrode in an open z-invariant world (no enclosing conductor) is held at 0 in
+  the free-space gauge `φ = −2λ ln r`, whose zero lies at the unit radius; it can draw net
+  charge from that "infinity", and with net charge the potential coefficients `−2 ln d`
+  (negative beyond d = 1) leave the electrostatic energy unbounded below: a large floating
+  conductor next to it polarizes along the line to it while the electrode charges up, without
+  end. The strip 8 × 32 with a small grounded electrode 1.5 below it ran away with no field
+  at all (B = 0, no wave: the electrode's charge 0.7 → 228 over t = 5–60, doubling every ~5;
+  the lower half's carriers −128 → −214), as in a steady B = 1 (0.6 → 169); with the
+  electrode floating (`Bias::Charge(0)`) it stayed at 0 ± 0.007, and with a grounded box
+  around everything (a reference at a finite distance, all coefficients `−2 ln(d/R)`
+  positive) at 0 ± 0.04 (temporary tests in drude.rs, `static_field_explore`, removed). The
+  eddy physics itself agrees with the continuum and the analytic law when the reference is
+  sound (D8, the square and the strip 8 × 32 with a floating electrode). The shipped levels'
+  metals all sit between contacts held at potentials (none floats); a level with an isolated
+  metal needs its electrodes floating or an enclosing grounded conductor.
 - **Arose in:** the eddy currents and laminations (task of 2026-10-19): `physics::tube::
   SolenoidWave` (a uniform B_z(t) and its induced `E = −½ Ḃ ẑ × (x − x₀)`), validation D8 in
   `crates/physics/tests/drude.rs`; the explorations that gave the numbers below were

@@ -690,8 +690,11 @@ fn eddy(
     let count = libm::round(w * b / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, 31);
     let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, 47);
-    // One small grounded electrode away from the metal (the electrostatics needs one).
-    let corner = lo - DVec3::new(1.5, 1.5, 0.0);
+    // One small electrode away from the metal (the electrostatics needs one), floating with
+    // no charge: grounded in this open z-invariant world it could draw charge from the log
+    // gauge's "infinity" (r = 1), and a floating metal beside it runs away (OP-1).
+    // Far from the metal: beside it, even floating, its induced dipole bent the strip's field.
+    let corner = lo - DVec3::new(40.0, 40.0, 0.0);
     let electrodes = Electrodes::new(
         vec![Electrode {
             section: Section::Rect {
@@ -700,7 +703,7 @@ fn eddy(
                 half_length: 0.25,
                 half_thickness: 0.25,
             },
-            bias: Bias::Grounded,
+            bias: Bias::Charge(0.0),
         }],
         &[],
         0.25,
@@ -779,57 +782,63 @@ fn eddy(
     blocks
 }
 
-/// D8, eddy currents: an isolated square 16 × 16 of the tests' metal (background 1,
-/// `q/m = −1`, thermal speed 1, `ℓ = 0.5`, 20 000 carriers) centred on the solenoid's axis, in
-/// a field along z ramping between ±0.25 in a triangle of period 20 (`|Ḃ| = 0.05`;
-/// `ω_c τ ≤ 0.1`), over t = 0–200 at dt 0.02, 2 time units skipped after each corner (the
-/// currents settle within a few `τ`). Ohm's law in the induced field `E = −½ Ḃ ẑ × (x − x₀)`:
-/// the current's stream function `ψ = −σ Ḃ u`, `u` the square's torsion function
-/// (`∇²u = −1`, 0 on its edge), so the power `σ Ḃ² ∫ u dA` and the current through the left
-/// half `σ Ḃ ∫ u dy` along the middle line (clockwise for a rising field: up on the left,
-/// Lenz's law); σ from the Boltzmann equation (D1). Required 5 % each (as D1: the medium's
-/// correction ~2 %, the statistics ~1 %). At twice the rate (`Ḃ = 0.1`, the field 0.4 at the
-/// edges, `qEℓ/kT ≈ 0.2`) the carriers warm and the square came out 5 % low: the linear
-/// response needs the weaker field. A strip 8 × 32 under the same drive does not reach
-/// this law's steady state (docs/OPEN_PROBLEMS.md, PHYSICS.md §2.11).
+/// D8, eddy currents: an isolated metal of the tests' (background 1, `q/m = −1`, thermal
+/// speed 1, `ℓ = 0.5`, 20 000 carriers) centred on the solenoid's axis, in a field along z
+/// ramping between ±0.25 in a triangle of period 20 (`|Ḃ| = 0.05`; `ω_c τ ≤ 0.1`), over
+/// t = 0–200 at dt 0.02, 2 time units skipped after each corner (the currents settle within a
+/// few `τ`): a square 16 × 16 and a strip 8 × 32. Ohm's law in the induced field
+/// `E = −½ Ḃ ẑ × (x − x₀)`: the current's stream function `ψ = −σ Ḃ u`, `u` the rectangle's
+/// torsion function (`∇²u = −1`, 0 on its edge), so the power `σ Ḃ² ∫ u dA` and the current
+/// through the left half `σ Ḃ ∫ u dy` along the middle line (clockwise for a rising field:
+/// up on the left, Lenz's law); σ from the Boltzmann equation (D1). Required 5 % each (as D1:
+/// the medium's correction ~2 %, the statistics ~1–2.5 %). At twice the rate (`Ḃ = 0.1`, the
+/// field 0.4 at the square's edges, `qEℓ/kT ≈ 0.2`) the carriers warm and the square came
+/// out 5 % low: the linear response needs the weaker field. The electrode the electrostatics
+/// needs floats: a grounded one in this open world made the strip run away (OP-1).
 #[test]
-#[ignore = "a measurement (about 5 minutes in release): run with --ignored (PHYSICS.md §2.11)"]
+#[ignore = "a measurement (about 6 minutes in release): run with --ignored (PHYSICS.md §2.11)"]
 fn d8_eddy_currents() {
-    let (n, dt, b0, period, a) = (20_000, 0.02, 0.25, 20.0, 16.0);
+    let (n, dt, b0, period) = (20_000, 0.02, 0.25, 20.0);
     // The cores' density sets the collision rate: kappa = 2 a n_ion = 1/l.
     let sigma = mobility(1.0 / MEAN_FREE_PATH, 0.0).0;
     let bdot = 4.0 * b0 / period;
-    let axis = DVec3::new(0.5 * a, 0.5 * a, 0.0);
-    let blocks = eddy(
-        DVec3::ZERO,
-        DVec3::new(a, a, 0.0),
-        axis,
-        n,
-        dt,
-        b0,
-        period,
-        200.0,
-        2.0,
-    );
-    #[allow(clippy::cast_precision_loss)]
-    let m = blocks.len() as f64;
-    let mean = |f: &dyn Fn(&(f64, f64)) -> f64| blocks.iter().map(f).sum::<f64>() / m;
-    let error = |f: &dyn Fn(&(f64, f64)) -> f64, mu: f64| {
-        libm::sqrt(blocks.iter().map(|x| (f(x) - mu).powi(2)).sum::<f64>() / ((m - 1.0) * m))
-    };
-    let (power, current) = (mean(&|x| x.0), mean(&|x| x.1));
-    let (sp, sc) = (error(&|x| x.0, power), error(&|x| x.1, current));
-    let p_theory = sigma * bdot * bdot * torsion_area(a, a);
-    let j_theory = sigma * bdot * torsion_midline(a, a);
-    println!(
-        "D8, square 16 x 16, {m} ramps: power {power:.5} ± {sp:.5} against {p_theory:.5} \
-         ({:+.2} ± {:.2} %), current through the left half {current:.5} ± {sc:.5} against \
-         {j_theory:.5} ({:+.2} ± {:.2} %)",
-        100.0 * (power / p_theory - 1.0),
-        100.0 * sp / p_theory,
-        100.0 * (current / j_theory - 1.0),
-        100.0 * sc / j_theory
-    );
-    assert!((power / p_theory - 1.0).abs() < 0.05, "power");
-    assert!((current / j_theory - 1.0).abs() < 0.05, "current");
+    let mut results = Vec::new();
+    for (name, w, b) in [("square 16 x 16", 16.0, 16.0), ("strip 8 x 32", 8.0, 32.0)] {
+        let axis = DVec3::new(0.5 * w, 0.5 * b, 0.0);
+        let blocks = eddy(
+            DVec3::ZERO,
+            DVec3::new(w, b, 0.0),
+            axis,
+            n,
+            dt,
+            b0,
+            period,
+            200.0,
+            2.0,
+        );
+        #[allow(clippy::cast_precision_loss)]
+        let m = blocks.len() as f64;
+        let mean = |f: &dyn Fn(&(f64, f64)) -> f64| blocks.iter().map(f).sum::<f64>() / m;
+        let error = |f: &dyn Fn(&(f64, f64)) -> f64, mu: f64| {
+            libm::sqrt(blocks.iter().map(|x| (f(x) - mu).powi(2)).sum::<f64>() / ((m - 1.0) * m))
+        };
+        let (power, current) = (mean(&|x| x.0), mean(&|x| x.1));
+        let (sp, sc) = (error(&|x| x.0, power), error(&|x| x.1, current));
+        let p_theory = sigma * bdot * bdot * torsion_area(w, b);
+        let j_theory = sigma * bdot * torsion_midline(w, b);
+        println!(
+            "D8, {name}, {m} ramps: power {power:.5} ± {sp:.5} against {p_theory:.5} \
+             ({:+.2} ± {:.2} %), current through the left half {current:.5} ± {sc:.5} \
+             against {j_theory:.5} ({:+.2} ± {:.2} %)",
+            100.0 * (power / p_theory - 1.0),
+            100.0 * sp / p_theory,
+            100.0 * (current / j_theory - 1.0),
+            100.0 * sc / j_theory
+        );
+        results.push((name, power / p_theory - 1.0, current / j_theory - 1.0));
+    }
+    for (name, p, c) in results {
+        assert!(p.abs() < 0.05, "{name}: power {p}");
+        assert!(c.abs() < 0.05, "{name}: current {c}");
+    }
 }
