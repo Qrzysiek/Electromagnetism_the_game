@@ -527,7 +527,7 @@ pub struct TubeFrame {
 }
 
 /// A metal as the display shows it (`TubeSpec::metals`): its rectangle, its background's
-/// charge per area (the ions'), its cores.
+/// charge per area (the ions'), its cores and its carriers' thermal speed `√(kT/m)`.
 #[derive(Clone, Debug, Default)]
 pub struct MetalView {
     pub lo: DVec3,
@@ -535,6 +535,37 @@ pub struct MetalView {
     pub background: f64,
     pub cores: Vec<[f32; 2]>,
     pub core_radius: f64,
+    pub thermal_speed: f64,
+}
+
+/// Each metal's carriers' mean displacement (x, y) from frame `a` to frame `b`: the mean over
+/// the carriers in it at `b` that were in flight at `a` (thousands: the thermal motion
+/// averages to ~10 % of a frame's drift, and does not accumulate). Summed over frames, the
+/// drift of the carriers as a whole (the game's chevrons; test `metal_drift_carries_the_current`).
+#[allow(clippy::cast_precision_loss)]
+#[must_use]
+pub fn metal_steps(metals: &[MetalView], a: &TubeFrame, b: &TubeFrame) -> Vec<[f64; 2]> {
+    let before: std::collections::HashMap<u32, [f32; 2]> =
+        a.id.iter().zip(&a.x).map(|(id, x)| (*id, *x)).collect();
+    let mut sums = vec![([0.0_f64; 2], 0_usize); metals.len()];
+    for (x, id) in b.x.iter().zip(&b.id) {
+        let inside = |m: &MetalView| {
+            let (px, py) = (f64::from(x[0]), f64::from(x[1]));
+            px >= m.lo.x && px <= m.hi.x && py >= m.lo.y && py <= m.hi.y
+        };
+        let (Some(m), Some(x0)) = (metals.iter().position(inside), before.get(id)) else {
+            continue;
+        };
+        sums[m].0[0] += f64::from(x[0] - x0[0]);
+        sums[m].0[1] += f64::from(x[1] - x0[1]);
+        sums[m].1 += 1;
+    }
+    sums.into_iter()
+        .map(|(sum, n)| {
+            let n = n.max(1) as f64;
+            [sum[0] / n, sum[1] / n]
+        })
+        .collect()
 }
 
 /// The Hall effect's forces in a metal strip (`TubeRun::hall_forces`): its centre, long
@@ -1687,6 +1718,7 @@ impl Level {
                     background: l.background,
                     cores: l.cores.iter().map(|c| [c.x as f32, c.y as f32]).collect(),
                     core_radius: l.core_radius,
+                    thermal_speed: l.thermal_speed,
                 })
                 .collect(),
             b_z: tube.b_z,

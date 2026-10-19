@@ -253,6 +253,28 @@ pub struct Game {
     /// Tube levels: how each electrode's potential swings in the preview run (`Swing`),
     /// for the glow of the oscillating ones.
     pub swing: Option<Swing>,
+    /// Tube levels with metals: the carriers traced with their paths (`Traced`) and each
+    /// metal's carriers' mean displacement along it (`Drift`, the ticks across it).
+    pub traced: Option<Traced>,
+    pub drift: Option<Drift>,
+}
+
+/// The carriers traced in a run's metals, by identity, constant in number: one a contact
+/// absorbs is replaced by the newest carrier in the metals (just given off by a contact).
+/// Started afresh when the run or the playback starts again.
+#[derive(Clone, Debug, Default)]
+pub struct Traced {
+    pub revision: u64,
+    pub t: f64,
+    pub ids: Vec<u32>,
+}
+
+/// Each metal's carriers' mean displacement (x, y) from the run's start, at every frame so
+/// far (the run's revision and the frames counted).
+#[derive(Clone, Debug, Default)]
+pub struct Drift {
+    pub revision: u64,
+    pub x: Vec<Vec<[f64; 2]>>,
 }
 
 /// Tube levels: each electrode's mean potential over the run's frames so far and its
@@ -354,6 +376,8 @@ impl Game {
             pan_anchor: None,
             hover_world: None,
             swing: None,
+            traced: None,
+            drift: None,
         }
     }
 
@@ -1908,6 +1932,8 @@ fn tube_flow_arrows(level: &Level, snap: &em::EmSnapshot) -> TubeArrows {
 fn update_em(mut game: ResMut<Game>) {
     let game = &mut *game;
     update_swing(game);
+    update_drift(game);
+    update_traced(game);
     let field_map = game.editor.level.is_tube()
         && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow));
     // Once started for this run, the field follows the playback under the other maps too
@@ -1952,6 +1978,141 @@ fn update_em(mut game: ResMut<Game>) {
     {
         game.em_snapshot = Some(s);
     }
+}
+
+/// Whether a point lies in a metal of the run.
+fn in_metals(metals: &[level::tube::MetalView], x: [f32; 2]) -> Option<usize> {
+    metals.iter().position(|m| {
+        f64::from(x[0]) >= m.lo.x
+            && f64::from(x[0]) <= m.hi.x
+            && f64::from(x[1]) >= m.lo.y
+            && f64::from(x[1]) <= m.hi.y
+    })
+}
+
+/// The frames `update_drift` takes on per display frame (a run's frames hold at most
+/// `level::tube::FRAME_BUDGET` carriers in all: a run that arrives at once is caught up
+/// with over a few display frames, not in one).
+const DRIFT_FRAMES_PER_UPDATE: usize = 20;
+
+/// Tube levels with metals: each metal's carriers' mean displacement, frame by frame from
+/// the run's start (`Drift`, the sum of `level::tube::metal_steps`), extended as frames
+/// arrive.
+fn update_drift(game: &mut Game) {
+    let Some(v) = game
+        .tube_preview
+        .as_ref()
+        .filter(|v| v.revision == game.sent_revision && !v.run.metals.is_empty())
+    else {
+        game.drift = None;
+        return;
+    };
+    let (metals, frames) = (&v.run.metals, &v.run.frames);
+    let d = game.drift.get_or_insert_with(Drift::default);
+    if d.revision != v.revision || d.x.len() != metals.len() {
+        *d = Drift {
+            revision: v.revision,
+            x: vec![Vec::new(); metals.len()],
+        };
+    }
+    let done = d.x.first().map_or(0, Vec::len);
+    for k in done..frames.len().min(done + DRIFT_FRAMES_PER_UPDATE) {
+        if k == 0 {
+            for x in &mut d.x {
+                x.push([0.0; 2]);
+            }
+            continue;
+        }
+        let steps = level::tube::metal_steps(metals, &frames[k - 1], &frames[k]);
+        for (x, step) in d.x.iter_mut().zip(steps) {
+            let last = x.last().copied().unwrap_or([0.0; 2]);
+            x.push([last[0] + step[0], last[1] + step[1]]);
+        }
+    }
+}
+
+/// Tube levels with metals: the carriers traced (`Traced`), `draw::METAL_SAMPLE` of them
+/// spread evenly over the metals' carriers when the run or the playback starts, each one a
+/// contact takes replaced by another carrier in the metals, drawn in a fixed order that has
+/// nothing to do with place (a hash of identity): the sample stays spread over the metals.
+/// (Replaced by the newest carrier, just given off next to a contact and soon taken again,
+/// the traces gathered at the contacts: a fifth of them within half a unit.)
+fn update_traced(game: &mut Game) {
+    let Some(revision) = game
+        .tube_preview
+        .as_ref()
+        .filter(|v| v.revision == game.sent_revision && !v.run.metals.is_empty())
+        .map(|v| v.revision)
+    else {
+        game.traced = None;
+        return;
+    };
+    let Some(frame) = game.tube_display_frame() else {
+        return;
+    };
+    let Some(metals) = game.tube_preview.as_ref().map(|v| v.run.metals.clone()) else {
+        return;
+    };
+    // The carriers in the metals now, by identity.
+    let mut present: Vec<u32> = frame
+        .id
+        .iter()
+        .zip(&frame.x)
+        .zip(&frame.kind)
+        .filter(|((_, x), kind)| {
+            **kind != level::tube::KIND_PROJECTILE && in_metals(&metals, **x).is_some()
+        })
+        .map(|((id, _), _)| *id)
+        .collect();
+    present.sort_unstable();
+    let restart = game
+        .traced
+        .as_ref()
+        .is_none_or(|t| t.revision != revision || frame.t < t.t - 1e-9);
+    if restart {
+        let every = (present.len() / draw::METAL_SAMPLE).max(1);
+        game.traced = Some(Traced {
+            revision,
+            t: frame.t,
+            ids: present.iter().step_by(every).copied().collect(),
+        });
+        return;
+    }
+    let Some(traced) = game.traced.as_mut() else {
+        return;
+    };
+    let alive: std::collections::HashSet<u32> = present.iter().copied().collect();
+    let kept: std::collections::HashSet<u32> = traced
+        .ids
+        .iter()
+        .copied()
+        .filter(|id| alive.contains(id))
+        .collect();
+    if kept.len() < traced.ids.len() {
+        let mut candidates: Vec<u32> = present
+            .iter()
+            .copied()
+            .filter(|id| !kept.contains(id))
+            .collect();
+        candidates.sort_unstable_by_key(|id| scatter(*id));
+        let mut candidates = candidates.into_iter();
+        for id in &mut traced.ids {
+            if !alive.contains(id)
+                && let Some(n) = candidates.next()
+            {
+                *id = n;
+            }
+        }
+    }
+    traced.t = frame.t;
+}
+
+/// An order of identities unrelated to them (Fibonacci hashing: the golden ratio's 64-bit
+/// multiple, its high bits).
+fn scatter(id: u32) -> u64 {
+    u64::from(id)
+        .wrapping_mul(0x9e37_79b9_7f4a_7c15)
+        .rotate_left(32)
 }
 
 /// Tube levels: each electrode's potential's mean and swing over the preview run's frames

@@ -185,3 +185,12 @@ the owner are marked **(owner)**; nothing is built until they are settled.
   magnetic once the charge has piled up, within the dielectric relaxation time ≈ 0.2).
   A force map (the force on the carriers, its electric and magnetic parts over the board)
   was proposed and left: the arrows answer the request.
+- **Owner 2026-10-19: Ohm's law looked AC from its wiring; show the electrons' drift on
+  DC, the traced ones constant in number.** The level is DC (supply 30, lead currents
+  ±3.0 ± 0.3 throughout); with the supply off, as the level opens, the leads carry the
+  thermal noise's current, both ways, and their beads wander. Chevrons across each metal
+  now move with its carriers' mean displacement, the drift (0.38 per time unit in Ohm's
+  law, `I/(ρW)` within 1.7 %: test `metal_drift_carries_the_current`), faint when it is
+  noise; a traced carrier a contact takes is replaced by another drawn uniformly from the
+  metal (40 throughout; replaced by the newest, just given off, they gathered at the
+  contacts).

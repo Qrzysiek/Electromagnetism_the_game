@@ -1939,10 +1939,14 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         } else {
             "A z-invariant metal (the Drude model): its carriers (blue; a few traced) fly at \
              the thermal speed and bounce off the ion cores (dots), a zigzag; the field adds \
-             a slow drift along it, the current. Each collision hands the lattice the energy \
-             the field gave: the Joule heat. Contacts take in the carriers that reach them \
-             and give off as many as keep the metal next to them neutral. A classical model \
-             of a metal (its real electrons are a quantum gas): see the physics notes."
+             a slow drift along it, the current. The chevrons across the metal move with its \
+             carriers as a whole (their mean displacement): the drift, a few tenths of a \
+             unit per time unit beside the thermal speed, faint when it is only the thermal \
+             motion's noise. Each collision hands the lattice the energy the field gave: the \
+             Joule heat. Contacts take in the carriers that reach them and give off as many \
+             as keep the metal next to them neutral (a traced carrier a contact takes is \
+             replaced by another, so they stay as many). A classical model of a metal (its real \
+             electrons are a quantum gas): see the physics notes."
         })
         .small(),
     );

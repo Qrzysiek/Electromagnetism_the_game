@@ -726,6 +726,41 @@ fn hall_forces_balance() {
     assert!((0.85..1.5).contains(&steady), "steady {steady}");
 }
 
+/// The metals' chevrons move with the carriers' drift (`level::tube::metal_steps`, PHYSICS.md
+/// §2.11): on Ohm's law's reference over the goal's window (t = 10–40) the carriers' mean
+/// displacement along the strip per time must be the current over the background's charge
+/// per area times the width, `v = I/(ρW)`, within 10 % (the carriers a contact takes during
+/// a step are left out of that step's mean; the noise ~1 %), and across it below 5 % of
+/// that.
+#[test]
+fn metal_drift_carries_the_current() {
+    let level = level::shipped("ohms_law");
+    let run = level.tube_run(&level.reference_solution, 1, 41.0);
+    let current = run.currents[0].expect("the goal's current");
+    let metal = &run.metals[0];
+    let (density, width) = (metal.background.abs(), metal.hi.y - metal.lo.y);
+    let expected = current / (density * width);
+    let k0 = run.frames.partition_point(|f| f.t < 10.0);
+    let k1 = run.frames.partition_point(|f| f.t <= 40.0) - 1;
+    let mut shift = [0.0; 2];
+    for k in k0 + 1..=k1 {
+        let step = level::tube::metal_steps(&run.metals, &run.frames[k - 1], &run.frames[k]);
+        shift[0] += step[0][0];
+        shift[1] += step[0][1];
+    }
+    let span = run.frames[k1].t - run.frames[k0].t;
+    let (along, across) = (shift[0] / span, shift[1] / span);
+    println!(
+        "drift {along:.4} along, {across:.4} across; I/(ρW) = {current:.3}/({density} × {width}) \
+         = {expected:.4}"
+    );
+    assert!(
+        (along / expected - 1.0).abs() < 0.10,
+        "drift {along} against {expected}"
+    );
+    assert!(across.abs() < 0.05 * expected, "across {across}");
+}
+
 /// The magnetron's antenna radiates its load (PHYSICS.md §2.11): on the reference's preview
 /// run, the electromagnetic field's power out of the board over t = 98–100 (the field
 /// solver's) against the tank load's R⟨I²⟩ over the same span (the circuit's): two

@@ -1217,7 +1217,7 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
 }
 
 /// A metal's carriers traced with their paths (about this many).
-const METAL_SAMPLE: usize = 40;
+pub const METAL_SAMPLE: usize = 40;
 
 /// The time over which a traced carrier's path is drawn.
 const METAL_TRAIL: f64 = 0.4;
@@ -1319,22 +1319,20 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     // A sample of a metal's carriers with their paths over the last `METAL_TRAIL`: the
     // thermal zigzag between collisions, the drift along the field.
     if metal_dots && in_metals > 0 {
-        // One carrier in `every` by identity, `every` fixed for the run (from its first
-        // frame): counted afresh each frame, the number in the metals wobbles as the
-        // contacts take and give carriers, and each step of `every` picked a whole new
-        // sample (the traces seemed to reset every few seconds, at random).
-        let first = view
-            .run
-            .frames
-            .first()
-            .map_or(in_metals, |f| f.x.iter().filter(|x| in_metal(x)).count());
-        let every = (first / METAL_SAMPLE).max(1);
+        // The carriers traced (`crate::Traced`): constant in number, one a contact absorbs
+        // replaced by the newest carrier (one in `every` by identity varied in number as
+        // the contacts took and gave carriers).
+        let traced: std::collections::HashSet<u32> = game
+            .traced
+            .as_ref()
+            .map(|t| t.ids.iter().copied().collect())
+            .unwrap_or_default();
         let sample: std::collections::HashMap<u32, usize> = frame
             .id
             .iter()
             .enumerate()
             .filter(|(i, id)| {
-                (**id as usize).is_multiple_of(every)
+                traced.contains(id)
                     && in_metal(&frame.x[*i])
                     && frame.kind[*i] != level::tube::KIND_PROJECTILE
             })
@@ -1462,6 +1460,107 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     draw_swing(gizmos, game, &frame);
     draw_leads(gizmos, game);
     draw_hall(gizmos, view, &frame);
+    draw_drift(gizmos, game, view, &frame);
+}
+
+/// The chevrons' spacing along a metal.
+const DRIFT_TICKS: f64 = 2.0;
+
+/// The drift (as a fraction of the thermal speed) at which the chevrons are fully drawn.
+/// Without a supply the drift is the thermal motion's noise, ~1 % of the thermal speed over
+/// a time unit, and its chevrons all but vanish; Ohm's law's reference drifts at 19 %.
+const DRIFT_FULL: f64 = 0.1;
+
+/// Metals: chevrons across each strip that move with its carriers' mean displacement along
+/// it (`crate::Drift`): the drift of the carriers as a whole, the current, slow against
+/// each one's thermal zigzag (Ohm's law: 0.37 against a thermal speed of 2), steady on a
+/// steady supply. They point the way it went over the last time unit, drawn as strongly as
+/// it is fast.
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+fn draw_drift(
+    gizmos: &mut Gizmos,
+    game: &Game,
+    view: &crate::TubeView,
+    frame: &level::tube::TubeFrame,
+) {
+    let Some(drift) = game.drift.as_ref().filter(|d| d.revision == view.revision) else {
+        return;
+    };
+    let frames = &view.run.frames;
+    // The mean displacement at time t (between the frames around it).
+    let at = |x: &[[f64; 2]], t: f64| -> Option<bevy::math::DVec2> {
+        let k = frames.partition_point(|f| f.t <= t).checked_sub(1)?;
+        let x0 = bevy::math::DVec2::from(*x.get(k)?);
+        let Some((f1, x1)) = frames.get(k + 1).zip(x.get(k + 1)) else {
+            return Some(x0);
+        };
+        let x1 = bevy::math::DVec2::from(*x1);
+        let span = f1.t - frames[k].t;
+        let s = if span > 0.0 {
+            ((t - frames[k].t) / span).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        Some(x0 + (x1 - x0) * s)
+    };
+    for (m, x) in view.run.metals.iter().zip(&drift.x) {
+        let (Some(now), Some(then)) = (at(x, frame.t), at(x, frame.t - 1.0)) else {
+            continue;
+        };
+        // Along the way the carriers have gone since the start (a square metal's drift is
+        // along its contacts, not its longer side).
+        let along_x = now.x.abs() >= now.y.abs();
+        let (now, then) = if along_x {
+            (now.x, then.x)
+        } else {
+            (now.y, then.y)
+        };
+        let (a0, a1, b0, b1) = if along_x {
+            (m.lo.x, m.hi.x, m.lo.y, m.hi.y)
+        } else {
+            (m.lo.y, m.hi.y, m.lo.x, m.hi.x)
+        };
+        let point = |a: f64, b: f64| {
+            if along_x {
+                Vec2::new(a as f32, b as f32)
+            } else {
+                Vec2::new(b as f32, a as f32)
+            }
+        };
+        let speed = now - then;
+        let strength = if m.thermal_speed > 0.0 {
+            (speed.abs() / (DRIFT_FULL * m.thermal_speed)).min(1.0)
+        } else {
+            1.0
+        };
+        let color = Color::srgba(0.95, 0.95, 0.9, (0.75 * strength) as f32);
+        // Each chevron spans the strip, its tip `depth` ahead of its arms, the way of the
+        // drift.
+        let (inset, way) = (0.15, speed.signum());
+        let depth = (0.25 * (b1 - b0)).min(1.0);
+        // From the first chevron that reaches into the strip (by either end).
+        let mut a = a0 + now.rem_euclid(DRIFT_TICKS) - DRIFT_TICKS;
+        while a < a1 + depth {
+            let back = a - way * depth;
+            for arm in [b0 + inset, b1 - inset] {
+                // Both ends clipped to the strip.
+                let (s, e) = (back.clamp(a0, a1), a.clamp(a0, a1));
+                if (e - s).abs() < 1e-9 {
+                    continue;
+                }
+                let b_at = |u: f64| arm + (0.5 * (b0 + b1) - arm) * (u - back) / (a - back);
+                let (p, q) = (point(s, b_at(s)), point(e, b_at(e)));
+                gizmos.line_2d(p, q, color);
+                let nudge = if along_x {
+                    Vec2::new(0.03, 0.0)
+                } else {
+                    Vec2::new(0.0, 0.03)
+                };
+                gizmos.line_2d(p + nudge, q + nudge, color);
+            }
+            a += DRIFT_TICKS;
+        }
+    }
 }
 
 /// How far back the drift of a metal's carriers is measured (their thermal motion is about
