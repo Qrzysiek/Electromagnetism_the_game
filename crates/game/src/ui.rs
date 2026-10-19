@@ -245,6 +245,7 @@ pub fn panel(
     let left = ctx.viewport_rect().right() - PANEL_WIDTH;
     game.panel_left_px = Some(left * ctx.pixels_per_point());
     supply_badges(ctx, game, *camera, left);
+    crate::legend::board(ctx, game);
     inspect_tooltip(ctx, game, *camera);
     Ok(())
 }
@@ -575,12 +576,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 }
             }
         });
-        ui.label(
-            egui::RichText::new(
-                "Outside fields: the setup must work under every disturbance. All flights \
-                 of a shot are drawn; the selected one is brightest.",
-            )
-            .small(),
+        explain(
+            ui,
+            "It must work under every disturbance",
+            "Outside fields: the setup must work under every disturbance. All flights of a \
+             shot are drawn; the selected one is brightest.",
         );
     }
     let shot_index = game.active_shot.min(n_shots.saturating_sub(1));
@@ -933,12 +933,11 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         for issue in issues {
             ui.colored_label(egui::Color32::from_rgb(255, 170, 80), issue);
         }
-        ui.label(
-            egui::RichText::new(
-                "Metal bodies must stay apart, and particles must not start in metal or on \
-                 a wire: the fields are singular there.",
-            )
-            .small(),
+        explain(
+            ui,
+            "Why: the fields are singular there",
+            "Metal bodies must stay apart, and particles must not start in metal or on a \
+             wire: the fields are singular there.",
         );
     } else if level.is_tube() {
         tube_result(ui, game, &level);
@@ -1271,10 +1270,16 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 .em_snapshot
                 .as_ref()
                 .map_or((0.0, 0.0, 0.0), |s| (s.c, s.t, s.delay));
-            let what = if game.map == Some(MapMode::Magnetic) {
-                "B_z, out of the plane (orange) or into it (teal)"
+            let (headline, what) = if game.map == Some(MapMode::Magnetic) {
+                (
+                    "B_z: orange out of the plane, teal into it",
+                    "B_z, out of the plane (orange) or into it (teal)",
+                )
             } else {
-                "the energy flow |S| = (c/4π)|E × B| (arrows: its direction)"
+                (
+                    "|S|, the field's energy flow; arrows: its way",
+                    "the energy flow |S| = (c/4π)|E × B| (arrows: its direction)",
+                )
             };
             let open = level.tube.as_ref().is_some_and(|t| t.output.is_some());
             let smoothed = if delay <= 0.0 {
@@ -1296,8 +1301,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     fmt_num(delay)
                 )
             };
-            ui.label(
-                egui::RichText::new(format!(
+            explain(
+                ui,
+                headline,
+                &format!(
                     "The electromagnetic field of the run's charges and currents, with \
                      retardation at the speed of light c = {} (a display parameter: the \
                      carriers' own motion stays Newtonian): {what}, on a log scale over {:.1} \
@@ -1310,8 +1317,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     fmt_num(c),
                     game.tube_range_decades,
                     fmt_num(t),
-                ))
-                .small(),
+                ),
             );
             ui.separator();
             controls(ui);
@@ -1322,8 +1328,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),
             )
             .on_hover_text("How many decades below the strong field are still coloured");
-            ui.label(
-                egui::RichText::new(format!(
+            explain(
+                ui,
+                "|E|, log scale; arrows: its direction",
+                &format!(
                     "|E| at the time shown (live while animating), with the electrons' space \
                      charge: bright where strong, on a log scale over {:.1} decades below the \
                      field at the 99th percentile of the board; contours every quarter \
@@ -1337,8 +1345,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     } else {
                         ""
                     }
-                ))
-                .small(),
+                ),
             );
             ui.separator();
             controls(ui);
@@ -1354,17 +1361,24 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             );
         }
         let metals = level.tube.as_ref().is_some_and(|t| !t.metals.is_empty());
-        ui.label(
-            egui::RichText::new(if metals {
-                "The carriers' potential energy at the time shown (live), relative to the \
+        if game.map == Some(MapMode::Potential) {
+            explain(
+                ui,
+                if metals {
+                    "Carriers' potential energy: blue downhill, red uphill"
+                } else {
+                    "Electrons' potential energy: blue downhill, red uphill"
+                },
+                if metals {
+                    "The carriers' potential energy at the time shown (live), relative to the \
                  first contact then, in units of the largest potential difference the \
                  electrodes reach divided by the gain: blue downhill, red uphill; contours \
                  every quarter. It includes the carriers' charge and the ions' background: \
                  inside a metal carrying a current they cancel but for a thin layer at its \
                  surfaces, and the potential falls evenly from contact to contact (a uniform \
                  field: Ohm's law)."
-            } else {
-                "The electrons' potential energy at the time shown (live), relative to the \
+                } else {
+                    "The electrons' potential energy at the time shown (live), relative to the \
                  cathode then, in units of the largest potential difference to it the \
                  electrodes reach (their supplies over a period) divided by the gain: blue \
                  downhill (towards the anode), red uphill, smoothly graded and saturating \
@@ -1372,9 +1386,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                  electrons' own space charge and the charge it induces on the electrodes: \
                  the flat region in front of the cathode, where the field is pulled down to \
                  zero, is the space charge that limits the current."
-            })
-            .small(),
-        );
+                },
+            );
+        }
         ui.separator();
         controls(ui);
         return;
@@ -1469,15 +1483,17 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             .disturbances
             .get(disturbance)
             .is_some_and(|d| d.waves.iter().any(|w| w.omega != 0.0));
-    let legend = match game.map {
-        Some(MapMode::Potential) if time_dependent => {
+    let legend: (&str, &str) = match game.map {
+        Some(MapMode::Potential) if time_dependent => (
+            "Red uphill, blue downhill (the static part)",
             "Red: uphill for this shot's particle, blue: downhill (the static part of the \
              field; plates and coils driven by circuits as they are at t = 0). No dark \
              region: the time-dependent fields (a ramped or driven coil's induced field, \
              driven plates, antennas, waves) do work on the particle, so energy \
-             conservation forbids nothing here."
-        }
-        Some(MapMode::Potential) => {
+             conservation forbids nothing here.",
+        ),
+        Some(MapMode::Potential) => (
+            "Red uphill, blue downhill; dark: out of reach",
             "Red: uphill for this shot's particle, blue: downhill; contours every T₀/4. \
              Dark: forbidden by energy conservation for every particle shown (all shots \
              with \"show all\"; a beam counts with its most energetic particle). The \
@@ -1485,44 +1501,50 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
              charges, clouds, coils, antennas and stray fields; metal from its picture \
              model (spheres to about 1e-4, electrodes on a coarser mesh, within about 0.5 % \
              of their potential). With interacting beam particles only a guide, since \
-             they exchange energy."
-        }
-        Some(MapMode::Magnetic) if shot.particle.charge == 0.0 && shot.particle.moment != 0.0 => {
+             they exchange energy.",
+        ),
+        Some(MapMode::Magnetic) if shot.particle.charge == 0.0 && shot.particle.moment != 0.0 => (
+            "B_z: orange out of the plane, teal into it",
             "B perpendicular to the plane. Orange: out of the plane, teal: into it. \
              Value 1 = field in which this particle's magnetic energy |m B| equals T₀; \
-             contours every 0.25."
-        }
-        Some(MapMode::Magnetic) => {
+             contours every 0.25.",
+        ),
+        Some(MapMode::Magnetic) => (
+            "B_z: orange out of the plane, teal into it",
             "B perpendicular to the plane. Orange: out of the plane, teal: into it. \
              Value 1 = field in which this particle circles with a 5-cell radius; \
-             contours every 0.25."
-        }
-        Some(MapMode::Waves) => {
+             contours every 0.25.",
+        ),
+        Some(MapMode::Waves) => (
+            "Antennas' and waves' fields: colour B_z, arrows E",
             "Fields of the antennas and waves at the animation time (their exact retarded \
              fields, drawn in single precision). Colour: B perpendicular to the plane \
              (orange out, blue in), on the chosen scale (bar above); arrows: E. Near an \
              antenna the field is quasi-static; further out the radiation travels outwards \
-             at c."
-        }
-        Some(MapMode::Total) => {
+             at c.",
+        ),
+        Some(MapMode::Total) => (
+            "Everything's field: colour B_z or |E|, arrows E",
             "The total field at the animation time: level charges, magnets and coils, \
              antennas, waves and disturbances, and the particle's own field (retarded, \
              Liénard–Wiechert). The static part is computed in double precision on 6 \
              points per cell and interpolated between them (metal from its picture model); \
              antennas, waves and the particle are evaluated per pixel. The particle's field \
              is usually far weaker than the electrodes'; raise the range to see it. Colour: \
-             B_z or |E| on the chosen scale (bar above); arrows: E."
-        }
-        Some(MapMode::ParticleField) if level.has_beams() && game.neglected_only => {
+             B_z or |E| on the chosen scale (bar above); arrows: E.",
+        ),
+        Some(MapMode::ParticleField) if level.has_beams() && game.neglected_only => (
+            "What the beam's interaction leaves out",
             "What the quasi-static beam interaction leaves out of the dynamics: the full \
              retarded field of all particles minus the fields it uses (each particle's past \
              continued along the motion it would have in the fields it feels now). Mostly \
              how those fields change along its path during the light travel time, and the \
              delay with which the news of an absorption spreads. Shown on the full field's \
              colour scale (linear by default), so its true size is seen; its size is stated \
-             above."
-        }
-        Some(MapMode::ParticleField) if level.has_beams() => {
+             above.",
+        ),
+        Some(MapMode::ParticleField) if level.has_beams() => (
+            "The beam's own field: colour B_z, arrows E",
             "The retarded (Liénard–Wiechert, exact) field of every particle of the beam at \
              the animation time, from the flight shown (the exact one once the verdict is \
              in). Every change of velocity sends out radiation at c. Before launch each \
@@ -1530,40 +1552,40 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
              detector flies on into the screening cup, its charge fading as seen from \
              outside (with the instant drain its field disappears as the news of its \
              absorption spreads at c); one absorbed by a body stays there at rest. Colour: \
-             B perpendicular to the plane, on the chosen scale; arrows: E."
-        }
-        Some(MapMode::ParticleField) if shot.particle.moment != 0.0 => {
+             B perpendicular to the plane, on the chosen scale; arrows: E.",
+        ),
+        Some(MapMode::ParticleField) if shot.particle.moment != 0.0 => (
+            "The particle's own field: colour B_z, arrows E",
             "The field of the particle itself at the animation time. Its charge's field is \
              Liénard–Wiechert (exact); its magnetic moment is drawn as the static dipole \
              field B_z = −m/r³ from its retarded position, without the terms of a moving \
              dipole (of order v/c). Colour: B perpendicular to the plane, on the chosen \
-             scale; arrows: E. Before launch the particle is taken to move uniformly."
-        }
-        Some(MapMode::ParticleField) => {
+             scale; arrows: E. Before launch the particle is taken to move uniformly.",
+        ),
+        Some(MapMode::ParticleField) => (
+            "The particle's own field: colour B_z, arrows E",
             "The field of the particle itself (Liénard–Wiechert, exact) at the animation \
              time. Every change of velocity sends out a radiation pulse at c; the energy it \
              carries is what the particle loses (radiation reaction, when included). \
              Colour: B perpendicular to the plane, on the chosen scale; arrows: E. Before \
-             launch the particle is taken to move uniformly."
-        }
+             launch the particle is taken to move uniformly.",
+        ),
         // Tube levels only (their own View section).
-        Some(MapMode::Electric | MapMode::EnergyFlow) | None => "",
+        Some(MapMode::Electric | MapMode::EnergyFlow) | None => ("", ""),
     };
-    if !legend.is_empty() {
-        ui.label(egui::RichText::new(legend).small());
+    if !legend.0.is_empty() {
+        explain(ui, legend.0, legend.1);
     }
     if game.map == Some(MapMode::ParticleField)
         && (!level.conductors.is_empty() || !level.electrodes.is_empty())
     {
-        ui.label(
-            egui::RichText::new(
-                "Near metal: the charges the particle induces on it reshape its field there \
-                 (and screen it inside); that part is not drawn. (In the dynamics their \
-                 force is included for spheres and bounded for electrodes, PHYSICS.md \
-                 §2.6–2.7.)",
-            )
-            .small()
-            .color(egui::Color32::from_rgb(255, 210, 120)),
+        explain_coloured(
+            ui,
+            "Near metal: its induced charges not drawn",
+            "Near metal: the charges the particle induces on it reshape its field there \
+             (and screen it inside); that part is not drawn. (In the dynamics their force is \
+             included for spheres and bounded for electrodes, PHYSICS.md §2.6–2.7.)",
+            Some(egui::Color32::from_rgb(255, 210, 120)),
         );
     }
     ui.checkbox(&mut game.show_field_lines, "Electric field lines (F)")
@@ -1575,15 +1597,36 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         .on_hover_text("Smallest distance between neighbouring field lines");
     ui.add(egui::Slider::new(&mut game.field_line_opacity, 0.05..=1.0).text("opacity"))
         .on_hover_text("How strongly the field lines are drawn");
-    ui.label(
-        egui::RichText::new(
-            "In this 2D slice of a 3D field, lines show direction only, not strength. Screened regions (behind grounded metal) get few lines.",
-        )
-        .small(),
+    explain(
+        ui,
+        "Lines show direction only",
+        "In this 2D slice of a 3D field, lines show direction only, not strength. Screened \
+         regions (behind grounded metal) get few lines.",
     );
     ui.separator();
 
     controls(ui);
+}
+
+/// An explanation that does not crowd the panel (the owner, 2026-10-19: no walls of small
+/// print; every element explained where it is): a short line, marked ℹ, and the whole
+/// explanation on hover.
+pub(crate) fn explain(ui: &mut egui::Ui, headline: &str, detail: &str) {
+    explain_coloured(ui, headline, detail, None);
+}
+
+/// `explain` in a colour (a warning).
+fn explain_coloured(
+    ui: &mut egui::Ui,
+    headline: &str,
+    detail: &str,
+    colour: Option<egui::Color32>,
+) {
+    let mut text = egui::RichText::new(format!("{headline}  ℹ")).small();
+    if let Some(c) = colour {
+        text = text.color(c);
+    }
+    ui.label(text).on_hover_text(detail);
 }
 
 fn controls(ui: &mut egui::Ui) {
@@ -1900,7 +1943,7 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         ui.colored_label(
             egui::Color32::from_rgb(255, 170, 80),
             format!(
-                "Too many particles: a run reached {} and emission paused, so the verdict                  is uncertain.",
+                "Too many particles: a run reached {} and emission paused, so the verdict is uncertain.",
                 physics::tube::MAX_PARTICLES
             ),
         );
@@ -1920,18 +1963,29 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             // over one unit the rate was uncertain by a third.
             let k0 = v.run.frames.partition_point(|f| f.t < f1.t - 10.0);
             if let Some(f0) = v.run.frames.get(k0).filter(|f0| f1.t > f0.t) {
-                ui.label(format!(
-                    "Joule heat: {} per unit length per time over the last 10 time units \
-                     (the lattice takes it at the collisions: about nine tenths of the \
-                     supplies' I V; the electrons bring the rest into the contact they \
-                     reach, the energy the field gave them since their last collision)",
-                    fmt_num((f1.heat - f0.heat) / (f1.t - f0.t))
-                ));
+                explain(
+                    ui,
+                    &format!(
+                        "Joule heat: {} per time",
+                        fmt_num((f1.heat - f0.heat) / (f1.t - f0.t))
+                    ),
+                    "The heat the metal's lattice takes, per unit length along z per time \
+                     unit, over the last 10 time units (each collision's share fluctuates by \
+                     about kT). The lattice takes it at the collisions: about nine tenths of \
+                     the supplies' I V; the carriers bring the rest into the contact they \
+                     reach, the energy the field gave them since their last collision.",
+                );
             }
         }
     }
-    ui.label(
-        egui::RichText::new(if spec.metals.is_empty() {
+    explain(
+        ui,
+        if spec.metals.is_empty() {
+            "A z-invariant tube: what is drawn"
+        } else {
+            "A metal (the Drude model): what is drawn"
+        },
+        if spec.metals.is_empty() {
             "A z-invariant tube: every electrode is a long prism, the electrons (blue), ions \
              (orange) and projectiles (large) are long lines of charge, and currents are per \
              unit length. Emitters release as much as their field allows: the particles' own \
@@ -1947,27 +2001,8 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
              as keep the metal next to them neutral (a traced carrier a contact takes is \
              replaced by another, so they stay as many). A classical model of a metal (its real \
              electrons are a quantum gas): see the physics notes."
-        })
-        .small(),
+        },
     );
-    let in_field = game
-        .tube_preview
-        .as_ref()
-        .is_some_and(|v| v.run.b_z != 0.0 && !v.run.metals.is_empty());
-    if in_field {
-        ui.label(
-            egui::RichText::new(
-                "The arrows on each strip, the Hall effect over the last time unit: white, \
-                 the carriers' drift; orange, the magnetic field's push on them, q v × B, \
-                 sideways; blue, the electric push across the strip, from the charge the \
-                 magnetic one piled on its sides (the Hall voltage). The piling goes on until \
-                 the electric push holds the carriers back (in a metal within a fraction of \
-                 a time unit, its dielectric relaxation time): then the two are nearly equal \
-                 and opposite.",
-            )
-            .small(),
-        );
-    }
 }
 
 /// Beam levels: verified transmission of every beam shot in every flight against its
@@ -2278,8 +2313,10 @@ fn free_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             };
         }
     }
-    ui.label(
-        egui::RichText::new(format!(
+    explain(
+        ui,
+        "Free charges move and interact; pull the handle back to launch",
+        &format!(
             "Free charges move and push and pull every other particle with their fields \
              (mass {}, radius {}; if two ever touch, they bounce as rigid spheres). To launch \
              one, pull the handle behind it back, like a slingshot: the arrow shows where \
@@ -2287,8 +2324,7 @@ fn free_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             fmt_si(level.limits.free_mass),
             level.limits.free_radius,
             level.physics.c.map_or_else(|| "∞".to_string(), fmt_si)
-        ))
-        .small(),
+        ),
     );
 }
 
@@ -2838,17 +2874,16 @@ fn flow_controls(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiatio
                 );
         }
     });
-    ui.label(
-        egui::RichText::new(
-            "S = (c²/4π) E × B, the flow of field energy (Jackson §6.7). Only its flux \
+    explain(
+        ui,
+        "S = (c²/4π) E × B: where the field's energy flows",
+        "S = (c²/4π) E × B, the flow of field energy (Jackson §6.7). Only its flux \
              through closed surfaces is unique: where the energy goes in between is \
              Poynting's convention. The map is a slice of a 3D flow; energy also leaves \
              the plane. Charges beside magnets keep a steady circulation (field momentum) \
              that carries energy nowhere. Near a particle part of the work done on it comes \
              from the exchange energy stored around it (a third at low speed), the rest \
              flows in.",
-        )
-        .small(),
     );
 }
 
@@ -3137,42 +3172,43 @@ fn radiation_goal(
         format!("below {} {unit}", fmt_si(hi))
     };
     if let Some([t1, t2]) = goal.window {
-        ui.label(
-            egui::RichText::new(format!(
+        explain(
+            ui,
+            &format!(
                 "Steady receiver: into {axis:.0}° ± {half:.0}°, {band}, from t = {t1:.0} to {t2:.0}: {need}"
-            ))
-            .small(),
-        )
-        .on_hover_text(
-            "The receiver (the band outside the arena) stands far away and collects the light the particle scatters while a wave drives it: the mean power it receives over its window, after the start's transient has died away (its time is the arrival time less the light time from the centre of the arena). The particle need not arrive anywhere; it must keep scattering, bound, until the window has passed.",
-        );
-        ui.label(
-            egui::RichText::new(if system {
-                "The receiver is far away and averages the scattered light over its window; the particle need not arrive. It sees every particle: their fields add."
-            } else {
-                "The receiver is far away and averages the scattered light over its window; the particle need not arrive."
-            })
-            .small()
-            .italics(),
+            ),
+            &format!(
+                "The receiver (the band outside the arena) stands far away and collects the \
+                 light the particle scatters while a wave drives it: the mean power it \
+                 receives over its window, after the start's transient has died away (its \
+                 time is the arrival time less the light time from the centre of the arena). \
+                 The particle need not arrive anywhere; it must keep scattering, bound, until \
+                 the window has passed.{}",
+                if system {
+                    " It sees every particle: their fields add."
+                } else {
+                    ""
+                }
+            ),
         );
     } else {
-        ui.label(
-            egui::RichText::new(format!(
-                "Radiation goal: into {axis:.0}° ± {half:.0}°, {band}: {need}"
-            ))
-            .small(),
-        )
-        .on_hover_text(
-            "The receiver (the band outside the arena) stands far away: it collects the particle's radiation, not the particle. The particle itself must still end in its detector. The radiation leaves at the speed of light whenever the particle is accelerated, mostly in the direction it is heading, and reaches the receiver after the flight: switch the map to 'particle field' to watch it go.",
-        );
-        ui.label(
-            egui::RichText::new(if system {
-                "The receiver is far away and collects radiation, not the particle; the particle must still end in its detector. It sees every particle: their fields add, in phase they reinforce, in antiphase they cancel."
-            } else {
-                "The receiver is far away and collects radiation, not the particle; the particle must still end in its detector."
-            })
-            .small()
-            .italics(),
+        explain(
+            ui,
+            &format!("Radiation goal: into {axis:.0}° ± {half:.0}°, {band}: {need}"),
+            &format!(
+                "The receiver (the band outside the arena) stands far away: it collects the \
+                 particle's radiation, not the particle. The particle itself must still end in \
+                 its detector. The radiation leaves at the speed of light whenever the \
+                 particle is accelerated, mostly in the direction it is heading, and reaches \
+                 the receiver after the flight: switch the map to 'particle field' to watch it \
+                 go.{}",
+                if system {
+                    " It sees every particle: their fields add, in phase they reinforce, in \
+                     antiphase they cancel."
+                } else {
+                    ""
+                }
+            ),
         );
     }
     if let Some(e) = radiation {

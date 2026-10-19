@@ -8,6 +8,7 @@ mod draw;
 mod editor;
 mod em;
 mod inspect;
+mod legend;
 mod level_docs;
 mod level_editor;
 mod math;
