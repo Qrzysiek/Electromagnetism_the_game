@@ -128,6 +128,7 @@ PLAYER_LIMITS = {
     "antenna": {"max_antennas": 2, "antenna_amplitudes": [0.5, 1.0], "antenna_omegas": [1.0]},
     "plate": {"max_plates": 2, "plate_voltages": [-1.0, 1.0]},
     "free": {"max_free": 2, "free_charges": [-1.0, 1.0], "free_speeds": [0.0, 1.0]},
+    "cut": {"max_cuts": 2},
 }
 
 
@@ -249,6 +250,20 @@ def make_tube_metal(lv, pl, p, o, w):
                               "core_radius": 0.005, "carriers_per_area": 20.0, "seed": 1}]}
 
 
+def make_player_cut(lv, pl, p, o, w):
+    """The player's insulating cut (PHYSICS.md 2.11): across the middle of the level's first
+    metal (along y, at the row of p within it) if it has one, so that its pieces carry the
+    metal's physics beside the other element; else at p, where it must be refused."""
+    lv["limits"].update(PLAYER_LIMITS["cut"])
+    metals = (lv.get("tube") or {}).get("metals") or []
+    if metals:
+        (x0, y0, _), (x1, y1, _) = metals[0]["corners"]
+        at = ((x0 + x1) // 2, min(max(p[1], y0 + 1), y1 - 1))
+    else:
+        at = p
+    pl.append({"node": node(at), "kind": "cut", "value": 0.0, "angle_deg": 90.0})
+
+
 def make_tube_coax(lv, pl, p, o, w):
     """A coaxial tube level: a rod cathode (diameter 2) at p inside a ring anode
     (mid-diameter 7, wall 1, at 1 V) collecting the goal's current, so that the other
@@ -335,6 +350,7 @@ ELEMENTS = {
                                               "angle_deg": 45.0, "omega": 1.0}),
     "player_plate": player(lambda p, o, w: {"node": node(p), "kind": "plate", "value": 1.0,
                                             "angle_deg": 90.0}),
+    "player_cut": make_player_cut,
     "player_free": player(lambda p, o, w: {"node": node(p), "kind": "free", "value": 1.0,
                                            "angle_deg": 0.0, "speed": 0.0}),
     "player_free_thrown": player(lambda p, o, w: {"node": node(p), "kind": "free", "value": 1.0,

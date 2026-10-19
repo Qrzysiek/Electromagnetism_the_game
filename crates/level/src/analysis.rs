@@ -381,6 +381,14 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
                         }
                         continue;
                     }
+                    // A cut: turn it (along x or along y).
+                    ElementKind::Cut => {
+                        t[i].angle_deg = if t[i].angle_deg == 0.0 { 90.0 } else { 0.0 };
+                        if t != p && level.check_placement(&t).is_ok() {
+                            return t;
+                        }
+                        continue;
+                    }
                     // Signed lists: step to a neighbouring potential, or turn a plate.
                     kind @ (ElementKind::Plate | ElementKind::Supply) => {
                         if kind == ElementKind::Plate && rng.below(2) == 0 {
@@ -429,7 +437,9 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
             }
             3 if !t.is_empty() => {
                 let i = rng.below(t.len());
-                t[i].value = -t[i].value;
+                if t[i].kind != ElementKind::Cut {
+                    t[i].value = -t[i].value;
+                }
             }
             _ => {
                 if !t.is_empty() && rng.below(2) == 0 {

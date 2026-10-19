@@ -9,12 +9,13 @@ use level::{
 
 /// Kinds in palette order. Power supplies are not placed from the palette: they are
 /// operated on their electrodes.
-pub const KINDS: [ElementKind; 5] = [
+pub const KINDS: [ElementKind; 6] = [
     ElementKind::Charge,
     ElementKind::Magnet,
     ElementKind::Antenna,
     ElementKind::Plate,
     ElementKind::Free,
+    ElementKind::Cut,
 ];
 
 /// Kinds whose values are signed values from a list (plates, power supplies: potentials;
@@ -50,6 +51,8 @@ pub struct Editor {
     pub angle_deg: f64,
     /// Orientation of new plates, degrees (one of `PLATE_ANGLES`).
     pub plate_angle_deg: f64,
+    /// Orientation of new cuts: 0 along x, 90 along y.
+    pub cut_angle_deg: f64,
     /// Index into the level's allowed antenna frequencies for new antennas.
     pub omega_index: usize,
     /// Launch direction of new free charges, degrees (one of `FREE_ANGLES`).
@@ -59,7 +62,7 @@ pub struct Editor {
     /// Hardcore mode: magnitudes of new elements per kind (`KINDS` order), the
     /// frequency of new antennas and the speed of new free charges, anywhere in the
     /// level's ranges.
-    pub continuous_magnitude: [f64; 5],
+    pub continuous_magnitude: [f64; 6],
     pub continuous_omega: f64,
     pub continuous_speed: f64,
     /// Player element being moved (index) and its node when it was grabbed.
@@ -82,6 +85,8 @@ pub fn magnitudes(level: &Level, kind: ElementKind) -> &[f64] {
         ElementKind::Plate => &level.limits.plate_voltages,
         ElementKind::Supply => &level.limits.supply_voltages,
         ElementKind::Free => &level.limits.free_charges,
+        // A cut has no value.
+        ElementKind::Cut => &[],
     }
 }
 
@@ -96,6 +101,7 @@ pub fn max_of(level: &Level, kind: ElementKind) -> u32 {
             u32::try_from(level.electrodes.iter().filter(|e| e.tunable).count()).unwrap_or(0)
         }
         ElementKind::Free => level.limits.max_free,
+        ElementKind::Cut => level.limits.max_cuts,
     }
 }
 
@@ -143,6 +149,7 @@ impl Editor {
             positive,
             angle_deg: ANTENNA_ANGLES[0],
             plate_angle_deg: PLATE_ANGLES[0],
+            cut_angle_deg: 0.0,
             omega_index: 0,
             free_angle_deg: 0.0,
             speed_index: 0,
@@ -307,6 +314,25 @@ impl Editor {
     /// one step of `ANTENNA_ANGLES` (45°) or `PLATE_ANGLES` (90°).
     pub fn rotate(&mut self, step: isize) {
         let on = self.player_index_at(self.cursor);
+        // A cut: along x or along y.
+        if on.map_or(self.kind, |i| self.placement[i].kind) == ElementKind::Cut {
+            let turn = |a: f64| {
+                if level::tube::cut_along_x(a) {
+                    90.0
+                } else {
+                    0.0
+                }
+            };
+            match on {
+                Some(i) => {
+                    let mut e = self.placement[i];
+                    e.angle_deg = turn(e.angle_deg);
+                    self.set_element(i, e);
+                }
+                None => self.cut_angle_deg = turn(self.cut_angle_deg),
+            }
+            return;
+        }
         if on.map_or(self.kind, |i| self.placement[i].kind) == ElementKind::Free {
             let turn = |a: f64| {
                 let n = FREE_ANGLES.len() as isize;
@@ -457,6 +483,17 @@ impl Editor {
             e.kind == ElementKind::Plate
                 && physics::bem::Electrodes::shapes_only(vec![self.level.plate_box(e)])
                     .contains(p, PICK_MARGIN)
+        }) {
+            return Some(i);
+        }
+        // A cut anywhere along its slit.
+        if let Some(i) = self.placement.iter().position(|e| {
+            e.kind == ElementKind::Cut
+                && self.level.cut_segment(e).is_some_and(|(a, b)| {
+                    let (d, r) = (b - a, p - a);
+                    let u = (r.dot(d) / d.length_squared()).clamp(0.0, 1.0);
+                    (r - d * u).length() <= PICK_MARGIN
+                })
         }) {
             return Some(i);
         }
@@ -664,10 +701,15 @@ impl Editor {
         let e = Element {
             node: self.cursor,
             kind: self.kind,
-            value: self.selected_value(),
+            value: if self.kind == ElementKind::Cut {
+                0.0
+            } else {
+                self.selected_value()
+            },
             angle_deg: match self.kind {
                 ElementKind::Antenna => self.angle_deg,
                 ElementKind::Plate => self.plate_angle_deg,
+                ElementKind::Cut => self.cut_angle_deg,
                 ElementKind::Free if self.selected_speed() != 0.0 => self.free_angle_deg,
                 _ => 0.0,
             },
@@ -696,6 +738,9 @@ impl Editor {
     /// Flips the sign of the element under the cursor, or of the selection if none.
     pub fn flip_sign(&mut self) {
         if let Some(i) = self.player_index_at(self.cursor) {
+            if self.placement[i].kind == ElementKind::Cut {
+                return;
+            }
             let mut trial = self.placement.clone();
             trial[i].value = -trial[i].value;
             let _ = self.try_placement(trial);
@@ -1173,6 +1218,15 @@ pub fn describe(e: &PlacementError) -> String {
         PlacementError::TooManyAntennas => "No antennas left for this level.".into(),
         PlacementError::TooManyPlates => "No plates left for this level.".into(),
         PlacementError::TooManyFree => "No free charges left for this level.".into(),
+        PlacementError::TooManyCuts => "No cuts left for this level.".into(),
+        PlacementError::CutNotInMetal(_) => {
+            "A cut goes through a metal: put it on a node inside one, along x or y.".into()
+        }
+        PlacementError::PieceTooNarrow(_) => {
+            "Too close to an edge or another cut: every piece must stay at least four mean \
+             free paths wide."
+                .into()
+        }
         PlacementError::SpeedNotAllowed(_) => "The level does not offer that speed.".into(),
         PlacementError::NoTunableElectrode(_) => {
             "Power supplies belong to the level's tunable electrodes.".into()

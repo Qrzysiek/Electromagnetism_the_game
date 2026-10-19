@@ -848,3 +848,103 @@ fn magnetron_antenna_radiates_its_load() {
         "{radiated} vs {absorbed}"
     );
 }
+
+/// A cut (`ElementKind::Cut`) through a node of Magnetoresistance's metals.
+fn cut(x: i64, y: i64, angle_deg: f64) -> level::Element {
+    level::Element {
+        node: [x, y, 0],
+        kind: level::ElementKind::Cut,
+        value: 0.0,
+        angle_deg,
+        omega: None,
+        speed: None,
+    }
+}
+
+/// The cuts' placement rules (`Level::check_cuts`, `metal_pieces`) on Magnetoresistance's
+/// two metals (a strip 16 × 4 from (4, 13), one 4 × 10 from (10, 1); mean free path 1):
+/// a cut along y at x = 12 splits the long strip in two 8 × 4, one along x at y = 6 the short
+/// one in two 4 × 5; refused: a node outside the metals or on an edge, an angle not along x
+/// or y, a piece narrower than four mean free paths, more cuts than the level allows.
+#[test]
+fn cuts_follow_their_rules() {
+    use level::PlacementError;
+    let mut level = level::shipped("magnetoresistance");
+    level.limits.max_cuts = 2;
+    let pieces = level.metal_pieces(&[cut(12, 15, 90.0), cut(12, 6, 0.0)]);
+    let rects: Vec<(usize, [f64; 4])> = pieces
+        .iter()
+        .map(|(k, lo, hi)| (*k, [lo.x, lo.y, hi.x, hi.y]))
+        .collect();
+    assert_eq!(
+        rects,
+        vec![
+            (0, [4.0, 13.0, 12.0, 17.0]),
+            (0, [12.0, 13.0, 20.0, 17.0]),
+            (1, [10.0, 1.0, 14.0, 6.0]),
+            (1, [10.0, 6.0, 14.0, 11.0]),
+        ]
+    );
+    assert_eq!(level.metal_pieces(&[]).len(), 2);
+    let ok = |p: &[level::Element]| level.check_placement(p);
+    assert!(ok(&[cut(12, 15, 90.0), cut(12, 6, 0.0)]).is_ok());
+    assert!(ok(&[cut(12, 15, 270.0)]).is_ok());
+    assert_eq!(
+        ok(&[cut(2, 2, 0.0)]),
+        Err(PlacementError::CutNotInMetal([2, 2, 0]))
+    );
+    assert_eq!(
+        ok(&[cut(4, 15, 90.0)]),
+        Err(PlacementError::CutNotInMetal([4, 15, 0]))
+    );
+    assert_eq!(
+        ok(&[cut(12, 15, 45.0)]),
+        Err(PlacementError::CutNotInMetal([12, 15, 0]))
+    );
+    assert_eq!(
+        ok(&[cut(6, 15, 90.0)]),
+        Err(PlacementError::PieceTooNarrow([6, 15, 0]))
+    );
+    assert_eq!(
+        ok(&[cut(12, 15, 0.0)]),
+        Err(PlacementError::PieceTooNarrow([12, 15, 0]))
+    );
+    assert_eq!(
+        ok(&[cut(8, 15, 90.0), cut(16, 15, 90.0), cut(12, 6, 0.0)]),
+        Err(PlacementError::TooManyCuts)
+    );
+}
+
+/// A cut insulates: on Magnetoresistance at B = 0 (its supply at 7, no solenoid), over
+/// its goals' window t = 10–80, a cut across the long strip (along y at x = 12: no path
+/// left from contact to contact) takes its current below 3 % of the uncut strip's, and a
+/// cut along the short wide strip (along x at y = 6: two strips 4 × 5 side by side between
+/// the same contacts) leaves its current within 10 % (each piece's new wall carries a
+/// conductor's surface charge, a few per cent of a narrow strip's conductance, PHYSICS.md
+/// §2.11).
+#[test]
+fn cuts_insulate() {
+    let mut level = level::shipped("magnetoresistance");
+    level.limits.max_cuts = 2;
+    let supply = level::Element::supply([21, 15, 0], 7.0);
+    let currents = |placement: &[level::Element]| {
+        let run = level.tube_run(placement, 1, 81.0);
+        [0, 1].map(|k| run.currents[k].expect("the goal's window has passed"))
+    };
+    let [long, short] = currents(&[supply]);
+    let [long_cut, short_cut] = currents(&[supply, cut(12, 15, 90.0), cut(12, 6, 0.0)]);
+    println!(
+        "long strip {long:.4} -> {long_cut:.4} (cut across), short {short:.4} -> {short_cut:.4} \
+         (cut along: {:+.2} %)",
+        100.0 * (short_cut / short - 1.0)
+    );
+    assert!(long > 0.5, "the uncut long strip conducts: {long}");
+    assert!(
+        long_cut.abs() < 0.03 * long,
+        "a cut across: {long_cut} of {long}"
+    );
+    assert!(
+        (short_cut / short - 1.0).abs() < 0.10,
+        "a cut along: {short_cut} of {short}"
+    );
+}

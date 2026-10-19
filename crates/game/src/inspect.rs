@@ -47,6 +47,28 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
         DVec3::new(v.x, v.y, 0.0)
     };
     let near = |n: Node, r: f64| (pos(n) - p).length() <= r;
+    // The player's cuts, anywhere along their slits.
+    for e in placement.iter().filter(|e| e.kind == ElementKind::Cut) {
+        if let Some((a, b)) = level.cut_segment(e) {
+            let (d, r) = (b - a, p - DVec3::new(a.x, a.y, 0.0));
+            let u = (r.dot(d) / d.length_squared()).clamp(0.0, 1.0);
+            if (r - d * u).length() <= POINT_RADIUS {
+                return Some(
+                    Inspection::new("Cut (yours): an insulating slit")
+                        .line(format!(
+                            "across the metal along {}, from edge to edge",
+                            if level::tube::cut_along_x(e.angle_deg) {
+                                "x"
+                            } else {
+                                "y"
+                            }
+                        ))
+                        .line("its carriers cannot cross it: the metal is two pieces")
+                        .line("a current loop closes within each: eddy currents shrink"),
+                );
+            }
+        }
+    }
     // Point elements: the level's, then the player's (a supply sits on its electrode or
     // its coil's terminal: described with it below).
     for (e, mine) in level
@@ -55,7 +77,10 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
         .map(|e| (e, false))
         .chain(placement.iter().map(|e| (e, true)))
     {
-        if matches!(e.kind, ElementKind::Plate | ElementKind::Supply) {
+        if matches!(
+            e.kind,
+            ElementKind::Plate | ElementKind::Supply | ElementKind::Cut
+        ) {
             continue;
         }
         if near(e.node, POINT_RADIUS) {
@@ -393,7 +418,7 @@ fn element(level: &Level, e: &Element, mine: bool) -> Inspection {
                 fmt_num(e.angle_deg),
                 fmt_num(e.speed.unwrap_or(0.0))
             )),
-        ElementKind::Plate | ElementKind::Supply => Inspection::new("Element"),
+        ElementKind::Plate | ElementKind::Supply | ElementKind::Cut => Inspection::new("Element"),
     }
 }
 

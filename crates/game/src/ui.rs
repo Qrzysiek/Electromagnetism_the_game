@@ -830,6 +830,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         ElementKind::Plate => "plates",
         ElementKind::Supply => "power supplies",
         ElementKind::Free => "free charges",
+        ElementKind::Cut => "cuts",
     };
     let allowed: Vec<ElementKind> = crate::editor::KINDS
         .into_iter()
@@ -860,6 +861,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         // Nothing to place (e.g. only power supplies to set).
     } else if game.editor.kind == ElementKind::Free {
         free_palette(ui, game, &level);
+    } else if game.editor.kind == ElementKind::Cut {
+        cut_palette(ui, game);
     } else if crate::editor::is_signed(game.editor.kind) {
         plate_palette(ui, game, &level);
     } else {
@@ -874,7 +877,10 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 (ElementKind::Magnet, false) => "in (−z)",
                 (ElementKind::Antenna, true) => "phase 0°",
                 (ElementKind::Antenna, false) => "phase 180°",
-                (ElementKind::Plate | ElementKind::Supply | ElementKind::Free, _) => "",
+                (
+                    ElementKind::Plate | ElementKind::Supply | ElementKind::Free | ElementKind::Cut,
+                    _,
+                ) => "",
             };
             let hover = match kind {
                 ElementKind::Charge => "Flip sign (S)",
@@ -882,13 +888,17 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     "Flip orientation (S): moment out of the plane (+z) or into it (−z)"
                 }
                 ElementKind::Antenna => "Flip phase (S): opposite phase of the RF generator",
-                ElementKind::Plate | ElementKind::Supply | ElementKind::Free => "",
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Free | ElementKind::Cut => {
+                    ""
+                }
             };
             ui.label(match kind {
                 ElementKind::Charge => "New charge:",
                 ElementKind::Magnet => "New magnet μ:",
                 ElementKind::Antenna => "New antenna p₀:",
-                ElementKind::Plate | ElementKind::Supply | ElementKind::Free => "",
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Free | ElementKind::Cut => {
+                    ""
+                }
             });
             if both_signs {
                 if ui.button(sign).on_hover_text(hover).clicked() {
@@ -2417,6 +2427,25 @@ fn free_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     );
 }
 
+/// New cuts: their orientation (R turns the one under the cursor), and what a cut does.
+fn cut_palette(ui: &mut egui::Ui, game: &mut Game) {
+    ui.horizontal(|ui| {
+        ui.label("Orientation:");
+        for (a, name) in [(0.0, "along x"), (90.0, "along y")] {
+            ui.selectable_value(&mut game.editor.cut_angle_deg, a, name)
+                .on_hover_text("Rotate with R");
+        }
+    });
+    explain(
+        ui,
+        "A cut: an insulating slit across the whole metal",
+        "Click a node inside a metal: the slit runs through it from edge to edge, along x or \
+         y, and the metal's carriers cannot cross it. The metal becomes two pieces: a current \
+         loop must close within each, so eddy currents shrink (laminations). Every piece \
+         stays at least four mean free paths wide.",
+    );
+}
+
 fn plate_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     // The potential: a slider in every mode (hardcore shows its own), for the plate under
     // the cursor if there is one, else for new plates.
@@ -2605,6 +2634,8 @@ fn hardcore_controls(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         ElementKind::Antenna => "|p₀|",
         ElementKind::Plate | ElementKind::Supply => "V",
         ElementKind::Free => "q",
+        // A cut has no value (its orientation is the palette's).
+        ElementKind::Cut => return,
     };
     let signed = crate::editor::is_signed(e.kind);
     if signed {

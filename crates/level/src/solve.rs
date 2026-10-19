@@ -83,6 +83,12 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
             }
         }
     }
+    // Cuts through the metals, along x and along y (only nodes inside a metal pass).
+    if level.limits.max_cuts > 0 {
+        for a in [0.0, 90.0] {
+            kinds.push((ElementKind::Cut, 0.0, a, None, None));
+        }
+    }
     if level.limits.max_free > 0 {
         for &q in &level.limits.free_charges {
             for &v in &level.limits.free_speeds {
@@ -382,6 +388,7 @@ fn anneal_once(
     let plate_values = values(ElementKind::Plate);
     let supply_values = values(ElementKind::Supply);
     let free_values = values(ElementKind::Free);
+    let cut_values = values(ElementKind::Cut);
     for it in 0..iterations {
         if score == 0.0 && is_verified_solution(level, &current) {
             return Some(current);
@@ -405,6 +412,7 @@ fn anneal_once(
                     ElementKind::Plate => &plate_values,
                     ElementKind::Supply => &supply_values,
                     ElementKind::Free => &free_values,
+                    ElementKind::Cut => &cut_values,
                 };
                 (
                     trial[i].value,

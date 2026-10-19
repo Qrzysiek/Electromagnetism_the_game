@@ -613,6 +613,11 @@ pub enum ElementKind {
     /// node towards `angle_deg` with the element's `speed`. It moves under every force
     /// and interacts with the other particles (the level flies as one beam).
     Free,
+    /// An insulating cut the player makes through a tube level's metal: a straight slit
+    /// through the node across the whole metal, along `angle_deg` (0: along x, 90: along
+    /// y), which its carriers cannot cross; the metal becomes two pieces (laminations: the
+    /// eddy currents' loops shrink). `value` is unused (0).
+    Cut,
 }
 
 /// An element on a grid node.
@@ -1017,6 +1022,9 @@ pub struct Limits {
     /// Maximum number of free charges the player may place (dynamic particles).
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub max_free: u32,
+    /// Maximum number of cuts the player may make through a tube level's metals.
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub max_cuts: u32,
     /// Charges a free charge may carry (signed).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub free_charges: Vec<f64>,
@@ -1230,6 +1238,12 @@ pub enum PlacementError {
     TooManyAntennas,
     TooManyPlates,
     TooManyFree,
+    TooManyCuts,
+    /// A cut not strictly inside a tube level's metal, or not along x or y.
+    CutNotInMetal(Node),
+    /// A cut that leaves a piece of metal narrower than four mean free paths (its carriers
+    /// would scatter off its walls more than off its cores: `tube::Level::metal_pieces`).
+    PieceTooNarrow(Node),
     /// A free charge's launch speed that the level does not offer.
     SpeedNotAllowed(Option<f64>),
     /// A power supply that is not on the centre of a tunable electrode.
@@ -1371,14 +1385,21 @@ impl Level {
         if count(ElementKind::Free) > self.limits.max_free as usize {
             return Err(PlacementError::TooManyFree);
         }
+        if count(ElementKind::Cut) > self.limits.max_cuts as usize {
+            return Err(PlacementError::TooManyCuts);
+        }
         self.check_supplies(player)?;
+        self.check_cuts(player)?;
         // Plates first: point elements are checked against every electrode.
         let boxes = self.check_plates(player)?;
         let mut occupied: Vec<Node> = self.elements.iter().map(|c| c.node).collect();
         occupied.extend(self.shots.iter().map(|s| s.launch.node));
         occupied.extend(self.free_particles.iter().map(|f| f.node));
         for e in player {
-            if matches!(e.kind, ElementKind::Plate | ElementKind::Supply) {
+            if matches!(
+                e.kind,
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Cut
+            ) {
                 continue;
             }
             if !self.grid.contains(e.node) {
@@ -1488,7 +1509,9 @@ impl Level {
                         return Err(PlacementError::AngleNotAllowed(e.angle_deg));
                     }
                 }
-                ElementKind::Plate | ElementKind::Supply => unreachable!("checked above"),
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Cut => {
+                    unreachable!("checked above")
+                }
             }
         }
         Ok(())
@@ -2208,7 +2231,7 @@ impl Level {
                 ElementKind::Magnet => self.physics.magnet_radius,
                 ElementKind::Antenna => self.physics.antenna_radius,
                 ElementKind::Free => self.limits.free_radius,
-                ElementKind::Plate | ElementKind::Supply => return None,
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Cut => return None,
             };
             Some((self.grid.position(e.node), r))
         });
@@ -3460,6 +3483,7 @@ mod tests {
                 coil_rates: vec![],
                 solenoid_fields: vec![],
                 max_free: 2,
+                max_cuts: 0,
                 free_charges: vec![-1e-6, 2e-6],
                 free_speeds: vec![0.0, 0.7],
                 free_mass: 3.0,

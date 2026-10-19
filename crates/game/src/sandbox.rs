@@ -170,6 +170,7 @@ pub fn empty_level() -> Level {
             coil_rates: vec![],
             solenoid_fields: vec![],
             max_free: 0,
+            max_cuts: 0,
             free_charges: vec![],
             free_speeds: vec![],
             free_mass: 1.0,
@@ -343,7 +344,9 @@ fn pointer(
                     game.sandbox.antenna_omega,
                 ),
                 // Level electrodes are edited in the "Electrodes" section.
-                ElementKind::Plate | ElementKind::Supply | ElementKind::Free => return true,
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Free | ElementKind::Cut => {
+                    return true;
+                }
             };
             game.editor.edit_level(|l| {
                 let launch = l.shots.iter().any(|s| s.launch.node == node);
@@ -664,7 +667,8 @@ fn tool_help(ui: &mut egui::Ui, game: &mut Game) {
                     ElementKind::Antenna
                     | ElementKind::Plate
                     | ElementKind::Supply
-                    | ElementKind::Free => &mut game.sandbox.antenna_value,
+                    | ElementKind::Free
+                    | ElementKind::Cut => &mut game.sandbox.antenna_value,
                 };
                 let r = ui.add(
                     egui::DragValue::new(value)

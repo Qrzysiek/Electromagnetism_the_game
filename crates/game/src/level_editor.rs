@@ -973,6 +973,7 @@ fn kind_combo(ui: &mut egui::Ui, id: usize, kind: &mut ElementKind) {
         ElementKind::Plate => "plate V",
         ElementKind::Supply => "supply V",
         ElementKind::Free => "free q",
+        ElementKind::Cut => "cut",
     };
     egui::ComboBox::from_id_salt(("element_kind", id))
         .selected_text(text(*kind))
@@ -2386,6 +2387,7 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
         coil_rates,
         solenoid_fields,
         max_free,
+        max_cuts,
         free_charges,
         free_speeds,
         free_mass,
@@ -2499,6 +2501,14 @@ fn edit_limits(ui: &mut egui::Ui, l: &mut Limits, texts: &mut EditTexts, grid: &
              supply sets its source's level from this list)",
         )
         .has_focus()
+    });
+    focus |= row(ui, "Player cuts (max)", |ui| {
+        ui.add(egui::DragValue::new(max_cuts).range(0..=MAX_COUNT))
+            .on_hover_text(
+                "Insulating cuts through a tube level's metals (each a slit across a metal, \
+                 along x or y)",
+            )
+            .has_focus()
     });
     focus |= row(ui, "Player free charges (max)", |ui| {
         ui.add(egui::DragValue::new(max_free).range(0..=MAX_COUNT))
@@ -3051,9 +3061,10 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             ElementKind::Charge | ElementKind::Magnet | ElementKind::Antenna => {}
             // Player-only kinds (the level's own electrodes are `electrodes`, its dynamic
             // particles `free_particles`).
-            ElementKind::Plate | ElementKind::Supply | ElementKind::Free if reference => {}
-            ElementKind::Plate | ElementKind::Supply | ElementKind::Free => {
-                return fail("plates, power supplies and free charges are player elements");
+            ElementKind::Plate | ElementKind::Supply | ElementKind::Free | ElementKind::Cut
+                if reference => {}
+            ElementKind::Plate | ElementKind::Supply | ElementKind::Free | ElementKind::Cut => {
+                return fail("plates, power supplies, free charges and cuts are player elements");
             }
         }
         if !on_grid(node)
@@ -3315,11 +3326,15 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         coil_rates,
         solenoid_fields,
         max_free,
+        max_cuts,
         free_charges,
         free_speeds,
         free_mass,
         free_radius,
     } = limits;
+    if *max_cuts > MAX_COUNT {
+        return fail("cut limit outside the editor's range");
+    }
     if *max_free > MAX_COUNT
         || !free_charges.iter().all(|v| v.is_finite())
         || !free_speeds.iter().all(|v| v.is_finite() && *v >= 0.0)

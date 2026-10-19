@@ -181,7 +181,7 @@ fn draw_element(
             seg(gizmos, tip, tip + Vec2::from_angle(-0.6).rotate(back), ink);
         }
         // Drawn with the electrodes.
-        ElementKind::Plate | ElementKind::Supply => return,
+        ElementKind::Plate | ElementKind::Supply | ElementKind::Cut => return,
         // Drawn with their velocity arrows (`draw_free`).
         ElementKind::Free => return,
     }
@@ -939,7 +939,7 @@ pub fn draw(
                 ElementKind::Charge => (charge_radius, q_scale),
                 ElementKind::Magnet => (magnet_radius, m_scale),
                 ElementKind::Antenna => (antenna_radius, a_scale),
-                ElementKind::Plate | ElementKind::Supply => continue,
+                ElementKind::Plate | ElementKind::Supply | ElementKind::Cut => continue,
                 ElementKind::Free => {
                     let t = crate::editor::arrow_tip(level, e, game.arrow_measure);
                     let h = crate::editor::arrow_handle(level, e, game.arrow_measure);
@@ -1035,8 +1035,54 @@ pub fn draw(
         (ElementKind::Charge, false) => Color::srgb(0.6, 0.8, 1.0),
         (ElementKind::Plate | ElementKind::Supply, _) => Color::srgb(0.9, 0.9, 0.7),
         (ElementKind::Free, _) => Color::srgb(1.0, 0.95, 0.6),
+        (ElementKind::Cut, _) => Color::srgb(0.95, 0.95, 1.0),
     };
     gizmos.rect_2d(cur, Vec2::splat(charge_radius * 2.8), cursor_color);
+    // The player's cuts through the metals: each a slit across its metal, its node a handle.
+    for e in game
+        .editor
+        .placement
+        .iter()
+        .filter(|e| e.kind == ElementKind::Cut)
+    {
+        if let Some((a, b)) = level.cut_segment(e) {
+            draw_cut(
+                &mut gizmos,
+                to_vec2(a),
+                to_vec2(b),
+                Color::srgb(0.95, 0.95, 1.0),
+            );
+            gizmos
+                .circle_2d(to_vec2(grid.position(e.node)), 0.16, Color::WHITE)
+                .resolution(16);
+        }
+    }
+    // A new cut at the cursor, where it would go (red where it may not).
+    if game.editor.kind == ElementKind::Cut
+        && game.editor.left(ElementKind::Cut) > 0
+        && (!game.sandbox.active || game.sandbox.tool == crate::sandbox::Tool::PlayerElement)
+        && game.editor.element_at_cursor().is_none()
+    {
+        let ghost = level::Element {
+            node: game.editor.cursor,
+            kind: ElementKind::Cut,
+            value: 0.0,
+            angle_deg: game.editor.cut_angle_deg,
+            omega: None,
+            speed: None,
+        };
+        if let Some((a, b)) = level.cut_segment(&ghost) {
+            let ok = level
+                .check_placement(&[game.editor.placement.as_slice(), &[ghost]].concat())
+                .is_ok();
+            let color = if ok {
+                Color::srgba(0.95, 0.95, 1.0, 0.55)
+            } else {
+                Color::srgba(1.0, 0.4, 0.3, 0.7)
+            };
+            draw_cut(&mut gizmos, to_vec2(a), to_vec2(b), color);
+        }
+    }
     // Outline of a new plate at the cursor (not over one of the player's elements or a
     // tunable electrode, where a click acts on those).
     if game.editor.kind == ElementKind::Plate
@@ -1662,6 +1708,24 @@ fn draw_hall(gizmos: &mut Gizmos, game: &Game, fade: f32) {
                 Color::srgb(0.95, 0.95, 0.9).with_alpha(fade),
             );
         }
+    }
+}
+
+/// A cut through a metal from `a` to `b`: a dark slit (the insulating gap) between two thin
+/// bright edges.
+fn draw_cut(gizmos: &mut Gizmos, a: Vec2, b: Vec2, edge: Color) {
+    let d = b - a;
+    if d.length() < 1e-4 {
+        return;
+    }
+    let n = d.normalize().perp();
+    for k in -3..=3_i32 {
+        #[allow(clippy::cast_precision_loss)]
+        let o = n * (0.015 * k as f32);
+        gizmos.line_2d(a + o, b + o, Color::srgb(0.03, 0.03, 0.05));
+    }
+    for s in [-1.0_f32, 1.0] {
+        gizmos.line_2d(a + n * (0.06 * s), b + n * (0.06 * s), edge);
     }
 }
 
