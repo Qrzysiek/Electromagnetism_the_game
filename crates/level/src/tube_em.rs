@@ -9,7 +9,9 @@
 //! and each electrode's circuit current along a straight lead (the owner's convention,
 //! 2026-10-12): from the innermost grounded ring enclosing it (an envelope), or, in an open
 //! level (one with an output), from the nearest envelope outside it, or else from the
-//! board's border; the shortest such segment that crosses no other electrode. A lead
+//! board's border; the shortest such segment that crosses no other electrode and no metal
+//! (a conductor: Positive carriers' inner Hall contacts were wired through the other
+//! strip). A lead
 //! carries the electrode's change of charge (from the frames' surface densities) less the
 //! particles it took in and gave off, plus what the leads starting on it drew. The
 //! electrodes are perfect conductors on the grid, so each one's charge follows the run's.
@@ -469,7 +471,13 @@ impl TubeEm {
             })
             .collect();
         // Leads: the shortest straight path from the electrode's surface to its parent's
-        // material (or the border) crossing no other electrode, over 144 directions.
+        // material (or the border) crossing no other electrode and no metal (its own
+        // included), over 144 directions.
+        let in_metal = |p: DVec3| {
+            run.metals
+                .iter()
+                .any(|m| p.x >= m.lo.x && p.x <= m.hi.x && p.y >= m.lo.y && p.y <= m.hi.y)
+        };
         let inside_grid = |p: DVec3| {
             let (x0, y0) = grid.origin;
             let (x1, y1) = (x0 + nx as f64 * h, y0 + ny as f64 * h);
@@ -520,6 +528,7 @@ impl TubeEm {
                             _ => {}
                         }
                         if !inside_grid(p)
+                            || in_metal(p)
                             || (0..n_el).any(|o| o != e && outlines[o].distance_to(p) == 0.0)
                         {
                             break None;

@@ -1571,8 +1571,8 @@ const DRIFT_SPAN: f64 = 1.0;
 /// Metals in a magnetic field: at each strip's centre the Hall effect's forces
 /// (`TubeRun::hall_forces`), drawn as arrows: the carriers' drift (white, over the last
 /// `DRIFT_SPAN`), the field's magnetic push on it (orange, `q ⟨v⟩ × B`, across the strip)
-/// and the push of the electric field across it (blue, `q E⊥`: the Hall field of the
-/// charge piled at its sides). The two pushes are drawn to the larger one's scale: the
+/// and the push of the electric field across it over the same time (blue, `q E⊥`: the
+/// Hall field of the charge piled at its sides). The two pushes are drawn to the larger one's scale: the
 /// magnetic push piles carriers on one side until the electric one holds them; then the
 /// arrows are nearly equal (the electric one up to 4/π longer: fast and slow carriers are
 /// pushed differently, the Hall factor).

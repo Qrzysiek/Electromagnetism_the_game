@@ -55,9 +55,22 @@ enum Command {
     /// solve the level (preview tolerance; each interval's middle verified).
     Window {
         path: PathBuf,
-        /// Potentials scanned across the range.
+        /// Potentials scanned across the range (a metal's tube level takes 15–40 s per
+        /// potential: 40 steps reach 0, the ends and the halves' middles and the 5 % about
+        /// them that the slider rule keeps clear).
         #[arg(long, default_value_t = 240)]
         steps: u32,
+        /// Only the reference's element of this number (1-based; several runs in parallel).
+        #[arg(long)]
+        element: Option<usize>,
+        /// Scan from this potential instead of the slider's lowest (with `--element`: the
+        /// part of its range where the level can solve; a supply far off, its current or
+        /// Hall voltage reversed, can take minutes per run).
+        #[arg(long, allow_hyphen_values = true)]
+        from: Option<f64>,
+        /// Scan up to this potential instead of the slider's highest.
+        #[arg(long, allow_hyphen_values = true)]
+        to: Option<f64>,
     },
     /// Tube levels: for each placement in a JSON file (a list of placements, each a
     /// list of elements), the preview's currents into every electrode over the goal's
@@ -396,12 +409,17 @@ fn tube_field(level: &Level, every: f64, end: Option<f64>) {
     println!("field {:.1} s", started.elapsed().as_secs_f64());
 }
 
-/// `generator window`: the solving intervals of each slider-set potential.
+/// `generator window`: the solving intervals of each slider-set potential (or of the
+/// reference's element `only`, 1-based), over its slider's range or the part `scan` of it,
+/// each evaluation logged to stderr.
 #[allow(clippy::cast_precision_loss)]
-fn window(level: &Level, steps: u32) {
+fn window(level: &Level, steps: u32, only: Option<usize>, scan: (Option<f64>, Option<f64>)) {
     use level::ElementKind;
     let reference = &level.reference_solution;
     for (i, e) in reference.iter().enumerate() {
+        if only.is_some_and(|k| k != i + 1) {
+            continue;
+        }
         // A supply's own slider: an electrode's potentials or a coil's ramp rates.
         let targets = level.supply_targets();
         let list: &[f64] = match e.kind {
@@ -418,9 +436,18 @@ fn window(level: &Level, steps: u32) {
         let mut trial = reference.clone();
         let mut solves = |v: f64| {
             trial[i].value = v;
-            search::objective(level, &trial).1 == physics::trajectory::Outcome::Arrived
+            let started = std::time::Instant::now();
+            let ok = search::objective(level, &trial).1 == physics::trajectory::Outcome::Arrived;
+            eprintln!(
+                "[window] element {}: {v:.4e} {} ({:.1} s)",
+                i + 1,
+                if ok { "solves" } else { "does not solve" },
+                started.elapsed().as_secs_f64()
+            );
+            ok
         };
-        let at = |k: u32| lo + (hi - lo) * f64::from(k) / f64::from(steps);
+        let (from, to) = (scan.0.unwrap_or(lo), scan.1.unwrap_or(hi));
+        let at = |k: u32| from + (to - from) * f64::from(k) / f64::from(steps);
         let mut intervals: Vec<(f64, f64)> = Vec::new();
         let mut start: Option<f64> = None;
         for k in 0..=steps {
@@ -435,10 +462,11 @@ fn window(level: &Level, steps: u32) {
             }
         }
         if let Some(s) = start {
-            intervals.push((s, hi));
+            intervals.push((s, to));
         }
         println!(
-            "{}: {:?} at {:?}, reference {:.4e}, range [{lo:.4e}, {hi:.4e}]",
+            "{}: {:?} at {:?}, reference {:.4e}, range [{lo:.4e}, {hi:.4e}], scanned \
+             [{from:.4e}, {to:.4e}]",
             level.name, e.kind, e.node, e.value
         );
         for (a, b) in intervals {
@@ -570,7 +598,13 @@ fn main() {
                 println!("{}: format {}", path.display(), level.format_version);
             }
         }
-        Command::Window { path, steps } => window(&load(&path), steps),
+        Command::Window {
+            path,
+            steps,
+            element,
+            from,
+            to,
+        } => window(&load(&path), steps, element, (from, to)),
         Command::TubeScan {
             path,
             placements,

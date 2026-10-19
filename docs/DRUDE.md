@@ -194,3 +194,24 @@ the owner are marked **(owner)**; nothing is built until they are settled.
   noise; a traced carrier a contact takes is replaced by another drawn uniformly from the
   metal (40 throughout; replaced by the newest, just given off, they gathered at the
   contacts).
+- **2026-10-19, Positive carriers (intermediate, after the Hall probe):** two strips in
+  the player's solenoid, the upper of the levels' metal, the lower's carriers positive
+  (`q/m = +1`, as zinc's or beryllium's behave), each with floating side contacts. Both
+  tops above their bottoms need the currents opposite: the carriers then move the same
+  way, and the field pushes electrons down and positive carriers up. Building it showed
+  three faults of the display, fixed (PHYSICS.md §2.11):
+  - the frames' field on the CPU (the Hall arrows, the field map's arrows) softened each
+    carrier as `r⃗/(r² + ε²)`, never quite Coulomb's: a strip's thousands of carriers
+    failed to cancel its background by `2λε²/r³` each, a field across the other strip
+    (0.6 between the lower strip's contacts) that took its electric arrow to 1.7 times
+    the magnetic. The carriers are now rods of radius 0.5, Coulomb's beyond, like the
+    physics' thinner ones;
+  - the electric push, taken on one frame along the centre line, scattered by more than
+    its size on the weakly driven lower strip: it is now the field across the strip's
+    middle, recorded by the run at every frame, averaged over the drift's time unit;
+  - the inner contacts' leads ran through the other strip: leads now avoid metals (test
+    `leads_cross_no_metal`).
+
+  `hall_forces_balance` now covers all three strips: 1.049, 0.957, 1.288. The lower
+  strip's ratio follows its weaker drive (driven at −30 like the upper: 1.043), not its
+  carriers' sign.

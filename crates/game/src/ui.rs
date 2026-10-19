@@ -1957,8 +1957,8 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     if in_field {
         ui.label(
             egui::RichText::new(
-                "The arrows on each strip, the Hall effect: white, the carriers' drift (over \
-                 the last time unit); orange, the magnetic field's push on them, q v × B, \
+                "The arrows on each strip, the Hall effect over the last time unit: white, \
+                 the carriers' drift; orange, the magnetic field's push on them, q v × B, \
                  sideways; blue, the electric push across the strip, from the charge the \
                  magnetic one piled on its sides (the Hall voltage). The piling goes on until \
                  the electric push holds the carriers back (in a metal within a fraction of \

@@ -568,6 +568,52 @@ pub fn metal_steps(metals: &[MetalView], a: &TubeFrame, b: &TubeFrame) -> Vec<[f
         .collect()
 }
 
+impl MetalView {
+    /// The metal as a strip: its centre, long axis (x for a square), the normal across it,
+    /// its length and width.
+    #[must_use]
+    pub fn strip(&self) -> (DVec3, DVec3, DVec3, f64, f64) {
+        let (dx, dy) = (self.hi.x - self.lo.x, self.hi.y - self.lo.y);
+        let centre = (self.lo + self.hi) * 0.5;
+        if dx >= dy {
+            (centre, DVec3::X, DVec3::Y, dx, dy)
+        } else {
+            (centre, DVec3::Y, DVec3::X, dy, dx)
+        }
+    }
+}
+
+/// The mean over `[a, b]` of a series `(t, v)` (times increasing) taken as linear between
+/// its samples and constant beyond its ends; at `b` if the interval is empty, None if the
+/// series is.
+fn series_mean(series: &[(f64, f64)], a: f64, b: f64) -> Option<f64> {
+    if series.is_empty() {
+        return None;
+    }
+    let at = |t: f64| {
+        let k = series.partition_point(|s| s.0 <= t);
+        match (k.checked_sub(1).map(|i| series[i]), series.get(k)) {
+            (Some(p), Some(q)) => p.1 + (q.1 - p.1) * (t - p.0) / (q.0 - p.0),
+            (Some(p), None) => p.1,
+            (None, Some(q)) => q.1,
+            (None, None) => 0.0,
+        }
+    };
+    if b <= a {
+        return Some(at(b));
+    }
+    let k0 = series.partition_point(|s| s.0 <= a);
+    let k1 = series.partition_point(|s| s.0 < b);
+    let mut points = vec![(a, at(a))];
+    points.extend_from_slice(&series[k0..k1.max(k0)]);
+    points.push((b, at(b)));
+    let integral: f64 = points
+        .windows(2)
+        .map(|w| 0.5 * (w[0].1 + w[1].1) * (w[1].0 - w[0].0))
+        .sum();
+    Some(integral / (b - a))
+}
+
 /// The Hall effect's forces in a metal strip (`TubeRun::hall_forces`): its centre, long
 /// axis, the normal across it and its width, its carriers' mean drift, the magnetic push
 /// on that drift and the electric push across the strip (per unit charge).
@@ -618,6 +664,9 @@ pub struct TubeRun {
     /// The uniform magnetic field along z of the run (the level's, or its solenoid's
     /// supply).
     pub b_z: f64,
+    /// Per metal, in a field: the field across its middle at each frame, `(t, E⊥)`
+    /// (`hall_field`; the Hall arrows' electric push is its mean over their drift's time).
+    pub hall: Vec<Vec<(f64, f64)>>,
 }
 
 impl TubeRun {
@@ -628,6 +677,12 @@ impl TubeRun {
             self.collected.resize(chunk.collected.len(), Vec::new());
         }
         for (a, c) in self.collected.iter_mut().zip(chunk.collected) {
+            a.extend(c);
+        }
+        if self.hall.len() < chunk.hall.len() {
+            self.hall.resize(chunk.hall.len(), Vec::new());
+        }
+        for (a, c) in self.hall.iter_mut().zip(chunk.hall) {
             a.extend(c);
         }
         if self.currents.len() < chunk.currents.len() {
@@ -729,10 +784,10 @@ impl TubeRun {
         for ((a, b), s) in self.segments.iter().zip(&frame.sigma) {
             e += physics::zinv::segment_field_fast(*a, *b, x) * f64::from(*s);
         }
-        let eps2 = PREVIEW_SEGMENT * PREVIEW_SEGMENT;
+        let h2 = PREVIEW_SEGMENT * PREVIEW_SEGMENT;
         for (p, q) in frame.x.iter().zip(&frame.q) {
             let r = DVec3::new(x.x - f64::from(p[0]), x.y - f64::from(p[1]), 0.0);
-            e += r * (2.0 * f64::from(*q) / (r.x * r.x + r.y * r.y + eps2));
+            e += r * (2.0 * f64::from(*q) / (r.x * r.x + r.y * r.y).max(h2));
         }
         for m in &self.metals {
             e += physics::zinv::rect_integrals(m.lo, m.hi, x).1 * m.background;
@@ -740,13 +795,44 @@ impl TubeRun {
         e
     }
 
+    /// The field across metal `metal`'s middle on `frame`, along its normal
+    /// (`MetalView::strip`): the mean of `e_at` over the central three fifths along it (7
+    /// points) on lines half a unit apart from a unit inside each side (its sides hold the
+    /// surface charge of its potential against its surroundings, within a Debye length; the
+    /// Hall field is the bulk's), or on its centre line alone in a strip narrower than 3.
+    /// Its carriers' graininess scatters it from frame to frame: on Hall probe's reference
+    /// (100 macroparticles per area) by 0.11 against its 0.47, on the centre line alone by
+    /// 0.19; on Positive carriers' lower strip (50 per area, a weaker current) by 0.20, on
+    /// the centre line by 0.35, against 0.27.
+    #[must_use]
+    pub fn hall_field(&self, frame: &TubeFrame, metal: usize) -> f64 {
+        let Some(m) = self.metals.get(metal) else {
+            return 0.0;
+        };
+        let (centre, axis, normal, length, width) = m.strip();
+        #[allow(clippy::cast_possible_truncation)]
+        let lines = libm::floor((0.5 * width - 1.0) / 0.5 + 1e-9).max(0.0) as i32;
+        let (mut sum, mut n) = (0.0, 0.0);
+        for l in -lines..=lines {
+            for i in 0..7 {
+                let x = centre
+                    + axis * (0.3 * length * (f64::from(i) / 3.0 - 1.0))
+                    + normal * (0.5 * f64::from(l));
+                sum += self.e_at(frame, x).dot(normal);
+                n += 1.0;
+            }
+        }
+        sum / n
+    }
+
     /// The Hall effect in metal `metal` of a run in a field along z: its carriers' mean
     /// drift from frame `before` to frame `now` in the strip's middle (the central three
     /// fifths along it, a quarter away from its sides), the field's magnetic push on that
-    /// drift, `q ⟨v⟩ × B`, and the electric push across the strip, `q E⊥`, averaged along
-    /// its centre line (its sides hold the surface charge of its potential against its
-    /// surroundings, within a Debye length; the Hall field is the bulk's), per unit charge
-    /// of the carriers' sign. None without a field or with too few carriers.
+    /// drift, `q ⟨v⟩ × B`, and the electric push across the strip, `q E⊥`: the field across
+    /// its middle (`hall_field`) averaged over the same time (the run's series `hall`,
+    /// linear between its frames: over a time unit its scatter falls to a few per cent),
+    /// per unit charge of the carriers' sign. None without a field or with too few
+    /// carriers.
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
     pub fn hall_forces(
@@ -760,18 +846,7 @@ impl TubeRun {
         if self.b_z == 0.0 || span <= 0.0 {
             return None;
         }
-        let along_x = m.hi.x - m.lo.x >= m.hi.y - m.lo.y;
-        let (axis, normal) = if along_x {
-            (DVec3::X, DVec3::Y)
-        } else {
-            (DVec3::Y, DVec3::X)
-        };
-        let centre = (m.lo + m.hi) * 0.5;
-        let (length, width) = if along_x {
-            (m.hi.x - m.lo.x, m.hi.y - m.lo.y)
-        } else {
-            (m.hi.y - m.lo.y, m.hi.x - m.lo.x)
-        };
+        let (centre, axis, normal, length, width) = m.strip();
         let then: std::collections::HashMap<u32, [f32; 2]> = before
             .id
             .iter()
@@ -803,15 +878,11 @@ impl TubeRun {
         let drift = sum / (n * span);
         // q v × B ẑ = q B (v_y, −v_x).
         let magnetic = DVec3::new(drift.y, -drift.x, 0.0) * (q * self.b_z);
-        let e: DVec3 = (0..7)
-            .map(|i| {
-                self.e_at(
-                    now,
-                    centre + axis * (0.3 * length * (f64::from(i) / 3.0 - 1.0)),
-                )
-            })
-            .fold(DVec3::ZERO, |a, b| a + b)
-            / 7.0;
+        let across = self
+            .hall
+            .get(metal)
+            .and_then(|s| series_mean(s, before.t, now.t))
+            .unwrap_or_else(|| self.hall_field(now, metal));
         Some(HallForces {
             centre,
             axis,
@@ -819,13 +890,17 @@ impl TubeRun {
             width,
             drift,
             magnetic,
-            electric: normal * (q * e.dot(normal)),
+            electric: normal * (q * across),
         })
     }
 
     /// The potential and field of a frame at `x`, as the maps show them: the segments'
-    /// charge exactly, the particles as line charges softened over `PREVIEW_SEGMENT` (the
-    /// preview's resolution of its space charge).
+    /// charge exactly, the particles as uniformly charged rods of radius `PREVIEW_SEGMENT`
+    /// (the preview's resolution of its space charge; the physics' rods are thinner,
+    /// `SOFTENING`), exactly Coulomb's beyond it. (Softened as `r⃗/(r² + ε²)`, which never
+    /// becomes Coulomb's, a metal's carriers failed to cancel its background's exact field
+    /// by `2λε²/r³` each: across Positive carriers' lower strip, from the upper's 128
+    /// charges, a field that took the Hall arrows' electric push to 1.73 of the magnetic.)
     pub fn field_at(&self, frame: &TubeFrame, x: DVec3) -> (f64, DVec3) {
         let (mut phi, mut e) = (0.0, DVec3::ZERO);
         for ((a, b), s) in self.segments.iter().zip(&frame.sigma) {
@@ -833,13 +908,19 @@ impl TubeRun {
             phi += f64::from(*s) * f;
             e += g * f64::from(*s);
         }
-        let eps2 = PREVIEW_SEGMENT * PREVIEW_SEGMENT;
+        let h2 = PREVIEW_SEGMENT * PREVIEW_SEGMENT;
+        let log_h2 = libm::log(h2);
         for (p, q) in frame.x.iter().zip(&frame.q) {
             let r = DVec3::new(x.x - f64::from(p[0]), x.y - f64::from(p[1]), 0.0);
-            let r2 = r.x * r.x + r.y * r.y + eps2;
+            let r2 = r.x * r.x + r.y * r.y;
             let lambda = f64::from(*q);
-            phi -= lambda * libm::log(r2);
-            e += r * (2.0 * lambda / r2);
+            if r2 >= h2 {
+                phi -= lambda * libm::log(r2);
+                e += r * (2.0 * lambda / r2);
+            } else {
+                phi -= lambda * (log_h2 - 1.0 + r2 / h2);
+                e += r * (2.0 * lambda / h2);
+            }
         }
         for m in &self.metals {
             let (f, g) = physics::zinv::rect_integrals(m.lo, m.hi, x);
@@ -862,6 +943,9 @@ pub struct TubeSim {
     at_start: Vec<Option<(f64, f64)>>,
     /// What has not been taken yet.
     pending: TubeRun,
+    /// The run's segments, metals and field without its frames (the first chunk's: the
+    /// frames' Hall field, `TubeRun::hall_field`, is measured on them).
+    layout: TubeRun,
     steps: u32,
     /// A frame every this many steps (`FRAME_BUDGET`).
     frame_stride: u32,
@@ -1124,6 +1208,14 @@ impl TubeSim {
                     },
                     heat: s.joule,
                 };
+                let metals = self.layout.metals.len();
+                if self.layout.b_z != 0.0 && metals > 0 {
+                    self.pending.hall.resize(metals, Vec::new());
+                    for m in 0..metals {
+                        let e = self.layout.hall_field(&frame, m);
+                        self.pending.hall[m].push((frame.t, e));
+                    }
+                }
                 self.pending.frames.push(frame);
             }
             // Each potential goal's measure over its window.
@@ -1747,6 +1839,7 @@ impl Level {
             spec,
             detectors,
             at_start: vec![None; n_currents],
+            layout: pending.clone(),
             pending,
             steps: 0,
             frame_stride,

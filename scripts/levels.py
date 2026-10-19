@@ -3658,6 +3658,56 @@ def hall_probe():
         reference=[supply(21, 8, 30.0), supply(23, 15, 1.3)])
 
 
+def positive_carriers():
+    # Designed with `generator tube-scan`: two strips 16 x 4 in the player's solenoid, the
+    # upper of the levels' metal (electrons), the lower the same but its carriers positive
+    # (q/m = +1), each with its left end grounded, its right end on a supply and floating
+    # side contacts at mid-length (C = 1). The Hall voltage's sign follows the carriers' for
+    # a given current: with the carriers moving the same way the two strips' Hall voltages
+    # agree in sign, so the tops both sit above the bottoms only with opposite supplies.
+    # Preview at (30, B = -1.3, -15) over t = 10-80: upper current 3.10, top above bottom
+    # 1.52; lower current 1.66, top above bottom 1.21 (both 0.3 lower at B = 0 for the upper
+    # strip, 0 for the lower; the lower's potential shifts the upper's reading by ~0.2). The
+    # floating contacts' noise over the window: 0.11 (upper) and 0.15 (lower) between seeds
+    # and resolutions (50 macroparticles per area: two strips at 100 would pass the
+    # verification's carrier limit). At B = -1.3 the lower Hall voltage at -12 (0.65-0.84)
+    # did not verify against its noise; at B = -1.8: upper 2.23 +- 0.10 at 30, lower 0.89
+    # at -10 and 1.23 at -14 (two seeds, both resolutions). `generator window`: the upper
+    # supply solves on 28-34, the lower on -16 to -8, the solenoid on -2.5 to -1.5: its
+    # slider is +-7 (at +-5 the half's middle, -2.5, solved).
+    material = dict(METAL, carriers_per_area=50.0)
+    return level(
+        "Positive carriers",
+        "Two strips of different metals in your solenoid's field, each with two floating "
+        "contacts on its sides that read its Hall voltage. The upper one conducts by "
+        "electrons; the lower one's carriers are positive (orange). Some real metals, such "
+        "as zinc and beryllium, behave so: band theory explains it, and in this classical "
+        "model their carriers simply carry a positive charge. Make a current between 2.7 "
+        "and 3.5 flow into the upper strip's right end, and make both strips' top contacts "
+        "sit above their bottom ones: the upper by 1.6 to 2.8, the lower by 0.6 to 1.6 "
+        "(averaged over $t = 10$ to $80$). Which way must each current flow?",
+        grid=(24, 20), c=None, t_max=200.0,
+        electrodes=[contact(3, 14, 4), contact(21, 14, 4, tunable=True),
+                    contact(12, 17, 2, vertical=False), contact(12, 11, 2, vertical=False),
+                    contact(3, 5, 4), contact(21, 5, 4, tunable=True),
+                    contact(12, 8, 2, vertical=False), contact(12, 2, 2, vertical=False)],
+        supplies=slider(40.0, -12.0, 15.0, 30.0),
+        solenoid_fields=slider(7.0, -1.8, 1.2, 1.8),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 19),
+                  circuits=[tube_circuit(2, dc(0.0), capacitance=1.0),
+                            tube_circuit(3, dc(0.0), capacitance=1.0),
+                            tube_circuit(6, dc(0.0), capacitance=1.0),
+                            tube_circuit(7, dc(0.0), capacitance=1.0),
+                            tube_circuit(4, dc(0.0), resistance=0.0)],
+                  goals=[current_goal(1, 2.7, 3.5, 10.0, 80.0, carriers="net")],
+                  potentials=[potential_goal(2, "mean", 1.6, 2.8, 10.0, 80.0, reference=3),
+                              potential_goal(6, "mean", 0.6, 1.6, 10.0, 80.0, reference=7)],
+                  metals=[metal((4, 12), (20, 16), [0, 1, 2, 3], seed=6, **material),
+                          metal((4, 3), (20, 7), [4, 5, 6, 7], seed=7, q_over_m=1.0,
+                                **material)]),
+        reference=[supply(21, 14, 30.0), supply(23, 19, -1.8), supply(21, 5, -12.0)])
+
+
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
@@ -3685,6 +3735,7 @@ ARCS.append(("Inside the components: metals", [
     ]),
     ("Intermediate", [
         ("hall_probe", hall_probe),
+        ("positive_carriers", positive_carriers),
     ]),
 ]))
 

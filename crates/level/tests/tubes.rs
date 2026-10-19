@@ -691,39 +691,90 @@ fn magnetron_feed_field_is_smooth() {
 }
 
 /// The Hall effect's forces as the game draws them (`TubeRun::hall_forces`, PHYSICS.md
-/// §2.11): on Hall probe's reference run, once the charge has piled up (t = 20–40, every
-/// 2), the electric push across the strip must oppose the magnetic push on the carriers'
-/// drift, its size between 0.85 and 1.5 of it (the model's Hall factor lies between 1 in a
-/// strong field and 4/π in a weak one, D4; the drift's noise ~10 %). The charge piles up
-/// within the metal's dielectric relaxation time, `1/(4πσ)` ≈ 0.2: earlier than the drift
-/// can be measured (over a time unit), so the build-up itself is not tested.
+/// §2.11): on Hall probe's reference run, and on both strips of Positive carriers' (the
+/// lower one's carriers positive), once the charge has piled up (t = 20–60, every 2), the
+/// electric push across each strip must oppose the magnetic push on the carriers' drift
+/// at every sample, and its size summed over them be between 0.85 and 1.5 of the magnetic
+/// one's (the model's Hall factor lies between 1 in a strong field and 4/π in a weak one,
+/// D4, whatever the carriers' sign; the pushes' scatter over a time unit, up to ~40 % on
+/// Positive carriers' weakly driven lower strip, a few per cent over the 21 samples; a
+/// ratio of sums, as a mean of ratios leans high when the divisor scatters). The charge
+/// piles up within the metal's dielectric relaxation time, `1/(4πσ)` ≈ 0.2: earlier than
+/// the drift can be measured (over a time unit), so the build-up itself is not tested.
 #[test]
 fn hall_forces_balance() {
-    let level = level::shipped("hall_probe");
-    let run = level.tube_run(&level.reference_solution, 1, 41.0);
-    let ratio_at = |t: f64| {
-        let now = run.frame_between(t).expect("a frame");
-        let before = run.frame_between(t - 1.0).expect("a frame");
-        let h = run.hall_forces(&now, &before, 0).expect("the Hall forces");
-        (
-            h.electric.length() / h.magnetic.length(),
-            h.electric.dot(h.magnetic),
-        )
-    };
-    let (mut sum, mut n) = (0.0, 0.0);
-    for k in 0..=10 {
-        let (r, dot) = ratio_at(20.0 + 2.0 * f64::from(k));
-        assert!(
-            dot < 0.0,
-            "the pushes must oppose at t = {}",
-            20.0 + 2.0 * f64::from(k)
-        );
-        sum += r;
-        n += 1.0;
+    for (slug, metals) in [("hall_probe", 1), ("positive_carriers", 2)] {
+        let level = level::shipped(slug);
+        let run = level.tube_run(&level.reference_solution, 1, 61.0);
+        for metal in 0..metals {
+            let (mut electric, mut magnetic) = (0.0, 0.0);
+            for k in 0..=20 {
+                let t = 20.0 + 2.0 * f64::from(k);
+                let now = run.frame_between(t).expect("a frame");
+                let before = run.frame_between(t - 1.0).expect("a frame");
+                let h = run
+                    .hall_forces(&now, &before, metal)
+                    .expect("the Hall forces");
+                assert!(
+                    h.electric.dot(h.magnetic) < 0.0,
+                    "{slug} {metal}: the pushes must oppose at t = {t}"
+                );
+                electric += h.electric.length();
+                magnetic += h.magnetic.length();
+            }
+            let steady = electric / magnetic;
+            println!("{slug} {metal}: electric/magnetic {steady:.3} once piled up");
+            assert!(
+                (0.85..1.5).contains(&steady),
+                "{slug} {metal}: steady {steady}"
+            );
+        }
     }
-    let steady = sum / n;
-    println!("Hall forces: electric/magnetic {steady:.3} once piled up");
-    assert!((0.85..1.5).contains(&steady), "steady {steady}");
+}
+
+/// The leads of the field's display (`level::tube_em`, PHYSICS.md §2.11) cross no metal: on
+/// every shipped level with metals, each lead, sampled at 200 points, stays out of every
+/// metal's interior (a wire through a conductor; Positive carriers' inner Hall contacts
+/// were wired through the other strip until the leads' rule took the metals in).
+#[test]
+fn leads_cross_no_metal() {
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../levels");
+    let mut checked = 0;
+    for path in std::fs::read_dir(dir)
+        .expect("levels")
+        .map(|e| e.expect("entry").path())
+    {
+        if !level::is_level_file(&path) {
+            continue;
+        }
+        let level =
+            Level::from_json(&std::fs::read_to_string(&path).expect("file")).expect("a level");
+        if level.tube.as_ref().is_none_or(|t| t.metals.is_empty()) {
+            continue;
+        }
+        let run = level.tube_run(&level.reference_solution, 1, 2.0);
+        let em = level::tube_em::TubeEm::new(&level, &run);
+        for (e, lead) in em.leads.iter().enumerate() {
+            let Some(((ax, ay), (bx, by))) = *lead else {
+                continue;
+            };
+            for m in &run.metals {
+                let inside = (1..200).any(|k| {
+                    let u = f64::from(k) / 200.0;
+                    let (x, y) = (ax + (bx - ax) * u, ay + (by - ay) * u);
+                    x > m.lo.x && x < m.hi.x && y > m.lo.y && y < m.hi.y
+                });
+                assert!(
+                    !inside,
+                    "{}: electrode {}'s lead crosses a metal",
+                    path.display(),
+                    e + 1
+                );
+            }
+        }
+        checked += 1;
+    }
+    assert!(checked >= 5, "{checked} levels with metals");
 }
 
 /// The metals' chevrons move with the carriers' drift (`level::tube::metal_steps`, PHYSICS.md
