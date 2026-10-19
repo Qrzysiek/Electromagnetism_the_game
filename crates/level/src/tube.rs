@@ -122,6 +122,12 @@ pub const MAX_PLASMA_STEP: f64 = 0.2;
 /// `TubeSim` records a frame every so many steps to stay within it.
 pub const FRAME_BUDGET: f64 = 4.0e6;
 
+/// About this many of a metal run's carriers are recorded at every step between its frames
+/// (`TubeFrame::paths`): the display traces a few dozen of them, and their paths bend within
+/// a frame's span (Magnetoresistance at B = 7: a gyration period of 0.9 against frames 0.28
+/// apart; drawn from the frames alone, a trail was two straight strokes).
+pub const FINE_SAMPLE: usize = 160;
+
 /// The most cores a metal may have (memory and the collision search's buckets).
 pub const MAX_CORES: f64 = 2.0e6;
 
@@ -544,6 +550,21 @@ pub struct TubeFrame {
     pub currents: Vec<f32>,
     /// The Joule heat the metals' lattices have taken so far (per unit length).
     pub heat: f64,
+    /// The sampled carriers (`TubeRun::fine_every`) at every step since the previous frame,
+    /// by identity (sorted): the last point is this frame's position, the one before it a
+    /// step (`TubeRun::dt`) earlier, and so on. Empty where every step is a frame.
+    pub paths: Vec<(u32, Vec<[f32; 2]>)>,
+}
+
+impl TubeFrame {
+    /// Carrier `id`'s positions at every step since the previous frame (`paths`).
+    #[must_use]
+    pub fn path(&self, id: u32) -> Option<&[[f32; 2]]> {
+        self.paths
+            .binary_search_by_key(&id, |(i, _)| *i)
+            .ok()
+            .map(|k| self.paths[k].1.as_slice())
+    }
 }
 
 /// A metal as the display shows it (`TubeSpec::metals`): its rectangle, its background's
@@ -634,9 +655,11 @@ fn series_mean(series: &[(f64, f64)], a: f64, b: f64) -> Option<f64> {
     Some(integral / (b - a))
 }
 
-/// The Hall effect's forces in a metal strip (`TubeRun::hall_forces`): its centre, long
-/// axis, the normal across it and its width, its carriers' mean drift, the magnetic push
-/// on that drift and the electric push across the strip (per unit charge).
+/// The forces on a metal's average carrier in a magnetic field (`TubeRun::hall_forces`):
+/// its middle's centre, long axis, the normal across it and its width, the carriers' mean
+/// drift there, the magnetic push on that drift `q⟨v⟩ × B`, the electric push `q⟨E⟩` (the
+/// mean field there) and the collisions' mean push, which in a steady drift balances the
+/// other two (the carriers' mean momentum stays put): minus their sum.
 #[derive(Clone, Copy, Debug)]
 pub struct HallForces {
     pub centre: DVec3,
@@ -646,6 +669,7 @@ pub struct HallForces {
     pub drift: DVec3,
     pub magnetic: DVec3,
     pub electric: DVec3,
+    pub collisions: DVec3,
 }
 
 /// One run of a tube level (or a chunk of one being streamed: `TubeSim::take_chunk`).
@@ -691,9 +715,15 @@ pub struct TubeRun {
     pub b_z: f64,
     /// A field that changes in time (`TubeSpec::solenoid_drive`), in place of `b_z`.
     pub b_wave: Option<physics::tube::SolenoidWave>,
-    /// Per metal, in a field: the field across its middle at each frame, `(t, E⊥)`
-    /// (`hall_field`; the Hall arrows' electric push is its mean over their drift's time).
-    pub hall: Vec<Vec<(f64, f64)>>,
+    /// Per metal, in a field: the mean field in its middle at each frame, its x and its y
+    /// component `(t, E)` (`middle_field`; the Hall diagram's electric push is its mean over
+    /// the drift's time).
+    pub middle: Vec<[Vec<(f64, f64)>; 2]>,
+    /// The time step.
+    pub dt: f64,
+    /// The carriers recorded at every step (`TubeFrame::paths`): those whose identity is a
+    /// multiple of this; 0 where every step is a frame.
+    pub fine_every: u32,
 }
 
 impl TubeRun {
@@ -718,11 +748,13 @@ impl TubeRun {
         for (a, c) in self.collected.iter_mut().zip(chunk.collected) {
             a.extend(c);
         }
-        if self.hall.len() < chunk.hall.len() {
-            self.hall.resize(chunk.hall.len(), Vec::new());
+        if self.middle.len() < chunk.middle.len() {
+            self.middle
+                .resize(chunk.middle.len(), [Vec::new(), Vec::new()]);
         }
-        for (a, c) in self.hall.iter_mut().zip(chunk.hall) {
-            a.extend(c);
+        for (a, [cx, cy]) in self.middle.iter_mut().zip(chunk.middle) {
+            a[0].extend(cx);
+            a[1].extend(cy);
         }
         if self.currents.len() < chunk.currents.len() {
             self.currents.resize(chunk.currents.len(), None);
@@ -789,7 +821,11 @@ impl TubeRun {
             a.x.iter()
                 .enumerate()
                 .map(|(i, p)| match a.id.get(i).and_then(|id| next.get(id)) {
-                    Some(&j) => [lerp(p[0], b.x[j][0]), lerp(p[1], b.x[j][1])],
+                    // A sampled carrier along its steps, the others straight on.
+                    Some(&j) => b
+                        .path(a.id[i])
+                        .and_then(|path| self.along(*p, a.t, path, b.t, t))
+                        .unwrap_or([lerp(p[0], b.x[j][0]), lerp(p[1], b.x[j][1])]),
                     None => *p,
                 })
                 .collect();
@@ -818,7 +854,70 @@ impl TubeRun {
                 .map(|(u, v)| lerp(*u, *v))
                 .collect(),
             heat: a.heat + (b.heat - a.heat) * f64::from(w),
+            paths: Vec::new(),
         })
+    }
+
+    /// The position at `t` of a carrier at `x0` at `t0` that then took the steps `path`
+    /// (the last at `t1`, each a step `dt` after the one before): between its two steps
+    /// around `t`. None if the path does not span the time from `t0` to `t1`.
+    fn along(&self, x0: [f32; 2], t0: f64, path: &[[f32; 2]], t1: f64, t: f64) -> Option<[f32; 2]> {
+        let n = path.len();
+        if n == 0 || self.dt <= 0.0 {
+            return None;
+        }
+        #[allow(clippy::cast_precision_loss)]
+        let start = t1 - self.dt * n as f64;
+        if (start - t0).abs() > 0.25 * self.dt {
+            return None;
+        }
+        // Steps after `start`: 0 at x0, k at path[k - 1].
+        #[allow(clippy::cast_precision_loss)]
+        let u = ((t - start) / self.dt).clamp(0.0, n as f64);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let k = (libm::floor(u) as usize).min(n - 1);
+        let p0 = if k == 0 { x0 } else { path[k - 1] };
+        let p1 = path[k];
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        let w = (u - k as f64) as f32;
+        Some([p0[0] + (p1[0] - p0[0]) * w, p0[1] + (p1[1] - p0[1]) * w])
+    }
+
+    /// Carrier `id`'s path from `t0` to `t1`: its recorded steps where it is sampled
+    /// (`TubeFrame::paths`), else its frames' positions, ending where it is at `t1`
+    /// (`frame_between`); empty if it is in no frame of that time.
+    #[must_use]
+    pub fn trail(&self, id: u32, t0: f64, t1: f64) -> Vec<[f32; 2]> {
+        let k0 = self.frames.partition_point(|f| f.t < t0);
+        let k1 = self.frames.partition_point(|f| f.t <= t1);
+        let mut out = Vec::new();
+        // The frames up to t1, and the next one's steps before t1.
+        for f in &self.frames[k0..(k1 + 1).min(self.frames.len())] {
+            match f.path(id) {
+                Some(path) =>
+                {
+                    #[allow(clippy::cast_precision_loss)]
+                    for (i, x) in path.iter().enumerate() {
+                        let ti = f.t - self.dt * (path.len() - 1 - i) as f64;
+                        if ti >= t0 && ti <= t1 {
+                            out.push(*x);
+                        }
+                    }
+                }
+                None if f.t <= t1 => {
+                    if let Some(i) = f.id.iter().position(|j| *j == id) {
+                        out.push(f.x[i]);
+                    }
+                }
+                None => {}
+            }
+        }
+        if let Some(now) = self.frame_between(t1)
+            && let Some(i) = now.id.iter().position(|j| *j == id)
+        {
+            out.push(now.x[i]);
+        }
+        out
     }
 
     /// The frame at time `t` (the last one at or before it; the first before it).
@@ -850,30 +949,30 @@ impl TubeRun {
         e
     }
 
-    /// The field across metal `metal`'s middle on `frame`, along its normal
-    /// (`MetalView::strip`): the mean of `e_at` over the central three fifths along it (7
-    /// points) on lines half a unit apart from a unit inside each side (its sides hold the
-    /// surface charge of its potential against its surroundings, within a Debye length; the
-    /// Hall field is the bulk's), or on its centre line alone in a strip narrower than 3.
-    /// Its carriers' graininess scatters it from frame to frame: on Hall probe's reference
-    /// (100 macroparticles per area) by 0.11 against its 0.47, on the centre line alone by
-    /// 0.19; on Positive carriers' lower strip (50 per area, a weaker current) by 0.20, on
-    /// the centre line by 0.35, against 0.27.
+    /// The mean field in metal `metal`'s middle on `frame` (`MetalView::strip`): the mean of
+    /// `e_at` over the central three fifths along it (7 points) on lines half a unit apart
+    /// from a unit inside each side (its sides hold the surface charge of its potential
+    /// against its surroundings, within a Debye length; the Hall field is the bulk's), or on
+    /// its centre line alone in a strip narrower than 3. Its carriers' graininess scatters
+    /// the part across from frame to frame: on Hall probe's reference (100 macroparticles per
+    /// area) by 0.11 against its 0.47, on the centre line alone by 0.19; on Positive
+    /// carriers' lower strip (50 per area, a weaker current) by 0.20, on the centre line by
+    /// 0.35, against 0.27.
     #[must_use]
-    pub fn hall_field(&self, frame: &TubeFrame, metal: usize) -> f64 {
+    pub fn middle_field(&self, frame: &TubeFrame, metal: usize) -> DVec3 {
         let Some(m) = self.metals.get(metal) else {
-            return 0.0;
+            return DVec3::ZERO;
         };
         let (centre, axis, normal, length, width) = m.strip();
         #[allow(clippy::cast_possible_truncation)]
         let lines = libm::floor((0.5 * width - 1.0) / 0.5 + 1e-9).max(0.0) as i32;
-        let (mut sum, mut n) = (0.0, 0.0);
+        let (mut sum, mut n) = (DVec3::ZERO, 0.0);
         for l in -lines..=lines {
             for i in 0..7 {
                 let x = centre
                     + axis * (0.3 * length * (f64::from(i) / 3.0 - 1.0))
                     + normal * (0.5 * f64::from(l));
-                sum += self.e_at(frame, x).dot(normal);
+                sum += self.e_at(frame, x);
                 n += 1.0;
             }
         }
@@ -935,11 +1034,16 @@ impl TubeRun {
         // A changing field: B at the window's middle.
         let b = self.b_at(0.5 * (before.t + now.t));
         let magnetic = DVec3::new(drift.y, -drift.x, 0.0) * (q * b);
-        let across = self
-            .hall
-            .get(metal)
-            .and_then(|s| series_mean(s, before.t, now.t))
-            .unwrap_or_else(|| self.hall_field(now, metal));
+        let mean = |k: usize| {
+            self.middle
+                .get(metal)
+                .and_then(|s| series_mean(&s[k], before.t, now.t))
+        };
+        let field = match (mean(0), mean(1)) {
+            (Some(x), Some(y)) => DVec3::new(x, y, 0.0),
+            _ => self.middle_field(now, metal),
+        };
+        let electric = field * q;
         Some(HallForces {
             centre,
             axis,
@@ -947,7 +1051,8 @@ impl TubeRun {
             width,
             drift,
             magnetic,
-            electric: normal * (q * across),
+            electric,
+            collisions: -(electric + magnetic),
         })
     }
 
@@ -1009,6 +1114,8 @@ pub struct TubeSim {
     steps: u32,
     /// A frame every this many steps (`FRAME_BUDGET`).
     frame_stride: u32,
+    /// The sampled carriers' steps since the last frame (`TubeFrame::paths`).
+    fine: std::collections::BTreeMap<u32, Vec<[f32; 2]>>,
     currents: Vec<Option<f64>>,
     /// Each potential goal's window so far: sum, count, least, most, and the samples
     /// `(t, V)` (for `Measure::Amplitude`).
@@ -1220,6 +1327,19 @@ impl TubeSim {
                     }
                 }
             }
+            // The sampled carriers every step (between frames).
+            let every = self.layout.fine_every;
+            if every > 0 {
+                for ((x, id), tag) in s.x.iter().zip(&s.id).zip(&s.tag) {
+                    if *tag < PROJECTILE_TAG && id.is_multiple_of(every) {
+                        #[allow(clippy::cast_possible_truncation)]
+                        self.fine
+                            .entry(*id)
+                            .or_default()
+                            .push([x.x as f32, x.y as f32]);
+                    }
+                }
+            }
             // A frame every `frame_stride` steps (a metal's thousands of carriers every
             // step would fill gigabytes over a long run).
             if self.steps.is_multiple_of(self.frame_stride) {
@@ -1270,6 +1390,7 @@ impl TubeSim {
                             .collect()
                     },
                     heat: s.joule,
+                    paths: std::mem::take(&mut self.fine).into_iter().collect(),
                 };
                 let metals = self.layout.metals.len();
                 if metals > 0 {
@@ -1280,10 +1401,11 @@ impl TubeSim {
                     }
                 }
                 if self.layout.has_field() && metals > 0 {
-                    self.pending.hall.resize(metals, Vec::new());
+                    self.pending.middle.resize(metals, [Vec::new(), Vec::new()]);
                     for m in 0..metals {
-                        let e = self.layout.hall_field(&frame, m);
-                        self.pending.hall[m].push((frame.t, e));
+                        let e = self.layout.middle_field(&frame, m);
+                        self.pending.middle[m][0].push((frame.t, e.x));
+                        self.pending.middle[m][1].push((frame.t, e.y));
                     }
                 }
                 self.pending.frames.push(frame);
@@ -1962,6 +2084,15 @@ impl Level {
                 .ceil()
                 .max(1.0) as u32
         };
+        // Between frames, a sample of the carriers at every step (identities are dealt out
+        // in order: every so many of them).
+        let mut pending = pending;
+        pending.dt = tube.dt;
+        pending.fine_every = if frame_stride > 1 {
+            u32::try_from((state.x.len() / FINE_SAMPLE).max(1)).unwrap_or(u32::MAX)
+        } else {
+            0
+        };
         TubeSim {
             tube,
             state,
@@ -1972,6 +2103,7 @@ impl Level {
             pending,
             steps: 0,
             frame_stride,
+            fine: std::collections::BTreeMap::new(),
             currents: vec![None; n_currents],
             windows: vec![(0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY); n_goals],
             series: vec![Vec::new(); n_goals],
@@ -2665,6 +2797,7 @@ mod tests {
             potentials: vec![sigma; 2],
             currents: Vec::new(),
             heat: 0.0,
+            paths: Vec::new(),
         };
         let run = TubeRun {
             frames: vec![
@@ -2682,6 +2815,48 @@ mod tests {
         assert_eq!(mid.potentials, vec![1.5; 2]);
         assert_eq!(run.frame_between(0.5).unwrap().x, run.frames[0].x);
         assert_eq!(run.frame_between(3.0).unwrap().x, run.frames[1].x);
+    }
+
+    /// A carrier recorded at every step (`TubeFrame::paths`) moves along its steps between
+    /// frames, not straight across: turning a corner between frames 0.3 apart (steps of
+    /// 0.1: from (0, 0) to (1, 0), (1, 1) and (0, 1)), at t = 1.15 it is halfway up the
+    /// corner's side, (1, 0.5) (straight across it would be at (0, 0.5)); its trail from
+    /// t = 1.0 to 1.25 goes round the corner; an unrecorded carrier moves straight.
+    #[test]
+    fn sampled_carriers_follow_their_steps() {
+        let frame = |t: f64, x: Vec<[f32; 2]>, paths: Vec<(u32, Vec<[f32; 2]>)>| TubeFrame {
+            t,
+            q: vec![-1.0; x.len()],
+            kind: vec![KIND_NEGATIVE; x.len()],
+            id: vec![7, 8],
+            x,
+            paths,
+            ..TubeFrame::default()
+        };
+        let run = TubeRun {
+            frames: vec![
+                frame(1.0, vec![[0.0, 0.0], [0.0, 0.0]], Vec::new()),
+                frame(
+                    1.3,
+                    vec![[0.0, 1.0], [0.0, 1.0]],
+                    vec![(7, vec![[1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])],
+                ),
+            ],
+            dt: 0.1,
+            fine_every: 7,
+            ..TubeRun::default()
+        };
+        let mid = run.frame_between(1.15).unwrap();
+        let close =
+            |a: [f32; 2], b: [f32; 2]| (a[0] - b[0]).abs() < 1e-5 && (a[1] - b[1]).abs() < 1e-5;
+        assert!(close(mid.x[0], [1.0, 0.5]), "sampled: {:?}", mid.x[0]);
+        assert!(close(mid.x[1], [0.0, 0.5]), "straight: {:?}", mid.x[1]);
+        let trail = run.trail(7, 1.0, 1.25);
+        let expected = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.5, 1.0]];
+        assert_eq!(trail.len(), expected.len(), "{trail:?}");
+        for (a, b) in trail.iter().zip(expected) {
+            assert!(close(*a, b), "{trail:?}");
+        }
     }
 
     /// The Fourier measures of a potential goal: `3 sin(ω t + φ)` plus a drift and an

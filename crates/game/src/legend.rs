@@ -386,30 +386,40 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
              motion's noise.",
         );
         if view.is_some_and(|v| v.run.has_field()) {
+            let c = |k: [f32; 3]| rgb(k[0], k[1], k[2]);
             row(
                 ui,
-                Swatch::Arrow(rgb(0.95, 0.95, 0.9)),
-                "Hall: drift",
-                "At each strip's centre, the Hall effect, over the last time unit. White: the \
-                 way its carriers drift.",
+                Swatch::Arrow(c(crate::draw::HALL_DRIFT)),
+                "v: drift of the average carrier",
+                "At each metal's middle, its average carrier over the last time unit (the white \
+                 dot) with the forces on it, all drawn from it. The thin arrow is the way the \
+                 carriers drift there (a velocity, not a force).",
             );
             row(
                 ui,
-                Swatch::Arrow(rgb(1.0, 0.55, 0.15)),
-                "Hall: magnetic push",
-                "Orange: the magnetic field's push on the drifting carriers, q v × B, across \
-                 the strip; its way depends on the carriers' sign as well as the current's. \
-                 It piles carriers on one side: charge on the strip's sides.",
+                Swatch::Arrow(c(crate::draw::HALL_MAGNETIC)),
+                "qv×B: magnetic push",
+                "The magnetic field's push on the drifting carriers, at right angles to their \
+                 drift; its way depends on the carriers' sign as well as the current's. It \
+                 piles carriers on one side: charge on the metal's sides.",
             );
             row(
                 ui,
-                Swatch::Arrow(rgb(0.45, 0.8, 1.0)),
-                "Hall: electric push",
-                "Blue: the push of the electric field across the strip, q E, from the charge \
-                 the magnetic push piled on its sides (the Hall field; the side contacts read \
-                 it as the Hall voltage). The piling goes on until it holds the carriers back, \
-                 within a fraction of a time unit in a metal: then the two pushes are about \
-                 equal and opposite. Both are drawn to the larger one's scale.",
+                Swatch::Arrow(c(crate::draw::HALL_ELECTRIC)),
+                "qE: electric push",
+                "The electric field's push: along the metal from the supply, and across it from \
+                 the charge the magnetic push piled on its sides (the Hall field; side contacts \
+                 read it as the Hall voltage). In a long strip the piling goes on until the \
+                 push across cancels the magnetic one, and the carriers drift straight along; \
+                 in a short wide one the contacts carry that charge off, and the drift turns.",
+            );
+            row(
+                ui,
+                Swatch::Arrow(c(crate::draw::HALL_COLLISIONS)),
+                "collisions",
+                "The collisions with the ion cores take the carriers' momentum away: their mean \
+                 push holds the drift steady, so it balances the other two (minus their sum: \
+                 the three arrows close). The forces are drawn to the largest one's scale.",
             );
         }
     }

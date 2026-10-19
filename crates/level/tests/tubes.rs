@@ -717,12 +717,14 @@ fn hall_forces_balance() {
                 let h = run
                     .hall_forces(&now, &before, metal)
                     .expect("the Hall forces");
+                // Across the strip (the electric push also drives the carriers along it).
+                let (e, m) = (h.electric.dot(h.normal), h.magnetic.dot(h.normal));
                 assert!(
-                    h.electric.dot(h.magnetic) < 0.0,
+                    e * m < 0.0,
                     "{slug} {metal}: the pushes must oppose at t = {t}"
                 );
-                electric += h.electric.length();
-                magnetic += h.magnetic.length();
+                electric += e.abs();
+                magnetic += m.abs();
             }
             let steady = electric / magnetic;
             println!("{slug} {metal}: electric/magnetic {steady:.3} once piled up");

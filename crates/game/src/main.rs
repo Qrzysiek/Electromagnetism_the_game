@@ -258,6 +258,16 @@ pub struct Game {
     /// metal's carriers' mean displacement along it (`Drift`, the ticks across it).
     pub traced: Option<Traced>,
     pub drift: Option<Drift>,
+    /// Tube levels with metals in a field: each strip's Hall diagram at the time shown
+    /// (`update_hall`).
+    pub hall: Vec<level::tube::HallForces>,
+    /// How the panel groups the electrodes' potential plots, and the electrodes whose lines
+    /// it hides (the level's; cleared with it).
+    pub plot_layout: ui::PlotLayout,
+    pub plot_hidden: Vec<usize>,
+    /// An electrode outlined on the board in a plot line's colour (its chip hovered),
+    /// until then.
+    pub plot_focus: Option<(usize, [u8; 3], std::time::Instant)>,
 }
 
 /// The carriers traced in a run's metals, by identity, constant in number: one a contact
@@ -300,6 +310,19 @@ impl Game {
         {
             self.supply_focus = Some((centre, until));
         }
+    }
+
+    /// Outlines electrode `i` in a plot line's colour for `seconds` from now.
+    pub fn focus_electrode(&mut self, i: usize, rgb: [u8; 3], seconds: f64) {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs_f64(seconds);
+        self.plot_focus = Some((i, rgb, until));
+    }
+
+    /// The electrode a plot's chip outlines now, with its colour.
+    pub fn focused_electrode(&self) -> Option<(usize, [u8; 3])> {
+        self.plot_focus
+            .filter(|(_, _, t)| std::time::Instant::now() < *t)
+            .map(|(i, c, _)| (i, c))
     }
 
     /// The supply highlighted now, if any.
@@ -379,6 +402,10 @@ impl Game {
             swing: None,
             traced: None,
             drift: None,
+            hall: Vec::new(),
+            plot_layout: ui::PlotLayout::default(),
+            plot_hidden: Vec::new(),
+            plot_focus: None,
         }
     }
 
@@ -406,6 +433,8 @@ impl Game {
         self.active_shot = 0;
         self.active_disturbance = 0;
         self.anim_time = 0.0;
+        self.plot_hidden.clear();
+        self.plot_focus = None;
     }
 
     pub fn next_level(&mut self, step: isize) {
@@ -1935,6 +1964,7 @@ fn update_em(mut game: ResMut<Game>) {
     update_swing(game);
     update_drift(game);
     update_traced(game);
+    update_hall(game);
     let field_map = game.editor.level.is_tube()
         && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow));
     // Once started for this run, the field follows the playback under the other maps too
@@ -2051,17 +2081,24 @@ fn update_traced(game: &mut Game) {
     let Some(frame) = game.tube_display_frame() else {
         return;
     };
-    let Some(metals) = game.tube_preview.as_ref().map(|v| v.run.metals.clone()) else {
+    let Some((metals, every)) = game
+        .tube_preview
+        .as_ref()
+        .map(|v| (v.run.metals.clone(), v.run.fine_every))
+    else {
         return;
     };
-    // The carriers in the metals now, by identity.
+    // The carriers in the metals now, by identity: of those recorded at every step where
+    // frames are steps apart (`level::tube::TubeFrame::paths`: their arcs show).
     let mut present: Vec<u32> = frame
         .id
         .iter()
         .zip(&frame.x)
         .zip(&frame.kind)
-        .filter(|((_, x), kind)| {
-            **kind != level::tube::KIND_PROJECTILE && in_metals(&metals, **x).is_some()
+        .filter(|((id, x), kind)| {
+            **kind != level::tube::KIND_PROJECTILE
+                && (every == 0 || id.is_multiple_of(every))
+                && in_metals(&metals, **x).is_some()
         })
         .map(|((id, _), _)| *id)
         .collect();
@@ -2106,6 +2143,29 @@ fn update_traced(game: &mut Game) {
         }
     }
     traced.t = frame.t;
+}
+
+/// Tube levels with metals in a field: the forces on each strip's average carrier at the
+/// time shown (`level::tube::TubeRun::hall_forces`, over the last `draw::DRIFT_SPAN`), for
+/// the board's diagram and its labels.
+fn update_hall(game: &mut Game) {
+    let hall = (|| {
+        let v = game
+            .tube_preview
+            .as_ref()
+            .filter(|v| v.run.has_field() && !v.run.metals.is_empty())?;
+        let frame = game.tube_display_frame()?;
+        let before = v.run.frame_between(frame.t - draw::DRIFT_SPAN)?;
+        if frame.t - before.t < 0.5 * draw::DRIFT_SPAN {
+            return None;
+        }
+        Some(
+            (0..v.run.metals.len())
+                .filter_map(|k| v.run.hall_forces(&frame, &before, k))
+                .collect(),
+        )
+    })();
+    game.hall = hall.unwrap_or_default();
 }
 
 /// An order of identities unrelated to them (Fibonacci hashing: the golden ratio's 64-bit

@@ -245,6 +245,7 @@ pub fn panel(
     let left = ctx.viewport_rect().right() - PANEL_WIDTH;
     game.panel_left_px = Some(left * ctx.pixels_per_point());
     supply_badges(ctx, game, *camera, left);
+    hall_labels(ctx, game, *camera, left);
     crate::legend::board(ctx, game);
     inspect_tooltip(ctx, game, *camera);
     Ok(())
@@ -371,6 +372,57 @@ fn supply_badges(
                 egui::FontId::proportional(11.0),
                 egui::Color32::WHITE,
             );
+        }
+    }
+}
+
+/// Each Hall diagram's labels (`draw::hall_diagram`), just past its arrows' tips: what each
+/// arrow is, on the board (the legend says more).
+fn hall_labels(
+    ctx: &egui::Context,
+    game: &Game,
+    (cam, cam_transform): (&Camera, &GlobalTransform),
+    panel_left: f32,
+) {
+    if game.hall.is_empty() {
+        return;
+    }
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Middle,
+        egui::Id::new("hall labels"),
+    ));
+    let to_screen = |p: Vec2| {
+        cam.world_to_viewport(cam_transform, p.extend(0.0))
+            .ok()
+            .map(|v| egui::pos2(v.x, v.y))
+    };
+    for h in &game.hall {
+        let (centre, arrows) = crate::draw::hall_diagram(h);
+        for a in &arrows {
+            let d = a.tip - centre;
+            if d.length() < 0.2 {
+                continue;
+            }
+            let Some(at) = to_screen(a.tip + d.normalize() * 0.3) else {
+                continue;
+            };
+            if at.x > panel_left - 30.0 {
+                continue;
+            }
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let [r, g, b] = a.rgb.map(|c| (c * 255.0).round() as u8);
+            let galley = painter.layout_no_wrap(
+                a.label.to_owned(),
+                egui::FontId::proportional(12.0),
+                egui::Color32::from_rgb(r, g, b),
+            );
+            let rect = egui::Align2::CENTER_CENTER.anchor_size(at, galley.size());
+            painter.rect_filled(
+                rect.expand(2.0),
+                3.0,
+                egui::Color32::from_rgba_unmultiplied(12, 13, 17, 200),
+            );
+            painter.galley(rect.min, galley, egui::Color32::WHITE);
         }
     }
 }
@@ -1909,41 +1961,42 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     }
     // (The output's picture needed the game mutably.)
     let view = game.tube_preview.as_ref().filter(|v| v.revision == current);
+    // The electrodes in circuits: their potentials over time (the goals' windows marked).
+    let potentials: Vec<(usize, Vec<(f64, f64)>)> = view
+        .map(|v| {
+            spec.circuits
+                .iter()
+                // An electrode on a constant ideal source: a flat line, not plotted.
+                .filter(|c| {
+                    !(c.resistance == Some(0.0)
+                        && c.inductance == 0.0
+                        && matches!(c.source, level::Source::Dc { .. }))
+                })
+                .map(|c| {
+                    // About 600 points over the run.
+                    let every = (v.run.frames.len() / 600).max(1);
+                    let samples = v
+                        .run
+                        .frames
+                        .iter()
+                        .step_by(every)
+                        .filter_map(|f| f.potentials.get(c.electrode).map(|p| (f.t, f64::from(*p))))
+                        .collect();
+                    (c.electrode, samples)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if !potentials.is_empty() {
+        let spec = spec.clone();
+        potential_plots(ui, game, &spec, &potentials);
+    }
+    let view = game.tube_preview.as_ref().filter(|v| v.revision == current);
     let verdict = game
         .tube_verdict
         .as_ref()
         .filter(|(r, _)| *r == current)
         .map(|(_, v)| v);
-    // The electrodes in circuits: their potential over time (the goal's window marked).
-    if let Some(v) = view {
-        let marks: Vec<f64> = spec
-            .potential_goals
-            .iter()
-            .flat_map(|g| [g.start, g.end])
-            .collect();
-        for c in &spec.circuits {
-            // An electrode on a constant ideal source: a flat line, not plotted.
-            if c.resistance == Some(0.0)
-                && c.inductance == 0.0
-                && matches!(c.source, level::Source::Dc { .. })
-            {
-                continue;
-            }
-            // About 600 points over the run.
-            let every = (v.run.frames.len() / 600).max(1);
-            let samples: Vec<(f64, f64)> = v
-                .run
-                .frames
-                .iter()
-                .step_by(every)
-                .filter_map(|f| f.potentials.get(c.electrode).map(|p| (f.t, f64::from(*p))))
-                .collect();
-            ui.label(
-                egui::RichText::new(format!("Electrode {}: potential", c.electrode + 1)).small(),
-            );
-            circuit_plot(ui, &samples, &marks);
-        }
-    }
     for (j, p) in spec.projectiles.iter().enumerate() {
         if p.detector.is_none() {
             continue;
@@ -3308,17 +3361,204 @@ fn radiation_goal(
     );
 }
 
+/// How the panel groups the electrodes' potential plots (`potential_plots`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PlotLayout {
+    /// Each metal's contacts on one plot, a potential goal's electrode with its reference.
+    #[default]
+    Grouped,
+    /// Every electrode on one plot.
+    Together,
+    /// Each electrode on its own plot (its own scale).
+    Separate,
+}
+
+/// A plot's line: its colour and its samples `(t, v)`.
+type Line<'a> = ([u8; 3], &'a [(f64, f64)]);
+
+/// The plot lines' colours, in the order of the electrodes plotted (the first the single
+/// plots' blue).
+const PLOT_COLOURS: [[u8; 3]; 7] = [
+    [120, 200, 255],
+    [255, 165, 80],
+    [130, 225, 140],
+    [235, 130, 220],
+    [240, 220, 110],
+    [110, 230, 210],
+    [255, 120, 110],
+];
+
+/// The potentials of the electrodes in circuits (`(electrode, samples)`), grouped on plots
+/// (`Game::plot_layout`): the lines of a plot share its scale, so that they compare at a
+/// glance. Under each plot a chip per electrode in its line's colour: a click shows or hides
+/// the line (the scale follows the lines shown), hovering outlines the electrode on the
+/// board in that colour.
+fn potential_plots(
+    ui: &mut egui::Ui,
+    game: &mut Game,
+    spec: &level::tube::TubeSpec,
+    potentials: &[(usize, Vec<(f64, f64)>)],
+) {
+    let marks: Vec<f64> = spec
+        .potential_goals
+        .iter()
+        .flat_map(|g| [g.start, g.end])
+        .collect();
+    let colour = |k: usize| PLOT_COLOURS[k % PLOT_COLOURS.len()];
+    if potentials.len() > 1 {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Potentials:").small());
+            for (layout, name, hint) in [
+                (
+                    PlotLayout::Grouped,
+                    "by metal",
+                    "Each metal's contacts on one plot (and a voltage goal's two electrodes), \
+                     on one scale",
+                ),
+                (
+                    PlotLayout::Together,
+                    "together",
+                    "Every electrode on one plot, one scale",
+                ),
+                (
+                    PlotLayout::Separate,
+                    "separate",
+                    "Each electrode on its own plot and scale",
+                ),
+            ] {
+                ui.selectable_value(&mut game.plot_layout, layout, name)
+                    .on_hover_text(hint);
+            }
+        });
+    }
+    // The groups: indices into `potentials`.
+    let n = potentials.len();
+    let mut group: Vec<usize> = (0..n).collect();
+    let find = |g: &[usize], mut i: usize| {
+        while g[i] != i {
+            i = g[i];
+        }
+        i
+    };
+    let together = |a: usize, b: usize, g: &mut Vec<usize>| {
+        let (ra, rb) = (find(g, a), find(g, b));
+        g[ra.max(rb)] = ra.min(rb);
+    };
+    let at = |e: usize| potentials.iter().position(|(j, _)| *j == e);
+    match game.plot_layout {
+        PlotLayout::Separate => {}
+        PlotLayout::Together => {
+            for i in 1..n {
+                together(0, i, &mut group);
+            }
+        }
+        PlotLayout::Grouped => {
+            for i in 0..n {
+                for j in 0..i {
+                    let (a, b) = (potentials[i].0, potentials[j].0);
+                    if spec.metal_of(a).is_some() && spec.metal_of(a) == spec.metal_of(b) {
+                        together(i, j, &mut group);
+                    }
+                }
+            }
+            for g in &spec.potential_goals {
+                if let (Some(i), Some(j)) = (at(g.electrode), g.reference.and_then(at)) {
+                    together(i, j, &mut group);
+                }
+            }
+        }
+    }
+    for root in 0..n {
+        let members: Vec<usize> = (0..n).filter(|&i| find(&group, i) == root).collect();
+        if members.is_empty() {
+            continue;
+        }
+        let electrodes: Vec<String> = members
+            .iter()
+            .map(|&i| format!("{}", potentials[i].0 + 1))
+            .collect();
+        let metal = members
+            .iter()
+            .map(|&i| spec.metal_of(potentials[i].0))
+            .reduce(|a, b| if a == b { a } else { None })
+            .flatten();
+        let title = match (members.len(), metal) {
+            (1, _) => format!("Electrode {}: potential", electrodes[0]),
+            (_, Some(m)) => format!(
+                "Metal {}: potentials of electrodes {}",
+                m + 1,
+                electrodes.join(", ")
+            ),
+            _ => format!("Potentials of electrodes {}", electrodes.join(", ")),
+        };
+        ui.label(egui::RichText::new(title).small());
+        let lines: Vec<Line> = members
+            .iter()
+            .filter(|&&i| !game.plot_hidden.contains(&potentials[i].0))
+            .map(|&i| (colour(i), potentials[i].1.as_slice()))
+            .collect();
+        multi_plot(ui, &lines, &marks);
+        if members.len() > 1 {
+            ui.horizontal_wrapped(|ui| {
+                for &i in &members {
+                    let e = potentials[i].0;
+                    let shown = !game.plot_hidden.contains(&e);
+                    let [r, g, b] = colour(i);
+                    let text = egui::RichText::new(format!("━ electrode {}", e + 1))
+                        .small()
+                        .color(if shown {
+                            egui::Color32::from_rgb(r, g, b)
+                        } else {
+                            egui::Color32::from_gray(110)
+                        });
+                    let response = ui
+                        .add(egui::Label::new(text).sense(egui::Sense::click()))
+                        .on_hover_text(
+                            "Click to show or hide its line (the scale follows the lines \
+                             shown); it is outlined on the board in this colour.",
+                        );
+                    if response.clicked() {
+                        if shown {
+                            game.plot_hidden.push(e);
+                        } else {
+                            game.plot_hidden.retain(|&j| j != e);
+                        }
+                    }
+                    if response.hovered() {
+                        game.focus_electrode(e, [r, g, b], 0.15);
+                    }
+                }
+            });
+        }
+    }
+}
+
 /// A small plot of a circuit quantity over lab time (PHYSICS.md §2.10), its range
 /// including 0, with lines at the times `marks` (the launches).
 fn circuit_plot(ui: &mut egui::Ui, samples: &[(f64, f64)], marks: &[f64]) {
-    let (Some(&(t0, _)), Some(&(t1, _))) = (samples.first(), samples.last()) else {
-        return;
-    };
+    multi_plot(ui, &[(PLOT_COLOURS[0], samples)], marks);
+}
+
+/// A small plot of several series over lab time on one scale (its range including 0),
+/// each in its colour, with lines at the times `marks`.
+fn multi_plot(ui: &mut egui::Ui, lines: &[Line], marks: &[f64]) {
+    let t0 = lines
+        .iter()
+        .filter_map(|(_, s)| s.first().map(|p| p.0))
+        .fold(f64::INFINITY, f64::min);
+    let t1 = lines
+        .iter()
+        .filter_map(|(_, s)| s.last().map(|p| p.0))
+        .fold(f64::NEG_INFINITY, f64::max);
     let width = ui.available_width().min(280.0);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 54.0), egui::Sense::hover());
+    if !(t0.is_finite() && t1.is_finite()) {
+        return;
+    }
     let painter = ui.painter_at(rect);
-    let (lo, hi) = samples
+    let (lo, hi) = lines
         .iter()
+        .flat_map(|(_, s)| s.iter())
         .fold((0.0_f64, 0.0_f64), |(a, b), s| (a.min(s.1), b.max(s.1)));
     let span = if hi > lo { hi - lo } else { 1.0 };
     let duration = if t1 > t0 { t1 - t0 } else { 1.0 };
@@ -3342,11 +3582,13 @@ fn circuit_plot(ui: &mut egui::Ui, samples: &[(f64, f64)], marks: &[f64]) {
             );
         }
     }
-    let points: Vec<egui::Pos2> = samples.iter().map(|&(t, v)| at(t, v)).collect();
-    painter.add(egui::Shape::line(
-        points,
-        egui::Stroke::new(1.5, egui::Color32::from_rgb(120, 200, 255)),
-    ));
+    for ([r, g, b], samples) in lines {
+        let points: Vec<egui::Pos2> = samples.iter().map(|&(t, v)| at(t, v)).collect();
+        painter.add(egui::Shape::line(
+            points,
+            egui::Stroke::new(1.5, egui::Color32::from_rgb(*r, *g, *b)),
+        ));
+    }
     painter.text(
         rect.left_top(),
         egui::Align2::LEFT_TOP,

@@ -671,6 +671,19 @@ pub fn draw(
                 None => gizmos.linestrip_2d(box_outline(b, 0.12), color),
             }
         }
+        // The electrode whose plot line is hovered, in the line's colour.
+        if let Some((_, [cr, cg, cb])) = game.focused_electrode().filter(|(j, _)| *j == i) {
+            let c = Color::srgb_u8(cr, cg, cb);
+            for grow in [0.2_f32, 0.26, 0.32] {
+                match radii {
+                    #[allow(clippy::cast_possible_truncation)]
+                    Some((_, outer)) => {
+                        gizmos.circle_2d(to_vec2(b.center), outer as f32 + grow, c);
+                    }
+                    None => gizmos.linestrip_2d(box_outline(b, grow), c),
+                }
+            }
+        }
         if focused.contains(&i) {
             for grow in [0.2_f32, 0.26, 0.32] {
                 match radii {
@@ -1220,7 +1233,7 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
 pub const METAL_SAMPLE: usize = 40;
 
 /// The time over which a traced carrier's path is drawn.
-const METAL_TRAIL: f64 = 0.4;
+const METAL_TRAIL: f64 = 0.8;
 
 /// Tube levels: the preview's particles at the animation time (the frame at or before
 /// it; all frames when not animating: the last one), faded while a new setup computes.
@@ -1338,28 +1351,18 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
             })
             .map(|(i, id)| (*id, i))
             .collect();
-        let frames = &view.run.frames;
-        let k1 = frames.partition_point(|f| f.t <= frame.t);
-        let k0 = frames.partition_point(|f| f.t < frame.t - METAL_TRAIL);
-        let mut paths: std::collections::HashMap<u32, Vec<Vec2>> = std::collections::HashMap::new();
-        for f in &frames[k0..k1] {
-            for (i, id) in f.id.iter().enumerate() {
-                if sample.contains_key(id) {
-                    paths
-                        .entry(*id)
-                        .or_default()
-                        .push(Vec2::new(f.x[i][0], f.x[i][1]));
-                }
-            }
-        }
         for (id, i) in &sample {
             let Some(color) = color_of(frame.kind[*i]) else {
                 continue;
             };
             let now = Vec2::new(frame.x[*i][0], frame.x[*i][1]);
-            if let Some(path) = paths.get_mut(id) {
-                path.push(now);
-                gizmos.linestrip_2d(path.iter().copied(), color.with_alpha(0.75 * stale));
+            // Along its steps (`TubeRun::trail`): the arcs between collisions in a field.
+            let path = view.run.trail(*id, frame.t - METAL_TRAIL, frame.t);
+            if path.len() > 1 {
+                gizmos.linestrip_2d(
+                    path.iter().map(|x| Vec2::new(x[0], x[1])),
+                    color.with_alpha(0.75 * stale),
+                );
             }
             gizmos
                 .circle_2d(now, 0.07, color.with_alpha(stale))
@@ -1459,7 +1462,7 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     }
     draw_swing(gizmos, game, &frame);
     draw_leads(gizmos, game);
-    draw_hall(gizmos, view, &frame);
+    draw_hall(gizmos, game, stale_fade(view.revision, game.sent_revision));
     draw_drift(gizmos, game, view, &frame);
 }
 
@@ -1566,57 +1569,99 @@ fn draw_drift(
 /// How far back the drift of a metal's carriers is measured (their thermal motion is about
 /// five times their drift; over this time and the thousands of carriers in a strip's middle
 /// its noise is a few per cent).
-const DRIFT_SPAN: f64 = 1.0;
+pub const DRIFT_SPAN: f64 = 1.0;
 
-/// Metals in a magnetic field: at each strip's centre the Hall effect's forces
-/// (`TubeRun::hall_forces`), drawn as arrows: the carriers' drift (white, over the last
-/// `DRIFT_SPAN`), the field's magnetic push on it (orange, `q ⟨v⟩ × B`, across the strip)
-/// and the push of the electric field across it over the same time (blue, `q E⊥`: the
-/// Hall field of the charge piled at its sides). The two pushes are drawn to the larger one's scale: the
-/// magnetic push piles carriers on one side until the electric one holds them; then the
-/// arrows are nearly equal (the electric one up to 4/π longer: fast and slow carriers are
-/// pushed differently, the Hall factor).
-fn draw_hall(gizmos: &mut Gizmos, view: &crate::TubeView, frame: &level::tube::TubeFrame) {
-    if !view.run.has_field() || view.run.metals.is_empty() {
-        return;
+/// The Hall diagram's colours: the drift, the magnetic, electric and collisions' pushes.
+pub const HALL_DRIFT: [f32; 3] = [0.95, 0.95, 0.9];
+pub const HALL_MAGNETIC: [f32; 3] = [1.0, 0.55, 0.15];
+pub const HALL_ELECTRIC: [f32; 3] = [0.45, 0.8, 1.0];
+pub const HALL_COLLISIONS: [f32; 3] = [0.72, 0.72, 0.76];
+
+/// One arrow of a Hall diagram (`hall_diagram`).
+pub struct HallArrow {
+    pub tip: Vec2,
+    pub rgb: [f32; 3],
+    pub label: &'static str,
+    /// A force (bold), else the drift (thin).
+    pub force: bool,
+}
+
+/// A strip's Hall diagram (`level::tube::HallForces`): its average carrier at the centre
+/// of its middle and, from it, its drift (its direction) and the three forces on it to
+/// the largest one's scale. The forces sum to zero (a steady drift): the electric push
+/// drives the carriers along and, from the charge piled on the sides, pushes them back
+/// across against the magnetic push; the collisions hold them to a steady drift.
+pub fn hall_diagram(h: &level::tube::HallForces) -> (Vec2, Vec<HallArrow>) {
+    let centre = to_vec2(h.centre);
+    let scale = h
+        .magnetic
+        .length()
+        .max(h.electric.length())
+        .max(h.collisions.length());
+    if scale <= 0.0 || h.drift.length() <= 0.0 {
+        return (centre, Vec::new());
     }
-    let Some(before) = view.run.frame_between(frame.t - DRIFT_SPAN) else {
-        return;
-    };
-    if frame.t - before.t < 0.5 * DRIFT_SPAN {
-        return;
-    }
-    for k in 0..view.run.metals.len() {
-        let Some(h) = view.run.hall_forces(frame, &before, k) else {
-            continue;
-        };
-        let scale = h.magnetic.length().max(h.electric.length());
-        if scale <= 0.0 || h.drift.length() <= 0.0 {
-            continue;
+    #[allow(clippy::cast_possible_truncation)]
+    let reach = (0.45 * h.width).min(2.0) as f32;
+    let tip = |f: physics::DVec3| centre + to_vec2(f / scale) * reach;
+    let arrows = vec![
+        HallArrow {
+            tip: centre + to_vec2(h.drift.normalize()) * reach.min(1.2),
+            rgb: HALL_DRIFT,
+            label: "v",
+            force: false,
+        },
+        HallArrow {
+            tip: tip(h.magnetic),
+            rgb: HALL_MAGNETIC,
+            label: "qv×B",
+            force: true,
+        },
+        HallArrow {
+            tip: tip(h.electric),
+            rgb: HALL_ELECTRIC,
+            label: "qE",
+            force: true,
+        },
+        HallArrow {
+            tip: tip(h.collisions),
+            rgb: HALL_COLLISIONS,
+            label: "collisions",
+            force: true,
+        },
+    ];
+    (centre, arrows)
+}
+
+/// Metals in a magnetic field: each strip's Hall diagram (`hall_diagram`, from
+/// `Game::hall`): its average carrier (a white dot) with its drift (thin) and the forces on
+/// it (bold), all drawn from it; their labels are the panel's (`ui::hall_labels`).
+fn draw_hall(gizmos: &mut Gizmos, game: &Game, fade: f32) {
+    let rgb = |c: [f32; 3]| Color::srgb(c[0], c[1], c[2]);
+    for h in &game.hall {
+        let (centre, arrows) = hall_diagram(h);
+        for a in &arrows {
+            if a.force {
+                bold_arrow(gizmos, centre, a.tip, rgb(a.rgb).with_alpha(fade));
+            } else {
+                gizmos.arrow_2d(centre, a.tip, Color::srgba(0.05, 0.05, 0.07, 0.8 * fade));
+                gizmos.arrow_2d(centre, a.tip, rgb(a.rgb).with_alpha(fade));
+            }
         }
-        let (centre, axis) = (to_vec2(h.centre), to_vec2(h.axis));
-        #[allow(clippy::cast_possible_truncation)]
-        let reach = (0.45 * h.width).min(2.0) as f32;
-        #[allow(clippy::cast_possible_truncation)]
-        let side = |f: physics::DVec3| to_vec2(f / scale) * reach;
-        bold_arrow(
-            gizmos,
-            centre - axis * 1.1,
-            centre + to_vec2(h.drift.normalize()) * 1.1,
-            Color::srgb(0.95, 0.95, 0.9),
-        );
-        bold_arrow(
-            gizmos,
-            centre - axis * 0.4,
-            centre - axis * 0.4 + side(h.magnetic),
-            Color::srgb(1.0, 0.55, 0.15),
-        );
-        bold_arrow(
-            gizmos,
-            centre + axis * 0.4,
-            centre + axis * 0.4 + side(h.electric),
-            Color::srgb(0.45, 0.8, 1.0),
-        );
+        if !arrows.is_empty() {
+            disc(
+                gizmos,
+                centre,
+                0.14,
+                Color::srgba(0.05, 0.05, 0.07, 0.9 * fade),
+            );
+            disc(
+                gizmos,
+                centre,
+                0.1,
+                Color::srgb(0.95, 0.95, 0.9).with_alpha(fade),
+            );
+        }
     }
 }
 

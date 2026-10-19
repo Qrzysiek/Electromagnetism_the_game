@@ -137,6 +137,7 @@ pub fn map_frame(frame: &level::tube::TubeFrame) -> std::borrow::Cow<'_, level::
             potentials: frame.potentials.clone(),
             currents: frame.currents.clone(),
             heat: frame.heat,
+            paths: Vec::new(),
         };
         for ((x, q), kind) in frame.x.iter().zip(&frame.q).zip(&frame.kind) {
             if *kind == level::tube::KIND_PROJECTILE {
