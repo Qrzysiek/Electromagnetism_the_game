@@ -63,10 +63,19 @@ fn levels_dir() -> PathBuf {
 
 fn level_hashes() -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
+    // GOLDEN_ONLY=<part of a name>: only the matching levels (a new level's hash without the
+    // hour the whole set takes).
+    let only = std::env::var("GOLDEN_ONLY").ok();
     let mut paths: Vec<_> = std::fs::read_dir(levels_dir())
         .unwrap()
         .map(|e| e.unwrap().path())
         .filter(|p| level::is_level_file(p))
+        .filter(|p| {
+            only.as_ref().is_none_or(|o| {
+                p.file_stem()
+                    .is_some_and(|s| s.to_string_lossy().contains(o.as_str()))
+            })
+        })
         .collect();
     paths.sort();
     for p in paths {
@@ -144,9 +153,21 @@ fn t11_repeated_runs_are_identical() {
 
 #[test]
 fn t11_matches_golden_hashes() {
-    let hashes = level_hashes();
+    let mut hashes = level_hashes();
     let golden_path = levels_dir().join("golden_hashes.json");
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
+        // With GOLDEN_ONLY, the other levels' hashes are kept as they are.
+        if std::env::var_os("GOLDEN_ONLY").is_some() {
+            let old = std::fs::read_to_string(&golden_path).unwrap_or_default();
+            for line in old.lines() {
+                let parts: Vec<&str> = line.split('"').collect();
+                if parts.len() >= 5 {
+                    hashes
+                        .entry(parts[1].to_string())
+                        .or_insert_with(|| parts[3].to_string());
+                }
+            }
+        }
         let mut s = String::from("{\n");
         let body: Vec<String> = hashes
             .iter()

@@ -88,6 +88,46 @@ impl Waveform {
         }
     }
 
+    /// The waveform's rate of change at `t` (on a pulse's corner, the slope after it).
+    #[must_use]
+    pub fn slope(&self, t: f64) -> f64 {
+        match *self {
+            Waveform::Dc(_) => 0.0,
+            Waveform::Sine {
+                amplitude,
+                omega,
+                phase,
+                ..
+            } => amplitude * omega * libm::cos(omega * t + phase),
+            Waveform::Pulse {
+                low,
+                high,
+                delay,
+                rise,
+                width,
+                fall,
+                period,
+            } => {
+                let mut s = t - delay;
+                if s < 0.0 {
+                    return 0.0;
+                }
+                if period > 0.0 {
+                    s -= period * libm::floor(s / period);
+                }
+                if s < rise {
+                    (high - low) / rise
+                } else if s < rise + width {
+                    0.0
+                } else if s < rise + width + fall {
+                    (low - high) / fall
+                } else {
+                    0.0
+                }
+            }
+        }
+    }
+
     /// The times in `(0, t_end)` where the waveform has a corner.
     pub fn corners(&self, t_end: f64) -> Vec<f64> {
         let Waveform::Pulse {

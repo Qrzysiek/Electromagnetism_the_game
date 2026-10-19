@@ -54,6 +54,12 @@ pub struct TubeSpec {
     /// `limits.solenoid_fields`) sets B along z in place of `b_z`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub solenoid: Option<Node>,
+    /// The solenoid's field over time (`physics::tube::SolenoidWave`, with the electric
+    /// field it induces about the board's centre): this source's shape, its level set by
+    /// the player's supply on the terminal, else `b_z` (a DC level, a sine's amplitude, a
+    /// pulse's high: a ramp or a triangle). None: a steady field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solenoid_drive: Option<crate::Source>,
     /// A temperature-limited cathode's macroparticles per unit time at its saturation, in
     /// the preview (the verification's twice as many; `TL_RATE` by default): a beam
     /// modulated at a high frequency needs many per period.
@@ -92,6 +98,9 @@ pub struct TubeSpec {
     /// Goals on electrodes' potentials over windows (their mean or their swing).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub potential_goals: Vec<PotentialGoal>,
+    /// Goals on metals' heat over windows (the mean power the field gives their carriers).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub heat_goals: Vec<HeatGoal>,
     /// The tube's radiated output (a magnetron's microwaves): one circuit's load.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<TubeOutput>,
@@ -264,6 +273,17 @@ impl PotentialGoal {
             v
         }
     }
+}
+
+/// A metal's heat, the power the field gives its carriers (`TubeState::field_work`: the
+/// Joule heat in a steady state), averaged over `start..end`, must lie in `min..max`.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HeatGoal {
+    pub metal: usize,
+    pub min: f64,
+    pub max: f64,
+    pub start: f64,
+    pub end: f64,
 }
 
 /// An electrode's potential, measured over `start..end`, must lie in `min..max`.
@@ -641,6 +661,11 @@ pub struct TubeRun {
     pub currents: Vec<Option<f64>>,
     /// Each potential goal's measure, once the run has passed its window.
     pub potential: Vec<Option<f64>>,
+    /// Each heat goal's mean power, once the run has passed its window.
+    pub heat: Vec<Option<f64>>,
+    /// Per metal: the work the field has done on its carriers so far, `(t, W)`, at each
+    /// frame (`TubeState::field_work`; its rate is the heat).
+    pub work: Vec<Vec<(f64, f64)>>,
     /// Per projectile: its track `(t, x)` while in flight, and when it reached its
     /// detector.
     pub tracks: Vec<Vec<(f64, [f32; 2])>>,
@@ -664,12 +689,26 @@ pub struct TubeRun {
     /// The uniform magnetic field along z of the run (the level's, or its solenoid's
     /// supply).
     pub b_z: f64,
+    /// A field that changes in time (`TubeSpec::solenoid_drive`), in place of `b_z`.
+    pub b_wave: Option<physics::tube::SolenoidWave>,
     /// Per metal, in a field: the field across its middle at each frame, `(t, E⊥)`
     /// (`hall_field`; the Hall arrows' electric push is its mean over their drift's time).
     pub hall: Vec<Vec<(f64, f64)>>,
 }
 
 impl TubeRun {
+    /// B along z at `t`.
+    #[must_use]
+    pub fn b_at(&self, t: f64) -> f64 {
+        self.b_wave.map_or(self.b_z, |w| w.b(t))
+    }
+
+    /// Whether the run has a magnetic field at all (steady or changing).
+    #[must_use]
+    pub fn has_field(&self) -> bool {
+        self.b_z != 0.0 || self.b_wave.is_some()
+    }
+
     /// Appends a streamed chunk (its frames and samples follow this run's).
     pub fn extend(&mut self, chunk: TubeRun) {
         self.frames.extend(chunk.frames);
@@ -696,6 +735,18 @@ impl TubeRun {
         }
         for (a, c) in self.potential.iter_mut().zip(chunk.potential) {
             *a = a.or(c);
+        }
+        if self.heat.len() < chunk.heat.len() {
+            self.heat.resize(chunk.heat.len(), None);
+        }
+        for (a, c) in self.heat.iter_mut().zip(chunk.heat) {
+            *a = a.or(c);
+        }
+        if self.work.len() < chunk.work.len() {
+            self.work.resize(chunk.work.len(), Vec::new());
+        }
+        for (a, c) in self.work.iter_mut().zip(chunk.work) {
+            a.extend(c);
         }
         if self.tracks.len() < chunk.tracks.len() {
             self.tracks.resize(chunk.tracks.len(), Vec::new());
@@ -792,6 +843,10 @@ impl TubeRun {
         for m in &self.metals {
             e += physics::zinv::rect_integrals(m.lo, m.hi, x).1 * m.background;
         }
+        // A changing field's induced part (no potential: it circulates).
+        if let Some(w) = &self.b_wave {
+            e += w.induced(frame.t, x);
+        }
         e
     }
 
@@ -843,7 +898,7 @@ impl TubeRun {
     ) -> Option<HallForces> {
         let m = self.metals.get(metal)?;
         let span = now.t - before.t;
-        if self.b_z == 0.0 || span <= 0.0 {
+        if !self.has_field() || span <= 0.0 {
             return None;
         }
         let (centre, axis, normal, length, width) = m.strip();
@@ -877,7 +932,9 @@ impl TubeRun {
         let q = f64::signum(sign);
         let drift = sum / (n * span);
         // q v × B ẑ = q B (v_y, −v_x).
-        let magnetic = DVec3::new(drift.y, -drift.x, 0.0) * (q * self.b_z);
+        // A changing field: B at the window's middle.
+        let b = self.b_at(0.5 * (before.t + now.t));
+        let magnetic = DVec3::new(drift.y, -drift.x, 0.0) * (q * b);
         let across = self
             .hall
             .get(metal)
@@ -927,6 +984,9 @@ impl TubeRun {
             phi += m.background * f;
             e += g * m.background;
         }
+        if let Some(w) = &self.b_wave {
+            e += w.induced(frame.t, x);
+        }
         (phi, e)
     }
 }
@@ -955,6 +1015,9 @@ pub struct TubeSim {
     windows: Vec<(f64, f64, f64, f64)>,
     series: Vec<Vec<(f64, f64)>>,
     potential: Vec<Option<f64>>,
+    /// Per heat goal: the time and its metal's work at its window's start, and its result.
+    heat_start: Vec<Option<(f64, f64)>>,
+    heat: Vec<Option<f64>>,
     arrivals: Vec<Option<f64>>,
     /// Per projectile with a detector: its closest approach to the detector so far.
     closest: Vec<f64>,
@@ -1209,7 +1272,14 @@ impl TubeSim {
                     heat: s.joule,
                 };
                 let metals = self.layout.metals.len();
-                if self.layout.b_z != 0.0 && metals > 0 {
+                if metals > 0 {
+                    self.pending.work.resize(metals, Vec::new());
+                    for m in 0..metals {
+                        let w = self.metal_work(m);
+                        self.pending.work[m].push((frame.t, w));
+                    }
+                }
+                if self.layout.has_field() && metals > 0 {
                     self.pending.hall.resize(metals, Vec::new());
                     for m in 0..metals {
                         let e = self.layout.hall_field(&frame, m);
@@ -1218,6 +1288,9 @@ impl TubeSim {
                 }
                 self.pending.frames.push(frame);
             }
+            // Each heat goal's window.
+            self.heat_goals();
+            let s = &self.state;
             // Each potential goal's measure over its window.
             if self.pending.potential.len() < self.potential.len() {
                 self.pending.potential.resize(self.potential.len(), None);
@@ -1249,6 +1322,35 @@ impl TubeSim {
         }
         self.pending.in_flight = self.state.x.len();
         self.pending.steps = self.steps;
+    }
+
+    /// Metal `m`'s field work so far (its lattices': one per metal).
+    fn metal_work(&self, m: usize) -> f64 {
+        self.state.field_work.get(m).copied().unwrap_or(0.0)
+    }
+
+    /// The heat goals' windows after a step: each one's start, and its mean power at its end.
+    fn heat_goals(&mut self) {
+        let (t, dt) = (self.state.t, self.tube.dt);
+        if self.pending.heat.len() < self.heat.len() {
+            self.pending.heat.resize(self.heat.len(), None);
+        }
+        for k in 0..self.spec.heat_goals.len() {
+            let g = self.spec.heat_goals[k];
+            if self.heat[k].is_some() {
+                continue;
+            }
+            let w = self.metal_work(g.metal);
+            if self.heat_start[k].is_none() && t >= g.start - 0.5 * dt {
+                self.heat_start[k] = Some((t, w));
+            }
+            if t >= g.end - 0.5 * dt {
+                let (t0, w0) = self.heat_start[k].unwrap_or((0.0, 0.0));
+                let p = if t > t0 { (w - w0) / (t - t0) } else { 0.0 };
+                self.heat[k] = Some(p);
+                self.pending.heat[k] = Some(p);
+            }
+        }
     }
 
     /// The frames and samples made since the last call (the first chunk also carries the
@@ -1307,6 +1409,8 @@ pub struct TubeResults {
     pub currents: Vec<Option<f64>>,
     /// Each potential goal's measure.
     pub potential: Vec<Option<f64>>,
+    /// Each heat goal's mean power.
+    pub heat: Vec<Option<f64>>,
     /// When each projectile reached its detector.
     pub arrivals: Vec<Option<f64>>,
     /// Emission paused at the particle cap.
@@ -1319,6 +1423,7 @@ impl TubeSim {
         TubeResults {
             currents: self.currents.clone(),
             potential: self.potential.clone(),
+            heat: self.heat.clone(),
             arrivals: self.arrivals.clone(),
             capped: self.state.capped,
         }
@@ -1333,6 +1438,8 @@ pub struct TubeVerdict {
     /// Each potential goal's verdict (the same rule: the fine run's value, 1.5 times the
     /// runs' difference as its error).
     pub potential: Vec<CurrentVerdict>,
+    /// Each heat goal's verdict (the same rule).
+    pub heat: Vec<CurrentVerdict>,
     /// Per projectile with a detector: (projectile, preview arrival, verification
     /// arrival, status).
     pub arrivals: Vec<(usize, Option<f64>, Option<f64>, TubeStatus)>,
@@ -1370,6 +1477,19 @@ impl TubeVerdict {
                 )
             })
             .collect();
+        let heat: Vec<CurrentVerdict> = spec
+            .heat_goals
+            .iter()
+            .enumerate()
+            .map(|(k, g)| {
+                CurrentVerdict::new(
+                    preview.heat.get(k).copied().flatten().unwrap_or(0.0),
+                    fine.heat.get(k).copied().flatten().unwrap_or(0.0),
+                    g.min,
+                    g.max,
+                )
+            })
+            .collect();
         let arrivals: Vec<_> = spec
             .projectiles
             .iter()
@@ -1391,6 +1511,7 @@ impl TubeVerdict {
         let all = currents
             .iter()
             .chain(potential.iter())
+            .chain(heat.iter())
             .map(|c| c.status)
             .chain(arrivals.iter().map(|a| a.3));
         let capped = preview.capped || fine.capped;
@@ -1409,6 +1530,7 @@ impl TubeVerdict {
         Self {
             currents,
             potential,
+            heat,
             arrivals,
             capped,
             status,
@@ -1736,6 +1858,11 @@ impl Level {
             dt: spec.step / r,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
+            b_wave: spec.solenoid_drive.map(|s| physics::tube::SolenoidWave {
+                waveform: s.with_level(b_z).waveform(),
+                // The solenoid around the board: its axis at the board's centre.
+                axis: DVec3::new(0.5 * max.x, 0.5 * max.y, 0.0),
+            }),
             circuits: self.tube_circuits(player),
             lattices,
         };
@@ -1814,9 +1941,11 @@ impl Level {
                 })
                 .collect(),
             b_z: tube.b_z,
+            b_wave: tube.b_wave,
             ..TubeRun::default()
         };
         let n_goals = spec.potential_goals.len();
+        let n_heat = spec.heat_goals.len();
         let n_currents = spec.goals.len();
         // A metal's run keeps a frame every few steps: its particles over the whole run
         // within `FRAME_BUDGET` (other tubes: every step).
@@ -1847,6 +1976,8 @@ impl Level {
             windows: vec![(0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY); n_goals],
             series: vec![Vec::new(); n_goals],
             potential: vec![None; n_goals],
+            heat_start: vec![None; n_heat],
+            heat: vec![None; n_heat],
             arrivals: vec![None; n_proj],
             closest: vec![f64::INFINITY; n_proj],
         }
@@ -1966,6 +2097,7 @@ impl Level {
                 .iter()
                 .map(|g| g.end)
                 .chain(t.potential_goals.iter().map(|g| g.end))
+                .chain(t.heat_goals.iter().map(|g| g.end))
                 .fold(0.0, f64::max);
             if t.projectiles.iter().any(|p| p.detector.is_some()) {
                 goal.max(self.physics.t_max)
@@ -2037,6 +2169,12 @@ impl Level {
             // Not measured (the run ended early): one width, finite for the annealing.
             score += measured.get(k).copied().flatten().map_or(1.0, |v| {
                 let v = g.compared(v);
+                (g.min - v).max(v - g.max).max(0.0) / (g.max - g.min).max(1e-300)
+            });
+        }
+        let heat = sim.results().heat;
+        for (k, g) in spec.heat_goals.iter().enumerate() {
+            score += heat.get(k).copied().flatten().map_or(1.0, |v| {
                 (g.min - v).max(v - g.max).max(0.0) / (g.max - g.min).max(1e-300)
             });
         }
@@ -2224,6 +2362,7 @@ impl Level {
         if spec.goals.is_empty()
             && !spec.projectiles.iter().any(|p| p.detector.is_some())
             && spec.potential_goals.is_empty()
+            && spec.heat_goals.is_empty()
         {
             out.push(
                 "Tube: no goal (a current, a potential, or a projectile with a detector).".into(),
@@ -2326,6 +2465,15 @@ impl Level {
             if !(g.electrode < n && g.min < g.max && 0.0 <= g.start && g.start < g.end) {
                 out.push(format!(
                     "Tube: potential goal {} needs an electrode, min < max and 0 ≤ start < end.",
+                    k + 1
+                ));
+            }
+        }
+        for (k, g) in spec.heat_goals.iter().enumerate() {
+            if !(g.metal < spec.metals.len() && g.min < g.max && 0.0 <= g.start && g.start < g.end)
+            {
+                out.push(format!(
+                    "Tube: heat goal {} needs a metal, min < max and 0 ≤ start < end.",
                     k + 1
                 ));
             }

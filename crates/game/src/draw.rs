@@ -1577,7 +1577,7 @@ const DRIFT_SPAN: f64 = 1.0;
 /// arrows are nearly equal (the electric one up to 4/π longer: fast and slow carriers are
 /// pushed differently, the Hall factor).
 fn draw_hall(gizmos: &mut Gizmos, view: &crate::TubeView, frame: &level::tube::TubeFrame) {
-    if view.run.b_z == 0.0 || view.run.metals.is_empty() {
+    if !view.run.has_field() || view.run.metals.is_empty() {
         return;
     }
     let Some(before) = view.run.frame_between(frame.t - DRIFT_SPAN) else {

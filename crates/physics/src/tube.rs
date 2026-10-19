@@ -44,6 +44,12 @@
 //! - **Push**: Boris with a fixed step (a uniform B along z rotates the velocity; with
 //!   B = 0 it is the kick-drift leapfrog), symplectic; launches and emission add
 //!   particles at the start of a step.
+//! - **A changing field** (`SolenoidWave`, optional): B_z follows a waveform, and by
+//!   Faraday's law (`∇ × E = −∂B/∂t`; these units write the Lorentz force `q(E + v × B)`)
+//!   it induces `E = −½ Ḃ ẑ × (x − axis)`, circulating about the solenoid's axis, which
+//!   pushes every particle (a metal's eddy currents). The currents' own magnetic field is
+//!   left out, as everywhere here: the eddy currents do not screen the change (valid where
+//!   the skin depth is far larger than the metal).
 
 use glam::DVec3;
 
@@ -216,6 +222,45 @@ pub const MAX_PARTICLES: usize = 20_000;
 /// index.
 pub const PROJECTILE_TAG: u32 = 1 << 16;
 
+/// A uniform field along z that changes in time (a long solenoid around the board on a
+/// time-dependent supply): `B_z(t)` follows `waveform`, and induces the electric field
+/// `E = −½ Ḃ ẑ × (x − axis)` (Faraday's law, `∇ × E = −Ḃ ẑ`), circulating about the
+/// solenoid's axis. Inside an isolated conductor only its curl matters (the charges it
+/// moves to the surface cancel any uniform part); a circuit through the field picks up the
+/// EMF of the flux it encloses, which this gauge assigns about `axis`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SolenoidWave {
+    pub waveform: Waveform,
+    pub axis: DVec3,
+}
+
+impl SolenoidWave {
+    /// `B_z` at `t`.
+    #[must_use]
+    pub fn b(&self, t: f64) -> f64 {
+        self.waveform.value(t)
+    }
+
+    /// The largest |B| it reaches.
+    #[must_use]
+    pub fn peak(&self) -> f64 {
+        match self.waveform {
+            Waveform::Dc(v) => v.abs(),
+            Waveform::Sine {
+                offset, amplitude, ..
+            } => offset.abs() + amplitude.abs(),
+            Waveform::Pulse { low, high, .. } => low.abs().max(high.abs()),
+        }
+    }
+
+    /// The induced electric field at `x` at `t`.
+    #[must_use]
+    pub fn induced(&self, t: f64, x: DVec3) -> DVec3 {
+        let half = 0.5 * self.waveform.slope(t);
+        DVec3::new(half * (x.y - self.axis.y), -half * (x.x - self.axis.x), 0.0)
+    }
+}
+
 /// The tube's setup.
 #[derive(Debug)]
 pub struct Tube {
@@ -235,6 +280,8 @@ pub struct Tube {
     pub arena: Option<(DVec3, DVec3)>,
     /// A uniform magnetic field along z (a long solenoid around the tube: z-invariant).
     pub b_z: f64,
+    /// A field that changes in time, with its induced electric field, in place of `b_z`.
+    pub b_wave: Option<SolenoidWave>,
     /// External circuits of electrodes.
     pub circuits: Vec<Circuit>,
     /// Conductors' interiors (`lattice.rs`): their carriers fill them at the start (tagged
@@ -285,6 +332,12 @@ pub struct TubeState {
     /// and the collisions.
     pub joule: f64,
     pub collisions: u64,
+    /// Per lattice: the work the field has done on the carriers inside it, `Σ (q dt/2)
+    /// E·(v_old + v_new)` (the push's exact energy account: the magnetic rotation does no
+    /// work). In a steady state the Joule heat, the lattice's take, with far less noise:
+    /// each collision exchanges about kT at random, while the field's work fluctuates by
+    /// `qEℓ/kT` times as much.
+    pub field_work: Vec<f64>,
     /// The density the lattices' backgrounds induce on the segments (constant).
     background: Vec<f64>,
     /// Every electrode's potential now.
@@ -430,6 +483,7 @@ impl Tube {
                 .collect(),
             collected: vec![vec![0.0; self.emitters.len() + self.lattices.len()]; n_el],
             released: vec![0.0; self.emitters.len()],
+            field_work: vec![0.0; self.lattices.len()],
             launched: vec![false; self.projectiles.len()],
             fates: vec![None; self.projectiles.len()],
             potentials,
@@ -995,7 +1049,19 @@ impl Tube {
         } else {
             s.x.iter().copied().zip(s.v.iter().copied()).collect()
         };
-        for (((x, v), qm), e) in s.x.iter_mut().zip(&mut s.v).zip(&s.qm).zip(&fields) {
+        // A changing field: B at the positions' time, and its induced field below.
+        let b_z = self.b_wave.map_or(self.b_z, |w| w.b(s.t));
+        // The field's work on each lattice's carriers over the step.
+        let mut work = vec![0.0; self.lattices.len()];
+        for (((((x, v), qm), e), charge), tag) in
+            s.x.iter_mut()
+                .zip(&mut s.v)
+                .zip(&s.qm)
+                .zip(&fields)
+                .zip(&s.charge)
+                .zip(&s.tag)
+        {
+            let old = *v;
             // The conductors' backgrounds (no sum at all without one: bit for bit as before).
             let e = if self.lattices.is_empty() {
                 *e
@@ -1006,15 +1072,28 @@ impl Tube {
                     .map(|l| l.background_at(*x).1)
                     .sum::<DVec3>()
             };
+            let e = match &self.b_wave {
+                Some(w) => e + w.induced(s.t, *x),
+                None => e,
+            };
             let e = &e;
             let h = 0.5 * self.dt * qm;
             let minus = *v + *e * h;
             // Rotation about z by the magnetic field (Boris).
-            let t = DVec3::new(0.0, 0.0, h * self.b_z);
+            let t = DVec3::new(0.0, 0.0, h * b_z);
             let prime = minus + minus.cross(t);
             let plus = minus + prime.cross(t * (2.0 / (1.0 + t.z * t.z)));
             *v = plus + *e * h;
+            if !work.is_empty()
+                && *tag < PROJECTILE_TAG
+                && let Some(k) = self.lattices.iter().position(|l| l.contains(*x))
+            {
+                work[k] += 0.5 * self.dt * charge * e.dot(old + *v);
+            }
             *x += *v * self.dt;
+        }
+        for (total, w) in s.field_work.iter_mut().zip(&work) {
+            *total += w;
         }
         s.t += self.dt;
         // The conductors: every carrier that was inside one scatters (lattice.rs).
@@ -1108,11 +1187,15 @@ impl Tube {
     }
 
     /// The field at `x` now: the segments' charge, every particle's (softened) and the
-    /// lattices' backgrounds.
+    /// lattices' backgrounds, and a changing field's induced part.
     #[must_use]
     pub fn field_at(&self, s: &TubeState, x: DVec3) -> DVec3 {
         let sigma = self.surface_density(s);
-        self.field(s, &sigma, x, None)
+        let e = self.field(s, &sigma, x, None);
+        match &self.b_wave {
+            Some(w) => e + w.induced(s.t, x),
+            None => e,
+        }
     }
 
     /// The carrier `p` of `lattice` after a move from `a` (its velocity `v0` before the

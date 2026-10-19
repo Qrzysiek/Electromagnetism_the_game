@@ -200,6 +200,8 @@ fn scan_one(level: &Level, placement: &[level::Element], samples: bool) -> serde
                 .map(|(c, g)| goal(c, g.min, g.max)).collect::<Vec<_>>(),
             "potentials": v.potential.iter().zip(&spec.potential_goals)
                 .map(|(c, g)| goal(c, g.min, g.max)).collect::<Vec<_>>(),
+            "heat": v.heat.iter().zip(&spec.heat_goals)
+                .map(|(c, g)| goal(c, g.min, g.max)).collect::<Vec<_>>(),
             "arrivals": v.arrivals.iter().map(|(j, a, b, s)| json!({
                 "projectile": j + 1, "preview": a, "verification": b,
                 "status": format!("{s:?}") })).collect::<Vec<_>>(),
@@ -335,7 +337,7 @@ fn tube_scan(
             })
             .collect();
         println!(
-            "{i}: {} lost {:.4} goals {:?} potential {:?} arrivals {:?} fates {} in flight {} weights {:?}",
+            "{i}: {} lost {:.4} goals {:?} potential {:?} arrivals {:?} fates {} in flight {} weights {:?} heat {:?}",
             currents.join(" "),
             (sim.lost() - lost0) / dt,
             sim.currents(),
@@ -343,7 +345,8 @@ fn tube_scan(
             sim.arrivals(),
             fates.join("; "),
             sim.in_flight(),
-            sim.weights()
+            sim.weights(),
+            sim.results().heat
         );
     }
 }
@@ -691,6 +694,19 @@ fn main() {
                     println!(
                         "  shot potential: {:?} {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
                         g.measure,
+                        c.fine,
+                        c.error,
+                        c.preview,
+                        g.min,
+                        g.max,
+                        c.status,
+                        verdict(c.status)
+                    );
+                }
+                for (c, g) in v.heat.iter().zip(&spec.heat_goals) {
+                    println!(
+                        "  shot heat of metal {}: {:.6} ± {:.6} (preview {:.6}), goal {} to {}: {:?}: {}",
+                        g.metal + 1,
                         c.fine,
                         c.error,
                         c.preview,

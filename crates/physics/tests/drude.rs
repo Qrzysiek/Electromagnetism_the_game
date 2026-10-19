@@ -7,14 +7,14 @@
 //! stepped by the lattice's own collision step (`Lattice::advance`, as `Tube` steps them).
 //! D5 screening: a metal in `Tube`, its carriers' own field screening two plates' within the
 //! Debye length. The self-consistent resistor (Ohm's law with the carriers' own field and
-//! the contacts) and D7, its thermal noise against Nyquist's, are measurements of minutes,
-//! run with `--ignored`.
+//! the contacts), D7, its thermal noise against Nyquist's, and D8, eddy currents in a
+//! changing field, are measurements of minutes, run with `--ignored`.
 
 use physics::DVec3;
 use physics::bem::Bias;
 use physics::circuit::Waveform;
 use physics::lattice::Lattice;
-use physics::tube::{Circuit, Emitter, OhmicContact, Tube};
+use physics::tube::{Circuit, Emitter, OhmicContact, SolenoidWave, Tube};
 use physics::zinv::{Electrode, Electrodes, Section};
 use rayon::prelude::*;
 use std::f64::consts::{FRAC_PI_2, PI};
@@ -342,6 +342,7 @@ fn d5_screening() {
             DVec3::new(l + 2.0, w + 3.0, 0.0),
         )),
         b_z: 0.0,
+        b_wave: None,
         circuits: Vec::new(),
         lattices: vec![lattice],
     };
@@ -479,6 +480,7 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64, seed: u64) -> Tube
             DVec3::new(l + 2.0, w + 2.0, 0.0),
         )),
         b_z: 0.0,
+        b_wave: None,
         circuits: vec![source(0, 0.0), source(1, v)],
         lattices: vec![lattice],
     }
@@ -644,4 +646,190 @@ fn d7_johnson_nyquist() {
         started.elapsed().as_secs_f64()
     );
     assert!((mean - 1.0).abs() < 0.05, "D7 {mean} +- {error}");
+}
+
+/// `∫ u dA` of the torsion function of a rectangle `w` × `b` (`∇²u = −1`, `u = 0` on its
+/// edge; Saint-Venant): `(w³ b/12) [1 − (192 w/π⁵ b) Σ_{n odd} tanh(nπb/2w)/n⁵]`.
+fn torsion_area(w: f64, b: f64) -> f64 {
+    let sum: f64 = (0..200)
+        .map(|k| f64::from(2 * k + 1))
+        .map(|n| libm::tanh(n * PI * b / (2.0 * w)) / libm::pow(n, 5.0))
+        .sum();
+    w * w * w * b / 12.0 * (1.0 - 192.0 * w / (libm::pow(PI, 5.0) * b) * sum)
+}
+
+/// `∫ u dy` along the middle line of the torsion function of a rectangle `w` (across) ×
+/// `b` (along the line): `w² b/8 − (8 w³/π⁴) Σ_{n odd} (−1)^((n−1)/2) tanh(nπb/2w)/n⁴`.
+fn torsion_midline(w: f64, b: f64) -> f64 {
+    let sum: f64 = (0..200)
+        .map(|k| (if k % 2 == 0 { 1.0 } else { -1.0 }, f64::from(2 * k + 1)))
+        .map(|(sign, n)| sign * libm::tanh(n * PI * b / (2.0 * w)) / libm::pow(n, 4.0))
+        .sum();
+    w * w * b / 8.0 - 8.0 * w * w * w / libm::pow(PI, 4.0) * sum
+}
+
+/// An isolated metal, the rectangle `lo`..`hi` (no contacts), in a field along z that
+/// changes in a triangle between `±b0` with period `period`, about `axis`: its eddy currents.
+/// Per ramp (but `skip` after each corner), the mean of the power the induced field gives
+/// the carriers, `Σ q E·Δx/dt`, and of the current through the rectangle's left half,
+/// `Σ q Δy/dt` (signed by the ramp: positive for a rising field): one block per ramp.
+#[allow(clippy::too_many_arguments)]
+fn eddy(
+    lo: DVec3,
+    hi: DVec3,
+    axis: DVec3,
+    carriers: usize,
+    dt: f64,
+    b0: f64,
+    period: f64,
+    end: f64,
+    skip: f64,
+) -> Vec<(f64, f64)> {
+    let (w, b) = (hi.x - lo.x, hi.y - lo.y);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let count = libm::round(w * b / (2.0 * A * MEAN_FREE_PATH)) as usize;
+    let cores = Lattice::random_cores(lo, hi, count, A, 31);
+    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, 47);
+    // One small grounded electrode away from the metal (the electrostatics needs one).
+    let corner = lo - DVec3::new(1.5, 1.5, 0.0);
+    let electrodes = Electrodes::new(
+        vec![Electrode {
+            section: Section::Rect {
+                center: corner,
+                angle: 0.0,
+                half_length: 0.25,
+                half_thickness: 0.25,
+            },
+            bias: Bias::Grounded,
+        }],
+        &[],
+        0.25,
+    );
+    let wave = SolenoidWave {
+        waveform: Waveform::Pulse {
+            low: -b0,
+            high: b0,
+            delay: 0.0,
+            rise: 0.5 * period,
+            width: 0.0,
+            fall: 0.5 * period,
+            period,
+        },
+        axis,
+    };
+    let tube = Tube {
+        electrodes,
+        emitters: Vec::new(),
+        projectiles: Vec::new(),
+        softening: 0.05,
+        dt,
+        arena: Some((
+            lo - DVec3::new(2.0, 2.0, 0.0),
+            hi + DVec3::new(2.0, 2.0, 0.0),
+        )),
+        b_z: 0.0,
+        b_wave: Some(wave),
+        circuits: Vec::new(),
+        lattices: vec![lattice],
+    };
+    let mut s = tube.state();
+    let (mut power, mut current, mut n) = (0.0, 0.0, 0.0);
+    let mut blocks = Vec::new();
+    let mut ramp = 0_i64;
+    let middle = 0.5 * (lo.x + hi.x);
+    while s.t < end {
+        let t0 = s.t;
+        let before: std::collections::HashMap<u32, DVec3> =
+            s.id.iter().zip(&s.x).map(|(id, x)| (*id, *x)).collect();
+        tube.step(&mut s);
+        // A new ramp: close the last one's block.
+        #[allow(clippy::cast_possible_truncation)]
+        let this = libm::floor(t0 / (0.5 * period)) as i64;
+        if this != ramp {
+            if n > 0.0 {
+                blocks.push((power / n, current / n));
+            }
+            (power, current, n, ramp) = (0.0, 0.0, 0.0, this);
+        }
+        let phase = t0 - period * libm::floor(t0 / period);
+        let rising = phase < 0.5 * period;
+        let since = if rising { phase } else { phase - 0.5 * period };
+        if since < skip || 0.5 * period - since < dt {
+            continue;
+        }
+        let sign = if rising { 1.0 } else { -1.0 };
+        let (mut p, mut j) = (0.0, 0.0);
+        for ((id, x), q) in s.id.iter().zip(&s.x).zip(&s.charge) {
+            let Some(x0) = before.get(id) else {
+                continue;
+            };
+            let d = *x - *x0;
+            p += q * wave.induced(t0, *x0).dot(d);
+            if x0.x < middle {
+                j += q * d.y;
+            }
+        }
+        power += p / dt;
+        current += sign * j / dt;
+        n += 1.0;
+    }
+    if n > 0.0 {
+        blocks.push((power / n, current / n));
+    }
+    blocks
+}
+
+/// D8, eddy currents: an isolated square 16 × 16 of the tests' metal (background 1,
+/// `q/m = −1`, thermal speed 1, `ℓ = 0.5`, 20 000 carriers) centred on the solenoid's axis, in
+/// a field along z ramping between ±0.25 in a triangle of period 20 (`|Ḃ| = 0.05`;
+/// `ω_c τ ≤ 0.1`), over t = 0–200 at dt 0.02, 2 time units skipped after each corner (the
+/// currents settle within a few `τ`). Ohm's law in the induced field `E = −½ Ḃ ẑ × (x − x₀)`:
+/// the current's stream function `ψ = −σ Ḃ u`, `u` the square's torsion function
+/// (`∇²u = −1`, 0 on its edge), so the power `σ Ḃ² ∫ u dA` and the current through the left
+/// half `σ Ḃ ∫ u dy` along the middle line (clockwise for a rising field: up on the left,
+/// Lenz's law); σ from the Boltzmann equation (D1). Required 5 % each (as D1: the medium's
+/// correction ~2 %, the statistics ~1 %). At twice the rate (`Ḃ = 0.1`, the field 0.4 at the
+/// edges, `qEℓ/kT ≈ 0.2`) the carriers warm and the square came out 5 % low: the linear
+/// response needs the weaker field. A strip 8 × 32 under the same drive does not reach
+/// this law's steady state (docs/OPEN_PROBLEMS.md, PHYSICS.md §2.11).
+#[test]
+#[ignore = "a measurement (about 5 minutes in release): run with --ignored (PHYSICS.md §2.11)"]
+fn d8_eddy_currents() {
+    let (n, dt, b0, period, a) = (20_000, 0.02, 0.25, 20.0, 16.0);
+    // The cores' density sets the collision rate: kappa = 2 a n_ion = 1/l.
+    let sigma = mobility(1.0 / MEAN_FREE_PATH, 0.0).0;
+    let bdot = 4.0 * b0 / period;
+    let axis = DVec3::new(0.5 * a, 0.5 * a, 0.0);
+    let blocks = eddy(
+        DVec3::ZERO,
+        DVec3::new(a, a, 0.0),
+        axis,
+        n,
+        dt,
+        b0,
+        period,
+        200.0,
+        2.0,
+    );
+    #[allow(clippy::cast_precision_loss)]
+    let m = blocks.len() as f64;
+    let mean = |f: &dyn Fn(&(f64, f64)) -> f64| blocks.iter().map(f).sum::<f64>() / m;
+    let error = |f: &dyn Fn(&(f64, f64)) -> f64, mu: f64| {
+        libm::sqrt(blocks.iter().map(|x| (f(x) - mu).powi(2)).sum::<f64>() / ((m - 1.0) * m))
+    };
+    let (power, current) = (mean(&|x| x.0), mean(&|x| x.1));
+    let (sp, sc) = (error(&|x| x.0, power), error(&|x| x.1, current));
+    let p_theory = sigma * bdot * bdot * torsion_area(a, a);
+    let j_theory = sigma * bdot * torsion_midline(a, a);
+    println!(
+        "D8, square 16 x 16, {m} ramps: power {power:.5} ± {sp:.5} against {p_theory:.5} \
+         ({:+.2} ± {:.2} %), current through the left half {current:.5} ± {sc:.5} against \
+         {j_theory:.5} ({:+.2} ± {:.2} %)",
+        100.0 * (power / p_theory - 1.0),
+        100.0 * sp / p_theory,
+        100.0 * (current / j_theory - 1.0),
+        100.0 * sc / j_theory
+    );
+    assert!((power / p_theory - 1.0).abs() < 0.05, "power");
+    assert!((current / j_theory - 1.0).abs() < 0.05, "current");
 }

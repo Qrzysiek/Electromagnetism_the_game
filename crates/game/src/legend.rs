@@ -385,7 +385,7 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
              slow against each carrier's thermal speed. They fade when it is only the thermal \
              motion's noise.",
         );
-        if view.is_some_and(|v| v.run.b_z != 0.0) {
+        if view.is_some_and(|v| v.run.has_field()) {
             row(
                 ui,
                 Swatch::Arrow(rgb(0.95, 0.95, 0.9)),

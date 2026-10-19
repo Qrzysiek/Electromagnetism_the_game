@@ -9,7 +9,7 @@
 use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::tube::{
-    Carriers, CurrentGoal, DEFAULT_STEP, IonSource, Measure, MetalSpec, PotentialGoal,
+    Carriers, CurrentGoal, DEFAULT_STEP, HeatGoal, IonSource, Measure, MetalSpec, PotentialGoal,
     ProjectileSpec, TL_RATE, TubeCircuit, TubeOutput, TubeSpec,
 };
 use level::{
@@ -1528,6 +1528,7 @@ fn edit_tube(
             projectiles: Vec::new(),
             b_z: 0.0,
             solenoid: None,
+            solenoid_drive: None,
             particle_rate: TL_RATE,
             particles: 1.0,
             emitter_mesh: 1.0,
@@ -1542,6 +1543,7 @@ fn edit_tube(
             }],
             circuits: Vec::new(),
             potential_goals: Vec::new(),
+            heat_goals: Vec::new(),
             output: None,
             metals: Vec::new(),
         });
@@ -1555,6 +1557,7 @@ fn edit_tube(
         projectiles,
         b_z,
         solenoid,
+        solenoid_drive,
         particle_rate,
         particles,
         emitter_mesh,
@@ -1562,6 +1565,7 @@ fn edit_tube(
         goals,
         circuits,
         potential_goals,
+        heat_goals,
         output,
         metals,
     }) = tube
@@ -1754,6 +1758,25 @@ fn edit_tube(
         });
     } else {
         *solenoid = None;
+    }
+    let mut changing = solenoid_drive.is_some();
+    ui.checkbox(&mut changing, "Field changes in time")
+        .on_hover_text(
+            "B along z follows this source's shape, its level set by the solenoid's supply \
+             (else by B along z): a DC level, a sine's amplitude or a pulse's high. Its \
+             change induces an electric field circulating about the board's centre \
+             (Faraday's law): eddy currents in the metals.",
+        );
+    if changing {
+        let s = solenoid_drive.get_or_insert(Source::Sine {
+            offset: 0.0,
+            amplitude: 1.0,
+            omega: 0.3,
+            phase: 0.0,
+        });
+        focus |= edit_source(ui, ("solenoid_drive", 0), s);
+    } else {
+        *solenoid_drive = None;
     }
     // Metals (the Drude model): resistors, Hall probes.
     let mut remove_metal = None;
@@ -2200,6 +2223,61 @@ fn edit_tube(
             reference: None,
             measure: Measure::Mean,
             omega: 0.0,
+            min: 0.0,
+            max: 1.0,
+            start: 20.0,
+            end: 40.0,
+        });
+    }
+    // Heat goals: a metal's mean power over a window.
+    let mut remove = None;
+    let n_metals = metals.len();
+    for (k, g) in heat_goals.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            ui.label(format!("Heat goal {}", k + 1)).on_hover_text(
+                "A metal's heat: the mean power the field gives its carriers over the window \
+                 (the Joule heat)",
+            );
+            if ui.small_button("×").clicked() {
+                remove = Some(k);
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label("  metal");
+            let mut m = g.metal + 1;
+            focus |= ui
+                .add(egui::DragValue::new(&mut m).range(1..=n_metals.max(1)))
+                .has_focus();
+            g.metal = m - 1;
+        });
+        ui.horizontal(|ui| {
+            ui.label("  from");
+            focus |= free(ui, &mut g.min, 0.01);
+            ui.label("to");
+            focus |= free(ui, &mut g.max, 0.01);
+        });
+        ui.horizontal(|ui| {
+            ui.label("  over t");
+            focus |= ui
+                .add(
+                    egui::DragValue::new(&mut g.start)
+                        .speed(0.1)
+                        .range(0.0..=MAX_POSITIVE),
+                )
+                .has_focus();
+            ui.label("to");
+            focus |= positive(ui, &mut g.end, 0.1, MAX_POSITIVE);
+        });
+    }
+    if let Some(k) = remove {
+        heat_goals.remove(k);
+    }
+    if n_metals > 0
+        && heat_goals.len() < MAX_COUNT as usize
+        && ui.small_button("+ heat goal").clicked()
+    {
+        heat_goals.push(HeatGoal {
+            metal: 0,
             min: 0.0,
             max: 1.0,
             start: 20.0,
@@ -2662,6 +2740,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             projectiles,
             b_z,
             solenoid,
+            solenoid_drive,
             particle_rate,
             particles,
             emitter_mesh,
@@ -2669,6 +2748,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             goals,
             circuits,
             potential_goals,
+            heat_goals,
             output,
             metals,
         } = t;
@@ -2676,6 +2756,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         let any = |v: f64| (-MAX_POSITIVE..=MAX_POSITIVE).contains(&v);
         let nonneg = |v: f64| (0.0..=MAX_POSITIVE).contains(&v);
         let angle = |a: &Option<f64>| a.is_none_or(|a| (-360.0..=360.0).contains(&a));
+        let drive_ok = solenoid_drive.is_none_or(|s| s.is_valid());
         let ratio_ok = (MIN_POSITIVE..=MAX_POSITIVE).contains(&charge_per_mass.abs())
             && (1.0..=MAX_POSITIVE).contains(particle_rate)
             && (0.1..=100.0).contains(particles)
@@ -2770,6 +2851,21 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     && nonneg(*start)
                     && (MIN_POSITIVE..=MAX_POSITIVE).contains(end)
             });
+        let heat_ok = heat_goals.len() <= MAX_COUNT as usize
+            && heat_goals.iter().all(|g| {
+                let HeatGoal {
+                    metal,
+                    min,
+                    max,
+                    start,
+                    end,
+                } = g;
+                *metal < metals.len()
+                    && any(*min)
+                    && any(*max)
+                    && nonneg(*start)
+                    && (MIN_POSITIVE..=MAX_POSITIVE).contains(end)
+            });
         let metals_ok = metals.len() <= MAX_COUNT as usize
             && metals.iter().all(|m| {
                 let MetalSpec {
@@ -2797,7 +2893,9 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         let field_ok = circuits_ok
             && metals_ok
             && potential_ok
+            && heat_ok
             && solenoid.is_none_or(|n| grid.contains(n))
+            && drive_ok
             && any(*b_z)
             && (MIN_POSITIVE..=MAX_POSITIVE).contains(step)
             && saturation.is_none_or(|j| (MIN_POSITIVE..=MAX_POSITIVE).contains(&j));

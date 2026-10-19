@@ -387,7 +387,9 @@ impl TubeEm {
         let c = spec.output.map_or_else(
             || {
                 (EM_C_FACTOR * speed).max(
-                    EM_MODE_FACTOR * fastest_frequency(level, run.b_z) * longer
+                    EM_MODE_FACTOR
+                        * fastest_frequency(level, run.b_wave.map_or(run.b_z, |w| w.peak()))
+                        * longer
                         / std::f64::consts::PI,
                 )
             },

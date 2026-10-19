@@ -257,7 +257,7 @@ def current_goal(electrode, lo, hi, start, end, carriers=None):
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
          potentials=(), goals=(), ions=None, step=None, particle_rate=None, particles=None,
-         emitter_mesh=None, output=None, metals=()):
+         emitter_mesh=None, output=None, metals=(), solenoid_drive=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -267,8 +267,12 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
     powers (a supply there sets B along z, over `level(solenoid_fields=...)`). `goals`:
     further current goals (`current_goal`); `ions` = (electrode, q/m[, coated face's
     direction]): an ion source (the bipolar diode). Tube levels are Newtonian (pass
-    c=None to `level`)."""
+    c=None to `level`). `solenoid_drive`: the solenoid's field over time (a source, see
+    `dc`, `sine`; its level set by the supply on the terminal), which induces an electric
+    field circulating about the board's centre."""
     t = {"cathode": cathode, "charge_per_mass": q_over_m}
+    if solenoid_drive is not None:
+        t["solenoid_drive"] = solenoid_drive
     all_goals = ([current_goal(electrode, lo, hi, start, end)] if electrode is not None
                  else []) + list(goals)
     if all_goals:
@@ -3708,6 +3712,44 @@ def positive_carriers():
         reference=[supply(21, 14, 30.0), supply(23, 19, -1.8), supply(21, 5, -12.0)])
 
 
+def magnetoresistance():
+    # Designed with `generator tube-scan` (target/scratch/design_mr_intro.py): a strip 16 x 4
+    # (current along it) and one 4 x 10 (short along the current, wide across it), both on
+    # one supply, in the player's solenoid. In the long strip the Hall field holds the
+    # carriers back from the sides and they flow straight; the short wide strip's contacts
+    # short that field: the carriers' paths bend and its resistance grows with |B|
+    # (geometric magnetoresistance; with L/W = 0.4 short of the Corbino limit 1 + (0.4 B)^2).
+    # Preview over t = 10-80, the currents into the two right contacts: at 7 V the long
+    # strip 0.73, 0.69, 0.68, 0.63, 0.63 at B = 3..7 (its own, intrinsic magnetoresistance:
+    # tau ~ 1/v), the short one 5.43, 4.62, 4.08, 3.64, 3.04 (about 7.2 at B = 0); at 6 V
+    # and 8 V in proportion. A run takes ~16 s, at B = 6 as at 0. `generator window`: B solves on
+    # 4.5-5.5 and -5.5 to -4.5 (its mirror's middle, -5, not verified: near the goals' edges);
+    # with the long strip's goal 0.62-0.76 the supply solved on 7.0-7.5 only (1.2 % of +-20):
+    # widened to 0.58-0.78, the slider +-10.
+    return level(
+        "Magnetoresistance",
+        "Two strips of the same metal on one supply, in your solenoid's field: a long one and "
+        "a short, wide one. In the long strip the charge the field piles on its sides (the "
+        "Hall voltage) pushes the carriers back, and they flow straight on. The short strip's "
+        "contacts short that charge out: its carriers' paths bend and lengthen, and it "
+        "resists more, whichever way the field points. Make between 0.58 and 0.78 flow into "
+        "the long strip's right end and between 3.7 and 4.5 into the short strip's (averaged "
+        "over $t = 10$ to $80$).",
+        grid=(24, 20), c=None, t_max=200.0,
+        # 0, 1: the long strip's contacts; 2, 3: the short wide strip's.
+        electrodes=[contact(3, 15, 4), contact(21, 15, 4, tunable=True),
+                    contact(9, 6, 10), contact(15, 6, 10)],
+        supplies=slider(10.0, 7.0, 4.0),
+        solenoid_fields=slider(7.0, -5.0, 2.0, 5.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 19),
+                  circuits=[tube_circuit(1, dc(0.0), resistance=0.0, linked=[3])],
+                  goals=[current_goal(1, 0.58, 0.78, 10.0, 80.0, carriers="net"),
+                         current_goal(3, 3.7, 4.5, 10.0, 80.0, carriers="net")],
+                  metals=[metal((4, 13), (20, 17), [0, 1], seed=11, **METAL),
+                          metal((10, 1), (14, 11), [2, 3], seed=12, **METAL)]),
+        reference=[supply(21, 15, 7.0), supply(23, 19, 5.0)])
+
+
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
@@ -3736,6 +3778,7 @@ ARCS.append(("Inside the components: metals", [
     ("Intermediate", [
         ("hall_probe", hall_probe),
         ("positive_carriers", positive_carriers),
+        ("magnetoresistance", magnetoresistance),
     ]),
 ]))
 

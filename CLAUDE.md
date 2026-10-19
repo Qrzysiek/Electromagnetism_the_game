@@ -8,7 +8,7 @@ A puzzle game on accurate classical electrodynamics. `SPEC.md` describes the gam
 - Open problems (questions the literature does not answer and that could not be derived in reasonable time) go into `docs/OPEN_PROBLEMS.md`, with what was searched and tried and the workaround in use (the `open-problems` skill).
 - The authoritative trajectory path is f64 on the CPU and deterministic: no fused multiply-add, a fixed summation order, and elementary functions (`sin`, `exp`, `ln`, `powf`, `atan2`, …) from the `libm` crate, never the standard library's (they call the platform's C library, which differs between Windows and Linux; `clippy.toml` disallows them). The GPU is for visuals only.
 - Every shipped level must have a verified reference solution for every shot, and neglected radiation below 1e-10 of the launch energy (`crates/level/tests/levels.rs`).
-- Golden hashes (`levels/golden_hashes.json`) change only when the physics or the levels change intentionally.
+- Golden hashes (`levels/golden_hashes.json`) change only when the physics or the levels change intentionally. `UPDATE_GOLDEN=1 cargo test --release -p level --test determinism` rewrites them all (about an hour); with `GOLDEN_ONLY=<part of a level's name>` it computes and updates only those (a new level's in a minute or two) and keeps the rest.
 
 ## Sandbox completeness
 Every level that ships must be reproducible by hand in the sandbox.

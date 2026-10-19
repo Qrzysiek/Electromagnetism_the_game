@@ -363,7 +363,8 @@
           "name": "Intermediate",
           "levels": [
             "hall_probe",
-            "positive_carriers"
+            "positive_carriers",
+            "magnetoresistance"
           ]
         }
       ]

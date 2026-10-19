@@ -1830,6 +1830,42 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             }
         }
     }
+    for (k, g) in spec.heat_goals.iter().enumerate() {
+        ui.label(format!(
+            "Goal: the heat of metal {} between {} and {} per time, over t = {} to {}",
+            g.metal + 1,
+            fmt_num(g.min),
+            fmt_num(g.max),
+            fmt_num(g.start),
+            fmt_num(g.end)
+        ))
+        .on_hover_text(
+            "The mean power the field gives the metal's carriers (per unit length along z): \
+             what its lattice takes as heat, the Joule heat, in a steady state",
+        );
+        if let Some(v) = view {
+            ui.label(match v.run.heat.get(k).copied().flatten() {
+                Some(p) => format!("Preview: {}", fmt_num(p)),
+                None => "Preview: computing…".into(),
+            });
+        }
+        match verdict.and_then(|v| v.heat.get(k).copied()) {
+            Some(c) => {
+                let (col, mark) = colour(c.status);
+                ui.colored_label(
+                    col,
+                    format!(
+                        "Verified: {} ± {} {mark}",
+                        fmt_num(c.fine),
+                        fmt_num(c.error)
+                    ),
+                );
+            }
+            None => {
+                ui.label("Verified: computing…");
+            }
+        }
+    }
     // The radiated output: the field's energy flow out of the board (`em.rs`) against the
     // load's absorption.
     if let (Some(o), Some(v)) = (spec.output, view) {

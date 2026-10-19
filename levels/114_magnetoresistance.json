@@ -1,0 +1,220 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Magnetoresistance",
+  "description": "Two strips of the same metal on one supply, in your solenoid's field: a long one and a short, wide one. In the long strip the charge the field piles on its sides (the Hall voltage) pushes the carriers back, and they flow straight on. The short strip's contacts short that charge out: its carriers' paths bend and lengthen, and it resists more, whichever way the field points. Make between 0.58 and 0.78 flow into the long strip's right end and between 3.7 and 4.5 into the short strip's (averaged over $t = 10$ to $80$).",
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -10.0,
+      4.0,
+      7.0,
+      10.0
+    ],
+    "solenoid_fields": [
+      -7.0,
+      -5.0,
+      2.0,
+      5.0,
+      7.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        21,
+        15,
+        0
+      ],
+      "kind": "supply",
+      "value": 7.0
+    },
+    {
+      "node": [
+        23,
+        19,
+        0
+      ],
+      "kind": "supply",
+      "value": 5.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        3,
+        15,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        21,
+        15,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true
+    },
+    {
+      "center": [
+        9,
+        6,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    },
+    {
+      "center": [
+        15,
+        6,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goals": [
+      {
+        "electrode": 1,
+        "min": 0.58,
+        "max": 0.78,
+        "start": 10.0,
+        "end": 80.0,
+        "carriers": "net"
+      },
+      {
+        "electrode": 3,
+        "min": 3.7,
+        "max": 4.5,
+        "start": 10.0,
+        "end": 80.0,
+        "carriers": "net"
+      }
+    ],
+    "step": 0.035,
+    "circuits": [
+      {
+        "electrode": 1,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "linked": [
+          3
+        ],
+        "resistance": 0.0
+      }
+    ],
+    "solenoid": [
+      23,
+      19,
+      0
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            4,
+            13,
+            0
+          ],
+          [
+            20,
+            17,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 11
+      },
+      {
+        "corners": [
+          [
+            10,
+            1,
+            0
+          ],
+          [
+            14,
+            11,
+            0
+          ]
+        ],
+        "contacts": [
+          2,
+          3
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 12
+      }
+    ]
+  }
+}

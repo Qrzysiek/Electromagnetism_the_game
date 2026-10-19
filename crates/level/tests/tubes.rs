@@ -42,6 +42,7 @@ pub fn diode(v: f64) -> Level {
         projectiles: Vec::new(),
         b_z: 0.0,
         solenoid: None,
+        solenoid_drive: None,
         particle_rate: level::tube::TL_RATE,
         particles: 1.0,
         emitter_mesh: 1.0,
@@ -58,6 +59,7 @@ pub fn diode(v: f64) -> Level {
         }],
         circuits: Vec::new(),
         potential_goals: Vec::new(),
+        heat_goals: Vec::new(),
     });
     level
 }
