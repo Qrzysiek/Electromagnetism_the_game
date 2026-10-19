@@ -653,6 +653,43 @@ fn em_field_obeys_amperes_law() {
     assert!(checked >= 6, "only {checked} leads checked");
 }
 
+/// The maps show no waves at the run's frame rate (PHYSICS.md §2.11, the smoothing): the
+/// run's currents step from frame to frame (Magnetron's every 0.05), and the steps radiated
+/// stripes along its antenna's feed, alternating every 1.5–2 (ω ≈ 126), strongest where the
+/// feed's own field passes zero. Across the feed (x = 62, y = 44–52, every 0.2, the feed's
+/// line left out), the shown `B_z`'s largest second difference over t = 109–110 must stay
+/// below 1 % of the largest field beside the feed (the map's logarithmic colours show
+/// little below that); it was 4.5 % unsmoothed.
+#[test]
+fn magnetron_feed_field_is_smooth() {
+    let level = level::shipped("magnetron");
+    let run = level.tube_run(&level.reference_solution, 1, 112.0);
+    let mut em = level::tube_em::TubeEm::new(&level, &run);
+    let (mut peak, mut wiggle) = (0.0_f64, 0.0_f64);
+    for k in 0..=8 {
+        em.show(&run, 109.0 + 0.125 * f64::from(k));
+        let mut f = em.fdtd.clone();
+        f.bz.copy_from_slice(em.shown().bz);
+        let profile: Vec<f64> = (0..=40)
+            .map(|j| f.bz_at(62.0, 44.0 + 0.2 * f64::from(j)))
+            .collect();
+        for (j, b) in profile.iter().enumerate() {
+            if j != 20 {
+                peak = peak.max(b.abs());
+            }
+        }
+        // Each side alone (the feed at j = 20 is a jump).
+        for j in (1..19).chain(22..40) {
+            wiggle = wiggle.max((profile[j - 1] - 2.0 * profile[j] + profile[j + 1]).abs());
+        }
+    }
+    println!(
+        "feed: largest second difference {wiggle:.3e} of a field up to {peak:.3e} ({:.2} %)",
+        100.0 * wiggle / peak
+    );
+    assert!(wiggle < 0.01 * peak, "{wiggle} vs {peak}");
+}
+
 /// The magnetron's antenna radiates its load (PHYSICS.md §2.11): on the reference's preview
 /// run, the electromagnetic field's power out of the board over t = 98–100 (the field
 /// solver's) against the tank load's R⟨I²⟩ over the same span (the circuit's): two

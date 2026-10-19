@@ -448,3 +448,17 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   own thread pool and shows its progress every 16 ms: 0.36 s per time unit, real time at
   speed 1 once the verification is done (measured by capture: t = 3.6 at 6.2 s, 7.7 at
   10.4 s).
+- **Owner 2026-10-19: the magnetic field checked; Magnetron's map "leaking" with
+  square-edged fragments.** Ampère's law across the circuits' leads holds to 0.05–1 %
+  (`em_field_obeys_amperes_law`; Triode's map is uneven where its grid's leads and its
+  changing potentials' displacement currents flow, which is physics). Magnetron's
+  stripes along its antenna's feed and the square-edged fragments inside its block were
+  waves the run's frame-to-frame current steps radiate (frames every 0.05, ω ≈ 126);
+  every level's field is now smoothed over a few frames (`magnetron_feed_field_is_smooth`).
+  What stays outside the block is the feed's own field: the straight lead from the block
+  to the antenna (the leads' convention) is a bare wire carrying the antenna's current,
+  whose field jumps across it by 4πI/c as it must (2.52 against 2.55). **(owner)** A
+  real magnetron's output is a shielded line (coaxial or a waveguide): the feed could run
+  between two grounded walls from the block to the antenna, its field then confined
+  between them; the antenna's radiation resistance would change and the tank's load be
+  set to it again.

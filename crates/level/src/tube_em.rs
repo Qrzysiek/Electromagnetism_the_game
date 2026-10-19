@@ -44,6 +44,14 @@ pub const EM_MODE_FACTOR: f64 = 12.0;
 pub const EM_SMOOTH_STAGES: usize = 4;
 /// Each stage's time constant in units of `1/ω₁`, ω₁ = πc/L the box's lowest mode.
 pub const EM_SMOOTH_RATIO: f64 = 2.0;
+/// Every level's field (open ones too) is smoothed at least over the run's sampling: each
+/// stage's time constant at least this many frame intervals. The run's currents are known
+/// at its frames only; between them they step from frame to frame, and the steps radiate
+/// waves at the frames' rate (Magnetron's frames every 0.05: stripes along its antenna's
+/// feed at ω ≈ 126), above the frames' Nyquist frequency π/T, where the run has no
+/// information. 0.4 passes `2π/T` as 0.02, `π/T` as 0.15, and Magnetron's ω = 3 and 6
+/// as 0.993 and 0.97.
+pub const EM_FRAME_RATIO: f64 = 0.4;
 /// The time step's fraction of the stability limit.
 const COURANT: f64 = 0.9;
 
@@ -97,7 +105,8 @@ pub struct TubeEm {
     background: Vec<f64>,
     /// Whether the grid is open (an absorbing layer inside its border).
     open: bool,
-    /// A closed box's field smoothed in time (None: open, shown as it is).
+    /// The field smoothed in time: over the run's frames, and a closed box's over its
+    /// lowest mode (`EM_FRAME_RATIO`, `EM_SMOOTH_RATIO`).
     smoothing: Option<Smoothing>,
     /// The next frame interval to feed: frames `next`..`next + 1`.
     next: usize,
@@ -224,15 +233,17 @@ pub fn fastest_frequency(level: &Level, b_z: f64) -> f64 {
     sources.max(ratio * b_z.abs())
 }
 
-/// A closed box's field smoothed in time: `EM_SMOOTH_STAGES` first-order low-passes in
-/// cascade, each step's field into the first (`y += α (x − y)`, `α = 1 − e^{−dt/τ}`).
-/// A lossless box keeps every wave radiated in it, and the run's macroparticles radiate
-/// far more than its real carriers would (their weight times: each one's impact on an
-/// electrode, its graininess, its path's kinks between frames), so the raw field's
-/// fluctuations grow without bound; they ring at the box's modes, `ω ≥ ω₁ = πc/L`, which
-/// the cascade passes as `(1 + (ωτ)²)^{−n/2}`, while static fields pass unchanged. Being
-/// linear, it is the field of the run's currents smoothed by the same kernel (a gamma
-/// distribution of mean delay `nτ`): the field shown is taken that much later.
+/// The field smoothed in time: `EM_SMOOTH_STAGES` first-order low-passes in cascade, each
+/// step's field into the first (`y += α (x − y)`, `α = 1 − e^{−dt/τ}`), passing a
+/// frequency ω as `(1 + (ωτ)²)^{−n/2}` and static fields unchanged. Every level's over the
+/// run's frames (`EM_FRAME_RATIO`: its currents step from frame to frame, and the steps
+/// radiate at the frames' rate). A closed box's more (`EM_SMOOTH_RATIO`): a lossless box
+/// keeps every wave radiated in it, and the run's macroparticles radiate far more than its
+/// real carriers would (their weight times: each one's impact on an electrode, its
+/// graininess, its path's kinks between frames), so the raw field's fluctuations grow
+/// without bound; they ring at the box's modes, `ω ≥ ω₁ = πc/L`. Being linear, it is the
+/// field of the run's currents smoothed by the same kernel (a gamma distribution of mean
+/// delay `nτ`): the field shown is taken that much later.
 #[derive(Clone, Debug)]
 struct Smoothing {
     alpha: f64,
@@ -565,8 +576,14 @@ impl TubeEm {
         );
         fdtd.set_static(&phi);
         fdtd.t = first.t;
-        let smoothing = (!open)
-            .then(|| Smoothing::new(&fdtd, EM_SMOOTH_RATIO * longer / (std::f64::consts::PI * c)));
+        // Smoothed over the run's frames at least, and a closed box over its lowest mode.
+        let frame = run.frames.get(1).map_or(spec.step, |f| f.t - first.t);
+        let tau = (EM_FRAME_RATIO * frame).max(if open {
+            0.0
+        } else {
+            EM_SMOOTH_RATIO * longer / (std::f64::consts::PI * c)
+        });
+        let smoothing = Some(Smoothing::new(&fdtd, tau));
         Self {
             fdtd,
             outlines,
@@ -814,8 +831,8 @@ impl TubeEm {
         self.smoothing.as_ref().map_or(0.0, |s| s.delay)
     }
 
-    /// The field the maps show: a closed box's smoothed (at the field's time less the
-    /// delay), an open one's as it is.
+    /// The field the maps show: smoothed in time (`Smoothing`), at the field's time less
+    /// the smoothing's delay.
     #[must_use]
     pub fn shown(&self) -> Shown<'_> {
         let f = &self.fdtd;

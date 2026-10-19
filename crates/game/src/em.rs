@@ -226,7 +226,7 @@ fn snapshot(revision: u64, em: Option<&TubeEm>, last: f64) -> EmSnapshot {
             delay: 0.0,
         };
     };
-    // The field the maps show (a closed box's smoothed in time).
+    // The field the maps show (smoothed in time).
     let field = em.shown();
     let g = em.fdtd.grid;
     let spacing = 1.0 / SAMPLES_PER_CELL;

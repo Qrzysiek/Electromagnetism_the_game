@@ -1276,7 +1276,17 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             } else {
                 "the energy flow |S| = (c/4π)|E × B| (arrows: its direction)"
             };
-            let smoothed = if delay > 0.0 {
+            let open = level.tube.as_ref().is_some_and(|t| t.output.is_some());
+            let smoothed = if delay <= 0.0 {
+                String::new()
+            } else if open {
+                format!(
+                    " The field is shown smoothed over about {}: the run's currents are known \
+                     at its frames only and step from one to the next, and the steps would \
+                     radiate waves at the frames' rate.",
+                    fmt_num(delay)
+                )
+            } else {
                 format!(
                     " The tube's envelope is a closed, lossless box: the field is shown \
                      smoothed over about {} (a few of the box's light-crossing times), the \
@@ -1285,8 +1295,6 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                      box and cover the map.",
                     fmt_num(delay)
                 )
-            } else {
-                String::new()
             };
             ui.label(
                 egui::RichText::new(format!(

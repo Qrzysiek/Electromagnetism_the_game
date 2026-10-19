@@ -505,7 +505,9 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
                 "The output: circuit {}'s load is what the antenna strapped to it radiates. \
                  The field maps show the run's electromagnetic field at the speed of light \
                  c = {} (a display parameter, one-way coupled: the carriers' motion stays \
-                 Newtonian), the board's edge absorbing the waves.",
+                 Newtonian), the board's edge absorbing the waves, smoothed over a few of \
+                 the run's frames (its currents step from one frame to the next, and the \
+                 steps would radiate waves at the frames' rate).",
                 o.circuit + 1,
                 o.c
             ),
