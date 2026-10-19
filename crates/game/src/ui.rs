@@ -1946,6 +1946,24 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
         })
         .small(),
     );
+    let in_field = game
+        .tube_preview
+        .as_ref()
+        .is_some_and(|v| v.run.b_z != 0.0 && !v.run.metals.is_empty());
+    if in_field {
+        ui.label(
+            egui::RichText::new(
+                "The arrows on each strip, the Hall effect: white, the carriers' drift (over \
+                 the last time unit); orange, the magnetic field's push on them, q v × B, \
+                 sideways; blue, the electric push across the strip, from the charge the \
+                 magnetic one piled on its sides (the Hall voltage). The piling goes on until \
+                 the electric push holds the carriers back (in a metal within a fraction of \
+                 a time unit, its dielectric relaxation time): then the two are nearly equal \
+                 and opposite.",
+            )
+            .small(),
+        );
+    }
 }
 
 /// Beam levels: verified transmission of every beam shot in every flight against its

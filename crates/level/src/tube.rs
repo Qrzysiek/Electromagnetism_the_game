@@ -537,6 +537,20 @@ pub struct MetalView {
     pub core_radius: f64,
 }
 
+/// The Hall effect's forces in a metal strip (`TubeRun::hall_forces`): its centre, long
+/// axis, the normal across it and its width, its carriers' mean drift, the magnetic push
+/// on that drift and the electric push across the strip (per unit charge).
+#[derive(Clone, Copy, Debug)]
+pub struct HallForces {
+    pub centre: DVec3,
+    pub axis: DVec3,
+    pub normal: DVec3,
+    pub width: f64,
+    pub drift: DVec3,
+    pub magnetic: DVec3,
+    pub electric: DVec3,
+}
+
 /// One run of a tube level (or a chunk of one being streamed: `TubeSim::take_chunk`).
 #[derive(Clone, Debug, Default)]
 pub struct TubeRun {
@@ -693,6 +707,89 @@ impl TubeRun {
             e += physics::zinv::rect_integrals(m.lo, m.hi, x).1 * m.background;
         }
         e
+    }
+
+    /// The Hall effect in metal `metal` of a run in a field along z: its carriers' mean
+    /// drift from frame `before` to frame `now` in the strip's middle (the central three
+    /// fifths along it, a quarter away from its sides), the field's magnetic push on that
+    /// drift, `q ⟨v⟩ × B`, and the electric push across the strip, `q E⊥`, averaged along
+    /// its centre line (its sides hold the surface charge of its potential against its
+    /// surroundings, within a Debye length; the Hall field is the bulk's), per unit charge
+    /// of the carriers' sign. None without a field or with too few carriers.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn hall_forces(
+        &self,
+        now: &TubeFrame,
+        before: &TubeFrame,
+        metal: usize,
+    ) -> Option<HallForces> {
+        let m = self.metals.get(metal)?;
+        let span = now.t - before.t;
+        if self.b_z == 0.0 || span <= 0.0 {
+            return None;
+        }
+        let along_x = m.hi.x - m.lo.x >= m.hi.y - m.lo.y;
+        let (axis, normal) = if along_x {
+            (DVec3::X, DVec3::Y)
+        } else {
+            (DVec3::Y, DVec3::X)
+        };
+        let centre = (m.lo + m.hi) * 0.5;
+        let (length, width) = if along_x {
+            (m.hi.x - m.lo.x, m.hi.y - m.lo.y)
+        } else {
+            (m.hi.y - m.lo.y, m.hi.x - m.lo.x)
+        };
+        let then: std::collections::HashMap<u32, [f32; 2]> = before
+            .id
+            .iter()
+            .zip(&before.x)
+            .map(|(id, x)| (*id, *x))
+            .collect();
+        let (mut sum, mut n, mut sign) = (DVec3::ZERO, 0.0, 0.0);
+        for ((x, id), kind) in now.x.iter().zip(&now.id).zip(&now.kind) {
+            let p = DVec3::new(f64::from(x[0]), f64::from(x[1]), 0.0);
+            let d = p - centre;
+            if d.dot(axis).abs() >= 0.3 * length || d.dot(normal).abs() >= 0.5 * width - 0.25 {
+                continue;
+            }
+            let Some(x0) = then.get(id) else {
+                continue;
+            };
+            sum += p - DVec3::new(f64::from(x0[0]), f64::from(x0[1]), 0.0);
+            n += 1.0;
+            sign += match *kind {
+                KIND_NEGATIVE => -1.0,
+                KIND_POSITIVE => 1.0,
+                _ => 0.0,
+            };
+        }
+        if n < 10.0 {
+            return None;
+        }
+        let q = f64::signum(sign);
+        let drift = sum / (n * span);
+        // q v × B ẑ = q B (v_y, −v_x).
+        let magnetic = DVec3::new(drift.y, -drift.x, 0.0) * (q * self.b_z);
+        let e: DVec3 = (0..7)
+            .map(|i| {
+                self.e_at(
+                    now,
+                    centre + axis * (0.3 * length * (f64::from(i) / 3.0 - 1.0)),
+                )
+            })
+            .fold(DVec3::ZERO, |a, b| a + b)
+            / 7.0;
+        Some(HallForces {
+            centre,
+            axis,
+            normal,
+            width,
+            drift,
+            magnetic,
+            electric: normal * (q * e.dot(normal)),
+        })
     }
 
     /// The potential and field of a frame at `x`, as the maps show them: the segments'

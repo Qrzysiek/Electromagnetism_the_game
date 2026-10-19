@@ -178,3 +178,10 @@ the owner are marked **(owner)**; nothing is built until they are settled.
   conductor's carriers fluctuate independently along z and its noise vanishes in a
   z-invariant world. A noise goal would be neither verifiable (preview and verification
   disagree by design) nor real physics.
+- **Owner 2026-10-19: the Hall probe does not show that the field pushes the electrons
+  aside.** Each strip in a field now carries the Hall effect's arrows: the carriers'
+  drift, the magnetic push on it and the electric push back across the strip
+  (`TubeRun::hall_forces`; test `hall_forces_balance`: opposite, the electric 1.022 of the
+  magnetic once the charge has piled up, within the dielectric relaxation time ≈ 0.2).
+  A force map (the force on the carriers, its electric and magnetic parts over the board)
+  was proposed and left: the arrows answer the request.

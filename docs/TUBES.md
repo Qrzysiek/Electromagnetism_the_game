@@ -462,3 +462,10 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   between two grounded walls from the block to the antenna, its field then confined
   between them; the antenna's radiation resistance would change and the tank's load be
   set to it again.
+- **Owner 2026-10-19: make the antenna's coupling to the magnetron visible.** The
+  magnetic and energy-flow maps draw the leads (decision 1 above, not drawn until now),
+  with beads moving with the charge each carries, and electrodes whose potential swings
+  glow with it: the tank's vanes and the antenna pulse together and the feed's beads
+  slosh in step with the tank's leads. The energy-flow map averaged over a few periods
+  (the meter's τ) shows the energy leaving in two lobes across the feed and antenna, the
+  pattern of a wire radiating its current.

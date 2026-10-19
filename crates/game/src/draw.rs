@@ -1459,6 +1459,219 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
             );
         }
     }
+    draw_swing(gizmos, game, &frame);
+    draw_leads(gizmos, game);
+    draw_hall(gizmos, view, &frame);
+}
+
+/// How far back the drift of a metal's carriers is measured (their thermal motion is about
+/// five times their drift; over this time and the thousands of carriers in a strip's middle
+/// its noise is a few per cent).
+const DRIFT_SPAN: f64 = 1.0;
+
+/// Metals in a magnetic field: at each strip's centre the Hall effect's forces
+/// (`TubeRun::hall_forces`), drawn as arrows: the carriers' drift (white, over the last
+/// `DRIFT_SPAN`), the field's magnetic push on it (orange, `q ⟨v⟩ × B`, across the strip)
+/// and the push of the electric field across it (blue, `q E⊥`: the Hall field of the
+/// charge piled at its sides). The two pushes are drawn to the larger one's scale: the
+/// magnetic push piles carriers on one side until the electric one holds them; then the
+/// arrows are nearly equal (the electric one up to 4/π longer: fast and slow carriers are
+/// pushed differently, the Hall factor).
+fn draw_hall(gizmos: &mut Gizmos, view: &crate::TubeView, frame: &level::tube::TubeFrame) {
+    if view.run.b_z == 0.0 || view.run.metals.is_empty() {
+        return;
+    }
+    let Some(before) = view.run.frame_between(frame.t - DRIFT_SPAN) else {
+        return;
+    };
+    if frame.t - before.t < 0.5 * DRIFT_SPAN {
+        return;
+    }
+    for k in 0..view.run.metals.len() {
+        let Some(h) = view.run.hall_forces(frame, &before, k) else {
+            continue;
+        };
+        let scale = h.magnetic.length().max(h.electric.length());
+        if scale <= 0.0 || h.drift.length() <= 0.0 {
+            continue;
+        }
+        let (centre, axis) = (to_vec2(h.centre), to_vec2(h.axis));
+        #[allow(clippy::cast_possible_truncation)]
+        let reach = (0.45 * h.width).min(2.0) as f32;
+        #[allow(clippy::cast_possible_truncation)]
+        let side = |f: physics::DVec3| to_vec2(f / scale) * reach;
+        bold_arrow(
+            gizmos,
+            centre - axis * 1.1,
+            centre + to_vec2(h.drift.normalize()) * 1.1,
+            Color::srgb(0.95, 0.95, 0.9),
+        );
+        bold_arrow(
+            gizmos,
+            centre - axis * 0.4,
+            centre - axis * 0.4 + side(h.magnetic),
+            Color::srgb(1.0, 0.55, 0.15),
+        );
+        bold_arrow(
+            gizmos,
+            centre + axis * 0.4,
+            centre + axis * 0.4 + side(h.electric),
+            Color::srgb(0.45, 0.8, 1.0),
+        );
+    }
+}
+
+/// An arrow drawn thick (parallel strokes) over a dark outline, readable over a metal's
+/// thousands of carriers.
+fn bold_arrow(gizmos: &mut Gizmos, from: Vec2, to: Vec2, color: Color) {
+    let d = to - from;
+    if d.length() < 1e-4 {
+        return;
+    }
+    let n = d.normalize().perp();
+    for k in -2..=2_i32 {
+        #[allow(clippy::cast_precision_loss)]
+        let o = n * (0.035 * k as f32);
+        gizmos.arrow_2d(from + o, to + o, Color::srgba(0.05, 0.05, 0.07, 0.8));
+    }
+    for k in -1..=1_i32 {
+        #[allow(clippy::cast_precision_loss)]
+        let o = n * (0.02 * k as f32);
+        gizmos.arrow_2d(from + o, to + o, color);
+    }
+}
+
+/// A rod's radius, or a ring's inner and outer radii, of electrode `i` (tube levels);
+/// None for a box.
+fn round_radii(level: &level::Level, i: usize) -> Option<(f64, f64)> {
+    let e = level.electrodes.get(i)?;
+    match e.shape {
+        level::ElectrodeShape::Rod => Some((0.0, e.length / 2.0)),
+        level::ElectrodeShape::Ring => Some((
+            (e.length - e.thickness) / 2.0,
+            (e.length + e.thickness) / 2.0,
+        )),
+        _ => None,
+    }
+}
+
+/// An electrode's outline `grow` outside its surface (inside a ring's hole too).
+fn electrode_outline(
+    gizmos: &mut Gizmos,
+    b: &physics::bem::BoxElectrode,
+    radii: Option<(f64, f64)>,
+    grow: f32,
+    color: Color,
+) {
+    match radii {
+        #[allow(clippy::cast_possible_truncation)]
+        Some((inner, outer)) => {
+            let c = to_vec2(b.center);
+            gizmos.circle_2d(c, outer as f32 + grow, color);
+            if inner > 0.0 {
+                gizmos.circle_2d(c, (inner as f32 - grow).max(0.01), color);
+            }
+        }
+        None => {
+            gizmos.linestrip_2d(box_outline(b, grow), color);
+        }
+    }
+}
+
+/// Tube levels: the electrodes whose potential swings over the run glow with its departure
+/// from its mean, warm above and cool below (the rims' colours), the brighter the further
+/// (in units of the run's largest swing): a magnetron's tank vanes and the antenna strapped
+/// to them pulse together, a triode's grid with its signal. Electrodes that hardly swing
+/// (below 5 % of the largest) do not glow.
+fn draw_swing(gizmos: &mut Gizmos, game: &Game, frame: &level::tube::TubeFrame) {
+    let Some(swing) = game.swing.as_ref().filter(|s| s.largest > 0.0) else {
+        return;
+    };
+    let level = &game.editor.level;
+    let boxes = level.all_box_electrodes(&game.editor.placement);
+    for (i, b) in boxes.iter().enumerate() {
+        let (Some(mean), Some(own), Some(p)) =
+            (swing.mean.get(i), swing.own.get(i), frame.potentials.get(i))
+        else {
+            continue;
+        };
+        if *own < 0.05 * swing.largest {
+            continue;
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let a = ((f64::from(*p) - mean) / swing.largest).clamp(-1.0, 1.0) as f32;
+        let color = if a >= 0.0 {
+            Color::srgb(1.0, 0.45, 0.35)
+        } else {
+            Color::srgb(0.4, 0.65, 1.0)
+        };
+        let radii = round_radii(level, i);
+        for (k, grow) in [0.12_f32, 0.2, 0.28].into_iter().enumerate() {
+            #[allow(clippy::cast_precision_loss)]
+            let fade = 1.0 - 0.3 * k as f32;
+            electrode_outline(gizmos, b, radii, grow, color.with_alpha(a.abs() * fade));
+        }
+    }
+}
+
+/// Tube levels' magnetic and energy-flow maps: each electrode's lead, the straight path by
+/// which its circuit current reaches it in the field (from its enclosing ring or the
+/// board's edge), a faint wire with beads that move with the charge it has carried (as the
+/// shown field sees it): the run's largest current moves them four spacings per time unit,
+/// an oscillating one swings them to and fro (a magnetron's tank leads and its antenna's
+/// feed together), a steady one marches them on.
+fn draw_leads(gizmos: &mut Gizmos, game: &Game) {
+    const SPACING: f32 = 0.6;
+    if !matches!(
+        game.map,
+        Some(crate::potential::MapMode::Magnetic | crate::potential::MapMode::EnergyFlow)
+    ) {
+        return;
+    }
+    let Some(s) = &game.em_snapshot else {
+        return;
+    };
+    if game
+        .tube_preview
+        .as_ref()
+        .is_none_or(|v| v.revision != s.revision)
+    {
+        return;
+    }
+    let wire = Color::srgb(0.95, 0.95, 0.85);
+    for (k, lead) in s.leads.iter().enumerate() {
+        let Some((a, b)) = lead else {
+            continue;
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        let (a, b) = (
+            Vec2::new(a.0 as f32, a.1 as f32),
+            Vec2::new(b.0 as f32, b.1 as f32),
+        );
+        let len = a.distance(b);
+        if len < 1e-3 {
+            continue;
+        }
+        gizmos.line_2d(a, b, wire.with_alpha(0.35));
+        let (Some(i), Some(q)) = (s.lead_currents.get(k), s.lead_charges.get(k)) else {
+            continue;
+        };
+        if s.lead_peak <= 0.0 {
+            continue;
+        }
+        // Positive current runs from the lead's start to its electrode.
+        #[allow(clippy::cast_possible_truncation)]
+        let (offset, alpha) = (
+            ((q / (0.25 * s.lead_peak)) as f32 * SPACING).rem_euclid(SPACING),
+            0.3 + 0.7 * (i.abs() / s.lead_peak).min(1.0) as f32,
+        );
+        let dir = (b - a) / len;
+        let mut u = offset;
+        while u < len {
+            gizmos.circle_2d(a + dir * u, 0.07, wire.with_alpha(alpha));
+            u += SPACING;
+        }
+    }
 }
 
 /// A faint spring from `anchor` to `x`: ten coils of fixed width that stretch with the

@@ -254,6 +254,12 @@ struct Smoothing {
     out: [Vec<f64>; 3],
     /// The kernel's mean delay (each stage's `dt (1 − α)/α`).
     delay: f64,
+    /// Per lead: its current through the same stages, the last one's (shown), the charge
+    /// that has passed at that current since the start, and the largest shown current.
+    lead_stages: Vec<[f64; EM_SMOOTH_STAGES]>,
+    lead_out: Vec<f64>,
+    lead_charge: Vec<f64>,
+    lead_peak: f64,
 }
 
 /// Elements per parallel task of the smoothing's pass.
@@ -261,8 +267,8 @@ const SMOOTH_CHUNK: usize = 2048;
 
 impl Smoothing {
     /// Stages of time constant `tau`, all starting at `fdtd`'s field (a static start
-    /// stays as it is).
-    fn new(fdtd: &Fdtd, tau: f64) -> Self {
+    /// stays as it is), with `leads` leads' currents starting at 0.
+    fn new(fdtd: &Fdtd, tau: f64, leads: usize) -> Self {
         let alpha = 1.0 - libm::exp(-fdtd.dt / tau);
         #[allow(clippy::cast_precision_loss)]
         let delay = EM_SMOOTH_STAGES as f64 * fdtd.dt * (1.0 - alpha) / alpha;
@@ -276,6 +282,31 @@ impl Smoothing {
             }),
             out: fields.map(Clone::clone),
             delay,
+            lead_stages: vec![[0.0; EM_SMOOTH_STAGES]; leads],
+            lead_out: vec![0.0; leads],
+            lead_charge: vec![0.0; leads],
+            lead_peak: 0.0,
+        }
+    }
+
+    /// Takes in a step's lead currents (`dt` long), as the field.
+    fn update_leads(&mut self, currents: &[f64], dt: f64) {
+        let a = self.alpha;
+        for (((ys, o), q), &i) in self
+            .lead_stages
+            .iter_mut()
+            .zip(&mut self.lead_out)
+            .zip(&mut self.lead_charge)
+            .zip(currents)
+        {
+            let mut v = i;
+            for y in ys {
+                *y += a * (v - *y);
+                v = *y;
+            }
+            *o = v;
+            *q += v * dt;
+            self.lead_peak = self.lead_peak.max(v.abs());
         }
     }
 
@@ -583,7 +614,7 @@ impl TubeEm {
         } else {
             EM_SMOOTH_RATIO * longer / (std::f64::consts::PI * c)
         });
-        let smoothing = Some(Smoothing::new(&fdtd, tau));
+        let smoothing = Some(Smoothing::new(&fdtd, tau, n_el));
         Self {
             fdtd,
             outlines,
@@ -824,6 +855,17 @@ impl TubeEm {
         )
     }
 
+    /// Per electrode: its lead's current as the shown field sees it (smoothed the same
+    /// way), the charge that has passed so, and the largest such current so far.
+    #[must_use]
+    pub fn shown_leads(&self) -> (&[f64], &[f64], f64) {
+        self.smoothing
+            .as_ref()
+            .map_or((&[][..], &[][..], 0.0), |s| {
+                (&s.lead_out[..], &s.lead_charge[..], s.lead_peak)
+            })
+    }
+
     /// How much later than the field's own time the shown field is (`Smoothing`; 0 when
     /// shown as it is).
     #[must_use]
@@ -885,6 +927,11 @@ impl TubeEm {
             self.fdtd.step();
             if let Some(s) = &mut self.smoothing {
                 s.update(&self.fdtd);
+                let currents = self.interval.as_ref().map_or_else(Vec::new, |iv| {
+                    let span = (iv.t1 - iv.t0).max(1e-300);
+                    iv.leads.iter().map(|q| q / span).collect()
+                });
+                s.update_leads(&currents, dt);
             }
             // A closed box radiates nothing out (its border is a conductor).
             if self.open {
@@ -961,7 +1008,7 @@ mod tests {
         }
         let omega = 2.0 / f.dt * libm::asin(c * f.dt / h * libm::sin(k * h / 2.0));
         let tau = EM_SMOOTH_RATIO / omega;
-        let mut s = Smoothing::new(&f, tau);
+        let mut s = Smoothing::new(&f, tau, 0);
         let period = 2.0 * PI / omega;
         let start = 70.0 * tau;
         let cell = 3 + n * 7;

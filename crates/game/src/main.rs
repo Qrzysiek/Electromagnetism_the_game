@@ -250,6 +250,21 @@ pub struct Game {
     /// The board point under the pointer (None over the panel, off the window, or while
     /// something is dragged): what the tooltip inspects (`inspect.rs`).
     pub hover_world: Option<Vec2>,
+    /// Tube levels: how each electrode's potential swings in the preview run (`Swing`),
+    /// for the glow of the oscillating ones.
+    pub swing: Option<Swing>,
+}
+
+/// Tube levels: each electrode's mean potential over the run's frames so far and its
+/// largest departure from it, and the largest of all (the run's revision and the frames
+/// counted).
+#[derive(Clone, Debug, Default)]
+pub struct Swing {
+    pub revision: u64,
+    pub frames: usize,
+    pub mean: Vec<f64>,
+    pub own: Vec<f64>,
+    pub largest: f64,
 }
 
 impl Game {
@@ -338,6 +353,7 @@ impl Game {
             zoom_center: None,
             pan_anchor: None,
             hover_world: None,
+            swing: None,
         }
     }
 
@@ -1891,6 +1907,7 @@ fn tube_flow_arrows(level: &Level, snap: &em::EmSnapshot) -> TubeArrows {
 /// and takes its snapshots.
 fn update_em(mut game: ResMut<Game>) {
     let game = &mut *game;
+    update_swing(game);
     let field_map = game.editor.level.is_tube()
         && matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow));
     // Once started for this run, the field follows the playback under the other maps too
@@ -1935,6 +1952,52 @@ fn update_em(mut game: ResMut<Game>) {
     {
         game.em_snapshot = Some(s);
     }
+}
+
+/// Tube levels: each electrode's potential's mean and swing over the preview run's frames
+/// (`Swing`), recomputed when frames arrive.
+#[allow(clippy::cast_precision_loss)]
+fn update_swing(game: &mut Game) {
+    let Some(v) = game
+        .tube_preview
+        .as_ref()
+        .filter(|v| v.revision == game.sent_revision)
+    else {
+        game.swing = None;
+        return;
+    };
+    let frames = &v.run.frames;
+    if game
+        .swing
+        .as_ref()
+        .is_some_and(|s| s.revision == v.revision && s.frames == frames.len())
+    {
+        return;
+    }
+    let n = frames.iter().map(|f| f.potentials.len()).max().unwrap_or(0);
+    let mut mean = vec![0.0; n];
+    for f in frames {
+        for (m, p) in mean.iter_mut().zip(&f.potentials) {
+            *m += f64::from(*p);
+        }
+    }
+    for m in &mut mean {
+        *m /= frames.len().max(1) as f64;
+    }
+    let mut own = vec![0.0_f64; n];
+    for f in frames {
+        for ((o, m), p) in own.iter_mut().zip(&mean).zip(&f.potentials) {
+            *o = o.max((f64::from(*p) - m).abs());
+        }
+    }
+    let largest = own.iter().fold(0.0_f64, |a, b| a.max(*b));
+    game.swing = Some(Swing {
+        revision: v.revision,
+        frames: frames.len(),
+        mean,
+        own,
+        largest,
+    });
 }
 
 /// Arrows `(position, E)` of a tube's electric field map.

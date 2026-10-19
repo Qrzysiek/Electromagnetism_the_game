@@ -690,6 +690,42 @@ fn magnetron_feed_field_is_smooth() {
     assert!(wiggle < 0.01 * peak, "{wiggle} vs {peak}");
 }
 
+/// The Hall effect's forces as the game draws them (`TubeRun::hall_forces`, PHYSICS.md
+/// §2.11): on Hall probe's reference run, once the charge has piled up (t = 20–40, every
+/// 2), the electric push across the strip must oppose the magnetic push on the carriers'
+/// drift, its size between 0.85 and 1.5 of it (the model's Hall factor lies between 1 in a
+/// strong field and 4/π in a weak one, D4; the drift's noise ~10 %). The charge piles up
+/// within the metal's dielectric relaxation time, `1/(4πσ)` ≈ 0.2: earlier than the drift
+/// can be measured (over a time unit), so the build-up itself is not tested.
+#[test]
+fn hall_forces_balance() {
+    let level = level::shipped("hall_probe");
+    let run = level.tube_run(&level.reference_solution, 1, 41.0);
+    let ratio_at = |t: f64| {
+        let now = run.frame_between(t).expect("a frame");
+        let before = run.frame_between(t - 1.0).expect("a frame");
+        let h = run.hall_forces(&now, &before, 0).expect("the Hall forces");
+        (
+            h.electric.length() / h.magnetic.length(),
+            h.electric.dot(h.magnetic),
+        )
+    };
+    let (mut sum, mut n) = (0.0, 0.0);
+    for k in 0..=10 {
+        let (r, dot) = ratio_at(20.0 + 2.0 * f64::from(k));
+        assert!(
+            dot < 0.0,
+            "the pushes must oppose at t = {}",
+            20.0 + 2.0 * f64::from(k)
+        );
+        sum += r;
+        n += 1.0;
+    }
+    let steady = sum / n;
+    println!("Hall forces: electric/magnetic {steady:.3} once piled up");
+    assert!((0.85..1.5).contains(&steady), "steady {steady}");
+}
+
 /// The magnetron's antenna radiates its load (PHYSICS.md §2.11): on the reference's preview
 /// run, the electromagnetic field's power out of the board over t = 98–100 (the field
 /// solver's) against the tank load's R⟨I²⟩ over the same span (the circuit's): two
