@@ -64,6 +64,9 @@ struct Interval {
     t0: f64,
     t1: f64,
     paths: Vec<Path>,
+    /// Per electrode: the charge its lead carries over the interval (from its start, the
+    /// parent or the border, to the electrode).
+    leads: Vec<f64>,
     /// The current of every path's and lead's whole move as if made in one step
     /// (`Fdtd::deposit_to`; `(edge, J)` of `E_x`'s and `E_y`'s edges): each step takes its
     /// share of the interval.
@@ -759,6 +762,7 @@ impl TubeEm {
             t0: f0.t,
             t1: f1.t,
             paths,
+            leads,
             jx: sparse(dense_x),
             jy: sparse(dense_y),
         }
@@ -788,6 +792,19 @@ impl TubeEm {
     pub fn in_vacuum(&self, i: usize, j: usize) -> bool {
         (i.saturating_sub(1)..=i + 1)
             .all(|a| (j.saturating_sub(1)..=j + 1).all(|b| !self.fdtd.is_metal(a, b)))
+    }
+
+    /// Per electrode: the current its lead carries now (over the frame interval being fed;
+    /// positive from the lead's start, its parent or the border, to the electrode).
+    #[must_use]
+    pub fn lead_currents(&self) -> Vec<f64> {
+        self.interval.as_ref().map_or_else(
+            || vec![0.0; self.outlines.len()],
+            |iv| {
+                let span = (iv.t1 - iv.t0).max(1e-300);
+                iv.leads.iter().map(|q| q / span).collect()
+            },
+        )
     }
 
     /// How much later than the field's own time the shown field is (`Smoothing`; 0 when

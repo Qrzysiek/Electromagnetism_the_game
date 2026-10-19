@@ -540,6 +540,119 @@ fn closed_box_map_shows_the_circuit() {
     assert!(f < 0.01 * m, "fluctuation {f:e} against {m:e}");
 }
 
+/// A lead's midpoint and the unit normal along which `B_z` rises across it.
+type Probe = ((f64, f64), (f64, f64));
+
+/// The maps' magnetic field obeys Ampère's law (PHYSICS.md §2.11): across a lead carrying a
+/// current I the shown `B_z` jumps by `4π I/c`, I the lead's own current from the run's
+/// charges (`TubeEm::lead_currents`, independent of the field), the jump between the means
+/// over squares of side 1 one unit either side of the lead's midpoint. Over a window where
+/// the currents are steady (Vacuum diode's beam over t = 12–20, Hall probe's metal over
+/// 20–40) or over whole periods of a level's signal (Triode, t = 40–80) the displacement
+/// current through the probe averages out (measured: below 0.3 % of the lead's). Every lead
+/// carrying a fifth of its level's largest current and with no other lead within 2 of its
+/// midpoint (the grid's wires' leads lie closer together); required 3 % (exact in the
+/// scheme for a steady current: what remains is the run's noise and the window's ends).
+#[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn em_field_obeys_amperes_law() {
+    let cases = [
+        ("vacuum_diode", 12.0, 20.0),
+        ("hall_probe", 20.0, 40.0),
+        ("triode", 40.0, 80.0),
+    ];
+    let mut checked = 0;
+    for (slug, t0, t1) in cases {
+        let level = level::shipped(slug);
+        let run = level.tube_run(&level.reference_solution, 1, t1 + 3.0);
+        let mut em = level::tube_em::TubeEm::new(&level, &run);
+        let g = em.fdtd.grid;
+        let leads = em.leads.clone();
+        // B_z averaged over a square of side 1 about a point.
+        let patch = |bz: &[f64], x: f64, y: f64| {
+            let (mut s, mut n) = (0.0_f64, 0.0_f64);
+            for j in 0..g.ny {
+                for i in 0..g.nx {
+                    let cx = g.origin.0 + (i as f64 + 0.5) * g.h;
+                    let cy = g.origin.1 + (j as f64 + 0.5) * g.h;
+                    if (cx - x).abs() < 0.5 && (cy - y).abs() < 0.5 {
+                        s += bz[i + g.nx * j];
+                        n += 1.0;
+                    }
+                }
+            }
+            s / n.max(1.0)
+        };
+        // Each lead's midpoint and the unit normal `ẑ × direction` (B_z rises across the
+        // lead along it by 4π I/c).
+        let probes: Vec<Option<Probe>> = leads
+            .iter()
+            .map(|l| {
+                l.map(|(a, b)| {
+                    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+                    let len = libm::hypot(dx, dy);
+                    (
+                        (0.5 * (a.0 + b.0), 0.5 * (a.1 + b.1)),
+                        (-dy / len, dx / len),
+                    )
+                })
+            })
+            .collect();
+        let n_el = leads.len();
+        let (mut current, mut jump, mut samples) = (vec![0.0; n_el], vec![0.0; n_el], 0.0);
+        let mut t = t0;
+        while t <= t1 + 1e-9 {
+            em.show(&run, t);
+            let now = em.lead_currents();
+            let bz = em.shown().bz;
+            for e in 0..n_el {
+                let Some((m, n)) = probes[e] else { continue };
+                current[e] += now[e];
+                jump[e] += patch(bz, m.0 + n.0, m.1 + n.1) - patch(bz, m.0 - n.0, m.1 - n.1);
+            }
+            samples += 1.0;
+            t += 0.05;
+        }
+        let largest = current.iter().fold(0.0_f64, |a, c| a.max(c.abs())) / samples;
+        // The distance from a point to a lead.
+        let distance = |p: (f64, f64), l: (f64, f64, f64, f64)| {
+            let (ax, ay, bx, by) = l;
+            let (dx, dy) = (bx - ax, by - ay);
+            let s = (((p.0 - ax) * dx + (p.1 - ay) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+            libm::hypot(p.0 - ax - s * dx, p.1 - ay - s * dy)
+        };
+        for e in 0..n_el {
+            let Some((m, _)) = probes[e] else { continue };
+            let i = current[e] / samples;
+            let isolated = leads.iter().enumerate().all(|(o, l)| {
+                o == e || l.is_none_or(|(a, b)| distance(m, (a.0, a.1, b.0, b.1)) > 2.0)
+            });
+            if i.abs() < 0.2 * largest || !isolated {
+                continue;
+            }
+            let expected = 4.0 * std::f64::consts::PI * i / em.fdtd.c;
+            let measured = jump[e] / samples;
+            println!(
+                "Ampère: {slug} electrode {}: <I> {i:.4}, B_z's jump {measured:.5} against 4 pi I/c \
+                 {expected:.5} ({:+.2} %)",
+                e + 1,
+                100.0 * (measured / expected - 1.0)
+            );
+            assert!(
+                (measured / expected - 1.0).abs() < 0.03,
+                "{slug} electrode {}: {measured} vs {expected}",
+                e + 1
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked >= 6, "only {checked} leads checked");
+}
+
 /// The magnetron's antenna radiates its load (PHYSICS.md §2.11): on the reference's preview
 /// run, the electromagnetic field's power out of the board over t = 98–100 (the field
 /// solver's) against the tank load's R⟨I²⟩ over the same span (the circuit's): two
