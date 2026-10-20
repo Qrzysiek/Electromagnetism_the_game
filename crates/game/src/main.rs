@@ -318,6 +318,33 @@ impl Game {
         self.plot_focus = Some((i, rgb, until));
     }
 
+    /// A tube level's uniform field B along z at the time shown, with its largest size over
+    /// the run (a swinging field's peak): the run's, else the player's solenoid supply or the
+    /// level's own field. None without a field.
+    pub fn tube_field_now(&self) -> Option<(f64, f64)> {
+        let level = &self.editor.level;
+        let spec = level.tube.as_ref()?;
+        if let Some(v) = self.tube_preview.as_ref().filter(|v| v.run.has_field()) {
+            let t = if self.animate {
+                self.anim_time
+            } else {
+                v.run.frames.last().map_or(0.0, |f| f.t)
+            };
+            let peak = v.run.b_wave.map_or(v.run.b_z.abs(), |w| w.peak());
+            return Some((v.run.b_at(t), peak));
+        }
+        let b = spec
+            .solenoid
+            .and_then(|n| {
+                self.editor
+                    .placement
+                    .iter()
+                    .find(|e| e.kind == level::ElementKind::Supply && e.node == n)
+            })
+            .map_or(spec.b_z, |e| e.value);
+        (b != 0.0 && spec.solenoid_drive.is_none()).then_some((b, b.abs()))
+    }
+
     /// The electrode a plot's chip outlines now, with its colour.
     pub fn focused_electrode(&self) -> Option<(usize, [u8; 3])> {
         self.plot_focus
@@ -2147,13 +2174,24 @@ fn update_traced(game: &mut Game) {
 
 /// Tube levels with metals in a field: the forces on each strip's average carrier at the
 /// time shown (`level::tube::TubeRun::hall_forces`, over the last `draw::DRIFT_SPAN`), for
-/// the board's diagram and its labels.
+/// the board's diagram and its labels. Only in the pieces of metals with contacts, a current
+/// through them: in an isolated metal (eddy currents) the middle's mean drift is noise.
 fn update_hall(game: &mut Game) {
     let hall = (|| {
         let v = game
             .tube_preview
             .as_ref()
             .filter(|v| v.run.has_field() && !v.run.metals.is_empty())?;
+        let level = &game.editor.level;
+        let spec = level.tube.as_ref()?;
+        // A piece (`run.metals`) belongs to the metal its centre lies in.
+        let fed = |m: &level::tube::MetalView| {
+            let c = (m.lo + m.hi) * 0.5;
+            spec.metals.iter().any(|s| {
+                let (lo, hi) = level.metal_rect(s);
+                !s.contacts.is_empty() && c.x > lo.x && c.x < hi.x && c.y > lo.y && c.y < hi.y
+            })
+        };
         let frame = game.tube_display_frame()?;
         let before = v.run.frame_between(frame.t - draw::DRIFT_SPAN)?;
         if frame.t - before.t < 0.5 * draw::DRIFT_SPAN {
@@ -2161,6 +2199,7 @@ fn update_hall(game: &mut Game) {
         }
         Some(
             (0..v.run.metals.len())
+                .filter(|&k| fed(&v.run.metals[k]))
                 .filter_map(|k| v.run.hall_forces(&frame, &before, k))
                 .collect(),
         )

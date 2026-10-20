@@ -712,19 +712,20 @@ pub fn draw(
             let c = p + Vec2::new(-0.3 + 0.3 * k as f32, 0.0);
             gizmos.circle_2d(c, 0.18, yellow);
         }
-        let b = game
-            .editor
-            .placement
-            .iter()
-            .find(|e| e.kind == level::ElementKind::Supply && e.node == n)
-            .map(|e| e.value);
-        if let Some(b) = b.filter(|b| *b != 0.0) {
+    }
+    // The field's direction around the board (the player's solenoid's or the level's own) at
+    // the time shown: dots (out of the board) in orange, crosses (into it) in teal, as the
+    // magnetic map colours them; a swinging field's marks flip and fade through zero.
+    if let Some((b, peak)) = game.tube_field_now().filter(|(b, _)| *b != 0.0) {
+        {
             let bounds = level.bounds();
             let (lo, hi) = (to_vec2(bounds.min), to_vec2(bounds.max));
+            #[allow(clippy::cast_possible_truncation)]
+            let alpha = 0.8 * ((b.abs() / peak.max(1e-300)).min(1.0) as f32).sqrt();
             let color = if b > 0.0 {
-                Color::srgba(0.95, 0.6, 0.15, 0.8)
+                Color::srgba(0.95, 0.6, 0.15, alpha.max(0.15))
             } else {
-                Color::srgba(0.2, 0.75, 0.7, 0.8)
+                Color::srgba(0.2, 0.75, 0.7, alpha.max(0.15))
             };
             let marks = 8;
             for k in 0..=marks {

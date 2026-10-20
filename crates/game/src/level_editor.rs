@@ -1647,7 +1647,14 @@ fn edit_tube(
             );
         if limited {
             let j = saturation.get_or_insert(0.1);
-            focus |= positive(ui, j, 0.001, MAX_POSITIVE);
+            focus |= ui
+                .add(
+                    egui::DragValue::new(j)
+                        .speed(0.001)
+                        .range(0.0..=MAX_POSITIVE),
+                )
+                .on_hover_text("0: a cold electrode, which emits nothing")
+                .has_focus();
         } else {
             *saturation = None;
         }
@@ -2908,7 +2915,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             && drive_ok
             && any(*b_z)
             && (MIN_POSITIVE..=MAX_POSITIVE).contains(step)
-            && saturation.is_none_or(|j| (MIN_POSITIVE..=MAX_POSITIVE).contains(&j));
+            && saturation.is_none_or(|j| (0.0..=MAX_POSITIVE).contains(&j));
         if *cathode >= n
             || !ratio_ok
             || !goal_ok

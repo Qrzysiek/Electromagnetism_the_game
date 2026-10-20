@@ -244,6 +244,20 @@ def slider_problems(lvl):
     return out
 
 
+def heat_goal(metal, lo, hi, start, end):
+    """A tube level's goal on metal `metal`'s mean heat (the field's work on its carriers per
+    time) over t = start..end, between lo and hi."""
+    return {"metal": metal, "min": lo, "max": hi, "start": start, "end": end}
+
+
+def cut(x, y, along_x):
+    """The player's insulating cut through the metal node (x, y), along x or along y."""
+    e = {"node": [x, y, 0], "kind": "cut", "value": 0.0}
+    if not along_x:
+        e["angle_deg"] = 90.0
+    return e
+
+
 def current_goal(electrode, lo, hi, start, end, carriers=None):
     """A tube level's current goal: the current into `electrode`, averaged over
     t = start..end, between lo and hi; `carriers`: None for the cathode's, "ions" for the
@@ -257,7 +271,7 @@ def current_goal(electrode, lo, hi, start, end, carriers=None):
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
          potentials=(), goals=(), ions=None, step=None, particle_rate=None, particles=None,
-         emitter_mesh=None, output=None, metals=(), solenoid_drive=None):
+         emitter_mesh=None, output=None, metals=(), solenoid_drive=None, heat_goals=()):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -269,8 +283,11 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
     direction]): an ion source (the bipolar diode). Tube levels are Newtonian (pass
     c=None to `level`). `solenoid_drive`: the solenoid's field over time (a source, see
     `dc`, `sine`; its level set by the supply on the terminal), which induces an electric
-    field circulating about the board's centre."""
+    field circulating about the board's centre. `heat_goals`: goals on a metal's mean heat
+    (`heat_goal`)."""
     t = {"cathode": cathode, "charge_per_mass": q_over_m}
+    if heat_goals:
+        t["heat_goals"] = list(heat_goals)
     if solenoid_drive is not None:
         t["solenoid_drive"] = solenoid_drive
     all_goals = ([current_goal(electrode, lo, hi, start, end)] if electrode is not None
@@ -444,7 +461,7 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
           beam_interaction=False, gates=(), clouds=(), free_particles=(), max_free=0,
           free_charges=(), free_speeds=(), free_mass=1.0, free_radius=0.3, dielectrics=(),
-          coil_rates=(), ferrites=(), tube=None, solenoid_fields=()):
+          coil_rates=(), ferrites=(), tube=None, solenoid_fields=(), max_cuts=0):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -468,6 +485,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         limits["solenoid_fields"] = list(solenoid_fields)
     if max_free:
         limits["max_free"] = max_free
+    if max_cuts:
+        limits["max_cuts"] = max_cuts
         limits["free_charges"] = list(free_charges)
         limits["free_speeds"] = list(free_speeds)
         if free_mass != 1.0:
@@ -3750,6 +3769,76 @@ def magnetoresistance():
         reference=[supply(21, 15, 7.0), supply(23, 19, 5.0)])
 
 
+# The eddy-current levels' drive: the solenoid's field swings as B0 sin(wt), period ~50: long
+# against the metal's settling (a few tenths) and its slow polarizations (a few units), and
+# slow enough that a cut's two faces, a Debye length apart, carry little current across as
+# a capacitor (at period 25 a core cut along its length took 61 % more heat than Ohm's law
+# gives: the cut's 1/(wC) was comparable to a strip's resistance; at period 50, 14 %).
+EDDY_OMEGA = 0.125
+
+
+def cold_electrode(x, y):
+    """A small floating electrode (zero charge) that emits nothing (saturation 0): the cathode
+    a tube level with only isolated metals needs. Floating, it cannot draw charge from this
+    open world's "infinity", which made a metal beside a grounded electrode run away
+    (docs/OPEN_PROBLEMS.md, OP-1)."""
+    return plate(x, y, 0.5, thickness=0.5, kind="charge", value=0.0)
+
+
+def eddy_currents():
+    # Designed with `generator tube-scan` (target/scratch/eddy_window.py): an isolated plate
+    # 12 x 12 on the solenoid's axis, its field B0 sin(0.125 t). Local Ohm's law (PHYSICS.md
+    # 2.11, D8): heat sigma <Bdot^2> int u dA = 0.47 x 728.75 x (0.125 B0)^2 / 2 = 2.68 B0^2;
+    # the carriers' linear response holds up to Bdot ~ 0.1 (qEl/kT = 0.1 at the edges'
+    # middles): B0 up to ~0.8. Measured (preview / verification): 0.744 / 0.753 at B0 = 0.55,
+    # 1.153 / 1.181 at 0.68, 1.504 / 1.595 at 0.8 (5-7 % below local Ohm's law: the walls,
+    # PHYSICS.md 2.11): about 2.55 B0^2. With the goal 1.0-1.4 the slider solved on 0.66-0.72
+    # only (`generator window`, every 0.0225; the verdict's error straddles the goal's edges
+    # beyond): widened to 0.9-1.5.
+    return level(
+        "Eddy currents",
+        "A metal plate alone in your solenoid, whose field now swings back and forth, "
+        "$B = B_0 \\sin \\omega t$. A changing magnetic field induces an electric field "
+        "that circulates about the solenoid's axis (Faraday's law), and in the metal it drives "
+        "the carriers round in loops: eddy currents, which heat it, the faster the field "
+        "changes the more (as $\\dot B^2$). Set the swing $B_0$ so that the plate takes "
+        "between 0.9 and 1.5 of heat per unit time (averaged over $t = 25$ to $125$).",
+        grid=(24, 20), c=None, t_max=200.0,
+        electrodes=[cold_electrode(1, 1)],
+        solenoid_fields=slider(1.0, 0.68),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, saturation=0.0, solenoid=(23, 19),
+                  solenoid_drive=sine(1.0, EDDY_OMEGA),
+                  heat_goals=[heat_goal(0, 0.9, 1.5, 25.0, 125.0)],
+                  metals=[metal((6, 4), (18, 16), [], seed=21, **METAL)]),
+        reference=[supply(23, 19, 0.68)])
+
+
+def laminations():
+    # Designed with `generator tube-scan` (target/scratch/lam_scan16.py, lam_seeds.py): a
+    # transformer's core 16 x 8 on the solenoid's axis, the field fixed (B0 = 0.68 at omega
+    # 0.125). Local Ohm's law (D8): heat 0.795 uncut; one cut along its length 0.244 (with one
+    # across as well 0.199), two across at best 0.305, one across at best 0.489. Measured
+    # (verification, seed 22): 0.749, 0.291 (the long cut's faces carry some current across
+    # as a capacitor), 0.168, 0.273, 0.435; one cut each way over three seeds 0.168, 0.187,
+    # 0.183 (previews 0.236, 0.184, 0.188): seed 122. The goal, at most 0.22, takes one cut
+    # each way.
+    return level(
+        "Laminations",
+        "A transformer's core in a field that swings back and forth: the eddy currents waste "
+        "its energy as heat. They run in loops across the whole core; cut it, and each loop "
+        "must close within a narrower piece, so the currents are weaker and the heat falls, "
+        "the narrower the pieces, the more. You have two cuts: make the core take at most "
+        "0.22 of heat per unit time (averaged over $t = 25$ to $125$).",
+        grid=(24, 20), c=None, t_max=200.0,
+        electrodes=[cold_electrode(1, 1)],
+        max_cuts=2,
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, saturation=0.0, b_z=0.68,
+                  solenoid_drive=sine(1.0, EDDY_OMEGA),
+                  heat_goals=[heat_goal(0, 0.0, 0.22, 25.0, 125.0)],
+                  metals=[metal((4, 6), (20, 14), [], seed=122, **METAL)]),
+        reference=[cut(12, 10, True), cut(12, 8, False)])
+
+
 ARCS.append(("Inside the components: vacuum tubes", [
     ("Introduction", [
         ("vacuum_diode", vacuum_diode),
@@ -3779,6 +3868,8 @@ ARCS.append(("Inside the components: metals", [
         ("hall_probe", hall_probe),
         ("positive_carriers", positive_carriers),
         ("magnetoresistance", magnetoresistance),
+        ("eddy_currents", eddy_currents),
+        ("laminations", laminations),
     ]),
 ]))
 

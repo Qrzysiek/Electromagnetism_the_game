@@ -698,7 +698,12 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             )
         });
     } else if let Some(t) = &level.tube {
-        if t.metal_of(t.cathode).is_none() {
+        if t.saturation == Some(0.0) {
+            ui.label(format!(
+                "Electrode {}: floating and cold (it emits nothing)",
+                t.cathode + 1
+            ));
+        } else if t.metal_of(t.cathode).is_none() {
             ui.label(format!(
                 "Carriers: q/m = {} (electrons; Newtonian), emitted by electrode {}",
                 fmt_si(t.charge_per_mass),
@@ -707,16 +712,19 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
         }
         for (k, m) in t.metals.iter().enumerate() {
             let contacts: Vec<String> = m.contacts.iter().map(|e| (e + 1).to_string()).collect();
+            let joined = match contacts.len() {
+                0 => "isolated (no contacts)".to_owned(),
+                1 => format!("contact: electrode {}", contacts[0]),
+                _ => format!("contacts: electrodes {}", contacts.join(", ")),
+            };
             ui.label(format!(
                 "Metal {}: carriers q/m = {}, charge density {}, thermal speed {}, mean free \
-                 path {}; contacts: electrode{} {}",
+                 path {}; {joined}",
                 k + 1,
                 fmt_si(m.charge_per_mass),
                 fmt_si(m.density),
                 fmt_si(m.thermal_speed),
                 fmt_si(m.mean_free_path),
-                if contacts.len() == 1 { "" } else { "s" },
-                contacts.join(", ")
             ));
         }
     }
@@ -1289,8 +1297,12 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 .on_hover_text("The carriers' potential energy at the time shown");
             ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B")
                 .on_hover_text(
-                    "B_z of the electromagnetic field the run's charges and currents make, \
-                     with retardation (computed as the animation plays)",
+                    "B_z that the run's own charges and currents make (the current through \
+                     the metal and along its leads, the beams), with retardation, computed as \
+                     the animation plays. Your solenoid's field is not in it: uniform and \
+                     hundreds of times stronger, it would swamp the map; the ⊙/⊗ marks round \
+                     the board show its way. So the map flips with the current, not with the \
+                     solenoid.",
                 );
             ui.selectable_value(&mut game.map, Some(MapMode::Electric), "electric field")
                 .on_hover_text("|E| and its direction at the time shown");

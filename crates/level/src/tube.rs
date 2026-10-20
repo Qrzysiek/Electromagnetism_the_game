@@ -36,7 +36,8 @@ pub struct TubeSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emit_toward_deg: Option<f64>,
     /// The cathode's temperature-limited emission: at most this current per unit length
-    /// of its surface (`physics::tube::Emitter::saturation`). None: space-charge limited
+    /// of its surface (`physics::tube::Emitter::saturation`; 0: a cold electrode that emits
+    /// nothing, the cathode a level with isolated metals only needs). None: space-charge limited
     /// only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub saturation: Option<f64>,
@@ -1448,11 +1449,24 @@ impl TubeSim {
         self.pending.steps = self.steps;
     }
 
-    /// Metal `m`'s field work so far (the sum over its pieces).
+    /// Metal `m`'s heat so far, the sum over its pieces: the field's work on its carriers
+    /// (`TubeState::field_work`), or, in a metal without contacts, the induced field's alone
+    /// (`TubeState::induced_work`: there the electrostatic field's work is only the time
+    /// step's numerical heating).
     fn metal_work(&self, m: usize) -> f64 {
+        let isolated = self
+            .spec
+            .metals
+            .get(m)
+            .is_some_and(|x| x.contacts.is_empty());
+        let work = if isolated {
+            &self.state.induced_work
+        } else {
+            &self.state.field_work
+        };
         self.lattice_metal
             .iter()
-            .zip(&self.state.field_work)
+            .zip(work)
             .filter(|(k, _)| **k == m)
             .map(|(_, w)| w)
             .sum()
@@ -1841,6 +1855,22 @@ impl Level {
         out
     }
 
+    /// Whether electrode `e` of a tube level is held by something outside the board: a bias
+    /// other than a fixed charge, a supply, a drive or a tube circuit (a floating one keeps
+    /// its charge).
+    fn electrode_held(&self, spec: &TubeSpec, e: usize) -> bool {
+        let Some(el) = self.electrodes.get(e) else {
+            return false;
+        };
+        !matches!(el.bias, crate::ConductorBias::Charge(_))
+            || el.tunable
+            || el.drive.is_some()
+            || spec
+                .circuits
+                .iter()
+                .any(|c| c.electrode == e || c.linked.contains(&e))
+    }
+
     /// A cut's slit (`ElementKind::Cut`): its two ends, on the edges of the metal it lies in;
     /// None if it lies in none.
     #[must_use]
@@ -2146,8 +2176,9 @@ impl Level {
                 .map(|v| tube.emitting_charge(i, v))
                 .fold(0.0, f64::max);
             let mut w = q.max(*fl).max(1e-300) / (PREVIEW_PARTICLES * many);
+            // (A cold cathode, saturation 0, emits nothing: its weight stays.)
             if i == 0
-                && let Some(j) = spec.saturation
+                && let Some(j) = spec.saturation.filter(|j| *j > 0.0)
             {
                 w = w.min(j * perimeter / (spec.particle_rate * many));
             }
@@ -2505,8 +2536,15 @@ impl Level {
             if cores > MAX_CORES {
                 out.push(format!("{name}: {cores:.0} cores, at most {MAX_CORES:.0}."));
             }
-            if m.contacts.is_empty() {
-                out.push(format!("{name} needs a contact."));
+            // An isolated metal (eddy currents): every electrode floating. One held at a
+            // potential in this open z-invariant world draws charge from the log gauge's
+            // "infinity", and a floating conductor beside it runs away (docs/OPEN_PROBLEMS.md,
+            // OP-1; PHYSICS.md 2.11).
+            if m.contacts.is_empty() && (0..n).any(|e| self.electrode_held(spec, e)) {
+                out.push(format!(
+                    "{name} has no contact: an isolated metal needs every electrode floating \
+                     (one held at a potential draws charge from this open world's infinity)."
+                ));
             }
             for (i, &e) in m.contacts.iter().enumerate() {
                 if e >= n || m.contacts[..i].contains(&e) {
@@ -2632,8 +2670,15 @@ impl Level {
                     .into(),
             );
         }
-        if spec.saturation.is_some_and(|j| !(j.is_finite() && j > 0.0)) {
-            out.push("Tube: the cathode's saturation current must be positive.".into());
+        if spec
+            .saturation
+            .is_some_and(|j| !(j.is_finite() && j >= 0.0))
+        {
+            out.push(
+                "Tube: the cathode's saturation current must not be negative (0: it emits \
+                 nothing)."
+                    .into(),
+            );
         }
         if !(spec.particle_rate.is_finite() && spec.particle_rate >= 1.0) {
             out.push("Tube: the cathode's macroparticle rate must be at least 1.".into());

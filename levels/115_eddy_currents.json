@@ -1,0 +1,117 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Eddy currents",
+  "description": "A metal plate alone in your solenoid, whose field now swings back and forth, $B = B_0 \\sin \\omega t$. A changing magnetic field induces an electric field that circulates about the solenoid's axis (Faraday's law), and in the metal it drives the carriers round in loops: eddy currents, which heat it, the faster the field changes the more (as $\\dot B^2$). Set the swing $B_0$ so that the plate takes between 0.9 and 1.5 of heat per unit time (averaged over $t = 25$ to $125$).",
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "solenoid_fields": [
+      -1.0,
+      0.68,
+      1.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        23,
+        19,
+        0
+      ],
+      "kind": "supply",
+      "value": 0.68
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        1,
+        1,
+        0
+      ],
+      "length": 0.5,
+      "thickness": 0.5,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "charge",
+        "value": 0.0
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "heat_goals": [
+      {
+        "metal": 0,
+        "min": 0.9,
+        "max": 1.5,
+        "start": 25.0,
+        "end": 125.0
+      }
+    ],
+    "solenoid_drive": {
+      "kind": "sine",
+      "amplitude": 1.0,
+      "omega": 0.125
+    },
+    "step": 0.035,
+    "saturation": 0.0,
+    "solenoid": [
+      23,
+      19,
+      0
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            6,
+            4,
+            0
+          ],
+          [
+            18,
+            16,
+            0
+          ]
+        ],
+        "contacts": [],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 21
+      }
+    ]
+  }
+}

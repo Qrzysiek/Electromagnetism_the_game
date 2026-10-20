@@ -29,6 +29,12 @@
   "height_ex": 1.557,
   "baseline_ex": 0.05
  },
+ "125": {
+  "file": "0f8ef3377b30fc47.svg",
+  "width_ex": 3.394,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
  "-0.5": {
   "file": "1b07b0cffa0b3f59.svg",
   "width_ex": 4.652,
@@ -107,11 +113,23 @@
   "height_ex": 1.879,
   "baseline_ex": 0.375
  },
+ "B = B_0 \\sin \\omega t": {
+  "file": "f139bda38aef5643.svg",
+  "width_ex": 13.196,
+  "height_ex": 1.92,
+  "baseline_ex": 0.375
+ },
  "B \\propto \\sqrt{V}": {
   "file": "5007294f58a41208.svg",
   "width_ex": 8.404,
   "height_ex": 2.398,
   "baseline_ex": 0.231
+ },
+ "B_0": {
+  "file": "3ea71b67efc35822.svg",
+  "width_ex": 2.705,
+  "height_ex": 1.92,
+  "baseline_ex": 0.375
  },
  "E/B": {
   "file": "0b03b9a5b279c68f.svg",
@@ -190,6 +208,12 @@
   "width_ex": 8.763,
   "height_ex": 2.034,
   "baseline_ex": 0.439
+ },
+ "\\dot B^2": {
+  "file": "a97f0a572b7e5d58.svg",
+  "width_ex": 2.705,
+  "height_ex": 2.281,
+  "baseline_ex": 0
  },
  "\\gamma m v": {
   "file": "d422c781211966e2.svg",
@@ -403,6 +427,12 @@
  },
  "t = 20": {
   "file": "56c9fe7f82f5edc4.svg",
+  "width_ex": 6.096,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
+ "t = 25": {
+  "file": "ea59d0816cd954b7.svg",
   "width_ex": 6.096,
   "height_ex": 1.692,
   "baseline_ex": 0.186

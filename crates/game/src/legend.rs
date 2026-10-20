@@ -308,22 +308,15 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
              hardly swing do not glow.",
         );
     }
-    if let Some(n) = spec.solenoid {
-        let b = game
-            .editor
-            .placement
-            .iter()
-            .find(|e| e.kind == level::ElementKind::Supply && e.node == n)
-            .map_or(0.0, |e| e.value);
-        if b != 0.0 {
-            row(
-                ui,
-                Swatch::OutIn(rgb(0.95, 0.6, 0.15), rgb(0.2, 0.75, 0.7)),
-                "B out of / into board",
-                "The solenoid's field, uniform over the board: dots along the edges when it \
-                 points out of the board, crosses when into it (the magnetic map's colours).",
-            );
-        }
+    if game.tube_field_now().is_some() || spec.solenoid_drive.is_some() {
+        row(
+            ui,
+            Swatch::OutIn(rgb(0.95, 0.6, 0.15), rgb(0.2, 0.75, 0.7)),
+            "B out of / into board",
+            "The solenoid's field, uniform over the board: dots along the edges when it \
+             points out of the board, crosses when into it (the magnetic map's colours). A \
+             field that swings flips them, and they fade as it passes through zero.",
+        );
     }
     let non_metal_dots = match game.tube_particles {
         crate::TubeParticles::Dots => true,
@@ -385,7 +378,7 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
              slow against each carrier's thermal speed. They fade when it is only the thermal \
              motion's noise.",
         );
-        if view.is_some_and(|v| v.run.has_field()) {
+        if view.is_some_and(|v| v.run.has_field()) && !game.hall.is_empty() {
             let c = |k: [f32; 3]| rgb(k[0], k[1], k[2]);
             row(
                 ui,

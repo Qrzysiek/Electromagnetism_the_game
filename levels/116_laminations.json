@@ -1,0 +1,121 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Laminations",
+  "description": "A transformer's core in a field that swings back and forth: the eddy currents waste its energy as heat. They run in loops across the whole core; cut it, and each loop must close within a narrower piece, so the currents are weaker and the heat falls, the narrower the pieces, the more. You have two cuts: make the core take at most 0.22 of heat per unit time (averaged over $t = 25$ to $125$).",
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "max_cuts": 2,
+    "free_charges": [],
+    "free_speeds": []
+  },
+  "reference_solution": [
+    {
+      "node": [
+        12,
+        10,
+        0
+      ],
+      "kind": "cut",
+      "value": 0.0
+    },
+    {
+      "node": [
+        12,
+        8,
+        0
+      ],
+      "kind": "cut",
+      "value": 0.0,
+      "angle_deg": 90.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        1,
+        1,
+        0
+      ],
+      "length": 0.5,
+      "thickness": 0.5,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "charge",
+        "value": 0.0
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "heat_goals": [
+      {
+        "metal": 0,
+        "min": 0.0,
+        "max": 0.22,
+        "start": 25.0,
+        "end": 125.0
+      }
+    ],
+    "solenoid_drive": {
+      "kind": "sine",
+      "amplitude": 1.0,
+      "omega": 0.125
+    },
+    "step": 0.035,
+    "saturation": 0.0,
+    "b_z": 0.68,
+    "metals": [
+      {
+        "corners": [
+          [
+            4,
+            6,
+            0
+          ],
+          [
+            20,
+            14,
+            0
+          ]
+        ],
+        "contacts": [],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 122
+      }
+    ]
+  }
+}

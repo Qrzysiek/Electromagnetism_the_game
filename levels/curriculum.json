@@ -364,7 +364,9 @@
           "levels": [
             "hall_probe",
             "positive_carriers",
-            "magnetoresistance"
+            "magnetoresistance",
+            "eddy_currents",
+            "laminations"
           ]
         }
       ]

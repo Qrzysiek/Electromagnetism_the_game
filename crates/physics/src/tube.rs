@@ -338,6 +338,13 @@ pub struct TubeState {
     /// each collision exchanges about kT at random, while the field's work fluctuates by
     /// `qEℓ/kT` times as much.
     pub field_work: Vec<f64>,
+    /// Per lattice: the part of `field_work` the induced field (`SolenoidWave::induced`)
+    /// does. In an isolated conductor it is the Joule heat: there the electrostatic field's
+    /// work averages to nothing (it only stores and returns energy), while the leapfrog's
+    /// finite step makes it heat the carriers through their own graininess (∝ dt²: on an
+    /// isolated plate 12 × 12, 2.57 per time at the preview's resolution and 0.60 at the
+    /// verification's, against an eddy-current heat of 1.24).
+    pub induced_work: Vec<f64>,
     /// The density the lattices' backgrounds induce on the segments (constant).
     background: Vec<f64>,
     /// Every electrode's potential now.
@@ -484,6 +491,7 @@ impl Tube {
             collected: vec![vec![0.0; self.emitters.len() + self.lattices.len()]; n_el],
             released: vec![0.0; self.emitters.len()],
             field_work: vec![0.0; self.lattices.len()],
+            induced_work: vec![0.0; self.lattices.len()],
             launched: vec![false; self.projectiles.len()],
             fates: vec![None; self.projectiles.len()],
             potentials,
@@ -1053,6 +1061,7 @@ impl Tube {
         let b_z = self.b_wave.map_or(self.b_z, |w| w.b(s.t));
         // The field's work on each lattice's carriers over the step.
         let mut work = vec![0.0; self.lattices.len()];
+        let mut induced_work = vec![0.0; self.lattices.len()];
         for (((((x, v), qm), e), charge), tag) in
             s.x.iter_mut()
                 .zip(&mut s.v)
@@ -1072,8 +1081,9 @@ impl Tube {
                     .map(|l| l.background_at(*x).1)
                     .sum::<DVec3>()
             };
-            let e = match &self.b_wave {
-                Some(w) => e + w.induced(s.t, *x),
+            let induced = self.b_wave.map(|w| w.induced(s.t, *x));
+            let e = match induced {
+                Some(i) => e + i,
                 None => e,
             };
             let e = &e;
@@ -1089,10 +1099,16 @@ impl Tube {
                 && let Some(k) = self.lattices.iter().position(|l| l.contains(*x))
             {
                 work[k] += 0.5 * self.dt * charge * e.dot(old + *v);
+                if let Some(i) = induced {
+                    induced_work[k] += 0.5 * self.dt * charge * i.dot(old + *v);
+                }
             }
             *x += *v * self.dt;
         }
         for (total, w) in s.field_work.iter_mut().zip(&work) {
+            *total += w;
+        }
+        for (total, w) in s.induced_work.iter_mut().zip(&induced_work) {
             *total += w;
         }
         s.t += self.dt;

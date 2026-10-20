@@ -948,3 +948,32 @@ fn cuts_insulate() {
         "a cut along: {short_cut} of {short}"
     );
 }
+
+/// An isolated metal's heat (`TubeState::induced_work`, PHYSICS.md §2.11) on Eddy currents'
+/// plate at the preview's resolution over its goal's window (t = 25–125): exactly 0 without
+/// a drive (the time step's numerical heating through the electrostatic field, 2.57 per time
+/// on this plate, is left out), and quadratic in the drive (linear response): at B₀ = 0.4
+/// and 0.8 the heats' ratio within 10 % of 4 (the preview's scatter between seeds is a few
+/// per cent on this plate; the carriers' warming at 0.8, `qEℓ/kT` ≈ 0.1 at the edges'
+/// middles, a few per cent too).
+#[test]
+fn isolated_metal_heat_is_the_induced_work() {
+    let level = level::shipped("eddy_currents");
+    let heat = |placement: &[level::Element]| {
+        let run = level.tube_run(placement, 1, 126.0);
+        run.heat[0].expect("the goal's window has passed")
+    };
+    let drive = |b0: f64| level::Element::supply([23, 19, 0], b0);
+    let still = heat(&[]);
+    let (low, high) = (heat(&[drive(0.4)]), heat(&[drive(0.8)]));
+    println!(
+        "heat without a drive {still}, at B0 = 0.4 {low:.4}, at 0.8 {high:.4} (ratio {:.3})",
+        high / low
+    );
+    assert!(still == 0.0, "without a drive: {still}");
+    assert!(
+        (high / low / 4.0 - 1.0).abs() < 0.10,
+        "ratio {}",
+        high / low
+    );
+}
