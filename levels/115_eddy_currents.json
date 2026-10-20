@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Eddy currents",
-  "description": "A metal plate alone in your solenoid, whose field now swings back and forth, $B = B_0 \\sin \\omega t$. A changing magnetic field induces an electric field that circulates about the solenoid's axis (Faraday's law), and in the metal it drives the carriers round in loops: eddy currents, which heat it, the faster the field changes the more (as $\\dot B^2$). Set the swing $B_0$ so that the plate takes between 0.9 and 1.5 of heat per unit time (averaged over $t = 25$ to $125$).",
+  "description": "A metal plate alone in your solenoid, whose field now swings back and forth, $B = B_0 \\sin \\omega t$. A changing magnetic field induces an electric field that circulates about the solenoid's axis (Faraday's law), and in the metal it drives the carriers round in loops: eddy currents, which heat it, the faster the field changes the more (as $\\dot B^2$). Set the swing $B_0$ so that the plate takes between 1.2 and 4 of heat per unit time (averaged over $t = 25$ to $125$).",
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -32,9 +32,9 @@
     "max_magnets": 0,
     "magnet_strengths": [],
     "solenoid_fields": [
-      -1.0,
-      0.68,
-      1.0
+      -3.0,
+      0.95,
+      3.0
     ]
   },
   "reference_solution": [
@@ -45,7 +45,7 @@
         0
       ],
       "kind": "supply",
-      "value": 0.68
+      "value": 0.95
     }
   ],
   "electrodes": [
@@ -71,8 +71,8 @@
     "heat_goals": [
       {
         "metal": 0,
-        "min": 0.9,
-        "max": 1.5,
+        "min": 1.2,
+        "max": 4.0,
         "start": 25.0,
         "end": 125.0
       }

@@ -288,7 +288,7 @@ fn inspect_tooltip(
                 }
                 if let Some((what, samples)) = &info.chart {
                     ui.label(egui::RichText::new(what).small());
-                    circuit_plot(ui, samples, &[]);
+                    circuit_plot(ui, samples, &[], "");
                 }
             });
         });
@@ -728,6 +728,31 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             ));
         }
     }
+    // What the numbers mean (`scales.rs`): the decisive ratios in the header, each quantity's
+    // real-world scale inside.
+    if let Some(sc) = crate::scales::of(&level, &game.editor.placement) {
+        egui::CollapsingHeader::new(format!("Scales: {}", sc.headline))
+            .id_salt("scales")
+            // Opened for developer captures with EM_SCALES=1.
+            .default_open(std::env::var("EM_SCALES").is_ok_and(|v| v == "1"))
+            .show(ui, |ui| {
+                for l in &sc.lines {
+                    ui.label(egui::RichText::new(l.quantity).strong().small())
+                        .on_hover_text(l.detail);
+                    ui.label(egui::RichText::new(format!("here: {}", l.here)).small());
+                    ui.label(
+                        egui::RichText::new(format!("real world: {}", l.real))
+                            .small()
+                            .weak(),
+                    );
+                }
+            })
+            .header_response
+            .on_hover_text(
+                "What the level's numbers mean: the ratios that decide what you see (the same \
+                 at any scale), and where such things happen in the real world.",
+            );
+    }
     egui::CollapsingHeader::new("Physics model and its limits")
         .id_salt("model_notes")
         // Opened for developer captures with EM_MODEL=1 (see `dev_capture`).
@@ -796,7 +821,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                                 Some(w) => samples.iter().copied().filter(|s| s.0 <= w).collect(),
                                 None => samples.clone(),
                             };
-                            circuit_plot(ui, &shown, &launches);
+                            circuit_plot(ui, &shown, &launches, "");
                         }
                         ui.label(
                             egui::RichText::new(
@@ -1822,7 +1847,7 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             });
             ui.label(egui::RichText::new("Charge collected by the goal electrode:").small());
             if let Some(series) = run.collected.get(k) {
-                circuit_plot(ui, series, &[g.start, g.end]);
+                circuit_plot(ui, series, &[g.start, g.end], "Q");
             }
             let quiet = g.carriers == level::tube::Carriers::Cathode
                 && current.is_some()
@@ -2439,22 +2464,16 @@ fn free_palette(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
     );
 }
 
-/// New cuts: their orientation (R turns the one under the cursor), and what a cut does.
-fn cut_palette(ui: &mut egui::Ui, game: &mut Game) {
-    ui.horizontal(|ui| {
-        ui.label("Orientation:");
-        for (a, name) in [(0.0, "along x"), (90.0, "along y")] {
-            ui.selectable_value(&mut game.editor.cut_angle_deg, a, name)
-                .on_hover_text("Rotate with R");
-        }
-    });
+/// New cuts: how to draw one, and what a cut does.
+fn cut_palette(ui: &mut egui::Ui, _game: &mut Game) {
     explain(
         ui,
-        "A cut: an insulating slit across the whole metal",
-        "Click a node inside a metal: the slit runs through it from edge to edge, along x or \
-         y, and the metal's carriers cannot cross it. The metal becomes two pieces: a current \
-         loop must close within each, so eddy currents shrink (laminations). Every piece \
-         stays at least four mean free paths wide.",
+        "A cut: drag across a metal to draw an insulating slit",
+        "Press on a point of a metal and release on another: a straight slit between them, any \
+         length and angle within the metal, which its carriers cannot cross. A current loop \
+         must go round it, so eddy currents weaken (laminations); a slit from edge to edge \
+         splits the metal in two. Drag a cut by its start to move it, R turns it by 15°, the \
+         right button removes it.",
     );
 }
 
@@ -3540,14 +3559,14 @@ fn potential_plots(
             .filter(|&&i| !game.plot_hidden.contains(&potentials[i].0))
             .map(|&i| (colour(i), potentials[i].1.as_slice()))
             .collect();
-        multi_plot(ui, &lines, &marks);
+        multi_plot(ui, &lines, &marks, "V");
         if members.len() > 1 {
             ui.horizontal_wrapped(|ui| {
                 for &i in &members {
                     let e = potentials[i].0;
                     let shown = !game.plot_hidden.contains(&e);
                     let [r, g, b] = colour(i);
-                    let text = egui::RichText::new(format!("━ electrode {}", e + 1))
+                    let text = egui::RichText::new(format!("— electrode {}", e + 1))
                         .small()
                         .color(if shown {
                             egui::Color32::from_rgb(r, g, b)
@@ -3577,14 +3596,46 @@ fn potential_plots(
 }
 
 /// A small plot of a circuit quantity over lab time (PHYSICS.md §2.10), its range
-/// including 0, with lines at the times `marks` (the launches).
-fn circuit_plot(ui: &mut egui::Ui, samples: &[(f64, f64)], marks: &[f64]) {
-    multi_plot(ui, &[(PLOT_COLOURS[0], samples)], marks);
+/// including 0, with lines at the times `marks` (the launches), `y` the quantity's symbol.
+fn circuit_plot(ui: &mut egui::Ui, samples: &[(f64, f64)], marks: &[f64], y: &str) {
+    multi_plot(ui, &[(PLOT_COLOURS[0], samples)], marks, y);
+}
+
+/// Round values over `lo..=hi` for an axis: steps of 1, 2 or 5 times a power of ten, at most
+/// about `n` of them.
+fn ticks(lo: f64, hi: f64, n: u32) -> Vec<f64> {
+    if !(lo.is_finite() && hi.is_finite()) || hi <= lo {
+        return vec![lo];
+    }
+    let raw = (hi - lo) / f64::from(n.max(1));
+    // The power of ten at or below `raw` (without logarithms: the platform's differ).
+    let mut mag = 1.0;
+    while mag * 10.0 <= raw {
+        mag *= 10.0;
+    }
+    while mag > raw {
+        mag /= 10.0;
+    }
+    let step = [1.0, 2.0, 5.0, 10.0]
+        .iter()
+        .map(|f| f * mag)
+        .find(|s| *s >= raw)
+        .unwrap_or(10.0 * mag);
+    let mut out = Vec::new();
+    let mut v = (lo / step).ceil() * step;
+    while v <= hi + 1e-9 * step {
+        out.push(if v.abs() < 1e-9 * step { 0.0 } else { v });
+        v += step;
+    }
+    out
 }
 
 /// A small plot of several series over lab time on one scale (its range including 0),
-/// each in its colour, with lines at the times `marks`.
-fn multi_plot(ui: &mut egui::Ui, lines: &[Line], marks: &[f64]) {
+/// each in its colour, with lines at the times `marks`: axes with round ticks and their
+/// numbers, t along the bottom, `y` (the quantity's symbol, if any) at the top of the left
+/// axis.
+#[allow(clippy::cast_possible_truncation)]
+fn multi_plot(ui: &mut egui::Ui, lines: &[Line], marks: &[f64], y: &str) {
     let t0 = lines
         .iter()
         .filter_map(|(_, s)| s.first().map(|p| p.0))
@@ -3594,7 +3645,7 @@ fn multi_plot(ui: &mut egui::Ui, lines: &[Line], marks: &[f64]) {
         .filter_map(|(_, s)| s.last().map(|p| p.0))
         .fold(f64::NEG_INFINITY, f64::max);
     let width = ui.available_width().min(280.0);
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 54.0), egui::Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 84.0), egui::Sense::hover());
     if !(t0.is_finite() && t1.is_finite()) {
         return;
     }
@@ -3603,19 +3654,70 @@ fn multi_plot(ui: &mut egui::Ui, lines: &[Line], marks: &[f64]) {
         .iter()
         .flat_map(|(_, s)| s.iter())
         .fold((0.0_f64, 0.0_f64), |(a, b), s| (a.min(s.1), b.max(s.1)));
-    let span = if hi > lo { hi - lo } else { 1.0 };
-    let duration = if t1 > t0 { t1 - t0 } else { 1.0 };
-    #[allow(clippy::cast_possible_truncation)]
+    let (lo, hi) = if hi > lo {
+        (lo, hi)
+    } else {
+        (lo - 1.0, hi + 1.0)
+    };
+    let (t0, t1) = if t1 > t0 { (t0, t1) } else { (t0, t0 + 1.0) };
+    // The plotting area: room for the numbers on the left and below, the symbol above.
+    let area = egui::Rect::from_min_max(
+        egui::pos2(rect.left() + 34.0, rect.top() + 9.0),
+        egui::pos2(rect.right() - 4.0, rect.bottom() - 13.0),
+    );
     let at = |t: f64, v: f64| {
         egui::pos2(
-            rect.left() + ((t - t0) / duration) as f32 * rect.width(),
-            rect.bottom() - 2.0 - ((v - lo) / span) as f32 * (rect.height() - 14.0),
+            area.left() + ((t - t0) / (t1 - t0)) as f32 * area.width(),
+            area.bottom() - ((v - lo) / (hi - lo)) as f32 * area.height(),
         )
     };
-    let text = ui.visuals().text_color();
-    painter.line_segment(
-        [at(t0, 0.0), at(t1, 0.0)],
-        egui::Stroke::new(1.0, egui::Color32::from_gray(90)),
+    let weak = ui.visuals().weak_text_color();
+    let font = egui::FontId::proportional(9.5);
+    let grid = egui::Stroke::new(1.0, egui::Color32::from_gray(48));
+    for v in ticks(lo, hi, 4) {
+        let p = at(t0, v);
+        painter.line_segment([p, egui::pos2(area.right(), p.y)], grid);
+        painter.text(
+            egui::pos2(area.left() - 3.0, p.y),
+            egui::Align2::RIGHT_CENTER,
+            fmt_si(v),
+            font.clone(),
+            weak,
+        );
+    }
+    for t in ticks(t0, t1, 5) {
+        let p = at(t, lo);
+        painter.line_segment([egui::pos2(p.x, area.top()), p], grid);
+        painter.text(
+            egui::pos2(p.x, area.bottom() + 1.0),
+            egui::Align2::CENTER_TOP,
+            fmt_si(t),
+            font.clone(),
+            weak,
+        );
+    }
+    let axis = egui::Stroke::new(1.0, egui::Color32::from_gray(120));
+    painter.line_segment([area.left_bottom(), area.left_top()], axis);
+    painter.line_segment([area.left_bottom(), area.right_bottom()], axis);
+    if lo < 0.0 && hi > 0.0 {
+        painter.line_segment(
+            [at(t0, 0.0), at(t1, 0.0)],
+            egui::Stroke::new(1.0, egui::Color32::from_gray(95)),
+        );
+    }
+    painter.text(
+        egui::pos2(area.left() - 3.0, rect.top()),
+        egui::Align2::RIGHT_TOP,
+        y,
+        font.clone(),
+        weak,
+    );
+    painter.text(
+        egui::pos2(area.right(), area.bottom() + 1.0),
+        egui::Align2::RIGHT_TOP,
+        "t",
+        font,
+        weak,
     );
     for &m in marks {
         if (t0..=t1).contains(&m) {
@@ -3632,23 +3734,21 @@ fn multi_plot(ui: &mut egui::Ui, lines: &[Line], marks: &[f64]) {
             egui::Stroke::new(1.5, egui::Color32::from_rgb(*r, *g, *b)),
         ));
     }
-    painter.text(
-        rect.left_top(),
-        egui::Align2::LEFT_TOP,
-        format!(
-            "max {}   min {}   t ≤ {}",
-            fmt_si(hi),
-            fmt_si(lo),
-            fmt_si(t1)
-        ),
-        egui::FontId::proportional(10.0),
-        text,
-    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Axis ticks: round steps (1, 2 or 5 times a power of ten) inside the range, 0 exact.
+    #[test]
+    fn axis_ticks_are_round() {
+        assert_eq!(ticks(0.0, 10.0, 5), vec![0.0, 2.0, 4.0, 6.0, 8.0, 10.0]);
+        assert_eq!(ticks(-0.3, 1.2, 4), vec![0.0, 0.5, 1.0]);
+        assert_eq!(ticks(-1.0, 1.0, 4), vec![-1.0, -0.5, 0.0, 0.5, 1.0]);
+        assert_eq!(ticks(0.0, 200.0, 5), vec![0.0, 50.0, 100.0, 150.0, 200.0]);
+        assert_eq!(ticks(3.0, 3.0, 4), vec![3.0]);
+    }
 
     #[test]
     fn si_round_trip() {

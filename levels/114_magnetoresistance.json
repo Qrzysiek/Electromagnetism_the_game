@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Magnetoresistance",
-  "description": "Two strips of the same metal on one supply, in your solenoid's field: a long one and a short, wide one. In the long strip the charge the field piles on its sides (the Hall voltage) pushes the carriers back, and they flow straight on. The short strip's contacts short that charge out: its carriers' paths bend and lengthen, and it resists more, whichever way the field points. Make between 0.58 and 0.78 flow into the long strip's right end and between 3.7 and 4.5 into the short strip's (averaged over $t = 10$ to $80$).",
+  "description": "Two strips of the same metal on one supply, in your solenoid's field: a long one and a short, wide one. In the long strip the charge the field piles on its sides (the Hall voltage) pushes the carriers back, and they flow straight on. The short strip's contacts short that charge out: its carriers' paths bend and lengthen, and it resists more, whichever way the field points; at full strength its carriers circle on the spot between collisions. Make between 0.56 and 0.8 flow into the long strip's right end and between 3.2 and 4.8 into the short strip's (averaged over $t = 10$ to $80$).",
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -38,11 +38,11 @@
       10.0
     ],
     "solenoid_fields": [
-      -7.0,
+      -16.0,
       -5.0,
-      2.0,
+      3.0,
       5.0,
-      7.0
+      16.0
     ]
   },
   "reference_solution": [
@@ -130,16 +130,16 @@
     "goals": [
       {
         "electrode": 1,
-        "min": 0.58,
-        "max": 0.78,
+        "min": 0.56,
+        "max": 0.8,
         "start": 10.0,
         "end": 80.0,
         "carriers": "net"
       },
       {
         "electrode": 3,
-        "min": 3.7,
-        "max": 4.5,
+        "min": 3.2,
+        "max": 4.8,
         "start": 10.0,
         "end": 80.0,
         "carriers": "net"

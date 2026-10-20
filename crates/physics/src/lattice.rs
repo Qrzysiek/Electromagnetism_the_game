@@ -30,6 +30,9 @@ pub struct Lattice {
     /// Macroparticles at the start (together the background's charge, opposite).
     pub carriers: usize,
     pub seed: u64,
+    /// Insulating walls inside it (straight segments: cuts), which its carriers cannot cross
+    /// (`physics::tube`: reflected off them as off its sides). Empty: none.
+    pub walls: Vec<(DVec3, DVec3)>,
     /// The cores by cell (`cell` wide, `nx × ny` from `lo`).
     cell: f64,
     nx: usize,
@@ -132,6 +135,7 @@ impl Lattice {
             nx,
             ny,
             buckets,
+            walls: Vec::new(),
         }
     }
 

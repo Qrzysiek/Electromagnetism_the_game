@@ -175,12 +175,14 @@ def status(args):
     now = time.time()
     rows = []
     for name in sorted(os.listdir(DIR)):
-        if not name.endswith(".json") or name.endswith(".chain.json"):
+        if not name.endswith(".json") or name.endswith((".chain.json", ".plan.json")):
             continue
         try:
             info = json.load(open(os.path.join(DIR, name), encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
+        if not isinstance(info, dict) or "log" not in info:
+            continue  # not a job's record
         state = info.get("state")
         if state == "running" and not alive(info.get("pid")):
             state = "lost (its process ended without a word)"

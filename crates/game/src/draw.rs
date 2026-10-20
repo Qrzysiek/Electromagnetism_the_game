@@ -1058,20 +1058,10 @@ pub fn draw(
                 .resolution(16);
         }
     }
-    // A new cut at the cursor, where it would go (red where it may not).
-    if game.editor.kind == ElementKind::Cut
-        && game.editor.left(ElementKind::Cut) > 0
-        && (!game.sandbox.active || game.sandbox.tool == crate::sandbox::Tool::PlayerElement)
-        && game.editor.element_at_cursor().is_none()
-    {
-        let ghost = level::Element {
-            node: game.editor.cursor,
-            kind: ElementKind::Cut,
-            value: 0.0,
-            angle_deg: game.editor.cut_angle_deg,
-            omega: None,
-            speed: None,
-        };
+    // A cut being drawn, from where the button went down to the cursor (red where it may
+    // not go).
+    if let Some(start) = game.cut_start.filter(|s| *s != game.editor.cursor) {
+        let ghost = level.cut_between(start, game.editor.cursor);
         if let Some((a, b)) = level.cut_segment(&ghost) {
             let ok = level
                 .check_placement(&[game.editor.placement.as_slice(), &[ghost]].concat())

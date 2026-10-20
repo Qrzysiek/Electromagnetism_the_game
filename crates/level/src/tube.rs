@@ -1112,7 +1112,7 @@ pub struct TubeSim {
     /// The run's segments, metals and field without its frames (the first chunk's: the
     /// frames' Hall field, `TubeRun::hall_field`, is measured on them).
     layout: TubeRun,
-    /// Each lattice's metal (`Level::metal_pieces`: a cut metal has several).
+    /// Each lattice's metal (one each: a cut is a wall inside it).
     lattice_metal: Vec<usize>,
     steps: u32,
     /// A frame every this many steps (`FRAME_BUDGET`).
@@ -1814,45 +1814,17 @@ impl Level {
         (0.5 * m.mean_free_path).min(0.25 * (hi.x - lo.x).min(hi.y - lo.y))
     }
 
-    /// The metals cut by the player's cuts (`ElementKind::Cut`): per piece, its metal and
-    /// rectangle, in the metals' order; an uncut metal is one piece. A cut along x (angle 0)
-    /// is the line through its node parallel to x across the whole metal it lies in, along
-    /// y (90) parallel to y; together they cut each metal into a grid of rectangles.
-    #[must_use]
-    pub fn metal_pieces(&self, player: &[Element]) -> Vec<(usize, DVec3, DVec3)> {
-        let Some(spec) = &self.tube else {
-            return Vec::new();
-        };
-        let mut out = Vec::new();
-        for (k, m) in spec.metals.iter().enumerate() {
-            let (lo, hi) = self.metal_rect(m);
-            let (mut xs, mut ys) = (vec![lo.x, hi.x], vec![lo.y, hi.y]);
-            for e in player.iter().filter(|e| e.kind == ElementKind::Cut) {
-                let p = self.grid.position(e.node);
-                if !(p.x > lo.x && p.x < hi.x && p.y > lo.y && p.y < hi.y) {
-                    continue;
-                }
-                if cut_along_x(e.angle_deg) {
-                    ys.push(p.y);
-                } else {
-                    xs.push(p.x);
-                }
-            }
-            xs.sort_by(f64::total_cmp);
-            xs.dedup();
-            ys.sort_by(f64::total_cmp);
-            ys.dedup();
-            for j in 0..ys.len() - 1 {
-                for i in 0..xs.len() - 1 {
-                    out.push((
-                        k,
-                        DVec3::new(xs[i], ys[j], 0.0),
-                        DVec3::new(xs[i + 1], ys[j + 1], 0.0),
-                    ));
-                }
-            }
-        }
-        out
+    /// The largest field along z the placement gives (the player's solenoid supply, else the
+    /// level's own; a changing field's level is its amplitude).
+    fn field_peak(&self, spec: &TubeSpec, player: &[Element]) -> f64 {
+        spec.solenoid
+            .and_then(|n| {
+                player
+                    .iter()
+                    .find(|e| e.kind == ElementKind::Supply && e.node == n)
+            })
+            .map_or(spec.b_z, |e| e.value)
+            .abs()
     }
 
     /// Whether electrode `e` of a tube level is held by something outside the board: a bias
@@ -1871,67 +1843,70 @@ impl Level {
                 .any(|c| c.electrode == e || c.linked.contains(&e))
     }
 
-    /// A cut's slit (`ElementKind::Cut`): its two ends, on the edges of the metal it lies in;
-    /// None if it lies in none.
+    /// A cut's slit (`ElementKind::Cut`): from its node along `angle_deg` for `value` (its
+    /// length); None if it has no length.
     #[must_use]
     pub fn cut_segment(&self, e: &Element) -> Option<(DVec3, DVec3)> {
+        if e.kind != ElementKind::Cut || !(e.value.is_finite() && e.value > 0.0) {
+            return None;
+        }
+        if !e.angle_deg.is_finite() {
+            return None;
+        }
+        let a = self.grid.position(e.node);
+        let angle = e.angle_deg.to_radians();
+        let d = DVec3::new(libm::cos(angle), libm::sin(angle), 0.0);
+        Some((
+            DVec3::new(a.x, a.y, 0.0),
+            DVec3::new(a.x, a.y, 0.0) + d * e.value,
+        ))
+    }
+
+    /// The metal a cut lies in: both its ends in the metal's rectangle (on its edges too),
+    /// its middle inside.
+    #[must_use]
+    pub fn cut_metal(&self, e: &Element) -> Option<usize> {
         let spec = self.tube.as_ref()?;
-        let p = self.grid.position(e.node);
-        let (lo, hi) = spec
-            .metals
-            .iter()
-            .map(|m| self.metal_rect(m))
-            .find(|(lo, hi)| p.x > lo.x && p.x < hi.x && p.y > lo.y && p.y < hi.y)?;
-        Some(if cut_along_x(e.angle_deg) {
-            (DVec3::new(lo.x, p.y, 0.0), DVec3::new(hi.x, p.y, 0.0))
-        } else {
-            (DVec3::new(p.x, lo.y, 0.0), DVec3::new(p.x, hi.y, 0.0))
+        let (a, b) = self.cut_segment(e)?;
+        let m = (a + b) * 0.5;
+        spec.metals.iter().position(|metal| {
+            let (lo, hi) = self.metal_rect(metal);
+            let tol = 1e-9 * (1.0 + hi.x.abs() + hi.y.abs());
+            let within = |p: DVec3| {
+                p.x >= lo.x - tol && p.x <= hi.x + tol && p.y >= lo.y - tol && p.y <= hi.y + tol
+            };
+            within(a) && within(b) && m.x > lo.x && m.x < hi.x && m.y > lo.y && m.y < hi.y
         })
     }
 
-    /// The player's cuts: each strictly inside one of the metals, along x or y, and every
-    /// piece at least four of its mean free paths wide (the metals' own rule: its carriers
-    /// scatter off its cores, not its walls).
+    /// A cut from node `a` to node `b` (the player draws it from one to the other).
+    #[must_use]
+    pub fn cut_between(&self, a: Node, b: Node) -> Element {
+        let (pa, pb) = (self.grid.position(a), self.grid.position(b));
+        let d = pb - pa;
+        Element {
+            node: a,
+            kind: ElementKind::Cut,
+            value: libm::sqrt(d.x * d.x + d.y * d.y),
+            angle_deg: libm::atan2(d.y, d.x).to_degrees(),
+            omega: None,
+            speed: None,
+        }
+    }
+
+    /// The player's cuts: each with a length, lying in one of the metals (its ends in the
+    /// metal, on its edges too).
     pub(crate) fn check_cuts(&self, player: &[Element]) -> Result<(), crate::PlacementError> {
-        let cuts: Vec<&Element> = player
-            .iter()
-            .filter(|e| e.kind == ElementKind::Cut)
-            .collect();
-        if cuts.is_empty() {
-            return Ok(());
-        }
-        let Some(spec) = &self.tube else {
-            return Err(crate::PlacementError::CutNotInMetal(cuts[0].node));
-        };
-        for e in &cuts {
-            let p = self.grid.position(e.node);
-            let quarter = libm::round(e.angle_deg / 90.0);
-            let inside = spec.metals.iter().any(|m| {
-                let (lo, hi) = self.metal_rect(m);
-                p.x > lo.x && p.x < hi.x && p.y > lo.y && p.y < hi.y
-            });
-            if (e.angle_deg - 90.0 * quarter).abs() > 1e-9 || !inside {
+        for e in player.iter().filter(|e| e.kind == ElementKind::Cut) {
+            if self.cut_metal(e).is_none() {
                 return Err(crate::PlacementError::CutNotInMetal(e.node));
-            }
-        }
-        for (k, lo, hi) in self.metal_pieces(player) {
-            let width = (hi.x - lo.x).min(hi.y - lo.y);
-            if width < 4.0 * spec.metals[k].mean_free_path {
-                let node = cuts
-                    .iter()
-                    .find(|e| {
-                        let p = self.grid.position(e.node);
-                        p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y
-                    })
-                    .map_or(cuts[0].node, |e| e.node);
-                return Err(crate::PlacementError::PieceTooNarrow(node));
             }
         }
         Ok(())
     }
 
-    /// A piece `lo`..`hi` of a metal with `many` times its preview's carriers; piece 0 of an
-    /// uncut metal is the metal (its seeds unchanged), further pieces seeded apart.
+    /// A metal's lattice (`lo`..`hi`) with `many` times its preview's carriers (`piece` 0:
+    /// the metal's own seeds).
     fn metal_lattice(&self, m: &MetalSpec, lo: DVec3, hi: DVec3, piece: u64, many: f64) -> Lattice {
         let seed = m.seed.wrapping_add(piece.wrapping_mul(0x9e37_79b9));
         let area = (hi.x - lo.x) * (hi.y - lo.y);
@@ -2015,21 +1990,37 @@ impl Level {
         // The metals, and their contacts as emitters of their carriers (at the carriers'
         // weight, toward the metal).
         let many = r * res.particles * spec.particles;
-        // The metals cut into pieces (the player's cuts): a lattice each.
-        let pieces = self.metal_pieces(player);
-        let mut counted = vec![0_u64; spec.metals.len()];
-        let lattices: Vec<Lattice> = pieces
+        // A lattice per metal, the player's cuts in it as walls (one that ends on the metal's
+        // edge reaching a tenth of a unit past it, so that no carrier slips round its end).
+        let mut lattices: Vec<Lattice> = spec
+            .metals
             .iter()
-            .map(|&(k, lo, hi)| {
-                counted[k] += 1;
-                self.metal_lattice(&spec.metals[k], lo, hi, counted[k] - 1, many)
+            .map(|m| {
+                let (lo, hi) = self.metal_rect(m);
+                self.metal_lattice(m, lo, hi, 0, many)
             })
             .collect();
-        let lattice_metal: Vec<usize> = pieces.iter().map(|p| p.0).collect();
+        for e in player.iter().filter(|e| e.kind == ElementKind::Cut) {
+            let (Some(k), Some((a, b))) = (self.cut_metal(e), self.cut_segment(e)) else {
+                continue;
+            };
+            let (lo, hi) = (lattices[k].lo, lattices[k].hi);
+            let d = (b - a) / (b - a).length();
+            let tol = 1e-9 * (1.0 + hi.x.abs() + hi.y.abs());
+            let edge = |p: DVec3| {
+                (p.x - lo.x).abs() < tol
+                    || (p.x - hi.x).abs() < tol
+                    || (p.y - lo.y).abs() < tol
+                    || (p.y - hi.y).abs() < tol
+            };
+            let a = if edge(a) { a - d * 0.1 } else { a };
+            let b = if edge(b) { b + d * 0.1 } else { b };
+            lattices[k].walls.push((a, b));
+        }
+        let lattice_metal: Vec<usize> = (0..lattices.len()).collect();
         let contact = |e: usize| {
             let k = spec.metal_of(e)?;
             let m = &spec.metals[k];
-            // Every piece of a metal has its carriers per area: the first one's weight.
             let first = lattice_metal.iter().position(|&j| j == k)?;
             Some(Emitter {
                 electrode: e,
@@ -2529,6 +2520,16 @@ impl Level {
                      (ℓ over 4 thermal speeds)."
                 ));
             }
+            // The step must follow the carriers' gyration: at most a radian per step (the
+            // Boris rotation's angle is then within 8 % of the true one; the verification's
+            // half step within 2 %).
+            let turn = m.charge_per_mass.abs() * self.field_peak(spec, player) * spec.step;
+            if turn > 1.0 {
+                out.push(format!(
+                    "{name}: the field turns its carriers by {turn:.2} rad per step, at most 1 \
+                     (the step cannot follow their gyration): a weaker field."
+                ));
+            }
             let area = (hi.x - lo.x) * (hi.y - lo.y);
             carriers += area * m.carriers_per_area;
             #[allow(clippy::cast_precision_loss)]
@@ -2941,14 +2942,6 @@ impl Level {
             }
         }
     }
-}
-
-/// Whether a cut at `angle_deg` runs along x (0 or 180), else along y.
-#[must_use]
-pub fn cut_along_x(angle_deg: f64) -> bool {
-    #[allow(clippy::cast_possible_truncation)]
-    let quarter = libm::round(angle_deg / 90.0) as i64;
-    quarter.rem_euclid(2) == 0
 }
 
 #[cfg(test)]

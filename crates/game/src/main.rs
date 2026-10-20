@@ -15,6 +15,7 @@ mod math;
 mod potential;
 mod radiation;
 mod sandbox;
+mod scales;
 mod ui;
 mod visuals;
 mod worker;
@@ -236,6 +237,8 @@ pub struct Game {
     pub mouse_drag: bool,
     /// The free charge whose velocity arrow is being dragged.
     pub arrow_drag: Option<usize>,
+    /// A cut being drawn: the node it started from (the left button held).
+    pub cut_start: Option<level::Node>,
     /// What velocity arrows measure (speed, or rapidity in relativistic levels).
     pub arrow_measure: editor::ArrowMeasure,
     /// Set by the UI while a text field has focus (game shortcuts are suspended).
@@ -419,6 +422,7 @@ impl Game {
             sandbox: sandbox::Sandbox::default(),
             mouse_drag: false,
             arrow_drag: None,
+            cut_start: None,
             arrow_measure,
             text_focus: false,
             panel_left_px: None,
@@ -1378,6 +1382,32 @@ fn input(
             game.arrow_drag = None;
         }
         return;
+    }
+    // A cut being drawn: it ends where the button is released.
+    if let Some(a) = game.cut_start {
+        if !mouse.pressed(MouseButton::Left) {
+            game.cut_start = None;
+            if on_grid && node != a {
+                let _ = game.editor.place_cut(a, node);
+            } else {
+                game.editor.message =
+                    Some("Drag from one point of a metal to another to draw a cut.".into());
+            }
+        }
+        return;
+    }
+    // With the cut tool, a press away from the player's elements starts a cut.
+    if on_grid
+        && pressed
+        && game.editor.kind == level::ElementKind::Cut
+        && game.editor.left(level::ElementKind::Cut) > 0
+        && (!game.sandbox.active || game.sandbox.tool == sandbox::Tool::PlayerElement)
+    {
+        game.editor.set_cursor(node);
+        if game.editor.element_at_cursor().is_none() {
+            game.cut_start = Some(node);
+            return;
+        }
     }
     // Left press on one of the player's elements picks it up (drag), elsewhere places;
     // where nothing can be placed on a zoomed tube level, it starts a pan.

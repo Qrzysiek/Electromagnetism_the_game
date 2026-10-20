@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Laminations",
-  "description": "A transformer's core in a field that swings back and forth: the eddy currents waste its energy as heat. They run in loops across the whole core; cut it, and each loop must close within a narrower piece, so the currents are weaker and the heat falls, the narrower the pieces, the more. You have two cuts: make the core take at most 0.22 of heat per unit time (averaged over $t = 25$ to $125$).",
+  "description": "A transformer's core in a field that swings back and forth: the eddy currents waste its energy as heat. They run in loops across the whole core; cut it, and each loop must close within a narrower piece, so the currents are weaker and the heat falls, the narrower the pieces, the more. Drag across the core to cut it, any length and angle; you have three cuts. Make the core take at most 0.65 of heat per unit time (averaged over $t = 25$ to $125$).",
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -31,28 +31,37 @@
     "allow_negative": true,
     "max_magnets": 0,
     "magnet_strengths": [],
-    "max_cuts": 2,
+    "max_cuts": 3,
     "free_charges": [],
     "free_speeds": []
   },
   "reference_solution": [
     {
       "node": [
-        12,
-        10,
-        0
-      ],
-      "kind": "cut",
-      "value": 0.0
-    },
-    {
-      "node": [
-        12,
+        2,
         8,
         0
       ],
       "kind": "cut",
-      "value": 0.0,
+      "value": 20.0
+    },
+    {
+      "node": [
+        2,
+        12,
+        0
+      ],
+      "kind": "cut",
+      "value": 20.0
+    },
+    {
+      "node": [
+        12,
+        4,
+        0
+      ],
+      "kind": "cut",
+      "value": 12.0,
       "angle_deg": 90.0
     }
   ],
@@ -80,7 +89,7 @@
       {
         "metal": 0,
         "min": 0.0,
-        "max": 0.22,
+        "max": 0.65,
         "start": 25.0,
         "end": 125.0
       }
@@ -97,13 +106,13 @@
       {
         "corners": [
           [
+            2,
             4,
-            6,
             0
           ],
           [
-            20,
-            14,
+            22,
+            16,
             0
           ]
         ],
@@ -113,7 +122,7 @@
         "thermal_speed": 2.0,
         "mean_free_path": 1.0,
         "core_radius": 0.01,
-        "carriers_per_area": 50.0,
+        "carriers_per_area": 30.0,
         "seed": 122
       }
     ]

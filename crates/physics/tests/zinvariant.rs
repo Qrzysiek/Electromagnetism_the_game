@@ -1694,3 +1694,75 @@ fn v19_strapped_electrodes_are_one_node() {
     assert!(worst_v < 1e-11, "V19 V {worst_v:.3e}");
     assert!(worst_e < 1e-11, "V19 energy {worst_e:.3e}");
 }
+
+/// Y19 (PHYSICS.md §9, Symmetries: charge conservation), the tube's charge account: V4's
+/// coaxial diode (the cathode emitting electrons into the space charge, some returning to
+/// it) run to t = 4: the charge the cathode released equals what the electrodes collected,
+/// plus what left the arena, plus what is still in flight, to 1e-12 of it (rounding: every
+/// macroparticle's charge is booked once, where it ends).
+#[test]
+fn y19_tube_charge_account() {
+    use physics::tube::Tube;
+    let size = 0.1;
+    let electrodes = Electrodes::new(
+        vec![
+            Electrode {
+                section: Section::Circle {
+                    center: DVec3::ZERO,
+                    radius: 1.0,
+                },
+                bias: Bias::Grounded,
+            },
+            Electrode {
+                section: Section::Circle {
+                    center: DVec3::ZERO,
+                    radius: 2.0,
+                },
+                bias: Bias::Potential(1.0),
+            },
+        ],
+        &[],
+        size,
+    );
+    let tube = Tube {
+        electrodes,
+        emitters: vec![physics::tube::Emitter {
+            electrode: 0,
+            charge_per_mass: -1.0,
+            weight: 2e-3,
+            emit_toward: None,
+            saturation: None,
+            thermal_speed: 0.0,
+            ohmic: None,
+        }],
+        projectiles: Vec::new(),
+        softening: 0.5 * size,
+        dt: 0.01,
+        arena: None,
+        b_z: 0.0,
+        b_wave: None,
+        lattices: Vec::new(),
+        circuits: Vec::new(),
+    };
+    let mut s = tube.state();
+    while s.t < 4.0 {
+        tube.step(&mut s);
+    }
+    let released = s.released[0];
+    let collected: f64 = s.collected.iter().map(|c| c[0]).sum();
+    let in_flight: f64 = s
+        .charge
+        .iter()
+        .zip(&s.tag)
+        .filter(|(_, t)| **t == 0)
+        .map(|(q, _)| q)
+        .sum();
+    let account = (released - collected - s.lost - in_flight).abs() / released.abs();
+    println!(
+        "Y19 charge account: released {released:.9}, collected {collected:.9}, lost {:.3e}, in \
+         flight {in_flight:.9} ({} macroparticles): off by {account:.2e}",
+        s.lost,
+        s.x.len()
+    );
+    assert!(account < 1e-12, "{account}");
+}

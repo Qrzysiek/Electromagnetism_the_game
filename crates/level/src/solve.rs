@@ -83,12 +83,6 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
             }
         }
     }
-    // Cuts through the metals, along x and along y (only nodes inside a metal pass).
-    if level.limits.max_cuts > 0 {
-        for a in [0.0, 90.0] {
-            kinds.push((ElementKind::Cut, 0.0, a, None, None));
-        }
-    }
     if level.limits.max_free > 0 {
         for &q in &level.limits.free_charges {
             for &v in &level.limits.free_speeds {
@@ -111,6 +105,33 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
             let s = Element::supply(centre, v);
             if level.check_placement(&[s]).is_ok() {
                 out.push(s);
+            }
+        }
+    }
+    // Cuts through the metals (any length and angle are allowed; the search tries these):
+    // from edge to edge along every interior row and column, and from each edge to the
+    // middle along them.
+    if level.limits.max_cuts > 0
+        && let Some(spec) = &level.tube
+    {
+        for metal in &spec.metals {
+            let [[x0, y0, _], [x1, y1, _]] = metal.corners;
+            let (mx, my) = ((x0 + x1) / 2, (y0 + y1) / 2);
+            let mut add = |a: Node, b: Node| {
+                let e = level.cut_between(a, b);
+                if level.check_placement(&[e]).is_ok() {
+                    out.push(e);
+                }
+            };
+            for y in y0 + 1..y1 {
+                add([x0, y, 0], [x1, y, 0]);
+                add([x0, y, 0], [mx, y, 0]);
+                add([x1, y, 0], [mx, y, 0]);
+            }
+            for x in x0 + 1..x1 {
+                add([x, y0, 0], [x, y1, 0]);
+                add([x, y0, 0], [x, my, 0]);
+                add([x, y1, 0], [x, my, 0]);
             }
         }
     }

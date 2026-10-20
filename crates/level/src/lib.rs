@@ -613,10 +613,10 @@ pub enum ElementKind {
     /// node towards `angle_deg` with the element's `speed`. It moves under every force
     /// and interacts with the other particles (the level flies as one beam).
     Free,
-    /// An insulating cut the player makes through a tube level's metal: a straight slit
-    /// through the node across the whole metal, along `angle_deg` (0: along x, 90: along
-    /// y), which its carriers cannot cross; the metal becomes two pieces (laminations: the
-    /// eddy currents' loops shrink). `value` is unused (0).
+    /// An insulating cut the player makes in a tube level's metal: a straight slit from the
+    /// node along `angle_deg`, `value` long (any length and angle within one metal; drawn
+    /// from one node to another, `tube::Level::cut_between`), which its carriers cannot
+    /// cross (laminations: the eddy currents' loops must close round it).
     Cut,
 }
 
@@ -1239,11 +1239,8 @@ pub enum PlacementError {
     TooManyPlates,
     TooManyFree,
     TooManyCuts,
-    /// A cut not strictly inside a tube level's metal, or not along x or y.
+    /// A cut without a length, or not within one of a tube level's metals.
     CutNotInMetal(Node),
-    /// A cut that leaves a piece of metal narrower than four mean free paths (its carriers
-    /// would scatter off its walls more than off its cores: `tube::Level::metal_pieces`).
-    PieceTooNarrow(Node),
     /// A free charge's launch speed that the level does not offer.
     SpeedNotAllowed(Option<f64>),
     /// A power supply that is not on the centre of a tunable electrode.

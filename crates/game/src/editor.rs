@@ -51,8 +51,7 @@ pub struct Editor {
     pub angle_deg: f64,
     /// Orientation of new plates, degrees (one of `PLATE_ANGLES`).
     pub plate_angle_deg: f64,
-    /// Orientation of new cuts: 0 along x, 90 along y.
-    pub cut_angle_deg: f64,
+
     /// Index into the level's allowed antenna frequencies for new antennas.
     pub omega_index: usize,
     /// Launch direction of new free charges, degrees (one of `FREE_ANGLES`).
@@ -149,7 +148,6 @@ impl Editor {
             positive,
             angle_deg: ANTENNA_ANGLES[0],
             plate_angle_deg: PLATE_ANGLES[0],
-            cut_angle_deg: 0.0,
             omega_index: 0,
             free_angle_deg: 0.0,
             speed_index: 0,
@@ -314,22 +312,12 @@ impl Editor {
     /// one step of `ANTENNA_ANGLES` (45°) or `PLATE_ANGLES` (90°).
     pub fn rotate(&mut self, step: isize) {
         let on = self.player_index_at(self.cursor);
-        // A cut: along x or along y.
+        // A cut: turned by 15° about its start.
         if on.map_or(self.kind, |i| self.placement[i].kind) == ElementKind::Cut {
-            let turn = |a: f64| {
-                if level::tube::cut_along_x(a) {
-                    90.0
-                } else {
-                    0.0
-                }
-            };
-            match on {
-                Some(i) => {
-                    let mut e = self.placement[i];
-                    e.angle_deg = turn(e.angle_deg);
-                    self.set_element(i, e);
-                }
-                None => self.cut_angle_deg = turn(self.cut_angle_deg),
+            if let Some(i) = on {
+                let mut e = self.placement[i];
+                e.angle_deg = (e.angle_deg + 15.0 * f64::from(step_i32(step))).rem_euclid(360.0);
+                self.set_element(i, e);
             }
             return;
         }
@@ -686,6 +674,11 @@ impl Editor {
     /// On a tunable electrode it operates its power supply instead: switches it on, or
     /// steps it to the next potential.
     pub fn place(&mut self) -> Result<(), PlacementError> {
+        // A cut is drawn: from the node pressed to the node released (`place_cut`).
+        if self.kind == ElementKind::Cut && self.player_index_at(self.cursor).is_none() {
+            self.message = Some("Drag from one point of a metal to another to draw a cut.".into());
+            return Ok(());
+        }
         if let Some(centre) = self.tunable_at(self.cursor) {
             if self
                 .placement
@@ -709,7 +702,6 @@ impl Editor {
             angle_deg: match self.kind {
                 ElementKind::Antenna => self.angle_deg,
                 ElementKind::Plate => self.plate_angle_deg,
-                ElementKind::Cut => self.cut_angle_deg,
                 ElementKind::Free if self.selected_speed() != 0.0 => self.free_angle_deg,
                 _ => 0.0,
             },
@@ -724,6 +716,13 @@ impl Editor {
             Some(i) => trial[i] = e,
             None => trial.push(e),
         }
+        self.try_placement(trial)
+    }
+
+    /// Places a cut from node `a` to node `b` (drawn with the mouse); kept if allowed.
+    pub fn place_cut(&mut self, a: Node, b: Node) -> Result<(), PlacementError> {
+        let mut trial = self.placement.clone();
+        trial.push(self.level.cut_between(a, b));
         self.try_placement(trial)
     }
 
@@ -1220,12 +1219,7 @@ pub fn describe(e: &PlacementError) -> String {
         PlacementError::TooManyFree => "No free charges left for this level.".into(),
         PlacementError::TooManyCuts => "No cuts left for this level.".into(),
         PlacementError::CutNotInMetal(_) => {
-            "A cut goes through a metal: put it on a node inside one, along x or y.".into()
-        }
-        PlacementError::PieceTooNarrow(_) => {
-            "Too close to an edge or another cut: every piece must stay at least four mean \
-             free paths wide."
-                .into()
+            "A cut lies within one metal: drag from one of its points to another.".into()
         }
         PlacementError::SpeedNotAllowed(_) => "The level does not offer that speed.".into(),
         PlacementError::NoTunableElectrode(_) => {

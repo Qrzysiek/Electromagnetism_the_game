@@ -849,103 +849,108 @@ fn magnetron_antenna_radiates_its_load() {
     );
 }
 
-/// A cut (`ElementKind::Cut`) through a node of Magnetoresistance's metals.
-fn cut(x: i64, y: i64, angle_deg: f64) -> level::Element {
-    level::Element {
-        node: [x, y, 0],
-        kind: level::ElementKind::Cut,
-        value: 0.0,
-        angle_deg,
-        omega: None,
-        speed: None,
-    }
+/// A cut (`ElementKind::Cut`) from node `a` to node `b`, as the player draws it.
+fn cut(level: &Level, a: [i64; 2], b: [i64; 2]) -> level::Element {
+    level.cut_between([a[0], a[1], 0], [b[0], b[1], 0])
 }
 
-/// The cuts' placement rules (`Level::check_cuts`, `metal_pieces`) on Magnetoresistance's
-/// two metals (a strip 16 × 4 from (4, 13), one 4 × 10 from (10, 1); mean free path 1):
-/// a cut along y at x = 12 splits the long strip in two 8 × 4, one along x at y = 6 the short
-/// one in two 4 × 5; refused: a node outside the metals or on an edge, an angle not along x
-/// or y, a piece narrower than four mean free paths, more cuts than the level allows.
+/// The cuts' rules (`Level::check_cuts`, `cut_metal`) on Magnetoresistance's two metals (a
+/// strip 16 × 4 from (4, 13), one 4 × 10 from (10, 1)): any length and angle within one
+/// metal, its ends on its edges too; refused: an end outside, a cut along an edge (its
+/// middle not inside), across two metals, without a length, more than the level allows.
 #[test]
 fn cuts_follow_their_rules() {
     use level::PlacementError;
     let mut level = level::shipped("magnetoresistance");
     level.limits.max_cuts = 2;
-    let pieces = level.metal_pieces(&[cut(12, 15, 90.0), cut(12, 6, 0.0)]);
-    let rects: Vec<(usize, [f64; 4])> = pieces
-        .iter()
-        .map(|(k, lo, hi)| (*k, [lo.x, lo.y, hi.x, hi.y]))
-        .collect();
-    assert_eq!(
-        rects,
-        vec![
-            (0, [4.0, 13.0, 12.0, 17.0]),
-            (0, [12.0, 13.0, 20.0, 17.0]),
-            (1, [10.0, 1.0, 14.0, 6.0]),
-            (1, [10.0, 6.0, 14.0, 11.0]),
-        ]
-    );
-    assert_eq!(level.metal_pieces(&[]).len(), 2);
     let ok = |p: &[level::Element]| level.check_placement(p);
-    assert!(ok(&[cut(12, 15, 90.0), cut(12, 6, 0.0)]).is_ok());
-    assert!(ok(&[cut(12, 15, 270.0)]).is_ok());
+    for (a, b) in [
+        ([12, 13], [12, 17]),
+        ([10, 13], [14, 17]),
+        ([8, 14], [16, 16]),
+        ([10, 6], [14, 6]),
+    ] {
+        assert!(ok(&[cut(&level, a, b)]).is_ok(), "{a:?} to {b:?}");
+        assert_eq!(
+            level.cut_metal(&cut(&level, a, b)),
+            Some(usize::from(a[1] < 12))
+        );
+    }
+    let (p, q) = level
+        .cut_segment(&cut(&level, [10, 13], [14, 17]))
+        .expect("a cut");
+    assert!((p.x - 10.0).abs() < 1e-12 && (p.y - 13.0).abs() < 1e-12);
+    assert!((q.x - 14.0).abs() < 1e-12 && (q.y - 17.0).abs() < 1e-12);
+    for (a, b) in [
+        ([12, 15], [12, 19]),
+        ([4, 13], [20, 13]),
+        ([12, 11], [12, 13]),
+        ([12, 15], [12, 15]),
+    ] {
+        assert_eq!(
+            ok(&[cut(&level, a, b)]),
+            Err(PlacementError::CutNotInMetal([a[0], a[1], 0])),
+            "{a:?} to {b:?}"
+        );
+    }
     assert_eq!(
-        ok(&[cut(2, 2, 0.0)]),
-        Err(PlacementError::CutNotInMetal([2, 2, 0]))
-    );
-    assert_eq!(
-        ok(&[cut(4, 15, 90.0)]),
-        Err(PlacementError::CutNotInMetal([4, 15, 0]))
-    );
-    assert_eq!(
-        ok(&[cut(12, 15, 45.0)]),
-        Err(PlacementError::CutNotInMetal([12, 15, 0]))
-    );
-    assert_eq!(
-        ok(&[cut(6, 15, 90.0)]),
-        Err(PlacementError::PieceTooNarrow([6, 15, 0]))
-    );
-    assert_eq!(
-        ok(&[cut(12, 15, 0.0)]),
-        Err(PlacementError::PieceTooNarrow([12, 15, 0]))
-    );
-    assert_eq!(
-        ok(&[cut(8, 15, 90.0), cut(16, 15, 90.0), cut(12, 6, 0.0)]),
+        ok(&[
+            cut(&level, [8, 13], [8, 17]),
+            cut(&level, [16, 13], [16, 17]),
+            cut(&level, [10, 6], [14, 6])
+        ]),
         Err(PlacementError::TooManyCuts)
     );
 }
 
-/// A cut insulates: on Magnetoresistance at B = 0 (its supply at 7, no solenoid), over
-/// its goals' window t = 10–80, a cut across the long strip (along y at x = 12: no path
-/// left from contact to contact) takes its current below 3 % of the uncut strip's, and a
-/// cut along the short wide strip (along x at y = 6: two strips 4 × 5 side by side between
-/// the same contacts) leaves its current within 10 % (each piece's new wall carries a
-/// conductor's surface charge, a few per cent of a narrow strip's conductance, PHYSICS.md
-/// §2.11).
+/// A cut insulates (its carriers reflected off it as off the metal's sides): on
+/// Magnetoresistance at B = 0 (its supply at 7, no solenoid), over its goals' window
+/// t = 10–80, a cut from edge to edge across the long strip, straight (x = 12) or oblique
+/// ((10, 13) to (14, 17)), takes its current below 3 % of the uncut strip's (no path left;
+/// one that ends on an edge reaches a little past it); one along the short wide strip (y = 6:
+/// two strips 4 × 5 between the same contacts) leaves its current within 10 % (each new wall
+/// carries a conductor's surface charge, PHYSICS.md §2.11); one across the long strip that
+/// stops a unit short of its top leaves a path: the current stays above 5 %.
 #[test]
 fn cuts_insulate() {
     let mut level = level::shipped("magnetoresistance");
     level.limits.max_cuts = 2;
     let supply = level::Element::supply([21, 15, 0], 7.0);
-    let currents = |placement: &[level::Element]| {
-        let run = level.tube_run(placement, 1, 81.0);
+    let currents = |cuts: &[level::Element]| {
+        let mut placement = vec![supply];
+        placement.extend_from_slice(cuts);
+        assert!(level.check_placement(&placement).is_ok());
+        let run = level.tube_run(&placement, 1, 81.0);
         [0, 1].map(|k| run.currents[k].expect("the goal's window has passed"))
     };
-    let [long, short] = currents(&[supply]);
-    let [long_cut, short_cut] = currents(&[supply, cut(12, 15, 90.0), cut(12, 6, 0.0)]);
+    let [long, short] = currents(&[]);
+    let [across, along] = currents(&[
+        cut(&level, [12, 13], [12, 17]),
+        cut(&level, [10, 6], [14, 6]),
+    ]);
+    let [oblique, _] = currents(&[cut(&level, [10, 13], [14, 17])]);
+    let [partial, _] = currents(&[cut(&level, [12, 13], [12, 16])]);
     println!(
-        "long strip {long:.4} -> {long_cut:.4} (cut across), short {short:.4} -> {short_cut:.4} \
-         (cut along: {:+.2} %)",
-        100.0 * (short_cut / short - 1.0)
+        "long strip {long:.4}: cut across {across:.4}, oblique {oblique:.4}, a unit short \
+         {partial:.4}; short strip {short:.4}, cut along {along:.4} ({:+.2} %)",
+        100.0 * (along / short - 1.0)
     );
     assert!(long > 0.5, "the uncut long strip conducts: {long}");
     assert!(
-        long_cut.abs() < 0.03 * long,
-        "a cut across: {long_cut} of {long}"
+        across.abs() < 0.03 * long,
+        "a cut across: {across} of {long}"
     );
     assert!(
-        (short_cut / short - 1.0).abs() < 0.10,
-        "a cut along: {short_cut} of {short}"
+        oblique.abs() < 0.03 * long,
+        "an oblique cut: {oblique} of {long}"
+    );
+    assert!(
+        partial > 0.05 * long,
+        "a cut a unit short: {partial} of {long}"
+    );
+    assert!(
+        (along / short - 1.0).abs() < 0.10,
+        "a cut along: {along} of {short}"
     );
 }
 
@@ -976,4 +981,142 @@ fn isolated_metal_heat_is_the_induced_work() {
         "ratio {}",
         high / low
     );
+}
+
+/// Y10, Onsager's reciprocity in the Drude metal (PHYSICS.md §9, Symmetries): Hall probe at
+/// its reference supply (30) with the solenoid at +3 and at −3, over t = 10–80: the current
+/// along the strip is even in B (the same both ways, within 4 %: the runs' scatter is ~1.3 %)
+/// and the Hall voltage odd (its two readings cancel to within 15 % of its size: the
+/// floating contacts carry ~0.2 of thermal noise).
+#[test]
+fn y10_onsager_in_the_metal() {
+    let level = level::shipped("hall_probe");
+    let run = |b: f64| {
+        let placement = [
+            level::Element::supply([21, 8, 0], 30.0),
+            level::Element::supply([23, 15, 0], b),
+        ];
+        let r = level.tube_run(&placement, 1, 81.0);
+        let current = r.currents[0].expect("the window has passed");
+        let hall = r.potential[0].expect("the window has passed");
+        (current, hall)
+    };
+    let ((i_up, v_up), (i_down, v_down)) = (run(3.0), run(-3.0));
+    println!(
+        "Y10 Onsager: current {i_up:.4} at B = +3, {i_down:.4} at −3 ({:+.2} %); Hall voltage \
+         {v_up:.4} and {v_down:.4} (sum {:.4})",
+        100.0 * (i_down / i_up - 1.0),
+        v_up + v_down
+    );
+    assert!(
+        (i_down / i_up - 1.0).abs() < 0.04,
+        "current {i_up} {i_down}"
+    );
+    assert!(
+        (v_up + v_down).abs() < 0.15 * 0.5 * (v_up - v_down).abs(),
+        "Hall voltage {v_up} {v_down}"
+    );
+}
+
+/// The quarter turn (x, y) → (ny − y, x) of a tube level: its board, electrodes (their
+/// angles turned too), metals, solenoid and reference.
+fn turned(level: &Level) -> Level {
+    let mut l = level.clone();
+    let ny = i64::from(level.grid.ny);
+    let turn = |n: [i64; 3]| [ny - n[1], n[0], n[2]];
+    (l.grid.nx, l.grid.ny) = (level.grid.ny, level.grid.nx);
+    for e in &mut l.electrodes {
+        e.center = turn(e.center);
+        e.angle_deg += 90.0;
+    }
+    for e in &mut l.reference_solution {
+        e.node = turn(e.node);
+    }
+    if let Some(t) = &mut l.tube {
+        t.solenoid = t.solenoid.map(turn);
+        for m in &mut t.metals {
+            let (a, b) = (turn(m.corners[0]), turn(m.corners[1]));
+            m.corners = [
+                [a[0].min(b[0]), a[1].min(b[1]), 0],
+                [a[0].max(b[0]), a[1].max(b[1]), 0],
+            ];
+        }
+    }
+    l
+}
+
+/// Y11, the isotropy of the tube engine with a Drude metal: Ohm's law's strip turned a
+/// quarter (its contacts, metal and supply with it; its cores fall elsewhere, from the same
+/// seed in the turned rectangle) carries the same current over t = 10–40, within 4 % (the
+/// runs' scatter, ~1.3 %): no axis of the board is preferred.
+#[test]
+fn y11_isotropy_of_the_metal() {
+    let level = level::shipped("ohms_law");
+    let t = turned(&level);
+    assert!(t.check_placement(&t.reference_solution).is_ok());
+    assert!(
+        t.setup_issues(&t.reference_solution).is_empty(),
+        "{:?}",
+        t.setup_issues(&t.reference_solution)
+    );
+    let current = |l: &Level| {
+        let r = l.tube_run(&l.reference_solution, 1, 41.0);
+        r.currents[0].expect("the window has passed")
+    };
+    let (along_x, along_y) = (current(&level), current(&t));
+    println!(
+        "Y11 isotropy: current {along_x:.4} along x, {along_y:.4} along y ({:+.2} %)",
+        100.0 * (along_y / along_x - 1.0)
+    );
+    assert!(
+        (along_y / along_x - 1.0).abs() < 0.04,
+        "{along_x} {along_y}"
+    );
+}
+
+/// The mirror x → nx − x of a tube level: its electrodes (their angles mirrored), metals,
+/// emission direction, solenoid, reference, and its field reversed (B is axial: the mirror
+/// reverses its z).
+fn mirrored(level: &Level) -> Level {
+    let mut l = level.clone();
+    let nx = i64::from(level.grid.nx);
+    let flip = |n: [i64; 3]| [nx - n[0], n[1], n[2]];
+    for e in &mut l.electrodes {
+        e.center = flip(e.center);
+        e.angle_deg = 180.0 - e.angle_deg;
+    }
+    for e in &mut l.reference_solution {
+        e.node = flip(e.node);
+    }
+    if let Some(t) = &mut l.tube {
+        t.solenoid = t.solenoid.map(flip);
+        t.emit_toward_deg = t.emit_toward_deg.map(|a| 180.0 - a);
+        t.b_z = -t.b_z;
+        for m in &mut t.metals {
+            let (a, b) = (flip(m.corners[0]), flip(m.corners[1]));
+            m.corners = [[b[0], a[1], 0], [a[0], b[1], 0]];
+        }
+    }
+    l
+}
+
+/// Y18, the vacuum tube engine's mirror symmetry (PHYSICS.md §9, Symmetries): Vacuum diode
+/// mirrored left to right (the cathode emitting the other way) delivers the same current to
+/// its anode over t = 10–20, within 2 % (the emission points along a face, a low-discrepancy
+/// sequence, are not mirror images of each other: the macroparticles differ, ~1 %).
+#[test]
+fn y18_vacuum_tube_mirror() {
+    let level = level::shipped("vacuum_diode");
+    let m = mirrored(&level);
+    assert!(m.check_placement(&m.reference_solution).is_ok());
+    let current = |l: &Level| {
+        let r = l.tube_run(&l.reference_solution, 1, 21.0);
+        r.currents[0].expect("the window has passed")
+    };
+    let (here, mirror) = (current(&level), current(&m));
+    println!(
+        "Y18 vacuum diode: current {here:.5}, mirrored {mirror:.5} ({:+.3} %)",
+        100.0 * (mirror / here - 1.0)
+    );
+    assert!((mirror / here - 1.0).abs() < 0.02, "{here} {mirror}");
 }

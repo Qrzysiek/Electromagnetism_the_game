@@ -250,11 +250,14 @@ def heat_goal(metal, lo, hi, start, end):
     return {"metal": metal, "min": lo, "max": hi, "start": start, "end": end}
 
 
-def cut(x, y, along_x):
-    """The player's insulating cut through the metal node (x, y), along x or along y."""
-    e = {"node": [x, y, 0], "kind": "cut", "value": 0.0}
-    if not along_x:
-        e["angle_deg"] = 90.0
+def cut(x0, y0, x1, y1):
+    """The player's insulating cut from the node (x0, y0) to (x1, y1) (as drawn in the game:
+    `Level::cut_between`)."""
+    dx, dy = x1 - x0, y1 - y0
+    e = {"node": [x0, y0, 0], "kind": "cut", "value": math.hypot(dx, dy)}
+    angle = math.degrees(math.atan2(dy, dx))
+    if angle:
+        e["angle_deg"] = angle
     return e
 
 
@@ -3654,6 +3657,13 @@ def hall_probe():
     # +0.22 at 0. `generator window` at the reference (30, 1.3): the supply solves on
     # 26-34, the solenoid on 1.0-1.4 (its slider +-4, the middles at +-2), over t = 10-80
     # (the floating contacts' noise).
+    # The solenoid's full range (the owner, 2026-10-20: every behaviour the model can
+    # show): +-16, from straight paths between collisions to circles 0.12 across
+    # (omega_c tau = 8; the step turns the carriers by at most 0.56 rad).
+    # Over it at 30 (target/scratch/b_range_scan.py; preview): current 3.14, 3.12, 3.06,
+    # 3.00, 2.91, 2.73, 2.55, 2.21, 1.96 and the top against the bottom -0.45, -1.05, -2.43,
+    # -3.68, -4.67, -6.61, -8.12, -10.57, -12.52 at B = 0.5, 1, 2, 3, 4, 6, 8, 12, 16 (the
+    # Hall voltage ever more sublinear). The goal moved to -6.0 to -3.5: B about 2.9-5.5.
     hall = dict(METAL, carriers_per_area=100.0)
     return level(
         "Hall probe",
@@ -3662,23 +3672,24 @@ def hall_probe():
         "field pushes the moving electrons sideways (the Lorentz force) until the charge "
         "they pile on one side holds the rest back: a voltage across the strip, the Hall "
         "voltage, $V_H \\approx I B/(n q)$ (per unit length). The two contacts on the "
-        "strip's sides read it, floating: no current flows through them. Make a current "
-        "between 2.7 and 3.5 flow into the right end and the top contact sit between 1.0 "
-        "and 1.9 below the bottom one (averaged over $t = 10$ to $80$). Which way must the "
-        "field point? Electrons are negative.",
+        "strip's sides read it, floating: no current flows through them. Try the field's "
+        "whole range: weak, the electrons' paths barely bend; strong, they curl into small "
+        "circles between collisions. Make a current between 2.7 and 3.5 flow into the right "
+        "end and the top contact sit between 3.5 and 6 below the bottom one (averaged over "
+        "$t = 10$ to $80$). Which way must the field point? Electrons are negative.",
         grid=(24, 16), c=None, t_max=200.0,
         electrodes=[contact(3, 8, 4), contact(21, 8, 4, tunable=True),
                     contact(12, 11, 2, vertical=False), contact(12, 5, 2, vertical=False)],
         supplies=slider(40.0, 15.0, 30.0, 35.0),
-        solenoid_fields=slider(4.0, -1.3, 0.9, 1.3),
+        solenoid_fields=slider(16.0, -4.2, 3.0, 4.2, 5.0),
         tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 15),
                   circuits=[tube_circuit(2, dc(0.0), capacitance=1.0),
                             tube_circuit(3, dc(0.0), capacitance=1.0)],
                   goals=[current_goal(1, 2.7, 3.5, 10.0, 80.0, carriers="net")],
-                  potentials=[potential_goal(2, "mean", -1.9, -1.0, 10.0, 80.0,
+                  potentials=[potential_goal(2, "mean", -6.0, -3.5, 10.0, 80.0,
                                              reference=3)],
                   metals=[metal((4, 6), (20, 10), [0, 1, 2, 3], seed=3, **hall)]),
-        reference=[supply(21, 8, 30.0), supply(23, 15, 1.3)])
+        reference=[supply(21, 8, 30.0), supply(23, 15, 4.2)])
 
 
 def positive_carriers():
@@ -3698,6 +3709,14 @@ def positive_carriers():
     # at -10 and 1.23 at -14 (two seeds, both resolutions). `generator window`: the upper
     # supply solves on 28-34, the lower on -16 to -8, the solenoid on -2.5 to -1.5: its
     # slider is +-7 (at +-5 the half's middle, -2.5, solved).
+    # The solenoid's full range (the owner, 2026-10-20: every behaviour the model can
+    # show): +-16, from straight paths between collisions to circles 0.12 across
+    # (omega_c tau = 8; the step turns the carriers by at most 0.56 rad).
+    # Over it at (30, B, -12) (preview): upper current 3.11, 3.06, 3.06, 2.98, 2.85, 2.68,
+    # 2.50, 2.22, 1.95; upper Hall 0.40, 1.12, 2.31, 3.57, 4.69, 6.12, 7.63, 10.47, 11.99;
+    # lower 0.57, 0.73, 1.14, 1.47, 2.05, 2.80, 3.15, 4.44, 4.92 at B = -0.5, -1, -2, -3,
+    # -4, -6, -8, -12, -16. The goals moved: current 2.6-3.5, upper 3.4-6.0, lower 1.3-2.6:
+    # B about -5.6 to -2.9.
     material = dict(METAL, carriers_per_area=50.0)
     return level(
         "Positive carriers",
@@ -3705,30 +3724,31 @@ def positive_carriers():
         "contacts on its sides that read its Hall voltage. The upper one conducts by "
         "electrons; the lower one's carriers are positive (orange). Some real metals, such "
         "as zinc and beryllium, behave so: band theory explains it, and in this classical "
-        "model their carriers simply carry a positive charge. Make a current between 2.7 "
-        "and 3.5 flow into the upper strip's right end, and make both strips' top contacts "
-        "sit above their bottom ones: the upper by 1.6 to 2.8, the lower by 0.6 to 1.6 "
-        "(averaged over $t = 10$ to $80$). Which way must each current flow?",
+        "model their carriers simply carry a positive charge. The field reaches strengths "
+        "that curl the carriers into small circles. Make a current between 2.6 and 3.5 flow "
+        "into the upper strip's right end, and make both strips' top contacts sit above "
+        "their bottom ones: the upper by 3.4 to 6, the lower by 1.3 to 2.6 (averaged over "
+        "$t = 10$ to $80$). Which way must each current flow?",
         grid=(24, 20), c=None, t_max=200.0,
         electrodes=[contact(3, 14, 4), contact(21, 14, 4, tunable=True),
                     contact(12, 17, 2, vertical=False), contact(12, 11, 2, vertical=False),
                     contact(3, 5, 4), contact(21, 5, 4, tunable=True),
                     contact(12, 8, 2, vertical=False), contact(12, 2, 2, vertical=False)],
         supplies=slider(40.0, -12.0, 15.0, 30.0),
-        solenoid_fields=slider(7.0, -1.8, 1.2, 1.8),
+        solenoid_fields=slider(16.0, -4.0, 3.0, 4.0),
         tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 19),
                   circuits=[tube_circuit(2, dc(0.0), capacitance=1.0),
                             tube_circuit(3, dc(0.0), capacitance=1.0),
                             tube_circuit(6, dc(0.0), capacitance=1.0),
                             tube_circuit(7, dc(0.0), capacitance=1.0),
                             tube_circuit(4, dc(0.0), resistance=0.0)],
-                  goals=[current_goal(1, 2.7, 3.5, 10.0, 80.0, carriers="net")],
-                  potentials=[potential_goal(2, "mean", 1.6, 2.8, 10.0, 80.0, reference=3),
-                              potential_goal(6, "mean", 0.6, 1.6, 10.0, 80.0, reference=7)],
+                  goals=[current_goal(1, 2.6, 3.5, 10.0, 80.0, carriers="net")],
+                  potentials=[potential_goal(2, "mean", 3.4, 6.0, 10.0, 80.0, reference=3),
+                              potential_goal(6, "mean", 1.3, 2.6, 10.0, 80.0, reference=7)],
                   metals=[metal((4, 12), (20, 16), [0, 1, 2, 3], seed=6, **material),
                           metal((4, 3), (20, 7), [4, 5, 6, 7], seed=7, q_over_m=1.0,
                                 **material)]),
-        reference=[supply(21, 14, 30.0), supply(23, 19, -1.8), supply(21, 5, -12.0)])
+        reference=[supply(21, 14, 30.0), supply(23, 19, -4.0), supply(21, 5, -12.0)])
 
 
 def magnetoresistance():
@@ -3745,25 +3765,36 @@ def magnetoresistance():
     # 4.5-5.5 and -5.5 to -4.5 (its mirror's middle, -5, not verified: near the goals' edges);
     # with the long strip's goal 0.62-0.76 the supply solved on 7.0-7.5 only (1.2 % of +-20):
     # widened to 0.58-0.78, the slider +-10.
+    # The solenoid's full range (the owner, 2026-10-20: every behaviour the model can
+    # show): +-16, from straight paths between collisions to circles 0.12 across
+    # (omega_c tau = 8; the step turns the carriers by at most 0.56 rad).
+    # Over it at 7 V (preview): long strip 0.795, 0.772, 0.738, 0.683, 0.679, 0.626, 0.573,
+    # 0.547, 0.522, 0.452; short 6.96, 6.09, 5.41, 4.63, 4.06, 3.61, 2.68, 2.09, 1.56, 1.18 at
+    # B = 1, 2, 3, 4, 5, 6, 8, 10, 13, 16. At B = 5 both currents go as the supply (long
+    # 0.096 V, short 0.58 V), so its window is the overlap of the two goals' ratios: with
+    # 0.58-0.78 and 3.2-4.6 it solved on 6.5-7.5 only (5 %; 6.0 gave 0.550, 8.0 gave 4.68).
+    # Widened to 0.56-0.80 and 3.2-4.8: the supply about 5.8-8.2, B about 3.8-6.6 (the half's
+    # middle, 8, clear).
     return level(
         "Magnetoresistance",
         "Two strips of the same metal on one supply, in your solenoid's field: a long one and "
         "a short, wide one. In the long strip the charge the field piles on its sides (the "
         "Hall voltage) pushes the carriers back, and they flow straight on. The short strip's "
         "contacts short that charge out: its carriers' paths bend and lengthen, and it "
-        "resists more, whichever way the field points. Make between 0.58 and 0.78 flow into "
-        "the long strip's right end and between 3.7 and 4.5 into the short strip's (averaged "
-        "over $t = 10$ to $80$).",
+        "resists more, whichever way the field points; at full strength its carriers circle "
+        "on the spot between collisions. Make between 0.56 and 0.8 flow into the long "
+        "strip's right end and between 3.2 and 4.8 into the short strip's (averaged over "
+        "$t = 10$ to $80$).",
         grid=(24, 20), c=None, t_max=200.0,
         # 0, 1: the long strip's contacts; 2, 3: the short wide strip's.
         electrodes=[contact(3, 15, 4), contact(21, 15, 4, tunable=True),
                     contact(9, 6, 10), contact(15, 6, 10)],
         supplies=slider(10.0, 7.0, 4.0),
-        solenoid_fields=slider(7.0, -5.0, 2.0, 5.0),
+        solenoid_fields=slider(16.0, -5.0, 3.0, 5.0),
         tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 19),
                   circuits=[tube_circuit(1, dc(0.0), resistance=0.0, linked=[3])],
-                  goals=[current_goal(1, 0.58, 0.78, 10.0, 80.0, carriers="net"),
-                         current_goal(3, 3.7, 4.5, 10.0, 80.0, carriers="net")],
+                  goals=[current_goal(1, 0.56, 0.80, 10.0, 80.0, carriers="net"),
+                         current_goal(3, 3.2, 4.8, 10.0, 80.0, carriers="net")],
                   metals=[metal((4, 13), (20, 17), [0, 1], seed=11, **METAL),
                           metal((10, 1), (14, 11), [2, 3], seed=12, **METAL)]),
         reference=[supply(21, 15, 7.0), supply(23, 19, 5.0)])
@@ -3794,7 +3825,9 @@ def eddy_currents():
     # 1.153 / 1.181 at 0.68, 1.504 / 1.595 at 0.8 (5-7 % below local Ohm's law: the walls,
     # PHYSICS.md 2.11): about 2.55 B0^2. With the goal 1.0-1.4 the slider solved on 0.66-0.72
     # only (`generator window`, every 0.0225; the verdict's error straddles the goal's edges
-    # beyond): widened to 0.9-1.5.
+    # beyond): widened to 0.9-1.5. Then the swing's full range (the owner, 2026-10-20): +-3;
+    # heat over B0^2 2.31, 2.51, 2.47, 2.48, 2.39 at B0 = 0.5, 1, 1.5, 2, 3 (previews; the
+    # carriers barely warm), so the goal 1.2-4.0 solves on B0 ~ 0.69-1.26.
     return level(
         "Eddy currents",
         "A metal plate alone in your solenoid, whose field now swings back and forth, "
@@ -3802,41 +3835,46 @@ def eddy_currents():
         "that circulates about the solenoid's axis (Faraday's law), and in the metal it drives "
         "the carriers round in loops: eddy currents, which heat it, the faster the field "
         "changes the more (as $\\dot B^2$). Set the swing $B_0$ so that the plate takes "
-        "between 0.9 and 1.5 of heat per unit time (averaged over $t = 25$ to $125$).",
+        "between 1.2 and 4 of heat per unit time (averaged over $t = 25$ to $125$).",
         grid=(24, 20), c=None, t_max=200.0,
         electrodes=[cold_electrode(1, 1)],
-        solenoid_fields=slider(1.0, 0.68),
+        solenoid_fields=slider(3.0, 0.95),
         tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, saturation=0.0, solenoid=(23, 19),
                   solenoid_drive=sine(1.0, EDDY_OMEGA),
-                  heat_goals=[heat_goal(0, 0.9, 1.5, 25.0, 125.0)],
+                  heat_goals=[heat_goal(0, 1.2, 4.0, 25.0, 125.0)],
                   metals=[metal((6, 4), (18, 16), [], seed=21, **METAL)]),
-        reference=[supply(23, 19, 0.68)])
+        reference=[supply(23, 19, 0.95)])
 
 
 def laminations():
-    # Designed with `generator tube-scan` (target/scratch/lam_scan16.py, lam_seeds.py): a
-    # transformer's core 16 x 8 on the solenoid's axis, the field fixed (B0 = 0.68 at omega
-    # 0.125). Local Ohm's law (D8): heat 0.795 uncut; one cut along its length 0.244 (with one
-    # across as well 0.199), two across at best 0.305, one across at best 0.489. Measured
-    # (verification, seed 22): 0.749, 0.291 (the long cut's faces carry some current across
-    # as a capacitor), 0.168, 0.273, 0.435; one cut each way over three seeds 0.168, 0.187,
-    # 0.183 (previews 0.236, 0.184, 0.188): seed 122. The goal, at most 0.22, takes one cut
-    # each way.
+    # Designed with `generator tube-scan` (target/scratch/lam20_*.py): a transformer's core
+    # 20 x 12 on the solenoid's axis (30 carriers per area: 14 400 in the verification), the
+    # field fixed (B0 = 0.68 at omega 0.125), three cuts of any length and angle (the owner:
+    # a bigger plate, cuts not only across the whole metal). Verification (local Ohm's law):
+    # uncut 2.833 (3.060); three full cuts along, evenly 0.516 (0.277), at y = 7, 11, 14
+    # 0.597, at 6, 10, 14 0.751; two along and one across 0.407; two along 0.755 (0.475);
+    # one along and one across 0.791 (0.765); one along 1.260 (0.991); corner to corner 1.435;
+    # one across 1.633 (1.692); two half-length cuts along 1.745, two staggered 16 long 1.737.
+    # The long cuts' faces carry current across as capacitors (PHYSICS.md 2.11): along them
+    # the gain falls short of Ohm's law. The goal, at most 0.65, takes all three cuts across
+    # the whole core, along it, about evenly (the best preview of three along read 0.609).
     return level(
         "Laminations",
         "A transformer's core in a field that swings back and forth: the eddy currents waste "
         "its energy as heat. They run in loops across the whole core; cut it, and each loop "
         "must close within a narrower piece, so the currents are weaker and the heat falls, "
-        "the narrower the pieces, the more. You have two cuts: make the core take at most "
-        "0.22 of heat per unit time (averaged over $t = 25$ to $125$).",
+        "the narrower the pieces, the more. Drag across the core to cut it, any length and "
+        "angle; you have three cuts. Make the core take at most 0.65 of heat per unit time "
+        "(averaged over $t = 25$ to $125$).",
         grid=(24, 20), c=None, t_max=200.0,
         electrodes=[cold_electrode(1, 1)],
-        max_cuts=2,
+        max_cuts=3,
         tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, saturation=0.0, b_z=0.68,
                   solenoid_drive=sine(1.0, EDDY_OMEGA),
-                  heat_goals=[heat_goal(0, 0.0, 0.22, 25.0, 125.0)],
-                  metals=[metal((4, 6), (20, 14), [], seed=122, **METAL)]),
-        reference=[cut(12, 10, True), cut(12, 8, False)])
+                  heat_goals=[heat_goal(0, 0.0, 0.65, 25.0, 125.0)],
+                  metals=[metal((2, 4), (22, 16), [], seed=122,
+                                **dict(METAL, carriers_per_area=30.0))]),
+        reference=[cut(2, 8, 22, 8), cut(2, 12, 22, 12), cut(12, 4, 12, 16)])
 
 
 ARCS.append(("Inside the components: vacuum tubes", [

@@ -56,15 +56,12 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
                 return Some(
                     Inspection::new("Cut (yours): an insulating slit")
                         .line(format!(
-                            "across the metal along {}, from edge to edge",
-                            if level::tube::cut_along_x(e.angle_deg) {
-                                "x"
-                            } else {
-                                "y"
-                            }
+                            "{} long, at {}° from x",
+                            fmt_num(e.value),
+                            fmt_num(e.angle_deg)
                         ))
-                        .line("its carriers cannot cross it: the metal is two pieces")
-                        .line("a current loop closes within each: eddy currents shrink"),
+                        .line("the metal's carriers cannot cross it")
+                        .line("a current loop must go round it: eddy currents weaken"),
                 );
             }
         }

@@ -501,18 +501,27 @@ impl Fdtd {
         div / (4.0 * std::f64::consts::PI)
     }
 
-    /// The field energy per unit length, `Σ (E² + B²) h²/8π` (`B_z` half a step behind).
+    /// The field energy per unit length at the time of `E`, `Σ (E·E + B⁻·B⁺) h²/8π`, `B⁻`
+    /// the stored `B_z` (half a step behind) and `B⁺` its next update from `E`'s curl (half
+    /// a step ahead; the absorbing layer's memory left out): the leapfrog's own energy,
+    /// conserved to rounding in a closed lossless box (PHYSICS.md §9, Y9). The plain
+    /// `Σ (E² + B²)` adds two times and swings as energy passes between E and B, by
+    /// `(ω Δt)²`: 0.97–1.16 of this on Y9's sharpest bumps.
     #[must_use]
     pub fn energy(&self) -> f64 {
-        let h2 = self.grid.h * self.grid.h;
-        let s: f64 = self
-            .ex
-            .iter()
-            .chain(&self.ey)
-            .chain(&self.bz)
-            .map(|v| v * v)
-            .sum();
-        s * h2 / (8.0 * std::f64::consts::PI)
+        let Grid { nx, ny, h, .. } = self.grid;
+        let cdt = self.c * self.dt / h;
+        let e: f64 = self.ex.iter().chain(&self.ey).map(|v| v * v).sum();
+        let mut b = 0.0;
+        for j in 0..ny {
+            for i in 0..nx {
+                let dx = self.ey[i + 1 + (nx + 1) * j] - self.ey[i + (nx + 1) * j];
+                let dy = self.ex[i + nx * (j + 1)] - self.ex[i + nx * j];
+                let now = self.bz[i + nx * j];
+                b += now * (now - cdt * (dx - dy));
+            }
+        }
+        (e + b) * h * h / (8.0 * std::f64::consts::PI)
     }
 
     /// The power per unit length flowing out of the rectangle `x0..x1 × y0..y1`:

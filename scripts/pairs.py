@@ -251,17 +251,18 @@ def make_tube_metal(lv, pl, p, o, w):
 
 
 def make_player_cut(lv, pl, p, o, w):
-    """The player's insulating cut (PHYSICS.md 2.11): across the middle of the level's first
-    metal (along y, at the row of p within it) if it has one, so that its pieces carry the
-    metal's physics beside the other element; else at p, where it must be refused."""
+    """The player's insulating cut (PHYSICS.md 2.11): from edge to edge across the middle of
+    the level's first metal if it has one, so that the cut metal's physics runs beside the
+    other element; else at p, where it must be refused."""
     lv["limits"].update(PLAYER_LIMITS["cut"])
     metals = (lv.get("tube") or {}).get("metals") or []
     if metals:
+        # From edge to edge across its middle.
         (x0, y0, _), (x1, y1, _) = metals[0]["corners"]
-        at = ((x0 + x1) // 2, min(max(p[1], y0 + 1), y1 - 1))
+        at, length = ((x0 + x1) // 2, y0), y1 - y0
     else:
-        at = p
-    pl.append({"node": node(at), "kind": "cut", "value": 0.0, "angle_deg": 90.0})
+        at, length = p, 2.0
+    pl.append({"node": node(at), "kind": "cut", "value": float(length), "angle_deg": 90.0})
 
 
 def make_tube_coax(lv, pl, p, o, w):

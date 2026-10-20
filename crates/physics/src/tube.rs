@@ -370,6 +370,23 @@ impl TubeState {
     }
 }
 
+/// Where the chord from `a` to `b` crosses the wall `w0`–`w1`, as the fraction of the chord
+/// (None: it does not). A side counts as crossed from the wall itself to either side, so a
+/// carrier on a wall cannot slip through it.
+fn crossing(a: DVec3, b: DVec3, w0: DVec3, w1: DVec3) -> Option<f64> {
+    let e = w1 - w0;
+    let side = |p: DVec3| (p.x - w0.x) * e.y - (p.y - w0.y) * e.x;
+    let (sa, sb) = (side(a), side(b));
+    if (sa > 0.0 && sb > 0.0) || (sa < 0.0 && sb < 0.0) || (sa == 0.0 && sb == 0.0) {
+        return None;
+    }
+    let t = sa / (sa - sb);
+    let p = a + (b - a) * t;
+    let len2 = e.x * e.x + e.y * e.y;
+    let u = ((p.x - w0.x) * e.x + (p.y - w0.y) * e.y) / len2;
+    (0.0..=1.0).contains(&u).then_some(t)
+}
+
 /// Whether `x` lies inside the section.
 fn inside(section: &Section, x: DVec3) -> bool {
     match *section {
@@ -1234,14 +1251,37 @@ impl Tube {
             s.x[p] = m.x;
             s.v[p] = m.v;
         }
-        for _ in 0..4 {
+        // Off its sides (out of the rectangle, not into a contact) and off its internal walls
+        // (the step's chord from `from` crossing one), until it is inside.
+        let mut from = a;
+        for _ in 0..8 {
             let x = s.x[p];
-            if lattice.contains(x)
-                || self
-                    .electrodes
-                    .electrodes
+            if lattice.contains(x) {
+                let Some((t, w0, w1)) = lattice
+                    .walls
                     .iter()
-                    .any(|e| inside(&e.section, x))
+                    .filter_map(|&(w0, w1)| crossing(from, x, w0, w1).map(|t| (t, w0, w1)))
+                    .min_by(|a, b| a.0.total_cmp(&b.0))
+                else {
+                    break;
+                };
+                // Specular: the position and the velocity mirrored in the wall's line.
+                let e = w1 - w0;
+                let n = DVec3::new(-e.y, e.x, 0.0) / libm::sqrt(e.x * e.x + e.y * e.y);
+                let hit = from + (x - from) * t;
+                let mirrored = x - n * (2.0 * (x - w0).dot(n));
+                let v = s.v[p];
+                s.v[p] = v - n * (2.0 * v.dot(n));
+                s.x[p] = mirrored;
+                // The next chord starts just off the wall, on the carrier's side.
+                from = hit + (mirrored - hit) * 1e-6;
+                continue;
+            }
+            if self
+                .electrodes
+                .electrodes
+                .iter()
+                .any(|e| inside(&e.section, x))
             {
                 break;
             }
