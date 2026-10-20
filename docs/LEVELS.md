@@ -152,7 +152,11 @@ head-on closest approach in cells, runs from 0.05 (Geiger–Marsden's weakest) t
 sky is blue), each palette spanning a factor of 4–16, so every one reaches from gentle bends
 (far away) to turning the projectile back (close up) and needs no change on that account
 (scripts/palette_ratios.py). What else each level fixes (walls, arenas, detectors)
-remains to be reviewed level by level (task list).
+remains to be reviewed level by level (task list). The beam levels' space charge (2026-10-20): the Scales
+section's angle √(k q²N/(R E_kin)) is 0.035–0.19 rad, and switching the interaction off
+moves the reference's landing points by 0.3–1.1 cells on average (detectors 2–5 cells;
+Space charge 0.56, Calutron at full current 1.07, Beam preparation 15 of 16 arriving with it, 13
+without): small against the launches' own spreads in Space charge, decisive in the others.
 
 | Level | Control | What its range shows | Solving interval (`generator window`) | Status |
 |---|---|---|---|---|

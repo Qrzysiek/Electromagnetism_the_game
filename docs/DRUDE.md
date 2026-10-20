@@ -178,6 +178,18 @@ the owner are marked **(owner)**; nothing is built until they are settled.
   conductor's carriers fluctuate independently along z and its noise vanishes in a
   z-invariant world. A noise goal would be neither verifiable (preview and verification
   disagree by design) nor real physics.
+- **Owner 2026-10-20: can the current's fluctuations from the carriers' thermal motion be
+  measured in a resistor?** Yes, in a real one: Johnson–Nyquist noise, `⟨I²⟩ = 4kTΔf/R` (a
+  shorted resistor) or `⟨V²⟩ = kT/C` across its own capacitance; the owner asked to note it
+  as a level idea. In this model it stands as decided above: the noise is real for the
+  model's line charges (D7 verifies `2kT/R` and `kT/C` with kT a macroparticle's) but not for
+  a metal's carriers, and a goal on it would not survive the verification's finer
+  macroparticles. What the game shows of it now: the metal maps' noise (each cell's current
+  and power with its standard error, the carriers' thermal motion: PHYSICS.md §2.11), the
+  floating contacts' wandering potentials, and the beads on the leads moving both ways. A
+  level could still make it a goal if the verification kept the preview's macroparticles
+  (refining the step only) and the goal were stated in the model's own kT (the noise
+  against `√(kT/C)`, resolution-free): the owner to decide (task list).
 - **Owner 2026-10-19: the Hall probe does not show that the field pushes the electrons
   aside.** Each strip in a field now carries the Hall effect's arrows: the carriers'
   drift, the magnetic push on it and the electric push back across the strip

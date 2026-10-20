@@ -153,6 +153,32 @@ fn particles(level: &Level, placement: &[Element]) -> Option<Scales> {
                      barely curves there; above 1 it circles. Read for that electron at 1 mm.",
         });
     }
+    // A beam's own charge (PHYSICS.md §3.3): the energy the bunch's charge gives a particle at
+    // its edge as it blows apart, k q² N/R (R the bunch's half-size), against the kinetic,
+    // as the angle it turns the particle's path by (its square root).
+    if let Some(b) = shot.beam.filter(|_| level.physics.beam_interaction) {
+        let half = 0.5 * b.width.max(b.length).max(1e-9);
+        let angle = (q * q * f64::from(b.count) / (half * ke)).sqrt();
+        lines.push(Scale {
+            quantity: "the beam's own charge: the angle it spreads the bunch by",
+            here: format!(
+                "{} rad, {}° ({} particles in a bunch about {} across)",
+                num(angle),
+                num(angle.to_degrees()),
+                b.count,
+                num(2.0 * half)
+            ),
+            real: "well below a milliradian in a TV tube's or a microscope's beam; tens of \
+                   milliradians in a high-current gun or a dense ion bunch, which focusing \
+                   must hold",
+            detail: "How hard the beam's own charge pushes its particles apart: √(k q²N/(R \
+                     E_kin)), the energy a particle at the bunch's edge gains as the bunch blows \
+                     up against its kinetic energy, as the angle its path turns by. Over a long \
+                     flight even a few degrees move the landing points by cells (measured on \
+                     the beam levels: switching the interaction off moves them by 0.3-1.1 cells \
+                     on average).",
+        });
+    }
     // The radiation reaction (PHYSICS.md §3.1): τ₀ = 2q²/3mc³ against the time to cross a
     // cell, here and for a real electron at the same speed (τ₀ = 6.26e-24 s, a cell 1 mm).
     if level.physics.radiation_reaction && c.is_finite() {
