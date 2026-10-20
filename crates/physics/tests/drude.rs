@@ -1033,3 +1033,86 @@ fn d10_carriers_energy_account() {
     assert!(coarse.0 / fine.0 > 2.5, "(b) {} {}", coarse.0, fine.0);
     assert!((fine.2 / fine.3).abs() < 5e-3, "(b) {} {}", fine.2, fine.3);
 }
+
+/// The circuit's energy through D1's resistor (`Σ V (given off − taken in)` over its contacts)
+/// against the field's work on the carriers `W` (D10) and the contacts' potential steps `S`
+/// (`TubeState::potential_steps`: a carrier is given off and taken in where the potential
+/// differs from its contact's, in the layer its contact keeps): `circuit = W + S − H`, the
+/// remainder `H` the step's own (the leapfrog's work near the contacts; the exact motion
+/// conserves the energy). Over t = 5–25 in 8 blocks: at V = 0, no current, `H` must fall at
+/// least 3 times for a step 4 times shorter (first order: 4); at V = 3.2, with the current,
+/// it must be V = 0's within 3 standard errors (the blocks' scatter): it does not depend on
+/// the current, so the steps carry the circuit's share exactly.
+#[test]
+#[allow(clippy::cast_precision_loss)]
+fn d11_circuit_energy_account() {
+    let run = |v: f64, dt: f64| {
+        let tube = resistor(16.0, 4.0, v, 4000, dt, 7);
+        let mut s = tube.state();
+        s.book_potential_steps = true;
+        let terms = |s: &physics::tube::TubeState| {
+            let circuit: f64 = (0..2)
+                .map(|e| {
+                    let given: f64 = tube
+                        .emitters
+                        .iter()
+                        .zip(&s.released)
+                        .filter(|(em, _)| em.electrode == e)
+                        .map(|(_, q)| q)
+                        .sum();
+                    s.potentials[e] * (given - s.collected[e].iter().sum::<f64>())
+                })
+                .sum();
+            let work: f64 = s.field_work.iter().sum();
+            let steps: f64 = s.potential_steps.iter().sum();
+            (circuit, work, steps)
+        };
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let per = libm::round(2.5 / dt) as usize;
+        for _ in 0..2 * per {
+            tube.step(&mut s);
+        }
+        let first = terms(&s);
+        let mut blocks = Vec::new();
+        for _ in 0..8 {
+            let a = terms(&s);
+            for _ in 0..per {
+                tube.step(&mut s);
+            }
+            let b = terms(&s);
+            blocks.push(((b.1 - a.1) + (b.2 - a.2) - (b.0 - a.0)) / 2.5);
+        }
+        let end = terms(&s);
+        let rest = blocks.iter().sum::<f64>() / 8.0;
+        let spread = (blocks.iter().map(|r| (r - rest).powi(2)).sum::<f64>() / 7.0).sqrt();
+        let rate = |k: fn(&(f64, f64, f64)) -> f64| (k(&end) - k(&first)) / 20.0;
+        (
+            rest,
+            spread / 8.0_f64.sqrt(),
+            rate(|t| t.0),
+            rate(|t| t.1),
+            rate(|t| t.2),
+        )
+    };
+    let cases: Vec<(f64, f64)> = vec![(0.0, 0.02), (0.0, 0.005), (3.2, 0.02)];
+    let out: Vec<_> = cases.par_iter().map(|&(v, dt)| run(v, dt)).collect();
+    for ((v, dt), (rest, err, circuit, work, steps)) in cases.iter().zip(&out) {
+        println!(
+            "D11 V {v} dt {dt}: per time the circuit gives {circuit:.4}, the field works {work:.4}, \
+             the steps {steps:+.4}: the remainder {rest:+.4} ± {err:.4}"
+        );
+    }
+    let (coarse, fine, current) = (out[0], out[1], out[2]);
+    println!(
+        "D11 the remainder falls {:.2} times for a step 4 times shorter; with the current it is \
+         {:+.4} off V = 0's ({:.1} standard errors)",
+        coarse.0 / fine.0,
+        current.0 - coarse.0,
+        (current.0 - coarse.0).abs() / libm::hypot(coarse.1, current.1)
+    );
+    assert!(coarse.0 / fine.0 > 3.0, "{coarse:?} {fine:?}");
+    assert!(
+        (current.0 - coarse.0).abs() < 3.0 * libm::hypot(coarse.1, current.1),
+        "{current:?} {coarse:?}"
+    );
+}

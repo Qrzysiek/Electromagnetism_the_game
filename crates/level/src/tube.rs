@@ -1058,6 +1058,10 @@ pub struct TubeRun {
     /// Per metal piece (`metals`): the work the field has done on its carriers so far,
     /// `(t, W)`, at each frame (`TubeState::field_work`; its rate is the heat).
     pub work: Vec<Vec<(f64, f64)>>,
+    /// The contacts' potential steps so far, `(t, Σ)` over the electrodes, at each frame
+    /// with metals, when booked (`TubeSim::book_potential_steps`; `TubeState::
+    /// potential_steps`: the circuit's energy the field's work leaves out).
+    pub potential_steps: Vec<(f64, f64)>,
     /// Per projectile: its track `(t, x)` while in flight, and when it reached its
     /// detector.
     pub tracks: Vec<Vec<(f64, [f32; 2])>>,
@@ -1148,6 +1152,7 @@ impl TubeRun {
         for (a, c) in self.work.iter_mut().zip(chunk.work) {
             a.extend(c);
         }
+        self.potential_steps.extend(chunk.potential_steps);
         if self.tracks.len() < chunk.tracks.len() {
             self.tracks.resize(chunk.tracks.len(), Vec::new());
         }
@@ -1564,6 +1569,12 @@ impl TubeSim {
         self.state.t
     }
 
+    /// Books the contacts' potential steps from now on (`TubeRun::potential_steps`; a
+    /// diagnostic: ~40 % more time).
+    pub fn book_potential_steps(&mut self) {
+        self.state.book_potential_steps = true;
+    }
+
     /// Steps taken and the segments of its linear system (for the cost meters).
     pub fn steps(&self) -> u32 {
         self.steps
@@ -1781,6 +1792,10 @@ impl TubeSim {
                     for m in 0..metals {
                         let w = self.state.field_work.get(m).copied().unwrap_or(0.0);
                         self.pending.work[m].push((frame.t, w));
+                    }
+                    if self.state.book_potential_steps {
+                        let steps = self.state.potential_steps.iter().sum();
+                        self.pending.potential_steps.push((frame.t, steps));
                     }
                 }
                 if self.layout.has_field() && metals > 0 {

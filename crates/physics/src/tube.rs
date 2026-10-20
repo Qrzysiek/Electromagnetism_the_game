@@ -59,7 +59,9 @@ use rayon::prelude::*;
 
 use crate::lattice::Lattice;
 use crate::tree2d::{Source, Tree};
-use crate::zinv::{Electrodes, PAR_CHUNK, Section, line_charge, segment_field_fast};
+use crate::zinv::{
+    Electrodes, PAR_CHUNK, Section, line_charge, segment_field_fast, segment_integrals,
+};
 
 /// From this many particles in flight the step sums the fields and the induced charge's
 /// potentials by trees (`tree2d`) instead of directly: below it the direct sums are faster
@@ -367,6 +369,16 @@ pub struct TubeState {
     /// gave off (an ohmic contact's), so far. With the lattices' heat, where the field's work
     /// on the carriers goes (test `d10_carriers_energy_account`).
     pub contact_energy: Vec<f64>,
+    /// Per electrode, with lattices and `book_potential_steps`: the potential steps of the
+    /// carriers it gave off and took in, `q (V − φ)` at each release and `q (φ − V)` at each
+    /// absorption (φ the potential at the carrier of everything else, V its electrode's): the
+    /// part of the circuit's energy that the field's work on the carriers leaves out (test
+    /// `d10_carriers_energy_account`).
+    pub potential_steps: Vec<f64>,
+    /// Whether to book `potential_steps` (a diagnostic, off by default: each release and
+    /// absorption then sums the potential over every particle, ~40 % more time in a metal
+    /// level).
+    pub book_potential_steps: bool,
     /// The density the lattices' backgrounds induce on the segments (constant).
     background: Vec<f64>,
     /// Every electrode's potential now.
@@ -529,6 +541,7 @@ impl Tube {
                 .collect(),
             collected: vec![vec![0.0; self.emitters.len() + self.lattices.len()]; n_el],
             contact_energy: vec![0.0; n_el],
+            potential_steps: vec![0.0; n_el],
             released: vec![0.0; self.emitters.len()],
             field_work: vec![0.0; self.lattices.len()],
             induced_work: vec![0.0; self.lattices.len()],
@@ -870,6 +883,33 @@ impl Tube {
         e
     }
 
+    /// The potential of `field`'s sources at `x`: the segments' exact integrals, each
+    /// particle's rod (`−λ ln r²` outside its radius, `−λ (r²/h² − 1 + ln h²)` inside, whose
+    /// field `field` uses) and the lattices' backgrounds.
+    fn potential(&self, s: &TubeState, sigma: &[f64], x: DVec3, skip: Option<usize>) -> f64 {
+        let mut phi = 0.0;
+        for ((a, b), d) in self.electrodes.segments.iter().zip(sigma) {
+            phi += segment_integrals(*a, *b, x).0 * *d;
+        }
+        let h2 = self.softening * self.softening;
+        for (k, (p, l)) in s.x.iter().zip(&s.charge).enumerate() {
+            if Some(k) == skip {
+                continue;
+            }
+            let (dx, dy) = (x.x - p.x, x.y - p.y);
+            let r2 = dx * dx + dy * dy;
+            phi -= if r2 >= h2 {
+                l * libm::log(r2)
+            } else {
+                l * (r2 / h2 - 1.0 + libm::log(h2))
+            };
+        }
+        for l in &self.lattices {
+            phi += l.background_at(x).0;
+        }
+        phi
+    }
+
     fn add(&self, s: &mut TubeState, x: DVec3, v: DVec3, charge: f64, qm: f64, tag: u32) {
         s.x.push(x);
         s.v.push(v);
@@ -940,7 +980,7 @@ impl Tube {
             let sign = em.charge_per_mass.signum();
             let segs: Vec<usize> = self.segments_of(em.electrode).collect();
             if let Some(ohmic) = em.ohmic {
-                self.emit_ohmic(s, i, em, ohmic, &segs, &mut emitted);
+                self.emit_ohmic(s, &sigma, i, em, ohmic, &segs, &mut emitted);
                 continue;
             }
             for (k, &j) in segs.iter().enumerate() {
@@ -988,10 +1028,13 @@ impl Tube {
     }
 
     /// An ohmic contact's emission (`OhmicContact`): per emitting segment of emitter `i`,
-    /// the carriers its layer lacks.
+    /// the carriers its layer lacks (`sigma`: the segments' density now, for the potential
+    /// step of each release).
+    #[allow(clippy::too_many_arguments)]
     fn emit_ohmic(
         &self,
         s: &mut TubeState,
+        sigma: &[f64],
         i: usize,
         em: &Emitter,
         ohmic: OhmicContact,
@@ -1036,6 +1079,11 @@ impl Tube {
                 // takes in carry on average.
                 let v = crate::lattice::flux_velocity(out, em.thermal_speed, s.emitted);
                 let x = a + t * (len * f) + out * (EMISSION_OFFSET * len);
+                if s.book_potential_steps {
+                    let phi = self.potential(s, sigma, x, None);
+                    s.potential_steps[em.electrode] +=
+                        sign * em.weight * (s.potentials[em.electrode] - phi);
+                }
                 self.add(s, x, v, sign * em.weight, em.charge_per_mass, tag);
                 emitted[em.electrode] += sign * em.weight;
                 s.released[i] += sign * em.weight;
@@ -1240,6 +1288,10 @@ impl Tube {
                     s.collected[e][tag as usize] += s.charge[k];
                     s.contact_energy[e] +=
                         0.5 * (s.charge[k] / s.qm[k]).abs() * s.v[k].length_squared();
+                    if s.book_potential_steps && !self.lattices.is_empty() {
+                        let phi = self.potential(s, &sigma, s.x[k], Some(k));
+                        s.potential_steps[e] += s.charge[k] * (phi - s.potentials[e]);
+                    }
                 }
                 // A circuit node keeps what it absorbs (projectiles' charge too).
                 if let Some(r) = hit.and_then(|e| self.node_of(&nodes, e)) {

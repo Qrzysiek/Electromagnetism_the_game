@@ -1295,10 +1295,12 @@ fn metal_maps_add_up() {
 /// reference over t = 10–40 the supply's power `IV` against the field's work on the carriers
 /// per time (`TubeRun::work`), within 5 % (set from the work's thermal noise over the window,
 /// ~1.5 %); the lattice's heat, the rest of it (D10: the carriers' kinetic energy carried into
-/// the contacts), printed. Measured −4.4 %; over t = 10–80 in windows the work is 0.94–0.97 of
-/// `IV` in the preview and 0.91–0.95 at the verification's resolution: a systematic gap of
-/// ~5 % not explained yet (PHYSICS.md §2.11; the release offset of the injecting contact's
-/// carriers skips ~0.3 V of its ~1 V layer, ~1 %).
+/// the contacts), printed. Measured −4.4 %. The account closed (physics test
+/// `d11_circuit_energy_account`): `IV = W + S − H`, the contacts' potential steps `S`
+/// (`TubeSim::book_potential_steps`) and the step's own remainder `H`, which must not depend
+/// on the current: at the reference and with the supply at 0, over t = 10–40 in 6 blocks of
+/// 5, within 3 standard errors (their scatter). Both are mostly the carriers' exchange with
+/// the contacts' layers, so the gap `W − IV` is the field's work with no current at all.
 #[test]
 fn metal_energy_balance() {
     let level = level::shipped("ohms_law");
@@ -1324,4 +1326,47 @@ fn metal_energy_balance() {
         100.0 * heat / supplied
     );
     assert!((work / supplied - 1.0).abs() < 0.05, "{work} {supplied}");
+    // The account closed (test `d11_circuit_energy_account`): `IV = W + S − H`, with the
+    // contacts' potential steps `S` and the step's own remainder `H`, which does not depend
+    // on the current: at the reference and with the supply at 0, over t = 10–40 in 6 blocks.
+    let account = |v: f64| {
+        let mut player = level.reference_solution.clone();
+        player[0].value = v;
+        let mut sim = level.tube_sim(&player, 1);
+        sim.book_potential_steps();
+        sim.advance_to(41.0);
+        let r = sim.take_chunk();
+        let rate = |s: &[(f64, f64)], t0: f64, t1: f64| (at(s, t1) - at(s, t0)) / (t1 - t0);
+        let blocks: Vec<f64> = (0..6)
+            .map(|k| {
+                #[allow(clippy::cast_precision_loss)]
+                let t0 = 10.0 + 5.0 * k as f64;
+                let t1 = t0 + 5.0;
+                rate(&r.work[0], t0, t1) + rate(&r.potential_steps, t0, t1)
+                    - v * rate(&r.collected[0], t0, t1)
+            })
+            .collect();
+        let rest = blocks.iter().sum::<f64>() / 6.0;
+        let spread = (blocks.iter().map(|b| (b - rest).powi(2)).sum::<f64>() / 5.0).sqrt();
+        (
+            rest,
+            spread / 6.0_f64.sqrt(),
+            rate(&r.potential_steps, 10.0, 40.0),
+        )
+    };
+    let ((rest, err, steps), (idle, idle_err, idle_steps)) = std::thread::scope(|scope| {
+        let on = scope.spawn(|| account(volts));
+        let off = account(0.0);
+        (on.join().expect("the run"), off)
+    });
+    println!(
+        "metal energy: the contacts' potential steps take {steps:.3} ({:.1} % of IV), the          remainder W + S − IV is {rest:+.3} ± {err:.3} ({:.1} %); with the supply at 0, steps          {idle_steps:+.3}, remainder {idle:+.3} ± {idle_err:.3}: {:.1} standard errors apart",
+        100.0 * steps / supplied,
+        100.0 * rest / supplied,
+        (rest - idle).abs() / libm::hypot(err, idle_err)
+    );
+    assert!(
+        (rest - idle).abs() < 3.0 * libm::hypot(err, idle_err),
+        "{rest} {err} {idle} {idle_err}"
+    );
 }
