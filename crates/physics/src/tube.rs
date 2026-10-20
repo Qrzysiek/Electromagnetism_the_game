@@ -290,6 +290,22 @@ pub struct Tube {
     pub lattices: Vec<Lattice>,
 }
 
+/// A lattice's accounts by cell (`Lattice::account_cell`, row by row), so far: bookkeeping
+/// for the display's maps of the current and the heat inside a metal. Nothing here acts on
+/// the motion (the golden hashes stayed); the cells add up to `TubeState::field_work` and
+/// `induced_work` (test `d9_cell_accounts_add_up`).
+#[derive(Clone, Debug, Default)]
+pub struct CellAccounts {
+    /// The charge the carriers carry through the cell, `Σ q Δx` of the pieces of their steps'
+    /// chords inside it (`Lattice::book_flux`; collisions and walls included in the steps):
+    /// the current density's time integral over the cell.
+    pub flux: Vec<[f64; 2]>,
+    /// The field's work on the carriers in the cell (their share of `TubeState::field_work`),
+    /// and the induced field's (of `induced_work`).
+    pub work: Vec<f64>,
+    pub induced: Vec<f64>,
+}
+
 /// The particles and the bookkeeping of a running tube.
 #[derive(Clone, Debug, Default)]
 pub struct TubeState {
@@ -345,6 +361,8 @@ pub struct TubeState {
     /// isolated plate 12 × 12, 2.57 per time at the preview's resolution and 0.60 at the
     /// verification's, against an eddy-current heat of 1.24).
     pub induced_work: Vec<f64>,
+    /// Per lattice: the current and those works by cell (`CellAccounts`).
+    pub cells: Vec<CellAccounts>,
     /// The density the lattices' backgrounds induce on the segments (constant).
     background: Vec<f64>,
     /// Every electrode's potential now.
@@ -509,6 +527,18 @@ impl Tube {
             released: vec![0.0; self.emitters.len()],
             field_work: vec![0.0; self.lattices.len()],
             induced_work: vec![0.0; self.lattices.len()],
+            cells: self
+                .lattices
+                .iter()
+                .map(|l| {
+                    let (nx, ny) = l.account_size();
+                    CellAccounts {
+                        flux: vec![[0.0; 2]; nx * ny],
+                        work: vec![0.0; nx * ny],
+                        induced: vec![0.0; nx * ny],
+                    }
+                })
+                .collect(),
             launched: vec![false; self.projectiles.len()],
             fates: vec![None; self.projectiles.len()],
             potentials,
@@ -1115,9 +1145,15 @@ impl Tube {
                 && *tag < PROJECTILE_TAG
                 && let Some(k) = self.lattices.iter().position(|l| l.contains(*x))
             {
-                work[k] += 0.5 * self.dt * charge * e.dot(old + *v);
+                // Its cell's share too (the same sums, split by place).
+                let c = self.lattices[k].account_cell(*x);
+                let w = 0.5 * self.dt * charge * e.dot(old + *v);
+                work[k] += w;
+                s.cells[k].work[c] += w;
                 if let Some(i) = induced {
-                    induced_work[k] += 0.5 * self.dt * charge * i.dot(old + *v);
+                    let w = 0.5 * self.dt * charge * i.dot(old + *v);
+                    induced_work[k] += w;
+                    s.cells[k].induced[c] += w;
                 }
             }
             *x += *v * self.dt;
@@ -1137,8 +1173,11 @@ impl Tube {
                 if s.tag[p] >= PROJECTILE_TAG {
                     continue;
                 }
-                if let Some(l) = self.lattices.iter().find(|l| l.contains(*a)) {
+                if let Some(k) = self.lattices.iter().position(|l| l.contains(*a)) {
+                    let l = &self.lattices[k];
                     self.scatter(l, s, p, *a, *v0, step);
+                    // The charge it carried over the step, along its chord.
+                    l.book_flux(&mut s.cells[k].flux, *a, s.x[p], s.charge[p]);
                 }
             }
         }

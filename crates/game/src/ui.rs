@@ -275,6 +275,7 @@ fn inspect_tooltip(
     let Some(info) = crate::inspect::inspect_at(level, &game.editor.placement, at) else {
         return;
     };
+    let live = metal_map_lines(game, at);
     egui::Area::new(egui::Id::new("inspect_tooltip"))
         .order(egui::Order::Tooltip)
         .fixed_pos(pointer + egui::vec2(18.0, 18.0))
@@ -286,12 +287,57 @@ fn inspect_tooltip(
                 for line in &info.lines {
                     ui.label(egui::RichText::new(line).small());
                 }
+                for line in &live {
+                    ui.label(egui::RichText::new(line).small().strong());
+                }
                 if let Some((what, samples)) = &info.chart {
                     ui.label(egui::RichText::new(what).small());
                     circuit_plot(ui, samples, &[], "");
                 }
             });
         });
+}
+
+/// Under a metal map, its values at the point (`crate::MetalMap`): the current density and
+/// the power per area of the cell there with their standard errors (the mean over the map's
+/// span and the cells about it; under a swinging field the current's lock-in rms).
+fn metal_map_lines(game: &Game, at: physics::DVec3) -> Vec<String> {
+    let (Some(map), Some(view)) = (&game.metal_map, &game.tube_preview) else {
+        return Vec::new();
+    };
+    if !matches!(game.map, Some(MapMode::Current | MapMode::Heat)) || map.revision != view.revision
+    {
+        return Vec::new();
+    }
+    let maps = &map.maps;
+    for ((m, r), e) in view.run.metals.iter().zip(&maps.values).zip(&maps.errors) {
+        let Some(c) = m.cell_at([at.x, at.y]).filter(|c| *c < r.power.len()) else {
+            continue;
+        };
+        let (j, ej) = (r.j[c], e.j[c]);
+        let what = if maps.lock_in {
+            "eddy current (rms, its way while B rises)"
+        } else {
+            "current density"
+        };
+        return vec![
+            format!(
+                "Here over t = {}–{}: {what} j = ({} ± {}, {} ± {})",
+                fmt_num(maps.from),
+                fmt_num(maps.to),
+                fmt_num(j[0]),
+                fmt_num(ej[0]),
+                fmt_num(j[1]),
+                fmt_num(ej[1]),
+            ),
+            format!(
+                "power per area the field gives the carriers: {} ± {}",
+                fmt_num(r.power[c]),
+                fmt_num(e.power[c])
+            ),
+        ];
+    }
+    Vec::new()
 }
 
 /// The colour of a supply's badge and of its electrodes' highlight while it is in focus
@@ -1333,6 +1379,18 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 .on_hover_text("|E| and its direction at the time shown");
             ui.selectable_value(&mut game.map, Some(MapMode::EnergyFlow), "energy flow")
                 .on_hover_text("The Poynting vector of that field: where its energy goes");
+            if level.tube.as_ref().is_some_and(|t| !t.metals.is_empty()) {
+                ui.selectable_value(&mut game.map, Some(MapMode::Current), "current")
+                    .on_hover_text(
+                        "The current density j inside the metals: where the charge flows and \
+                         how strongly (colour |j|, arrows its way)",
+                    );
+                ui.selectable_value(&mut game.map, Some(MapMode::Heat), "heat")
+                    .on_hover_text(
+                        "The power per area the field gives the metals' carriers, E·j: where \
+                         the heat is made",
+                    );
+            }
             ui.selectable_value(&mut game.map, None, "off")
                 .on_hover_text("No background map");
         });
@@ -1360,6 +1418,51 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
              first-order low-pass, as an RC meter or a power meter integrates). 0: the \
              instantaneous field, every fluctuation of the real physics.",
         );
+        if matches!(game.map, Some(MapMode::Current | MapMode::Heat)) {
+            ui.add(
+                egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),
+            )
+            .on_hover_text("How many decades below the run's strongest so far are still coloured");
+            let span = crate::metal_map_span(game.map_tau);
+            let (headline, what) = if game.map == Some(MapMode::Current) {
+                (
+                    "|j| in the metals; arrows: its way",
+                    "the current density |j| (arrows: the way positive charge goes; electrons \
+                     drift against them)",
+                )
+            } else {
+                (
+                    "E·j: orange heats the carriers, teal takes back",
+                    "the power per area the field gives the carriers, E·j, orange (teal where \
+                     it takes energy back): in a steady state the heat made there; in an \
+                     isolated metal the induced field's part, which the heat goals measure",
+                )
+            };
+            explain(
+                ui,
+                headline,
+                &format!(
+                    "Inside the metals: {what}, on a log scale over {:.1} decades below the \
+                     strongest so far on this level (the 95th percentile of the metals' cells: \
+                     one setup compares with another, a cut core shows dimmer). Each \
+                     cell's mean over the last {} time units (twice the average τ when one is \
+                     set) and over the 3 × 3 cells about it that no cut separates from it. \
+                     Under a swinging field, over its last whole half periods (up to four): \
+                     the heat as a mean over whole cycles of it, the current by lock-in (its \
+                     part in step with the field's change, which a plain mean would cancel: \
+                     the rms, its way while the field rises). The carriers' thermal motion \
+                     makes every cell's value noisy (Johnson–Nyquist noise): the span is cut \
+                     into parts whose spread gives each value's standard error, and a cell \
+                     fades out as its value sinks into its noise (gone within one standard \
+                     error, full beyond three). Hover a metal for the values.",
+                    game.tube_range_decades,
+                    fmt_num(span),
+                ),
+            );
+            ui.separator();
+            controls(ui);
+            return;
+        }
         if matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow)) {
             ui.add(
                 egui::Slider::new(&mut game.tube_range_decades, 0.5..=4.0).text("range (decades)"),
@@ -1670,7 +1773,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
              launch the particle is taken to move uniformly.",
         ),
         // Tube levels only (their own View section).
-        Some(MapMode::Electric | MapMode::EnergyFlow) | None => ("", ""),
+        Some(MapMode::Electric | MapMode::EnergyFlow | MapMode::Current | MapMode::Heat) | None => {
+            ("", "")
+        }
     };
     if !legend.0.is_empty() {
         explain(ui, legend.0, legend.1);

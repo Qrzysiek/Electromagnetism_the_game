@@ -32,6 +32,12 @@ pub enum MapMode {
     /// Tube levels: the energy flow (Poynting vector) of the run's electromagnetic field,
     /// with arrows (`em.rs`; `Magnetic` shows its B_z).
     EnergyFlow,
+    /// Tube levels with metals: the current density inside them, |j| with arrows, over a
+    /// span of time (`level::tube::TubeRun::metal_rates`).
+    Current,
+    /// Tube levels with metals: the power per area the field gives their carriers (the heat
+    /// goal's), signed.
+    Heat,
 }
 
 /// Uniform parameters of the maps. The sources themselves are in the storage buffer
@@ -138,6 +144,7 @@ pub fn map_frame(frame: &level::tube::TubeFrame) -> std::borrow::Cow<'_, level::
             currents: frame.currents.clone(),
             heat: frame.heat,
             paths: Vec::new(),
+            cells: Vec::new(),
         };
         for ((x, q), kind) in frame.x.iter().zip(&frame.q).zip(&frame.kind) {
             if *kind == level::tube::KIND_PROJECTILE {
@@ -458,7 +465,7 @@ pub fn params(
         mode: match mode {
             MapMode::Potential => 0,
             MapMode::Magnetic | MapMode::Waves | MapMode::ParticleField | MapMode::Total => 1,
-            MapMode::Electric | MapMode::EnergyFlow => 2,
+            MapMode::Electric | MapMode::EnergyFlow | MapMode::Current | MapMode::Heat => 2,
         },
         uniform: Vec4::new(e_u.x as f32, e_u.y as f32, (b_u / b_ref) as f32, 0.0),
         origin: Vec4::new(

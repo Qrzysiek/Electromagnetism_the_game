@@ -552,6 +552,8 @@ pub fn draw(
                     | crate::potential::MapMode::Magnetic
                     | crate::potential::MapMode::Electric
                     | crate::potential::MapMode::EnergyFlow
+                    | crate::potential::MapMode::Current
+                    | crate::potential::MapMode::Heat
             )
         ) {
             Visibility::Visible
@@ -1292,6 +1294,8 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
                 | crate::potential::MapMode::Electric
                 | crate::potential::MapMode::Magnetic
                 | crate::potential::MapMode::EnergyFlow
+                | crate::potential::MapMode::Current
+                | crate::potential::MapMode::Heat
         )
     );
     let dots = match game.tube_particles {
@@ -1470,11 +1474,15 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
             }
         }
     }
-    // The electric field map's arrows: direction, faded with |E| over the map's 1.5
-    // decades (as its colours).
+    // The electric field map's arrows (the energy flow's, the current's): direction, faded
+    // with the size over the map's 1.5 decades (as its colours).
     if matches!(
         game.map,
-        Some(crate::potential::MapMode::Electric | crate::potential::MapMode::EnergyFlow)
+        Some(
+            crate::potential::MapMode::Electric
+                | crate::potential::MapMode::EnergyFlow
+                | crate::potential::MapMode::Current
+        )
     ) && let Some(field) = &game.tube_field
     {
         #[allow(clippy::cast_possible_truncation)]
@@ -1490,11 +1498,12 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
                 continue;
             }
             let d = *e / m * 0.8;
-            gizmos.arrow_2d(
-                *p - d * 0.5,
-                *p + d * 0.5,
-                Color::srgb(1.0, 0.9, 0.6).with_alpha(0.7 * a),
-            );
+            let color = if game.map == Some(crate::potential::MapMode::Current) {
+                CURRENT_ARROW.with_alpha(0.9 * a)
+            } else {
+                Color::srgb(1.0, 0.9, 0.6).with_alpha(0.7 * a)
+            };
+            gizmos.arrow_2d(*p - d * 0.5, *p + d * 0.5, color);
         }
     }
     draw_swing(gizmos, game, &frame);
@@ -1502,6 +1511,9 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     draw_hall(gizmos, game, stale_fade(view.revision, game.sent_revision));
     draw_drift(gizmos, game, view, &frame);
 }
+
+/// The current map's arrows (magenta: no other mark's colour, and seen on its amber).
+pub const CURRENT_ARROW: Color = Color::srgb(0.85, 0.25, 0.95);
 
 /// The chevrons' spacing along a metal.
 const DRIFT_TICKS: f64 = 2.0;

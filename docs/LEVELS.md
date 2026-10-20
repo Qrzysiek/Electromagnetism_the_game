@@ -139,6 +139,31 @@ verified reference solution for every shot and negligible radiation
 | 115 | Eddy currents | 13 Intermediate | an isolated plate 12 × 12 on the solenoid's axis, its field swinging as B₀ sin(0.125 t) (`TubeSpec::solenoid_drive`): the induced field drives the carriers round in loops, eddy currents, whose heat goes as `Ḃ²` (the heat goal measures the induced field's work, PHYSICS.md §2.11). The board's only electrode is a small floating cold one (it emits nothing; isolated metals need every electrode floating, OP-1). Local Ohm's law gives `σ ⟨Ḃ²⟩ ∫u dA` = 2.68 B₀²; measured heat over B₀² 2.31, 2.51, 2.47, 2.48, 2.39 at B₀ = 0.5, 1, 1.5, 2, 3 (5–7 % below Ohm's law: the walls; the carriers barely warm even at 3). The swing spans ±3 (the owner's showcase rule: heat over a factor of 36). Goal 1.2–4.0 over t = 25–125 (two periods): EDDY_WINDOW. Verified 2.30 ± 0.28 at the reference B₀ = 0.95 | 1 supply (solenoid swing ±3) | 1 |
 | 116 | Laminations | 13 Intermediate | a transformer's core 20 × 12 (30 macroparticles per area) on the solenoid's axis in the level's own swinging field (B₀ = 0.68, ω = 0.125), three cuts of any length and angle, drawn by dragging (`ElementKind::Cut`: walls inside the metal). Each eddy loop must go round the cuts: measured (local Ohm's law) uncut 2.833 (3.060); three full cuts along, evenly 0.516 (0.277), at y = 7, 11, 14 0.597, at 6, 10, 14 0.751; two along and one across 0.407; two along 0.755 (0.475); one along and one across 0.791 (0.765); one along 1.260 (0.991); corner to corner 1.435; one across 1.633 (1.692); two half-length cuts along 1.745, two staggered 16 long 1.737. The long cuts' faces carry current across as capacitors, so the gain along them falls short of Ohm's law. Goal at most 0.65 over t = 25–125: all three cuts across the whole core, about evenly, mostly along it. Verified at the reference (two along, one across) | 3 cuts | 3 |
 
+## Showcase review
+
+The rule (CLAUDE.md, the owner, 2026-10-20: a priority): every control spans all the
+behaviours the model can produce within reason, and the answer is one choice among them with
+a solving interval of at least about 5 % of a slider (`generator window`), clear of 0, the
+ends and the halves' middles. Reviewed so far: the tube levels (99–116), whose controls are
+symmetric sliders. The particle levels (1–98) choose element strengths from palettes (stops
+such as 1e6, 2e6, 4e6) and positions; their review needs each palette's extremes simulated
+(task list).
+
+| Level | Control | What its range shows | Solving interval | Status |
+|---|---|---|---|---|
+| 99 Vacuum diode | supply ±70 | from no current through space-charge-limited flow to saturation | — | not measured |
+| 100 Sideways | solenoid ±4 | straight paths, Hull's cutoff (~0.86), the electrons curling back onto the cathode above ~1.35 (circles ~1.9 across at the end) | ~0.95–1.3 (~4.4 %) | full; interval borderline |
+| 104 Ion diode | solenoid ±3 | electrons pouring into the rod (B = 0), their cutoff (~0.8), insulation; not the ions' own cutoff (~14: ions curling back) | B 1.66–2.55 (~15 % of ±3) | proposal: ±16 would show the ions insulated too, but the interval would fall to 2.8 % (the owner to decide) |
+| 108 Magnetron | supply ±80, solenoid ±10 | crossing below Hull's cutoff (~4.5), the oscillating band (Buneman–Hartree), the insulated hub | supply 42.0–47.3 (3.3 %), solenoid 5.83–6.33 (2.5 %) | full; intervals below 5 %: the resonance is narrow (a lower swing goal, ≥ 5 instead of 10, would give the supply ~4.7 %; the solenoid's stays ~3 %) — the owner to decide |
+| 109–111 Ohm's law, Long and thin, Potentiometer | supplies ±40 | from no current to the carriers warming in the field (`qEℓ/kT` to ~0.6) | — | not measured |
+| 112 Hall probe | supply ±40, solenoid ±16 | straight paths to circles 0.12 across (`ω_c τ` 6.4) | B 3.2–5.2 (6.3 %), supply 29–36 (8.8 %) | done 2026-10-20 |
+| 113 Positive carriers | supplies ±40, solenoid ±16 | as Hall probe, both signs of carriers | B −5.6 to −3.2 (7.5 %), supplies 27–37 (12.5 %), −15 to −8 (8.8 %) | done 2026-10-20 |
+| 114 Magnetoresistance | supply ±10, solenoid ±16 | straight to circling on the spot | B 4.0–6.4 (7.5 %), supply 6.5–8.0 (7.5 %) | done 2026-10-20 |
+| 115 Eddy currents | swing ±3 | heat over a factor of 36 | B₀ 0.8–1.2 (6.7 %) | done 2026-10-20 |
+| 116 Laminations | three free cuts | any length and angle across a 20 × 12 core | goal ≤ 0.65 | done 2026-10-20 |
+
+The other tube levels (101–103, 105–107) have not been reviewed yet.
+
 ## Automatic detectors
 
 A shot's detector may be given as `Auto(strip, axis, size)`. The script then runs the

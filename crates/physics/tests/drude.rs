@@ -673,8 +673,10 @@ fn torsion_midline(w: f64, b: f64) -> f64 {
 /// Per ramp (but `skip` after each corner), the mean of the power the induced field gives
 /// the carriers, `Σ q E·Δx/dt`, and of the current through the rectangle's left half,
 /// `Σ q Δy/dt` (signed by the ramp: positive for a rising field): one block per ramp.
-#[allow(clippy::too_many_arguments)]
-fn eddy(
+/// An isolated metal of the tests' (`carriers` in the rectangle `lo`..`hi`, no contacts) in
+/// a field along z that changes in a triangle between `±b0` with period `period`, about
+/// `axis` (D8, D9).
+fn plate(
     lo: DVec3,
     hi: DVec3,
     axis: DVec3,
@@ -682,9 +684,7 @@ fn eddy(
     dt: f64,
     b0: f64,
     period: f64,
-    end: f64,
-    skip: f64,
-) -> Vec<(f64, f64)> {
+) -> Tube {
     let (w, b) = (hi.x - lo.x, hi.y - lo.y);
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(w * b / (2.0 * A * MEAN_FREE_PATH)) as usize;
@@ -720,7 +720,7 @@ fn eddy(
         },
         axis,
     };
-    let tube = Tube {
+    Tube {
         electrodes,
         emitters: Vec::new(),
         projectiles: Vec::new(),
@@ -734,7 +734,23 @@ fn eddy(
         b_wave: Some(wave),
         circuits: Vec::new(),
         lattices: vec![lattice],
-    };
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn eddy(
+    lo: DVec3,
+    hi: DVec3,
+    axis: DVec3,
+    carriers: usize,
+    dt: f64,
+    b0: f64,
+    period: f64,
+    end: f64,
+    skip: f64,
+) -> Vec<(f64, f64)> {
+    let tube = plate(lo, hi, axis, carriers, dt, b0, period);
+    let wave = tube.b_wave.expect("a swinging field");
     let mut s = tube.state();
     let (mut power, mut current, mut n) = (0.0, 0.0, 0.0);
     let mut blocks = Vec::new();
@@ -841,4 +857,53 @@ fn d8_eddy_currents() {
         assert!(p.abs() < 0.05, "{name}: power {p}");
         assert!(c.abs() < 0.05, "{name}: current {c}");
     }
+}
+
+/// D9, the display's accounts by cell (`physics::tube::CellAccounts`): an isolated plate 6 × 4
+/// of the tests' metal (4000 carriers) in D8's swinging field, 400 steps of 0.02: the cells'
+/// works add up to the lattice's (`field_work`, `induced_work`), and their charge carried to
+/// every carrier's own `Σ q Δx` over the steps it started inside, here booked independently,
+/// each to 1e-9 of the sums' scale (the sum of the cells' sizes: rounding over 1.6 million
+/// terms is ~1e-10 of it; a carrier missed or booked twice would be ~1e-4).
+#[test]
+fn d9_cell_accounts_add_up() {
+    let (lo, hi) = (DVec3::ZERO, DVec3::new(6.0, 4.0, 0.0));
+    let tube = plate(lo, hi, DVec3::new(3.0, 2.0, 0.0), 4000, 0.02, 0.25, 20.0);
+    let lattice = &tube.lattices[0];
+    let mut s = tube.state();
+    let mut flux = [0.0_f64; 2];
+    for _ in 0..400 {
+        let before: std::collections::HashMap<u32, (DVec3, f64)> =
+            s.id.iter()
+                .zip(&s.x)
+                .zip(&s.charge)
+                .filter(|((_, x), _)| lattice.contains(**x))
+                .map(|((id, x), q)| (*id, (*x, *q)))
+                .collect();
+        tube.step(&mut s);
+        for (id, x) in s.id.iter().zip(&s.x) {
+            if let Some((x0, q)) = before.get(id) {
+                flux[0] += q * (x.x - x0.x);
+                flux[1] += q * (x.y - x0.y);
+            }
+        }
+    }
+    let cells = &s.cells[0];
+    let (nx, ny) = lattice.account_size();
+    assert_eq!((nx, ny, cells.work.len()), (6, 4, 24));
+    let check = |what: &str, cells: &[f64], total: f64| {
+        let sum: f64 = cells.iter().sum();
+        let scale: f64 = cells.iter().map(|c| c.abs()).sum::<f64>().max(1e-300);
+        println!(
+            "D9 {what}: cells {sum:.12e}, total {total:.12e}, off by {:.1e} of their scale {scale:.3e}",
+            (sum - total).abs() / scale
+        );
+        assert!((sum - total).abs() < 1e-9 * scale, "{what}: {sum} {total}");
+    };
+    check("field's work", &cells.work, s.field_work[0]);
+    check("induced work", &cells.induced, s.induced_work[0]);
+    let fx: Vec<f64> = cells.flux.iter().map(|f| f[0]).collect();
+    let fy: Vec<f64> = cells.flux.iter().map(|f| f[1]).collect();
+    check("charge carried along x", &fx, flux[0]);
+    check("charge carried along y", &fy, flux[1]);
 }

@@ -276,7 +276,14 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
     let frame = game.tube_display_frame();
     let map_on = matches!(
         game.map,
-        Some(MapMode::Potential | MapMode::Electric | MapMode::Magnetic | MapMode::EnergyFlow)
+        Some(
+            MapMode::Potential
+                | MapMode::Electric
+                | MapMode::Magnetic
+                | MapMode::EnergyFlow
+                | MapMode::Current
+                | MapMode::Heat
+        )
     );
     let metals = !spec.metals.is_empty();
     let (mut negative, mut positive) = (false, false);
@@ -440,6 +447,15 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
             "energy flow's way",
             "The direction of the Poynting vector S = (c/4π) E × B, where the field's energy \
              goes; its size is the map's colour.",
+        ),
+        Some(MapMode::Current) => row(
+            ui,
+            Swatch::Arrow(from_bevy(crate::draw::CURRENT_ARROW)),
+            "current's way",
+            "The direction of the current density j in each cell of the metal: the way \
+             positive charge goes (electrons drift against it), faded where it is weak; its \
+             size is the map's colour. Averaged over the last few time units and the cells \
+             about each one that no cut separates from it (the carriers' thermal noise).",
         ),
         _ => {}
     }

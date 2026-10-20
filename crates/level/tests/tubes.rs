@@ -1120,3 +1120,173 @@ fn y18_vacuum_tube_mirror() {
     );
     assert!((mirror / here - 1.0).abs() < 0.02, "{here} {mirror}");
 }
+
+/// The metal maps (`TubeRun::metal_rates`, PHYSICS.md §2.11, the Drude metal's maps). (a) The
+/// heat map adds up to the heat goal: Eddy currents' reference, the plate's cells' power over
+/// the goal's window against the goal's measure, within 1 % (the frames' accounts are
+/// interpolated between frames 0.28 apart at the window's ends: ~0.3 % of its work). (b) The
+/// current map carries the strip's current: Ohm's law's reference (a strip between two
+/// contacts alone), the mean `j_x` over its middle half times its width against the current
+/// into its end over the goal's window (t = 10–40), within 3 % (the cells' thermal noise
+/// averages to ~1 %), flowing from the supply's end; and no current into its walls: in
+/// each row along the strip's middle half the mean `j_y` within 15 % of `|j_x|` (the noise of
+/// a row of 8 cells over 30 time units ~4 %; booked to the cell where each step began, the
+/// charge carried had given the rows along the walls ±70 %). (Not Hall probe: its floating side
+/// contacts at mid-length carry part of the current past the metal under them, and charge
+/// through the strip until t ≈ 60: PHYSICS.md.) (c) The eddy currents circulate against the field's change as Ohm's law has them:
+/// Ohmic, the stream function is `ψ = −σḂu` (`u` the plate's torsion function), so the
+/// circulation `L = ∫(r × j)_z dA = 2∫ψ dA = −2σḂ∫u dA` and the heat `P = σḂ²∫u dA`: over
+/// t = 40–60 (Ḃ > 0 throughout), `L/P = −2⟨Ḃ⟩/⟨Ḃ²⟩` whatever σ and the plate's shape, within
+/// 10 % (the heat came 5–7 % below Ohm's law: the walls). (d) The maps as shown
+/// (`TubeRun::metal_maps`) under the swinging field: over the two periods before t = 125 the
+/// lock-in current is the rms of the eddy currents, `j_rms = −σ Ḃ_rms ∇ × (u ẑ)`, so its
+/// circulation against the power is `−2/Ḃ_rms`, within 10 %. (e) Their error bars are
+/// honest: on Ohm's law's uniform middle at t = 40 (4 time units in five batches) the
+/// scatter of `j_x` across the cells against the standard errors they report, a ratio
+/// within 0.6–1.6 (five batches estimate each error to ~35 %).
+#[test]
+#[allow(clippy::cast_precision_loss)]
+fn metal_maps_add_up() {
+    // (a) and (c): Eddy currents.
+    let eddy = level::shipped("eddy_currents");
+    let (start, end) = {
+        let g = &eddy.tube.as_ref().expect("a tube level").heat_goals[0];
+        (g.start, g.end)
+    };
+    let r = eddy.tube_run(&eddy.reference_solution, 1, end + 1.0);
+    let m = &r.metals[0];
+    let area = (m.hi.x - m.lo.x) * (m.hi.y - m.lo.y) / (m.cells.0 * m.cells.1) as f64;
+    let rates = r.metal_rates(start, end, false).expect("frames");
+    let mapped: f64 = rates[0].power.iter().sum::<f64>() * area;
+    let heat = r.heat[0].expect("the window has passed");
+    let (t0, t1) = (40.0, 60.0);
+    let rates = r.metal_rates(t0, t1, false).expect("frames");
+    let centre = [0.5 * (m.lo.x + m.hi.x), 0.5 * (m.lo.y + m.hi.y)];
+    let circulation: f64 = rates[0]
+        .j
+        .iter()
+        .enumerate()
+        .map(|(k, j)| {
+            let x = m.cell_centre(k);
+            ((x[0] - centre[0]) * j[1] - (x[1] - centre[1]) * j[0]) * area
+        })
+        .sum();
+    let power: f64 = rates[0].power.iter().sum::<f64>() * area;
+    let n = 4000;
+    let h = (t1 - t0) / f64::from(n);
+    let bdot = |t: f64| (r.b_at(t + 1e-4) - r.b_at(t - 1e-4)) / 2e-4;
+    let mean_bdot = (r.b_at(t1) - r.b_at(t0)) / (t1 - t0);
+    let mean_bdot2 = (0..n)
+        .map(|k| bdot(t0 + (f64::from(k) + 0.5) * h).powi(2))
+        .sum::<f64>()
+        / f64::from(n);
+    let ohmic = -2.0 * mean_bdot / mean_bdot2;
+    // (d): the maps as shown, by lock-in.
+    let maps = r.metal_maps(125.0, 4.0).expect("maps");
+    assert!(maps.lock_in, "a swinging field's maps lock in");
+    let lock_l: f64 = maps.values[0]
+        .j
+        .iter()
+        .enumerate()
+        .map(|(k, j)| {
+            let x = m.cell_centre(k);
+            ((x[0] - centre[0]) * j[1] - (x[1] - centre[1]) * j[0]) * area
+        })
+        .sum();
+    let lock_p: f64 = maps.values[0].power.iter().sum::<f64>() * area;
+    let (f0, f1) = (maps.from, maps.to);
+    let rms = ((0..n)
+        .map(|k| bdot(f0 + (f64::from(k) + 0.5) * (f1 - f0) / f64::from(n)).powi(2))
+        .sum::<f64>()
+        / f64::from(n))
+    .sqrt();
+    let lock_ohmic = -2.0 / rms;
+    // (b): Ohm's law.
+    let ohm = level::shipped("ohms_law");
+    let rh = ohm.tube_run(&ohm.reference_solution, 1, 41.0);
+    let current = rh.currents[0].expect("the window has passed");
+    let mh = &rh.metals[0];
+    let rates = rh.metal_rates(10.0, 40.0, false).expect("frames");
+    let length = mh.hi.x - mh.lo.x;
+    let middle: Vec<f64> = (0..rates[0].j.len())
+        .filter(|k| {
+            let x = mh.cell_centre(*k)[0];
+            x > mh.lo.x + 0.25 * length && x < mh.hi.x - 0.25 * length
+        })
+        .map(|k| rates[0].j[k][0])
+        .collect();
+    let jx = middle.iter().sum::<f64>() / middle.len() as f64;
+    let carried = -jx * (mh.hi.y - mh.lo.y);
+    // (e): the error bars on the uniform middle.
+    let shown = rh.metal_maps(40.0, 4.0).expect("maps");
+    let middle_cells: Vec<usize> = (0..shown.values[0].j.len())
+        .filter(|k| {
+            let x = mh.cell_centre(*k)[0];
+            x > mh.lo.x + 0.25 * length && x < mh.hi.x - 0.25 * length
+        })
+        .collect();
+    let values: Vec<f64> = middle_cells
+        .iter()
+        .map(|k| shown.values[0].j[*k][0])
+        .collect();
+    let mean_value = values.iter().sum::<f64>() / values.len() as f64;
+    let scatter = (values.iter().map(|v| (v - mean_value).powi(2)).sum::<f64>()
+        / (values.len() - 1) as f64)
+        .sqrt();
+    let reported = (middle_cells
+        .iter()
+        .map(|k| shown.errors[0].j[*k][0].powi(2))
+        .sum::<f64>()
+        / middle_cells.len() as f64)
+        .sqrt();
+    let (nx, ny) = mh.cells;
+    let rows: Vec<f64> = (0..ny)
+        .map(|row| {
+            let cells: Vec<f64> = (0..nx)
+                .filter(|i| {
+                    let x = mh.cell_centre(i + nx * row)[0];
+                    x > mh.lo.x + 0.25 * length && x < mh.hi.x - 0.25 * length
+                })
+                .map(|i| rates[0].j[i + nx * row][1])
+                .collect();
+            cells.iter().sum::<f64>() / cells.len() as f64
+        })
+        .collect();
+    println!(
+        "metal maps: (a) heat map {mapped:.5} against the goal's {heat:.5} ({:+.3} %); (b) the \
+         strip's middle carries {carried:.4} (j_x {jx:.4}) against {current:.4} into its end \
+         ({:+.2} %), j_y by row {rows:.4?}; (c) circulation {circulation:.3}, power {power:.4}: L/P {:.4} against \
+         Ohm's −2⟨Ḃ⟩/⟨Ḃ²⟩ = {ohmic:.4} ({:+.2} %); (d) lock-in over t = {f0:.1}–{f1:.1}: \
+         circulation {lock_l:.3}, power {lock_p:.4}: L/P {:.4} against −2/Ḃ_rms = {lock_ohmic:.4} \
+         ({:+.2} %); (e) j_x {mean_value:.4}: scatter across cells {scatter:.4}, reported error \
+         {reported:.4} (ratio {:.2})",
+        100.0 * (mapped / heat - 1.0),
+        100.0 * (carried / current - 1.0),
+        circulation / power,
+        100.0 * (circulation / power / ohmic - 1.0),
+        lock_l / lock_p,
+        100.0 * (lock_l / lock_p / lock_ohmic - 1.0),
+        scatter / reported
+    );
+    assert!((mapped / heat - 1.0).abs() < 0.01, "(a) {mapped} {heat}");
+    assert!(
+        (carried / current - 1.0).abs() < 0.03,
+        "(b) {carried} {current}"
+    );
+    assert!(
+        rows.iter().all(|j| j.abs() < 0.15 * jx.abs()),
+        "(b) j_y by row {rows:?} against j_x {jx}"
+    );
+    assert!(
+        (circulation / power / ohmic - 1.0).abs() < 0.10,
+        "(c) {circulation} {power} {ohmic}"
+    );
+    assert!(
+        (lock_l / lock_p / lock_ohmic - 1.0).abs() < 0.10,
+        "(d) {lock_l} {lock_p} {lock_ohmic}"
+    );
+    assert!(
+        (0.6..1.6).contains(&(scatter / reported)),
+        "(e) {scatter} {reported}"
+    );
+}

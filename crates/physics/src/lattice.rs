@@ -163,6 +163,72 @@ impl Lattice {
         x.x >= self.lo.x && x.x <= self.hi.x && x.y >= self.lo.y && x.y <= self.hi.y
     }
 
+    /// The cells of the display's accounts (`physics::tube::CellAccounts`): `nx × ny` of
+    /// about a unit each, from `lo`.
+    #[must_use]
+    pub fn account_size(&self) -> (usize, usize) {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let n = |w: f64| libm::ceil(w - 1e-9).max(1.0) as usize;
+        (n(self.hi.x - self.lo.x), n(self.hi.y - self.lo.y))
+    }
+
+    /// Books the charge `q` carried along the chord from `a` to `b` (a step) into the
+    /// account cells it crosses (`flux`, row by row): each the part of `q (b − a)` along the
+    /// piece of the chord inside it. (Booked whole to the cell where the step began, the
+    /// steps across a cell's edge biased the cells along a wall: each edge between two rows
+    /// gave its thermal crossings' overshoot to the row below and took it from the row
+    /// above, which cancels inside but left the rows along the walls a spurious flux into
+    /// them, ±0.14 per area in the levels' metal, ~70 % of a strip's current density.)
+    #[allow(clippy::cast_precision_loss)]
+    pub fn book_flux(&self, flux: &mut [[f64; 2]], a: DVec3, b: DVec3, q: f64) {
+        let d = b - a;
+        let (ca, cb) = (self.account_cell(a), self.account_cell(b));
+        if ca == cb {
+            flux[ca][0] += q * d.x;
+            flux[ca][1] += q * d.y;
+            return;
+        }
+        // Where the chord crosses the cells' inner edges (fractions of it), in order.
+        let (nx, ny) = self.account_size();
+        let mut cuts = [0.0_f64; 10];
+        let mut n = 0;
+        let mut lines = |u0: f64, u1: f64, lo: f64, w: f64, count: usize| {
+            for k in 1..count {
+                let line = lo + w * k as f64;
+                if (line - u0) * (line - u1) < 0.0 && n < cuts.len() {
+                    cuts[n] = (line - u0) / (u1 - u0);
+                    n += 1;
+                }
+            }
+        };
+        lines(a.x, b.x, self.lo.x, (self.hi.x - self.lo.x) / nx as f64, nx);
+        lines(a.y, b.y, self.lo.y, (self.hi.y - self.lo.y) / ny as f64, ny);
+        let cuts = &mut cuts[..n];
+        cuts.sort_by(f64::total_cmp);
+        let mut from = 0.0;
+        for to in cuts.iter().copied().chain(std::iter::once(1.0)) {
+            let c = self.account_cell(a + d * (0.5 * (from + to)));
+            flux[c][0] += q * d.x * (to - from);
+            flux[c][1] += q * d.y * (to - from);
+            from = to;
+        }
+    }
+
+    /// The account cell (row by row from `lo`) that `x` lies in; the nearest one outside.
+    #[must_use]
+    pub fn account_cell(&self, x: DVec3) -> usize {
+        let (nx, ny) = self.account_size();
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            clippy::cast_precision_loss
+        )]
+        let at = |u: f64, lo: f64, hi: f64, n: usize| {
+            (libm::floor((u - lo) / (hi - lo) * n as f64).max(0.0) as usize).min(n - 1)
+        };
+        at(x.x, self.lo.x, self.hi.x, nx) + nx * at(x.y, self.lo.y, self.hi.y, ny)
+    }
+
     /// The background's potential and field at `x`.
     #[must_use]
     pub fn background_at(&self, x: DVec3) -> (f64, DVec3) {
