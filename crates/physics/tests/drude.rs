@@ -907,3 +907,129 @@ fn d9_cell_accounts_add_up() {
     check("charge carried along x", &fx, flux[0]);
     check("charge carried along y", &fy, flux[1]);
 }
+
+/// The carriers' kinetic energy (of their stored velocities).
+fn kinetic(s: &physics::tube::TubeState) -> f64 {
+    s.v.iter()
+        .zip(&s.charge)
+        .zip(&s.qm)
+        .map(|((v, q), qm)| 0.5 * (q / qm).abs() * v.length_squared())
+        .sum()
+}
+
+/// What the carriers' energy account leaves over: their kinetic energy's change less the
+/// field's work on them, plus the lattice's take and the contacts' net take, since `start`
+/// (kinetic energy, work, heat, contacts' take).
+fn unbooked(s: &physics::tube::TubeState, start: (f64, f64, f64, f64)) -> f64 {
+    let work: f64 = s.field_work.iter().sum();
+    let contacts: f64 = s.contact_energy.iter().sum();
+    (kinetic(s) - start.0) - ((work - start.1) - (s.joule - start.2) - (contacts - start.3))
+}
+
+/// The account's terms now (`unbooked`'s start).
+fn account(s: &physics::tube::TubeState) -> (f64, f64, f64, f64) {
+    (
+        kinetic(s),
+        s.field_work.iter().sum(),
+        s.joule,
+        s.contact_energy.iter().sum(),
+    )
+}
+
+/// D10, the carriers' energy account (PHYSICS.md §9, Symmetries: energy). The kinetic energy
+/// of the carriers' stored velocities changes by the field's work on them (the Boris push
+/// keeps its own account exactly: the magnetic rotation keeps |v|, and `½m(v₁² − v₀²) =
+/// (q dt/2) E·(v₀ + v₁)`), less the lattice's take in collisions, less what the contacts take
+/// in, plus what they give off (`TubeState::contact_energy`). (a) Without cores (no
+/// collisions; D1's resistor at 3.2, 4000 carriers, 500 steps of 0.02): exactly, to 1e-10
+/// of the largest term. (b) With them: a collision's heat is taken at the velocity of its
+/// moment in the step, the stored velocity is the step's middle's (the leapfrog's), and the
+/// two differ by the part of the step's kick `g` between them: each collision books
+/// `m (½ − φ) g·(u′ − v)` too much or too little (zero mean; `g` mostly the carriers' own
+/// grainy field) and `m g² (½ − φ)²` too little: a random walk over the collisions, ∝ dt.
+/// Over 10 time units in 40 blocks, the blocks' rms residual at dt = 0.02 against 0.005 must
+/// fall by at least 2.5 (∝ dt: 4; the rms of 40 blocks is known to ~11 %), and the run's
+/// residual at 0.005 stay below 5e-3 of the field's work (estimated ~1e-3: ~1e5 collisions
+/// of ~5e-5 each).
+#[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn d10_carriers_energy_account() {
+    // (a) No cores.
+    let mut tube = resistor(16.0, 4.0, 3.2, 4000, 0.02, 7);
+    tube.lattices[0] = Lattice::new(
+        DVec3::ZERO,
+        DVec3::new(16.0, 4.0, 0.0),
+        1.0,
+        Vec::new(),
+        A,
+        -1.0,
+        1.0,
+        4000,
+        11,
+    );
+    let mut s = tube.state();
+    let start = account(&s);
+    for _ in 0..500 {
+        tube.step(&mut s);
+    }
+    let end = account(&s);
+    let residual = unbooked(&s, start);
+    let scale = [end.0, end.1 - start.1, end.3 - start.3]
+        .into_iter()
+        .fold(0.0_f64, |m, x| m.max(x.abs()));
+    println!(
+        "D10 (a) without cores: kinetic {:.6} -> {:.6}, the field's work {:.6}, the contacts' \
+         net take {:.6}, no collisions ({}): unbooked {:.2e} of {scale:.3}",
+        start.0,
+        end.0,
+        end.1 - start.1,
+        end.3 - start.3,
+        s.collisions,
+        residual.abs() / scale
+    );
+    assert_eq!(s.collisions, 0);
+    assert!(residual.abs() < 1e-10 * scale, "(a) {residual}");
+    // (b) With cores, at two steps.
+    let blocks = |dt: f64| {
+        let tube = resistor(16.0, 4.0, 3.2, 4000, dt, 7);
+        let mut s = tube.state();
+        let per = (0.25 / dt).round() as usize;
+        let first = account(&s);
+        let mut out = Vec::new();
+        for _ in 0..40 {
+            let start = account(&s);
+            for _ in 0..per {
+                tube.step(&mut s);
+            }
+            out.push(unbooked(&s, start));
+        }
+        let total = unbooked(&s, first);
+        let work = account(&s).1 - first.1;
+        let rms = (out.iter().map(|r| r * r).sum::<f64>() / out.len() as f64).sqrt();
+        let mean = out.iter().sum::<f64>() / out.len() as f64;
+        (rms, mean, total, work, s.collisions)
+    };
+    let (coarse, fine) = (blocks(0.02), blocks(0.005));
+    for (dt, b) in [(0.02, coarse), (0.005, fine)] {
+        println!(
+            "D10 (b) dt {dt}: blocks' rms residual {:.3e}, mean {:+.2e}; the run's {:+.4} \
+             against the field's work {:.3} ({:+.2e}); {} collisions",
+            b.0,
+            b.1,
+            b.2,
+            b.3,
+            b.2 / b.3,
+            b.4
+        );
+    }
+    println!(
+        "D10 (b) the rms falls {:.2} times for a step 4 times shorter",
+        coarse.0 / fine.0
+    );
+    assert!(coarse.0 / fine.0 > 2.5, "(b) {} {}", coarse.0, fine.0);
+    assert!((fine.2 / fine.3).abs() < 5e-3, "(b) {} {}", fine.2, fine.3);
+}

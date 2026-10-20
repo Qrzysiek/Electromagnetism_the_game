@@ -1,7 +1,7 @@
 //! What a level's numbers mean (the owner, 2026-10-20): for each measurable quantity the
 //! real-world order of magnitude where its phenomena occur, and the dimensionless ratios that
-//! decide its physics, computed for the setup shown. One family of levels at a time: the
-//! metals (tube levels with Drude metals, PHYSICS.md §2.11) first.
+//! decide its physics, computed for the setup shown: the particle levels (with the radiation
+//! reaction's strength where it is modelled), the vacuum tubes and the metals.
 
 use level::{Element, ElementKind, Level};
 
@@ -90,35 +90,39 @@ fn particles(level: &Level, placement: &[Element]) -> Option<Scales> {
     let v_si = p_si * C_SI * C_SI / (e_j + ME_C2_J);
     let num = crate::ui::fmt_num;
     let headline = format!(
-        "{} · Coulomb {} · a cell ≈ 1 mm",
+        "{}{} · a cell ≈ 1 mm",
         if c.is_finite() {
             format!("v/c = {}", num(speed / c))
         } else {
             "Newtonian".into()
         },
-        num(coulomb)
+        if charge > 0.0 {
+            format!(" · Coulomb {}", num(coulomb))
+        } else {
+            String::new()
+        }
     );
-    let mut lines = vec![
-        Scale {
-            quantity: "the speed against light's, v/c",
-            here: if c.is_finite() {
-                format!(
-                    "{} (c = {} here); as an electron ≈ {} keV",
-                    num(speed / c),
-                    num(c),
-                    num(kev)
-                )
-            } else {
-                "Newtonian (c = ∞): read as an electron at 10 keV".into()
-            },
-            real: "a TV tube's electrons 25 keV (v/c 0.3); an electron microscope's 100-300 keV \
+    let mut lines = vec![Scale {
+        quantity: "the speed against light's, v/c",
+        here: if c.is_finite() {
+            format!(
+                "{} (c = {} here); as an electron ≈ {} keV",
+                num(speed / c),
+                num(c),
+                num(kev)
+            )
+        } else {
+            "Newtonian (c = ∞): read as an electron at 10 keV".into()
+        },
+        real: "a TV tube's electrons 25 keV (v/c 0.3); an electron microscope's 100-300 keV \
                    (0.55-0.78); thermal electrons 0.03 eV",
-            detail: "How fast the projectile goes against light. Below about 0.1 Newton's \
+        detail: "How fast the projectile goes against light. Below about 0.1 Newton's \
                      mechanics holds; near 1 its mass grows (γ), magnetic forces become as \
                      strong as electric ones and fields spread at a finite speed (retarded). \
                      The game's c is a level's choice: what matters is v/c.",
-        },
-        Scale {
+    }];
+    if charge > 0.0 {
+        lines.push(Scale {
             quantity: "the Coulomb push: k|qQ|/(L E_kin) at one cell",
             here: format!(
                 "{} (the strongest charge, |Q| = {})",
@@ -132,8 +136,8 @@ fn particles(level: &Level, placement: &[Element]) -> Option<Scales> {
                      turns hard; well above, the projectile cannot climb near a like charge (it \
                      turns back) and swings round an opposite one. Only this ratio matters: all \
                      charges and the energy scaled together give the same flight.",
-        },
-    ];
+        });
+    }
     if magnet > 0.0 {
         let tesla = bending * p_si / (E_SI * 1e-3);
         lines.push(Scale {
@@ -147,6 +151,31 @@ fn particles(level: &Level, placement: &[Element]) -> Option<Scales> {
             detail: "How tightly the strongest magnet's field one cell away would curl the \
                      projectile: the cell over its gyroradius p/(qB). Well below 1 the path \
                      barely curves there; above 1 it circles. Read for that electron at 1 mm.",
+        });
+    }
+    // The radiation reaction (PHYSICS.md §3.1): τ₀ = 2q²/3mc³ against the time to cross a
+    // cell, here and for a real electron at the same speed (τ₀ = 6.26e-24 s, a cell 1 mm).
+    if level.physics.radiation_reaction && c.is_finite() {
+        let tau0 = 2.0 * q * q / (3.0 * mass * c * c * c);
+        let ratio = tau0 * speed;
+        let real = 6.26e-24 * v_si / 1e-3;
+        lines.push(Scale {
+            quantity: "the radiation reaction: τ₀ = 2q²/3mc³ against a cell's crossing",
+            here: format!(
+                "{} (a real electron at this speed: {}; the game's charges radiate {} times \
+                 harder)",
+                num(ratio),
+                num(real),
+                num(ratio / real)
+            ),
+            real: "an electron's τ₀ = 6.3e-24 s, the time light takes to cross two thirds of its \
+                   classical radius: against a nanosecond's flight, a few parts in 10¹²",
+            detail: "How strongly the projectile's own radiation brakes it: τ₀ against the time it \
+                     takes to cross a cell. Real charges radiate very weakly on such scales (the \
+                     reaction shows over many turns, as in a synchrotron, or over an atom's \
+                     size); the game raises the charge against the mass so that it shows within \
+                     one flight, and keeps the ratio small enough for the Landau–Lifshitz form \
+                     of the reaction to hold (PHYSICS.md §3.1).",
         });
     }
     lines.push(Scale {

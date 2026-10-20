@@ -363,6 +363,10 @@ pub struct TubeState {
     pub induced_work: Vec<f64>,
     /// Per lattice: the current and those works by cell (`CellAccounts`).
     pub cells: Vec<CellAccounts>,
+    /// Per electrode: the kinetic energy of the carriers it took in less that of those it
+    /// gave off (an ohmic contact's), so far. With the lattices' heat, where the field's work
+    /// on the carriers goes (test `d10_carriers_energy_account`).
+    pub contact_energy: Vec<f64>,
     /// The density the lattices' backgrounds induce on the segments (constant).
     background: Vec<f64>,
     /// Every electrode's potential now.
@@ -524,6 +528,7 @@ impl Tube {
                 })
                 .collect(),
             collected: vec![vec![0.0; self.emitters.len() + self.lattices.len()]; n_el],
+            contact_energy: vec![0.0; n_el],
             released: vec![0.0; self.emitters.len()],
             field_work: vec![0.0; self.lattices.len()],
             induced_work: vec![0.0; self.lattices.len()],
@@ -1034,6 +1039,8 @@ impl Tube {
                 self.add(s, x, v, sign * em.weight, em.charge_per_mass, tag);
                 emitted[em.electrode] += sign * em.weight;
                 s.released[i] += sign * em.weight;
+                s.contact_energy[em.electrode] -=
+                    0.5 * (em.weight / em.charge_per_mass).abs() * v.length_squared();
             }
         }
     }
@@ -1231,6 +1238,8 @@ impl Tube {
                     });
                 } else if let Some(e) = hit {
                     s.collected[e][tag as usize] += s.charge[k];
+                    s.contact_energy[e] +=
+                        0.5 * (s.charge[k] / s.qm[k]).abs() * s.v[k].length_squared();
                 }
                 // A circuit node keeps what it absorbs (projectiles' charge too).
                 if let Some(r) = hit.and_then(|e| self.node_of(&nodes, e)) {
