@@ -370,6 +370,12 @@
             "eddy_silicon",
             "laminations"
           ]
+        },
+        {
+          "name": "Master",
+          "levels": [
+            "strength_and_sign"
+          ]
         }
       ]
     }

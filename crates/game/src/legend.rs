@@ -305,6 +305,20 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
         "An electrode's rim shows its potential: red above 0, blue below, grey at 0 \
          (grounded). Hover an electrode for its potential and circuit.",
     );
+    if spec
+        .circuits
+        .iter()
+        .any(|c| c.resistance.is_none() && !c.linked.is_empty())
+    {
+        row(
+            ui,
+            Swatch::Line(from_bevy(crate::draw::STRAP)),
+            "wire: one floating node",
+            "Electrodes joined by a wire are one conductor: they share their potential, and \
+             what one takes in the other can give off. No supply holds it: its potential \
+             settles where the currents in and out balance.",
+        );
+    }
     if game.swing.as_ref().is_some_and(|s| s.largest > 0.0) {
         row(
             ui,

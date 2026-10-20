@@ -3892,6 +3892,61 @@ def magnetoresistance():
         reference=[supply(21, 15, 7.0), supply(23, 19, 5.0)])
 
 
+def strength_and_sign():
+    # The metals' master (task 6): a magnetic-field sensor of two parts in series on one
+    # supply, joined at a floating junction. The short wide strip of Magnetoresistance (4 x
+    # 10, electrons) resists more as |B| grows, whichever way B points; the Hall bar 16 x 4
+    # carries positive carriers (Positive carriers' lower strip), its Hall voltage odd in B.
+    # The current pins the supply, the junction's potential (the wide strip's share of it)
+    # |B|, and the Hall voltage's sign B's sign.
+    # Designed with `generator tube-scan` (target/scratch/level_scratch.py): at 30 over B =
+    # -16, -8, -5, -3, 0, 3, 5, 8, 12, 16 (preview, t = 10-80) the current 1.20, 2.02, 2.48,
+    # 2.72, 2.98, 2.75, 2.43, 2.05, 1.58, 1.16, the junction 7.44, 5.10, 4.16, 3.37, 2.86, 3.34,
+    # 4.06, 5.00, 5.94, 6.48 (both even in B: the two strips' magnetoresistance) and the Hall
+    # voltage -10.9, -7.25, -5.43, -3.69, -0.11, 3.67, 5.36, 6.97, 9.34, 10.9 (odd: the top
+    # above the bottom for B out of the board, the current then flowing leftwards through
+    # positive carriers). Then mirrored left to right (the wide strip under the Hall bar's
+    # right end, the wire between them short and clear of the board's legend): the current
+    # flows rightwards, and the top sits above the bottom for B into the board; at B = 5,
+    # before the mirror, 2.40, 3.98, 5.15. Verified at (30, -5): 2.47 +- 0.06, 4.065 +-
+    # 0.005, 5.43 +- 0.19. `generator window`: the supply solves on 27-32 (6.2 % of +-40; 26
+    # and 33 fail on the junction), the solenoid on -6.0 to -3.5 (7.8 % of +-16; -6.5 to -9
+    # and -3 to -2 fail). The junction over the current is the wide strip's resistance, whatever the
+    # supply: 0.96, 1.22, 1.67, 2.44, 3.75, 5.59 at |B| = 0, 3, 5, 8, 12, 16. Goals: the
+    # current 2.1-2.9, the junction 3.6-4.5 (their ratio 1.24-2.14: |B| about 3-7, clear of
+    # the half's middle, 8), the Hall voltage 3-8 (the sign).
+    return level(
+        "Strength and sign",
+        "A magnetic field sensor in two parts, in series on your supply. The current enters "
+        "the Hall bar's left end (its carriers are positive), leaves its right end into the "
+        "junction, and crosses a short, wide strip of the electron metal to ground; that "
+        "strip resists more as the field grows, whichever way the field points. Make a "
+        "current between 2.1 and 2.9 flow through the wide strip, the junction sit between "
+        "3.6 and 4.5, and the Hall bar's top contact sit 3 to 8 above its bottom one "
+        "(averaged over $t = 10$ to $80$). The wide strip reads the field's strength but not "
+        "its sign; the Hall bar reads its sign.",
+        grid=(24, 20), c=None, t_max=200.0,
+        # 0: the wide strip's bottom contact (grounded); 1: the Hall bar's left end (the
+        # supply); 2, 3: its side contacts; 4, 5: the junction (the Hall bar's right end
+        # wired to the wide strip's top contact, straight below it).
+        electrodes=[contact(17, 2, 10, vertical=False), contact(3, 15, 4, tunable=True),
+                    contact(12, 18, 2, vertical=False), contact(12, 12, 2, vertical=False),
+                    contact(21, 15, 4), contact(17, 8, 10, vertical=False)],
+        supplies=slider(40.0, 15.0, 30.0, 35.0),
+        solenoid_fields=slider(16.0, -5.0, 3.0, 5.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 19),
+                  circuits=[tube_circuit(2, dc(0.0), capacitance=1.0),
+                            tube_circuit(3, dc(0.0), capacitance=1.0),
+                            tube_circuit(4, dc(0.0), capacitance=1.0, linked=[5])],
+                  goals=[current_goal(5, 2.1, 2.9, 10.0, 80.0, carriers="net")],
+                  potentials=[potential_goal(4, "mean", 3.6, 4.5, 10.0, 80.0),
+                              potential_goal(2, "mean", 3.0, 8.0, 10.0, 80.0, reference=3)],
+                  metals=[metal((4, 13), (20, 17), [1, 2, 3, 4], seed=13, q_over_m=1.0,
+                                **METAL),
+                          metal((12, 3), (22, 7), [5, 0], seed=14, **METAL)]),
+        reference=[supply(3, 15, 30.0), supply(23, 19, -5.0)])
+
+
 # The eddy-current levels' drive: the solenoid's field swings as B0 sin(wt), period ~50: long
 # against the metal's settling (a few tenths) and its slow polarizations (a few units), and
 # slow enough that a cut's two faces, a Debye length apart, carry little current across as
@@ -4051,6 +4106,9 @@ ARCS.append(("Inside the components: metals", [
         ("eddy_currents", eddy_currents),
         ("eddy_silicon", eddy_silicon),
         ("laminations", laminations),
+    ]),
+    ("Master", [
+        ("strength_and_sign", strength_and_sign),
     ]),
 ]))
 

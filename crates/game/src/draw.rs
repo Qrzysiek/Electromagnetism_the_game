@@ -1512,6 +1512,7 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
         }
     }
     draw_swing(gizmos, game, &frame);
+    draw_straps(gizmos, game);
     draw_leads(gizmos, game);
     draw_hall(gizmos, game, stale_fade(view.revision, game.sent_revision));
     draw_drift(gizmos, game, view, &frame);
@@ -1828,6 +1829,62 @@ fn draw_swing(gizmos: &mut Gizmos, game: &Game, frame: &level::tube::TubeFrame) 
             electrode_outline(gizmos, b, radii, grow, color.with_alpha(a.abs() * fade));
         }
     }
+}
+
+/// The wire between electrodes strapped into one floating node (`draw_straps`).
+pub const STRAP: Color = Color::srgb(0.85, 0.85, 0.7);
+
+/// Tube levels: the electrodes of a floating circuit (no source) and those linked to it,
+/// one conductor (`level::tube::TubeCircuit::linked`: Strength and sign's junction), joined
+/// by a wire between their closest points, a dot at each end. Wires to a supply are shown
+/// by its badge and focus instead (`ui::supply_badges`).
+fn draw_straps(gizmos: &mut Gizmos, game: &Game) {
+    let level = &game.editor.level;
+    let Some(spec) = level.tube.as_ref() else {
+        return;
+    };
+    let boxes = level.all_box_electrodes(&game.editor.placement);
+    for c in spec.circuits.iter().filter(|c| c.resistance.is_none()) {
+        let Some(a) = boxes.get(c.electrode) else {
+            continue;
+        };
+        for b in c.linked.iter().filter_map(|&e| boxes.get(e)) {
+            let (p, q) = closest_points(a, b);
+            gizmos.line_2d(p, q, STRAP);
+            gizmos.circle_2d(p, 0.12, STRAP);
+            gizmos.circle_2d(q, 0.12, STRAP);
+        }
+    }
+}
+
+/// The closest points of two boxes' outlines (sampled 20 times along each side): where
+/// several pairs are as close (parallel faces), the middle of them.
+fn closest_points(a: &physics::bem::BoxElectrode, b: &physics::bem::BoxElectrode) -> (Vec2, Vec2) {
+    let sample = |e: &physics::bem::BoxElectrode| -> Vec<Vec2> {
+        let o = box_outline(e, 0.0);
+        (0..4)
+            .flat_map(|k| {
+                (0..20).map(move |i| {
+                    #[allow(clippy::cast_precision_loss)]
+                    let f = i as f32 / 20.0;
+                    o[k].lerp(o[k + 1], f)
+                })
+            })
+            .collect()
+    };
+    let (pa, pb) = (sample(a), sample(b));
+    let pairs: Vec<(Vec2, Vec2, f32)> = pa
+        .iter()
+        .flat_map(|p| pb.iter().map(move |q| (*p, *q, p.distance(*q))))
+        .collect();
+    let least = pairs.iter().map(|x| x.2).fold(f32::INFINITY, f32::min);
+    let near: Vec<&(Vec2, Vec2, f32)> = pairs.iter().filter(|x| x.2 <= least + 1e-3).collect();
+    #[allow(clippy::cast_precision_loss)]
+    let n = near.len().max(1) as f32;
+    (
+        near.iter().map(|x| x.0).sum::<Vec2>() / n,
+        near.iter().map(|x| x.1).sum::<Vec2>() / n,
+    )
 }
 
 /// Tube levels' magnetic and energy-flow maps: each electrode's lead, the straight path by

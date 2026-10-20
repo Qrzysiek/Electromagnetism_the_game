@@ -585,6 +585,13 @@ fn electrode(level: &Level, placement: &[Element], k: usize) -> Inspection {
             let source = tube_source(c, supply.map(|s| s.value));
             if c.electrode != k {
                 i = i.line(format!("wired to electrode {}'s circuit:", c.electrode + 1));
+            } else if !c.linked.is_empty() {
+                let others: Vec<String> = c.linked.iter().map(|e| (e + 1).to_string()).collect();
+                i = i.line(format!(
+                    "wired to electrode{} {}",
+                    if others.len() > 1 { "s" } else { "" },
+                    others.join(", ")
+                ));
             }
             i = i.line(format!("circuit: {}", source_text(&source)));
             let mut parts = Vec::new();
