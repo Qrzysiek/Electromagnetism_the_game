@@ -364,6 +364,7 @@
           "levels": [
             "hall_probe",
             "positive_carriers",
+            "few_or_many",
             "magnetoresistance",
             "eddy_currents",
             "eddy_silicon",

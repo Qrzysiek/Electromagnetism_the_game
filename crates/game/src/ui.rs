@@ -763,14 +763,19 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 1 => format!("contact: electrode {}", contacts[0]),
                 _ => format!("contacts: electrodes {}", contacts.join(", ")),
             };
+            // Game units, plainly (an SI prefix would read 0.25 as 250m).
+            let plain = |v: f64| {
+                let text = format!("{v:.3}");
+                text.trim_end_matches('0').trim_end_matches('.').to_owned()
+            };
             ui.label(format!(
                 "Metal {}: carriers q/m = {}, charge density {}, thermal speed {}, mean free \
                  path {}; {joined}",
                 k + 1,
-                fmt_si(m.charge_per_mass),
-                fmt_si(m.density),
-                fmt_si(m.thermal_speed),
-                fmt_si(m.mean_free_path),
+                plain(m.charge_per_mass),
+                plain(m.density),
+                plain(m.thermal_speed),
+                plain(m.mean_free_path),
             ));
         }
     }

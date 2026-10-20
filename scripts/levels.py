@@ -3777,6 +3777,72 @@ def positive_carriers():
         reference=[supply(21, 14, 30.0), supply(23, 19, -4.0), supply(21, 5, -12.0)])
 
 
+# Why Hall probes are semiconductors (the owner, 2026-10-20): two strips of the same size and
+# the same conductance in one field, the upper the levels' metal (few carriers that fly far: it
+# resembles n-type germanium at 1e16 per cm^3 in these fields, game scales.rs), the lower four
+# times as many carriers colliding four times as often (density 8, mean free path 0.25: sigma =
+# rho tau the same; n-type silicon at 1e17 per cm^3, within x1.21). At the same current the
+# lower's carriers drift four times slower, the magnetic push on each is four times weaker, and
+# so is its Hall voltage (V_H = IB/(nq)); at the same field they turn a quarter as far between
+# collisions (omega_c tau). Copper is the trend a million times further. The step follows the
+# dense strip's plasma oscillation (omega_p = 10.0: 0.019, omega_p dt = 0.19).
+DENSE = dict(density=8.0, thermal_speed=2.0, mean_free_path=0.25, core_radius=0.002,
+             carriers_per_area=50.0)
+DENSE_STEP = 0.019
+
+
+def few_or_many():
+    # Designed with `generator tube-scan` (target/scratch/few_scratch.py): at (30, B, 30)
+    # (preview, t = 10-80) over B = 0, 1, 2, 3, 4.2, 6, 9, 12, 16: upper current 3.18, 3.16,
+    # 3.14, 3.03, 2.93, 2.77, 2.53, 2.29, 2.04; lower 3.25, 3.40, 3.33, 3.29, 3.25, 3.10, 3.13,
+    # 2.94, 2.68; upper Hall (top less bottom) -0.19, -1.58, -3.13, -3.91, -5.22, -6.73, -9.27,
+    # -10.7, -13.3; lower +0.76, +0.02, -0.81, -0.85, -1.45, -1.80, -2.85, -4.00, -4.97 (its
+    # floating contacts scatter ~0.4: its macroparticles are four times heavier). Per unit IB
+    # the Hall voltages are 0.42 and 0.11: four times apart, as the densities. Verified at
+    # (30, 3.8, 30): currents 3.00 +- 0.05 and 3.32 +- 0.16, Hall -4.69 +- 0.08 and -1.37 +-
+    # 0.19. The Hall readings' error bars grow with B (upper 0.08, 0.51, 0.74 and lower 0.29,
+    # 0.36, 0.70 at B = 2.5, 5, 5.5): with goals -6 to -3.5 and -2 to 0 the solenoid solved on
+    # 3.0-4.5 only (4.7 %), so -7 to -3 and -2.5 to 0. `generator window`: the solenoid
+    # solves on 2.0-6.0 (12.5 % of +-16; 1.5 and 6.5-8.5 fail), the upper supply on 28-35
+    # (8.8 % of +-40), the lower on 25-31 (7.5 %; both measured with the narrower Hall goals,
+    # their edges set by the current goals). The solenoid's +-16 spans straight paths to
+    # circles (omega_c tau 6.4 in the upper strip, 1.6 in the lower).
+    material = dict(METAL, carriers_per_area=50.0)
+    return level(
+        "Few carriers or many",
+        "Two strips of the same size and the same resistance in your solenoid's field, each "
+        "with two floating contacts on its sides that read its Hall voltage. The upper one's "
+        "carriers are few and fly far between collisions (like germanium's); the lower one has "
+        "four times as many, colliding four times as often (like silicon's). Make a current "
+        "between 2.7 and 3.5 flow into each strip's right end, and the upper strip's top "
+        "contact sit between 3 and 7 below its bottom one, while the lower strip's sits at "
+        "most 2.5 below (averaged over $t = 10$ to $80$). Carrying the same current, the many "
+        "carriers drift slowly, the field pushes each one gently, and the Hall voltage is "
+        "small: real Hall probes are semiconductors with few, fast carriers (InSb, GaAs), "
+        "while copper's carriers are about a million times as many, and its Hall voltage a "
+        "million times smaller: microvolts.",
+        grid=(24, 20), c=None, t_max=200.0,
+        electrodes=[contact(3, 14, 4), contact(21, 14, 4, tunable=True),
+                    contact(12, 17, 2, vertical=False), contact(12, 11, 2, vertical=False),
+                    contact(3, 5, 4), contact(21, 5, 4, tunable=True),
+                    contact(12, 8, 2, vertical=False), contact(12, 2, 2, vertical=False)],
+        supplies=slider(40.0, 15.0, 30.0, 35.0),
+        solenoid_fields=slider(16.0, -3.8, 3.0, 3.8, 5.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=DENSE_STEP, solenoid=(23, 19),
+                  circuits=[tube_circuit(2, dc(0.0), capacitance=1.0),
+                            tube_circuit(3, dc(0.0), capacitance=1.0),
+                            tube_circuit(6, dc(0.0), capacitance=1.0),
+                            tube_circuit(7, dc(0.0), capacitance=1.0),
+                            tube_circuit(4, dc(0.0), resistance=0.0)],
+                  goals=[current_goal(1, 2.7, 3.5, 10.0, 80.0, carriers="net"),
+                         current_goal(5, 2.7, 3.5, 10.0, 80.0, carriers="net")],
+                  potentials=[potential_goal(2, "mean", -7.0, -3.0, 10.0, 80.0, reference=3),
+                              potential_goal(6, "mean", -2.5, 0.0, 10.0, 80.0, reference=7)],
+                  metals=[metal((4, 12), (20, 16), [0, 1, 2, 3], seed=6, **material),
+                          metal((4, 3), (20, 7), [4, 5, 6, 7], seed=7, **DENSE)]),
+        reference=[supply(21, 14, 30.0), supply(23, 19, 3.8), supply(21, 5, 30.0)])
+
+
 def magnetoresistance():
     # Designed with `generator tube-scan` (target/scratch/design_mr_intro.py): a strip 16 x 4
     # (current along it) and one 4 x 10 (short along the current, wide across it), both on
@@ -3980,6 +4046,7 @@ ARCS.append(("Inside the components: metals", [
     ("Intermediate", [
         ("hall_probe", hall_probe),
         ("positive_carriers", positive_carriers),
+        ("few_or_many", few_or_many),
         ("magnetoresistance", magnetoresistance),
         ("eddy_currents", eddy_currents),
         ("eddy_silicon", eddy_silicon),

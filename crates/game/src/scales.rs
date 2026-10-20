@@ -583,39 +583,41 @@ fn tubes(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) -> 
     Some(Scales { headline, lines })
 }
 
-/// The metals (tube levels with Drude metals, PHYSICS.md §2.11).
-fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) -> Option<Scales> {
-    let m = spec.metals.first()?;
-    // The field: the player's solenoid, else the level's own; a swinging one's amplitude.
-    let b = spec
-        .solenoid
-        .and_then(|n| {
-            placement
-                .iter()
-                .find(|e| e.kind == ElementKind::Supply && e.node == n)
-        })
-        .map_or(spec.b_z, |e| e.value)
-        .abs();
+/// One metal's numbers for its scales (`metals`).
+struct MetalScales {
+    /// ω_c τ, qEℓ/kT, its width and Debye length in mean free paths, ω_p τ.
+    wct: f64,
+    heating: f64,
+    width: f64,
+    debye: f64,
+    wp_tau: f64,
+    /// The gyration radius, the mean free path, the mean free time and |q/m|.
+    gyration: f64,
+    ell: f64,
+    tau: f64,
+    qm: f64,
+    like: Option<Resemblance>,
+}
+
+/// Metal `m`'s scales in the field `b` (its magnitude), with the strongest supply `supply`.
+fn metal_scales(
+    level: &Level,
+    spec: &level::tube::TubeSpec,
+    m: &level::tube::MetalSpec,
+    b: f64,
+    supply: f64,
+) -> MetalScales {
     let qm = m.charge_per_mass.abs();
     let sigma = m.thermal_speed;
     let ell = m.mean_free_path;
     // The mean speed of a two-dimensional Maxwellian, σ √(π/2), and the mean free time.
     let mean_speed = sigma * 1.253_314_137_315_500_3;
     let tau = ell / mean_speed;
-    let wct = qm * b * tau;
     let kt_over_q = sigma * sigma / qm;
-    let debye = (kt_over_q / (4.0 * std::f64::consts::PI * m.density)).sqrt();
-    let wp_tau = (4.0 * std::f64::consts::PI * m.density * qm).sqrt() * tau;
-    // The strongest driving field: the largest supply over the longest metal (a strip's
-    // length between its contacts), or a swinging field's induced one at a metal's edge.
+    // The strongest driving field: the largest supply over the metal's length (a strip's
+    // length between its contacts), or a swinging field's induced one at its edge.
     let (lo, hi) = level.metal_rect(m);
     let length = (hi.x - lo.x).max(hi.y - lo.y);
-    let width = (hi.x - lo.x).min(hi.y - lo.y);
-    let supply = placement
-        .iter()
-        .filter(|e| e.kind == ElementKind::Supply && Some(e.node) != spec.solenoid)
-        .map(|e| e.value.abs())
-        .fold(0.0, f64::max);
     let field = match spec.solenoid_drive {
         Some(d) => {
             let omega = match d {
@@ -626,35 +628,128 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
         }
         None => supply / length,
     };
-    let heating = field * ell / kt_over_q;
-    let gyration = if b > 0.0 {
-        sigma / (qm * b)
-    } else {
-        f64::INFINITY
-    };
+    MetalScales {
+        wct: qm * b * tau,
+        heating: field * ell / kt_over_q,
+        width: (hi.x - lo.x).min(hi.y - lo.y) / ell,
+        debye: (kt_over_q / (4.0 * std::f64::consts::PI * m.density)).sqrt() / ell,
+        wp_tau: (4.0 * std::f64::consts::PI * m.density * qm).sqrt() * tau,
+        gyration: if b > 0.0 {
+            sigma / (qm * b)
+        } else {
+            f64::INFINITY
+        },
+        ell,
+        tau,
+        qm,
+        like: resemblance(level, m),
+    }
+}
+
+/// The metals (tube levels with Drude metals, PHYSICS.md §2.11): each different material once
+/// (its own parameters: the carriers' sign changes no ratio), its numbers after its metal's
+/// number where there are several (Few carriers or many's two strips).
+fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) -> Option<Scales> {
+    spec.metals.first()?;
+    // The field: the player's solenoid, else the level's own; a swinging one's amplitude.
+    let b = spec
+        .solenoid
+        .and_then(|n| {
+            placement
+                .iter()
+                .find(|e| e.kind == ElementKind::Supply && e.node == n)
+        })
+        .map_or(spec.b_z, |e| e.value)
+        .abs();
+    let supply = placement
+        .iter()
+        .filter(|e| e.kind == ElementKind::Supply && Some(e.node) != spec.solenoid)
+        .map(|e| e.value.abs())
+        .fold(0.0, f64::max);
+    let mut kinds: Vec<(usize, MetalScales)> = Vec::new();
+    let mut seen: Vec<[u64; 4]> = Vec::new();
+    for (k, m) in spec.metals.iter().enumerate() {
+        let key = [
+            m.density.to_bits(),
+            m.charge_per_mass.abs().to_bits(),
+            m.thermal_speed.to_bits(),
+            m.mean_free_path.to_bits(),
+        ];
+        if !seen.contains(&key) {
+            seen.push(key);
+            kinds.push((k, metal_scales(level, spec, m, b, supply)));
+        }
+    }
     let num = crate::ui::fmt_num;
-    let like = resemblance(level, m);
-    let headline = format!(
-        "ω_c τ = {} · qEℓ/kT = {}{}",
-        num(wct),
-        num(heating),
-        like.as_ref()
-            .map_or(String::new(), |r| format!(" · like {}", r.short))
-    );
+    // One metal's text, or each one's after its number.
+    let each = |f: &dyn Fn(&MetalScales) -> String| -> String {
+        if let [(_, only)] = kinds.as_slice() {
+            f(only)
+        } else {
+            kinds
+                .iter()
+                .map(|(k, s)| format!("metal {}: {}", k + 1, f(s)))
+                .collect::<Vec<_>>()
+                .join("; ")
+        }
+    };
+    let circles = |s: &MetalScales| {
+        if s.gyration.is_finite() {
+            num(2.0 * s.gyration)
+        } else {
+            "∞".into()
+        }
+    };
+    let headline = if let [(_, s)] = kinds.as_slice() {
+        format!(
+            "ω_c τ = {} · qEℓ/kT = {}{}",
+            num(s.wct),
+            num(s.heating),
+            s.like
+                .as_ref()
+                .map_or(String::new(), |r| format!(" · like {}", r.short))
+        )
+    } else {
+        let join = |f: &dyn Fn(&MetalScales) -> String| {
+            kinds
+                .iter()
+                .map(|(_, s)| f(s))
+                .collect::<Vec<_>>()
+                .join(" / ")
+        };
+        format!(
+            "ω_c τ = {} · like {}",
+            join(&|s| num(s.wct)),
+            join(&|s| s
+                .like
+                .as_ref()
+                .map_or("none".into(), |r| r.short.to_owned()))
+        )
+    };
+    let turn = if let [(_, s)] = kinds.as_slice() {
+        format!(
+            "{} (B = {}: circles {} across, the mean free path {})",
+            num(s.wct),
+            num(b),
+            circles(s),
+            num(s.ell)
+        )
+    } else {
+        format!(
+            "B = {}: {}",
+            num(b),
+            each(&|s| format!(
+                "{} (circles {} across, the mean free path {})",
+                num(s.wct),
+                circles(s),
+                num(s.ell)
+            ))
+        )
+    };
     let mut lines = vec![
         Scale {
             quantity: "ω_c τ, the field's turn between collisions",
-            here: format!(
-                "{} (B = {}: circles {} across, the mean free path {})",
-                num(wct),
-                num(b),
-                if gyration.is_finite() {
-                    num(2.0 * gyration)
-                } else {
-                    "∞".into()
-                },
-                num(ell)
-            ),
+            here: turn,
             real: "copper at room temperature 0.004 per tesla; GaAs 0.85 per T; InSb 7.7 per T; \
                    a clean 2D electron gas at 4 K ~1000 per T",
             detail: "How far a carrier's path turns in the magnetic field between two collisions \
@@ -666,7 +761,7 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
         },
         Scale {
             quantity: "qEℓ/kT, the field's push against the thermal motion",
-            here: num(heating),
+            here: each(&|s| num(s.heating)),
             real: "copper at 1 V/m ~1e-6 (always linear); semiconductors heat up near 1 at \
                    ~1 kV/cm",
             detail: "The energy a carrier gains from the electric field over one mean free path, \
@@ -676,7 +771,7 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
         },
         Scale {
             quantity: "the strip's width in mean free paths",
-            here: num(width / ell),
+            here: each(&|s| num(s.width)),
             real: "a copper wire 1 mm thick: 25 000; a thin film or nanowire: ~1",
             detail: "How many mean free paths fit across the metal. Many: its bulk conducts as \
                      Ohm's law says; a few: its walls matter (size effects, the heat of eddy \
@@ -684,7 +779,7 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
         },
         Scale {
             quantity: "the screening (Debye) length in mean free paths",
-            here: num(debye / ell),
+            here: each(&|s| num(s.debye)),
             real: "copper 0.001 (screening within an atom); doped GaAs (1e23 per m³) ~0.1",
             detail: "How deep a charge piled on a surface reaches into the metal: the thin layer \
                      that holds a conductor's surface charge, the Hall voltage's charge, a \
@@ -692,7 +787,7 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
         },
         Scale {
             quantity: "ω_p τ, plasma oscillations per collision",
-            here: num(wp_tau),
+            here: each(&|s| num(s.wp_tau)),
             real: "copper ~250; doped semiconductors ~1-10",
             detail: "How many times the carriers' charge could oscillate (the plasma frequency) \
                      before a collision damps it: a charge imbalance relaxes in a fraction of a \
@@ -703,55 +798,65 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
         Some(level::Source::Sine { omega, .. }) => omega,
         _ => 0.0,
     };
-    lines.push(match &like {
+    // The model's τ and ℓ read as the material's; B from ω_c τ = μB.
+    let reading = |s: &MetalScales| match &s.like {
         Some(r) => {
-            // The model's τ and ℓ read as the material's; B from ω_c τ = μB.
-            let (t_unit, l_unit) = (r.tau / tau, r.ell / ell);
-            Scale {
-                quantity: "the real material it resembles",
-                here: format!(
-                    "{} ({} of its own ratios: ω_p τ {}, the screening length {} mean free paths): \
-                     a cell {} µm; time {} ps; B {} T{}",
-                    r.name,
-                    if r.factor <= 3.0 { "within ×3" } else { "within ×10" },
-                    num(r.wp_tau),
-                    num(r.screen),
-                    num(l_unit * 1e6),
-                    num(t_unit * 1e12),
-                    num(b * qm * tau / r.mobility),
-                    if omega > 0.0 {
-                        format!(
-                            "; the swing {} GHz",
-                            num(omega / t_unit / (2.0 * std::f64::consts::PI) * 1e-9)
-                        )
-                    } else {
-                        String::new()
-                    }
-                ),
-                real: "compared: copper, aluminium, iron, stainless steel, silicon (1e16-1e18 per \
-                       cm³), silver, gold, nichrome, germanium, GaAs, InAs, InSb at 300 K. Real \
-                       metals have ω_p τ 50-500, beyond the model at playable cost (about 1: its \
-                       step must follow the plasma oscillation)",
-                detail: "The metal's own ratios, ω_p τ (plasma oscillations per collision) and its \
-                         screening length in mean free paths, against real conductors' at room \
-                         temperature (Drude, from their density, effective mass and mobility); \
-                         a material counts only if the level's strongest field, read through its \
-                         mobility (ω_c τ = μB), is a laboratory's (at most 30 T). Named: the most \
-                         common such material within ×3 of both ratios, else within ×10. The rest \
-                         of the line reads the game's units as that material's: its collision \
-                         time and mean free path for the model's.",
-            }
+            let (t_unit, l_unit) = (r.tau / s.tau, r.ell / s.ell);
+            format!(
+                "{} ({} of its own ratios: ω_p τ {}, the screening length {} mean free paths): a \
+                 cell {} µm; time {} ps; B {} T{}",
+                r.name,
+                if r.factor <= 3.0 {
+                    "within ×3"
+                } else {
+                    "within ×10"
+                },
+                num(r.wp_tau),
+                num(r.screen),
+                num(l_unit * 1e6),
+                num(t_unit * 1e12),
+                num(b * s.qm * s.tau / r.mobility),
+                if omega > 0.0 {
+                    format!(
+                        "; the swing {} GHz",
+                        num(omega / t_unit / (2.0 * std::f64::consts::PI) * 1e-9)
+                    )
+                } else {
+                    String::new()
+                }
+            )
         }
-        None => Scale {
+        None => {
+            "none of the materials compared within ×10 of its ratios at a laboratory's field".into()
+        }
+    };
+    lines.push(if kinds.iter().any(|(_, s)| s.like.is_some()) {
+        Scale {
             quantity: "the real material it resembles",
-            here: "none of the materials compared within ×10 of its ratios at a laboratory's field"
-                .into(),
+            here: each(&reading),
+            real: "compared: copper, aluminium, iron, stainless steel, silicon (1e16-1e18 per \
+                   cm³), silver, gold, nichrome, germanium, GaAs, InAs, InSb at 300 K. Real \
+                   metals have ω_p τ 50-500, beyond the model at playable cost (about 1: its \
+                   step must follow the plasma oscillation)",
+            detail: "The metal's own ratios, ω_p τ (plasma oscillations per collision) and its \
+                     screening length in mean free paths, against real conductors' at room \
+                     temperature (Drude, from their density, effective mass and mobility); \
+                     a material counts only if the level's strongest field, read through its \
+                     mobility (ω_c τ = μB), is a laboratory's (at most 30 T). Named: the most \
+                     common such material within ×3 of both ratios, else within ×10. The rest \
+                     of the line reads the game's units as that material's: its collision \
+                     time and mean free path for the model's.",
+        }
+    } else {
+        Scale {
+            quantity: "the real material it resembles",
+            here: each(&reading),
             real: "compared: copper, aluminium, iron, stainless steel, silicon (1e16-1e18 per cm³), \
                    silver, gold, nichrome, germanium, GaAs, InAs, InSb at 300 K",
             detail: "No real conductor among those compared has this metal's own ratios (ω_p τ and \
                      the screening length in mean free paths, within ×10) and reaches the level's \
                      strongest field at most 30 T.",
-        },
+        }
     });
     Some(Scales { headline, lines })
 }
