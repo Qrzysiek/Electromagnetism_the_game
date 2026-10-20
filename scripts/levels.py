@@ -3133,7 +3133,10 @@ def sideways():
     # (the cutoff; below it, 0.13 at 0.95, comes in at the gap's ends, where the
     # translation symmetry behind Hull's theorem is broken); above ~1.35 the electrons
     # curl back onto the cathode, which takes them (0.87 at 1.4, 0.50 at 1.5). The goal
-    # >= 1.1 asks for B in ~0.95-1.3.
+    # >= 1.1 asks for B in ~0.95-1.3: it solved on 0.925-1.225, 3.8 % of the solenoid's +-4
+    # (the showcase rule's review, 2026-10-20). At least 0.9 (still nearly twice the 0.47
+    # without field) asks for ~0.82-1.38, between Hull's cutoff and the electrons' curling
+    # back onto the cathode.
     return level(
         "Sideways",
         "Around this tube is a solenoid: switch on its supply (the yellow coil at the top "
@@ -3141,14 +3144,14 @@ def sideways():
         "when positive. Electrons crossing it curve, and above a critical field (Hull's "
         "cutoff) they cannot reach the anode at all: they drift along the cathode instead, "
         "sideways, perpendicular to both the electric and the magnetic field. Send the "
-        "electrons into the collector above the gap: at least 1.1 must land there "
+        "electrons into the collector above the gap: at least 0.9 must land there "
         "(averaged over $t = 20$ to $40$).",
         grid=(24, 22), c=None, t_max=60.0,
         electrodes=[plate(6, 11, 10, thickness=1.0, angle_deg=90.0),
                     plate(16, 11, 10, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
                     plate(9, 19, 6, thickness=1.0, kind="potential", value=10.0)],
         solenoid_fields=slider(4.0, -1.1, 0.6, 1.1),
-        tube=tube(0, 2, 1.1, 10.0, 20.0, 40.0, emit_toward_deg=0.0, solenoid=(23, 21)),
+        tube=tube(0, 2, 0.9, 10.0, 20.0, 40.0, emit_toward_deg=0.0, solenoid=(23, 21)),
         reference=[supply(23, 21, 1.1)])
 
 
@@ -3202,11 +3205,19 @@ def through_the_cloud():
     # t = 21.23 and 21.20 (the reference); (8, 2) horizontal at +45, 2.956 +- 0.018, t =
     # 21.33 and 21.32; (6, 18) vertical at +65, 2.830 +- 0.073, t = 23.80 and 23.85. Too
     # strong a plate below draws too much current (3.2 and more at +55 to +75).
+    # The showcase rule's review (2026-10-20): with the reference plate the anode's current
+    # is 1.75, 2.26, 2.58, 2.90, 3.23, 3.59, 4.14, 4.88, 5.56 at 40, 50, 55, 60, 65, 70, 80,
+    # 90, 100 V, the ion leaving the top at x = 9.66, 8.42, 7.78, 7.15, 6.53, 5.91, 4.59, 3.41
+    # (the detector 8 to 14) and at 100 turned back onto the cathode: the supply's +-100
+    # shows it all. With the current goal 2.5-3.1 the supply solved on 54-61 (3.5 %); at
+    # 2.3-3.3 the ion bounds it above (~62) and the current below (~51).
+    # Measured: the supply 51-61 (5.0 %), the plate 30-49, next to +-100's half's middle (50):
+    # the plates span +-120 (its middle 60; the interval 7.9 %).
     return level(
         "Through the cloud",
         "An ion (a long line of positive charge, the large dot) is fired up through the gap "
         "of a working diode, after its electrons have started to flow. Keep the diode "
-        "running, with a current between 2.5 and 3.1 into the anode (averaged over "
+        "running, with a current between 2.3 and 3.3 into the anode (averaged over "
         "$t = 15$ to $30$), and bring the ion into the detector at the top. The anode's "
         "field pushes positive charges toward the cathode, and the electrons' cloud pulls "
         "on the ion as it passes: at the voltage the current needs, the ion leaves the "
@@ -3217,9 +3228,9 @@ def through_the_cloud():
         electrodes=[plate(6, 10, 10, thickness=1.0, angle_deg=90.0),
                     plate(16, 10, 10, thickness=1.0, angle_deg=90.0, tunable=True)],
         supplies=slider(100.0, 40.0, 60.0, 80.0),
-        max_plates=2, plate_voltages=slider(100.0, -40.0, 20.0, 30.0, 45.0, 65.0),
+        max_plates=2, plate_voltages=slider(120.0, -40.0, 20.0, 30.0, 45.0, 65.0),
         plate_size=(3.0, 0.5, 4.0),
-        tube=tube(0, 1, 2.5, 3.1, 15.0, 30.0, emit_toward_deg=0.0,
+        tube=tube(0, 1, 2.3, 3.3, 15.0, 30.0, emit_toward_deg=0.0,
                   projectiles=[projectile(11, 0, 90.0, 1.8, 0.2, 10.0, launch=10.0,
                                           detector=((8, 18), (14, 20)))]),
         reference=[supply(16, 10, 60.0), player_plate(9, 2, 30.0, angle_deg=90.0)])
@@ -3237,6 +3248,13 @@ def electron_gun():
     # Verified: (21, 13/7) at +6 0.294 +- 0.008 (the reference); (17, 13/7) at +6 0.288
     # +- 0.023; (19, 13/7) at +4 0.294 +- 0.019. At 0 the lens is too strong (0.192 +-
     # 0.025) and at +12 too weak (0.161 +- 0.012): both missed.
+    # The plates' range (the showcase rule's review, 2026-10-20): the collector's current
+    # (preview) with both plates at V: 0.180, 0.253, 0.281, 0.293, 0.273, 0.196, 0.155 at
+    # V = 0, 2, 4, 6, 8, 10, 14; nothing at -10 to -40 (the beam turned back), 0.125, 0.101,
+    # 0.098 at +20, +30, +40 (the plates, above the anode's 30, collect it). One plate alone
+    # steers the beam off: each slider solves on ~3-7.5 with the other at 6, 2.8 % of +-80.
+    # Every behaviour lies within +-40 (beyond it only more of the same), so the plates span
+    # +-40 (that interval 5.6 %).
     return level(
         "Electron gun",
         "An electron gun: the hot cathode (left) gives at most 0.2 per unit length of its "
@@ -3251,7 +3269,7 @@ def electron_gun():
                     plate(12, 14, 6, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
                     plate(12, 6, 6, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0),
                     plate(28, 10, 2, thickness=1.0, angle_deg=90.0, kind="potential", value=30.0)],
-        max_plates=2, plate_voltages=slider(80.0, -10.0, 3.0, 6.0, 12.0, 20.0),
+        max_plates=2, plate_voltages=slider(40.0, -10.0, 3.0, 6.0, 12.0, 20.0),
         plate_size=(3.0, 0.5, 4.0),
         tube=tube(0, 3, 0.24, 5.0, 20.0, 40.0, emit_toward_deg=0.0, saturation=0.2),
         reference=[player_plate(21, 13, 6.0), player_plate(21, 7, 6.0)])
@@ -3283,6 +3301,12 @@ def ion_diode():
     #   33    11.84/0.094  9.88/0.002 8.31/0     7.20/0     6.42/0     5.95/0
     #   36    14.81/0.171 11.32/0    10.06/0     8.55/0     7.53/0     6.95/0
     # The boost is largest just above the cutoff (1.76 times the strong field's at 30 V).
+    # The showcase rule's review (2026-10-20): with ions 5.5 to 8 the supply solved on 27-32
+    # (3.1 % of +-80; the +-80 shows the leak above ~50). Widened to 5.0-8.5 (not 9: the ion
+    # current climbs as B falls towards the electrons' cutoff, 8.87 at B = 1.5, and the
+    # field's interval would then take in 1.5, its half's middle). Measured: the supply
+    # 26-33.5 (4.7 %), the field 1.55-3.0, up to +-3's end (5.05 at B = 3): the field spans
+    # +-8 (its half's middle 4; the ions bent harder towards their own cutoff, ~14).
     # The goals (ions 5.5 to 8, leak <= 0.05) leave a diagonal strip, B roughly in proportion
     # to sqrt(V): at the reference (30, 1.9) V ~ 27-32 and B ~ 1.66-2.55; full voltage and
     # field (~8.1) overshoot it, the sliders' middles fall short. The leak the description
@@ -3301,7 +3325,7 @@ def ion_diode():
         "solenoid (the yellow coil, top right) curls them: above Hull's critical field they "
         "cannot reach the rod, and stay in a sheath along the ring. The heavy ions still "
         "cross, and the sheath's negative charge pulls more of them across. Deliver an ion "
-        "current between 5.5 and 8 to the ring while at most 0.05 of electrons leak to the "
+        "current between 5 and 8.5 to the ring while at most 0.05 of electrons leak to the "
         "rod (averaged over $t = 20$ to $30$). The critical field grows with the voltage, "
         "as $B \\propto \\sqrt{V}$: too weak a field for your voltage lets the electrons "
         "leak; the sheath helps the ions most just above it. The thin outer ring is the "
@@ -3311,10 +3335,10 @@ def ion_diode():
                     plate(12, 8, 2, thickness=2.0, shape="rod", tunable=True),
                     plate(12, 8, 14.5, thickness=0.5, shape="ring")],
         supplies=slider(80.0, 27.0, 30.0, 33.0),
-        solenoid_fields=slider(3.0, 1.7, 1.9, 2.2),
+        solenoid_fields=slider(8.0, 1.7, 1.9, 2.2),
         tube=tube(0, 1, 0.0, 0.05, 20.0, 30.0, solenoid=(23, 15), step=0.05,
                   ions=(1, 0.0625), particles=8.0, emitter_mesh=2.0,
-                  goals=[current_goal(0, 5.5, 8.0, 20.0, 30.0, carriers="ions")]),
+                  goals=[current_goal(0, 5.0, 8.5, 20.0, 30.0, carriers="ions")]),
         reference=[supply(12, 8, 30.0), supply(23, 15, 1.9)])
 
 
@@ -3620,7 +3644,9 @@ def potentiometer():
     # had been heat sinks, PHYSICS.md 2.11) the side contact's current at 30 is -0.22 at 8,
     # -0.02 at 9, 0.31 at 10: none at about 9.05 (V1/3 = 10: the contacts take ~1 V).
     # The side contact's current verified with a bar of ~0.3 (+-0.35 left it uncertain):
-    # the window +-0.5, about 7.5-10.6 at 30.
+    # the window +-0.5, about 7.5-10.6 at 30. The showcase rule's review (2026-10-20): it solved
+    # on 6.75-10.25, 4.4 % of +-40: the window +-0.7 (the side current changes by ~0.27 per
+    # volt, still a null to find).
     return level(
         "Potentiometer",
         "A longer strip of metal with a third contact on its side, a third of the way "
@@ -3628,7 +3654,7 @@ def potentiometer():
         "field is uniform: the potential falls evenly from one end to the other (the "
         "contacts take a little). Make a "
         "current between 2.4 and 3.0 flow along the strip into its right end, and set the "
-        "side contact so that no current flows through it (between $-0.5$ and $0.5$, "
+        "side contact so that no current flows through it (between $-0.7$ and $0.7$, "
         "averaged over $t = 10$ to $80$): it must sit at the potential the strip has "
         "there. A potentiometer measures a voltage this way, drawing no current from it.",
         grid=(24, 16), c=None, t_max=200.0,
@@ -3637,7 +3663,7 @@ def potentiometer():
         supplies=slider(40.0, 10.0, 15.0, 30.0),
         tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP,
                   goals=[current_goal(1, 2.4, 3.0, 10.0, 80.0, carriers="net"),
-                         current_goal(2, -0.5, 0.5, 10.0, 80.0, carriers="net")],
+                         current_goal(2, -0.7, 0.7, 10.0, 80.0, carriers="net")],
                   metals=[metal((3, 6), (21, 10), [0, 1, 2], seed=2,
                                 **dict(METAL, carriers_per_area=100.0))]),
         reference=[supply(22, 8, 30.0), supply(9, 11, 9.0)])

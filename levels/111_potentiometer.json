@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Potentiometer",
-  "description": "A longer strip of metal with a third contact on its side, a third of the way along, on your second supply. Inside a conductor carrying a steady current the field is uniform: the potential falls evenly from one end to the other (the contacts take a little). Make a current between 2.4 and 3.0 flow along the strip into its right end, and set the side contact so that no current flows through it (between $-0.5$ and $0.5$, averaged over $t = 10$ to $80$): it must sit at the potential the strip has there. A potentiometer measures a voltage this way, drawing no current from it.",
+  "description": "A longer strip of metal with a third contact on its side, a third of the way along, on your second supply. Inside a conductor carrying a steady current the field is uniform: the potential falls evenly from one end to the other (the contacts take a little). Make a current between 2.4 and 3.0 flow along the strip into its right end, and set the side contact so that no current flows through it (between $-0.7$ and $0.7$, averaged over $t = 10$ to $80$): it must sit at the potential the strip has there. A potentiometer measures a voltage this way, drawing no current from it.",
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -119,8 +119,8 @@
       },
       {
         "electrode": 2,
-        "min": -0.5,
-        "max": 0.5,
+        "min": -0.7,
+        "max": 0.7,
         "start": 10.0,
         "end": 80.0,
         "carriers": "net"

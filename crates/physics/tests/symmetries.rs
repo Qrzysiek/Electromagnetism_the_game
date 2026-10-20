@@ -946,3 +946,231 @@ fn y17_antenna_fields() {
         "mirror {worst_m}, quarter turn {worst_t}"
     );
 }
+
+/// A Lorentz boost by `u` (light's speed `c`; the force `q(E + v × B)`): events, a mass `m`'s
+/// momenta and the fields seen from the frame moving at `u`.
+struct Boost {
+    u: DVec3,
+    c: f64,
+}
+
+impl Boost {
+    fn gamma(&self) -> f64 {
+        1.0 / (1.0 - self.u.length_squared() / (self.c * self.c)).sqrt()
+    }
+    fn unit(&self) -> DVec3 {
+        self.u.normalize_or_zero()
+    }
+    fn event(&self, t: f64, x: DVec3) -> (f64, DVec3) {
+        let (g, n) = (self.gamma(), self.unit());
+        (
+            g * (t - self.u.dot(x) / (self.c * self.c)),
+            x + n * ((g - 1.0) * x.dot(n)) - self.u * (g * t),
+        )
+    }
+    fn momentum(&self, p: DVec3, m: f64) -> DVec3 {
+        let (g, n, c) = (self.gamma(), self.unit(), self.c);
+        let energy = (m * m * c.powi(4) + p.length_squared() * c * c).sqrt();
+        p + n * ((g - 1.0) * p.dot(n)) - self.u * (g * energy / (c * c))
+    }
+    /// A plane wave seen from the moving frame: its phase is invariant, its wave four-vector
+    /// `(ω/c, k)` transforms as an event, its amplitude and polarization as its fields at any
+    /// event.
+    fn wave(&self, w: &physics::external::PlaneWave) -> physics::external::PlaneWave {
+        let (g, n, c) = (self.gamma(), self.unit(), self.c);
+        let k = w.direction * (w.omega / c);
+        let omega = g * (w.omega - self.u.dot(k));
+        let k2 = k + n * ((g - 1.0) * k.dot(n)) - self.u * (g * w.omega / (c * c));
+        let e = w.polarization * w.amplitude;
+        let (e2, _) = self.fields(e, w.direction.cross(e) / c);
+        physics::external::PlaneWave {
+            amplitude: e2.length(),
+            direction: k2.normalize(),
+            polarization: e2.normalize(),
+            omega,
+            phase: w.phase,
+            c,
+        }
+    }
+    fn fields(&self, e: DVec3, b: DVec3) -> (DVec3, DVec3) {
+        let (g, n, c) = (self.gamma(), self.unit(), self.c);
+        (
+            (e + self.u.cross(b)) * g - n * ((g - 1.0) * e.dot(n)),
+            (b - self.u.cross(e) / (c * c)) * g - n * ((g - 1.0) * b.dot(n)),
+        )
+    }
+}
+
+/// A charge (q = 1, m = 1) flown in uniform fields from `x0`, `p0` for `t_max` (c = `c`).
+fn fly_uniform(e: DVec3, b: DVec3, c: f64, x0: DVec3, p0: DVec3, t_max: f64) -> Trajectory {
+    fly_external(
+        vec![physics::external::External::Uniform { e, b }],
+        c,
+        x0,
+        p0,
+        t_max,
+    )
+}
+
+/// A charge (q = 1, m = 1) flown in external fields from `x0`, `p0` for `t_max`.
+fn fly_external(
+    external: Vec<physics::external::External>,
+    c: f64,
+    x0: DVec3,
+    p0: DVec3,
+    t_max: f64,
+) -> Trajectory {
+    let scn = Scenario {
+        field: LevelField {
+            external,
+            ..LevelField::default()
+        },
+        obstacles: Vec::new(),
+        particle: Particle {
+            charge: 1.0,
+            mass: 1.0,
+            radius: 0.0,
+            moment: 0.0,
+        },
+        c,
+        x0,
+        p0,
+        detector: None,
+        bounds: Some(cube(1e4)),
+        t_max,
+        radiation_reaction: false,
+        acceptance: None,
+        gates: Vec::new(),
+    };
+    run(&scn, &RunSettings::with_tolerance(TOL))
+}
+
+/// Y20, Lorentz invariance of the relativistic engine (PHYSICS.md §9): a charge in uniform
+/// crossed fields (E = 2 ŷ, B = ẑ, c = 5), flown for 12 from the origin with p₀ = (0.6, 1.1,
+/// 0.4), against the same charge flown in the fields seen from a moving frame (`Boost`) from
+/// the boosted start for the boosted time: the boosted end event and momentum, to 1e-8 of
+/// the path's size and of the momentum (the integrator's tolerance 1e-12, amplified along the
+/// flight; Y1's bound). Boosts: the E × B drift frame (u = 2 x̂, β = 0.4), where E′ vanishes
+/// and B′ = B/γ, so that the boosted flight is also a gyration in closed form (checked to the
+/// same bound); and an oblique one, u = (1.2, −0.8, 0.9). The same oblique boost of a plane
+/// wave (ω = 1.3, amplitude 1.5, along (1, 0.3, 0)) over a uniform B = 0.8 ẑ: the wave seen
+/// Doppler-shifted (`Boost::wave`), its B′ that of a plane wave (`k̂′ × E′/c`, to 1e-12), the
+/// flights the same to 1e-8.
+#[test]
+fn y20_lorentz_boost() {
+    let (e, b, c) = (DVec3::new(0.0, 2.0, 0.0), DVec3::new(0.0, 0.0, 1.0), 5.0);
+    let (x0, p0, t_max) = (DVec3::ZERO, DVec3::new(0.6, 1.1, 0.4), 12.0);
+    let lab = fly_uniform(e, b, c, x0, p0, t_max);
+    assert_eq!(lab.outcome, physics::trajectory::Outcome::Timeout);
+    for u in [DVec3::new(2.0, 0.0, 0.0), DVec3::new(1.2, -0.8, 0.9)] {
+        let boost = Boost { u, c };
+        let (e2, b2) = boost.fields(e, b);
+        let (t0, y0) = boost.event(0.0, x0);
+        let (t1, y1) = boost.event(lab.end.t, lab.end.x);
+        let (q0, q1) = (boost.momentum(p0, 1.0), boost.momentum(lab.end.p, 1.0));
+        let moving = fly_uniform(e2, b2, c, y0, q0, t1 - t0);
+        assert_eq!(moving.outcome, physics::trajectory::Outcome::Timeout);
+        let size = (y1 - y0).length().max(1.0);
+        let dx = (moving.end.x - y1).length() / size;
+        let dp = (moving.end.p - q1).length() / q1.length();
+        println!(
+            "Y20 boost u = {u:?} (γ = {:.4}): E′ = {e2:.4?}, B′ = {b2:.4?}; the end {dx:.2e} of \
+             the path, the momentum {dp:.2e}",
+            boost.gamma()
+        );
+        assert!(dx < 1e-8 && dp < 1e-8, "{u:?}: {dx} {dp}");
+        if u.y == 0.0 && u.z == 0.0 {
+            // The drift frame: a gyration about z at ω = B′/(γ_p m), the momentum turning.
+            assert!(e2.length() < 1e-14, "E′ {e2:?}");
+            let gamma_p = (1.0 + q0.length_squared() / (c * c)).sqrt();
+            let omega = b2.z / gamma_p;
+            let dt = t1 - t0;
+            let (sn, cs) = ((-omega * dt).sin(), (-omega * dt).cos());
+            let turned = DVec3::new(q0.x * cs - q0.y * sn, q0.x * sn + q0.y * cs, q0.z);
+            // The position: the guiding centre plus the turned radius vector.
+            let centre = y0 + DVec3::new(q0.y, -q0.x, 0.0) / b2.z;
+            let at = centre - DVec3::new(turned.y, -turned.x, 0.0) / b2.z
+                + DVec3::new(0.0, 0.0, q0.z / gamma_p * dt);
+            let (ax, ap) = (
+                (moving.end.x - at).length() / size,
+                (moving.end.p - turned).length() / q1.length(),
+            );
+            println!(
+                "Y20 the drift frame's gyration in closed form: the end {ax:.2e}, the momentum {ap:.2e}"
+            );
+            assert!(ax < 1e-8 && ap < 1e-8, "gyration {ax} {ap}");
+        }
+    }
+    // A plane wave over a uniform field.
+    let wave = physics::external::PlaneWave {
+        amplitude: 1.5,
+        direction: DVec3::new(1.0, 0.3, 0.0).normalize(),
+        polarization: DVec3::new(-0.3, 1.0, 0.4).normalize(),
+        omega: 1.3,
+        phase: 0.4,
+        c,
+    };
+    // The polarization made perpendicular to the direction.
+    let wave = physics::external::PlaneWave {
+        polarization: (wave.polarization - wave.direction * wave.polarization.dot(wave.direction))
+            .normalize(),
+        ..wave
+    };
+    let b_uniform = DVec3::new(0.0, 0.0, 0.8);
+    let lab = fly_external(
+        vec![
+            physics::external::External::Wave(wave),
+            physics::external::External::Uniform {
+                e: DVec3::ZERO,
+                b: b_uniform,
+            },
+        ],
+        c,
+        x0,
+        p0,
+        t_max,
+    );
+    assert_eq!(lab.outcome, physics::trajectory::Outcome::Timeout);
+    let boost = Boost {
+        u: DVec3::new(1.2, -0.8, 0.9),
+        c,
+    };
+    let seen = boost.wave(&wave);
+    // Its fields at an event, both ways: transformed, and the boosted wave's own.
+    let (t, x) = (3.7, DVec3::new(1.0, -2.0, 0.5));
+    let field = |w: &physics::external::PlaneWave, t: f64, x: DVec3| {
+        let e = w.polarization * (w.amplitude * w.phase_at(x, t).cos());
+        (e, w.direction.cross(e) / w.c)
+    };
+    let (e, b) = field(&wave, t, x);
+    let (e_t, b_t) = boost.fields(e, b);
+    let (t2, x2) = boost.event(t, x);
+    let (e_w, b_w) = field(&seen, t2, x2);
+    let consistency = (e_t - e_w).length().max((b_t - b_w).length() * c) / wave.amplitude;
+    let (_, b2) = boost.fields(DVec3::ZERO, b_uniform);
+    let (e2u, _) = boost.fields(DVec3::ZERO, b_uniform);
+    let (t0, y0) = boost.event(0.0, x0);
+    let (t1, y1) = boost.event(lab.end.t, lab.end.x);
+    let (q0, q1) = (boost.momentum(p0, 1.0), boost.momentum(lab.end.p, 1.0));
+    let moving = fly_external(
+        vec![
+            physics::external::External::Wave(seen),
+            physics::external::External::Uniform { e: e2u, b: b2 },
+        ],
+        c,
+        y0,
+        q0,
+        t1 - t0,
+    );
+    assert_eq!(moving.outcome, physics::trajectory::Outcome::Timeout);
+    let size = (y1 - y0).length().max(1.0);
+    let dx = (moving.end.x - y1).length() / size;
+    let dp = (moving.end.p - q1).length() / q1.length();
+    println!(
+        "Y20 a plane wave boosted: ω {} → {:.5}, its fields at an event both ways within \
+         {consistency:.2e}; the end {dx:.2e} of the path, the momentum {dp:.2e}",
+        wave.omega, seen.omega
+    );
+    assert!(consistency < 1e-12, "the boosted wave {consistency}");
+    assert!(dx < 1e-8 && dp < 1e-8, "wave: {dx} {dp}");
+}

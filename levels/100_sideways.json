@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Sideways",
-  "description": "Around this tube is a solenoid: switch on its supply (the yellow coil at the top right) to fill the tube with a magnetic field along its length, out of the board when positive. Electrons crossing it curve, and above a critical field (Hull's cutoff) they cannot reach the anode at all: they drift along the cathode instead, sideways, perpendicular to both the electric and the magnetic field. Send the electrons into the collector above the gap: at least 1.1 must land there (averaged over $t = 20$ to $40$).",
+  "description": "Around this tube is a solenoid: switch on its supply (the yellow coil at the top right) to fill the tube with a magnetic field along its length, out of the board when positive. Electrons crossing it curve, and above a critical field (Hull's cutoff) they cannot reach the anode at all: they drift along the cathode instead, sideways, perpendicular to both the electric and the magnetic field. Send the electrons into the collector above the gap: at least 0.9 must land there (averaged over $t = 20$ to $40$).",
   "grid": {
     "nx": 24,
     "ny": 22,
@@ -102,7 +102,7 @@
     "goals": [
       {
         "electrode": 2,
-        "min": 1.1,
+        "min": 0.9,
         "max": 10.0,
         "start": 20.0,
         "end": 40.0

@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Ion diode",
-  "description": "An ion diode turned inside out: the ring is the cathode, emitting electrons from its inner face, and the rod in its middle, on your supply, emits ions. Without a magnetic field the electrons rush to the rod and waste the supply's current. Your solenoid (the yellow coil, top right) curls them: above Hull's critical field they cannot reach the rod, and stay in a sheath along the ring. The heavy ions still cross, and the sheath's negative charge pulls more of them across. Deliver an ion current between 5.5 and 8 to the ring while at most 0.05 of electrons leak to the rod (averaged over $t = 20$ to $30$). The critical field grows with the voltage, as $B \\propto \\sqrt{V}$: too weak a field for your voltage lets the electrons leak; the sheath helps the ions most just above it. The thin outer ring is the tube's grounded envelope.",
+  "description": "An ion diode turned inside out: the ring is the cathode, emitting electrons from its inner face, and the rod in its middle, on your supply, emits ions. Without a magnetic field the electrons rush to the rod and waste the supply's current. Your solenoid (the yellow coil, top right) curls them: above Hull's critical field they cannot reach the rod, and stay in a sheath along the ring. The heavy ions still cross, and the sheath's negative charge pulls more of them across. Deliver an ion current between 5 and 8.5 to the ring while at most 0.05 of electrons leak to the rod (averaged over $t = 20$ to $30$). The critical field grows with the voltage, as $B \\propto \\sqrt{V}$: too weak a field for your voltage lets the electrons leak; the sheath helps the ions most just above it. The thin outer ring is the tube's grounded envelope.",
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -39,11 +39,11 @@
       80.0
     ],
     "solenoid_fields": [
-      -3.0,
+      -8.0,
       1.7,
       1.9,
       2.2,
-      3.0
+      8.0
     ]
   },
   "reference_solution": [
@@ -127,8 +127,8 @@
       },
       {
         "electrode": 0,
-        "min": 5.5,
-        "max": 8.0,
+        "min": 5.0,
+        "max": 8.5,
         "start": 20.0,
         "end": 30.0,
         "carriers": "ions"
