@@ -10,6 +10,8 @@ workspace = true
 [dependencies]
 physics = { path = "../physics" }
 level = { path = "../level" }
+# The elementary functions of the materials' ratios (scales.rs; clippy.toml forbids std's).
+libm = "0.2.16"
 bevy = "0.19.1"
 bevy_egui = "0.42.0"
 # Rasterizes the MathJax-rendered formulas of level texts (math.rs).

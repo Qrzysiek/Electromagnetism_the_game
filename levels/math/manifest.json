@@ -131,6 +131,12 @@
   "height_ex": 1.92,
   "baseline_ex": 0.375
  },
+ "B_0^2": {
+  "file": "a0888f00073397fa.svg",
+  "width_ex": 2.705,
+  "height_ex": 2.573,
+  "baseline_ex": 0.687
+ },
  "E/B": {
   "file": "0b03b9a5b279c68f.svg",
   "width_ex": 4.577,
@@ -286,6 +292,18 @@
   "width_ex": 23.553,
   "height_ex": 2.452,
   "baseline_ex": 0.566
+ },
+ "\\omega_c \\tau \\approx 0.05": {
+  "file": "5e02b40ea08295a8.svg",
+  "width_ex": 10.497,
+  "height_ex": 1.864,
+  "baseline_ex": 0.357
+ },
+ "\\omega_c \\tau \\approx 0.4": {
+  "file": "7d52a5c9cdd52cfb.svg",
+  "width_ex": 9.366,
+  "height_ex": 1.889,
+  "baseline_ex": 0.357
  },
  "\\omega_s = \\omega\\,\\frac{1 + \\beta\\cos\\varphi}{1 - \\beta\\cos(\\theta - \\varphi)}": {
   "file": "0b4099458c176703.svg",

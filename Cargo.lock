@@ -3077,6 +3077,7 @@ dependencies = [
  "bevy",
  "bevy_egui",
  "level",
+ "libm",
  "opener",
  "physics",
  "rayon",

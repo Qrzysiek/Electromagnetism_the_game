@@ -1268,6 +1268,9 @@ fn draw_beams(gizmos: &mut Gizmos, game: &Game) {
     }
 }
 
+/// The most of a metal's ion cores drawn (one in so many beyond).
+const CORES_DRAWN: usize = 8000;
+
 /// A metal's carriers traced with their paths (about this many).
 pub const METAL_SAMPLE: usize = 40;
 
@@ -1320,7 +1323,9 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
         #[allow(clippy::cast_possible_truncation)]
         let r = (m.core_radius as f32).max(0.028);
         let core = Color::srgb(0.85, 0.78, 0.65).with_alpha(0.32 * stale);
-        for c in &m.cores {
+        // A dense lattice's cores one in so many (a short mean free path takes many: Eddy
+        // currents in silicon's 96 000 covered the metal and the maps on it).
+        for c in m.cores.iter().step_by((m.cores.len() / CORES_DRAWN).max(1)) {
             gizmos
                 .circle_2d(Vec2::new(c[0], c[1]), r, core)
                 .resolution(6);

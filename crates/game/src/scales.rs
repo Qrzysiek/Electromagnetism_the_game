@@ -1,7 +1,8 @@
 //! What a level's numbers mean (the owner, 2026-10-20): for each measurable quantity the
 //! real-world order of magnitude where its phenomena occur, and the dimensionless ratios that
 //! decide its physics, computed for the setup shown: the particle levels (with the radiation
-//! reaction's strength where it is modelled), the vacuum tubes and the metals.
+//! reaction's strength where it is modelled, a beam's own charge), the vacuum tubes and the
+//! metals (with the real material each resembles).
 
 use level::{Element, ElementKind, Level};
 
@@ -28,6 +29,270 @@ pub fn of(level: &Level, placement: &[Element]) -> Option<Scales> {
         Some(spec) => tubes(level, spec, placement),
         None => particles(level, placement),
     }
+}
+
+/// The electron's mass (kg), the vacuum's permittivity (F/m), kT at 300 K (J), ħ (J s): for the
+/// materials' ratios (`resemblance`).
+const ME_KG: f64 = 9.109e-31;
+const EPS0: f64 = 8.854e-12;
+const KT_300: f64 = 4.14e-21;
+const HBAR: f64 = 1.0546e-34;
+
+/// A real conductor at 300 K (Drude): its carriers' density (per m³), effective mass (of the
+/// electron's), mobility (m²/Vs), the background's permittivity and whether its carriers are
+/// degenerate (a metal's Fermi gas) or not (a doped semiconductor's).
+struct Material {
+    name: &'static str,
+    short: &'static str,
+    /// 1 everyday, 2 common, 3 specialised.
+    tier: u8,
+    n: f64,
+    mass: f64,
+    mobility: f64,
+    eps: f64,
+    degenerate: bool,
+}
+
+/// The conductors a metal is compared with (`resemblance`): textbook values, a few digits.
+const MATERIALS: [Material; 14] = [
+    Material {
+        name: "copper",
+        short: "copper",
+        tier: 1,
+        n: 8.47e28,
+        mass: 1.0,
+        mobility: 4.3e-3,
+        eps: 1.0,
+        degenerate: true,
+    },
+    Material {
+        name: "aluminium",
+        short: "aluminium",
+        tier: 1,
+        n: 1.81e29,
+        mass: 1.0,
+        mobility: 1.2e-3,
+        eps: 1.0,
+        degenerate: true,
+    },
+    Material {
+        name: "iron",
+        short: "iron",
+        tier: 1,
+        n: 1.7e29,
+        mass: 1.0,
+        mobility: 3.7e-4,
+        eps: 1.0,
+        degenerate: true,
+    },
+    Material {
+        name: "stainless steel",
+        short: "steel",
+        tier: 1,
+        n: 1.7e29,
+        mass: 1.0,
+        mobility: 5.1e-5,
+        eps: 1.0,
+        degenerate: true,
+    },
+    Material {
+        name: "n-type silicon, 10¹⁶ per cm³",
+        short: "silicon",
+        tier: 1,
+        n: 1e22,
+        mass: 0.26,
+        mobility: 0.135,
+        eps: 11.7,
+        degenerate: false,
+    },
+    Material {
+        name: "n-type silicon, 10¹⁷ per cm³",
+        short: "silicon",
+        tier: 1,
+        n: 1e23,
+        mass: 0.26,
+        mobility: 0.08,
+        eps: 11.7,
+        degenerate: false,
+    },
+    Material {
+        name: "n-type silicon, 10¹⁸ per cm³",
+        short: "silicon",
+        tier: 1,
+        n: 1e24,
+        mass: 0.26,
+        mobility: 0.03,
+        eps: 11.7,
+        degenerate: false,
+    },
+    Material {
+        name: "silver",
+        short: "silver",
+        tier: 2,
+        n: 5.86e28,
+        mass: 1.0,
+        mobility: 6.7e-3,
+        eps: 1.0,
+        degenerate: true,
+    },
+    Material {
+        name: "gold",
+        short: "gold",
+        tier: 2,
+        n: 5.9e28,
+        mass: 1.0,
+        mobility: 4.8e-3,
+        eps: 1.0,
+        degenerate: true,
+    },
+    Material {
+        name: "nichrome",
+        short: "nichrome",
+        tier: 2,
+        n: 1e29,
+        mass: 1.0,
+        mobility: 5.7e-5,
+        eps: 1.0,
+        degenerate: true,
+    },
+    Material {
+        name: "n-type germanium, 10¹⁶ per cm³",
+        short: "germanium",
+        tier: 2,
+        n: 1e22,
+        mass: 0.12,
+        mobility: 0.39,
+        eps: 16.0,
+        degenerate: false,
+    },
+    Material {
+        name: "n-type GaAs, 10¹⁷ per cm³",
+        short: "GaAs",
+        tier: 2,
+        n: 1e23,
+        mass: 0.067,
+        mobility: 0.6,
+        eps: 12.9,
+        degenerate: false,
+    },
+    Material {
+        name: "n-type InAs, 10¹⁷ per cm³",
+        short: "InAs",
+        tier: 3,
+        n: 1e23,
+        mass: 0.023,
+        mobility: 3.0,
+        eps: 15.0,
+        degenerate: false,
+    },
+    Material {
+        name: "InSb (intrinsic)",
+        short: "InSb",
+        tier: 3,
+        n: 2e22,
+        mass: 0.014,
+        mobility: 7.7,
+        eps: 16.8,
+        degenerate: false,
+    },
+];
+
+/// A material's ω_p τ, screening length per mean free path, collision time (s) and mean free
+/// path (m) (Material::ratios).
+type Ratios = (f64, f64, f64, f64);
+
+impl Material {
+    /// Its plasma oscillations per collision, its screening length (Debye's, or a Fermi gas's
+    /// Thomas-Fermi length) per mean free path, its collision time (s) and mean free path (m).
+    fn ratios(&self) -> Ratios {
+        let m = self.mass * ME_KG;
+        let tau = self.mobility * m / E_SI;
+        let wp = (self.n * E_SI * E_SI / (EPS0 * self.eps * m)).sqrt();
+        let (screen, speed) = if self.degenerate {
+            let fermi = HBAR
+                * HBAR
+                * libm::pow(
+                    3.0 * std::f64::consts::PI * std::f64::consts::PI * self.n,
+                    2.0 / 3.0,
+                )
+                / (2.0 * m);
+            (
+                (2.0 * EPS0 * self.eps * fermi / (3.0 * self.n * E_SI * E_SI)).sqrt(),
+                (2.0 * fermi / m).sqrt(),
+            )
+        } else {
+            (
+                (EPS0 * self.eps * KT_300 / (self.n * E_SI * E_SI)).sqrt(),
+                (KT_300 / m).sqrt() * 1.253_314_137_315_500_3,
+            )
+        };
+        (wp * tau, screen / (speed * tau), tau, speed * tau)
+    }
+}
+
+/// The real material a level's metal resembles (`resemblance`): its name, its ratios, how far
+/// the metal's are from them (a factor), and its collision time (s), mean free path (m) and
+/// mobility (m²/Vs).
+pub struct Resemblance {
+    pub name: &'static str,
+    pub short: &'static str,
+    pub wp_tau: f64,
+    pub screen: f64,
+    pub factor: f64,
+    pub tau: f64,
+    pub ell: f64,
+    pub mobility: f64,
+}
+
+/// The real material a level's metal resembles (the owner, 2026-10-20): its own ratios, ω_p τ
+/// and the screening length per mean free path (the same in any units), within ×3 (close) or
+/// ×10 (roughly) of the material's (the geometric mean of the two factors), with the level's
+/// strongest field reachable in the material (ω_c τ = μB at most 30 T). The most common
+/// material first (`Material::tier`), close before rough, then the closest.
+pub fn resemblance(level: &Level, m: &level::tube::MetalSpec) -> Option<Resemblance> {
+    let qm = m.charge_per_mass.abs();
+    let tau = m.mean_free_path / (m.thermal_speed * 1.253_314_137_315_500_3);
+    let wp_tau = (4.0 * std::f64::consts::PI * m.density * qm).sqrt() * tau;
+    let debye = (m.thermal_speed * m.thermal_speed / qm / (4.0 * std::f64::consts::PI * m.density))
+        .sqrt()
+        / m.mean_free_path;
+    let field = level.tube.as_ref().map_or(0.0, |t| t.b_z.abs());
+    let strongest = level
+        .limits
+        .solenoid_fields
+        .iter()
+        .fold(field, |a, v| a.max(v.abs()));
+    let wct = qm * strongest * tau;
+    let candidates: Vec<(&Material, f64, Ratios)> = MATERIALS
+        .iter()
+        .filter_map(|mat| {
+            let r = mat.ratios();
+            let factor =
+                libm::exp(0.5 * (libm::log(wp_tau / r.0).abs() + libm::log(debye / r.1).abs()));
+            (wct / mat.mobility <= 30.0).then_some((mat, factor, r))
+        })
+        .collect();
+    for tier in 1..=3 {
+        for limit in [3.0, 10.0] {
+            if let Some((mat, factor, r)) = candidates
+                .iter()
+                .filter(|(mat, f, _)| mat.tier == tier && *f <= limit)
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+            {
+                return Some(Resemblance {
+                    name: mat.name,
+                    short: mat.short,
+                    wp_tau: r.0,
+                    screen: r.1,
+                    factor: *factor,
+                    tau: r.2,
+                    ell: r.3,
+                    mobility: mat.mobility,
+                });
+            }
+        }
+    }
+    None
 }
 
 /// Elementary charge (C), electron rest energy (J), Coulomb constant (N m²/C²), light's speed
@@ -368,12 +633,15 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
         f64::INFINITY
     };
     let num = crate::ui::fmt_num;
+    let like = resemblance(level, m);
     let headline = format!(
-        "ω_c τ = {} · qEℓ/kT = {} · a cell ≈ 0.1 µm",
+        "ω_c τ = {} · qEℓ/kT = {}{}",
         num(wct),
-        num(heating)
+        num(heating),
+        like.as_ref()
+            .map_or(String::new(), |r| format!(" · like {}", r.short))
     );
-    let lines = vec![
+    let mut lines = vec![
         Scale {
             quantity: "ω_c τ, the field's turn between collisions",
             here: format!(
@@ -430,16 +698,60 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
                      before a collision damps it: a charge imbalance relaxes in a fraction of a \
                      mean free time, so the metal stays neutral inside.",
         },
-        Scale {
-            quantity: "units: this model's metal as a real one",
-            here: "a cell 0.1 µm; time 0.8 ps; B 0.47 T; potential 6.5 mV; speed 1.3e5 m/s".into(),
-            real: "GaAs at room temperature (mobility 0.85 m²/Vs, 1e23 carriers per m³)",
-            detail: "One consistent reading of the game's units, from its carriers' thermal speed, \
-                     mean free path and charge-to-mass ratio set equal to GaAs's: then B = 4 is \
-                     about 2 tesla, a strip 16 cells long 1.6 µm, a supply of 30 about 0.2 volt. \
-                     The model is a scaled classical plasma closer to a doped semiconductor than \
-                     to copper, whose numbers are in the line above each.",
-        },
     ];
+    let omega = match spec.solenoid_drive {
+        Some(level::Source::Sine { omega, .. }) => omega,
+        _ => 0.0,
+    };
+    lines.push(match &like {
+        Some(r) => {
+            // The model's τ and ℓ read as the material's; B from ω_c τ = μB.
+            let (t_unit, l_unit) = (r.tau / tau, r.ell / ell);
+            Scale {
+                quantity: "the real material it resembles",
+                here: format!(
+                    "{} ({} of its own ratios: ω_p τ {}, the screening length {} mean free paths): \
+                     a cell {} µm; time {} ps; B {} T{}",
+                    r.name,
+                    if r.factor <= 3.0 { "within ×3" } else { "within ×10" },
+                    num(r.wp_tau),
+                    num(r.screen),
+                    num(l_unit * 1e6),
+                    num(t_unit * 1e12),
+                    num(b * qm * tau / r.mobility),
+                    if omega > 0.0 {
+                        format!(
+                            "; the swing {} GHz",
+                            num(omega / t_unit / (2.0 * std::f64::consts::PI) * 1e-9)
+                        )
+                    } else {
+                        String::new()
+                    }
+                ),
+                real: "compared: copper, aluminium, iron, stainless steel, silicon (1e16-1e18 per \
+                       cm³), silver, gold, nichrome, germanium, GaAs, InAs, InSb at 300 K. Real \
+                       metals have ω_p τ 50-500, beyond the model at playable cost (about 1: its \
+                       step must follow the plasma oscillation)",
+                detail: "The metal's own ratios, ω_p τ (plasma oscillations per collision) and its \
+                         screening length in mean free paths, against real conductors' at room \
+                         temperature (Drude, from their density, effective mass and mobility); \
+                         a material counts only if the level's strongest field, read through its \
+                         mobility (ω_c τ = μB), is a laboratory's (at most 30 T). Named: the most \
+                         common such material within ×3 of both ratios, else within ×10. The rest \
+                         of the line reads the game's units as that material's: its collision \
+                         time and mean free path for the model's.",
+            }
+        }
+        None => Scale {
+            quantity: "the real material it resembles",
+            here: "none of the materials compared within ×10 of its ratios at a laboratory's field"
+                .into(),
+            real: "compared: copper, aluminium, iron, stainless steel, silicon (1e16-1e18 per cm³), \
+                   silver, gold, nichrome, germanium, GaAs, InAs, InSb at 300 K",
+            detail: "No real conductor among those compared has this metal's own ratios (ω_p τ and \
+                     the screening length in mean free paths, within ×10) and reaches the level's \
+                     strongest field at most 30 T.",
+        },
+    });
     Some(Scales { headline, lines })
 }

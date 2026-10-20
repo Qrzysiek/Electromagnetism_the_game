@@ -1,0 +1,117 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Eddy currents in silicon",
+  "description": "The last plate's carriers flew far between collisions, so that the field turned their paths by a good part of a radian on the way ($\\omega_c \\tau \\approx 0.4$; the Scales section). This plate is lightly doped silicon's: its carriers collide far more often, in a field that swings faster. The field barely turns them between collisions ($\\omega_c \\tau \\approx 0.05$), so the eddy currents follow Ohm's law alone, as they do in copper at any laboratory field, and their heat grows as $B_0^2$. Set the swing $B_0$ so that the plate takes between 1 and 4 of heat per unit time (averaged over $t = 25$ to $125$).",
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 200.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "solenoid_fields": [
+      -1.5,
+      0.43,
+      1.5
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        23,
+        19,
+        0
+      ],
+      "kind": "supply",
+      "value": 0.43
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        1,
+        1,
+        0
+      ],
+      "length": 0.5,
+      "thickness": 0.5,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "charge",
+        "value": 0.0
+      }
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "heat_goals": [
+      {
+        "metal": 0,
+        "min": 1.0,
+        "max": 4.0,
+        "start": 25.0,
+        "end": 125.0
+      }
+    ],
+    "solenoid_drive": {
+      "kind": "sine",
+      "amplitude": 1.0,
+      "omega": 0.4084070449666731
+    },
+    "step": 0.033,
+    "saturation": 0.0,
+    "solenoid": [
+      23,
+      19,
+      0
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            6,
+            4,
+            0
+          ],
+          [
+            18,
+            16,
+            0
+          ]
+        ],
+        "contacts": [],
+        "density": 2.7,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 0.3,
+        "core_radius": 0.0025,
+        "carriers_per_area": 50.0,
+        "seed": 21
+      }
+    ]
+  }
+}

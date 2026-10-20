@@ -3872,6 +3872,55 @@ def eddy_currents():
         reference=[supply(23, 19, 0.95)])
 
 
+# Eddy currents in Ohm's regime (the owner, 2026-10-20: Eddy currents' plate reads as a doped
+# semiconductor, omega_c tau 0.38 at its answer; make one like copper's). The same plate with
+# carriers that collide far more often, in a field that swings faster, so that every ratio
+# deciding its eddy currents is small, as in copper: omega tau = 0.049 (the swing slow against
+# the collisions), omega_c tau <= 0.18 over the whole slider (0.052 at the answer; copper's
+# 0.0044 per tesla), omega/(4 pi sigma) = 0.10 (the edge charge keeps up with the swing), the
+# plate 40 mean free paths across (the other's 12). The metal's own ratios, though, are a lightly
+# doped semiconductor's: omega_p tau 0.70 and a screening length of 1.14 mean free paths match
+# n-type silicon at 1e16 per cm^3 within x1.08 (game scales.rs, `resemblance`), where copper's are
+# 400 and 0.0014 (real metals' omega_p tau 50-500: the step must follow the plasma oscillation,
+# so the model affords about 1). Named for silicon (the owner's choice). The mean free path 0.3
+# (tau = 0.12), cores of radius 0.0025 (a/2l = 0.004, the model's limit 0.005; 96 000 of them),
+# density 2.7 (sigma = 0.32), the step 0.033 (omega_p dt = 0.19).
+SILICON = dict(density=2.7, thermal_speed=2.0, mean_free_path=0.3, core_radius=0.0025,
+               carriers_per_area=50.0)
+SILICON_STEP = 0.033
+# 13 whole cycles of the heat (it goes as Bdot^2, period pi/omega) in the goal's window.
+SILICON_OMEGA = 0.13 * math.pi
+
+
+def eddy_silicon():
+    # Designed with `generator tube-scan` (target/scratch/copper_scratch.py): heat (preview)
+    # 0.114, 0.471, 1.02, 1.11, 1.19, 1.67, 2.06, 4.42, 7.35, 16.4 at B0 = 0.1, 0.2, 0.3, 0.32,
+    # 0.35, 0.38, 0.43, 0.6, 0.8, 1.2: 11.5 B0^2, local Ohm's law's 11.1 (sigma <Bdot^2> int u
+    # dA; 40 mean free paths across, its walls matter less than the other plate's, 5-7 %
+    # below), the preview scattering ~10 % at small swings. With the goal 1.2-4.0 B0 solved on
+    # 0.40-0.55 (5.0 % of +-1.5): from 1.0. Verified 2.067 +- 0.012 at 0.43 (the other plate's
+    # +- 0.28: the shorter collision time averages the thermal noise out). The swing's +-1.5
+    # spans heat 0 to ~26 with omega_c tau <= 0.18.
+    return level(
+        "Eddy currents in silicon",
+        "The last plate's carriers flew far between collisions, so that the field turned their "
+        "paths by a good part of a radian on the way ($\\omega_c \\tau \\approx 0.4$; the Scales "
+        "section). This plate is lightly doped silicon's: its carriers collide far more often, "
+        "in a field that swings faster. The field barely turns them between collisions "
+        "($\\omega_c \\tau \\approx 0.05$), so the eddy currents follow Ohm's law alone, as they "
+        "do in copper at any laboratory field, and their heat grows as $B_0^2$. Set the swing "
+        "$B_0$ so that the plate takes between 1 and 4 of heat per unit time (averaged over "
+        "$t = 25$ to $125$).",
+        grid=(24, 20), c=None, t_max=200.0,
+        electrodes=[cold_electrode(1, 1)],
+        solenoid_fields=slider(1.5, 0.43),
+        tube=tube(0, None, 0, 0, 0, 0, step=SILICON_STEP, saturation=0.0, solenoid=(23, 19),
+                  solenoid_drive=sine(1.0, SILICON_OMEGA),
+                  heat_goals=[heat_goal(0, 1.0, 4.0, 25.0, 125.0)],
+                  metals=[metal((6, 4), (18, 16), [], seed=21, **SILICON)]),
+        reference=[supply(23, 19, 0.43)])
+
+
 def laminations():
     # Designed with `generator tube-scan` (target/scratch/lam20_*.py): a transformer's core
     # 20 x 12 on the solenoid's axis (30 carriers per area: 14 400 in the verification), the
@@ -3933,6 +3982,7 @@ ARCS.append(("Inside the components: metals", [
         ("positive_carriers", positive_carriers),
         ("magnetoresistance", magnetoresistance),
         ("eddy_currents", eddy_currents),
+        ("eddy_silicon", eddy_silicon),
         ("laminations", laminations),
     ]),
 ]))

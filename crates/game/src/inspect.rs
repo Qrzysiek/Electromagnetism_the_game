@@ -304,17 +304,33 @@ fn metal(level: &Level, k: usize, m: &level::tube::MetalSpec, lo: DVec3, hi: DVe
             area * m.core_density(),
             fmt_num(m.mean_free_path)
         ))
-        .line(format!(
-            "contacts: electrode{} {} (each keeps a layer {} deep neutral)",
-            if contacts.len() == 1 { "" } else { "s" },
-            contacts.join(", "),
-            fmt_num(level.contact_depth(m))
-        ))
+        .line(if contacts.is_empty() {
+            "no contacts: isolated (its charge stays in it)".into()
+        } else {
+            format!(
+                "contacts: electrode{} {} (each keeps a layer {} deep neutral)",
+                if contacts.len() == 1 { "" } else { "s" },
+                contacts.join(", "),
+                fmt_num(level.contact_depth(m))
+            )
+        })
         .line(format!(
             "{} macroparticles per area in the preview; plasma frequency {}",
             fmt_num(m.carriers_per_area),
             fmt_num(m.plasma_frequency())
         ))
+        .line(match crate::scales::resemblance(level, m) {
+            Some(r) => format!(
+                "resembles {} ({} of its ratios; the Scales section)",
+                r.name,
+                if r.factor <= 3.0 {
+                    "within ×3"
+                } else {
+                    "within ×10"
+                }
+            ),
+            None => "resembles none of the conductors compared (the Scales section)".into(),
+        })
 }
 
 fn particle(s: &level::ParticleSpec) -> String {

@@ -366,6 +366,7 @@
             "positive_carriers",
             "magnetoresistance",
             "eddy_currents",
+            "eddy_silicon",
             "laminations"
           ]
         }
