@@ -378,6 +378,17 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Inside the components: transistors",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "gate"
+          ]
+        }
+      ]
     }
   ]
 }

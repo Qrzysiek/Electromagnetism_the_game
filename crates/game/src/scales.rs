@@ -700,15 +700,35 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
             "∞".into()
         }
     };
+    // A gate (the transistors' levels): a tunable electrode that is no metal's contact, on
+    // the player's supply: its potential in thermal voltages, and the channel's width in
+    // screening lengths (the first metal's).
+    let gate = level.electrodes.iter().enumerate().find_map(|(k, e)| {
+        (e.tunable && spec.metal_of(k).is_none())
+            .then(|| {
+                placement
+                    .iter()
+                    .find(|s| s.kind == ElementKind::Supply && s.node == e.center)
+            })
+            .flatten()
+            .map(|s| s.value)
+    });
+    // The gate's potential in the first metal's thermal voltages (the headline's, without a
+    // magnetic field).
+    let gate_kt = gate.and_then(|v| {
+        spec.metals
+            .first()
+            .map(|m| v / (m.thermal_speed * m.thermal_speed / m.charge_per_mass.abs()))
+    });
     let headline = if let [(_, s)] = kinds.as_slice() {
-        format!(
-            "ω_c τ = {} · qEℓ/kT = {}{}",
-            num(s.wct),
-            num(s.heating),
-            s.like
-                .as_ref()
-                .map_or(String::new(), |r| format!(" · like {}", r.short))
-        )
+        let like = s
+            .like
+            .as_ref()
+            .map_or(String::new(), |r| format!(" · like {}", r.short));
+        match gate_kt.filter(|_| b == 0.0) {
+            Some(g) => format!("gate {} kT/q · qEℓ/kT = {}{like}", num(g), num(s.heating)),
+            None => format!("ω_c τ = {} · qEℓ/kT = {}{like}", num(s.wct), num(s.heating)),
+        }
     } else {
         let join = |f: &dyn Fn(&MetalScales) -> String| {
             kinds
@@ -794,6 +814,31 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
                      mean free time, so the metal stays neutral inside.",
         },
     ];
+    if let (Some(v), Some(m)) = (gate, spec.metals.first()) {
+        let kt_over_q = m.thermal_speed * m.thermal_speed / m.charge_per_mass.abs();
+        let debye = (kt_over_q / (4.0 * std::f64::consts::PI * m.density)).sqrt();
+        let (lo, hi) = level.metal_rect(m);
+        lines.push(Scale {
+            quantity: "the gate's potential in thermal voltages kT/q",
+            here: format!("{} / {} = {}", num(v), num(kt_over_q), num(v / kt_over_q)),
+            real: "kT/q = 26 mV at room temperature; a transistor's gate swings about 1 V, \
+                   some 40 kT/q",
+            detail: "How hard the gate pushes the channel's carriers against their thermal \
+                     motion: where the potential changes by V their density changes by \
+                     e^(qV/kT). Below threshold the current falls about e-fold per kT/q or \
+                     two of gate swing (a real transistor's best: a tenfold fall per 60 mV at \
+                     room temperature).",
+        });
+        lines.push(Scale {
+            quantity: "the channel's width in screening (Debye) lengths",
+            here: num((hi.x - lo.x).min(hi.y - lo.y) / debye),
+            real: "a transistor's channel: a few nm, a few screening lengths; a metal screens \
+                   within an atom, so no gate reaches inside it",
+            detail: "How far a gate's field reaches into the channel before the carriers screen \
+                     it: a channel a few screening lengths thin is emptied or filled through \
+                     its whole width.",
+        });
+    }
     let omega = match spec.solenoid_drive {
         Some(level::Source::Sine { omega, .. }) => omega,
         _ => 0.0,

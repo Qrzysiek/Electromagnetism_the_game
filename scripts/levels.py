@@ -3947,6 +3947,61 @@ def strength_and_sign():
         reference=[supply(3, 15, 30.0), supply(23, 19, -5.0)])
 
 
+# Inside the components: transistors (docs/DRUDE.md, the owner approved the plan
+# 2026-10-20). The field effect: a gate beside a thin channel of few carriers pushes them out
+# or draws more in, and the channel's current follows. A metal cannot be gated (it screens
+# within an atom); the model's lightly doped channel can (its Debye length 0.56, a quarter of
+# its width). The channel's material: density 1, mean free path 0.5 (n-type silicon at 1e16
+# per cm^3 by its own ratios, within x1.1: game scales.rs, `resemblance`).
+CHANNEL = dict(density=1.0, thermal_speed=2.0, mean_free_path=0.5, core_radius=0.005,
+               carriers_per_area=400.0)
+CHANNEL_STEP = 0.04
+
+
+def gate():
+    # Designed with `generator tube-scan` (target/scratch/gate_design*.py): a channel 8 x 2
+    # between a grounded source and a drain held at 10, gates 1.5 above and below it on the
+    # player's supply. The channel charges through its own resistance (R C ~ L^2: a channel 16
+    # long had not settled by t = 30; 8 long settles within ~10). Convergence: with the gates
+    # 0.5 away and 100 macroparticles per area the preview's current was 0.342 at gate 0
+    # against the verification's 0.220 (and 0.243 at refine 3); the macroparticles were the
+    # cause (twice as many: 0.262; four times: 0.266; the verification with twice as many:
+    # 0.256; the softening and the contacts' segments hardly mattered), and the gates moved
+    # 1.5 away (three preview segments). Depletion needs more: the current at -10, -15, -25,
+    # -35 was 0.176, 0.163, 0.150, 0.159 at 200 per area (a plateau, an artefact), 0.182, 0.136,
+    # 0.071, 0.050 at 400, 0.181, 0.139, 0.069, 0.027 at 800, 0.171, 0.134, 0.065, 0.023 at the
+    # verification with 800: below threshold the current crosses the gate's barrier
+    # thermally, and coarse macroparticles' grainy field rocks the barrier (at -46: 0.078,
+    # 0.052, 0.007 at 200, 400, 800). So 400 per area: converged within 10 % to about -25;
+    # pinch-off beyond -40 is shown as it is, its current not converged at the preview. At
+    # 200 per area over the slider: 0.957, 0.598, 0.262 at +100, 40, 0, the channel's carriers
+    # 13575, 6917, 2969 (doubled at 400: at +60 the verification's ~36000 pass the particle
+    # cap and pause emission, where nothing solves). Goal 0.08-0.16: the gate about -13 to
+    # -24.
+    return level(
+        "Gate",
+        "The principle of the transistor. A thin strip of lightly doped silicon carries a "
+        "current from the drain, held at 10, to the grounded source. Two gate electrodes beside "
+        "it, on your supply, never touch it: a negative gate pushes the strip's carriers out "
+        "and the current fades, until none flows; a positive one draws more in from the "
+        "contacts. Set the gate so that between 0.08 and 0.16 flows into the drain, a third to "
+        "two thirds of what flows with the gate at 0 (averaged over $t = 20$ to $60$). A metal screens any field within an atom, so no gate reaches "
+        "inside copper; billions of these gates, each over a thin oxide on a silicon channel, "
+        "switch in every chip.",
+        grid=(20, 16), c=None, t_max=100.0,
+        # 0: the source (grounded); 1: the drain (held at 10); 2, 3: the gates (your supply).
+        electrodes=[contact(5, 8, 2), contact(15, 8, 2),
+                    plate(10, 11, 6, thickness=1.0, tunable=True),
+                    plate(10, 5, 6, thickness=1.0)],
+        supplies=slider(60.0, -18.0, 0.0, 20.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=CHANNEL_STEP,
+                  circuits=[tube_circuit(1, dc(10.0), resistance=0.0),
+                            tube_circuit(2, dc(0.0), resistance=0.0, linked=[3])],
+                  goals=[current_goal(1, 0.08, 0.16, 20.0, 60.0, carriers="net")],
+                  metals=[metal((6, 7), (14, 9), [0, 1], seed=3, **CHANNEL)]),
+        reference=[supply(10, 11, -18.0)])
+
+
 # The eddy-current levels' drive: the solenoid's field swings as B0 sin(wt), period ~50: long
 # against the metal's settling (a few tenths) and its slow polarizations (a few units), and
 # slow enough that a cut's two faces, a Debye length apart, carry little current across as
@@ -4109,6 +4164,12 @@ ARCS.append(("Inside the components: metals", [
     ]),
     ("Master", [
         ("strength_and_sign", strength_and_sign),
+    ]),
+]))
+
+ARCS.append(("Inside the components: transistors", [
+    ("Introduction", [
+        ("gate", gate),
     ]),
 ]))
 
