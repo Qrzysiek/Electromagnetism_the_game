@@ -13,6 +13,7 @@ mod level_docs;
 mod level_editor;
 mod math;
 mod potential;
+mod probe;
 mod radiation;
 mod sandbox;
 mod scales;
@@ -407,6 +408,12 @@ pub struct Game {
     /// The board point under the pointer (None over the panel, off the window, or while
     /// something is dragged): what the tooltip inspects (`inspect.rs`).
     pub hover_world: Option<Vec2>,
+    /// The board probe is on (I held, or `EM_PROBE=1` in a capture): the tooltip shows
+    /// everything known at the pointer (`probe.rs`).
+    pub probe: bool,
+    /// Particle levels: the static field the probe samples, with the setup revision it was
+    /// built for (built when the probe is first used after a change).
+    pub probe_field: Option<(u64, physics::field::LevelField)>,
     /// Tube levels: how each electrode's potential swings in the preview run (`Swing`),
     /// for the glow of the oscillating ones.
     pub swing: Option<Swing>,
@@ -585,6 +592,8 @@ impl Game {
             zoom_center: None,
             pan_anchor: None,
             hover_world: None,
+            probe: false,
+            probe_field: None,
             swing: None,
             traced: None,
             drift: None,
@@ -1445,6 +1454,19 @@ fn input(
         if keys.just_pressed(KeyCode::KeyP) || keys.just_pressed(KeyCode::PageUp) {
             game.next_level(-1);
         }
+    }
+    // The board probe while I is held (a capture's EM_PROBE=1 holds it).
+    game.probe = (!game.text_focus && keys.pressed(KeyCode::KeyI))
+        || std::env::var("EM_PROBE").is_ok_and(|v| v == "1");
+    if game.probe
+        && !game.editor.level.is_tube()
+        && game
+            .probe_field
+            .as_ref()
+            .is_none_or(|(revision, _)| *revision != game.sent_revision)
+    {
+        let field = game.editor.level.field(&game.editor.placement).0;
+        game.probe_field = Some((game.sent_revision, field));
     }
 
     if egui_input.wants_pointer_input() || egui_input.is_pointer_over_area() {

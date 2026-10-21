@@ -23,148 +23,181 @@ fn shipped_levels() -> Vec<(String, Level)> {
     out
 }
 
+/// The shipped levels with their files' bytes (the pass records' key).
+fn shipped_files() -> Vec<(String, Vec<u8>, Level)> {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../levels");
+    let mut out: Vec<(String, Vec<u8>, Level)> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| level::is_level_file(p))
+        .map(|p| {
+            let name = p.file_stem().unwrap().to_string_lossy().into_owned();
+            let bytes = std::fs::read(&p).unwrap();
+            let level = Level::from_json(std::str::from_utf8(&bytes).unwrap()).unwrap();
+            (name, bytes, level)
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
 /// End-point shifts (cells) that no view shows and no margin of the shipped levels comes
 /// near: below it the interaction's effect is too small to compare the beam models by.
 const NEGLIGIBLE_EFFECT: f64 = 1e-2;
 
 #[test]
 fn reference_solutions_are_verified() {
-    for (name, level) in shipped_levels() {
-        assert_eq!(
-            level.check_placement(&level.reference_solution),
-            Ok(()),
-            "{name}"
-        );
-        if level.is_tube() {
-            // Tube levels: the verified current meets the goal (`level::tube`).
-            let v = level.tube_verdict(&level.reference_solution);
-            println!("{name}: tube verdict {v:?}");
-            assert_eq!(v.status, level::tube::TubeStatus::Met, "{name}");
+    // Each level checked again only where its file or this test program changed since it
+    // last passed (`level::run_cache::TestPasses`; EM_TEST_FULL=1 checks them all).
+    let passes = level::run_cache::TestPasses::open("reference");
+    for (name, bytes, level) in shipped_files() {
+        if passes.as_ref().and_then(|t| t.passed(&bytes)).is_some() {
             continue;
         }
-        if level.has_beams() {
-            // Every beam shot reaches its verified transmission in every flight.
-            let v = level.verify_beams(&level.reference_solution);
-            for (d, f) in v.iter().enumerate() {
-                for s in 0..level.shots.len() {
-                    let (ok, n) = f.transmitted(s);
-                    println!("{name} flight {d} shot {s}: {ok}/{n} arrive, verified");
-                }
+        check_reference(&name, &level);
+        if let Some(t) = &passes {
+            t.record(&bytes, "verified");
+        }
+    }
+}
+
+/// One level's reference solution, verified (`reference_solutions_are_verified`).
+#[allow(clippy::too_many_lines)]
+fn check_reference(name: &str, level: &Level) {
+    assert_eq!(
+        level.check_placement(&level.reference_solution),
+        Ok(()),
+        "{name}"
+    );
+    if level.is_tube() {
+        // Tube levels: the verified current meets the goal (`level::tube`).
+        let v = level.tube_verdict(&level.reference_solution);
+        println!("{name}: tube verdict {v:?}");
+        assert_eq!(v.status, level::tube::TubeStatus::Met, "{name}");
+        return;
+    }
+    if level.has_beams() {
+        // Every beam shot reaches its verified transmission in every flight.
+        let v = level.verify_beams(&level.reference_solution);
+        for (d, f) in v.iter().enumerate() {
+            for s in 0..level.shots.len() {
+                let (ok, n) = f.transmitted(s);
+                println!("{name} flight {d} shot {s}: {ok}/{n} arrive, verified");
             }
-            assert!(level.beams_solved(&v), "{name}");
-            // The model neglects each particle's radiation (PHYSICS.md §3.3): the energy it
-            // radiates (Liénard, with the other particles' fields) must be below the
-            // numerical accuracy, as for single flights.
-            // Quasi-static interaction at finite c (PHYSICS.md §3.3): the exact retarded
-            // interaction must give the same outcome for every particle, and the difference
-            // between the models must match the indicator. Both are flown without radiation
-            // reaction (it would multiply the cost of the exact run eightfold), so that the
-            // comparison measures the interaction models only: comparing the level's own
-            // flights (with radiation reaction) against an exact run without it mixed in
-            // the radiation reaction's effect (found on level 51, where it dominated).
-            // Both at the verification tolerance: at the preview tolerance their integration
-            // errors (5e-6 cells on Soft landing at full current) masked the difference of
-            // the models.
-            if level.physics.c.is_some() && level.interacts() && !level.physics.beam_retarded {
-                let rs = RunSettings::with_tolerance(level.physics.tolerances.verify);
-                // The interaction is switched on the flights themselves: a level with free
-                // particles or free charges always interacts (`Level::interacts`), whatever
-                // its `beam_interaction` says (the first version switched that flag and
-                // compared such a level with itself).
-                let flights = |retarded: bool, interact: bool| {
-                    let mut l = level.clone();
-                    l.physics.beam_retarded = retarded;
-                    l.physics.radiation_reaction = false;
-                    l.beam_scenarios(
-                        &level.reference_solution,
-                        physics::conductor::Resolution::Preview,
-                    )
-                    .into_iter()
-                    .map(|mut scn| {
-                        scn.interact = interact;
-                        physics::beam::run_beam(&scn, &rs)
-                    })
-                    .collect::<Vec<_>>()
-                };
-                let (quasi, exact, alone) = (
-                    flights(false, true),
-                    flights(true, true),
-                    flights(false, false),
+        }
+        assert!(level.beams_solved(&v), "{name}");
+        // The model neglects each particle's radiation (PHYSICS.md §3.3): the energy it
+        // radiates (Liénard, with the other particles' fields) must be below the
+        // numerical accuracy, as for single flights.
+        // Quasi-static interaction at finite c (PHYSICS.md §3.3): the exact retarded
+        // interaction must give the same outcome for every particle, and the difference
+        // between the models must match the indicator. Both are flown without radiation
+        // reaction (it would multiply the cost of the exact run eightfold), so that the
+        // comparison measures the interaction models only: comparing the level's own
+        // flights (with radiation reaction) against an exact run without it mixed in
+        // the radiation reaction's effect (found on level 51, where it dominated).
+        // Both at the verification tolerance: at the preview tolerance their integration
+        // errors (5e-6 cells on Soft landing at full current) masked the difference of
+        // the models.
+        if level.physics.c.is_some() && level.interacts() && !level.physics.beam_retarded {
+            let rs = RunSettings::with_tolerance(level.physics.tolerances.verify);
+            // The interaction is switched on the flights themselves: a level with free
+            // particles or free charges always interacts (`Level::interacts`), whatever
+            // its `beam_interaction` says (the first version switched that flag and
+            // compared such a level with itself).
+            let flights = |retarded: bool, interact: bool| {
+                let mut l = level.clone();
+                l.physics.beam_retarded = retarded;
+                l.physics.radiation_reaction = false;
+                l.beam_scenarios(
+                    &level.reference_solution,
+                    physics::conductor::Resolution::Preview,
+                )
+                .into_iter()
+                .map(|mut scn| {
+                    scn.interact = interact;
+                    physics::beam::run_beam(&scn, &rs)
+                })
+                .collect::<Vec<_>>()
+            };
+            let (quasi, exact, alone) = (
+                flights(false, true),
+                flights(true, true),
+                flights(false, false),
+            );
+            for (((f, q), r), lone) in v.iter().zip(&quasi).zip(&exact).zip(&alone) {
+                let effect = q
+                    .trajectories
+                    .iter()
+                    .zip(&lone.trajectories)
+                    .map(|(a, b)| (a.end.x - b.end.x).length())
+                    .fold(0.0f64, f64::max);
+                let mut worst: f64 = 0.0;
+                for (i, ((a, b), c)) in f
+                    .verified
+                    .trajectories
+                    .iter()
+                    .zip(&r.trajectories)
+                    .zip(&q.trajectories)
+                    .enumerate()
+                {
+                    assert_eq!(a.outcome, b.outcome, "{name}: particle {i}");
+                    worst = worst.max((c.end.x - b.end.x).length());
+                }
+                let indicator = q
+                    .neglected_retardation
+                    .iter()
+                    .fold(0.0f64, |m, &x| m.max(x));
+                println!(
+                    "{name}: quasi-static and retarded end points differ by up to {worst:.1e} \
+                     cells, {:.1e} of the interaction's effect {effect:.1e}; indicator up to \
+                     {indicator:.1e}",
+                    worst / effect
                 );
-                for (((f, q), r), lone) in v.iter().zip(&quasi).zip(&exact).zip(&alone) {
-                    let effect = q
-                        .trajectories
-                        .iter()
-                        .zip(&lone.trajectories)
-                        .map(|(a, b)| (a.end.x - b.end.x).length())
-                        .fold(0.0f64, f64::max);
-                    let mut worst: f64 = 0.0;
-                    for (i, ((a, b), c)) in f
-                        .verified
-                        .trajectories
-                        .iter()
-                        .zip(&r.trajectories)
-                        .zip(&q.trajectories)
-                        .enumerate()
-                    {
-                        assert_eq!(a.outcome, b.outcome, "{name}: particle {i}");
-                        worst = worst.max((c.end.x - b.end.x).length());
-                    }
-                    let indicator = q
-                        .neglected_retardation
-                        .iter()
-                        .fold(0.0f64, |m, &x| m.max(x));
-                    println!(
-                        "{name}: quasi-static and retarded end points differ by up to {worst:.1e} \
-                         cells, {:.1e} of the interaction's effect {effect:.1e}; indicator up to \
-                         {indicator:.1e}",
-                        worst / effect
+                if effect < NEGLIGIBLE_EFFECT {
+                    // The interaction hardly moves the end points (a pair repelling
+                    // symmetrically, as in a quiet ring): the ratio says nothing about
+                    // the indicator, and the difference itself must be negligible.
+                    assert!(worst < NEGLIGIBLE_EFFECT, "{name}: {worst:.2e} cells");
+                } else {
+                    // The indicator is an order-of-magnitude estimate of the relative
+                    // error.
+                    assert!(
+                        worst / effect < 3.0 * indicator,
+                        "{name}: indicator too small"
                     );
-                    if effect < NEGLIGIBLE_EFFECT {
-                        // The interaction hardly moves the end points (a pair repelling
-                        // symmetrically, as in a quiet ring): the ratio says nothing about
-                        // the indicator, and the difference itself must be negligible.
-                        assert!(worst < NEGLIGIBLE_EFFECT, "{name}: {worst:.2e} cells");
+                }
+            }
+        }
+        // With radiation reaction the Landau–Lifshitz treatment must be valid instead.
+        if level.physics.c.is_some() {
+            for f in &v {
+                for t in &f.verified.trajectories {
+                    if level.physics.radiation_reaction {
+                        let r = t.reaction_ratio_max;
+                        assert!(r < 0.05, "{name}: |F_RR|/|F_L| = {r:.3e}");
                     } else {
-                        // The indicator is an order-of-magnitude estimate of the relative
-                        // error.
-                        assert!(
-                            worst / effect < 3.0 * indicator,
-                            "{name}: indicator too small"
-                        );
+                        let fraction = t.radiated_energy / t.kinetic_initial;
+                        assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
                     }
                 }
             }
-            // With radiation reaction the Landau–Lifshitz treatment must be valid instead.
-            if level.physics.c.is_some() {
-                for f in &v {
-                    for t in &f.verified.trajectories {
-                        if level.physics.radiation_reaction {
-                            let r = t.reaction_ratio_max;
-                            assert!(r < 0.05, "{name}: |F_RR|/|F_L| = {r:.3e}");
-                        } else {
-                            let fraction = t.radiated_energy / t.kinetic_initial;
-                            assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
-                        }
-                    }
-                }
-            }
-            continue;
         }
-        for (i, v) in level
-            .verify_flights(&level.reference_solution)
-            .iter()
-            .enumerate()
-        {
-            let (shot, d) = level.flight_of(i);
-            let flight = format!("{name} shot {} disturbance {}", shot + 1, d + 1);
-            assert_eq!(v.outcome(), Outcome::Arrived, "{flight}");
-            assert!(v.status.is_verified(), "{flight}: {:?}", v.status);
-            // Resource budget (level::cost), machine-independent part: steps per flight.
-            #[allow(clippy::cast_precision_loss)]
-            let steps = v.preview.stats.n_step.max(v.verified.stats.n_step) as f64;
-            assert!(steps <= level::cost::STEPS_LIMIT, "{flight}: {steps} steps");
-        }
+        return;
+    }
+    for (i, v) in level
+        .verify_flights(&level.reference_solution)
+        .iter()
+        .enumerate()
+    {
+        let (shot, d) = level.flight_of(i);
+        let flight = format!("{name} shot {} disturbance {}", shot + 1, d + 1);
+        assert_eq!(v.outcome(), Outcome::Arrived, "{flight}");
+        assert!(v.status.is_verified(), "{flight}: {:?}", v.status);
+        // Resource budget (level::cost), machine-independent part: steps per flight.
+        #[allow(clippy::cast_precision_loss)]
+        let steps = v.preview.stats.n_step.max(v.verified.stats.n_step) as f64;
+        assert!(steps <= level::cost::STEPS_LIMIT, "{flight}: {steps} steps");
     }
 }
 
@@ -175,38 +208,52 @@ fn reference_solutions_are_verified() {
 /// electrodes.
 #[test]
 fn neglected_radiation_is_below_numerical_accuracy() {
-    for (name, level) in shipped_levels() {
-        for (i, scn) in level
-            .scenarios(&level.reference_solution)
-            .iter()
-            .enumerate()
-        {
-            let tr = run(
-                scn,
-                &RunSettings::with_tolerance(level.physics.tolerances.verify),
-            );
-            // Charge (Liénard) plus the estimate for a magnetic moment (PHYSICS.md §3.2).
-            let moment =
-                level::moment_radiation_estimate(scn, tr.samples.iter().map(|s| (s.x, s.p, s.t)));
-            let fraction = (tr.radiated_energy + moment) / tr.kinetic_initial;
-            if level.physics.radiation_reaction {
-                // Radiation is part of the model; the Landau–Lifshitz treatment must be
-                // valid instead (radiation reaction small against the Lorentz force).
-                assert!(
-                    tr.reaction_ratio_max < 0.05,
-                    "{name}: |F_RR|/|F_L| = {:.3e}",
-                    tr.reaction_ratio_max
-                );
-                continue;
-            }
-            let (shot, d) = level.flight_of(i);
-            println!(
-                "{name} shot {} disturbance {}: radiated / T0 = {fraction:.2e}",
-                shot + 1,
-                d + 1
-            );
-            assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
+    // Each level checked again only where its file or this test program changed since it
+    // last passed (`level::run_cache::TestPasses`; EM_TEST_FULL=1 checks them all).
+    let passes = level::run_cache::TestPasses::open("radiation");
+    for (name, bytes, level) in shipped_files() {
+        if passes.as_ref().and_then(|t| t.passed(&bytes)).is_some() {
+            continue;
         }
+        check_radiation(&name, &level);
+        if let Some(t) = &passes {
+            t.record(&bytes, "neglected");
+        }
+    }
+}
+
+/// One level's neglected radiation (`neglected_radiation_is_below_numerical_accuracy`).
+fn check_radiation(name: &str, level: &Level) {
+    for (i, scn) in level
+        .scenarios(&level.reference_solution)
+        .iter()
+        .enumerate()
+    {
+        let tr = run(
+            scn,
+            &RunSettings::with_tolerance(level.physics.tolerances.verify),
+        );
+        // Charge (Liénard) plus the estimate for a magnetic moment (PHYSICS.md §3.2).
+        let moment =
+            level::moment_radiation_estimate(scn, tr.samples.iter().map(|s| (s.x, s.p, s.t)));
+        let fraction = (tr.radiated_energy + moment) / tr.kinetic_initial;
+        if level.physics.radiation_reaction {
+            // Radiation is part of the model; the Landau–Lifshitz treatment must be
+            // valid instead (radiation reaction small against the Lorentz force).
+            assert!(
+                tr.reaction_ratio_max < 0.05,
+                "{name}: |F_RR|/|F_L| = {:.3e}",
+                tr.reaction_ratio_max
+            );
+            continue;
+        }
+        let (shot, d) = level.flight_of(i);
+        println!(
+            "{name} shot {} disturbance {}: radiated / T0 = {fraction:.2e}",
+            shot + 1,
+            d + 1
+        );
+        assert!(fraction < 1e-10, "{name}: radiated fraction {fraction:.3e}");
     }
 }
 

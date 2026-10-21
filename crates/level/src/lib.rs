@@ -16,6 +16,7 @@ pub mod analysis;
 pub mod beam;
 pub mod cost;
 pub mod model;
+pub mod run_cache;
 pub mod solve;
 pub mod tube;
 pub mod tube_em;

@@ -319,16 +319,11 @@ impl Level {
         let tol = self.tolerances();
         let metal = self.has_metal(player);
         if self.is_tube() {
+            // The verdict's own runs (one each; from the offline tools' run cache the time
+            // is the one measured when the run was computed).
             for refine in [1, 2] {
-                let t = Instant::now();
-                let mut sim = self.tube_sim(player, refine);
-                sim.advance_to(self.tube_verify_end());
-                cost.add_tube_run(
-                    t.elapsed().as_secs_f64(),
-                    sim.segment_count(),
-                    sim.steps(),
-                    refine == 2,
-                );
+                let run = self.tube_record(player, crate::tube::TubeResolution::refined(refine));
+                cost.add_tube_run(run.seconds, run.segments, run.steps, refine == 2);
             }
             return cost;
         }

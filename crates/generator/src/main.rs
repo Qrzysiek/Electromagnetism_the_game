@@ -9,8 +9,28 @@ use level::solve as search;
 #[derive(Parser)]
 #[command(about = "Level tools for Electromagnetism the game")]
 struct Cli {
+    /// Compute every tube run (the run cache is on by default: `target/run-cache`, or the
+    /// directory in `EM_RUN_CACHE`; `EM_NO_CACHE=1` also turns it off).
+    #[arg(long, global = true)]
+    no_cache: bool,
+    /// Run every cache hit again and stop on any difference from its record.
+    #[arg(long, global = true)]
+    verify_cache: bool,
     #[command(subcommand)]
     command: Command,
+}
+
+/// The tube runs' cache (`level::run_cache`), hash-locked to this executable: any rebuild
+/// is another engine.
+fn enable_cache(verify: bool) {
+    match level::run_cache::exe_fingerprint() {
+        Ok(engine) => {
+            let dir = std::env::var_os("EM_RUN_CACHE")
+                .map_or_else(|| PathBuf::from("target/run-cache"), PathBuf::from);
+            level::run_cache::enable(level::run_cache::RunCache::new(dir, engine, verify));
+        }
+        Err(e) => eprintln!("[cache] off: the executable could not be read ({e})"),
+    }
 }
 
 #[derive(Subcommand)]
@@ -29,7 +49,12 @@ enum Command {
         write: bool,
     },
     /// Verify the reference solution of a level.
-    Check { path: PathBuf },
+    Check {
+        path: PathBuf,
+        /// Print the verdict as JSON (as `scan` does, with the cost meters).
+        #[arg(long)]
+        json: bool,
+    },
     /// Measure difficulty: configuration space, random-guess rate, heuristic search.
     Analyze {
         paths: Vec<PathBuf>,
@@ -71,6 +96,9 @@ enum Command {
         /// Scan up to this potential instead of the slider's highest.
         #[arg(long, allow_hyphen_values = true)]
         to: Option<f64>,
+        /// Also print every evaluation and interval as JSON at the end.
+        #[arg(long)]
+        json: bool,
     },
     /// Tube levels: for each placement in a JSON file (a list of placements, each a
     /// list of elements), the preview's currents into every electrode over the goal's
@@ -285,6 +313,36 @@ fn tube_scan(
             println!("{i}: refused: {}", issues.join(" "));
             continue;
         }
+        let line = || tube_scan_line(level, spec, placement, res, trace, (start, end));
+        // From the run cache, unless traced (a trace prints along the run).
+        let text = match (level::run_cache::get(), trace) {
+            (Some(cache), None) => {
+                let key = cache.tube_key(
+                    "tube-scan",
+                    level,
+                    placement,
+                    res,
+                    end.max(level.tube_verify_end()),
+                    &[start],
+                );
+                cache.text(&key, line)
+            }
+            _ => line(),
+        };
+        println!("{i}: {text}");
+    }
+}
+
+/// One placement's line of `tube-scan` (without its number).
+fn tube_scan_line(
+    level: &Level,
+    spec: &level::tube::TubeSpec,
+    placement: &[level::Element],
+    res: level::tube::TubeResolution,
+    trace: Option<usize>,
+    (start, end): (f64, f64),
+) -> String {
+    {
         let mut sim = level.tube_sim_at(
             placement,
             level::tube::TubeResolution {
@@ -336,8 +394,8 @@ fn tube_scan(
                 None => "flying".into(),
             })
             .collect();
-        println!(
-            "{i}: {} lost {:.4} goals {:?} potential {:?} arrivals {:?} fates {} in flight {} weights {:?} heat {:?}",
+        format!(
+            "{} lost {:.4} goals {:?} potential {:?} arrivals {:?} fates {} in flight {} weights {:?} heat {:?}",
             currents.join(" "),
             (sim.lost() - lost0) / dt,
             sim.currents(),
@@ -347,7 +405,7 @@ fn tube_scan(
             sim.in_flight(),
             sim.weights(),
             sim.results().heat
-        );
+        )
     }
 }
 
@@ -415,10 +473,17 @@ fn tube_field(level: &Level, every: f64, end: Option<f64>) {
 /// `generator window`: the solving intervals of each slider-set potential (or of the
 /// reference's element `only`, 1-based), over its slider's range or the part `scan` of it,
 /// each evaluation logged to stderr.
-#[allow(clippy::cast_precision_loss)]
-fn window(level: &Level, steps: u32, only: Option<usize>, scan: (Option<f64>, Option<f64>)) {
+#[allow(clippy::cast_precision_loss, clippy::too_many_lines)]
+fn window(
+    level: &Level,
+    steps: u32,
+    only: Option<usize>,
+    scan: (Option<f64>, Option<f64>),
+    json: bool,
+) {
     use level::ElementKind;
     let reference = &level.reference_solution;
+    let mut report: Vec<serde_json::Value> = Vec::new();
     for (i, e) in reference.iter().enumerate() {
         if only.is_some_and(|k| k != i + 1) {
             continue;
@@ -437,16 +502,18 @@ fn window(level: &Level, steps: u32, only: Option<usize>, scan: (Option<f64>, Op
             continue;
         };
         let mut trial = reference.clone();
+        let mut evaluations: Vec<serde_json::Value> = Vec::new();
         let mut solves = |v: f64| {
             trial[i].value = v;
             let started = std::time::Instant::now();
             let ok = search::objective(level, &trial).1 == physics::trajectory::Outcome::Arrived;
+            let seconds = started.elapsed().as_secs_f64();
             eprintln!(
-                "[window] element {}: {v:.4e} {} ({:.1} s)",
+                "[window] element {}: {v:.4e} {} ({seconds:.1} s)",
                 i + 1,
                 if ok { "solves" } else { "does not solve" },
-                started.elapsed().as_secs_f64()
             );
+            evaluations.push(serde_json::json!({ "value": v, "solves": ok, "seconds": seconds }));
             ok
         };
         let (from, to) = (scan.0.unwrap_or(lo), scan.1.unwrap_or(hi));
@@ -472,15 +539,26 @@ fn window(level: &Level, steps: u32, only: Option<usize>, scan: (Option<f64>, Op
              [{from:.4e}, {to:.4e}]",
             level.name, e.kind, e.node, e.value
         );
+        let mut found = Vec::new();
         for (a, b) in intervals {
             let mut mid = reference.clone();
             mid[i].value = 0.5 * (a + b);
+            let verified = search::is_verified_solution(level, &mid);
+            let percent = 100.0 * (b - a) / (hi - lo);
             println!(
-                "  solves on [{a:.4e}, {b:.4e}] ({:.1} % of the range; middle verified: {})",
-                100.0 * (b - a) / (hi - lo),
-                search::is_verified_solution(level, &mid)
+                "  solves on [{a:.4e}, {b:.4e}] ({percent:.1} % of the range; middle verified: {verified})"
             );
+            found.push(serde_json::json!({ "from": a, "to": b, "percent": percent,
+                                           "middle_verified": verified }));
         }
+        report.push(serde_json::json!({
+            "element": i + 1, "kind": format!("{:?}", e.kind), "node": e.node,
+            "reference": e.value, "range": [lo, hi], "scanned": [from, to],
+            "evaluations": evaluations, "intervals": found,
+        }));
+    }
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report).expect("JSON"));
     }
 }
 
@@ -498,7 +576,25 @@ fn fewest_elements(level: &Level) -> usize {
 }
 
 fn main() {
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    if !cli.no_cache && std::env::var_os("EM_NO_CACHE").is_none_or(|v| v != "1") {
+        enable_cache(cli.verify_cache);
+    }
+    run(cli.command);
+    if let Some(cache) = level::run_cache::get() {
+        let (hits, misses) = cache.stats();
+        if hits + misses > 0 {
+            eprintln!(
+                "[cache] {hits} hits, {misses} runs computed ({})",
+                cache.dir().display()
+            );
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn run(command: Command) {
+    match command {
         Command::Solve {
             path,
             restarts,
@@ -607,7 +703,8 @@ fn main() {
             element,
             from,
             to,
-        } => window(&load(&path), steps, element, (from, to)),
+            json,
+        } => window(&load(&path), steps, element, (from, to), json),
         Command::TubeScan {
             path,
             placements,
@@ -658,9 +755,24 @@ fn main() {
                 tr.outcome, tr.end.t, -tr.radiation_work, tr.reaction_ratio_max
             );
         }
-        Command::Check { path } => {
+        Command::Check { path, json } => {
             let level = load(&path);
             let placement = &level.reference_solution;
+            if json {
+                let mut out = scan_one(&level, placement, false);
+                out["placement_ok"] = serde_json::json!(level.check_placement(placement).is_ok());
+                out["cost"] = level
+                    .measure_cost(placement)
+                    .meters()
+                    .iter()
+                    .map(|m| {
+                        serde_json::json!({ "label": m.label, "value": m.text(),
+                                            "load": format!("{:?}", m.load()) })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&out).expect("JSON"));
+                return;
+            }
             println!(
                 "{}: placement {:?}",
                 level.name,

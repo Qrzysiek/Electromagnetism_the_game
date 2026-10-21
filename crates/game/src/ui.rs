@@ -272,9 +272,16 @@ fn inspect_tooltip(
     };
     let level = &game.editor.level;
     let at = physics::DVec3::new(f64::from(world.x), f64::from(world.y), 0.0);
-    let Some(info) = crate::inspect::inspect_at(level, &game.editor.placement, at) else {
-        return;
+    let info = crate::inspect::inspect_at(level, &game.editor.placement, at);
+    // The probe (I held): every registered source's values at the point, anywhere.
+    let probed = if game.probe {
+        crate::probe::probe(game, at)
+    } else {
+        Vec::new()
     };
+    if info.is_none() && probed.is_empty() {
+        return;
+    }
     let live = metal_map_lines(game, at);
     egui::Area::new(egui::Id::new("inspect_tooltip"))
         .order(egui::Order::Tooltip)
@@ -283,16 +290,27 @@ fn inspect_tooltip(
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_max_width(300.0);
-                ui.label(egui::RichText::new(&info.title).strong());
-                for line in &info.lines {
-                    ui.label(egui::RichText::new(line).small());
+                if let Some(info) = &info {
+                    ui.label(egui::RichText::new(&info.title).strong());
+                    for line in &info.lines {
+                        ui.label(egui::RichText::new(line).small());
+                    }
+                    for line in &live {
+                        ui.label(egui::RichText::new(line).small().strong());
+                    }
+                    if let Some((what, samples)) = &info.chart {
+                        ui.label(egui::RichText::new(what).small());
+                        circuit_plot(ui, samples, &[], "");
+                    }
                 }
-                for line in &live {
-                    ui.label(egui::RichText::new(line).small().strong());
-                }
-                if let Some((what, samples)) = &info.chart {
-                    ui.label(egui::RichText::new(what).small());
-                    circuit_plot(ui, samples, &[], "");
+                for (k, section) in probed.iter().enumerate() {
+                    if k > 0 || info.is_some() {
+                        ui.separator();
+                    }
+                    ui.label(egui::RichText::new(&section.title).strong());
+                    for line in &section.lines {
+                        ui.label(egui::RichText::new(line).small());
+                    }
                 }
             });
         });
@@ -1845,6 +1863,7 @@ fn controls(ui: &mut egui::Ui) {
         ui.label("S flip sign/phase, Q/E change magnitude, C clear.");
         ui.label("1–4 grid refinement, [ ] switch shot, H show all shots.");
         ui.label("N/P next/previous level, V map, F field lines, A animation.");
+        ui.label("Hold I: the probe, everything known at the pointer (fields, particles, …).");
         ui.label("R rotate antenna (Shift+R back), W antenna frequency, M cycles kinds.");
         ui.label("Drag your elements with the mouse, or G to grab / drop and Esc to cancel.");
         ui.label("Hardcore (checkbox): sliders instead of fixed values; Q/E and W step ×1.1.");

@@ -9,6 +9,8 @@ workspace = true
 
 [dependencies]
 physics = { path = "../physics" }
+# The offline tools' run cache keys (run_cache.rs; already in the tree through the game).
+blake3 = "1.8.7"
 # Elementary functions bit-identical on every platform (the authoritative path).
 libm = "0.2.16"
 rayon = "1.12.0"

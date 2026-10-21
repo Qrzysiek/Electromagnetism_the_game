@@ -61,10 +61,9 @@ fn levels_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../levels")
 }
 
-fn level_hashes() -> BTreeMap<String, String> {
-    let mut out = BTreeMap::new();
-    // GOLDEN_ONLY=<part of a name>: only the matching levels (a new level's hash without the
-    // hour the whole set takes).
+/// Every level's file (`GOLDEN_ONLY=<part of a name>`: only the matching levels, a new
+/// level's hash without the hour the whole set takes), sorted.
+fn level_paths() -> Vec<PathBuf> {
     let only = std::env::var("GOLDEN_ONLY").ok();
     let mut paths: Vec<_> = std::fs::read_dir(levels_dir())
         .unwrap()
@@ -78,8 +77,17 @@ fn level_hashes() -> BTreeMap<String, String> {
         })
         .collect();
     paths.sort();
-    for p in paths {
-        let level = Level::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();
+    paths
+}
+
+/// A level's file name (its stem: the golden file's key).
+fn stem(p: &std::path::Path) -> String {
+    p.file_stem().unwrap().to_string_lossy().into_owned()
+}
+
+/// A level's hash: both runs of its reference, every bit.
+fn level_hash(level: &Level) -> String {
+    {
         let mut h = Hasher::new();
         if level.is_tube() {
             // Tube levels: both runs, every frame's particles and the currents.
@@ -140,20 +148,56 @@ fn level_hashes() -> BTreeMap<String, String> {
                 h.trajectory(&v.verified);
             }
         }
-        let name = p.file_stem().unwrap().to_string_lossy().into_owned();
-        out.insert(name, format!("{:016x}", h.0));
+        format!("{:016x}", h.0)
     }
-    out
 }
 
+/// The levels run twice must hash alike, each level checked again only where its file or
+/// this test program changed since it last passed (`level::run_cache::TestPasses`).
 #[test]
 fn t11_repeated_runs_are_identical() {
-    assert_eq!(level_hashes(), level_hashes());
+    let passes = level::run_cache::TestPasses::open("t11-repeated");
+    for p in level_paths() {
+        let bytes = std::fs::read(&p).unwrap();
+        if passes.as_ref().and_then(|t| t.passed(&bytes)).is_some() {
+            continue;
+        }
+        let level = Level::from_json(std::str::from_utf8(&bytes).unwrap()).unwrap();
+        let (a, b) = (level_hash(&level), level_hash(&level));
+        assert_eq!(a, b, "{}", stem(&p));
+        if let Some(t) = &passes {
+            t.record(&bytes, &a);
+        }
+    }
 }
 
 #[test]
 fn t11_matches_golden_hashes() {
-    let mut hashes = level_hashes();
+    // A level's hash computed under this test program for its file, kept: the runs are
+    // deterministic (`level::run_cache::TestPasses`).
+    let passes = level::run_cache::TestPasses::open("t11-golden");
+    let files: Vec<(String, Vec<u8>)> = level_paths()
+        .iter()
+        .map(|p| (stem(p), std::fs::read(p).unwrap()))
+        .collect();
+    let mut hashes = BTreeMap::new();
+    for (name, bytes) in &files {
+        let hash = passes
+            .as_ref()
+            .and_then(|t| t.passed(bytes))
+            .unwrap_or_else(|| {
+                let level = Level::from_json(std::str::from_utf8(bytes).unwrap()).unwrap();
+                level_hash(&level)
+            });
+        hashes.insert(name.clone(), hash);
+    }
+    let record = |hashes: &BTreeMap<String, String>| {
+        if let Some(t) = &passes {
+            for (name, bytes) in &files {
+                t.record(bytes, &hashes[name]);
+            }
+        }
+    };
     let golden_path = levels_dir().join("golden_hashes.json");
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
         // With GOLDEN_ONLY, the other levels' hashes are kept as they are.
@@ -176,6 +220,7 @@ fn t11_matches_golden_hashes() {
         s += &body.join(",\n");
         s += "\n}\n";
         std::fs::write(&golden_path, s).unwrap();
+        record(&hashes);
         return;
     }
     let golden = std::fs::read_to_string(&golden_path).expect("golden_hashes.json missing");
@@ -187,4 +232,5 @@ fn t11_matches_golden_hashes() {
             "{name}: hash {hash} not in golden file (platform-dependent result or physics change)"
         );
     }
+    record(&hashes);
 }

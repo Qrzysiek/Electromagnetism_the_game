@@ -2803,9 +2803,41 @@ impl Level {
     /// # Panics
     /// If the level is not a tube level.
     pub fn tube_results(&self, player: &[Element], refine: u32) -> TubeResults {
-        let mut sim = self.tube_sim(player, refine);
-        sim.advance_to(self.tube_verify_end());
-        sim.results()
+        self.tube_record(player, TubeResolution::refined(refine))
+            .results
+    }
+
+    /// One run at `res` to `tube_verify_end`: its results, its projectiles' closest
+    /// approaches, its size and its time; from the offline tools' run cache when one is on
+    /// (`run_cache`: hash-locked to the level, the placement, the resolution and the engine).
+    ///
+    /// # Panics
+    /// If the level is not a tube level.
+    pub fn tube_record(
+        &self,
+        player: &[Element],
+        res: TubeResolution,
+    ) -> crate::run_cache::TubeRecord {
+        let end = self.tube_verify_end();
+        let compute = || {
+            let started = std::time::Instant::now();
+            let mut sim = self.tube_sim_at(player, res);
+            sim.advance_to(end);
+            crate::run_cache::TubeRecord {
+                results: sim.results(),
+                closest: sim.closest().to_vec(),
+                segments: sim.segment_count(),
+                steps: sim.steps(),
+                seconds: started.elapsed().as_secs_f64(),
+            }
+        };
+        match crate::run_cache::get() {
+            Some(cache) => {
+                let key = cache.tube_key("tube-record", self, player, res, end, &[]);
+                cache.tube_record(&key, compute)
+            }
+            None => compute(),
+        }
     }
 
     /// The verdict of a placement: the preview and the verification run.
@@ -2832,14 +2864,13 @@ impl Level {
     pub fn tube_objective(&self, player: &[Element]) -> (f64, physics::trajectory::Outcome) {
         use physics::trajectory::Outcome;
         let spec = self.tube.as_ref().expect("a tube level");
-        let mut sim = self.tube_sim(player, 1);
-        sim.advance_to(self.tube_verify_end());
+        let run = self.tube_record(player, TubeResolution::refined(1));
         let mut score = 0.0;
-        for (g, i) in spec.goals.iter().zip(sim.currents()) {
+        for (g, i) in spec.goals.iter().zip(&run.results.currents) {
             let i = i.unwrap_or(0.0);
             score += (g.min - i).max(i - g.max).max(0.0) / (g.max - g.min).max(1e-300);
         }
-        let measured = sim.results().potential;
+        let measured = &run.results.potential;
         for (k, g) in spec.potential_goals.iter().enumerate() {
             // Not measured (the run ended early): one width, finite for the annealing.
             score += measured.get(k).copied().flatten().map_or(1.0, |v| {
@@ -2847,13 +2878,13 @@ impl Level {
                 (g.min - v).max(v - g.max).max(0.0) / (g.max - g.min).max(1e-300)
             });
         }
-        let heat = sim.results().heat;
+        let heat = &run.results.heat;
         for (k, g) in spec.heat_goals.iter().enumerate() {
             score += heat.get(k).copied().flatten().map_or(1.0, |v| {
                 (g.min - v).max(v - g.max).max(0.0) / (g.max - g.min).max(1e-300)
             });
         }
-        score += sim.closest().iter().filter(|d| d.is_finite()).sum::<f64>();
+        score += run.closest.iter().filter(|d| d.is_finite()).sum::<f64>();
         if score == 0.0 {
             (0.0, Outcome::Arrived)
         } else {
