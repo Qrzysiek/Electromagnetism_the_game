@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §14.2: a quiet turn",
   "description": "Jackson §14.2–14.3: bring the particle to the detector at the top, heading up (within 30°), without lighting the receiver at 45°: it may collect at most 0.006 per steradian. Any turn from right to up sweeps the velocity through 45°, and the radiation follows the velocity. The energy that reaches the receiver falls with the radius of the turn (the power grows with the acceleration squared, the time in the cone only with the radius). Or is there a way to turn without ever heading for the receiver?",
+  "reality": {
+    "represents": "Radiation follows the velocity: turning quietly (Jackson §14.2)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Gentle turns are quiet",
+        "detail": "The power grows as the acceleration squared while the time spent heading for the receiver grows only with the radius: wide turns send less there."
+      },
+      {
+        "kind": "kept",
+        "line": "The radiation is exact for the motion",
+        "detail": "What the receiver collects is computed from the particle's computed path with the exact far-zone fields (Liénard; the spectrum from Jackson's radiation integral), and the particle feels its radiation's reaction (Landau–Lifshitz)."
+      },
+      {
+        "kind": "simplified",
+        "line": "γ = 3 and slow light",
+        "detail": "c is 2 cells per time unit and the particle's γ is 3, so that its cone (1/γ, about 19°) and its flashes fit the board. Real synchrotron sources run electrons at γ in the thousands, beamed into fractions of a milliradian, out to X-rays."
+      },
+      {
+        "kind": "simplified",
+        "line": "Directions in the plane only",
+        "detail": "The receiver averages over directions in the plane of the motion; the real radiation also goes out of the plane, where its pattern differs."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

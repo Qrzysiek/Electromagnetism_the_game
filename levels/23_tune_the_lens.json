@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Tune the lens",
   "description": "A real Einzel lens: three metal apertures, the outer ones grounded. The two halves of the middle aperture have a power supply each. At the right voltage the lens focuses the three diverging rays into the small detector; too little and they stay apart, too much and they cross before it.",
+  "reality": {
+    "represents": "An einzel lens: three apertures, the middle one at a voltage",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Weak, right and strong focusing",
+        "detail": "The focal length shortens as the middle electrode's voltage rises: too little and the rays stay apart, too much and they cross before the detector."
+      },
+      {
+        "kind": "kept",
+        "line": "Real plates and their fringe fields",
+        "detail": "The electrodes are metal boxes standing on the plane, their surface charge solved exactly (boundary elements): uniform between plates, bulging out past their ends, and rearranging when charges come near, as in a real instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "Slits, not round apertures",
+        "detail": "Each aperture is a pair of plates a few cells high, a slit; a real einzel lens is round (apertures or tubes) and focuses in every direction at once, a slit lens only across the slit."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -170,7 +190,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "entrance aperture, upper half"
     },
     {
       "center": [
@@ -184,7 +205,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "entrance aperture, lower half"
     },
     {
       "center": [
@@ -199,7 +221,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "middle aperture, upper half (your supply)"
     },
     {
       "center": [
@@ -214,7 +237,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "middle aperture, lower half (your supply)"
     },
     {
       "center": [
@@ -228,7 +252,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "exit aperture, upper half"
     },
     {
       "center": [
@@ -242,7 +267,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "exit aperture, lower half"
     }
   ]
 }

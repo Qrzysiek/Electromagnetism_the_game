@@ -169,7 +169,7 @@ impl RunCache {
             end.to_bits(),
         ];
         parts.extend(extra.iter().map(|x| x.to_bits()));
-        self.key(kind, &level.to_json(), player, &parts)
+        self.key(kind, &level.physics_json(), player, &parts)
     }
 
     fn path(&self, key: &str) -> PathBuf {
@@ -306,6 +306,12 @@ impl TestPasses {
     }
 
     fn path(&self, level_file: &[u8]) -> PathBuf {
+        // The level's physics (`Level::physics_json`): rewording it checks nothing again.
+        let physics = std::str::from_utf8(level_file)
+            .ok()
+            .and_then(|s| crate::Level::from_json(s).ok())
+            .map(|l| l.physics_json());
+        let level_file = physics.as_ref().map_or(level_file, |p| p.as_bytes());
         let mut h = blake3::Hasher::new();
         for part in [self.program.as_bytes(), self.test.as_bytes(), level_file] {
             h.update(&(part.len() as u64).to_le_bytes());
@@ -428,6 +434,39 @@ mod tests {
         assert_eq!(b.passed(b"level one"), None);
         let c = TestPasses::at(dir.clone(), "program-a".into(), "repeated").expect("a record");
         assert_eq!(c.passed(b"level one"), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A level's texts (name, description, reality) key neither a pass nor a run; its
+    /// physics does.
+    #[test]
+    fn rewording_a_level_keeps_its_keys() {
+        let dir = scratch("reworded");
+        let _ = std::fs::remove_dir_all(&dir);
+        let passes = TestPasses::at(dir.clone(), "program".into(), "golden").expect("a record");
+        let cache = RunCache::new(dir.clone(), "engine".into(), false);
+        let level = crate::shipped("gate");
+        let mut reworded = level.clone();
+        reworded.name = "Another name".into();
+        reworded.description = "Another description.".into();
+        reworded.reality.represents = "something else".into();
+        reworded.reality.remarks.clear();
+        reworded.electrodes[0].label = "another function".into();
+        if let Some(t) = &mut reworded.tube {
+            t.metals[0].label = "another function".into();
+        }
+        let mut changed = level.clone();
+        changed.physics.t_max += 1.0;
+        let res = TubeResolution::refined(1);
+        let key = |l: &crate::Level| cache.tube_key("tube", l, &[], res, 10.0, &[]);
+        passes.record(level.to_json().as_bytes(), "pass");
+        assert_eq!(
+            passes.passed(reworded.to_json().as_bytes()).as_deref(),
+            Some("pass")
+        );
+        assert_eq!(key(&reworded), key(&level));
+        assert_eq!(passes.passed(changed.to_json().as_bytes()), None);
+        assert_ne!(key(&changed), key(&level));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

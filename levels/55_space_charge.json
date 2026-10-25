@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Space charge",
   "description": "The first bend again, but now a whole beam of 16 particles, with a small spread in position, direction and energy. The particles repel each other, so the beam spreads out on the way (space charge). Bend it into the detector: at least 90 % of it must arrive, verified.",
+  "reality": {
+    "represents": "Space charge: an intense beam spreading under its own repulsion",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Space charge, exactly",
+        "detail": "The particles repel each other with the exact Coulomb force (with c = ∞ that is the whole interaction), so an intense beam spreads as a real one does."
+      },
+      {
+        "kind": "simplified",
+        "line": "A beam of a few particles",
+        "detail": "A dozen or so particles stand for a beam of billions: each carries the charge of many (its mass and energy scaled alike, so that its own path is unchanged), so their repulsion matches an intense beam's. The spreads are a fixed sample of the beam's distribution, the same every time."
+      },
+      {
+        "kind": "omitted",
+        "line": "Neutralization by the residual gas",
+        "detail": "In a real beam line the beam ionizes the remaining gas, and the electrons it frees cancel much of a positive beam's space charge; in this perfect vacuum nothing does."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

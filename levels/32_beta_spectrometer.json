@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Beta-ray spectrometer",
   "description": "Beta decay electrons are fast. Two electrons, at v = 0.91 c (γ = 2.41) and v = 0.87 c (γ = 2.0), must each reach their own detector after bending around one charge. The circular-orbit condition is $|qQ| = \\gamma m v^2 R$, not the Newtonian $2T_0 R$. Trust relativity, not intuition. (The electron charge is small and the fixed charges large, so that radiation stays negligible.)",
+  "reality": {
+    "represents": "A beta-ray spectrometer for relativistic electrons",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The relativistic orbit condition",
+        "detail": "A circular orbit needs |qQ| = γmv²R: at these speeds the Newtonian estimate would be wrong by tens of per cent."
+      },
+      {
+        "kind": "simplified",
+        "line": "Electric, not magnetic",
+        "detail": "Real beta spectrometers bend the electrons in magnetic fields (semicircular 180° focusing or lens types); a central electric field bends them here."
+      },
+      {
+        "kind": "simplified",
+        "line": "Two energies",
+        "detail": "Beta decay gives electrons a continuous spread of energies (the neutrino takes the rest); two chosen energies stand for it."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

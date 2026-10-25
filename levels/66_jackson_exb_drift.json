@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §12.3: E×B drift",
   "description": "Jackson §12.3 (motion in combined, uniform, static electric and magnetic fields). In crossed fields a particle starting at rest does not follow E: it rolls along a cycloid and drifts with the velocity $\\mathbf{E}\\times\\mathbf{B}/B^2$, whatever its charge and mass. A positive and a negative ion start here; both drift to the right, rolling in opposite senses. Their guiding centres follow the equipotentials (see the potential map): place a charge to bend the drift of both into the detector.",
+  "reality": {
+    "represents": "E×B drift in crossed uniform fields (Jackson §12.3)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Drift E×B/B² for any charge",
+        "detail": "A particle starting at rest rolls along a cycloid and drifts at E×B/B² whatever its charge and mass: the drift that moves plasma in the ionosphere, magnetrons and Hall thrusters."
+      },
+      {
+        "kind": "kept",
+        "line": "Uniform static fields, as in the book",
+        "detail": "The fields across the arena are exactly uniform and static, as Jackson assumes, and the motion in them is exact."
+      },
+      {
+        "kind": "simplified",
+        "line": "Guiding centres follow equipotentials",
+        "detail": "Only where your charge's field changes little over a gyration's size; the motion itself is computed exactly."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Fast lane",
   "description": "A relativistic particle (v = 0.85 c) is hard to bend: its momentum grows as $\\gamma m v$. Charges that would easily steer a slow particle barely move this one.",
+  "reality": {
+    "represents": "Relativistic momentum: why fast particles are hard to bend",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Exact relativistic motion",
+        "detail": "The momentum grows as γmv and the force changes the momentum, exactly at any speed: near c a particle gains momentum but hardly speed."
+      },
+      {
+        "kind": "simplified",
+        "line": "Light is slow here",
+        "detail": "c is a few cells per time unit, so that the board spans less than a wavelength of the RF and the particle crosses it in a few periods; the physics depends only on such ratios (v/c, the wavelength against the board), which real devices share."
+      },
+      {
+        "kind": "kept",
+        "line": "Radiation negligible",
+        "detail": "The particle's charge is small so that it radiates far less than the accuracy, as a real beam particle does in fields like these."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

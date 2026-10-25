@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Calutron",
   "description": "Lawrence's calutron separated uranium isotopes by bending ions in a magnetic field: at equal energy the radius $r = \\sqrt{2mT}/(qB)$ grows with the mass. Three isotopes leave the source together; place magnets so that each reaches its own detector.",
+  "reality": {
+    "represents": "Lawrence's calutron: separating uranium isotopes magnetically",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Heavier ions bend less",
+        "detail": "At equal energy the radius r = √(2mT)/(qB) grows as the square root of the mass, which is how the calutrons separated uranium-235 from uranium-238."
+      },
+      {
+        "kind": "simplified",
+        "line": "Masses 1, 2 and 4",
+        "detail": "U-235 and U-238 differ by 1.3 % in mass: after a semicircle of 1.2 m radius their beams landed about 1.5 cm apart."
+      },
+      {
+        "kind": "simplified",
+        "line": "Magnets you place",
+        "detail": "The calutrons bent the ions in the uniform field of a huge electromagnet; here dipole magnets make a field far from uniform."
+      },
+      {
+        "kind": "omitted",
+        "line": "Space charge",
+        "detail": "The real beams were intense and pushed themselves apart; here the ions fly one at a time (Calutron with space charge shows it)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

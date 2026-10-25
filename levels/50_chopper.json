@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Chopper",
   "description": "A switch connects the top plate to its power supply at t = 30, through a small resistor: the plate charges within about one time unit, so the switch turns the deflector on. Two ions are launched, at t = 0 and at t = 40. Set the supply so that each reaches its own detector: the first flies past the plates before the switch closes, the second after.",
+  "reality": {
+    "represents": "A beam chopper: a deflector switched on at a set time",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A switch and a small RC",
+        "detail": "Once the switch closes, the plate charges within RC, about one time unit: what passes before is undeflected, what passes after is swept aside, as in the pulsed deflectors that chop accelerator beams into bunches."
+      },
+      {
+        "kind": "simplified",
+        "line": "An ideal switch",
+        "detail": "It closes in no time, without bounce or arc; real fast choppers use semiconductor switches and still take nanoseconds."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal lumped circuits",
+        "detail": "Resistors, capacitors, inductors and switches are ideal; the leads have no resistance, inductance or delay, and the circuit acts on the plate as if the field spread instantly (quasi-static, here exact: the motion is Newtonian)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -141,7 +166,8 @@
         "switch": {
           "at": 30.0
         }
-      }
+      },
+      "label": "deflection plate (switched on at t = 30)"
     },
     {
       "center": [
@@ -155,7 +181,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "deflection plate (grounded)"
     }
   ]
 }

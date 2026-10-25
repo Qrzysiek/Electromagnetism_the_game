@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Triode",
   "description": "A triode: between the hot cathode (left) and the anode (right) a grid of five thin wires, all on one supply: a small signal, a sine of amplitude 1 and period 40, around a steady potential, the bias, which you set. Close to the cathode, where the electrons are slow, the grid controls the current far more strongly than the anode does. The anode takes its current through a resistor (60) from a fixed 100, so as the current swings, the anode's potential swings too, and much more than the grid's: an amplifier. Bias the grid so that the anode's potential oscillates with an amplitude between 2.2 and 3.8 (over $t = 40$ to $80$). Too negative a bias cuts the current off.",
+  "reality": {
+    "represents": "A triode amplifier biased by its grid",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The grid controls the current",
+        "detail": "Close to the cathode, where the electrons are slow, the grid's potential governs the current far more than the anode's: the amplification factor."
+      },
+      {
+        "kind": "kept",
+        "line": "Gain capped by the anode's capacitance",
+        "detail": "The anode's own capacitance shunts its load, which is why the signal is slow and the anode short (as real tubes are limited at high frequency)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Five wires as the grid",
+        "detail": "A real grid is a fine helix or mesh round the cathode; here five parallel wires."
+      },
+      {
+        "kind": "simplified",
+        "line": "Lumped circuits per unit length",
+        "detail": "Supplies, resistors, capacitors and coils are ideal lumped parts, per unit length of the tube; they drive the electrodes and feel the current the electrons induce (Ramo)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -63,7 +93,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "cathode (hot)"
     },
     {
       "center": [
@@ -77,7 +108,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "anode (through R = 60 from 100)"
     },
     {
       "center": [
@@ -92,7 +124,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "grid wire (your bias and the signal)"
     },
     {
       "center": [
@@ -106,7 +139,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "grid wire"
     },
     {
       "center": [
@@ -120,7 +154,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "grid wire"
     },
     {
       "center": [
@@ -134,7 +169,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "grid wire"
     },
     {
       "center": [
@@ -148,7 +184,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "grid wire"
     }
   ],
   "tube": {

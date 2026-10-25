@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Beam pipe",
   "description": "Your injection setup from arc 1 (Charges) is built in, but beams run in grounded metal pipes, and the pipe wall lies between the beam and your steering charge: the charge it induces on the wall cancels much of the field. Straighten the beam into the next stage again. Add a few charges.",
+  "reality": {
+    "represents": "A beam pipe screening a steering charge",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The wall's induced charge screens",
+        "detail": "The grounded wall takes up charge that cancels much of your charge's field inside the pipe."
+      },
+      {
+        "kind": "simplified",
+        "line": "One wall, not a pipe",
+        "detail": "The pipe is a single grounded plate along one side; a real pipe surrounds the beam, and steering is done with magnets or with electrodes inside it."
+      },
+      {
+        "kind": "kept",
+        "line": "Real plates and their fringe fields",
+        "detail": "The electrodes are metal boxes standing on the plane, their surface charge solved exactly (boundary elements): uniform between plates, bulging out past their ends, and rearranging when charges come near, as in a real instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +49,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -122,7 +147,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "beam pipe wall (grounded)"
     }
   ]
 }

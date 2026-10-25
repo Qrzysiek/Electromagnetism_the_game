@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Collimator",
   "description": "Three rays leave the source at −10°, 0° and +10°. All three must reach the detector travelling parallel to the axis (within ±3°): a parallel beam, as optics downstream expect. Only charges of the particle's sign are available.",
+  "reality": {
+    "represents": "Collimating a diverging beam into a parallel one",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A lens with the source at its focus",
+        "detail": "Rays from a point at a lens's focal point leave parallel: the same optics as for light."
+      },
+      {
+        "kind": "simplified",
+        "line": "A lens of point charges",
+        "detail": "Real collimating lenses are electrodes shaped for small aberrations; a few point charges make a lens with large ones, which the angle tolerance absorbs."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

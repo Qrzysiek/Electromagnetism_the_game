@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Reflectron",
   "description": "Time-of-flight mass spectrometers turn ions around with an electrostatic mirror, the reflectron. Two ions with different energies must both come back to the detector beside the source.",
+  "reality": {
+    "represents": "The reflectron: the ion mirror of time-of-flight mass spectrometers",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Ions turn round in a retarding field",
+        "detail": "Faster ions go deeper into the mirror before turning, so ions of different energies come back along different paths and at different times."
+      },
+      {
+        "kind": "simplified",
+        "line": "A mirror of point charges",
+        "detail": "A real reflectron is a stack of ring electrodes making a uniform retarding field; here you build one from point charges."
+      },
+      {
+        "kind": "omitted",
+        "line": "The timing",
+        "detail": "The instrument tells masses apart by their arrival times, and the mirror's point is that faster ions catch up with slower ones; here only where the ions arrive counts."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

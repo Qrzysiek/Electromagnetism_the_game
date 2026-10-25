@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Collimated beam",
   "description": "The collimator again, for a real beam: 16 particles leave the source with a spread of directions (σ = 4°) and repel each other on the way. At least 90 % must reach the detector travelling parallel to the axis (within ±3°). Only charges of the particle's sign are available.",
+  "reality": {
+    "represents": "Collimating an intense, diverging beam",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Space charge, exactly",
+        "detail": "The particles repel each other with the exact Coulomb force (with c = ∞ that is the whole interaction), so an intense beam spreads as a real one does."
+      },
+      {
+        "kind": "simplified",
+        "line": "A beam of a few particles",
+        "detail": "A dozen or so particles stand for a beam of billions: each carries the charge of many (its mass and energy scaled alike, so that its own path is unchanged), so their repulsion matches an intense beam's. The spreads are a fixed sample of the beam's distribution, the same every time."
+      },
+      {
+        "kind": "simplified",
+        "line": "Lenses made of point charges",
+        "detail": "Real ion optics use shaped electrodes with small aberrations; a few point charges make lenses and deflectors with large ones, which the detectors' tolerances absorb."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson Ch. 12: magnetosphere",
   "description": "Finale of the Jackson arc on charges in fields (§12.3, §12.4, Pr. 12.9). The solar wind's crossed fields carry a proton and an electron from rest towards the Earth, both drifting the same way. First lift both through the upper gate, then bring them down through the lower one: steer their E×B drift along the equipotentials. Near the Earth the gradient drift splits them, protons one way and electrons the other: bring the proton around to the small northern satellite behind the Earth, and the electron to the southern one.",
+  "reality": {
+    "represents": "Solar-wind particles drifting into a dipole magnetosphere",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "E×B and gradient drifts together",
+        "detail": "The crossed fields carry both signs the same way; near the Earth the gradient drift splits them, protons one way, electrons the other."
+      },
+      {
+        "kind": "simplified",
+        "line": "The solar wind as uniform crossed fields",
+        "detail": "In the Earth's frame the flowing solar wind carries an electric field −v×B; here it is uniform everywhere, even next to the Earth, where the real magnetosphere shields it."
+      },
+      {
+        "kind": "simplified",
+        "line": "Test particles in given fields",
+        "detail": "The particles move in fields that they do not change; a real magnetosphere is shaped by its plasma's own currents (the magnetopause, the ring current, the tail)."
+      },
+      {
+        "kind": "omitted",
+        "line": "Bouncing between the poles",
+        "detail": "The particles stay in the equatorial plane. Real trapped particles also spiral along the field lines and bounce between mirror points in the north and the south."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

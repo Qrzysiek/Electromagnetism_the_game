@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §14.8: Thomson scattering",
   "description": "Jackson §14.8: a light wave (coming from the right, ω = 1) shakes a charge, and the shaken charge radiates: it scatters the light. A charge flying into the wave meets its crests faster, and moving towards the receiver it squeezes what it sends there: heading at $\\varphi$ against the wave, it is seen at an angle $\\theta$ to scatter $\\omega_s = \\omega\\,\\frac{1 + \\beta\\cos\\varphi}{1 - \\beta\\cos(\\theta - \\varphi)}$, up to $\\omega_s \\approx 4\\gamma^2\\omega$ head on: how laser light is turned into X-rays (inverse Compton sources). The receiver at 30° counts only 27–33: steer the particle so that the light it scatters towards the receiver lands in that band, at least 0.003 per steradian.",
+  "reality": {
+    "represents": "Thomson scattering of light by a fast charge: inverse Compton (Jackson §14.8)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Doppler up to about 4γ²ω",
+        "detail": "A charge flying into a light wave meets it faster and sends the scattered light forward squeezed: how laser light becomes X-rays in inverse Compton sources."
+      },
+      {
+        "kind": "kept",
+        "line": "The radiation is exact for the motion",
+        "detail": "What the receiver collects is computed from the particle's computed path with the exact far-zone fields (Liénard; the spectrum from Jackson's radiation integral), and the particle feels its radiation's reaction (Landau–Lifshitz)."
+      },
+      {
+        "kind": "omitted",
+        "line": "The photon's recoil",
+        "detail": "Classical scattering leaves out the Compton recoil, valid while the light's photon energy, seen from the charge, is far below its rest energy; at higher energies the recoil lowers the scattered frequency."
+      },
+      {
+        "kind": "simplified",
+        "line": "Directions in the plane only",
+        "detail": "The receiver averages over directions in the plane of the motion; the real radiation also goes out of the plane, where its pattern differs."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

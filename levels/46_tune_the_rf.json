@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Tune the RF",
   "description": "Now you choose the frequency. Two identical bunches leave the source 4 time units apart and must reach different detectors. An antenna kicks them differently only if they meet it at different phases of its oscillation: the phase difference is $\\omega\\,\\Delta t$. Pick the frequency, then the orientation and place.",
+  "reality": {
+    "represents": "Choosing an RF frequency to separate bunches",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The phase difference is ωΔt",
+        "detail": "Two bunches Δt apart meet the field at phases ωΔt apart; they are kicked oppositely near half a period."
+      },
+      {
+        "kind": "simplified",
+        "line": "Antennas are point dipoles",
+        "detail": "Each antenna is an oscillating point dipole with its exact retarded fields (near, induction and radiation zones); real RF deflectors are resonant cavities or plates driven by a generator."
+      },
+      {
+        "kind": "simplified",
+        "line": "Light is slow here",
+        "detail": "c is a few cells per time unit, so that the board spans less than a wavelength of the RF and the particle crosses it in a few periods; the physics depends only on such ratios (v/c, the wavelength against the board), which real devices share."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

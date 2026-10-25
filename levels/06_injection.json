@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Injection",
   "description": "The detector is the entrance of the next accelerator stage: the beam must not only hit it, it must enter moving along the axis (+x, within ±8°), or the next stage loses it. The beam already reaches the entrance, but at 20°: straighten it. The cone shows what is accepted.",
+  "reality": {
+    "represents": "Injecting a beam into the next accelerator stage",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Position and angle both count",
+        "detail": "Each stage of an accelerator accepts particles only within a range of positions and angles, its acceptance; a beam outside it is lost."
+      },
+      {
+        "kind": "simplified",
+        "line": "A box and a cone",
+        "detail": "A real acceptance is a region of phase space (positions and angles together, an ellipse); here it is a box with an angle cone, for one particle."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

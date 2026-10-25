@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Real Einzel lens",
   "description": "The Einzel lens of arc 1, as it is really built: three metal apertures, the middle one at high voltage. Its focus is not quite on the detector, and the rays leave at ±6° now. Add charges to bring all three rays into the small detector.",
+  "reality": {
+    "represents": "An einzel lens as it is built: three metal apertures",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A real lens's field",
+        "detail": "The apertures' surface charge is solved exactly, so the lens has its true focal length and aberrations: its focus is not quite on the detector, as a real lens's rarely is."
+      },
+      {
+        "kind": "simplified",
+        "line": "Slits, not round apertures",
+        "detail": "Each aperture is a pair of plates a few cells high, a slit; a real einzel lens is round (apertures or tubes) and focuses in every direction at once, a slit lens only across the slit."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +44,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -56,7 +76,7 @@
     },
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -88,7 +108,7 @@
     },
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -179,7 +199,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "entrance aperture, upper half (grounded)"
     },
     {
       "center": [
@@ -193,7 +214,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "entrance aperture, lower half (grounded)"
     },
     {
       "center": [
@@ -208,7 +230,8 @@
       "bias": {
         "kind": "potential",
         "value": 250000.0
-      }
+      },
+      "label": "middle aperture, upper half (high voltage)"
     },
     {
       "center": [
@@ -223,7 +246,8 @@
       "bias": {
         "kind": "potential",
         "value": 250000.0
-      }
+      },
+      "label": "middle aperture, lower half (high voltage)"
     },
     {
       "center": [
@@ -237,7 +261,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "exit aperture, upper half (grounded)"
     },
     {
       "center": [
@@ -251,7 +276,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "exit aperture, lower half (grounded)"
     }
   ]
 }

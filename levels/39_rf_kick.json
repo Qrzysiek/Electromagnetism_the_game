@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "RF kick",
   "description": "An antenna is a dipole driven by a radio-frequency generator: its field reverses every half period. The kick it gives a passing particle depends on the moment it passes. Orient and place an antenna to steer the beam into the detector.",
+  "reality": {
+    "represents": "Deflection by a radio-frequency field",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The kick depends on the phase",
+        "detail": "The antenna's field reverses every half period, so what a passing particle gets depends on when it passes."
+      },
+      {
+        "kind": "simplified",
+        "line": "Antennas are point dipoles",
+        "detail": "Each antenna is an oscillating point dipole with its exact retarded fields (near, induction and radiation zones); real RF deflectors are resonant cavities or plates driven by a generator."
+      },
+      {
+        "kind": "simplified",
+        "line": "Light is slow here",
+        "detail": "c is a few cells per time unit, so that the board spans less than a wavelength of the RF and the particle crosses it in a few periods; the physics depends only on such ratios (v/c, the wavelength against the board), which real devices share."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

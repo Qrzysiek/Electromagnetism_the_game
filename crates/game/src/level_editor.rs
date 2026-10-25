@@ -16,7 +16,7 @@ use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,
     DielectricSphere, Disturbance, Drive, Electrode, ElectrodeShape, Element, ElementKind,
     FerritePlate, FreeParticle, Grid, Launch, Level, Limits, Node, ParticleSpec, RadiationGoal,
-    Region2, Shot, Source, Switch, TolerancesSpec, Wave, WorldPhysics,
+    Reality, Region2, Remark, RemarkKind, Shot, Source, Switch, TolerancesSpec, Wave, WorldPhysics,
 };
 
 use crate::ui::{fmt_si, parse_si};
@@ -1278,6 +1278,7 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
             bias,
             tunable,
             drive,
+            label,
         } = e;
         ui.push_id(("electrode", i), |ui| {
             ui.horizontal(|ui| {
@@ -1318,6 +1319,7 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
                     .has_focus();
                 focus |= bias_editor(ui, ("ebias", i), bias);
             });
+            focus |= label_editor(ui, label, "cathode, grid, source, gate, deflection plate…");
             focus |= drive_editor(ui, ("electrode drive", i), drive, true);
         });
     }
@@ -1336,9 +1338,25 @@ fn edit_electrodes(ui: &mut egui::Ui, list: &mut Vec<Electrode>, grid: &Grid) ->
             bias: ConductorBias::Grounded,
             tunable: false,
             drive: None,
+            label: String::new(),
         });
     }
     focus
+}
+
+/// An object's function in its device (`Electrode::label`, `MetalSpec::label`): text only.
+fn label_editor(ui: &mut egui::Ui, label: &mut String, examples: &str) -> bool {
+    ui.horizontal(|ui| {
+        ui.label("function");
+        ui.add(
+            egui::TextEdit::singleline(label)
+                .hint_text(examples)
+                .desired_width(180.0),
+        )
+        .on_hover_text("Its function in the device, shown with its number wherever it is named")
+        .has_focus()
+    })
+    .inner
 }
 
 fn edit_dielectrics(ui: &mut egui::Ui, list: &mut Vec<Dielectric>, grid: &Grid) -> bool {
@@ -1800,6 +1818,7 @@ fn edit_tube(
                 core_radius,
                 carriers_per_area,
                 seed,
+                label,
             } = m;
             ui.horizontal(|ui| {
                 ui.label(format!("Metal {}", k + 1)).on_hover_text(
@@ -1867,6 +1886,7 @@ fn edit_tube(
                 ui.label("seed");
                 focus |= ui.add(egui::DragValue::new(seed)).has_focus();
             });
+            focus |= label_editor(ui, label, "channel, load, Hall plate…");
         });
     }
     if let Some(k) = remove_metal {
@@ -1884,6 +1904,7 @@ fn edit_tube(
             core_radius: 0.002,
             carriers_per_area: 100.0,
             seed: 0,
+            label: String::new(),
         });
     }
     // Current goals: each counts the cathode's carriers, the ions, or a lead's net.
@@ -2603,6 +2624,7 @@ pub fn edit_level(
         engine_version: _,
         name,
         description,
+        reality,
         grid,
         physics,
         shots,
@@ -2642,6 +2664,7 @@ pub fn edit_level(
                         .desired_width(f32::INFINITY),
                 )
                 .has_focus();
+            focus |= edit_reality(ui, reality);
             egui::Grid::new("level_props")
                 .num_columns(2)
                 .show(ui, |ui| {
@@ -2720,6 +2743,63 @@ pub fn edit_level(
     EditResult { focus, refine_by }
 }
 
+/// What the level represents and how it differs from the real thing (`level::Reality`):
+/// a headline and remarks, each a kind, a short line and its explanation.
+fn edit_reality(ui: &mut egui::Ui, reality: &mut Reality) -> bool {
+    let mut focus = false;
+    ui.label("Represents").on_hover_text(
+        "The real thing the level shows, in a few words (the header of its Represents section)",
+    );
+    focus |= ui
+        .add(egui::TextEdit::singleline(&mut reality.represents).desired_width(f32::INFINITY))
+        .has_focus();
+    let mut remove = None;
+    for (i, r) in reality.remarks.iter_mut().enumerate() {
+        let Remark { kind, line, detail } = r;
+        ui.push_id(("remark", i), |ui| {
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_id_salt("kind")
+                    .selected_text(kind.label())
+                    .show_ui(ui, |ui| {
+                        for k in RemarkKind::ALL {
+                            ui.selectable_value(kind, k, k.label());
+                        }
+                    });
+                focus |= ui
+                    .add(egui::TextEdit::singleline(line).desired_width(200.0))
+                    .has_focus();
+                if ui.small_button("×").clicked() {
+                    remove = Some(i);
+                }
+            });
+            focus |= ui
+                .add(
+                    egui::TextEdit::multiline(detail)
+                        .desired_rows(2)
+                        .desired_width(f32::INFINITY),
+                )
+                .has_focus();
+        });
+    }
+    if let Some(i) = remove {
+        reality.remarks.remove(i);
+    }
+    if ui
+        .small_button("+ remark")
+        .on_hover_text(
+            "What carries over from the real thing, what is simplified, what is left out",
+        )
+        .clicked()
+    {
+        reality.remarks.push(Remark {
+            kind: RemarkKind::Simplified,
+            line: String::new(),
+            detail: String::new(),
+        });
+    }
+    focus
+}
+
 /// Checks that every value of `level` can be produced with the sandbox editors (the same
 /// ranges and constraints as the controls above, and the same exhaustive destructuring).
 /// Returns the first problem found.
@@ -2729,6 +2809,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         engine_version: _,
         name: _,
         description: _,
+        // Free text (the remarks' kinds: a combo box of every kind).
+        reality: _,
         grid,
         physics,
         shots,
@@ -2895,6 +2977,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     core_radius,
                     carriers_per_area,
                     seed: _,
+                    // Free text.
+                    label: _,
                 } = m;
                 let positive = |v: f64| (MIN_POSITIVE..=MAX_POSITIVE).contains(&v);
                 corners.iter().all(|c| grid.contains(*c))
@@ -3138,6 +3222,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             // A checkbox.
             tunable: _,
             drive,
+            // Free text.
+            label: _,
         } = e;
         let value_ok = match bias {
             ConductorBias::Grounded => true,

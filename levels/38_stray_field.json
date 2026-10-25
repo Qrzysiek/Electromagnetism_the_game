@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Stray field",
   "description": "Somewhere in the building a high-voltage supply is switched on and off, and with it a weak uniform field across your beam line. The beam must reach the detector in both cases. Compare the two flights and aim between them.",
+  "reality": {
+    "represents": "Keeping a beam on target against a stray field",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A uniform field acts exactly",
+        "detail": "The stray field pushes the particle as a real one would; the motion is Newtonian, as at these speeds."
+      },
+      {
+        "kind": "simplified",
+        "line": "A uniform field, on or off",
+        "detail": "Stray fields in a lab come from cables and supplies and vary in space and time; here a uniform field is either on or off."
+      },
+      {
+        "kind": "omitted",
+        "line": "Shielding",
+        "detail": "A real beam line would sit in a grounded metal pipe that keeps outside electric fields out; here the setup must work despite the field."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

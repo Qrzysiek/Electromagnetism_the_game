@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Shielding",
   "description": "A strong charge next to the beam line throws the beam out of the arena. A grounded metal plate between them screens its field: the charge it induces on the plate cancels much of the field on the far side. Place a grounded plate.",
+  "reality": {
+    "represents": "Electrostatic shielding by a grounded plate",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Induced charge cancels the field",
+        "detail": "The charge the field induces on the grounded plate cancels much of it beyond the plate."
+      },
+      {
+        "kind": "simplified",
+        "line": "A plate, not an enclosure",
+        "detail": "A plate screens only partly: the field reaches round its edges. A closed grounded box (a Faraday cage) would screen completely."
+      },
+      {
+        "kind": "kept",
+        "line": "Real plates and their fringe fields",
+        "detail": "The electrodes are metal boxes standing on the plane, their surface charge solved exactly (boundary elements): uniform between plates, bulging out past their ends, and rearranging when charges come near, as in a real instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Slingshot",
   "description": "The detector is behind you. Attraction can turn the particle around; the fixed negative charge is a hint, but not enough on its own.",
+  "reality": {
+    "represents": "A charge turned back by an attracting one",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Exact Coulomb fields",
+        "detail": "The charges' fields are the exact 3D inverse-square fields, and the particle follows the exact equation of motion in them (relativistic where the level has a speed of light)."
+      },
+      {
+        "kind": "kept",
+        "line": "Orbits are conic sections",
+        "detail": "Past a single attracting charge the path is a hyperbola, as for a comet passing the Sun: it turns back only if it passes very close or slowly."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

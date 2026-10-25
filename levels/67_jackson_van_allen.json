@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 12.9: Van Allen equator",
   "description": "Jackson Problem 12.9 (the Van Allen belts). In the equatorial plane of a dipole Earth the field grows towards the Earth, and a gyrating particle drifts around it: protons one way, electrons the other (the gradient drift of §12.4). A proton and an electron start at the same place; the proton must reach the northern satellite, the electron the southern one. Shift their drift shells with charges or magnets.",
+  "reality": {
+    "represents": "Drift around a dipole Earth: the Van Allen belts (Jackson Pr. 12.9)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Protons and electrons drift opposite ways",
+        "detail": "The field grows towards the Earth, so a gyrating particle's orbit is tighter on the near side and it drifts around the Earth, the two signs in opposite senses: the ring current."
+      },
+      {
+        "kind": "kept",
+        "line": "The Earth as a dipole",
+        "detail": "Near the Earth its field is close to a dipole's, which a magnetized sphere at the centre gives exactly."
+      },
+      {
+        "kind": "simplified",
+        "line": "Large gyrations",
+        "detail": "Here a gyration is 0.4 of the distance to the Earth; a real belt particle gyrates over kilometres thousands of kilometres out, and drifts round in minutes to hours."
+      },
+      {
+        "kind": "omitted",
+        "line": "Bouncing between the poles",
+        "detail": "The particles stay in the equatorial plane. Real trapped particles also spiral along the field lines and bounce between mirror points in the north and the south."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +49,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -56,7 +81,7 @@
     },
     {
       "particle": {
-        "charge": -1e-6,
+        "charge": -1e-06,
         "mass": 1.0,
         "radius": 0.0
       },

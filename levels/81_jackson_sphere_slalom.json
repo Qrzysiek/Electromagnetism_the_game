@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Jackson Ch. 2: sphere slalom",
   "description": "Finale of the Jackson arc on conductors (Problems 2.4 and 2.6). Three isolated spheres carry the particle's own charge: far away they repel it, close by their images pull it in (inside 1.618 radii for equal charges), and each polarizes the others. Weave between them: through the two gates, then around the last sphere into the detector.",
+  "reality": {
+    "represents": "Charged conducting spheres: repulsion far, image attraction near",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Each sphere repels, then captures",
+        "detail": "Carrying the particle's own charge, a sphere repels it from afar and pulls it in inside 1.618 radii, and each polarizes the others."
+      },
+      {
+        "kind": "kept",
+        "line": "Images, exactly",
+        "detail": "The metal's induced charge is the exact image series plus a fitted surface charge, its boundary error below 1e-10: the conductor is an exact equipotential."
+      },
+      {
+        "kind": "simplified",
+        "line": "A strongly charged particle",
+        "detail": "The particle carries a charge comparable to the sphere's, so that the charge it induces on the metal pulls it noticeably; for a real ion that pull matters only within nanometres of a surface. Newtonian (c = ∞), so nothing radiates."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

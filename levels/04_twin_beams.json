@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Twin beams",
   "description": "Two particles, two detectors, one setup: every shot must reach its own detector. Switch between the shots with [ and ], or show them all.",
+  "reality": {
+    "represents": "One field setup serving two beams",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Exact Coulomb fields",
+        "detail": "The charges' fields are the exact 3D inverse-square fields, and the particle follows the exact equation of motion in them (relativistic where the level has a speed of light)."
+      },
+      {
+        "kind": "simplified",
+        "line": "One particle at a time",
+        "detail": "The shots fly separately and never meet, as in a weak beam; in an intense beam the particles repel each other (the Beams arc shows it)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

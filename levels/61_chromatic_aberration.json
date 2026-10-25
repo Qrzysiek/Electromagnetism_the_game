@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Chromatic aberration",
   "description": "Your Einzel lens from arc 1 (Charges) is built in. Real ion sources are not monochromatic: every ray now carries an 8 % spread in energy, and a lens focuses faster ions further away (chromatic aberration). At least 90 % of each ray must still reach the small detector. Add a few charges.",
+  "reality": {
+    "represents": "Chromatic aberration of an electrostatic lens",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Faster ions focus further away",
+        "detail": "A lens bends a faster particle less, so a spread of energies smears the focus along the axis, as in every charged-particle lens."
+      },
+      {
+        "kind": "simplified",
+        "line": "An exaggerated energy spread",
+        "detail": "8 % in energy, to make the aberration large; real sources have spreads from a fraction of an eV (field emitters) to tens of eV (plasma sources) on beams of kilovolts."
+      },
+      {
+        "kind": "simplified",
+        "line": "Lenses made of point charges",
+        "detail": "Real ion optics use shaped electrodes with small aberrations; a few point charges make lenses and deflectors with large ones, which the detectors' tolerances absorb."
+      },
+      {
+        "kind": "simplified",
+        "line": "The ions do not interact",
+        "detail": "Each ion flies alone: the aberration shows without space charge."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

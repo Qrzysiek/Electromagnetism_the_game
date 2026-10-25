@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Bipolar diode",
   "description": "The same diode, but now the anode's face is coated with a salt that, hot, emits positive ions (orange), as many as its field pulls off, just as the cathode emits electrons. The ions fly the other way, and their positive charge cancels part of the electrons' cloud: more electrons get through than in the vacuum diode at the same voltage (1.86 times as many in an infinitely wide diode: Langmuir, 1929). But the ions strike the cathode and wear it away. Set the anode's voltage so that at least 2.0 of electrons reach the anode while at most 0.75 of ions strike the cathode (both averaged over $t = 20$ to $30$). Both currents grow as $I \\propto V^{3/2}$.",
+  "reality": {
+    "represents": "A bipolar diode: ions cancelling the electrons' space charge (Langmuir, 1929)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "More electrons pass",
+        "detail": "The ions' positive charge cancels part of the electrons' cloud, so more electrons pass at the same voltage (1.86 times in an infinite planar diode)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Light ions",
+        "detail": "The ions are 16 times heavier per charge than the electrons, not 1836 times or more: in a static field the mass changes neither the paths nor the electrons' gain, only the time scale and the ion current (√(m_e/m_i) of the electrons' in a planar diode)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      },
+      {
+        "kind": "omitted",
+        "line": "The cathode's wear",
+        "detail": "The ions that strike the cathode wear it away in a real tube (sputtering); here the goal only limits their current."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -63,7 +88,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "cathode (hot, emits electrons)"
     },
     {
       "center": [
@@ -78,7 +104,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "anode (your supply; its coating emits ions)"
     }
   ],
   "tube": {

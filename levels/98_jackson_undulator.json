@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §14.7: undulator",
   "description": "Jackson §14.7: a row of magnets of alternating sign wiggles a fast particle, and seen from straight ahead the wiggles' radiation adds up at one frequency, $\\omega_1 = 2\\gamma^2\\omega_u/(1 + K^2/2)$, where $\\omega_u = 2\\pi v/\\lambda_u$ is the wiggle frequency and K the wiggle strength: the Doppler effect squeezes a slow wiggle into a fast wave. Build an undulator that delivers at least 0.0001 per steradian to the receiver straight ahead, in the band 34–38, and lets the particle go on straight along the axis into the detector. The spacing sets the frequency, the number of periods the strength of the line. (Half-strength magnets at the ends keep the particle on course.)",
+  "reality": {
+    "represents": "An undulator: a wiggled beam's radiation adds up (Jackson §14.7)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "ω₁ = 2γ²ω_u/(1 + K²/2)",
+        "detail": "Seen from straight ahead the wiggles' radiation adds up at one frequency, Doppler-squeezed, and the line grows with the number of periods."
+      },
+      {
+        "kind": "simplified",
+        "line": "Magnets are spheres",
+        "detail": "A real undulator is two rows of magnet blocks with poles, periods of centimetres, for electrons with γ in the thousands, making X-ray lines; here a row of dipole spheres."
+      },
+      {
+        "kind": "kept",
+        "line": "The radiation is exact for the motion",
+        "detail": "What the receiver collects is computed from the particle's computed path with the exact far-zone fields (Liénard; the spectrum from Jackson's radiation integral), and the particle feels its radiation's reaction (Landau–Lifshitz)."
+      },
+      {
+        "kind": "simplified",
+        "line": "γ = 3 and slow light",
+        "detail": "c is 2 cells per time unit and the particle's γ is 3, so that its cone (1/γ, about 19°) and its flashes fit the board. Real synchrotron sources run electrons at γ in the thousands, beamed into fractions of a milliradian, out to X-rays."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

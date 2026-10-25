@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Ion diode",
   "description": "An ion diode turned inside out: the ring is the cathode, emitting electrons from its inner face, and the rod in its middle, on your supply, emits ions. Without a magnetic field the electrons rush to the rod and waste the supply's current. Your solenoid (the yellow coil, top right) curls them: above Hull's critical field they cannot reach the rod, and stay in a sheath along the ring. The heavy ions still cross, and the sheath's negative charge pulls more of them across. Deliver an ion current between 5 and 8.5 to the ring while at most 0.05 of electrons leak to the rod (averaged over $t = 20$ to $30$). The critical field grows with the voltage, as $B \\propto \\sqrt{V}$: too weak a field for your voltage lets the electrons leak; the sheath helps the ions most just above it. The thin outer ring is the tube's grounded envelope.",
+  "reality": {
+    "represents": "A magnetically insulated ion diode, as in pulsed-power ion sources",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Electrons insulated, ions not",
+        "detail": "Hull's cutoff for the heavy ions is 18 times the electrons', so a field that holds the electrons in a sheath lets the ions cross, and the sheath's charge draws more of them."
+      },
+      {
+        "kind": "kept",
+        "line": "The sheath spreads",
+        "detail": "The electron sheath keeps spreading towards the anode, as in real ion diodes (their impedance collapse): the goal's window is a fixed time after switch-on."
+      },
+      {
+        "kind": "simplified",
+        "line": "A steady supply",
+        "detail": "Real magnetically insulated diodes run on pulsed power, megavolts for tens of nanoseconds; here a steady supply."
+      },
+      {
+        "kind": "simplified",
+        "line": "Light ions",
+        "detail": "The ions are 16 times heavier per charge than the electrons, not 1836 times or more: in a static field the mass changes neither the paths nor the electrons' gain, only the time scale and the ion current (√(m_e/m_i) of the electrons' in a planar diode)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -80,7 +110,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "shape": "ring"
+      "shape": "ring",
+      "label": "cathode (ring; emits electrons inwards)"
     },
     {
       "center": [
@@ -96,7 +127,8 @@
         "kind": "grounded"
       },
       "tunable": true,
-      "shape": "rod"
+      "shape": "rod",
+      "label": "anode (rod, your supply; emits ions)"
     },
     {
       "center": [
@@ -111,7 +143,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "shape": "ring"
+      "shape": "ring",
+      "label": "envelope (grounded)"
     }
   ],
   "tube": {

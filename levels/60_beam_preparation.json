@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Beam preparation",
   "description": "Experiments need a prepared beam. Stage 1: collimate it, so that at least 90 % of the particles cross the gate travelling parallel to the axis (within ±4°). Stage 2: steer the prepared beam down into the target. A particle counts only if it went through both stages in order. Only charges of the particle's sign are available.",
+  "reality": {
+    "represents": "Preparing a beam: collimation, then delivery",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Space charge, exactly",
+        "detail": "The particles repel each other with the exact Coulomb force (with c = ∞ that is the whole interaction), so an intense beam spreads as a real one does."
+      },
+      {
+        "kind": "simplified",
+        "line": "A beam of a few particles",
+        "detail": "A dozen or so particles stand for a beam of billions: each carries the charge of many (its mass and energy scaled alike, so that its own path is unchanged), so their repulsion matches an intense beam's. The spreads are a fixed sample of the beam's distribution, the same every time."
+      },
+      {
+        "kind": "simplified",
+        "line": "A stage is a box",
+        "detail": "The gate is a region the beam must cross parallel; real stages are lenses and slits that also remove what is off axis."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

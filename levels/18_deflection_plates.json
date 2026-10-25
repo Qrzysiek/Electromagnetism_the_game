@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Deflection plates",
   "description": "Real deflection plates, as in a cathode-ray tube: two metal plates at +V and −V. Between them the field is nearly uniform, but it bulges out at the ends (the fringe field) and the plates' charge rearranges when you bring charges near. Add a charge to bring the beam into the detector.",
+  "reality": {
+    "represents": "The deflection plates of a cathode-ray tube",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Real plates and their fringe fields",
+        "detail": "The electrodes are metal boxes standing on the plane, their surface charge solved exactly (boundary elements): uniform between plates, bulging out past their ends, and rearranging when charges come near, as in a real instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "Plates at fixed voltages",
+        "detail": "The plates are held at ±V by ideal supplies; their charge follows what you add nearby, their potential does not."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +49,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -107,7 +132,8 @@
       "bias": {
         "kind": "potential",
         "value": -30000.0
-      }
+      },
+      "label": "upper deflection plate (−V)"
     },
     {
       "center": [
@@ -122,7 +148,8 @@
       "bias": {
         "kind": "potential",
         "value": 30000.0
-      }
+      },
+      "label": "lower deflection plate (+V)"
     }
   ]
 }

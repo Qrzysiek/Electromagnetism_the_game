@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Sideways",
   "description": "Around this tube is a solenoid: switch on its supply (the yellow coil at the top right) to fill the tube with a magnetic field along its length, out of the board when positive. Electrons crossing it curve, and above a critical field (Hull's cutoff) they cannot reach the anode at all: they drift along the cathode instead, sideways, perpendicular to both the electric and the magnetic field. Send the electrons into the collector above the gap: at least 0.9 must land there (averaged over $t = 20$ to $40$).",
+  "reality": {
+    "represents": "Hull's magnetic cutoff: the magnetron's principle",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Hull's critical field",
+        "detail": "Above a field of about √(2V m/q)/d the electrons curve back before the anode and drift along the cathode, at E/B across both fields."
+      },
+      {
+        "kind": "kept",
+        "line": "Broken symmetry at the ends",
+        "detail": "Below the cutoff a little current still reaches the anode at the gap's ends, where the translation symmetry behind Hull's theorem is broken."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      },
+      {
+        "kind": "simplified",
+        "line": "A uniform field from the solenoid",
+        "detail": "The solenoid round the tube makes an exactly uniform field along it; a real magnet's field is only nearly uniform."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 22,
@@ -63,7 +88,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "cathode (hot)"
     },
     {
       "center": [
@@ -78,7 +104,8 @@
       "bias": {
         "kind": "potential",
         "value": 30.0
-      }
+      },
+      "label": "anode (at 30)"
     },
     {
       "center": [
@@ -93,7 +120,8 @@
       "bias": {
         "kind": "potential",
         "value": 10.0
-      }
+      },
+      "label": "collector (at 10)"
     }
   ],
   "tube": {

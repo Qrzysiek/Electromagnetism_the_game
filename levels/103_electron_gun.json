@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Electron gun",
   "description": "An electron gun: the hot cathode (left) gives at most 0.2 per unit length of its face (its temperature limits it: a stronger field pulls no more), the anode's slit lets a thin beam through, and the small collector on the right should catch it. But the beam's electrons repel one another: it spreads and misses. Place two plates beside the beam to focus it, so that at least 0.24 reaches the collector (averaged over $t = 20$ to $40$). A plate at a lower potential than the beam's surroundings pushes the electrons back toward the axis; too low, and it throws them back.",
+  "reality": {
+    "represents": "An electron gun with a temperature-limited cathode",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Temperature-limited emission",
+        "detail": "The cathode gives at most 0.2 per unit length of its face, as a real hot cathode gives at most its Richardson current: a stronger field pulls no more."
+      },
+      {
+        "kind": "kept",
+        "line": "A beam spread by its own charge",
+        "detail": "The beam's electrons repel one another and it spreads; two plates at a lower potential make a lens that refocuses it."
+      },
+      {
+        "kind": "simplified",
+        "line": "A sheet beam through a slit",
+        "detail": "Infinitely long electrodes make a flat ribbon of a beam; a real gun makes a round beam through a round aperture."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      }
+    ]
+  },
   "grid": {
     "nx": 32,
     "ny": 20,
@@ -80,7 +105,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "cathode (hot, temperature-limited)"
     },
     {
       "center": [
@@ -95,7 +121,8 @@
       "bias": {
         "kind": "potential",
         "value": 30.0
-      }
+      },
+      "label": "anode, upper jaw of the slit (at 30)"
     },
     {
       "center": [
@@ -110,7 +137,8 @@
       "bias": {
         "kind": "potential",
         "value": 30.0
-      }
+      },
+      "label": "anode, lower jaw of the slit (at 30)"
     },
     {
       "center": [
@@ -125,7 +153,8 @@
       "bias": {
         "kind": "potential",
         "value": 30.0
-      }
+      },
+      "label": "collector (at 30)"
     }
   ],
   "tube": {

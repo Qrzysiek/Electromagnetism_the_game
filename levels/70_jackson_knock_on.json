@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 13.1: knock-on",
   "description": "Jackson Problem 13.1 (energy transfer in a Coulomb collision): throw a heavy ion (pull its slingshot handle back) past the light particle at rest. The ion's field kicks it, the harder the closer the ion passes, $T(b) = T_\\text{max}/\\left(1 + (b/b_\\text{min})^2\\right)$: a close pass throws it forward, a distant one sideways. Kick the light particle into its detector, fast enough to count (a gentle push from afar is not a kick).",
+  "reality": {
+    "represents": "Energy transfer in a Coulomb collision (Jackson Pr. 13.1)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "T(b) = T_max/(1 + (b/b_min)²)",
+        "detail": "The closer the pass, the harder the kick; close passes throw the target forward, distant ones sideways."
+      },
+      {
+        "kind": "simplified",
+        "line": "A mass ratio of 40",
+        "detail": "A fast ion in matter knocks out electrons thousands of times lighter than itself: the knock-on electrons (δ rays) along particle tracks."
+      },
+      {
+        "kind": "simplified",
+        "line": "One target",
+        "detail": "In matter the ion passes many electrons at every distance, and the sum of their kicks is its stopping power (Bethe's formula)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

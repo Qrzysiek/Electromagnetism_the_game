@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Einzel lens",
   "description": "An Einzel lens focuses charged-particle beams in electron microscopes and ion sources. Three rays leave the source at −12°, 0° and +12°; all three must meet in the small detector on the axis. Only charges of the particle's sign are available (a decelerating lens).",
+  "reality": {
+    "represents": "An einzel lens of electron and ion optics",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A decelerating lens focuses",
+        "detail": "Rays far from the axis are pushed back towards it more strongly than those near it, so the bundle converges, as in the electrostatic lenses of microscopes and ion sources."
+      },
+      {
+        "kind": "simplified",
+        "line": "Point charges, not cylinders",
+        "detail": "A real einzel lens is three coaxial cylinders or apertures, the middle one at another voltage: round, so it focuses in every direction. Charges in one plane focus only in that plane."
+      },
+      {
+        "kind": "simplified",
+        "line": "Three rays",
+        "detail": "A real beam is a continuum of rays, and a lens focuses its outer rays shorter (spherical aberration); the detector's size here tolerates some."
+      },
+      {
+        "kind": "kept",
+        "line": "Exact Coulomb fields",
+        "detail": "The charges' fields are the exact 3D inverse-square fields, and the particle follows the exact equation of motion in them (relativistic where the level has a speed of light)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

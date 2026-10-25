@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Vacuum diode",
   "description": "Inside a vacuum tube. The left plate is a hot cathode: its right face emits electrons (blue dots), as many as its field pulls off. The right plate, the anode, is on your power supply. Set its voltage so that a current between 0.9 and 1.5 reaches the anode (averaged over $t = 10$ to $20$). The electrons in flight repel the ones behind them: this space charge chokes the current, which grows as $I \\propto V^{3/2}$ (Child and Langmuir), faster than in proportion to the voltage. The potential map shows the space charge as a flat region in front of the cathode, where the field is pulled down to zero.",
+  "reality": {
+    "represents": "A planar vacuum diode: the Child–Langmuir law",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Space charge from the electrons themselves",
+        "detail": "Every electron in flight repels the others, and the charge it induces on the electrodes is solved at every step: the space-charge limit (Child and Langmuir) comes out of the simulation, not from a formula."
+      },
+      {
+        "kind": "kept",
+        "line": "I ∝ V^(3/2)",
+        "detail": "The current grows faster than the voltage: the space-charge law of every space-charge-limited diode."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      },
+      {
+        "kind": "simplified",
+        "line": "Electrons released at rest",
+        "detail": "The cathode gives off as many electrons as its field pulls off (the space-charge limit), released at rest. A real hot cathode emits them with thermal energies of about 0.1 eV, which lets a little current flow against a small retarding field and moves the potential's minimum slightly out from its face."
+      },
+      {
+        "kind": "omitted",
+        "line": "The cathode's temperature limit",
+        "detail": "This cathode gives whatever the field pulls; a real one's temperature caps the current (Richardson's law: the Electron gun level)."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -63,7 +93,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "cathode (hot, emitting)"
     },
     {
       "center": [
@@ -78,7 +109,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "anode (your supply)"
     }
   ],
   "tube": {

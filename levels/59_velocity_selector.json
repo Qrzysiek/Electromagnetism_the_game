@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Velocity selector",
   "description": "The Wien filter for a real beam: three groups of ions, slow, middle and fast, mixed and repelling each other. The coil provides B; place charges for E so that the middle group leaves straight along the axis (within ±5°) and the slower and faster groups reach their own detectors: at least 80 % of each.",
+  "reality": {
+    "represents": "A Wien filter for an intense beam",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Crossed fields pass v = E/B",
+        "detail": "The middle speed flies straight where the electric and magnetic pushes balance."
+      },
+      {
+        "kind": "kept",
+        "line": "Space charge, exactly",
+        "detail": "The particles repel each other with the exact Coulomb force (with c = ∞ that is the whole interaction), so an intense beam spreads as a real one does."
+      },
+      {
+        "kind": "simplified",
+        "line": "A beam of a few particles",
+        "detail": "A dozen or so particles stand for a beam of billions: each carries the charge of many (its mass and energy scaled alike, so that its own path is unchanged), so their repulsion matches an intense beam's. The spreads are a fixed sample of the beam's distribution, the same every time."
+      },
+      {
+        "kind": "simplified",
+        "line": "A coil is one thin loop",
+        "detail": "The coil is a single loop of thin wire carrying a steady current, its field the exact Biot–Savart field (perpendicular to the plane in it, and far from uniform); a real magnet has many turns, iron and pole pieces shaped for a uniform field."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

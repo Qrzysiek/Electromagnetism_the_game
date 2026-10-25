@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Jackson §2.2: its own image",
   "description": "Jackson §2.2 (a point charge near a grounded conducting sphere). The sphere carries no charge of its own, yet it attracts every charge that passes: the charge induces an opposite image charge inside it, $-qR/d$ at the distance $R^2/d$ from the centre, and the image pulls. The pull grows steeply near the surface. Bring the particle into the detector.",
+  "reality": {
+    "represents": "A charge pulled by its own image in a grounded sphere (Jackson §2.2)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Images, exactly",
+        "detail": "The metal's induced charge is the exact image series plus a fitted surface charge, its boundary error below 1e-10: the conductor is an exact equipotential."
+      },
+      {
+        "kind": "kept",
+        "line": "The pull grows steeply near the surface",
+        "detail": "The image −qR/d at R²/d pulls with q²Rd/(d² − R²)², exactly."
+      },
+      {
+        "kind": "simplified",
+        "line": "A strongly charged particle",
+        "detail": "The particle carries a charge comparable to the sphere's, so that the charge it induces on the metal pulls it noticeably; for a real ion that pull matters only within nanometres of a surface. Newtonian (c = ∞), so nothing radiates."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

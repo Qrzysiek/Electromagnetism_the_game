@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Potentiometer",
   "description": "A longer strip of metal with a third contact on its side, a third of the way along, on your second supply. Inside a conductor carrying a steady current the field is uniform: the potential falls evenly from one end to the other (the contacts take a little). Make a current between 2.4 and 3.0 flow along the strip into its right end, and set the side contact so that no current flows through it (between $-0.7$ and $0.7$, averaged over $t = 10$ to $80$): it must sit at the potential the strip has there. A potentiometer measures a voltage this way, drawing no current from it.",
+  "reality": {
+    "represents": "A potentiometer: a voltage measured without drawing current",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The potential falls evenly",
+        "detail": "Inside a conductor carrying a steady current the field is uniform, so the potential falls evenly along it; the contacts take a little."
+      },
+      {
+        "kind": "kept",
+        "line": "The null method",
+        "detail": "A contact at the strip's own potential there draws no current: a voltage measured without disturbing it."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal ohmic contacts",
+        "detail": "A contact takes in the carriers that reach it and gives off as many as keep the layer in front of it neutral, at the lattice's temperature: a perfect reservoir. Real contacts have a resistance, and between different materials a barrier."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -72,7 +97,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "strip's left end (grounded)"
     },
     {
       "center": [
@@ -87,7 +113,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "strip's right end (supply 1)"
     },
     {
       "center": [
@@ -102,7 +129,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "side contact (supply 2)"
     }
   ],
   "tube": {
@@ -152,7 +180,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 100.0,
-        "seed": 2
+        "seed": 2,
+        "label": "resistive strip"
       }
     ]
   }

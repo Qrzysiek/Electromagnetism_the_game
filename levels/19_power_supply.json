@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Power supply",
   "description": "Instead of placing charges, turn a knob: the top deflection plate is connected to a power supply (yellow frame). Click the plate to switch it on, and set its potential with the slider in the panel. A positive plate pushes positive ions away, a negative one pulls them. Bring the beam into the detector.",
+  "reality": {
+    "represents": "Deflection set by a power supply's knob",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The voltage sets the deflection",
+        "detail": "The sideways push grows in proportion to the plate's voltage, its sign with the voltage's: an oscilloscope's deflection works so."
+      },
+      {
+        "kind": "kept",
+        "line": "Real plates and their fringe fields",
+        "detail": "The electrodes are metal boxes standing on the plane, their surface charge solved exactly (boundary elements): uniform between plates, bulging out past their ends, and rearranging when charges come near, as in a real instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal supplies",
+        "detail": "A plate on a supply sits at its voltage whatever charge that takes; a real supply has an internal resistance and leads, and charging a plate takes a current for a while (the Circuits arc)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -98,7 +123,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "deflection plate (on your supply)"
     },
     {
       "center": [
@@ -112,7 +138,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "deflection plate (grounded)"
     }
   ]
 }

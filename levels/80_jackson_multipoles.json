@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Jackson §4.1: multipoles",
   "description": "Jackson §4.1 (the multipole expansion): far from a group of charges, only its lowest nonvanishing moment counts. A beam passing at a distance b is turned by a net charge Q by an angle $\\propto Q/b$, by a dipole p (charges ±q a distance d apart, p = qd) only $\\propto p/b^2$, by a quadrupole (such as +q, −2q, +q in a row) only $\\propto qd^2/b^3$. Bend the lower beam down into its detector, but leave the two far beams untouched: they must arrive within 0.05° of straight.",
+  "reality": {
+    "represents": "The multipole expansion: far away only the lowest moment counts (Jackson §4.1)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Q/b, p/b², qd²/b³",
+        "detail": "A beam passing at distance b is turned by a net charge as 1/b, by a dipole as 1/b², by a quadrupole as 1/b³, exactly as the expansion says."
+      },
+      {
+        "kind": "kept",
+        "line": "Exact Coulomb fields",
+        "detail": "The charges' fields are the exact 3D inverse-square fields, and the particle follows the exact equation of motion in them (relativistic where the level has a speed of light)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 30,

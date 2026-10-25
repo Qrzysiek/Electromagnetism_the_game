@@ -47,6 +47,10 @@ pub struct Level {
     pub engine_version: String,
     pub name: String,
     pub description: String,
+    /// What the level represents in the real world, and how its model differs from that
+    /// (shown with the description; text only, it changes no run).
+    #[serde(default, skip_serializing_if = "Reality::is_empty")]
+    pub reality: Reality,
     pub grid: Grid,
     pub physics: WorldPhysics,
     /// Particles to deliver; one setup must bring every shot to its detector.
@@ -96,9 +100,64 @@ pub struct Level {
     pub tube: Option<tube::TubeSpec>,
 }
 
+/// What a level represents and how far it is the real thing (the owner, 2026-10-21: leaving
+/// it out gives a wrong impression of what a level shows). Written per level in
+/// `scripts/reality.py`; every shipped level has it (test `every_level_states_its_reality`).
+/// The numerical model's own approximations are `Level::model_notes`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reality {
+    /// The real thing the level shows, in a few words.
+    pub represents: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remarks: Vec<Remark>,
+}
+
+impl Reality {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.represents.is_empty() && self.remarks.is_empty()
+    }
+}
+
+/// One way the level is, or is not, the real thing: a short line and its explanation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Remark {
+    pub kind: RemarkKind,
+    pub line: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub detail: String,
+}
+
+/// How a remark relates the level to reality.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RemarkKind {
+    /// As in reality: what carries over.
+    Kept,
+    /// Idealized, scaled or approximated.
+    #[default]
+    Simplified,
+    /// Absent from the model.
+    Omitted,
+}
+
+impl RemarkKind {
+    pub const ALL: [RemarkKind; 3] = [Self::Kept, Self::Simplified, Self::Omitted];
+
+    /// The tag the panel shows.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Kept => "as real",
+            Self::Simplified => "simplified",
+            Self::Omitted => "left out",
+        }
+    }
+}
+
 /// A rectangular metal box standing on the plane (symmetric about it): a plate, slab or
 /// wall electrode.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Electrode {
     /// Centre (grid node).
     pub center: Node,
@@ -123,6 +182,10 @@ pub struct Electrode {
     /// A circuit driving its potential (PHYSICS.md §2.10).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drive: Option<Drive>,
+    /// Its function in the device (cathode, grid, source, gate, deflection plate, …):
+    /// shown with its number wherever it is named. Text only.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
 }
 
 /// An electrode's cross-section (`Electrode::shape`).
@@ -289,6 +352,8 @@ struct LevelFile {
     name: String,
     #[serde(default)]
     description: String,
+    #[serde(default)]
+    reality: Reality,
     grid: Grid,
     physics: WorldPhysics,
     #[serde(default)]
@@ -345,6 +410,7 @@ impl From<LevelFile> for Level {
             engine_version: f.engine_version,
             name: f.name,
             description: f.description,
+            reality: f.reality,
             grid: f.grid,
             physics: f.physics,
             shots,
@@ -1263,6 +1329,66 @@ impl Level {
 
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("level serialization cannot fail")
+    }
+
+    /// The JSON of everything that can change a run: the level without its texts (name,
+    /// description, reality, the electrodes' and metals' labels). The run cache and the
+    /// test pass records key on it, so that rewording a level reruns nothing.
+    #[must_use]
+    pub fn physics_json(&self) -> String {
+        let mut bare = Level {
+            name: String::new(),
+            description: String::new(),
+            reality: Reality::default(),
+            ..self.clone()
+        };
+        for e in &mut bare.electrodes {
+            e.label.clear();
+        }
+        if let Some(t) = &mut bare.tube {
+            for m in &mut t.metals {
+                m.label.clear();
+            }
+        }
+        bare.to_json()
+    }
+
+    /// Electrode `k` as the interface names it: its number, and its function if it has one
+    /// ("Electrode 3 — gate").
+    #[must_use]
+    pub fn electrode_name(&self, k: usize) -> String {
+        match self.electrodes.get(k).map(|e| e.label.as_str()) {
+            Some(l) if !l.is_empty() => format!("Electrode {} — {l}", k + 1),
+            _ => format!("Electrode {}", k + 1),
+        }
+    }
+
+    /// Electrode `k` within a sentence: "electrode 2 (drain)", its function without the
+    /// details in parentheses ("drain" of "drain (held at 10)").
+    #[must_use]
+    pub fn electrode_ref(&self, k: usize) -> String {
+        let label = self.electrodes.get(k).map_or("", |e| e.label.as_str());
+        let role = label.split(" (").next().unwrap_or("").trim();
+        if role.is_empty() {
+            format!("electrode {}", k + 1)
+        } else {
+            format!("electrode {} ({role})", k + 1)
+        }
+    }
+
+    /// Metal `k` of a tube level as the interface names it, as `electrode_name`.
+    #[must_use]
+    pub fn metal_name(&self, k: usize) -> String {
+        let label = self
+            .tube
+            .as_ref()
+            .and_then(|t| t.metals.get(k))
+            .map_or("", |m| m.label.as_str());
+        if label.is_empty() {
+            format!("Metal {}", k + 1)
+        } else {
+            format!("Metal {} — {label}", k + 1)
+        }
     }
 
     pub fn c(&self) -> f64 {
@@ -3401,6 +3527,7 @@ mod tests {
             engine_version: ENGINE_VERSION.to_string(),
             name: "test".into(),
             description: String::new(),
+            reality: Reality::default(),
             grid: Grid {
                 nx: 20,
                 ny: 10,
@@ -3594,6 +3721,7 @@ mod tests {
             bias: ConductorBias::Grounded,
             tunable: true,
             drive: None,
+            label: String::new(),
         }];
         l
     }
@@ -3711,6 +3839,7 @@ mod tests {
             bias: ConductorBias::Potential(1e4),
             tunable: false,
             drive: None,
+            label: String::new(),
         });
         let (a, oa) = l.field(&player);
         let (b, ob) = fixed.field(&[]);

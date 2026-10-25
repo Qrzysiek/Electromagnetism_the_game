@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 2.4: golden-ratio capture",
   "description": "Jackson Problem 2.4: a charge near an isolated conducting sphere carrying the same charge is repelled far away, but attracted close to it: its image in the sphere wins inside 1.618 radii from the centre, the golden ratio (for equal charges). This particle has enough energy to get that close, and the sphere would catch it. Bring it around the sphere into the detector behind.",
+  "reality": {
+    "represents": "Repulsion that turns to attraction near a charged sphere (Jackson Pr. 2.4)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The force vanishes at 1.618 radii",
+        "detail": "For a charge equal to the sphere's, the image wins inside the golden ratio of the radius from the centre: far away it repels, close by it attracts."
+      },
+      {
+        "kind": "kept",
+        "line": "Images, exactly",
+        "detail": "The metal's induced charge is the exact image series plus a fitted surface charge, its boundary error below 1e-10: the conductor is an exact equipotential."
+      },
+      {
+        "kind": "simplified",
+        "line": "A strongly charged particle",
+        "detail": "The particle carries a charge comparable to the sphere's, so that the charge it induces on the metal pulls it noticeably; for a real ion that pull matters only within nanometres of a surface. Newtonian (c = ∞), so nothing radiates."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

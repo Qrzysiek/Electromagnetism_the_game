@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §12.1: Störmer's forbidden region",
   "description": "Jackson §12.1 (canonical momentum). The Earth's dipole field is symmetric about its axis, so the particle's canonical angular momentum $r p_\\varphi + q r A_\\varphi$ cannot change: aimed straight at the Earth, it is turned away more than seven cells out, and no aim of the launch helps (Störmer's forbidden region, which keeps slow cosmic rays away from the equator). Your charges break the symmetry: bring the particle down to the Earth.",
+  "reality": {
+    "represents": "Störmer's forbidden region: cosmic rays turned away by the Earth (Jackson §12.1)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Canonical angular momentum is conserved",
+        "detail": "The dipole field is symmetric about its axis, so r p_φ + q r A_φ cannot change and a slow particle cannot reach the equator, whatever its aim."
+      },
+      {
+        "kind": "kept",
+        "line": "The Earth as a dipole",
+        "detail": "Near the Earth its field is close to a dipole's, which a magnetized sphere at the centre gives exactly."
+      },
+      {
+        "kind": "simplified",
+        "line": "Only the equatorial plane",
+        "detail": "In 3D the forbidden region is a ring around the equator: cosmic rays reach the Earth more easily near the poles, why their cutoff depends on latitude."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

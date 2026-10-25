@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §13.1: recoil at right angles",
   "description": "Jackson §13.1 (energy transfer in a Coulomb collision), with a target that is free to recoil. Throw a particle of the same mass at the one at rest: whatever the force between them, conservation of momentum and energy sends them off at right angles to each other. Choose the aim so that the target recoils into its detector, fast enough to count; watch the thrown one leave at 90°.",
+  "reality": {
+    "represents": "Equal masses recoil at right angles (Jackson §13.1)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "90° for equal masses, any force",
+        "detail": "Momentum and energy conservation alone send equal masses off at right angles after an elastic collision with one at rest; cloud-chamber photographs of alphas hitting helium nuclei show the same fork."
+      },
+      {
+        "kind": "simplified",
+        "line": "Newtonian",
+        "detail": "At relativistic speeds the angle closes below 90°; here c = ∞."
+      },
+      {
+        "kind": "simplified",
+        "line": "A distant push, not a contact",
+        "detail": "The two never touch: the Coulomb force does the whole collision."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,
@@ -39,7 +64,7 @@
           1.0,
           0.0
         ],
-        "kinetic_energy": 1e-9
+        "kinetic_energy": 1e-09
       },
       "detector": {
         "min": [

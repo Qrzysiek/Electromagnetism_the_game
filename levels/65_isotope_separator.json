@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Isotope separator",
   "description": "Finale of the last arc. A beam of two isotopes, 8 ions each, leaves the source with a spread of directions, and the ions repel each other. First collimate it: at least 80 % of each isotope must cross the gate moving along the axis (within ±5°). Then separate the isotopes with magnets, each onto its own collector. Only charges of the ions' sign are available.",
+  "reality": {
+    "represents": "An isotope separator: collimation, then a magnetic sector",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The lighter isotope bends more",
+        "detail": "At equal energy the lighter ion has less momentum, so a magnetic field bends it more: both bend the same way."
+      },
+      {
+        "kind": "kept",
+        "line": "Space charge, exactly",
+        "detail": "The particles repel each other with the exact Coulomb force (with c = ∞ that is the whole interaction), so an intense beam spreads as a real one does."
+      },
+      {
+        "kind": "simplified",
+        "line": "A beam of a few particles",
+        "detail": "A dozen or so particles stand for a beam of billions: each carries the charge of many (its mass and energy scaled alike, so that its own path is unchanged), so their repulsion matches an intense beam's. The spreads are a fixed sample of the beam's distribution, the same every time."
+      },
+      {
+        "kind": "simplified",
+        "line": "Masses 1 and 2",
+        "detail": "Real isotopes differ by a few per cent in mass; a factor of two separates widely."
+      },
+      {
+        "kind": "simplified",
+        "line": "Magnets are magnetized spheres",
+        "detail": "A uniformly magnetized sphere has exactly a dipole's field outside it, which keeps the field simple and exact; real magnets are blocks, rings and pole pieces, and an instrument's magnet makes a field as uniform as it can."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

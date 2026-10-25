@@ -470,9 +470,11 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
              metal's conduction electrons are a degenerate quantum gas, far denser and with \
              far shorter free times: this is a scaled classical plasma, whose screening \
              length and mean free path are well below the conductor's size, so that it \
-             conducts as a metal does. What carries over: Ohm's law, σ = n q² τ/m, the Joule \
-             heat, the Hall coefficient (1/(nq) times this model's Hall factor, 4/π). What \
-             does not: the thermal speed, the carriers' heat capacity.",
+             conducts as a metal does; by its own ratios it is a lightly doped \
+             semiconductor (the Scales section names which). What carries over: Ohm's law, \
+             σ = n q² τ/m, the Joule heat, the Hall coefficient (1/(nq) times this model's \
+             Hall factor, 4/π). What does not: the thermal speed, the carriers' heat \
+             capacity.",
         ));
         out.push(note(
             false,
@@ -553,5 +555,61 @@ mod tests {
         // Exact statements come first.
         let n = sync.model_notes(&[]);
         assert!(n.windows(2).all(|w| w[0].exact || !w[1].exact));
+    }
+
+    /// Every shipped level says what real thing it shows and how far it is that thing (the
+    /// owner, 2026-10-21; `scripts/reality.py`): a headline, what carries over and what is
+    /// simplified or left out, each a short line with its explanation. Its electrodes and
+    /// metals, the device's parts, each name their function.
+    #[test]
+    fn every_level_states_its_reality() {
+        use crate::RemarkKind;
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../levels");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&dir).expect("levels directory") {
+            let path = entry.expect("an entry").path();
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if !stem.starts_with(|c: char| c.is_ascii_digit()) {
+                continue;
+            }
+            let level = Level::from_json(&std::fs::read_to_string(&path).expect("level file"))
+                .expect("a level");
+            let r = &level.reality;
+            assert!(!r.represents.is_empty(), "{stem}: no headline");
+            assert!(
+                r.represents.chars().count() <= 80,
+                "{stem}: the headline is long"
+            );
+            assert!(r.remarks.len() >= 3, "{stem}: fewer than three remarks");
+            assert!(
+                r.remarks.iter().any(|m| m.kind == RemarkKind::Kept),
+                "{stem}: nothing said to carry over"
+            );
+            assert!(
+                r.remarks.iter().any(|m| m.kind != RemarkKind::Kept),
+                "{stem}: nothing said to be simplified or left out"
+            );
+            for m in &r.remarks {
+                assert!(
+                    !m.line.is_empty() && !m.detail.is_empty(),
+                    "{stem}: a bare remark"
+                );
+                assert!(
+                    m.line.chars().count() <= 70,
+                    "{stem}: a long line: {}",
+                    m.line
+                );
+            }
+            for (k, e) in level.electrodes.iter().enumerate() {
+                assert!(!e.label.is_empty(), "{stem}: electrode {} unnamed", k + 1);
+            }
+            if let Some(t) = &level.tube {
+                for (k, m) in t.metals.iter().enumerate() {
+                    assert!(!m.label.is_empty(), "{stem}: metal {} unnamed", k + 1);
+                }
+            }
+            checked += 1;
+        }
+        assert!(checked > 100, "only {checked} levels found");
     }
 }

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Soft landing",
   "description": "Ions for surface science must land gently, or they would smash the surface: they may arrive with at most a quarter of their launch energy. The two electrodes at the target already brake them; add charges so that they land slowly, on the target, without turning back.",
+  "reality": {
+    "represents": "Soft landing: slowing ions gently onto a surface",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A potential hill takes the energy",
+        "detail": "An ion arrives with its launch energy less q times the potential it climbed: the braking electrodes take the energy back without stopping it short."
+      },
+      {
+        "kind": "simplified",
+        "line": "Brakes made of charges",
+        "detail": "Real soft-landing setups slow the ions with electrodes biased close to the ions' energy, landing them at a few eV per charge so that fragile molecules survive; point charges brake them here."
+      },
+      {
+        "kind": "omitted",
+        "line": "The surface",
+        "detail": "The target is a detector: what the ion does on arrival (sticking, breaking apart, sputtering) is not modelled."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

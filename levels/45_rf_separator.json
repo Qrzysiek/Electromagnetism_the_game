@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "RF separator",
   "description": "Identical particles, one launched half an RF period after the other. No static field can tell them apart; an oscillating one can. RF separators at CERN sorted kaons from pions this way. Send each bunch to its own detector.",
+  "reality": {
+    "represents": "An RF separator, as at CERN for kaons and pions",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Time-dependent fields tell bunches apart",
+        "detail": "Particles that reach an oscillating field at different phases are kicked differently, which no static field can do."
+      },
+      {
+        "kind": "simplified",
+        "line": "Identical particles, delayed",
+        "detail": "Real separators sort particles of equal momentum but different mass: after a long drift their different speeds bring them to the deflecting cavities at different phases. Here two identical particles leave half a period apart."
+      },
+      {
+        "kind": "simplified",
+        "line": "Antennas are point dipoles",
+        "detail": "Each antenna is an oscillating point dipole with its exact retarded fields (near, induction and radiation zones); real RF deflectors are resonant cavities or plates driven by a generator."
+      },
+      {
+        "kind": "simplified",
+        "line": "Light is slow here",
+        "detail": "c is a few cells per time unit, so that the board spans less than a wavelength of the RF and the particle crosses it in a few periods; the physics depends only on such ratios (v/c, the wavelength against the board), which real devices share."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Image charge",
   "description": "A large grounded sphere. Whatever charge you place near it, the metal answers with an opposite image charge inside: near the surface your charge is almost cancelled, far away the pair acts like a dipole. Steer the beam around the sphere.",
+  "reality": {
+    "represents": "Image charges: a grounded metal sphere",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The images are exact",
+        "detail": "For a sphere the method of images is exact: a charge q at distance d from a grounded sphere of radius a acts with the image −qa/d at a²/d from its centre."
+      },
+      {
+        "kind": "kept",
+        "line": "The metal answers at once",
+        "detail": "A metal rearranges its charge within femtoseconds, instantly for a beam."
+      },
+      {
+        "kind": "omitted",
+        "line": "The particle's own image",
+        "detail": "The particle's charge also induces an image that pulls it towards the metal; for its tiny charge this matters only within a hair of the surface, and it is left out."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

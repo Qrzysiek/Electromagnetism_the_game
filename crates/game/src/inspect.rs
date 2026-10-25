@@ -281,7 +281,7 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
 fn metal(level: &Level, k: usize, m: &level::tube::MetalSpec, lo: DVec3, hi: DVec3) -> Inspection {
     let area = (hi.x - lo.x) * (hi.y - lo.y);
     let contacts: Vec<String> = m.contacts.iter().map(|e| (e + 1).to_string()).collect();
-    Inspection::new(format!("Metal {} (the Drude model)", k + 1))
+    Inspection::new(format!("{} (the Drude model)", level.metal_name(k)))
         .line(format!(
             "{} × {}, from ({}, {}) to ({}, {})",
             fmt_num(hi.x - lo.x),
@@ -517,7 +517,7 @@ fn electrode(level: &Level, placement: &[Element], k: usize) -> Inspection {
             fmt_num(e.thickness)
         ),
     };
-    let mut i = Inspection::new(format!("Electrode {}", k + 1)).line(shape);
+    let mut i = Inspection::new(level.electrode_name(k)).line(shape);
     let supply = placement
         .iter()
         .find(|s| s.kind == ElementKind::Supply && e.tunable && s.node == e.center);

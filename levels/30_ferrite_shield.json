@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Ferrite shield",
   "description": "A ferrite is a magnetically soft insulator: it carries no current, but its magnetic domains line up with a field and draw the field lines into it, so behind a ferrite plate a magnet's field is much weaker (a magnetic shield; electric fields pass, as through any insulator). The strong magnet behind the plate still nudges the beam a little. Place magnets to bring it into the detector.",
+  "reality": {
+    "represents": "Magnetic shielding by a ferrite plate",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A soft magnet draws the field in",
+        "detail": "A material of high permeability (μ = 1000) carries the field lines through itself, so beyond it the magnet's field is much weaker; electric fields pass, as through any insulator."
+      },
+      {
+        "kind": "simplified",
+        "line": "An ideal ferrite",
+        "detail": "Its permeability is constant: no saturation (real ferrites saturate near 0.3–0.5 T), no hysteresis, no dependence on frequency; it is magnetized by the magnets and coils only."
+      },
+      {
+        "kind": "simplified",
+        "line": "Magnets are magnetized spheres",
+        "detail": "A uniformly magnetized sphere has exactly a dipole's field outside it, which keeps the field simple and exact; real magnets are blocks, rings and pole pieces, and an instrument's magnet makes a field as uniform as it can."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

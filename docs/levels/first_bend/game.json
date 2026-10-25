@@ -1,8 +1,8 @@
 {
  "level_file": "levels/01_first_bend.json",
- "level_sha256": "f1b0bc198773f85c",
+ "level_sha256": "2ecc92e62c2d03fa",
  "golden_hash": "9e00d2d931d75e00",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-25",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

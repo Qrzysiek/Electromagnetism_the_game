@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Jackson §16.7: a bound charge",
   "description": "Jackson §16.7 models an atom's electron as a charge bound by a spring. Here the spring is real electrostatics: inside a sphere of uniform positive charge (J. J. Thomson's atom) the field grows linearly from the centre, so the electron is pulled back in proportion to how far it strays: it circles the centre with the same period at any radius. Only inside: outside the sphere the pull is Coulomb's $1/r^2$, no spring at all, so an electron with more energy than the spring can hold leaves. Pull it out of the atom into the detector.",
+  "reality": {
+    "represents": "An electron bound by a spring: Thomson's atom (Jackson §16.7)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A harmonic pull inside a uniform charge",
+        "detail": "Inside a uniformly charged sphere the field grows linearly from the centre, so the electron circles with one period at any radius; outside the pull is Coulomb's 1/r², no spring."
+      },
+      {
+        "kind": "simplified",
+        "line": "Thomson's atom",
+        "detail": "The positive charge is a uniform sphere the electron moves through (J. J. Thomson's model, 1904): inside, the pull grows linearly with the distance, a spring. Rutherford found the positive charge in a tiny nucleus instead, but a bound electron's response to weak fields is still described by such a spring (the Lorentz oscillator of optics). The sphere is rigid and fixed."
+      },
+      {
+        "kind": "omitted",
+        "line": "Ionization energies",
+        "detail": "A real atom's electron leaves when it gains its binding energy in a quantum jump; here it leaves when it climbs out of the classical well."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

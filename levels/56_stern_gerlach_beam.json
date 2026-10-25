@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Stern–Gerlach beam",
   "description": "The experiment as it was done: a beam of both spin states at once, 12 atoms each, with a spread in speed and direction. Each spin state must reach its own detector, at least 90 % of it. The state pulled towards the magnet passes closer to it and fans out more. (Neutral atoms hardly interact; in this Newtonian level, not at all.)",
+  "reality": {
+    "represents": "The Stern–Gerlach experiment with a real beam",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The force of a field gradient",
+        "detail": "Each atom's moment is pulled along the field's gradient; the state pulled towards the magnet passes closer and fans out more, as in the real splitting's uneven lines."
+      },
+      {
+        "kind": "kept",
+        "line": "Neutral atoms barely interact",
+        "detail": "Their magnetic dipole forces on each other are tiny; in this Newtonian level they are none."
+      },
+      {
+        "kind": "simplified",
+        "line": "Two classical spin states",
+        "detail": "Each state flies as its own beam, its moment fixed along z; the quantum superposition and the measurement's choice of one of two outcomes are put in by hand."
+      },
+      {
+        "kind": "simplified",
+        "line": "A narrow speed spread",
+        "detail": "2 % in energy; the oven's atoms had a broad thermal spread, which slits narrowed only in direction."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

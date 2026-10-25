@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Mains hum",
   "description": "An alternating field from the mains wiring shakes the beam. Launched at different moments of the cycle, the particle drifts off at different angles, so no single aim works. A lens that images the source onto the detector does not care about the launch angle.",
+  "reality": {
+    "represents": "Mains interference on a beam, and an imaging lens",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Imaging cancels the launch angle",
+        "detail": "A lens that images the source onto the detector brings every ray from the source there, whatever its angle."
+      },
+      {
+        "kind": "kept",
+        "line": "The same field everywhere at once",
+        "detail": "The field changes in step over the whole board (c = ∞), as mains fields do over a lab: their wavelength is thousands of kilometres."
+      },
+      {
+        "kind": "simplified",
+        "line": "The hum is fast here",
+        "detail": "Real hum (50 or 60 Hz) is frozen during a flight of nanoseconds and shifts each particle's path as a slowly changing static field; here it changes during the flight, which acts as a random launch angle."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +49,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },

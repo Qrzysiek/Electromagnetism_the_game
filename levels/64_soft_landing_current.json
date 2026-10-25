@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Soft landing, full current",
   "description": "Your soft-landing optics from arc 1 (Charges) are built in. With a real ion current the braked ions crowd together and repel each other: the slower they get, the stronger the space charge, and the beam blows up just before the target. At least 90 % must still land gently on the target. Add a few charges.",
+  "reality": {
+    "represents": "Soft landing with an intense ion beam",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Space charge grows as the beam slows",
+        "detail": "The same current packed into a slower beam is a denser charge: braked ions crowd and blow up just before the target."
+      },
+      {
+        "kind": "simplified",
+        "line": "A beam of a few particles",
+        "detail": "A dozen or so particles stand for a beam of billions: each carries the charge of many (its mass and energy scaled alike, so that its own path is unchanged), so their repulsion matches an intense beam's. The spreads are a fixed sample of the beam's distribution, the same every time."
+      },
+      {
+        "kind": "omitted",
+        "line": "The surface",
+        "detail": "The target is a detector: what the ions do on arrival is not modelled."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Mass spectrometer from parts",
   "description": "Finale of the third arc. Ions of three masses (1, 2 and 4) leave the source with the same energy, each at −5° and +5°. First focus them all through the gate: an electrostatic lens bends every mass alike at the same energy, since only T/q matters. Then separate them: in a magnetic field the momentum $\\sqrt{2mT}$ decides, so each mass lands on its own collector.",
+  "reality": {
+    "represents": "A mass spectrometer: an electrostatic lens and a magnetic sector",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Electric optics ignore the mass",
+        "detail": "At equal energy every mass follows the same path through electric fields (only T/q matters), so one lens focuses all of them."
+      },
+      {
+        "kind": "kept",
+        "line": "Magnets sort by momentum",
+        "detail": "In a magnetic field the momentum √(2mT) decides the radius, so the masses separate."
+      },
+      {
+        "kind": "simplified",
+        "line": "Magnets are magnetized spheres",
+        "detail": "A uniformly magnetized sphere has exactly a dipole's field outside it, which keeps the field simple and exact; real magnets are blocks, rings and pole pieces, and an instrument's magnet makes a field as uniform as it can."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

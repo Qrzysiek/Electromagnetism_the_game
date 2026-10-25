@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Induction kick",
   "description": "The coil's current now comes from a circuit: switched on at t = 0 through a resistor, it rises as $I(t) = (V/R)(1 - e^{-t/\\tau})$ with $\\tau = L/R$, L the coil's own inductance. While it rises, the changing flux induces an electric field around the axis that drives the particle at rest; once the current settles, the induction stops. Faraday's law in integral form: the kick depends only on how much the flux changed, not on how fast. Bring the particle into the detector with at least 0.3 of kinetic energy.",
+  "reality": {
+    "represents": "Faraday's law: an ion kicked by a coil's rising flux",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The kick follows the flux change",
+        "detail": "While the current rises, the changing flux induces an electric field around the axis; the momentum it gives depends only on how much the flux changed (the canonical momentum), not on how fast."
+      },
+      {
+        "kind": "kept",
+        "line": "The coil's own inductance",
+        "detail": "L comes from the coil's own flux, and the current rises with τ = L/R."
+      },
+      {
+        "kind": "simplified",
+        "line": "Light is very fast here",
+        "detail": "c = 10⁴ makes the coil's field follow its current at once (quasi-static), as in any coil much smaller than a wavelength."
+      },
+      {
+        "kind": "simplified",
+        "line": "A coil is one thin loop",
+        "detail": "The coil is a single loop of thin wire carrying a steady current, its field the exact Biot–Savart field (perpendicular to the plane in it, and far from uniform); a real magnet has many turns, iron and pole pieces shaped for a uniform field."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +49,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -39,7 +64,7 @@
           0.0,
           0.0
         ],
-        "kinetic_energy": 1e-6
+        "kinetic_energy": 1e-06
       },
       "detector": {
         "min": [
@@ -77,7 +102,7 @@
           "kind": "dc",
           "value": 22425000.0
         },
-        "resistance": 2.2425e-7
+        "resistance": 2.2425e-07
       }
     }
   ],

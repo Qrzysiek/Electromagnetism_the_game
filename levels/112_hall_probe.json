@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Hall probe",
   "description": "A strip of metal carrying a current, in your solenoid's field (B along the strip's length, out of the board when positive; the yellow coil, top right). The field pushes the moving electrons sideways (the Lorentz force) until the charge they pile on one side holds the rest back: a voltage across the strip, the Hall voltage, $V_H \\approx I B/(n q)$ (per unit length). The two contacts on the strip's sides read it, floating: no current flows through them. Try the field's whole range: weak, the electrons' paths barely bend; strong, they curl into small circles between collisions. Make a current between 2.7 and 3.5 flow into the right end and the top contact sit between 3.5 and 6 below the bottom one (averaged over $t = 10$ to $80$). Which way must the field point? Electrons are negative.",
+  "reality": {
+    "represents": "A Hall probe: the voltage across a current in a magnetic field",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "V_H ≈ IB/(nq)",
+        "detail": "The field pushes the moving carriers sideways until the charge they pile up holds the rest back; at strong fields the voltage grows ever more slowly (the Hall factor falls towards 1, and the end contacts short it)."
+      },
+      {
+        "kind": "kept",
+        "line": "A semiconductor, as real probes are",
+        "detail": "By its ratios the strip is n-type germanium (the Scales section); real Hall probes are semiconductors for the reason Few carriers or many shows."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal voltmeters",
+        "detail": "The floating side contacts read the potential as an ideal voltmeter does, through a capacitance of 1 to ground, drawing no current."
+      },
+      {
+        "kind": "simplified",
+        "line": "A conductor seen end-on",
+        "detail": "The strip is infinitely long along z, its carriers lines of charge moving as one: currents are per unit length, and the noise is larger than a real conductor's, whose carriers move independently along its length."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -80,7 +105,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "strip's left end (grounded)"
     },
     {
       "center": [
@@ -95,7 +121,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "strip's right end (your supply)"
     },
     {
       "center": [
@@ -109,7 +136,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "Hall contact, top (floating)"
     },
     {
       "center": [
@@ -123,7 +151,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "Hall contact, bottom (floating)"
     }
   ],
   "tube": {
@@ -200,7 +229,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 100.0,
-        "seed": 3
+        "seed": 3,
+        "label": "Hall plate"
       }
     ]
   }

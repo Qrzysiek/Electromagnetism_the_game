@@ -212,7 +212,7 @@ fn metal_here(game: &Game, at: DVec3) -> Option<Section> {
     let area = std::f64::consts::PI * r2 * f64::from(inside) / f64::from(all.max(1));
     let density = charge / area.max(1e-12);
     Some(Section {
-        title: format!("Metal {}", k + 1),
+        title: level.metal_name(k),
         lines: vec![
             format!(
                 "its carriers' charge density here: {} (within {} of the point)",

@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Magnetron",
   "description": "A magnetron, the heart of a microwave oven and of wartime radar. Electrons leave the cathode in the middle (your supply sets its voltage below the vanes) and, in your solenoid's field (the yellow coil, top right), curl around it instead of crossing to the vanes. The vanes are strapped in two sets: one grounded with the block, the other through a tuned circuit ringing near $\\omega = 3$. Its oscillation is a wave of four crests running around the vanes at $\\omega/4$; electrons drifting in step with it give it energy and gather into four spokes that turn with it. Make the tuned circuit oscillate with a swing of at least 10 (half its peak-to-peak, over $t = 90$ to $120$). The electrons drift at $E/B$: to keep pace with the wave the voltage must rise with the field. Too weak a field lets them straight onto the vanes; too fast a drift outruns the wave. The rod outside the block is the antenna, strapped to the tuned set of vanes: it radiates the microwaves: the magnetic or energy flow map shows them spreading over the board once the oscillation has grown out of the noise, after about $t = 50$ (the mouse wheel zooms in on the spokes, a drag pans).",
+  "reality": {
+    "represents": "A strapped eight-vane magnetron, as in microwave ovens and radar",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Hull's cutoff and the Buneman–Hartree condition",
+        "detail": "The electrons drift at E/B; it oscillates where that drift keeps pace with the wave running round the vanes, the band the Buneman–Hartree condition predicts."
+      },
+      {
+        "kind": "kept",
+        "line": "Spokes and start from noise",
+        "detail": "Electrons in step with the π mode give it energy and gather into four turning spokes; the oscillation grows out of the noise, as in a real magnetron."
+      },
+      {
+        "kind": "simplified",
+        "line": "Vanes on a lumped tank",
+        "detail": "A real magnetron's resonators are cavities cut into the anode block between the vanes; here the vanes are strapped onto one lumped tuned circuit."
+      },
+      {
+        "kind": "simplified",
+        "line": "The radiation shown, not felt",
+        "detail": "The antenna's microwaves are drawn from the run's currents with light at 40 cells per time unit (one-way: the electrons stay Newtonian); real magnetrons feed a waveguide at a few gigahertz."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      }
+    ]
+  },
   "grid": {
     "nx": 96,
     "ny": 96,
@@ -81,7 +111,8 @@
         "kind": "grounded"
       },
       "tunable": true,
-      "shape": "rod"
+      "shape": "rod",
+      "label": "cathode (rod, your supply)"
     },
     {
       "center": [
@@ -95,7 +126,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "vane at 0° (grounded set)"
     },
     {
       "center": [
@@ -109,7 +141,8 @@
       "angle_deg": 45.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "vane at 45° (tuned set)"
     },
     {
       "center": [
@@ -123,7 +156,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "vane at 90° (grounded set)"
     },
     {
       "center": [
@@ -137,7 +171,8 @@
       "angle_deg": 135.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "vane at 135° (tuned set)"
     },
     {
       "center": [
@@ -151,7 +186,8 @@
       "angle_deg": 180.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "vane at 180° (grounded set)"
     },
     {
       "center": [
@@ -165,7 +201,8 @@
       "angle_deg": 225.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "vane at 225° (tuned set)"
     },
     {
       "center": [
@@ -179,7 +216,8 @@
       "angle_deg": 270.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "vane at 270° (grounded set)"
     },
     {
       "center": [
@@ -193,7 +231,8 @@
       "angle_deg": 315.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "vane at 315° (tuned set)"
     },
     {
       "center": [
@@ -208,7 +247,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "shape": "ring"
+      "shape": "ring",
+      "label": "anode block (grounded)"
     },
     {
       "center": [
@@ -223,7 +263,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "shape": "rod"
+      "shape": "rod",
+      "label": "antenna (strapped to the tuned set)"
     }
   ],
   "tube": {

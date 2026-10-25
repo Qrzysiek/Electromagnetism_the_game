@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Charging a plate",
   "description": "The top deflection plate is connected to its power supply through a resistor R. A plate is a capacitor: its charge has to flow in through R, so its potential rises as $V(t) = V_s(1 - e^{-t/RC})$ towards the supply's $V_s$, with the time constant $\\tau = RC$, here about 8 (C comes from the plates' shape). The ions cross the plates while it is still charging: the Circuits panel shows V(t), with the launch marked. Set the supply so that the beam lands in the detector.",
+  "reality": {
+    "represents": "An RC circuit charging a deflection plate",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The plate is a capacitor",
+        "detail": "Its capacitance comes from its shape (the boundary elements); its voltage rises as V_s(1 − e^(−t/RC)), so a beam passing early sees part of it. In an oscilloscope the plates charge in nanoseconds, which limits how fast a signal it can follow."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal lumped circuits",
+        "detail": "Resistors, capacitors, inductors and switches are ideal; the leads have no resistance, inductance or delay, and the circuit acts on the plate as if the field spread instantly (quasi-static, here exact: the motion is Newtonian)."
+      },
+      {
+        "kind": "kept",
+        "line": "Real plates and their fringe fields",
+        "detail": "The electrodes are metal boxes standing on the plane, their surface charge solved exactly (boundary elements): uniform between plates, bulging out past their ends, and rearranging when charges come near, as in a real instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -105,7 +130,8 @@
           "value": 0.0
         },
         "resistance": 3.0
-      }
+      },
+      "label": "deflection plate (charged through R)"
     },
     {
       "center": [
@@ -119,7 +145,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "deflection plate (grounded)"
     }
   ]
 }

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Eddy currents",
   "description": "A metal plate alone in your solenoid, whose field now swings back and forth, $B = B_0 \\sin \\omega t$. A changing magnetic field induces an electric field that circulates about the solenoid's axis (Faraday's law), and in the metal it drives the carriers round in loops: eddy currents, which heat it, the faster the field changes the more (as $\\dot B^2$). Set the swing $B_0$ so that the plate takes between 1.2 and 4 of heat per unit time (averaged over $t = 25$ to $125$).",
+  "reality": {
+    "represents": "Eddy currents heating a conducting plate",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Faraday's law, then Ohm's",
+        "detail": "The changing field induces a circulating electric field, which drives the carriers round in loops; the heat grows as Ḃ², as the torsion-function law gives."
+      },
+      {
+        "kind": "simplified",
+        "line": "Carriers that turn between collisions",
+        "detail": "Here the field turns the carriers' paths by a good part of a radian between collisions (ω_c τ ≈ 0.4): a semiconductor's regime; in copper it barely turns them (Eddy currents in silicon)."
+      },
+      {
+        "kind": "omitted",
+        "line": "The currents' own magnetic field",
+        "detail": "The carriers' currents make no magnetic field of their own: no self-inductance and no skin effect, valid while the skin depth is far larger than the conductor. The only magnetic field is the solenoid's."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -62,7 +87,8 @@
       "bias": {
         "kind": "charge",
         "value": 0.0
-      }
+      },
+      "label": "inert electrode (floating, emits nothing; the model needs one)"
     }
   ],
   "tube": {
@@ -110,7 +136,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 21
+        "seed": 21,
+        "label": "plate"
       }
     ]
   }

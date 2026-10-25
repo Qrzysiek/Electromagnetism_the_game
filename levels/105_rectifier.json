@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Rectifier",
   "description": "A rectifier tube: a hot cathode in the middle, an anode on each side. Each anode is on its own AC power supply, a sine of period 20 whose amplitude you set; the right one's runs half a period behind the left one's. Electrons flow from the cathode to an anode only while that anode is positive: the tube conducts one way. The cathode is connected to ground through a load resistor (30) and a capacitor (1): losing electrons, it charges positive, and its potential is the rectifier's output, DC from AC. Make a smooth supply: the cathode's mean potential between 8.5 and 11.5, and its ripple (half its peak-to-peak) below 1.2, over $t = 40$ to $80$.",
+  "reality": {
+    "represents": "A full-wave rectifier tube with a smoothing capacitor",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "It conducts one way",
+        "detail": "Electrons flow to an anode only while it is above the cathode, so two anodes on opposite phases charge the output on both halves of the cycle: full-wave rectification, as in the twin-anode rectifiers of old power supplies."
+      },
+      {
+        "kind": "kept",
+        "line": "The ripple of an RC filter",
+        "detail": "The capacitor holds the output between the peaks and the load drains it: the ripple falls as RC grows."
+      },
+      {
+        "kind": "simplified",
+        "line": "Lumped circuits per unit length",
+        "detail": "Supplies, resistors, capacitors and coils are ideal lumped parts, per unit length of the tube; they drive the electrodes and feel the current the electrons induce (Ramo)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      },
+      {
+        "kind": "simplified",
+        "line": "Electrons released at rest",
+        "detail": "The cathode gives off as many electrons as its field pulls off (the space-charge limit), released at rest. A real hot cathode emits them with thermal energies of about 0.1 eV, which lets a little current flow against a small retarding field and moves the potential's minimum slightly out from its face."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -72,7 +102,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "cathode (hot; the output, through R and C to ground)"
     },
     {
       "center": [
@@ -87,7 +118,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "left anode (AC supply)"
     },
     {
       "center": [
@@ -102,7 +134,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "right anode (AC supply, half a period behind)"
     }
   ],
   "tube": {

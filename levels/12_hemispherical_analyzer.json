@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Hemispherical analyzer (XPS)",
   "description": "Photoelectron spectrometers sort particles by energy between two concentric hemispheres, where the field is exactly that of a point charge at the centre. Three energies leave the source; each must reach its own detector after bending through 180°. A circular orbit of radius R needs $|qQ| = p v R$; the others become ellipses.",
+  "reality": {
+    "represents": "A hemispherical electron energy analyzer (as in XPS)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The field of a point charge",
+        "detail": "Between two concentric hemispheres the field is exactly that of a point charge at their centre, which is what your charge makes: the orbits are the same Kepler ellipses, and the energies separate as in the instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "No hemispheres",
+        "detail": "A real analyzer's field exists only between its two hemispherical electrodes, entered and left through slits; here the point charge's field fills the board."
+      },
+      {
+        "kind": "omitted",
+        "line": "The input lens",
+        "detail": "Real analyzers slow the electrons in a lens before the hemispheres (a fixed pass energy) and image a band of energies onto a position-sensitive detector."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

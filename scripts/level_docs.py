@@ -131,9 +131,16 @@ def curriculum():
 
 
 def level_sha(path):
-    """The level file's fingerprint: SHA-256 of its bytes (newlines normalised), 16 digits."""
-    with open(path, "rb") as f:
-        data = f.read().replace(b"\r\n", b"\n")
+    """The level file's fingerprint, 16 digits of SHA-256: everything a document uses, so
+    without what the level represents (`reality`) and its electrodes' and metals' labels,
+    which no document shows (rewording them leaves the documents current)."""
+    level = load_json(path)
+    level.pop("reality", None)
+    for e in level.get("electrodes", []):
+        e.pop("label", None)
+    for m in (level.get("tube") or {}).get("metals", []):
+        m.pop("label", None)
+    data = json.dumps(level, sort_keys=True, ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(data).hexdigest()[:16]
 
 

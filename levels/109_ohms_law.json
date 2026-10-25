@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Ohm's law",
   "description": "Inside a metal. The rectangle is a conductor seen end-on: its electrons (blue; a few traced with their paths) fly at their thermal speed and bounce off the metal's ions (the dots), a zigzag. Your supply, on the contact at the right end, adds a slow drift along the field to that random motion: a current, in proportion to the voltage, $I = V/R$ (Ohm's law). Make a current between 2.6 and 3.2 flow into the right contact (averaged over $t = 10$ to $40$). At every collision the electrons hand the ions the energy the field gave them: the Joule heat, shown below. A classical model of a metal (its real electrons are a quantum gas): see the physics notes.",
+  "reality": {
+    "represents": "Ohm's law inside a conductor (the Drude model)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Ohm's law emerges",
+        "detail": "The current, the Joule heat and the Hall voltage are not formulas: they come out of the carriers' motion and collisions, σ = nq²τ/m verified against the Boltzmann equation."
+      },
+      {
+        "kind": "kept",
+        "line": "The Joule heat",
+        "detail": "At every collision the carriers hand the lattice the energy the field gave them: the heat is the field's work on the current."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "A conductor seen end-on",
+        "detail": "The strip is infinitely long along z, its carriers lines of charge moving as one: currents are per unit length, and the noise is larger than a real conductor's, whose carriers move independently along its length."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal ohmic contacts",
+        "detail": "A contact takes in the carriers that reach it and gives off as many as keep the layer in front of it neutral, at the lattice's temperature: a perfect reservoir. Real contacts have a resistance, and between different materials a barrier."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -63,7 +93,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "left contact (grounded)"
     },
     {
       "center": [
@@ -78,7 +109,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "right contact (your supply)"
     }
   ],
   "tube": {
@@ -119,7 +151,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 1
+        "seed": 1,
+        "label": "resistor"
       }
     ]
   }

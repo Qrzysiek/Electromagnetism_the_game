@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Throw a charge",
   "description": "A new element: a free charge. It is not fixed: pull the handle behind it back like a slingshot to give it a velocity, and it flies off with the particle. Its field pushes the particle, and the particle's field pushes it back: momentum passes between them without any contact. Push the particle into the detector.",
+  "reality": {
+    "represents": "Momentum passed between two free charges by their fields",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Equal and opposite pushes",
+        "detail": "Each charge's field pushes the other, and the momentum one loses the other gains, without contact."
+      },
+      {
+        "kind": "simplified",
+        "line": "Instantaneous forces",
+        "detail": "With c = ∞ each feels the other's push at once and Newton's third law holds at every moment. Really the push travels at the speed of light and the field holds momentum on the way, which matters only near c."
+      },
+      {
+        "kind": "simplified",
+        "line": "A slingshot launch",
+        "detail": "You give the free charge its speed and direction by hand."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

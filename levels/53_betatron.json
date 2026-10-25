@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Betatron",
   "description": "Wideroe's betatron accelerates without any electrode: a changing flux induces an electric field around it, and a magnetic field holds the particle on its circle. The particle starts at rest between two coils. The inner one (the core, on a circuit whose source rises and then holds) supplies most of the flux, the outer one (the guide, ramped) the field at the orbit. The orbit keeps its radius only if the flux inside it grows twice as fast as the guide field times the orbit's area, $\\Phi(R) = 2\\pi R^2 B(R)$: then the particle gains energy turn after turn on the same circle. When the core's source stops rising, the flux stops growing but the guide's field rises on, and the orbit shrinks onto the detector. Set the two supplies so that the particle arrives there with its energy in the window.",
+  "reality": {
+    "represents": "The betatron: accelerating by induction (Wideröe's 2:1 rule)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The 2:1 condition",
+        "detail": "The orbit keeps its radius only if the flux through it grows twice as fast as the guide field times its area; then the induced field accelerates the particle turn after turn on the same circle."
+      },
+      {
+        "kind": "simplified",
+        "line": "Two loops, not a shaped magnet",
+        "detail": "Real betatrons (Kerst's first in 1940, for electrons) use an iron magnet whose poles shape both the central flux and the guide field; two current loops make them here."
+      },
+      {
+        "kind": "simplified",
+        "line": "Stable only in the plane",
+        "detail": "Here the guide field grows outward (field index −3.8), which holds the orbit's radius but would throw a real particle out of the plane: real betatrons need an index between 0 and 1. The plane's symmetry hides that."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 30,

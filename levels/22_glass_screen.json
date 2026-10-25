@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Glass screen",
   "description": "Shielding with glass instead of metal. A dielectric is an insulator: its charges cannot flow, but its molecules polarize, and the bound charge on its surfaces weakens the field that crosses it, here by roughly the permittivity ε = 4, never to zero as metal does. The strong charge behind the glass still pushes the beam off; place charges to bring it into the detector.",
+  "reality": {
+    "represents": "Partial screening by a dielectric (glass)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Bound charge weakens the field",
+        "detail": "The glass's molecules polarize, and the bound charge on its surfaces weakens the field that crosses it, by roughly its permittivity, never to zero as metal does."
+      },
+      {
+        "kind": "simplified",
+        "line": "Static, linear glass",
+        "detail": "ε = 4 at every field and frequency, with no breakdown and no losses."
+      },
+      {
+        "kind": "omitted",
+        "line": "Charging up",
+        "detail": "Real insulators near beams collect stray charge on their surfaces, which deflects the beam (why beam lines avoid exposed insulators); this glass never charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +54,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },

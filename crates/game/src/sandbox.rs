@@ -125,6 +125,7 @@ pub fn empty_level() -> Level {
         engine_version: ENGINE_VERSION.to_string(),
         name: "New level".into(),
         description: String::new(),
+        reality: level::Reality::default(),
         grid: Grid {
             nx: 30,
             ny: 20,

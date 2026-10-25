@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 16.3: orbits circularize",
   "description": "Jackson Problem 16.3: an electron on an elliptic orbit radiates most near the nucleus, and its orbit becomes rounder as it decays. Two electrons with the same energy, one circling, one on an ellipse: the ellipse swings close to the nucleus early, but too fast to count. Bring both into the detector slowed by their radiation, in time.",
+  "reality": {
+    "represents": "Elliptic orbits round off as they radiate (Jackson Pr. 16.3)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Radiation reaction",
+        "detail": "The electron radiates as Larmor's formula says and loses that energy through the Landau–Lifshitz force, exact in classical electrodynamics while the reaction is small against the Coulomb force."
+      },
+      {
+        "kind": "kept",
+        "line": "Ellipses circularize",
+        "detail": "An elliptic orbit radiates most near the nucleus, which takes away more energy than angular momentum there: the orbit becomes rounder as it decays."
+      },
+      {
+        "kind": "simplified",
+        "line": "A collapse within a few turns",
+        "detail": "The atom is scaled so that it radiates away its orbit in a few turns (c = 2 cells per time unit); a classical hydrogen atom would circle about a hundred thousand times before collapsing, in about 10⁻¹¹ s. The nucleus is held fixed."
+      },
+      {
+        "kind": "omitted",
+        "line": "Quantum mechanics",
+        "detail": "Real atoms do not collapse: quantum mechanics keeps the electron in stationary states, and it radiates only when it jumps between them. This classical collapse is the failure that made quantum theory necessary."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

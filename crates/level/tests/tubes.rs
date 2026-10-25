@@ -28,6 +28,7 @@ pub fn diode(v: f64) -> Level {
         bias,
         tunable: false,
         drive: None,
+        label: String::new(),
     };
     level.electrodes = vec![
         plate(8, ConductorBias::Grounded),
@@ -284,6 +285,7 @@ fn coax_level() -> Level {
         bias,
         tunable: false,
         drive: None,
+        label: String::new(),
     };
     level.electrodes = vec![
         round(

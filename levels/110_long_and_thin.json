@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Long and thin",
   "description": "Two strips of the same metal: the upper one long and thin, the lower one short and wide. A strip's resistance grows with its length and falls with its width, $R = L/(\\sigma W)$ (per unit length along it): the upper one has about four times the lower one's. They are in series: your first supply holds the upper strip's left end, your second the junction (the upper strip's right end, wired to the lower strip's left end), and the lower strip's right end is grounded. Make a current between 2.0 and 2.8 flow through each strip (into its left end, averaged over $t = 10$ to $40$).",
+  "reality": {
+    "represents": "Resistance from shape: R = L/(σW)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Length raises, width lowers",
+        "detail": "Two strips of one metal: the long thin one resists about four times as much (4.3: its stronger field warms its carriers a little)."
+      },
+      {
+        "kind": "kept",
+        "line": "Ohm's law emerges",
+        "detail": "The current, the Joule heat and the Hall voltage are not formulas: they come out of the carriers' motion and collisions, σ = nq²τ/m verified against the Boltzmann equation."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "An ideal wire",
+        "detail": "The junction's two contacts are joined by a wire without resistance."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 16,
@@ -72,7 +97,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "short wide strip, right end (grounded)"
     },
     {
       "center": [
@@ -87,7 +113,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "long strip, left end (supply 1)"
     },
     {
       "center": [
@@ -102,7 +129,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "long strip, right end: the junction (supply 2)"
     },
     {
       "center": [
@@ -116,7 +144,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "short wide strip, left end: the junction (wired)"
     }
   ],
   "tube": {
@@ -178,7 +207,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 4
+        "seed": 4,
+        "label": "long thin resistor"
       },
       {
         "corners": [
@@ -203,7 +233,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 5
+        "seed": 5,
+        "label": "short wide resistor"
       }
     ]
   }

@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Ringing plate",
   "description": "Now an inductor L sits between the supply and the top plate. With the plate's capacitance it makes an LC circuit: the charge rushes in, overshoots and swings around the supply's voltage at $\\omega = 1/\\sqrt{LC}$, slowly damped by the small resistance. The first swing peaks just as the ions pass, at almost twice the supply's voltage (see the Circuits panel). Set the supply so that the beam lands in the detector.",
+  "reality": {
+    "represents": "An LC circuit ringing on a deflection plate",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "LC resonance and overshoot",
+        "detail": "The charge rushes in through L, overshoots and swings at ω = 1/√(LC), damped slowly by R; fast pulsed deflectors ring the same way through their leads' stray inductance."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal lumped circuits",
+        "detail": "Resistors, capacitors, inductors and switches are ideal; the leads have no resistance, inductance or delay, and the circuit acts on the plate as if the field spread instantly (quasi-static, here exact: the motion is Newtonian)."
+      },
+      {
+        "kind": "kept",
+        "line": "Real plates and their fringe fields",
+        "detail": "The electrodes are metal boxes standing on the plane, their surface charge solved exactly (boundary elements): uniform between plates, bulging out past their ends, and rearranging when charges come near, as in a real instrument."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -106,7 +126,8 @@
         },
         "resistance": 0.2,
         "inductance": 4.66
-      }
+      },
+      "label": "deflection plate (on an LC circuit)"
     },
     {
       "center": [
@@ -120,7 +141,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "deflection plate (grounded)"
     }
   ]
 }

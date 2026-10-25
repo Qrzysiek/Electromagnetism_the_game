@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Real analyser",
   "description": "Your electron-energy analyser from arc 1 (Charges) is built in. A real source emits into a cone: the rays now leave within a few degrees of the axis (σ = 4°), and each energy must still land in its own detector, 90 % of it. Half a turn in a central field focuses directions only approximately. Add a few charges.",
+  "reality": {
+    "represents": "A hemispherical analyzer with a real source's angular spread",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Focusing to first order only",
+        "detail": "Half a turn in a central field brings rays of slightly different angles together to first order; the image still broadens as the square of the angle, which limits a real analyzer's resolution."
+      },
+      {
+        "kind": "simplified",
+        "line": "No hemispheres",
+        "detail": "The point charge's field fills the board; a real analyzer's exists only between its electrodes, entered through a slit."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Relativistic beam",
   "description": "A beam at 0.8 c. Its particles repel each other electrically, but charges moving side by side also attract magnetically: at this speed the net repulsion is only 36 % ($1/\\gamma^2$) of the Coulomb force, which is why fast beams hold together. They are also harder to bend (momentum $\\gamma m v$). Bring at least 90 % of the beam into the detector.",
+  "reality": {
+    "represents": "A relativistic beam: magnetic attraction holds it together",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Net repulsion 1/γ²",
+        "detail": "Charges moving side by side attract magnetically, which cancels all but 1/γ² of their electric repulsion: at 0.8 c, 36 %. Fast beams hold together for this reason."
+      },
+      {
+        "kind": "kept",
+        "line": "Radiation reaction",
+        "detail": "Each particle feels its own radiation's reaction (Landau–Lifshitz): with these scaled charges it radiates too much to neglect."
+      },
+      {
+        "kind": "simplified",
+        "line": "Fields from where the others are now",
+        "detail": "Each feels the others' fields computed from their present motion, exact in the velocities and checked against the exact retarded fields; real fields come from where the others were a light-time earlier."
+      },
+      {
+        "kind": "simplified",
+        "line": "A beam of a few particles",
+        "detail": "A dozen or so particles stand for a beam of billions: each carries the charge of many (its mass and energy scaled alike, so that its own path is unchanged), so their repulsion matches an intense beam's. The spreads are a fixed sample of the beam's distribution, the same every time."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

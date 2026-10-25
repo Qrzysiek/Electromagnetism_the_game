@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §16.8: why the sky is blue",
   "description": "Jackson §16.8: light scattered by a bound electron. The light (ω = 0.35, from the left, its field along y) shakes the atom's electron, and the shaken electron sends light back to the receiver. How much depends on how near the light's frequency is to the atom's own: $\\sigma = \\sigma_T\\,\\frac{\\omega^4}{(\\omega_0^2 - \\omega^2)^2 + (\\omega\\Gamma)^2}$. Far below the resonance it grows as $\\omega^4$ (Rayleigh: blue light, nearer the ultraviolet resonances of air, scatters more than red, so the sky is blue); at the resonance it is enormous; far above it the electron scatters like a free one (Thomson). This atom rings at ω₀ = 0.5, too stiff for this light: soften its spring along the light's field until the receiver counts 3 to 6 times what the bare atom sends. A charge pulls the swinging electron the harder the nearer it comes: on the line of the swing it weakens the spring, across it it stiffens it. Mind its steady pull too. The receiver averages over a window, after the start has died away; the electron must stay in its atom.",
+  "reality": {
+    "represents": "Why the sky is blue: light scattered by a bound electron (Jackson §16.8)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Rayleigh, resonance, Thomson",
+        "detail": "The cross-section σ_T ω⁴/((ω₀² − ω²)² + (ωΓ)²) grows as ω⁴ far below the resonance (Rayleigh), peaks at it, and tends to a free electron's above it (Thomson), with Γ from the electron's own radiation."
+      },
+      {
+        "kind": "simplified",
+        "line": "Thomson's atom",
+        "detail": "The positive charge is a uniform sphere the electron moves through (J. J. Thomson's model, 1904): inside, the pull grows linearly with the distance, a spring. Rutherford found the positive charge in a tiny nucleus instead, but a bound electron's response to weak fields is still described by such a spring (the Lorentz oscillator of optics). The sphere is rigid and fixed."
+      },
+      {
+        "kind": "simplified",
+        "line": "One atom",
+        "detail": "The sky's colour is the scattering of countless air molecules, whose resonances lie in the ultraviolet, adding up incoherently; here one atom scatters."
+      },
+      {
+        "kind": "simplified",
+        "line": "Directions in the plane only",
+        "detail": "The receiver averages over directions in the plane of the motion; the real radiation also goes out of the plane, where its pattern differs."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

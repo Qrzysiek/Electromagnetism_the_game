@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Thomson's cathode-ray tube (1897)",
   "description": "J. J. Thomson deflected cathode rays with charged plates and showed they are negative particles: electrons. Here an electron at 0.2 c must hit a one-cell spot on the screen. Two electron energies must hit their own one-cell spots: the deflection falls as 1/T, like in an oscilloscope. Build deflection plates from point charges.",
+  "reality": {
+    "represents": "Thomson's cathode-ray tube (1897): electrons deflected electrically",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The deflection falls as 1/T",
+        "detail": "Through a given field a faster particle spends less time and is kicked less: the spot of an oscilloscope moves in proportion to the deflecting voltage over the beam's energy."
+      },
+      {
+        "kind": "simplified",
+        "line": "Point charges, not plates",
+        "detail": "Thomson deflected the rays between two parallel metal plates at a voltage, a nearly uniform field; here you build the field from point charges."
+      },
+      {
+        "kind": "omitted",
+        "line": "The magnetic half of the experiment",
+        "detail": "Thomson balanced the electric deflection against a magnetic one to measure the electrons' charge-to-mass ratio; only the electric part is here."
+      },
+      {
+        "kind": "omitted",
+        "line": "Residual gas",
+        "detail": "Hertz had failed to see the electric deflection: ionized gas in his tube screened the plates. Thomson's better vacuum made it visible; here the vacuum is perfect."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

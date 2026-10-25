@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 14.23: a ring of four",
   "description": "Jackson Pr. 14.23: N equal charges spaced evenly around one circle radiate only at the multiples of $N\\omega_0$ (N² times as strongly as one charge there), and a ring of many radiates almost nothing: a steady current does not radiate. The receiver now counts the band 0.6–2.6, which holds the first three harmonics ($\\omega_0$, $2\\omega_0$, $3\\omega_0$); keep it below 0.000013 per steradian. An opposite pair cancels $\\omega_0$, but its fields add at $2\\omega_0$. Space charges around the circle so that only a harmonic outside the band survives.",
+  "reality": {
+    "represents": "A ring of charges: why a steady current does not radiate (Jackson Pr. 14.23)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "N charges radiate at multiples of Nω₀",
+        "detail": "Equal charges spaced evenly round a circle cancel every harmonic below Nω₀; a ring of many, a steady current, radiates almost nothing, unlike one orbiting charge."
+      },
+      {
+        "kind": "kept",
+        "line": "The radiation is exact for the motion",
+        "detail": "What the receiver collects is computed from the particle's computed path with the exact far-zone fields (Liénard; the spectrum from Jackson's radiation integral), and the particle feels its radiation's reaction (Landau–Lifshitz)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Uniform crossed fields",
+        "detail": "The charges circle in uniform crossed fields given from outside; their own fields add at the receiver, and they act on each other."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Strength and sign",
   "description": "A magnetic field sensor in two parts, in series on your supply. The current enters the Hall bar's left end (its carriers are positive), leaves its right end into the junction, and crosses a short, wide strip of the electron metal to ground; that strip resists more as the field grows, whichever way the field points. Make a current between 2.1 and 2.9 flow through the wide strip, the junction sit between 3.6 and 4.5, and the Hall bar's top contact sit 3 to 8 above its bottom one (averaged over $t = 10$ to $80$). The wide strip reads the field's strength but not its sign; the Hall bar reads its sign.",
+  "reality": {
+    "represents": "A two-part magnetic field sensor: strength and sign",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Even and odd in the field",
+        "detail": "A magnetoresistor reads |B| whatever its sign; a Hall bar's voltage is odd in B and reads its sign, as in real field sensors."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal voltmeters",
+        "detail": "The floating side contacts read the potential as an ideal voltmeter does, through a capacitance of 1 to ground, drawing no current."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal ohmic contacts",
+        "detail": "A contact takes in the carriers that reach it and gives off as many as keep the layer in front of it neutral, at the lattice's temperature: a perfect reservoir. Real contacts have a resistance, and between different materials a barrier."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -79,7 +104,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "wide strip, bottom contact (grounded)"
     },
     {
       "center": [
@@ -94,7 +120,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "Hall bar, left end (your supply)"
     },
     {
       "center": [
@@ -108,7 +135,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "Hall bar, top Hall contact"
     },
     {
       "center": [
@@ -122,7 +150,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "Hall bar, bottom Hall contact"
     },
     {
       "center": [
@@ -136,7 +165,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "Hall bar, right end (the junction)"
     },
     {
       "center": [
@@ -150,7 +180,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "wide strip, top contact (the junction)"
     }
   ],
   "tube": {
@@ -246,7 +277,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 13
+        "seed": 13,
+        "label": "Hall bar (positive carriers)"
       },
       {
         "corners": [
@@ -271,7 +303,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 14
+        "seed": 14,
+        "label": "magnetoresistor (electrons)"
       }
     ]
   }

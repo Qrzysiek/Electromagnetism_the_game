@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Ramp the coil",
   "description": "The coil now has a power supply too (the yellow ring: click the coil, then set the slider). It does not set a fixed current: it sets how fast the current rises from zero. The ion crosses the coil a while after the start and meets the field the current has built by then: the faster the ramp, the more it is bent. (A rising field also induces an electric field around the axis, Faraday's law, which pushes the ion along a little.) Find the ramp that brings the ion into the detector.",
+  "reality": {
+    "represents": "A coil whose current its supply ramps",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The field follows the current",
+        "detail": "The field grows in proportion to the current, and a rising field induces an electric field around the axis (Faraday's law), both acting on the ion."
+      },
+      {
+        "kind": "simplified",
+        "line": "A prescribed ramp",
+        "detail": "The current rises at the set rate whatever the coil's inductance; a real supply must push it against L dI/dt (Induction kick has that circuit)."
+      },
+      {
+        "kind": "simplified",
+        "line": "A coil is one thin loop",
+        "detail": "The coil is a single loop of thin wire carrying a steady current, its field the exact Biot–Savart field (perpendicular to the plane in it, and far from uniform); a real magnet has many turns, iron and pole pieces shaped for a uniform field."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

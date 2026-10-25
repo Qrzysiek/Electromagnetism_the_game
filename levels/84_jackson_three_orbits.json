@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson Ch. 16: three orbits",
   "description": "Finale of the Jackson arc on radiation damping (Problems 16.2 and 16.3). Three electrons circle the nucleus: on a small circle, on an ellipse, and on a wide circle that alone would take five times too long to collapse. Shape all three orbits so that each radiates enough, soon enough, to arrive slowly in the detector.",
+  "reality": {
+    "represents": "Three classical orbits radiating away (Jackson Ch. 16)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Radiation reaction",
+        "detail": "The electron radiates as Larmor's formula says and loses that energy through the Landau–Lifshitz force, exact in classical electrodynamics while the reaction is small against the Coulomb force."
+      },
+      {
+        "kind": "kept",
+        "line": "Shape decides the decay",
+        "detail": "Small and eccentric orbits radiate fastest; a wide circle alone would take five times too long."
+      },
+      {
+        "kind": "simplified",
+        "line": "A collapse within a few turns",
+        "detail": "The atom is scaled so that it radiates away its orbit in a few turns (c = 2 cells per time unit); a classical hydrogen atom would circle about a hundred thousand times before collapsing, in about 10⁻¹¹ s. The nucleus is held fixed."
+      },
+      {
+        "kind": "omitted",
+        "line": "Quantum mechanics",
+        "detail": "Real atoms do not collapse: quantum mechanics keeps the electron in stationary states, and it radiates only when it jumps between them. This classical collapse is the failure that made quantum theory necessary."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

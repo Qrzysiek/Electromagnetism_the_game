@@ -491,6 +491,68 @@ fn hall_labels(
     }
 }
 
+/// What the level represents and how far it is the real thing (`level::Reality`): the
+/// headline always in view, the remarks folded under it (the owner, 2026-10-21: leaving them
+/// out gives a wrong impression; folded, they do not clutter the panel).
+fn reality(ui: &mut egui::Ui, reality: &level::Reality) {
+    use level::RemarkKind;
+    if reality.is_empty() {
+        return;
+    }
+    // The headline wraps on its own line (a long collapsing header would widen the panel).
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new("Represents:").strong())
+            .on_hover_text("The real thing this level shows; how far it is that thing, below");
+        ui.label(&reality.represents);
+    });
+    let simplified = reality
+        .remarks
+        .iter()
+        .filter(|r| r.kind != RemarkKind::Kept)
+        .count();
+    egui::CollapsingHeader::new(format!(
+        "How real: {} kept, {simplified} simplified or left out",
+        reality.remarks.len() - simplified
+    ))
+    .id_salt("reality")
+    // Opened for developer captures with EM_REALITY=1.
+    .default_open(std::env::var("EM_REALITY").is_ok_and(|v| v == "1"))
+    .show(ui, |ui| {
+        for r in &reality.remarks {
+            ui.horizontal_wrapped(|ui| {
+                let (colour, meaning) = match r.kind {
+                    RemarkKind::Kept => (
+                        egui::Color32::from_rgb(110, 210, 120),
+                        "As in the real thing: this carries over",
+                    ),
+                    RemarkKind::Simplified => (
+                        egui::Color32::from_rgb(230, 180, 70),
+                        "Idealized, scaled or approximated against the real thing",
+                    ),
+                    RemarkKind::Omitted => (
+                        egui::Color32::from_rgb(225, 120, 95),
+                        "Absent from the model: the real thing has it",
+                    ),
+                };
+                ui.label(egui::RichText::new(r.kind.label()).small().color(colour))
+                    .on_hover_text(meaning);
+                ui.label(egui::RichText::new(&r.line).strong());
+            });
+            // Full size: folded away, it takes no room until opened (no small print).
+            if !r.detail.is_empty() {
+                ui.label(&r.detail);
+            }
+            ui.add_space(4.0);
+        }
+    })
+    .header_response
+    .on_hover_text(
+        "The real thing this level shows: what carries over from it, what the level \
+         simplifies, and what it leaves out. The numerical model's own approximations are \
+         under Physics model and its limits.",
+    );
+}
+
 /// The level's document and the Foundations (docs/levels/README.md), opened in the system's PDF
 /// viewer; nothing for a level without a document yet.
 fn level_doc_buttons(ui: &mut egui::Ui, game: &Game) {
@@ -611,6 +673,7 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     if !level.description.is_empty() {
         crate::math::paragraph(ui, &level.description, egui::RichText::italics);
     }
+    reality(ui, &level.reality);
 
     // Shots.
     let n_shots = level.shots.len();
@@ -764,14 +827,14 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     } else if let Some(t) = &level.tube {
         if t.saturation == Some(0.0) {
             ui.label(format!(
-                "Electrode {}: floating and cold (it emits nothing)",
-                t.cathode + 1
+                "{}: floating and cold (it emits nothing)",
+                level.electrode_name(t.cathode)
             ));
         } else if t.metal_of(t.cathode).is_none() {
             ui.label(format!(
-                "Carriers: q/m = {} (electrons; Newtonian), emitted by electrode {}",
+                "Carriers: q/m = {} (electrons; Newtonian), emitted by {}",
                 fmt_si(t.charge_per_mass),
-                t.cathode + 1
+                level.electrode_ref(t.cathode)
             ));
         }
         for (k, m) in t.metals.iter().enumerate() {
@@ -787,9 +850,9 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 text.trim_end_matches('0').trim_end_matches('.').to_owned()
             };
             ui.label(format!(
-                "Metal {}: carriers q/m = {}, charge density {}, thermal speed {}, mean free \
+                "{}: carriers q/m = {}, charge density {}, thermal speed {}, mean free \
                  path {}; {joined}",
-                k + 1,
+                level.metal_name(k),
                 plain(m.charge_per_mass),
                 plain(m.density),
                 plain(m.thermal_speed),
@@ -1960,8 +2023,8 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
             level::tube::Carriers::Net => "net current",
         };
         ui.label(format!(
-            "Goal: the {whose} into electrode {} between {} and {}, averaged over t = {} to {}",
-            g.electrode + 1,
+            "Goal: the {whose} into {} between {} and {}, averaged over t = {} to {}",
+            level.electrode_ref(g.electrode),
             fmt_num(g.min),
             fmt_num(g.max),
             fmt_num(g.start),
@@ -2024,12 +2087,12 @@ fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                 fmt_num(g.omega)
             ),
         };
-        let against = g
-            .reference
-            .map_or(String::new(), |r| format!(" against electrode {}", r + 1));
+        let against = g.reference.map_or(String::new(), |r| {
+            format!(" against {}", level.electrode_ref(r))
+        });
         ui.label(format!(
-            "Goal: the {what} of electrode {}{against} between {} and {}, over t = {} to {}",
-            g.electrode + 1,
+            "Goal: the {what} of {}{against} between {} and {}, over t = {} to {}",
+            level.electrode_ref(g.electrode),
             fmt_num(g.min),
             fmt_num(g.max),
             fmt_num(g.start),
@@ -2736,7 +2799,13 @@ fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level) {
                     .background_color(badge),
             )
             .on_hover_text("Its number on the map, beside every electrode it drives");
-            ui.label(name);
+            // The electrode's function on hover: in the row it would overflow the panel.
+            let named = ui.label(name);
+            if let level::SupplyTarget::Electrode(i) = target
+                && !level.electrodes[i].label.is_empty()
+            {
+                named.on_hover_text(level.electrode_name(i));
+            }
             // A slider over the level's range, in every mode (the owner: values are tuned,
             // not picked from a list whose ends give the answer away).
             let mut choice = current;
@@ -3674,10 +3743,13 @@ fn potential_plots(
             .reduce(|a, b| if a == b { a } else { None })
             .flatten();
         let title = match (members.len(), metal) {
-            (1, _) => format!("Electrode {}: potential", electrodes[0]),
+            (1, _) => format!(
+                "{}: potential",
+                game.editor.level.electrode_name(potentials[members[0]].0)
+            ),
             (_, Some(m)) => format!(
-                "Metal {}: potentials of electrodes {}",
-                m + 1,
+                "{}: potentials of electrodes {}",
+                game.editor.level.metal_name(m),
                 electrodes.join(", ")
             ),
             _ => format!("Potentials of electrodes {}", electrodes.join(", ")),

@@ -2,6 +2,10 @@
 
     python scripts/levels.py            # write levels/NN_*.json
     python scripts/levels.py --only 07  # rebuild one level
+    python scripts/levels.py --text     # only the texts changed: rewrite them, check nothing
+
+What each level represents and how far it is the real thing (its headline, remarks and the
+labels of its electrodes and metals) is written in `scripts/reality.py`.
 
 Order: by how hard the phenomenon is to understand and use. Every new element or
 concept first gets an easy introduction level; within a chapter the possibility space
@@ -30,7 +34,11 @@ import subprocess
 import sys
 import tempfile
 
+from reality import REALITY
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# `--text`: rewrite the built levels' texts only, running nothing (`text_only`).
+TEXT_ONLY = "--text" in sys.argv
 # The generator binary; EM_GENERATOR overrides it (e.g. a build in another target dir).
 GENERATOR = os.environ.get("EM_GENERATOR") or os.path.join(ROOT, "target", "release", "generator")
 M = 1e6
@@ -126,7 +134,7 @@ def shot(q, m, node, angle_deg, ke, detector, time=0.0, moment=0.0, beam=None):
     }
 
 
-def metal(x, y, r, kind="grounded", value=None):
+def metal_sphere(x, y, r, kind="grounded", value=None):
     """A metal sphere: kind "grounded", "charge" (net charge value) or "potential"."""
     bias = {"kind": kind}
     if value is not None:
@@ -488,14 +496,14 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         limits["solenoid_fields"] = list(solenoid_fields)
     if max_free:
         limits["max_free"] = max_free
-    if max_cuts:
-        limits["max_cuts"] = max_cuts
         limits["free_charges"] = list(free_charges)
         limits["free_speeds"] = list(free_speeds)
         if free_mass != 1.0:
             limits["free_mass"] = free_mass
         if free_radius != 0.3:
             limits["free_radius"] = free_radius
+    if max_cuts:
+        limits["max_cuts"] = max_cuts
     return {
         "format_version": 2, "engine_version": "0.1.0", "name": name, "description": desc,
         "grid": {"nx": grid[0], "ny": grid[1], "nz": 0, "subdivision": 1},
@@ -941,7 +949,7 @@ def high_voltage_dome():
         "charge you put near it pulls the dome's charge towards itself. The dome lifts the "
         "beam; add a charge to bring it into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 16, 30, 19)))],
-        conductors=[metal(15, 4, 2.5, "potential", 3e5)],
+        conductors=[metal_sphere(15, 4, 2.5, "potential", 3e5)],
         max_charges=3, magnitudes=[m * M for m in (0.25, 0.5, 1, 2)])
 
 
@@ -952,7 +960,7 @@ def image_charge():
         "an opposite image charge inside: near the surface your charge is almost cancelled, "
         "far away the pair acts like a dipole. Steer the beam around the sphere.",
         shots=[shot(1e-6, 1.0, (0, 6), 0.0, 0.5, box((27, 13, 30, 17)))],
-        conductors=[metal(14, 10, 3.5, "grounded")],
+        conductors=[metal_sphere(14, 10, 3.5, "grounded")],
         max_charges=3, magnitudes=[m * M for m in (0.5, 1, 2, 4)])
 
 
@@ -965,7 +973,7 @@ def polarized_sphere():
         "add. Bring the beam to the detector.",
         shots=[shot(1e-6, 1.0, (0, 4), 0.0, 0.5, box((27, 15, 30, 18)))],
         elements=[charge(8, 16, 4 * M)],
-        conductors=[metal(16, 10, 2.5, "charge", 0.0)],
+        conductors=[metal_sphere(16, 10, 2.5, "charge", 0.0)],
         max_charges=3, magnitudes=[m * M for m in (0.5, 1, 2, 4)], region=(4, 2, 24, 18))
 
 
@@ -1657,7 +1665,10 @@ def solve_stage(lvl, fixed, detectors, gates, prepare=None, **player):
     """Solve one stage of `lvl`: the shots aim at `detectors` (one per shot), after
     passing `gates`, with `fixed` elements built in and the player's elements `player`.
     `prepare(sub)` may adjust the sub-level further (e.g. fix the earlier stages' power
-    supplies). Returns the solver's elements."""
+    supplies). Returns the solver's elements (none with `--text`: the built reference is
+    kept)."""
+    if TEXT_ONLY:
+        return []
     sub = json.loads(json.dumps(lvl))
     sub["elements"] = sub["elements"] + fixed
     for shot_, d in zip(sub["shots"], detectors):
@@ -2132,7 +2143,7 @@ def jackson_own_image():
         "from the centre, and the image pulls. The pull grows steeply near the surface. "
         "Bring the particle into the detector.",
         shots=[shot(1.0, 1.0, (0, 6), 0.0, 0.3, box((27, 12, 30, 16)))],
-        conductors=[metal(15, 11, 3, "grounded")],
+        conductors=[metal_sphere(15, 11, 3, "grounded")],
         max_charges=3, magnitudes=[0.25, 0.5, 1.0, 2.0], c=None, t_max=300.0)
 
 
@@ -2144,7 +2155,7 @@ def jackson_two_spheres():
         "on: the neutral sphere becomes a dipole facing the charged one, and both respond "
         "to your charges and to the particle itself. Bring the beam into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 14, 30, 18)))],
-        conductors=[metal(11, 5, 2.5, "charge", 3e6), metal(19, 13, 2.5, "charge", 0.0)],
+        conductors=[metal_sphere(11, 5, 2.5, "charge", 3e6), metal_sphere(19, 13, 2.5, "charge", 0.0)],
         max_charges=3, magnitudes=[m * M for m in (0.5, 1, 2, 4)], region=(2, 1, 26, 19))
 
 
@@ -2179,7 +2190,7 @@ def jackson_golden_ratio():
         "This particle has enough energy to get that close, and the sphere would catch "
         "it. Bring it around the sphere into the detector behind.",
         shots=[shot(1.0, 1.0, (0, 10), 0.0, 0.3, box((27, 8, 30, 12)))],
-        conductors=[metal(15, 10, 3, "charge", 1.0)],
+        conductors=[metal_sphere(15, 10, 3, "charge", 1.0)],
         max_charges=4, magnitudes=[0.25, 0.5, 1.0, 2.0], c=None, t_max=300.0)
 
 
@@ -2231,8 +2242,8 @@ def jackson_sphere_slalom():
         "others. Weave between them: through the two gates, then around the last sphere "
         "into the detector.",
         grid=(40, 20), shots=shots, gates=gates, t_max=400.0, c=None,
-        conductors=[metal(10, 5, 2.5, "charge", 1.0), metal(21, 15, 2.5, "charge", 1.0),
-                    metal(31, 5, 2.5, "charge", 1.0)],
+        conductors=[metal_sphere(10, 5, 2.5, "charge", 1.0), metal_sphere(21, 15, 2.5, "charge", 1.0),
+                    metal_sphere(31, 5, 2.5, "charge", 1.0)],
         max_charges=8, magnitudes=mags, region=(2, 1, 37, 19))
     stage1 = solve_stage(lvl, [], [gates[0]], [], max_charges=3, magnitudes=mags,
                          region=(2, 1, 14, 19))
@@ -4308,23 +4319,114 @@ def previous_build(slug):
     return None
 
 
+def with_reality(slug, lvl):
+    """The level with what it represents (`scripts/reality.py`): its headline and remarks
+    after the description, and each electrode's and metal's function."""
+    r = REALITY.get(slug)
+    if r is None:
+        sys.exit(f"{slug}: no entry in scripts/reality.py (what the level represents)")
+    for key, items in (("electrodes", lvl.get("electrodes", [])),
+                       ("metals", (lvl.get("tube") or {}).get("metals", []))):
+        if len(r[key]) != len(items):
+            sys.exit(f"{slug}: scripts/reality.py names {len(r[key])} {key} of {len(items)}")
+        for item, label in zip(items, r[key]):
+            item["label"] = label
+    return with_reality_dict(lvl, {"represents": r["represents"], "remarks": [
+        {"kind": kind, "line": line, "detail": detail} for kind, line, detail in r["remarks"]]})
+
+
+def text_of(lvl):
+    """A level's texts: what `--text` rewrites (they change no run)."""
+    return {"name": lvl["name"], "description": lvl["description"],
+            "reality": lvl.get("reality"),
+            "electrodes": [e.get("label") for e in lvl.get("electrodes", [])],
+            "metals": [m.get("label") for m in (lvl.get("tube") or {}).get("metals", [])]}
+
+
+def with_text(lvl, text):
+    """`lvl` with the texts `text` (`text_of`) and nothing else changed."""
+    out = with_reality_dict(lvl, text["reality"])
+    out["name"], out["description"] = text["name"], text["description"]
+    for e, label in zip(out.get("electrodes", []), text["electrodes"]):
+        e["label"] = label
+    for m, label in zip((out.get("tube") or {}).get("metals", []), text["metals"]):
+        m["label"] = label
+    return out
+
+
+def with_reality_dict(lvl, reality):
+    """`lvl` with `reality` right after its description."""
+    out = {}
+    for k, v in lvl.items():
+        if k != "reality":
+            out[k] = v
+        if k == "description":
+            out["reality"] = reality
+    return out
+
+
 def same_physics(a, b):
-    """Whether two levels differ at most in their name, description, limits and
-    reference: then a reference of one is a solution of the other (if within limits)."""
+    """Whether two levels differ at most in their texts (`text_of`), limits and reference:
+    then a reference of one is a solution of the other (if within limits)."""
     automatic = any(isinstance(sh["detector"], Auto) for sh in a["shots"] + b["shots"])
 
     def strip(l):
         l = {k: v for k, v in l.items()
-             if k not in ("name", "description", "limits", "reference_solution")}
+             if k not in ("name", "description", "reality", "limits", "reference_solution")}
+        for key in ("electrodes",):
+            if key in l:
+                l[key] = [{k: v for k, v in e.items() if k != "label"} for e in l[key]]
+        if l.get("tube") and l["tube"].get("metals"):
+            l["tube"] = dict(l["tube"], metals=[{k: v for k, v in m.items() if k != "label"}
+                                                 for m in l["tube"]["metals"]])
         if automatic:
             # Automatic detectors are placed from the reference: compare without them.
             l["shots"] = [{k: v for k, v in sh.items() if k != "detector"} for sh in l["shots"]]
-        return json.dumps(l, sort_keys=True)
+        return json.dumps(numbers(l), sort_keys=True)
     return strip(a) == strip(b)
+
+
+def numbers(v):
+    """`v` with every number a float: a file the generator wrote holds 8 as 8.0."""
+    if isinstance(v, dict):
+        return {k: numbers(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [numbers(x) for x in v]
+    if isinstance(v, int) and not isinstance(v, bool):
+        return float(v)
+    return v
+
+
+def text_only(only):
+    """`--text`: rewrite the built levels' texts from this script, refusing any level whose
+    physics, limits or designed reference differ from its built file (build those in full)."""
+    for i, (slug, make) in enumerate(LEVELS, start=1):
+        key = f"{i:02d}_{slug}"
+        if only and not (key.startswith(only) or slug in only.split(",")):
+            continue
+        path = os.path.join(ROOT, "levels", f"{key}.json")
+        if not os.path.exists(path):
+            sys.exit(f"{key}: not built yet: build it in full")
+        previous = json.load(open(path, encoding="utf-8"))
+        lvl = with_reality(slug, make())
+        # Empty lists are absent to the game (serde's default).
+        limits = [{k: v for k, v in l["limits"].items() if v != []} for l in (lvl, previous)]
+        if (not same_physics(lvl, previous) or limits[0] != limits[1]
+                or (lvl["reference_solution"]
+                    and lvl["reference_solution"] != previous["reference_solution"])):
+            sys.exit(f"{key}: more than its text changed: build it in full (--only {slug})")
+        new = with_text(previous, text_of(lvl))
+        if new != previous:
+            with open(path, "w", newline="\n", encoding="utf-8") as f:
+                f.write(json.dumps(new, indent=2, ensure_ascii=False) + "\n")
+            print(f"{key}: text rewritten")
+    render_math()
 
 
 def main():
     only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
+    if "--text" in sys.argv:
+        return text_only(only)
     # Renumber: move each slug's previous file to its place in the curriculum first.
     wanted = {slug: f"{i:02d}_{slug}.json" for i, (slug, _) in enumerate(LEVELS, start=1)}
     for slug, name in wanted.items():
@@ -4345,7 +4447,7 @@ def main():
         path = os.path.join(ROOT, "levels", f"{key}.json")
         previous = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else None
         kept = False
-        lvl = make()
+        lvl = with_reality(slug, make())
         if (previous and previous["reference_solution"] and not lvl["reference_solution"]
                 and same_physics(lvl, previous)):
             # Only the text or the limits changed: keep the verified reference (checked

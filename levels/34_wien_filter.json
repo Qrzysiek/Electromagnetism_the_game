@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Wien filter",
   "description": "Crossed electric and magnetic fields pass exactly one speed straight through: $qE$ balances $qvB$ when $v = E/B$. Slower ions are pushed one way, faster ones the other. The coil provides B; place charges to supply E so that the middle ion leaves straight along the axis (within ±3°) and the slower and faster ones reach their own detectors.",
+  "reality": {
+    "represents": "A Wien filter (velocity selector)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Crossed fields pass v = E/B",
+        "detail": "Where the electric push qE balances the magnetic qvB the particle flies straight; slower ones are pushed one way, faster ones the other."
+      },
+      {
+        "kind": "simplified",
+        "line": "Fields that only roughly balance",
+        "detail": "A real Wien filter has parallel plates (a uniform E) inside a magnet's uniform B, over the same length; here B is a loop's field and E comes from point charges, so they balance only approximately along the path."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

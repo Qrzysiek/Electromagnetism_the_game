@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Geiger–Marsden (1909)",
   "description": "Alpha particles fired at gold foil sometimes bounced straight back: the atom has a tiny, heavy, positive nucleus. Steer the alpha near the source so that it backscatters into the detector. The deflection follows $\\tan(\\theta/2) = qQ/(2T_0 b)$: the impact parameter b decides everything.",
+  "reality": {
+    "represents": "Rutherford scattering: alpha particles off a gold nucleus",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Rutherford's law holds exactly",
+        "detail": "The deflection follows tan(θ/2) = qQ/(2T₀b). For the Coulomb force quantum mechanics gives the same scattering as classical mechanics, which is why Rutherford's classical analysis was right."
+      },
+      {
+        "kind": "simplified",
+        "line": "One alpha aimed at one nucleus",
+        "detail": "Geiger and Marsden fired many alphas through a gold foil thousands of atoms thick; each met nuclei at random distances and about 1 in 8000 bounced back. Here you aim one alpha at one nucleus."
+      },
+      {
+        "kind": "simplified",
+        "line": "The nucleus does not recoil",
+        "detail": "It is held fixed. A gold nucleus, 49 times heavier than an alpha, recoils a little: an alpha bouncing straight back loses about 8 % of its energy to it."
+      },
+      {
+        "kind": "omitted",
+        "line": "The atom's electrons",
+        "detail": "They screen the nucleus only far from it and are far too light to deflect the alpha; they are left out."
+      },
+      {
+        "kind": "simplified",
+        "line": "Real distances are femtometres",
+        "detail": "A 5 MeV alpha comes within about 45 fm of a gold nucleus head-on; the cell-sized board is the same physics scaled up (the Scales section)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

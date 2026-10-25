@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §16.8: resonance",
   "description": "Jackson §16.8 (scattering and absorption of radiation by an oscillator). The bound electron oscillates at its natural frequency ω₀ = 0.125. A weak field that oscillates at ω₀ pushes it in step every cycle and its swing grows steadily; at any other frequency the pushes cancel out. Tune an antenna (frequency, orientation, place) so that the electron swings out of the atom into the detector. The atom is Thomson's: a sphere of uniform positive charge. Inside it the field grows in proportion to the distance from the centre, so an electron inside feels the pull of a spring ($\\omega_0^2 = |qQ|/(mR^3)$), the effective description of Jackson's bound charge. Outside the sphere the pull is Coulomb's $1/r^2$, no spring at all: an electron with more energy than the spring can hold leaves.",
+  "reality": {
+    "represents": "Resonant driving of a bound electron (Jackson §16.8)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Only the resonant frequency builds up",
+        "detail": "A drive at ω₀ pushes the electron in step every cycle and its swing grows; at other frequencies the pushes cancel out, as in the absorption of light by atoms."
+      },
+      {
+        "kind": "simplified",
+        "line": "Thomson's atom",
+        "detail": "The positive charge is a uniform sphere the electron moves through (J. J. Thomson's model, 1904): inside, the pull grows linearly with the distance, a spring. Rutherford found the positive charge in a tiny nucleus instead, but a bound electron's response to weak fields is still described by such a spring (the Lorentz oscillator of optics). The sphere is rigid and fixed."
+      },
+      {
+        "kind": "omitted",
+        "line": "Damping",
+        "detail": "Without radiation reaction here the swing grows until the electron escapes; a real oscillator's damping (its radiation, collisions) limits it and gives the resonance its width."
+      },
+      {
+        "kind": "simplified",
+        "line": "Antennas are point dipoles",
+        "detail": "Each antenna is an oscillating point dipole with its exact retarded fields (near, induction and radiation zones); real RF deflectors are resonant cavities or plates driven by a generator."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

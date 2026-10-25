@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Magnetoresistance",
   "description": "Two strips of the same metal on one supply, in your solenoid's field: a long one and a short, wide one. In the long strip the charge the field piles on its sides (the Hall voltage) pushes the carriers back, and they flow straight on. The short strip's contacts short that charge out: its carriers' paths bend and lengthen, and it resists more, whichever way the field points; at full strength its carriers circle on the spot between collisions. Make between 0.56 and 0.8 flow into the long strip's right end and between 3.2 and 4.8 into the short strip's (averaged over $t = 10$ to $80$).",
+  "reality": {
+    "represents": "Geometric magnetoresistance",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Shorted Hall field, longer paths",
+        "detail": "In a long strip the Hall field holds the carriers on course; a short wide strip's contacts short it out, the carriers' paths bend and lengthen, and it resists more whichever way the field points: the principle of InSb magnetoresistors."
+      },
+      {
+        "kind": "kept",
+        "line": "The model's own magnetoresistance",
+        "detail": "Even the long strip resists a little more in a field: with τ = ℓ/v the faster carriers are deflected differently from the slow ones."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "Hard-disc collisions, a fixed-temperature lattice",
+        "detail": "Carriers bounce off randomly placed hard discs and leave with a fresh thermal speed; the lattice takes the heat and never warms. Real carriers scatter off lattice vibrations and impurities at rates that depend on energy and temperature."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -78,7 +103,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "long strip, left end (grounded)"
     },
     {
       "center": [
@@ -93,7 +119,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "long strip, right end (your supply)"
     },
     {
       "center": [
@@ -107,7 +134,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "wide strip, left contact (grounded)"
     },
     {
       "center": [
@@ -121,7 +149,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "wide strip, right contact (your supply)"
     }
   ],
   "tube": {
@@ -188,7 +217,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 11
+        "seed": 11,
+        "label": "long strip"
       },
       {
         "corners": [
@@ -213,7 +243,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 12
+        "seed": 12,
+        "label": "short wide strip"
       }
     ]
   }

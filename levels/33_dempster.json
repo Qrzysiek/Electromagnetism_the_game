@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Dempster's mass spectrometer (1918)",
   "description": "Ions from the source are accelerated by your electrodes, then bent by the magnetic field of the large coil. In a uniform field $r = \\sqrt{2mT}/(qB)$, so masses 1, 2 and 4 land at different places; ions leaving at slightly different angles re-converge after half a turn (180° focusing). One setup must bring all six ions to the detectors of their masses.",
+  "reality": {
+    "represents": "Dempster's magnetic mass spectrometer (1918)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "180° focusing",
+        "detail": "Ions leaving at slightly different angles meet again after half a turn in a magnetic field, the principle of Dempster's instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "A loop's field, not a uniform one",
+        "detail": "Dempster bent the ions between the flat poles of an electromagnet, a uniform field; the large loop's field falls off from its centre, so r = √(2mT)/(qB) holds only roughly."
+      },
+      {
+        "kind": "simplified",
+        "line": "Masses 1, 2 and 4",
+        "detail": "Real isotopes differ in mass by a few per cent; masses differing by factors of two separate widely."
+      },
+      {
+        "kind": "simplified",
+        "line": "Accelerated by point charges",
+        "detail": "Dempster accelerated the ions with a voltage across slits; your charges play that part."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 32,
     "ny": 22,

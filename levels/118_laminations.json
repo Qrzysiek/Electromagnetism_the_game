@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Laminations",
   "description": "A transformer's core in a field that swings back and forth: the eddy currents waste its energy as heat. They run in loops across the whole core; cut it, and each loop must close within a narrower piece, so the currents are weaker and the heat falls, the narrower the pieces, the more. Drag across the core to cut it, any length and angle; you have three cuts. Make the core take at most 0.65 of heat per unit time (averaged over $t = 25$ to $125$).",
+  "reality": {
+    "represents": "A laminated transformer core",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Narrow pieces, small loops",
+        "detail": "Cut into strips, the core's eddy loops close within each strip and the heat falls as the strips narrow (N laminations of one metal take about 1/N² of it)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Cuts are ideal insulating slits",
+        "detail": "Real laminations are sheets coated with varnish; a cut here is a wall whose faces, a screening length apart, still carry a little current across as a capacitor."
+      },
+      {
+        "kind": "omitted",
+        "line": "A magnetic core",
+        "detail": "A real core is iron, whose permeability concentrates the flux and whose hysteresis wastes energy too; this one is a non-magnetic conductor in a given field."
+      },
+      {
+        "kind": "omitted",
+        "line": "The currents' own magnetic field",
+        "detail": "The carriers' currents make no magnetic field of their own: no self-inductance and no skin effect, valid while the skin depth is far larger than the conductor. The only magnetic field is the solenoid's."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -79,7 +104,8 @@
       "bias": {
         "kind": "charge",
         "value": 0.0
-      }
+      },
+      "label": "inert electrode (floating, emits nothing; the model needs one)"
     }
   ],
   "tube": {
@@ -123,7 +149,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 30.0,
-        "seed": 122
+        "seed": 122,
+        "label": "transformer core"
       }
     ]
   }

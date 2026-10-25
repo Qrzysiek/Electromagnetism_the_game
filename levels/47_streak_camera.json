@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "Streak camera",
   "description": "A streak camera turns time into position: a sweeping field deflects what arrives early one way and what arrives late the other. Three bunches leave the source a third of an RF period apart; each must hit its own spot on the screen.",
+  "reality": {
+    "represents": "A streak camera: time turned into position",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A sweeping field maps time to place",
+        "detail": "What arrives early is deflected one way and what arrives late the other, so the screen shows the arrival times side by side."
+      },
+      {
+        "kind": "simplified",
+        "line": "Real streak cameras",
+        "detail": "Light hits a photocathode and its photoelectrons are swept across a phosphor screen by a voltage ramp on deflection plates, resolving picoseconds; here an antenna's sinusoidal field sweeps bunches a third of a period apart."
+      },
+      {
+        "kind": "simplified",
+        "line": "Antennas are point dipoles",
+        "detail": "Each antenna is an oscillating point dipole with its exact retarded fields (near, induction and radiation zones); real RF deflectors are resonant cavities or plates driven by a generator."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

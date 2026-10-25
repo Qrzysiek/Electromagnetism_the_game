@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Calutron at full current",
   "description": "Your calutron from arc 3 (Relativity and magnetism) is built in. The wartime calutrons ran intense beams, and the ions repel each other: the isotope beams spread out and their spots grow into each other. At least 80 % of each isotope must still reach its own collector. Add a few charges.",
+  "reality": {
+    "represents": "The calutron at production currents",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Space charge spreads the spots",
+        "detail": "The ions repel each other, so each isotope's spot grows into its neighbour's."
+      },
+      {
+        "kind": "simplified",
+        "line": "A beam of a few particles",
+        "detail": "A dozen or so particles stand for a beam of billions: each carries the charge of many (its mass and energy scaled alike, so that its own path is unchanged), so their repulsion matches an intense beam's. The spreads are a fixed sample of the beam's distribution, the same every time."
+      },
+      {
+        "kind": "omitted",
+        "line": "Neutralization by the residual gas",
+        "detail": "In a real beam line the beam ionizes the remaining gas, and the electrons it frees cancel much of a positive beam's space charge; in this perfect vacuum nothing does."
+      },
+      {
+        "kind": "kept",
+        "line": "Radiation included",
+        "detail": "With the scaled charges the ions would radiate more than may be neglected, so their radiation's reaction is included."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

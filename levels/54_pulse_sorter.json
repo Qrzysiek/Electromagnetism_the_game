@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Pulse sorter",
   "description": "Finale of the circuits: three ions, launched at t = 0, 30 and 60, fly through three pairs of deflection plates, and each top plate hangs on its own circuit with its own power supply. The first charges through a resistor, the second is switched on at t = 40, the third rings with an inductor. Each ion meets the three plates at a different stage of their circuits (the Circuits panel shows each plate's V(t), with the launches marked). Set the three supplies so that every ion lands in its own detector.",
+  "reality": {
+    "represents": "Timed deflectors: sorting ions by their circuits' timing",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Each circuit has its own V(t)",
+        "detail": "A plate charging through R, one switched on, one ringing through L: each ion meets each plate at a different stage, as fast deflectors in a beam line do."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal lumped circuits",
+        "detail": "Resistors, capacitors, inductors and switches are ideal; the leads have no resistance, inductance or delay, and the circuit acts on the plate as if the field spread instantly (quasi-static, here exact: the motion is Newtonian)."
+      },
+      {
+        "kind": "simplified",
+        "line": "One particle at a time",
+        "detail": "The shots fly separately and never meet, as in a weak beam; in an intense beam the particles repel each other (the Beams arc shows it)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,
@@ -191,7 +216,8 @@
           "value": 0.0
         },
         "resistance": 20.0
-      }
+      },
+      "label": "plate A (charged through R)"
     },
     {
       "center": [
@@ -205,7 +231,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "plate A (grounded)"
     },
     {
       "center": [
@@ -230,7 +257,8 @@
         "switch": {
           "at": 40.0
         }
-      }
+      },
+      "label": "plate B (switched on at t = 40)"
     },
     {
       "center": [
@@ -244,7 +272,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "plate B (grounded)"
     },
     {
       "center": [
@@ -267,7 +296,8 @@
         },
         "resistance": 0.5,
         "inductance": 130.0
-      }
+      },
+      "label": "plate C (ringing through L)"
     },
     {
       "center": [
@@ -281,7 +311,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "plate C (grounded)"
     }
   ]
 }

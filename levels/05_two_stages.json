@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Two stages",
   "description": "Real instruments work in stages, and a particle only counts if it went through every stage in order. Here the particle must first pass the gate (the violet dashed box) and only then enter the detector. Reaching the detector without passing the gate does not count.",
+  "reality": {
+    "represents": "An instrument's stages, passed in order",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Exact Coulomb fields",
+        "detail": "The charges' fields are the exact 3D inverse-square fields, and the particle follows the exact equation of motion in them (relativistic where the level has a speed of light)."
+      },
+      {
+        "kind": "simplified",
+        "line": "A stage is a box",
+        "detail": "Real stages are lenses, filters and slits that act on the beam; here a stage is a region the particle must pass, acting on nothing."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

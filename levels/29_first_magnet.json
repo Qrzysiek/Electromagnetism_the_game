@@ -3,6 +3,26 @@
   "engine_version": "0.1.0",
   "name": "First magnet",
   "description": "A magnet here is a uniformly magnetized sphere standing out of the plane (⊙) or into it (⊗). In the plane its field is perpendicular to the plane and falls as $1/r^3$, so it bends the particle sideways, strongly only nearby. Place a magnet to bend the beam into the detector.",
+  "reality": {
+    "represents": "A permanent magnet's field bending a beam",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A dipole's field",
+        "detail": "Outside a uniformly magnetized sphere the field is exactly a dipole's: in the plane it points across the plane and falls as 1/r³, so only close passes bend much."
+      },
+      {
+        "kind": "simplified",
+        "line": "Magnets are magnetized spheres",
+        "detail": "A uniformly magnetized sphere has exactly a dipole's field outside it, which keeps the field simple and exact; real magnets are blocks, rings and pole pieces, and an instrument's magnet makes a field as uniform as it can."
+      },
+      {
+        "kind": "simplified",
+        "line": "Magnets never change",
+        "detail": "A magnet keeps its magnetization whatever field it is in (an ideally hard magnet), and is held in place."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

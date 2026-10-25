@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Few carriers or many",
   "description": "Two strips of the same size and the same resistance in your solenoid's field, each with two floating contacts on its sides that read its Hall voltage. The upper one's carriers are few and fly far between collisions (like germanium's); the lower one has four times as many, colliding four times as often (like silicon's). Make a current between 2.7 and 3.5 flow into each strip's right end, and the upper strip's top contact sit between 3 and 7 below its bottom one, while the lower strip's sits at most 2.5 below (averaged over $t = 10$ to $80$). Carrying the same current, the many carriers drift slowly, the field pushes each one gently, and the Hall voltage is small: real Hall probes are semiconductors with few, fast carriers (InSb, GaAs), while copper's carriers are about a million times as many, and its Hall voltage a million times smaller: microvolts.",
+  "reality": {
+    "represents": "Why Hall probes are semiconductors: few fast carriers or many slow ones",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Fewer carriers, a larger Hall voltage",
+        "detail": "The same conductance σ = nq²τ/m from few carriers flying far or many colliding often; at the same current the few drift faster, are pushed harder, and give four times the Hall voltage."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ratios, not materials",
+        "detail": "The strips have germanium-like and silicon-like ratios; copper's carriers, a million times as many, lie beyond what the model can afford."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal voltmeters",
+        "detail": "The floating side contacts read the potential as an ideal voltmeter does, through a capacitance of 1 to ground, drawing no current."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -89,7 +114,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "few-carrier strip, left end (grounded)"
     },
     {
       "center": [
@@ -104,7 +130,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "few-carrier strip, right end (supply 1)"
     },
     {
       "center": [
@@ -118,7 +145,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "few-carrier strip, top Hall contact"
     },
     {
       "center": [
@@ -132,7 +160,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "few-carrier strip, bottom Hall contact"
     },
     {
       "center": [
@@ -146,7 +175,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "many-carrier strip, left end (grounded)"
     },
     {
       "center": [
@@ -161,7 +191,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "many-carrier strip, right end (supply 2)"
     },
     {
       "center": [
@@ -175,7 +206,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "many-carrier strip, top Hall contact"
     },
     {
       "center": [
@@ -189,7 +221,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "many-carrier strip, bottom Hall contact"
     }
   ],
   "tube": {
@@ -307,7 +340,8 @@
         "mean_free_path": 1.0,
         "core_radius": 0.01,
         "carriers_per_area": 50.0,
-        "seed": 6
+        "seed": 6,
+        "label": "few fast carriers (germanium-like)"
       },
       {
         "corners": [
@@ -334,7 +368,8 @@
         "mean_free_path": 0.25,
         "core_radius": 0.002,
         "carriers_per_area": 50.0,
-        "seed": 7
+        "seed": 7,
+        "label": "many slow carriers (silicon-like)"
       }
     ]
   }

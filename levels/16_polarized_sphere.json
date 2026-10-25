@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Polarised sphere",
   "description": "An isolated, uncharged metal sphere next to a strong charge. It stays neutral, but its charges separate: the side facing the charge takes the opposite sign, the far side the same sign. The sphere becomes a dipole that moves with every charge you add. Bring the beam to the detector.",
+  "reality": {
+    "represents": "Electrostatic induction: a neutral metal sphere polarized",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Neutral, but polarized",
+        "detail": "An isolated conductor keeps its net charge (here zero) but its charges separate: the near side takes the opposite sign, the far side the same, exactly as images give."
+      },
+      {
+        "kind": "kept",
+        "line": "Every charge moves the induced charge",
+        "detail": "The induced charge answers every charge you add, so the sphere's field changes with your setup, as real conductors do."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

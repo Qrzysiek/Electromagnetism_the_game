@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Earth's field",
   "description": "Cathode-ray tubes had to be adjusted to how they stood in the Earth's magnetic field. Your electron beam must hit the detector whichever way the apparatus faces: no stray field, or a weak field in or out of the plane. Magnetic bending grows with the time spent in the field.",
+  "reality": {
+    "represents": "A cathode-ray tube's sensitivity to the Earth's magnetic field",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Bending grows with the flight time",
+        "detail": "A weak field bends the path as the square of the time spent in it, so slow particles over long paths are the most sensitive."
+      },
+      {
+        "kind": "simplified",
+        "line": "Only the field across the plane",
+        "detail": "The Earth's field (about 50 µT, which moves a picture tube's beam by millimetres) also has parts along the tube, which would push the beam out of the plane; only the part across the plane is here."
+      },
+      {
+        "kind": "simplified",
+        "line": "Corrected with charges",
+        "detail": "Real tubes were corrected with small magnets and coils around the neck, or shielded; here charges do it."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

@@ -3,6 +3,36 @@
   "engine_version": "0.1.0",
   "name": "Klystron",
   "description": "A klystron amplifier. The gun on the left shoots a weak electron beam into a grounded tube; you set the cathode's voltage, and with it the beam's speed. On its way the beam passes the buncher, plates on a small sine (period 1) whose amplitude you set: crossing its gaps speeds some electrons up and slows others down. Further on the fast ones catch up with the slow ones and the beam gathers into bunches, one per period, which induce a current in the catcher plate, a tuned circuit ringing at the same frequency. Run it as a linear amplifier, below saturation: the catcher must oscillate with an amplitude between 0.085 and 0.105, and with a phase, relative to the buncher's signal, between $-135°$ and $-105°$ (over $t = 10$ to $20$). A stronger signal bunches the beam tighter, up to a point: too strong a one overbunches it, the fast electrons overtaking the slow ones before the catcher. The phase depends on how long the bunches take to arrive.",
+  "reality": {
+    "represents": "A two-cavity klystron amplifier",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Velocity modulation and bunching",
+        "detail": "The buncher speeds some electrons up and slows others; downstream the fast catch the slow, the bunches' current follows the Bessel function J₁, and too strong a drive overbunches."
+      },
+      {
+        "kind": "kept",
+        "line": "Phase pushing",
+        "detail": "The output's phase moves with the beam's transit time, about 7.5° per volt here, as the theory's θ₀/(2V₀)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Plates and a tank, not cavities",
+        "detail": "A real klystron's buncher and catcher are resonant cavities with narrow gaps the beam crosses; here plates, the catcher on a lumped tuned circuit."
+      },
+      {
+        "kind": "simplified",
+        "line": "A weak beam",
+        "detail": "Its space charge is negligible and the bunching purely ballistic; in high-power klystrons the bunches' own repulsion (plasma oscillations) limits it."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      }
+    ]
+  },
   "grid": {
     "nx": 48,
     "ny": 20,
@@ -75,7 +105,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "cathode (your supply: −V₀)"
     },
     {
       "center": [
@@ -89,7 +120,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "Wehnelt plate, upper (at the cathode's potential)"
     },
     {
       "center": [
@@ -103,7 +135,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "Wehnelt plate, lower (at the cathode's potential)"
     },
     {
       "center": [
@@ -117,7 +150,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "drift tube mouth, upper (grounded)"
     },
     {
       "center": [
@@ -131,7 +165,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "drift tube mouth, lower (grounded)"
     },
     {
       "center": [
@@ -146,7 +181,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "buncher, upper (your sine)"
     },
     {
       "center": [
@@ -160,7 +196,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "buncher, lower (your sine)"
     },
     {
       "center": [
@@ -174,7 +211,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "drift tube, upper (grounded)"
     },
     {
       "center": [
@@ -188,7 +226,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "drift tube, lower (grounded)"
     },
     {
       "center": [
@@ -202,7 +241,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "catcher, upper (grounded)"
     },
     {
       "center": [
@@ -216,7 +256,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "catcher (the tuned circuit)"
     },
     {
       "center": [
@@ -230,7 +271,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "drift tube end, upper (grounded)"
     },
     {
       "center": [
@@ -244,7 +286,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "drift tube end, lower (grounded)"
     },
     {
       "center": [
@@ -258,7 +301,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "collector (grounded)"
     }
   ],
   "tube": {

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §14.6: the critical frequency",
   "description": "Jackson §14.6: the same receiver as before, but now it only counts angular frequencies from 80 to 160 (the shaded band of the spectrum in the panel). A bend's radiation reaches the receiver as a short flash, the shorter the tighter the bend, and a short flash contains high frequencies: up to about $\\tfrac{3}{2}\\gamma^3 c/R$ for a bend of radius R. A gentle bend that lit the receiver before may put almost nothing into this band: bend the particle harder, while it heads for the receiver, to deliver at least 0.003 per steradian in the band. Watch the spectrum move up as the bend gets tighter.",
+  "reality": {
+    "represents": "The critical frequency of synchrotron radiation (Jackson §14.6)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Tighter bends, higher frequencies",
+        "detail": "A bend lights the receiver for a time of about R/(γ³c), so its spectrum reaches about (3/2)γ³c/R: why synchrotron light from tight bends of fast electrons reaches X-rays."
+      },
+      {
+        "kind": "kept",
+        "line": "The radiation is exact for the motion",
+        "detail": "What the receiver collects is computed from the particle's computed path with the exact far-zone fields (Liénard; the spectrum from Jackson's radiation integral), and the particle feels its radiation's reaction (Landau–Lifshitz)."
+      },
+      {
+        "kind": "simplified",
+        "line": "γ = 3 and slow light",
+        "detail": "c is 2 cells per time unit and the particle's γ is 3, so that its cone (1/γ, about 19°) and its flashes fit the board. Real synchrotron sources run electrons at γ in the thousands, beamed into fractions of a milliradian, out to X-rays."
+      },
+      {
+        "kind": "simplified",
+        "line": "Directions in the plane only",
+        "detail": "The receiver averages over directions in the plane of the motion; the real radiation also goes out of the plane, where its pattern differs."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "RF beam line",
   "description": "Finale of the fourth arc. Two identical bunches leave the source half an RF period apart, while a supply in the building switches a weak stray field on and off. First bring both bunches through the gate, moving along the axis (within ±6°), whether the stray field is on or off. Then send each bunch to its own detector: only a field that changes in time can tell them apart.",
+  "reality": {
+    "represents": "A beam line: steering robust to a stray field, then an RF separator",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Only a changing field separates identical bunches",
+        "detail": "Two identical bunches half a period apart differ only in when they arrive; an oscillating field tells them apart."
+      },
+      {
+        "kind": "simplified",
+        "line": "Antennas are point dipoles",
+        "detail": "Each antenna is an oscillating point dipole with its exact retarded fields (near, induction and radiation zones); real RF deflectors are resonant cavities or plates driven by a generator."
+      },
+      {
+        "kind": "simplified",
+        "line": "A uniform stray field, on or off",
+        "detail": "The building's stray field is uniform and either on or off."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

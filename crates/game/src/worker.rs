@@ -195,8 +195,8 @@ fn circuit_view(
             let driven = level.electrodes.get(e).is_some_and(|el| el.drive.is_some());
             plots.push((
                 format!(
-                    "Electrode {}{}: potential",
-                    e + 1,
+                    "{}{}: potential",
+                    level.electrode_name(e),
                     if driven { "" } else { " (floating)" }
                 ),
                 times()

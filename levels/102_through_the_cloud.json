@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Through the cloud",
   "description": "An ion (a long line of positive charge, the large dot) is fired up through the gap of a working diode, after its electrons have started to flow. Keep the diode running, with a current between 2.3 and 3.3 into the anode (averaged over $t = 15$ to $30$), and bring the ion into the detector at the top. The anode's field pushes positive charges toward the cathode, and the electrons' cloud pulls on the ion as it passes: at the voltage the current needs, the ion leaves the tube far left of the detector. Your two plates can push it back on course, but they act on the electrons as well, and the ion's own charge disturbs the flow it crosses.",
+  "reality": {
+    "represents": "An ion crossing a working diode's electron cloud",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The ion and the flow act on each other",
+        "detail": "The cloud pulls the ion, and the ion's charge disturbs the flow it crosses; your plates act on both."
+      },
+      {
+        "kind": "simplified",
+        "line": "The ion is a line of charge",
+        "detail": "A real ion is a point, its field falling as 1/r² instead of 1/r: it would disturb the flow far less, and be pulled less."
+      },
+      {
+        "kind": "kept",
+        "line": "Space charge from the electrons themselves",
+        "detail": "Every electron in flight repels the others, and the charge it induces on the electrodes is solved at every step: the space-charge limit (Child and Langmuir) comes out of the simulation, not from a formula."
+      },
+      {
+        "kind": "simplified",
+        "line": "Infinitely long electrodes",
+        "detail": "The tube is the same all along its length: its electrodes are long prisms, its electrons long lines of charge, its currents per unit length. A real tube is a few centimetres long and has end effects; the textbooks' planar and coaxial laws assume this symmetry too."
+      }
+    ]
+  },
   "grid": {
     "nx": 24,
     "ny": 20,
@@ -88,7 +113,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "cathode (hot)"
     },
     {
       "center": [
@@ -103,7 +129,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "anode (your supply)"
     }
   ],
   "tube": {

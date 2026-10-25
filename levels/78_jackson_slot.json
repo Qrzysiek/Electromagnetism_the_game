@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §3.13: field through a hole",
   "description": "Jackson §3.13 (a conducting plane with a hole): a grounded wall screens what is behind it, except through the opening, where the field leaks through and falls off within a few widths of the hole (in this slice the hole is a slot). The strong charge behind the wall is screened; the beam passes the slot. Your charges on this side are screened from the far side too. Bring the beam into the detector.",
+  "reality": {
+    "represents": "A grounded wall with an opening (Jackson §3.13)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The field leaks through and fades",
+        "detail": "Through the opening the screened charge's field leaks out and falls off within a few widths of it."
+      },
+      {
+        "kind": "simplified",
+        "line": "A finite wall with a slot",
+        "detail": "Jackson's wall is an infinite plane with a round hole; this one is two plates 8 long and 4 high with a slot between them, so the field also reaches round their ends and over their top."
+      },
+      {
+        "kind": "kept",
+        "line": "Real plates and their fringe fields",
+        "detail": "The electrodes are metal boxes standing on the plane, their surface charge solved exactly (boundary elements): uniform between plates, bulging out past their ends, and rearranging when charges come near, as in a real instrument."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
@@ -24,7 +49,7 @@
   "shots": [
     {
       "particle": {
-        "charge": 1e-6,
+        "charge": 1e-06,
         "mass": 1.0,
         "radius": 0.0
       },
@@ -125,7 +150,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "wall, lower half (grounded)"
     },
     {
       "center": [
@@ -139,7 +165,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "wall, upper half (grounded)"
     }
   ]
 }

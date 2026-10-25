@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson §15.2: braking radiation",
   "description": "Jackson §15.2: a charge that is stopped abruptly radiates a flash of every frequency (bremsstrahlung, braking radiation). This target stops the particle at once. The flash goes mostly forward, but not straight ahead: seen at an angle $\\theta$ to the particle's last velocity it is $\\propto \\sin^2\\theta/(1 - \\beta\\cos\\theta)^2$, zero along the velocity and largest at $\\cos\\theta = \\beta$ (here about 20°). The receiver straight ahead counts the band 100–200 and wants at least 0.005 per steradian: fired straight into the target the particle lights it not at all.",
+  "reality": {
+    "represents": "Bremsstrahlung: the flash of a sudden stop (Jackson §15.2)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Zero straight ahead, peaked at cos θ = β",
+        "detail": "A stopped charge radiates as sin²θ/(1 − β cos θ)², every frequency alike, as Jackson derives."
+      },
+      {
+        "kind": "simplified",
+        "line": "An instant stop",
+        "detail": "Real bremsstrahlung comes from deflections by nuclei, over a short but finite time, so the spectrum is flat only below the inverse of that time; and in quantum theory no photon carries more than the particle's kinetic energy."
+      },
+      {
+        "kind": "kept",
+        "line": "The radiation is exact for the motion",
+        "detail": "What the receiver collects is computed from the particle's computed path with the exact far-zone fields (Liénard; the spectrum from Jackson's radiation integral), and the particle feels its radiation's reaction (Landau–Lifshitz)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Directions in the plane only",
+        "detail": "The receiver averages over directions in the plane of the motion; the real radiation also goes out of the plane, where its pattern differs."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

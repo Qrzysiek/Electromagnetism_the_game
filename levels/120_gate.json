@@ -3,6 +3,61 @@
   "engine_version": "0.1.0",
   "name": "Gate",
   "description": "The principle of the transistor. A thin strip of lightly doped silicon carries a current from the drain, held at 10, to the grounded source. Two gate electrodes beside it, on your supply, never touch it: a negative gate pushes the strip's carriers out and the current fades, until none flows; a positive one draws more in from the contacts. Set the gate so that between 0.08 and 0.16 flows into the drain, a third to two thirds of what flows with the gate at 0 (averaged over $t = 20$ to $60$). A metal screens any field within an atom, so no gate reaches inside copper; billions of these gates, each over a thin oxide on a silicon channel, switch in every chip.",
+  "reality": {
+    "represents": "A field-effect transistor: a junctionless, depletion-mode FET",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The field effect",
+        "detail": "A gate beside a channel a few screening lengths thin empties it (depletion) or fills it from the contacts (accumulation), and the current follows: what a metal, screening within an atom, can never do."
+      },
+      {
+        "kind": "kept",
+        "line": "No transistor law is programmed",
+        "detail": "Depletion, accumulation, pinch-off, the current's saturation at high drain voltage, the current over the gate's barrier below threshold and the channel's charging all come out of the carriers' motion in the fields."
+      },
+      {
+        "kind": "omitted",
+        "line": "Holes, and so inversion",
+        "detail": "Only electrons: no holes, no generation or recombination. A MOSFET's inversion layer and the pn junctions at its source and drain cannot form, so this is a uniformly doped, normally-on channel that the gate depletes: a junctionless (depletion-mode) transistor, not an enhancement-mode MOSFET."
+      },
+      {
+        "kind": "omitted",
+        "line": "The oxide",
+        "detail": "The gate faces the channel across empty space, and the permittivity is 1 everywhere (silicon's is 11.7, its oxide's 3.9). No work-function difference (gate 0 is flat band), no oxide or interface charge, no traps, no gate leakage."
+      },
+      {
+        "kind": "simplified",
+        "line": "Simple collisions, a lattice that never warms",
+        "detail": "The carriers bounce off random hard discs, not phonons and impurities: there is no saturation velocity (at high fields the drift keeps growing, about as √E), and the device never heats itself."
+      },
+      {
+        "kind": "simplified",
+        "line": "Dopants as a smooth background",
+        "detail": "The donors are a uniform positive background, always fully ionized: they scatter nothing, and there are no random dopant fluctuations."
+      },
+      {
+        "kind": "omitted",
+        "line": "Quantum effects",
+        "detail": "No band structure, no quantum confinement in the thin channel, no tunnelling. The classical Boltzmann statistics is right at this light doping."
+      },
+      {
+        "kind": "simplified",
+        "line": "A slice of an infinitely wide device",
+        "detail": "The device is infinitely wide along z (the usual cut in device simulation), but each carrier is a line of charge moving as one: its noise and grainy field are far larger than a real device's, why the current deep below threshold is not converged."
+      },
+      {
+        "kind": "simplified",
+        "line": "Voltages in thermal voltages",
+        "detail": "kT/q is 4 here, so the gate at −18 is 4.5 kT/q, about 0.12 V at room temperature; a real gate swings about 1 V, 40 kT/q. The channel matches n-type silicon at about 10¹⁶ per cm³ by its own ratios."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal contacts, no n+ regions",
+        "detail": "The source and drain are perfect reservoirs of the channel's own doping; real ones are heavily doped regions with a resistance of their own."
+      }
+    ]
+  },
   "grid": {
     "nx": 20,
     "ny": 16,
@@ -63,7 +118,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "source (grounded)"
     },
     {
       "center": [
@@ -77,7 +133,8 @@
       "angle_deg": 90.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "drain (held at 10)"
     },
     {
       "center": [
@@ -92,7 +149,8 @@
       "bias": {
         "kind": "grounded"
       },
-      "tunable": true
+      "tunable": true,
+      "label": "gate, above the channel (your supply)"
     },
     {
       "center": [
@@ -106,7 +164,8 @@
       "angle_deg": 0.0,
       "bias": {
         "kind": "grounded"
-      }
+      },
+      "label": "gate, below the channel (your supply)"
     }
   ],
   "tube": {
@@ -168,7 +227,8 @@
         "mean_free_path": 0.5,
         "core_radius": 0.005,
         "carriers_per_area": 400.0,
-        "seed": 3
+        "seed": 3,
+        "label": "channel (lightly doped, n-type)"
       }
     ]
   }

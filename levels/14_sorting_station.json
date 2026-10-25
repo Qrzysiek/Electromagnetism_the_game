@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Sorting station",
   "description": "Finale of the first arc. Six rays leave the source: two energies, each at −8°, 0° and +8°. First bring all six through the gate (a lens). Behind it they spread out again: sort them by energy and focus each energy onto its own small spot. Lens, deflector, lens: everything this arc taught, in one setup.",
+  "reality": {
+    "represents": "An ion-optical bench: lens, energy sorter, lens",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Exact Coulomb fields",
+        "detail": "The charges' fields are the exact 3D inverse-square fields, and the particle follows the exact equation of motion in them (relativistic where the level has a speed of light)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Lenses made of point charges",
+        "detail": "Real ion optics use shaped electrodes with small aberrations; a few point charges make lenses and deflectors with large ones, which the detectors' tolerances absorb."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 40,
     "ny": 20,

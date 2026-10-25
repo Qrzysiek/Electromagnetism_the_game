@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "CRT in the Earth's field",
   "description": "Your cathode-ray tube from arc 1 (Charges) is built in and installed in the lab, facing north. In the Earth's magnetic field the electrons drift sideways on their way, and both beams miss their spots. Adjust the tube where it stands: add a few charges.",
+  "reality": {
+    "represents": "A cathode-ray tube adjusted for the Earth's field",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A weak field bends a slow beam",
+        "detail": "Over the flight the field turns the electrons a little, the more the longer they take: enough to move a spot."
+      },
+      {
+        "kind": "simplified",
+        "line": "Only the field across the plane",
+        "detail": "The real field (about 50 µT) also has parts along the tube; only the part across the plane is here."
+      },
+      {
+        "kind": "simplified",
+        "line": "Corrected with charges",
+        "detail": "Real tubes were corrected with small magnets and coils around the neck."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

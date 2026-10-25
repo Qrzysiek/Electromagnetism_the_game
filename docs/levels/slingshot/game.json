@@ -1,8 +1,8 @@
 {
  "level_file": "levels/02_slingshot.json",
- "level_sha256": "dda3f5d66f42d420",
+ "level_sha256": "65f43923b1ceeac5",
  "golden_hash": "c44ef15e3ac0644b",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-25",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

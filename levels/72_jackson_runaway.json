@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 12.5: E×B runaway",
   "description": "Jackson Problem 12.5 and §12.3. Crossed fields make a particle drift only if $|E| < c|B|$: then a frame moving with $\\mathbf{E}\\times\\mathbf{B}/B^2$ sees no electric field. Here the electric field is stronger than c times the magnetic one (c = 2 cells per time unit), no such frame exists, and the particle runs away along E. Near a magnet the field is strong enough: place magnets so that the particle drifts into the detector instead.",
+  "reality": {
+    "represents": "Crossed fields with |E| > c|B|: no frame to drift in (Jackson Pr. 12.5)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "No frame without an electric field",
+        "detail": "When |E| > c|B| no moving frame cancels E (E² − c²B² is the same in every frame), and the particle runs away along E, exactly as relativity says."
+      },
+      {
+        "kind": "simplified",
+        "line": "Light is slow here",
+        "detail": "c is a few cells per time unit, so that the board spans less than a wavelength of the RF and the particle crosses it in a few periods; the physics depends only on such ratios (v/c, the wavelength against the board), which real devices share."
+      },
+      {
+        "kind": "kept",
+        "line": "Radiation negligible",
+        "detail": "The particle's charge is small and every field large (only qE and qB matter), so that its radiation stays below the accuracy."
+      },
+      {
+        "kind": "simplified",
+        "line": "Magnets are magnetized spheres",
+        "detail": "A uniformly magnetized sphere has exactly a dipole's field outside it, which keeps the field simple and exact; real magnets are blocks, rings and pole pieces, and an instrument's magnet makes a field as uniform as it can."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

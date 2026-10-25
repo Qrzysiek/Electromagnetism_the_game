@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "High-voltage dome",
   "description": "A metal sphere held at high voltage, like the dome of a Van de Graaff generator. From outside it pushes like a big charge at its centre, but it is a conductor: a charge you put near it pulls the dome's charge towards itself. The dome lifts the beam; add a charge to bring it into the detector.",
+  "reality": {
+    "represents": "The high-voltage dome of a Van de Graaff generator",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A conductor is an equipotential",
+        "detail": "The dome's charge arranges itself so that its whole surface has one potential: from outside it acts like a charge at its centre, plus the images of the charges near it."
+      },
+      {
+        "kind": "simplified",
+        "line": "Held at its voltage",
+        "detail": "An ideal supply holds the dome at its potential; a real dome is charged by a belt and loses charge into the air (corona) until the two balance."
+      },
+      {
+        "kind": "simplified",
+        "line": "Your charges are held fixed",
+        "detail": "The particle pulls on them as hard as they push on it, but they stay put, as if infinitely heavy. Real instruments shape their fields with electrodes held at set voltages, not with point charges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Motion in one plane",
+        "detail": "Everything is symmetric about the plane z = 0, so the particle never leaves it. A real beam also has a width across the plane, where the same fields act differently (focusing in the plane can defocus across it)."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

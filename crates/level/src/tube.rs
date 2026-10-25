@@ -167,6 +167,10 @@ pub struct MetalSpec {
     /// The cores' placement and the collisions' random numbers.
     #[serde(default)]
     pub seed: u64,
+    /// Its function in the device (channel, load, Hall plate, …): shown with its number
+    /// wherever it is named. Text only.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
 }
 
 impl TubeSpec {

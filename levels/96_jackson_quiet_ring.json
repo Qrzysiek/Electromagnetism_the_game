@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 14.23: a quiet ring",
   "description": "Jackson Pr. 14.23: the same drifting circle, but now the receiver must stay quiet: at most 0.000007 per steradian in the band 0.6–1.0, about a seventh of what the charge sends alone. Two charges on opposite sides of one circle, circling together, form a dipole that never turns: their radiation at $\\omega_0$ cancels. Put a second charge on the far side of the circle, circling about the same drifting centre: in the lab it moves at the drift plus its circling velocity.",
+  "reality": {
+    "represents": "Two charges on one circle cancel their radiation (Jackson Pr. 14.23)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A dipole that never turns",
+        "detail": "Charges on opposite sides of one circle, circling together, have a dipole moment that stays zero: their radiation at ω₀ cancels."
+      },
+      {
+        "kind": "kept",
+        "line": "Relativistic velocity addition",
+        "detail": "The partner must move at the drift added relativistically to its circling velocity; with Galilean addition the cancellation fails by 30 times."
+      },
+      {
+        "kind": "kept",
+        "line": "The radiation is exact for the motion",
+        "detail": "What the receiver collects is computed from the particle's computed path with the exact far-zone fields (Liénard; the spectrum from Jackson's radiation integral), and the particle feels its radiation's reaction (Landau–Lifshitz)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Uniform crossed fields",
+        "detail": "The charges circle in uniform crossed fields given from outside; their own fields add at the receiver, and they act on each other."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,

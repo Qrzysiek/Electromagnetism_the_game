@@ -3,6 +3,31 @@
   "engine_version": "0.1.0",
   "name": "Jackson Pr. 14.23: in step",
   "description": "Jackson Pr. 14.23: in crossed fields a charge circles (its cyclotron motion, $\\omega_0 = 0.8$) while its circle drifts to the right into the detector (the E×B drift). Circling, it radiates at $\\omega_0$. The receiver far away at 90° counts the band 0.6–1.0, and it sees every particle: their fields add. Two charges circling in step send twice the field, so four times the energy. Add a charge that circles in step with this one, so that the receiver collects at least 0.00014 per steradian, about three times what the charge sends alone. (c = 4; radiation reaction is included.)",
+  "reality": {
+    "represents": "Coherent radiation: two charges in step (Jackson Pr. 14.23)",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Fields add, energies square",
+        "detail": "Two charges circling in step send twice the field, so four times the energy: why bunched beams radiate coherently (free-electron lasers)."
+      },
+      {
+        "kind": "kept",
+        "line": "The radiation is exact for the motion",
+        "detail": "What the receiver collects is computed from the particle's computed path with the exact far-zone fields (Liénard; the spectrum from Jackson's radiation integral), and the particle feels its radiation's reaction (Landau–Lifshitz)."
+      },
+      {
+        "kind": "simplified",
+        "line": "Uniform crossed fields",
+        "detail": "The charges circle in uniform crossed fields given from outside; their own fields add at the receiver, and they act on each other."
+      },
+      {
+        "kind": "simplified",
+        "line": "Directions in the plane only",
+        "detail": "The receiver averages over directions in the plane of the motion; the real radiation also goes out of the plane, where its pattern differs."
+      }
+    ]
+  },
   "grid": {
     "nx": 30,
     "ny": 20,
