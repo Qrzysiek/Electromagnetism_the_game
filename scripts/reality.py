@@ -1702,7 +1702,6 @@ REALITY["gate"] = R(
                 "gate, above the channel (your supply)", "gate, below the channel (your supply)"],
     metals=["channel (lightly doped, n-type)"])
 
-# The Inverter (designed, not yet in the curriculum: target/scratch/inverter_level.py).
 REALITY["inverter"] = R(
     "A resistor-load inverter: the simplest logic gate",
     kept("Logic levels from a load line",
@@ -1719,4 +1718,28 @@ REALITY["inverter"] = R(
     electrodes=["source (grounded)", "drain (fed from 25 through the load)",
                 "gate, above the channel (the pulse; its top your supply)",
                 "gate, below the channel (the pulse)"],
+    metals=["channel (lightly doped, n-type)"])
+
+REALITY["amplifier"] = R(
+    "A common-source amplifier with a resistor load",
+    kept("Voltage gain from a load line",
+         "The gate's small swing changes the channel's current, and the load turns that "
+         "change into a larger swing of the drain: g_m times the load and the channel's own "
+         "resistance in parallel."),
+    kept("The bias point",
+         "Too negative, the pinched channel's current barely follows the gate; too positive, "
+         "the drain falls so low that the channel acts as a plain resistor: the gain peaks "
+         "in between, as in every transistor stage."),
+    kept("Inverted, and lagging",
+         "The drain falls as the gate rises. It lags because its capacitance charges through "
+         "the load, so a faster signal would be amplified less: the gain–bandwidth product, "
+         "here g_m/C about 0.06."),
+    simpler("A gain under 2",
+            "A real stage gains 10 to 100: a long channel in saturation hardly feels its "
+            "drain. This short, thick one does (its output resistance about 400 against the "
+            "load's 200), and the drain's capacitance, slow to charge, takes some of the rest."),
+    FET_NO_HOLES, FET_NO_OXIDE, FET_SLICE, TUBE_CIRCUITS,
+    electrodes=["source (grounded)", "drain, the output (fed from 120 through the load)",
+                "gate, above the channel (the signal around your bias)",
+                "gate, below the channel (the signal)"],
     metals=["channel (lightly doped, n-type)"])

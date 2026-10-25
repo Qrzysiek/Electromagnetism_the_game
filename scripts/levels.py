@@ -4055,6 +4055,61 @@ def inverter():
         reference=[supply(10, 11, -10.0)])
 
 
+def amplifier():
+    # Designed with `generator tube-scan` (target/scratch/amp_*.py): Gate's channel, a sine
+    # of amplitude 3 on both gates around the player's supply (the bias), the drain fed from
+    # V_DD through R_L. The DC characteristics (fet_dc.py, preview, the drain through 20):
+    # at V_D ~ 39 g_m ~ 0.018 between gates -20 and -10 and the output conductance ~0.0026
+    # (intrinsic gain ~7); at V_D ~ 12 g_m ~ 0.009 against 0.012 (a resistor): gain needs
+    # the drain high, so a load of 200 from V_DD 100 put it at ~41 at the bias -15. The drain
+    # starts at V_DD and settles with tau ~ 40 (R_par C: C_out ~ 0.3, the drain contact's
+    # 2D capacitance and the channel's coupling to the gates), so the gain-bandwidth
+    # product g_m / C ~ 0.06: at the bias -15 the gain (window 2 periods after 100) was 1.14,
+    # 1.41 at periods 100, 200, and ~1.9 at 400 (traced). Shorter channels were faster but
+    # gained less (L 6, load 150: 1.11, 1.37; L 4, load 100: 0.67, 0.72), a load of 300
+    # (V_DD 130) no more at period 300 (1.73). At period 300, measured over one period after
+    # 120, the gain against the bias: -30 0.59, -25 0.55 (the preview's unconverged pinch-off
+    # plateau, the drain stuck near 59), -20 1.62, -15 1.69, -10 1.43, -5 1.02, 0 0.78,
+    # 8 0.42. The lag 60-70 degrees on top of the inversion (the output pole and the gate-drain
+    # feedthrough, a right-half-plane zero). Preview against verification (refine 2): the
+    # gain at -22 0.92 / 1.61 (the preview's pinch-off not converged: the drain stuck at 56
+    # against 59.5), -15 1.69 / 1.69, -9 1.36 / 1.42. The verdict's error is the two runs'
+    # difference, so with the goal 4.5-7 (gain 1.5) it solved on -20 to -13 only (`generator
+    # window`, every 1: 6 %; -22 uncertain, the preview's plateau). V_DD 120 keeps the drain
+    # in saturation to higher biases, where g_m is larger: the gain (preview) -22 0.85, -18
+    # 1.88, -14 1.93, -10 1.75, -6 1.59, -2 1.21. It solves on -20 to -5 (every 1; 12.5 %
+    # of +-60); the reference -13 verified 5.95 +- 0.91 (preview 5.35).
+    period = 300.0
+    omega = 2.0 * math.pi / period
+    return level(
+        "Amplifier",
+        "A small signal made larger: the heart of every radio and audio amplifier. The gates "
+        "now carry a slow sine of amplitude 3 (period 300) around your supply's level, the "
+        "bias, and the drain is fed from 120 through a load of 200. As the gate rises the "
+        "channel conducts more and the drain falls: the drain swings with the signal, "
+        "inverted, and at a good bias by more. Bias it so that the drain's oscillation has an "
+        "amplitude between 4.5 and 7 (a gain of 1.5 or more), measured over one period "
+        "from $t = 150$, once the drain has settled from 120. Too negative, and the pinched "
+        "channel's current barely follows the gate; too positive, and the drain falls so low "
+        "that the channel is a plain resistor. The drain also lags: its capacitance charges "
+        "through the load.",
+        grid=(20, 16), c=None, t_max=460.0,
+        # 0: the source (grounded); 1: the drain (the output), fed from 120 through the load;
+        # 2, 3: the gates (the signal around your supply).
+        electrodes=[contact(5, 8, 2), contact(15, 8, 2),
+                    plate(10, 11, 6, thickness=1.0, tunable=True),
+                    plate(10, 5, 6, thickness=1.0)],
+        supplies=slider(60.0, -13.0, 0.0, 20.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=CHANNEL_STEP,
+                  circuits=[tube_circuit(1, dc(120.0), resistance=200.0),
+                            tube_circuit(2, sine(3.0, omega), resistance=0.0,
+                                         supply_offset=True, linked=[3])],
+                  potentials=[potential_goal(1, "amplitude", 4.5, 7.0, 150.0, 450.0,
+                                             omega=omega)],
+                  metals=[metal((6, 7), (14, 9), [0, 1], seed=3, **CHANNEL)]),
+        reference=[supply(10, 11, -13.0)])
+
+
 # The eddy-current levels' drive: the solenoid's field swings as B0 sin(wt), period ~50: long
 # against the metal's settling (a few tenths) and its slow polarizations (a few units), and
 # slow enough that a cut's two faces, a Debye length apart, carry little current across as
@@ -4224,6 +4279,9 @@ ARCS.append(("Inside the components: transistors", [
     ("Introduction", [
         ("gate", gate),
         ("inverter", inverter),
+    ]),
+    ("Intermediate", [
+        ("amplifier", amplifier),
     ]),
 ]))
 

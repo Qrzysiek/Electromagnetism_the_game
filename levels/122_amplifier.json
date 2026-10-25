@@ -1,0 +1,228 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Amplifier",
+  "description": "A small signal made larger: the heart of every radio and audio amplifier. The gates now carry a slow sine of amplitude 3 (period 300) around your supply's level, the bias, and the drain is fed from 120 through a load of 200. As the gate rises the channel conducts more and the drain falls: the drain swings with the signal, inverted, and at a good bias by more. Bias it so that the drain's oscillation has an amplitude between 4.5 and 7 (a gain of 1.5 or more), measured over one period from $t = 150$, once the drain has settled from 120. Too negative, and the pinched channel's current barely follows the gate; too positive, and the drain falls so low that the channel is a plain resistor. The drain also lags: its capacitance charges through the load.",
+  "reality": {
+    "represents": "A common-source amplifier with a resistor load",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Voltage gain from a load line",
+        "detail": "The gate's small swing changes the channel's current, and the load turns that change into a larger swing of the drain: g_m times the load and the channel's own resistance in parallel."
+      },
+      {
+        "kind": "kept",
+        "line": "The bias point",
+        "detail": "Too negative, the pinched channel's current barely follows the gate; too positive, the drain falls so low that the channel acts as a plain resistor: the gain peaks in between, as in every transistor stage."
+      },
+      {
+        "kind": "kept",
+        "line": "Inverted, and lagging",
+        "detail": "The drain falls as the gate rises. It lags because its capacitance charges through the load, so a faster signal would be amplified less: the gain–bandwidth product, here g_m/C about 0.06."
+      },
+      {
+        "kind": "simplified",
+        "line": "A gain under 2",
+        "detail": "A real stage gains 10 to 100: a long channel in saturation hardly feels its drain. This short, thick one does (its output resistance about 400 against the load's 200), and the drain's capacitance, slow to charge, takes some of the rest."
+      },
+      {
+        "kind": "omitted",
+        "line": "Holes, and so inversion",
+        "detail": "Only electrons: no holes, no generation or recombination. A MOSFET's inversion layer and the pn junctions at its source and drain cannot form, so this is a uniformly doped, normally-on channel that the gate depletes: a junctionless (depletion-mode) transistor, not an enhancement-mode MOSFET."
+      },
+      {
+        "kind": "omitted",
+        "line": "The oxide",
+        "detail": "The gate faces the channel across empty space, and the permittivity is 1 everywhere (silicon's is 11.7, its oxide's 3.9). No work-function difference (gate 0 is flat band), no oxide or interface charge, no traps, no gate leakage."
+      },
+      {
+        "kind": "simplified",
+        "line": "A slice of an infinitely wide device",
+        "detail": "The device is infinitely wide along z (the usual cut in device simulation), but each carrier is a line of charge moving as one: its noise and grainy field are far larger than a real device's, why the current deep below threshold is not converged."
+      },
+      {
+        "kind": "simplified",
+        "line": "Lumped circuits per unit length",
+        "detail": "Supplies, resistors, capacitors and coils are ideal lumped parts, per unit length of the tube; they drive the electrodes and feel the current the electrons induce (Ramo)."
+      }
+    ]
+  },
+  "grid": {
+    "nx": 20,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 460.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -60.0,
+      -13.0,
+      0.0,
+      20.0,
+      60.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        10,
+        11,
+        0
+      ],
+      "kind": "supply",
+      "value": -13.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        5,
+        8,
+        0
+      ],
+      "length": 2,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "source (grounded)"
+    },
+    {
+      "center": [
+        15,
+        8,
+        0
+      ],
+      "length": 2,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "drain, the output (fed from 120 through the load)"
+    },
+    {
+      "center": [
+        10,
+        11,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "label": "gate, above the channel (the signal around your bias)"
+    },
+    {
+      "center": [
+        10,
+        5,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "gate, below the channel (the signal)"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "step": 0.04,
+    "circuits": [
+      {
+        "electrode": 1,
+        "source": {
+          "kind": "dc",
+          "value": 120.0
+        },
+        "resistance": 200.0
+      },
+      {
+        "electrode": 2,
+        "source": {
+          "kind": "sine",
+          "amplitude": 3.0,
+          "omega": 0.020943951023931952
+        },
+        "linked": [
+          3
+        ],
+        "resistance": 0.0,
+        "supply_offset": true
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 1,
+        "measure": "amplitude",
+        "min": 4.5,
+        "max": 7.0,
+        "start": 150.0,
+        "end": 450.0,
+        "omega": 0.020943951023931952
+      }
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            6,
+            7,
+            0
+          ],
+          [
+            14,
+            9,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1
+        ],
+        "density": 1.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 0.5,
+        "core_radius": 0.005,
+        "carriers_per_area": 400.0,
+        "seed": 3,
+        "label": "channel (lightly doped, n-type)"
+      }
+    ]
+  }
+}
