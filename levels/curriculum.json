@@ -385,7 +385,8 @@
         {
           "name": "Introduction",
           "levels": [
-            "gate"
+            "gate",
+            "inverter"
           ]
         }
       ]

@@ -1,0 +1,227 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Inverter",
+  "description": "The simplest logic gate. The last level's channel, its drain now fed from 25 through a load resistor: while the channel is off, almost no current flows and the drain sits near 25 (a logical 1); while it conducts, the current through the load pulls the drain down (a 0). The gate starts at -60, off; at $t = 100$ a pulse brings it to your supply's level, for 100. Make the drain sit between 22.5 and 25.5 while the gate is off (averaged over $t = 60$ to $100$) and between 15 and 19 while it conducts ($t = 160$ to $200$). Watch the drain jump as the gate switches: the gate pushes charge onto it through the capacitance between them.",
+  "reality": {
+    "represents": "A resistor-load inverter: the simplest logic gate",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "Logic levels from a load line",
+        "detail": "Off, the channel passes almost nothing and the drain sits near the supply (a 1); on, its current through the load pulls the drain down (a 0)."
+      },
+      {
+        "kind": "kept",
+        "line": "Gate–drain feedthrough",
+        "detail": "At each switch the gate's step jumps the drain for a moment through the capacitance between them, as in real logic."
+      },
+      {
+        "kind": "simplified",
+        "line": "Off needs a negative gate",
+        "detail": "A depletion transistor conducts at 0, so the gate must go to −60 to switch it off; real logic uses enhancement-mode transistors, off at 0, in complementary pairs (CMOS) that draw no current when idle."
+      },
+      {
+        "kind": "omitted",
+        "line": "Holes, and so inversion",
+        "detail": "Only electrons: no holes, no generation or recombination. A MOSFET's inversion layer and the pn junctions at its source and drain cannot form, so this is a uniformly doped, normally-on channel that the gate depletes: a junctionless (depletion-mode) transistor, not an enhancement-mode MOSFET."
+      },
+      {
+        "kind": "omitted",
+        "line": "The oxide",
+        "detail": "The gate faces the channel across empty space, and the permittivity is 1 everywhere (silicon's is 11.7, its oxide's 3.9). No work-function difference (gate 0 is flat band), no oxide or interface charge, no traps, no gate leakage."
+      },
+      {
+        "kind": "simplified",
+        "line": "A slice of an infinitely wide device",
+        "detail": "The device is infinitely wide along z (the usual cut in device simulation), but each carrier is a line of charge moving as one: its noise and grainy field are far larger than a real device's, why the current deep below threshold is not converged."
+      }
+    ]
+  },
+  "grid": {
+    "nx": 20,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 260.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -40.0,
+      -10.0,
+      10.0,
+      40.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        10,
+        11,
+        0
+      ],
+      "kind": "supply",
+      "value": -10.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        5,
+        8,
+        0
+      ],
+      "length": 2,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "source (grounded)"
+    },
+    {
+      "center": [
+        15,
+        8,
+        0
+      ],
+      "length": 2,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "drain (fed from 25 through the load)"
+    },
+    {
+      "center": [
+        10,
+        11,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "label": "gate, above the channel (the pulse; its top your supply)"
+    },
+    {
+      "center": [
+        10,
+        5,
+        0
+      ],
+      "length": 6,
+      "thickness": 1.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "gate, below the channel (the pulse)"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "step": 0.04,
+    "circuits": [
+      {
+        "electrode": 1,
+        "source": {
+          "kind": "dc",
+          "value": 25.0
+        },
+        "resistance": 30.0
+      },
+      {
+        "electrode": 2,
+        "source": {
+          "kind": "pulse",
+          "low": -60.0,
+          "high": -10.0,
+          "delay": 100.0,
+          "rise": 2.0,
+          "width": 100.0,
+          "fall": 2.0
+        },
+        "linked": [
+          3
+        ],
+        "resistance": 0.0
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 1,
+        "measure": "mean",
+        "min": 22.5,
+        "max": 25.5,
+        "start": 60.0,
+        "end": 100.0
+      },
+      {
+        "electrode": 1,
+        "measure": "mean",
+        "min": 15.0,
+        "max": 19.0,
+        "start": 160.0,
+        "end": 200.0
+      }
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            6,
+            7,
+            0
+          ],
+          [
+            14,
+            9,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1
+        ],
+        "density": 1.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 0.5,
+        "core_radius": 0.005,
+        "carriers_per_area": 400.0,
+        "seed": 3,
+        "label": "channel (lightly doped, n-type)"
+      }
+    ]
+  }
+}

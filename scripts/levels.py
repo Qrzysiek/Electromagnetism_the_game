@@ -4013,6 +4013,48 @@ def gate():
         reference=[supply(10, 11, -18.0)])
 
 
+def inverter():
+    # Designed with `generator tube-scan --trace` (target/scratch/fet_inverter*.py): Gate's
+    # channel with its drain fed from 25 through a load of 30, the gate at -60
+    # (off) until a pulse (rise 2) brings it to the player's supply at t = 100 for 100.
+    # The drain's potential (preview, window means): at V_DD 25 off 24.08 (the channel leaks
+    # 0.03 at -60; at -40 it leaked 0.09), on 14.35, 17.14, 20.33 with the gate at 0, -10,
+    # -20: the low level about 0.3 per volt of gate. The output settles within ~40 of each
+    # switch (the channel's and the load's R C); at the switch the gate's step jumps the drain
+    # up by ~4 for a few units (their capacitance carries charge across: the gate-drain
+    # feedthrough). With load 20 the swing was 4.9, with 40 7.1 (and slower). With V_DD on a
+    # second slider (goals 22-26.5 and 16-19) it solved on 24-26 only (3.75 %: the low level
+    # follows V_DD one for one), the gate on -14 to -6: so V_DD is the level's, and this an
+    # introduction (the load is its new piece). Goals: the output 22.5-25.5 while off (t =
+    # 60-100), 15-19 while on (t = 160-200): the gate's on level about -17 to -3.
+    return level(
+        "Inverter",
+        "The simplest logic gate. The last level's channel, its drain now fed from 25 through "
+        "a load resistor: while the channel is off, almost no current flows and the drain "
+        "sits near 25 (a logical 1); while it conducts, the current through the load pulls "
+        "the drain down (a 0). The gate starts at -60, off; at $t = 100$ a pulse brings it to "
+        "your supply's level, for 100. Make the drain sit between 22.5 and 25.5 while the "
+        "gate is off (averaged over $t = 60$ to $100$) and between 15 and 19 while it "
+        "conducts ($t = 160$ to $200$). Watch the drain jump as the gate switches: the gate "
+        "pushes charge onto it through the capacitance between them.",
+        grid=(20, 16), c=None, t_max=260.0,
+        # 0: the source (grounded); 1: the drain, fed from 25 through the load; 2, 3: the
+        # gates (the pulse, its top on your supply).
+        electrodes=[contact(5, 8, 2), contact(15, 8, 2),
+                    plate(10, 11, 6, thickness=1.0, tunable=True),
+                    plate(10, 5, 6, thickness=1.0)],
+        supplies=slider(40.0, -10.0, 10.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=CHANNEL_STEP,
+                  circuits=[tube_circuit(1, dc(25.0), resistance=30.0),
+                            tube_circuit(2, pulse(-10.0, 2.0, delay=100.0, width=100.0,
+                                                  fall=2.0, low=-60.0),
+                                         resistance=0.0, linked=[3])],
+                  potentials=[potential_goal(1, "mean", 22.5, 25.5, 60.0, 100.0),
+                              potential_goal(1, "mean", 15.0, 19.0, 160.0, 200.0)],
+                  metals=[metal((6, 7), (14, 9), [0, 1], seed=3, **CHANNEL)]),
+        reference=[supply(10, 11, -10.0)])
+
+
 # The eddy-current levels' drive: the solenoid's field swings as B0 sin(wt), period ~50: long
 # against the metal's settling (a few tenths) and its slow polarizations (a few units), and
 # slow enough that a cut's two faces, a Debye length apart, carry little current across as
@@ -4181,6 +4223,7 @@ ARCS.append(("Inside the components: metals", [
 ARCS.append(("Inside the components: transistors", [
     ("Introduction", [
         ("gate", gate),
+        ("inverter", inverter),
     ]),
 ]))
 

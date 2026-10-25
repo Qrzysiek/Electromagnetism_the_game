@@ -29,6 +29,12 @@
   "height_ex": 1.557,
   "baseline_ex": 0.05
  },
+ "100": {
+  "file": "ad57366865126e55.svg",
+  "width_ex": 3.394,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
  "120": {
   "file": "2abaca4911e68fa9.svg",
   "width_ex": 3.394,
@@ -37,6 +43,12 @@
  },
  "125": {
   "file": "0f8ef3377b30fc47.svg",
+  "width_ex": 3.394,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
+ "200": {
+  "file": "27badc983df1780b.svg",
   "width_ex": 3.394,
   "height_ex": 1.557,
   "baseline_ex": 0.05
@@ -443,9 +455,21 @@
   "height_ex": 1.692,
   "baseline_ex": 0.186
  },
+ "t = 100": {
+  "file": "f56b4874ca3b64a8.svg",
+  "width_ex": 7.228,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
  "t = 15": {
   "file": "ee5c5cd3e3bc034e.svg",
   "width_ex": 6.096,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
+ "t = 160": {
+  "file": "a0e5abcb18e2569b.svg",
+  "width_ex": 7.228,
   "height_ex": 1.692,
   "baseline_ex": 0.186
  },
@@ -469,6 +493,12 @@
  },
  "t = 50": {
   "file": "a717862cc1324249.svg",
+  "width_ex": 6.096,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
+ "t = 60": {
+  "file": "b5d3ad4b3ffef74c.svg",
   "width_ex": 6.096,
   "height_ex": 1.692,
   "baseline_ex": 0.186
