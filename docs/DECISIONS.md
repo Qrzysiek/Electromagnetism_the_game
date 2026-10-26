@@ -381,3 +381,26 @@ Entries are numbered in order and never renumbered.
   - 2026-10-26: introduced for V-D6. With it, a carrier drawn into a core that straddles a
     hole's edge or the outline is put on the core's inner side (it had been pushed outward,
     into the hole or out of the metal); levels have neither, so none changes.
+
+## DEC-15: Build speed: the default linker and no compiler cache (both measured)
+
+- **Status:** decided (2026-10-26)
+- **Area:** tooling
+- **Choice:** keep the MSVC linker and build without a compiler cache.
+- **Purpose:** the owner asked for faster builds (2026-10-26); two established tools were
+  measured first.
+- **Alternatives (measured on this machine):**
+  - `rust-lld` as the linker (`target.x86_64-pc-windows-msvc.linker`): the generator's
+    release rebuild after a touched file 12.7 s with either (thin LTO and one codegen unit:
+    the time is code generation, not linking); the game's development rebuild 4.8 s with
+    MSVC's linker, 4.5 s with `rust-lld`. Changing the linker also recompiles everything once
+    (4 min 20 s). Not worth it.
+  - `sccache` as `rustc-wrapper`, to share compiled dependencies between worktrees and build
+    directories: two release builds of the generator in fresh directories, cold then warm,
+    40 s and 37 s with 0 hits out of 92 compiles (the arguments it hashes carry each build
+    directory's absolute paths, so another directory never hits without path remapping), and
+    the generator's dependencies build in under a minute anyway. Not adopted; uninstalled.
+- **Where:** nothing configured (no `.cargo/config.toml`).
+- **History:**
+  - 2026-10-26: measured and decided. What costs time is the heavy per-level tests, which
+    test selection (DEC-16, to come) addresses.
