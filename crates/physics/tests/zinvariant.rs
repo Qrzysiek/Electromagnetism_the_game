@@ -168,7 +168,7 @@ fn v3_line_charge_in_a_grounded_cylinder() {
 /// 30 digits; its series and Langmuir & Blodgett's table agree). Measured as the anode's
 /// collected charge per time over t = 4 to 8, after the flow has settled (two transit
 /// times), at a base resolution and a refined one (half the macroparticle weight, the
-/// step, the segments and the softening). The release half a segment out (tube.rs,
+/// step, the segments and the softening). The release half a segment out (`tube/emission.rs`,
 /// `EMISSION_OFFSET`) makes the error first order in the resolution: required, the error
 /// shrinking at an observed order of at least 0.7 and the Richardson extrapolation
 /// (2 I_fine − I_coarse) within 2 % (measured 15 %, 7.8 %, extrapolated 0.5 %). The 2 %:
