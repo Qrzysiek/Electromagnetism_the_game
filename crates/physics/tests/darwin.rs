@@ -9,7 +9,7 @@ use physics::DVec3;
 use physics::bem::Bias;
 use physics::circuit::Waveform;
 use physics::darwin2d::Darwin2d;
-use physics::lattice::Lattice;
+use physics::lattice::{Lattice, Material};
 use physics::tube::{SolenoidWave, Tube, TubeState};
 use physics::zinv::{Electrode, Electrodes, Section};
 use std::f64::consts::PI;
@@ -39,7 +39,20 @@ fn ring(
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(144.0 / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, seed ^ 31);
-    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, seed).with_hole(
+    let lattice = Lattice::new(
+        lo,
+        hi,
+        Material {
+            background: 1.0,
+            core_radius: A,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+        },
+        cores,
+        carriers,
+        seed,
+    )
+    .with_hole(
         DVec3::new(wall, wall, 0.0),
         DVec3::new(12.0 - wall, 12.0 - wall, 0.0),
     );
@@ -287,8 +300,20 @@ fn disc(c: f64, carriers: usize, b0: f64, omega: f64, dt: f64, seed: u64) -> Tub
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(square / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, seed ^ 31);
-    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, seed)
-        .with_disc(DVec3::ZERO, radius);
+    let lattice = Lattice::new(
+        lo,
+        hi,
+        Material {
+            background: 1.0,
+            core_radius: A,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+        },
+        cores,
+        carriers,
+        seed,
+    )
+    .with_disc(DVec3::ZERO, radius);
     let electrodes = Electrodes::new(
         vec![Electrode {
             section: Section::Rect {
@@ -480,11 +505,13 @@ impl Little {
         let mut lattice = Lattice::new(
             lo,
             hi,
-            self.background,
+            Material {
+                background: self.background,
+                core_radius: A,
+                charge_per_mass: self.qm,
+                thermal_speed: self.thermal,
+            },
             self.cores.clone(),
-            A,
-            self.qm,
-            self.thermal,
             self.carriers,
             11,
         )

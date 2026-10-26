@@ -14,6 +14,21 @@ use glam::DVec3;
 
 use crate::zinv::rect_integrals;
 
+/// What a conductor is made of: its ions' background and cores, its carriers' charge per
+/// mass and temperature (named, so that four numbers of one type cannot be passed in each
+/// other's places).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Material {
+    /// The background's charge per area (the ions'; the carriers' is opposite).
+    pub background: f64,
+    /// The ion cores' radius.
+    pub core_radius: f64,
+    /// The carriers' charge-to-mass ratio.
+    pub charge_per_mass: f64,
+    /// The carriers' thermal speed `σ = √(kT/m)`.
+    pub thermal_speed: f64,
+}
+
 /// A conductor: its rectangle, background, cores and carriers.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lattice {
@@ -117,10 +132,10 @@ pub fn flux_velocity(n: DVec3, sigma: f64, key: u64) -> DVec3 {
 }
 
 impl Lattice {
-    /// A conductor (`lo`..`hi`), its background, cores and carriers; `cores` must lie in it.
+    /// A conductor (`lo`..`hi`) of `material`, its `cores` (they must lie in it) and
+    /// `carriers` macroparticles drawn from `seed`.
     #[must_use]
     #[allow(
-        clippy::too_many_arguments,
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         clippy::cast_precision_loss
@@ -128,14 +143,17 @@ impl Lattice {
     pub fn new(
         lo: DVec3,
         hi: DVec3,
-        background: f64,
+        material: Material,
         cores: Vec<DVec3>,
-        core_radius: f64,
-        charge_per_mass: f64,
-        thermal_speed: f64,
         carriers: usize,
         seed: u64,
     ) -> Self {
+        let Material {
+            background,
+            core_radius,
+            charge_per_mass,
+            thermal_speed,
+        } = material;
         let area = (hi.x - lo.x) * (hi.y - lo.y);
         let spacing = libm::sqrt(area / cores.len().max(1) as f64);
         let cell = (2.0 * spacing).max(4.0 * core_radius).max(1e-9);
@@ -617,8 +635,20 @@ mod tests {
         let half = DVec3::new(radius * 1.001, radius * 1.001, 0.0);
         let (lo, hi) = (center - half, center + half);
         let cores = Lattice::random_cores(lo, hi, 400, 0.01, 5);
-        let lattice =
-            Lattice::new(lo, hi, 1.0, cores, 0.01, -1.0, 1.0, 3000, 7).with_disc(center, radius);
+        let lattice = Lattice::new(
+            lo,
+            hi,
+            Material {
+                background: 1.0,
+                core_radius: 0.01,
+                charge_per_mass: -1.0,
+                thermal_speed: 1.0,
+            },
+            cores,
+            3000,
+            7,
+        )
+        .with_disc(center, radius);
         let pi = std::f64::consts::PI;
         assert!((lattice.area() - pi * radius * radius).abs() < 1e-12);
         let total = lattice.carrier_charge() * lattice.carriers as f64;

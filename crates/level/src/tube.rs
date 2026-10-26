@@ -2469,11 +2469,13 @@ impl Level {
         Lattice::new(
             lo,
             hi,
-            -m.charge_per_mass.signum() * m.density,
+            physics::lattice::Material {
+                background: -m.charge_per_mass.signum() * m.density,
+                core_radius: m.core_radius,
+                charge_per_mass: m.charge_per_mass,
+                thermal_speed: m.thermal_speed,
+            },
             Lattice::random_cores(lo, hi, cores, m.core_radius, seed),
-            m.core_radius,
-            m.charge_per_mass,
-            m.thermal_speed,
             carriers,
             seed.wrapping_add(METAL_SEED),
         )

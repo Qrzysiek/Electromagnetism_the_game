@@ -1524,7 +1524,7 @@ impl Tube {
 mod tests {
     use super::*;
     use crate::bem::Bias;
-    use crate::lattice::Lattice;
+    use crate::lattice::{Lattice, Material};
     use crate::zinv::{Electrode, Electrodes, Section};
 
     /// The step's two ways of summing the charges' fields (`charges_fields`: the trees from
@@ -1539,7 +1539,19 @@ mod tests {
     fn trees_and_direct_sums_agree() {
         let (lo, hi) = (DVec3::ZERO, DVec3::new(10.0, 4.0, 0.0));
         let cores = Lattice::random_cores(lo, hi, 2000, 0.01, 3);
-        let lattice = Lattice::new(lo, hi, 1.0, cores, 0.01, -1.0, 1.0, 2500, 5);
+        let lattice = Lattice::new(
+            lo,
+            hi,
+            Material {
+                background: 1.0,
+                core_radius: 0.01,
+                charge_per_mass: -1.0,
+                thermal_speed: 1.0,
+            },
+            cores,
+            2500,
+            5,
+        );
         let electrodes = Electrodes::new(
             vec![Electrode {
                 section: Section::Rect {

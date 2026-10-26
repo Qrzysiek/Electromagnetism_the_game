@@ -13,7 +13,7 @@
 use physics::DVec3;
 use physics::bem::Bias;
 use physics::circuit::Waveform;
-use physics::lattice::Lattice;
+use physics::lattice::{Lattice, Material};
 use physics::tube::{Circuit, Emitter, OhmicContact, SolenoidWave, Tube};
 use physics::zinv::{Electrode, Electrodes, Section};
 use rayon::prelude::*;
@@ -59,7 +59,19 @@ fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, ac: f64, t0: f64, t1:
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(side * side * n_ion) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, 5);
-    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, 11);
+    let lattice = Lattice::new(
+        lo,
+        hi,
+        Material {
+            background: 1.0,
+            core_radius: A,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+        },
+        cores,
+        carriers,
+        11,
+    );
     let kappa = 2.0 * A * lattice.cores.len() as f64 / (side * side);
     // Position, stored (half step) velocity, displacement over the window.
     let kick = DVec3::new(acc * dt, 0.0, 0.0);
@@ -330,7 +342,19 @@ fn d5_screening() {
     let count = libm::round(l * w / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, 9);
     let carriers = 32_000;
-    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, 13);
+    let lattice = Lattice::new(
+        lo,
+        hi,
+        Material {
+            background: 1.0,
+            core_radius: A,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+        },
+        cores,
+        carriers,
+        13,
+    );
     let tube = Tube {
         arena: Some((
             DVec3::new(-2.0, -3.0, 0.0),
@@ -440,7 +464,19 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64, seed: u64) -> Tube
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(l * w / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, seed);
-    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, seed + 4);
+    let lattice = Lattice::new(
+        lo,
+        hi,
+        Material {
+            background: 1.0,
+            core_radius: A,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+        },
+        cores,
+        carriers,
+        seed + 4,
+    );
     let weight = lattice.carrier_charge().abs();
     let emitter = |electrode: usize, toward: f64| Emitter {
         electrode,
@@ -677,7 +713,19 @@ fn plate(
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(w * b / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, 31);
-    let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, 47);
+    let lattice = Lattice::new(
+        lo,
+        hi,
+        Material {
+            background: 1.0,
+            core_radius: A,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+        },
+        cores,
+        carriers,
+        47,
+    );
     // One small electrode away from the metal (the electrostatics needs one), floating with
     // no charge: grounded in this open z-invariant world it could draw charge from the log
     // gauge's "infinity" (r = 1), and a floating metal beside it runs away (OP-1).
@@ -945,11 +993,13 @@ fn d10_carriers_energy_account() {
     tube.lattices[0] = Lattice::new(
         DVec3::ZERO,
         DVec3::new(16.0, 4.0, 0.0),
-        1.0,
+        Material {
+            background: 1.0,
+            core_radius: A,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+        },
         Vec::new(),
-        A,
-        -1.0,
-        1.0,
         4000,
         11,
     );
