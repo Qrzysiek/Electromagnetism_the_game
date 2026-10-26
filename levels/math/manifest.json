@@ -23,6 +23,18 @@
   "height_ex": 1.557,
   "baseline_ex": 0.05
  },
+ "65": {
+  "file": "108c995b953c8a35.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
+ "74": {
+  "file": "eb624dbe56eb6620.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.581,
+  "baseline_ex": 0.05
+ },
  "80": {
   "file": "48449a14a4ff7d79.svg",
   "width_ex": 2.262,
@@ -154,6 +166,12 @@
   "width_ex": 2.705,
   "height_ex": 1.92,
   "baseline_ex": 0.375
+ },
+ "B_0 \\sin(0.125\\,t)": {
+  "file": "03881c20eabdb4d6.svg",
+  "width_ex": 13.969,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
  },
  "B_0^2": {
   "file": "a0888f00073397fa.svg",
@@ -501,6 +519,12 @@
   "file": "55ec59df190c608a.svg",
   "width_ex": 6.096,
   "height_ex": 1.717,
+  "baseline_ex": 0.186
+ },
+ "t = 5": {
+  "file": "db60791162d7db79.svg",
+  "width_ex": 4.965,
+  "height_ex": 1.692,
   "baseline_ex": 0.186
  },
  "t = 50": {

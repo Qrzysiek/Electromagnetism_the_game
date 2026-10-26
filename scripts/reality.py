@@ -1762,3 +1762,68 @@ REALITY["amplifier"] = R(
                 "gate, above the channel (the signal around your bias)",
                 "gate, below the channel (the signal)"],
     metals=["channel (lightly doped, n-type)"])
+
+
+# AC and induction.
+REALITY["ringing_tank"] = R(
+    "A tuned LC circuit damped by a resistor: its Q",
+    kept("The resistor sets the ringing's decay",
+         "The tank's energy swings between the coil and the capacitor and leaks into the "
+         "strip as heat; across the tank, the more the strip resists, the longer it rings "
+         "(Q = R√(C/L) for a parallel resistor)."),
+    kept("A resistor made of collisions",
+         "The strip's resistance is no number in a formula: its carriers' collisions with the "
+         "lattice take the energy, the Joule heat of every real resistor."),
+    kept("Stray capacitance",
+         "The strip and its contact add about 0.3 to the capacitor, so the tank rings a little "
+         "slower than 1/√(LC) says, as stray capacitance detunes real circuits."),
+    simpler("An ideal coil and capacitor",
+            "The coil and the capacitor are ideal lumped parts with no losses of their own; "
+            "a real coil's wire resists and its core heats, so only the strip damps here."),
+    METAL_CLASSICAL, METAL_Z,
+    electrodes=["strip, left end (the tank's node: the coil from your supply, the capacitor "
+                "to ground)", "strip, right end (grounded)"],
+    metals=["strip (the tank's resistor)"])
+
+REALITY["field_tuned_damping"] = R(
+    "A tuned circuit whose Q a magnetic field sets",
+    kept("The field sets the damping",
+         "The magnetoresistor across the tank resists more in a field, so less of the "
+         "tank's energy leaks into it each swing: InSb field plates served as contactless, "
+         "field-driven variable resistors."),
+    kept("Shorted Hall field, longer paths",
+         "The wide strip's contacts short out its Hall field, its carriers' paths bend, and it "
+         "resists more in either field direction."),
+    kept("Noise rings a tank",
+         "The strip's thermal noise drives the tank at its own frequency; the higher its Q, "
+         "the more of that noise it collects there, as in every tuned circuit."),
+    simpler("An ideal coil and capacitor",
+            "The coil and the capacitor are ideal lumped parts with no losses of their own; "
+            "only the strip damps the tank."),
+    METAL_CLASSICAL, METAL_Z,
+    electrodes=["wide strip, left contact (the tank's node: the coil from the step, the "
+                "capacitor to ground)", "wide strip, right contact (grounded)"],
+    metals=["short wide strip (magnetoresistive, the tank's resistor)"])
+
+REALITY["lock_in_hall"] = R(
+    "Lock-in detection of a Hall voltage in a swinging field",
+    kept("A lock-in reads amplitude and phase",
+         "Averaging the signal times the reference's sine and cosine over whole periods keeps "
+         "only what swings at that frequency: the Hall voltage, not the noise, the offset or "
+         "the magnetoresistance, which swings at twice the frequency."),
+    kept("The phase tells the sign",
+         "The Hall voltage follows the field in step or against it as the current's direction "
+         "and the carriers' sign say: how a lock-in reads a material's carriers."),
+    kept("A lag from the contacts",
+         "The voltmeter contacts charge through the strip's resistance, so the reading lags "
+         "the field by about 17° at this frequency, as cable capacitance shifts a real "
+         "lock-in's phase."),
+    kept("The field's induction kept out",
+         "The swinging field also induces an electric field circling the board's centre; the "
+         "contacts sit on its symmetry line, so it does not reach the reading, as twisted "
+         "leads keep it out of a real one."),
+    VOLTMETER, METAL_CLASSICAL, METAL_Z,
+    electrodes=["strip, left end (grounded)", "strip, right end (your supply)",
+                "top side contact (a floating voltmeter)",
+                "bottom side contact (a floating voltmeter, the reference)"],
+    metals=["Hall bar"])

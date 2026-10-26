@@ -272,6 +272,12 @@ design runs, repeated today across `tube-scan`, `check`, `window` and captures.
 
 ### Phase 1: levels with the engine as it is (about 10 levels, a week of sessions)
 
+*Status (2026-10-26):* done: Gate (121), Inverter (122), Amplifier (123); Wheatstone bridge
+(116: a half bridge, two strips and two resistors, DEC-6); Ringing tank (124, the "RLC with
+a strip"), Field-tuned damping (125), Lock-in Hall (126). Deferred: Flip-flop (DEC-4). Left:
+Relaxation; Resistive anode (prototyped, DEC-11: the steering too weak so far) and
+Calibrated field. The design decisions: docs/DECISIONS.md.
+
 1. *Transistors, introduction:* **Gate.** One strip, a drain supply, a gate slider from
    accumulation (more carriers, more current) to pinch-off. Scales: the gate's potential
    in kT/q, the channel's width in Debye lengths. Risk: the channel charges through its own

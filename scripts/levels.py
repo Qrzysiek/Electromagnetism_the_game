@@ -4155,6 +4155,141 @@ def amplifier():
         reference=[supply(10, 11, -13.0)])
 
 
+def ringing_tank():
+    # Designed with `generator tube-scan` (target/scratch/rlc_proto.py): Magnetoresistance's
+    # long strip (16 x 4, R ~ 8.8 at DC) as the resistor of a parallel tank: its left contact
+    # fed through a coil L = 7.5 (no series resistance) by the player's step at t = 5, a
+    # capacitor C = 1.5 from it to ground, its right contact grounded. Ideal: omega0 =
+    # 1/sqrt(LC) = 0.298, Q = R sqrt(C/L) = 3.9. Traced (step 10): the end swings to 16.8,
+    # 4.8, 13.5, 7.3 at t = 16.8, 29.6, 40.0, 52.5 about 10, a period of ~23 (the contact and
+    # the strip add ~0.3 to C: 1/sqrt(7.5 x 1.8) gives 23.1) and Q ~ 6 (each period 0.59 of
+    # the last: the strip resists more than its DC 8.8 at these frequencies). With a series
+    # resistance 0.5 Q was ~2.4. The amplitude at the ringing's omega 2 pi / 23 over three
+    # periods (t = 5-74): per volt 0.460, 0.469, 0.473 at 11, 14, 16.5 (the strip warms a
+    # little at larger steps); preview against verification 4.998 / 5.056, 6.373 / 6.569,
+    # 7.683 / 7.798. Goal 4.5-9 on a +-50 slider: the step solves on 10.5-18.5 (`generator
+    # window`, every 0.5; 9.5-10 too, 10.25 uncertain at the goal's edge, an isolated 19.5)
+    # and -18 to -14 at least (-10 not): 8-9 %.
+    period = 23.0
+    return level(
+        "Ringing tank",
+        "A tuned circuit, the heart of every radio: a coil (L = 7.5) and a capacitor "
+        "(C = 1.5) meet at a metal strip's left end, and the strip's right end is grounded. At "
+        "$t = 5$ your supply steps the coil's far end from 0 to its level. The coil's current "
+        "overshoots, and the strip's end rings about the supply's level with a period of "
+        "about 23 (the strip and its contact add a little to the capacitor). The strip is "
+        "the circuit's resistor: its carriers' collisions turn each swing's energy into "
+        "heat, and the ringing dies away. Make the ringing's amplitude between 4.5 and 9 "
+        "(its oscillation at the period 23, over three periods from $t = 5$ to $74$).",
+        grid=(24, 20), c=None, t_max=80.0,
+        # 0: the strip's left end, the tank's node (the coil from your supply, the capacitor
+        # to ground); 1: its right end (grounded).
+        electrodes=[contact(3, 10, 4, tunable=True), contact(21, 10, 4)],
+        supplies=slider(50.0, 14.0, 6.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP,
+                  circuits=[tube_circuit(0, pulse(14.0, 1.0, delay=5.0), resistance=0.0,
+                                         inductance=7.5, capacitance=1.5)],
+                  potentials=[potential_goal(0, "amplitude", 4.5, 9.0, 5.0, 74.0,
+                                             omega=2.0 * math.pi / period)],
+                  metals=[metal((4, 8), (20, 12), [0, 1], seed=11, **METAL)]),
+        reference=[supply(3, 10, 14.0)])
+
+
+def field_tuned_damping():
+    # Designed with `generator tube-scan` (target/scratch/ftd_proto.py): Ringing tank's
+    # parallel tank (no series resistance) with Magnetoresistance's short wide strip (4 along
+    # the current, 10 across, R ~ 1 at B = 0 to ~6 at 16) as its resistor, in the player's
+    # solenoid: Q = R sqrt(C/L) from ~0.5 to ~3 with L 6, C 1.5. The tank rings with a period
+    # of ~20 (ideal 18.8: the strip and its contact add to C). The amplitude at 2 pi / 20 over
+    # three periods (t = 5-65), step 6, 50 carriers per area (preview): 0.47, 0.75, 1.11,
+    # 1.44, 1.46, 1.86, 2.06 at B = 0, 4, 8, 10, 12, 14, 16. Preview against verification, step
+    # 8: 1.78 / 1.84, 2.08 / 2.20, 2.78 / 2.46 at 9.5, 11.5, 13.5: the error grows with Q (the
+    # strip's thermal noise rings the tank at its own frequency, the more the higher its Q).
+    # With 100 per area and the step 10: 2.19 / 2.21, 2.51 / 2.63, 3.15 / 2.95 (errors 0.04,
+    # 0.18, 0.29). Goal 2.15-3.0: its lower bound keeps the window clear of the half's middle
+    # (8 +- 0.8). B solves on 9.5-13 (every 0.5; 9 and 13.5 not: 10.9 %) and -13 to -11 (-9
+    # not).
+    period = 20.0
+    return level(
+        "Field-tuned damping",
+        "Ringing tank's circuit, its resistor now Magnetoresistance's short wide strip, in "
+        "your solenoid. With no field the strip barely resists, and across the tank it "
+        "shorts the ringing out: the end hardly swings after the step to 10 at $t = 5$. In a "
+        "field its carriers' paths bend and it resists more, and the tank rings longer: the "
+        "field sets the tank's Q, whichever way it points. Make the ringing's amplitude "
+        "between 2.15 and 3 (at the period 20, over three periods from $t = 5$ to $65$). The "
+        "strip's own thermal noise rings the tank too, more the longer it rings.",
+        grid=(24, 20), c=None, t_max=70.0,
+        # 0: the strip's left contact, the tank's node (the coil from the step, the capacitor
+        # to ground); 1: its right contact (grounded).
+        electrodes=[contact(9, 10, 10), contact(15, 10, 10)],
+        solenoid_fields=slider(16.0, 11.0, 4.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 19),
+                  circuits=[tube_circuit(0, pulse(10.0, 1.0, delay=5.0), resistance=0.0,
+                                         inductance=6.0, capacitance=1.5)],
+                  potentials=[potential_goal(0, "amplitude", 2.15, 3.0, 5.0, 65.0,
+                                             omega=2.0 * math.pi / period)],
+                  metals=[metal((10, 5), (14, 15), [0, 1], seed=12,
+                                **dict(METAL, carriers_per_area=100.0))]),
+        reference=[supply(23, 19, 11.0)])
+
+
+def lock_in_hall():
+    # Designed with `generator tube-scan` (target/scratch/lockin_proto.py): Hall probe's strip
+    # (16 x 4 at the board's centre, 100 carriers per area, floating side contacts C = 1) with
+    # a steady current from the player's supply on its right end, in the player's solenoid
+    # swinging as B0 sin(EDDY_OMEGA t) (period 50.3). The top contact against the bottom one,
+    # its amplitude and phase at the field's frequency over two periods from t = 10
+    # (preview): (V, B0) = (30, 4) 4.89 at 160 deg, (-30, 4) 4.89 at -15 deg, (30, 8) 7.85 at
+    # 160; at -30: 2.85, 3.80, 5.97, 6.45 at B0 = 2, 3, 5, 6 (sublinear above ~5); at B0 = 4:
+    # 3.24, 6.26 at -20, -38. The phase lags the ideal 0 / 180 by ~17 deg for either sign of
+    # the current (the contacts' C charging through the strip, ~2.5 time units; an inductive
+    # pickup would have shifted the two signs opposite ways): the induced field circles the
+    # board's centre and the contacts sit on its symmetry line. Preview against
+    # verification: (-30, 3.5) 4.40 / 4.43, (-30, 2.7) 3.64 / 3.47, (-30, 5) 5.97 / 5.81,
+    # (-24, 3.5) 3.78 / 3.54; the phases within 3 deg. The amplitude goal's ratio sets both
+    # sliders' windows (the voltage goes as I B0): 4.9-7 puts the supply's between the
+    # guessable 22 and 38 and the field's below 7.2 (sublinear near 7). The phase goal
+    # -60..30 (in step with the field) takes the current's direction. Over two periods with
+    # the goal 4.9-7 B0 solved on 4.5-6.0 only (4.7 %; the supply -36 to -26, 12.5 %): three
+    # periods (the error bars ~0.8 times) and the goal from 4.7: the reference verified
+    # 5.77 +- 0.26 at -17.5 +- 1.4 deg; B0 solves on 4.0-6.5 (every 0.5; 3.5 and 7 not:
+    # 7.8 %), the supply on -36 to -24 (-37 and -22 not: 15 %); the opposite signs fail the
+    # phase (supply +30 or B0 -5).
+    period = 2.0 * math.pi / EDDY_OMEGA
+    start, end = 10.0, 10.0 + 3.0 * period
+    hall = dict(METAL, carriers_per_area=100.0)
+    return level(
+        "Lock-in Hall",
+        "Hall probe's strip with a steady current (your supply on its right end), in your "
+        "solenoid swinging as $B_0 \\sin(0.125\\,t)$, a period of about 50 (your second "
+        "supply sets $B_0$). The Hall voltage across the strip swings with the field, in "
+        "step with it or against it as the current's direction says. A lock-in amplifier "
+        "picks out a signal's swing at one frequency, its size and its phase, from the noise "
+        "and from anything else the strip does: here the top contact against the bottom one "
+        "at the field's frequency, over three periods from $t = 10$. Make its amplitude "
+        "between 4.7 and 7, in step with the field (its phase between -60 and 30 degrees: it "
+        "lags a little, as the contacts charge through the strip). Which way must the "
+        "current flow?",
+        grid=(24, 16), c=None, t_max=end + 5.0,
+        # 0: the strip's left end (grounded); 1: its right end (your supply); 2, 3: the top
+        # and bottom side contacts (floating voltmeters).
+        electrodes=[contact(3, 8, 4), contact(21, 8, 4, tunable=True),
+                    contact(12, 11, 2, vertical=False), contact(12, 5, 2, vertical=False)],
+        supplies=slider(40.0, -30.0, 30.0),
+        solenoid_fields=slider(16.0, 5.0, 3.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 15),
+                  solenoid_drive=sine(1.0, EDDY_OMEGA),
+                  circuits=[tube_circuit(2, dc(0.0), capacitance=1.0),
+                            tube_circuit(3, dc(0.0), capacitance=1.0)],
+                  potentials=[potential_goal(2, "amplitude", 4.7, 7.0, start, end,
+                                             omega=EDDY_OMEGA, reference=3),
+                              potential_goal(2, "phase", -60.0, 30.0, start, end,
+                                             omega=EDDY_OMEGA, reference=3)],
+                  metals=[metal((4, 6), (20, 10), [0, 1, 2, 3], seed=11, **hall)]),
+        reference=[supply(21, 8, -30.0), supply(23, 15, 5.0)])
+
+
 # The eddy-current levels' drive: the solenoid's field swings as B0 sin(wt), period ~50: long
 # against the metal's settling (a few tenths) and its slow polarizations (a few units), and
 # slow enough that a cut's two faces, a Debye length apart, carry little current across as
@@ -4328,6 +4463,16 @@ ARCS.append(("Inside the components: transistors", [
     ]),
     ("Intermediate", [
         ("amplifier", amplifier),
+    ]),
+]))
+
+ARCS.append(("AC and induction", [
+    ("Introduction", [
+        ("ringing_tank", ringing_tank),
+    ]),
+    ("Intermediate", [
+        ("field_tuned_damping", field_tuned_damping),
+        ("lock_in_hall", lock_in_hall),
     ]),
 ]))
 

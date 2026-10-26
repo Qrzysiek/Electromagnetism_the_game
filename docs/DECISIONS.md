@@ -163,7 +163,7 @@ Entries are numbered in order and never renumbered.
 
 ## DEC-7: Ringing tank (level 124, the AC and induction arc's first)
 
-- **Status:** in design (2026-10-26)
+- **Status:** in use (since 2026-10-26)
 - **Area:** level design
 - **Choice:** a parallel tank: a strip's left contact fed by the player's step at t = 5
   through a coil L = 7.5 with no series resistance, a capacitor C = 1.5 from it to ground,
@@ -195,9 +195,9 @@ Entries are numbered in order and never renumbered.
 - **History:**
   - 2026-10-26: started, with this session's choices; older ones are added when touched.
 
-## DEC-9: Field-tuned damping (the AC arc's first intermediate)
+## DEC-9: Field-tuned damping (level 125, the AC arc's first intermediate)
 
-- **Status:** in design (2026-10-26)
+- **Status:** in use (since 2026-10-26)
 - **Area:** level design
 - **Choice:** Ringing tank's parallel tank (L 6, C 1.5, no series resistance) with
   Magnetoresistance's short wide strip as its resistor, in the player's solenoid; a fixed
@@ -215,9 +215,9 @@ Entries are numbered in order and never renumbered.
   - 2026-10-26: designed. The reference 11 verified 2.42 ± 0.04; B solves on 9.5–13
     (10.9 % of ±16) and −13 to −11 (−9 not).
 
-## DEC-10: Lock-in Hall (the AC arc's second intermediate)
+## DEC-10: Lock-in Hall (level 126, the AC arc's second intermediate)
 
-- **Status:** in design (2026-10-26)
+- **Status:** in use (since 2026-10-26)
 - **Area:** level design
 - **Choice:** Hall probe's strip (100 carriers per area, floating side contacts) with a
   steady current from the player's supply, in the player's solenoid swinging as

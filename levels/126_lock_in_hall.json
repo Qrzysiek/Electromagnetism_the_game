@@ -1,0 +1,255 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Lock-in Hall",
+  "description": "Hall probe's strip with a steady current (your supply on its right end), in your solenoid swinging as $B_0 \\sin(0.125\\,t)$, a period of about 50 (your second supply sets $B_0$). The Hall voltage across the strip swings with the field, in step with it or against it as the current's direction says. A lock-in amplifier picks out a signal's swing at one frequency, its size and its phase, from the noise and from anything else the strip does: here the top contact against the bottom one at the field's frequency, over three periods from $t = 10$. Make its amplitude between 4.7 and 7, in step with the field (its phase between -60 and 30 degrees: it lags a little, as the contacts charge through the strip). Which way must the current flow?",
+  "reality": {
+    "represents": "Lock-in detection of a Hall voltage in a swinging field",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A lock-in reads amplitude and phase",
+        "detail": "Averaging the signal times the reference's sine and cosine over whole periods keeps only what swings at that frequency: the Hall voltage, not the noise, the offset or the magnetoresistance, which swings at twice the frequency."
+      },
+      {
+        "kind": "kept",
+        "line": "The phase tells the sign",
+        "detail": "The Hall voltage follows the field in step or against it as the current's direction and the carriers' sign say: how a lock-in reads a material's carriers."
+      },
+      {
+        "kind": "kept",
+        "line": "A lag from the contacts",
+        "detail": "The voltmeter contacts charge through the strip's resistance, so the reading lags the field by about 17° at this frequency, as cable capacitance shifts a real lock-in's phase."
+      },
+      {
+        "kind": "kept",
+        "line": "The field's induction kept out",
+        "detail": "The swinging field also induces an electric field circling the board's centre; the contacts sit on its symmetry line, so it does not reach the reading, as twisted leads keep it out of a real one."
+      },
+      {
+        "kind": "simplified",
+        "line": "Ideal voltmeters",
+        "detail": "The floating side contacts read the potential as an ideal voltmeter does, through a capacitance of 1 to ground, drawing no current."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "A conductor seen end-on",
+        "detail": "The strip is infinitely long along z, its carriers lines of charge moving as one: currents are per unit length, and the noise is larger than a real conductor's, whose carriers move independently along its length."
+      }
+    ]
+  },
+  "grid": {
+    "nx": 24,
+    "ny": 16,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 165.79644737231007,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -40.0,
+      -30.0,
+      30.0,
+      40.0
+    ],
+    "solenoid_fields": [
+      -16.0,
+      3.0,
+      5.0,
+      16.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        21,
+        8,
+        0
+      ],
+      "kind": "supply",
+      "value": -30.0
+    },
+    {
+      "node": [
+        23,
+        15,
+        0
+      ],
+      "kind": "supply",
+      "value": 5.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        3,
+        8,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "strip, left end (grounded)"
+    },
+    {
+      "center": [
+        21,
+        8,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "label": "strip, right end (your supply)"
+    },
+    {
+      "center": [
+        12,
+        11,
+        0
+      ],
+      "length": 2,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "top side contact (a floating voltmeter)"
+    },
+    {
+      "center": [
+        12,
+        5,
+        0
+      ],
+      "length": 2,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "bottom side contact (a floating voltmeter, the reference)"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "solenoid_drive": {
+      "kind": "sine",
+      "amplitude": 1.0,
+      "omega": 0.125
+    },
+    "step": 0.035,
+    "circuits": [
+      {
+        "electrode": 2,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "capacitance": 1.0
+      },
+      {
+        "electrode": 3,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "capacitance": 1.0
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 2,
+        "measure": "amplitude",
+        "min": 4.7,
+        "max": 7.0,
+        "start": 10.0,
+        "end": 160.79644737231007,
+        "omega": 0.125,
+        "reference": 3
+      },
+      {
+        "electrode": 2,
+        "measure": "phase",
+        "min": -60.0,
+        "max": 30.0,
+        "start": 10.0,
+        "end": 160.79644737231007,
+        "omega": 0.125,
+        "reference": 3
+      }
+    ],
+    "solenoid": [
+      23,
+      15,
+      0
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            4,
+            6,
+            0
+          ],
+          [
+            20,
+            10,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 100.0,
+        "seed": 11,
+        "label": "Hall bar"
+      }
+    ]
+  }
+}

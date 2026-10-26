@@ -397,6 +397,24 @@
           ]
         }
       ]
+    },
+    {
+      "name": "AC and induction",
+      "tiers": [
+        {
+          "name": "Introduction",
+          "levels": [
+            "ringing_tank"
+          ]
+        },
+        {
+          "name": "Intermediate",
+          "levels": [
+            "field_tuned_damping",
+            "lock_in_hall"
+          ]
+        }
+      ]
     }
   ]
 }

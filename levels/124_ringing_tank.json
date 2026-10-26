@@ -1,0 +1,181 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Ringing tank",
+  "description": "A tuned circuit, the heart of every radio: a coil (L = 7.5) and a capacitor (C = 1.5) meet at a metal strip's left end, and the strip's right end is grounded. At $t = 5$ your supply steps the coil's far end from 0 to its level. The coil's current overshoots, and the strip's end rings about the supply's level with a period of about 23 (the strip and its contact add a little to the capacitor). The strip is the circuit's resistor: its carriers' collisions turn each swing's energy into heat, and the ringing dies away. Make the ringing's amplitude between 4.5 and 9 (its oscillation at the period 23, over three periods from $t = 5$ to $74$).",
+  "reality": {
+    "represents": "A tuned LC circuit damped by a resistor: its Q",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The resistor sets the ringing's decay",
+        "detail": "The tank's energy swings between the coil and the capacitor and leaks into the strip as heat; across the tank, the more the strip resists, the longer it rings (Q = R√(C/L) for a parallel resistor)."
+      },
+      {
+        "kind": "kept",
+        "line": "A resistor made of collisions",
+        "detail": "The strip's resistance is no number in a formula: its carriers' collisions with the lattice take the energy, the Joule heat of every real resistor."
+      },
+      {
+        "kind": "kept",
+        "line": "Stray capacitance",
+        "detail": "The strip and its contact add about 0.3 to the capacitor, so the tank rings a little slower than 1/√(LC) says, as stray capacitance detunes real circuits."
+      },
+      {
+        "kind": "simplified",
+        "line": "An ideal coil and capacitor",
+        "detail": "The coil and the capacitor are ideal lumped parts with no losses of their own; a real coil's wire resists and its core heats, so only the strip damps here."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "A conductor seen end-on",
+        "detail": "The strip is infinitely long along z, its carriers lines of charge moving as one: currents are per unit length, and the noise is larger than a real conductor's, whose carriers move independently along its length."
+      }
+    ]
+  },
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 80.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "supply_voltages": [
+      -50.0,
+      6.0,
+      14.0,
+      50.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        3,
+        10,
+        0
+      ],
+      "kind": "supply",
+      "value": 14.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        3,
+        10,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "tunable": true,
+      "label": "strip, left end (the tank's node: the coil from your supply, the capacitor to ground)"
+    },
+    {
+      "center": [
+        21,
+        10,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "strip, right end (grounded)"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "step": 0.035,
+    "circuits": [
+      {
+        "electrode": 0,
+        "source": {
+          "kind": "pulse",
+          "low": 0.0,
+          "high": 14.0,
+          "delay": 5.0,
+          "rise": 1.0,
+          "width": 10000.0,
+          "fall": 0.0
+        },
+        "inductance": 7.5,
+        "resistance": 0.0,
+        "capacitance": 1.5
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 0,
+        "measure": "amplitude",
+        "min": 4.5,
+        "max": 9.0,
+        "start": 5.0,
+        "end": 74.0,
+        "omega": 0.2731819698773733
+      }
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            4,
+            8,
+            0
+          ],
+          [
+            20,
+            12,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 11,
+        "label": "strip (the tank's resistor)"
+      }
+    ]
+  }
+}

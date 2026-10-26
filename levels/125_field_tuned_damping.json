@@ -1,0 +1,185 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Field-tuned damping",
+  "description": "Ringing tank's circuit, its resistor now Magnetoresistance's short wide strip, in your solenoid. With no field the strip barely resists, and across the tank it shorts the ringing out: the end hardly swings after the step to 10 at $t = 5$. In a field its carriers' paths bend and it resists more, and the tank rings longer: the field sets the tank's Q, whichever way it points. Make the ringing's amplitude between 2.15 and 3 (at the period 20, over three periods from $t = 5$ to $65$). The strip's own thermal noise rings the tank too, more the longer it rings.",
+  "reality": {
+    "represents": "A tuned circuit whose Q a magnetic field sets",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "The field sets the damping",
+        "detail": "The magnetoresistor across the tank resists more in a field, so less of the tank's energy leaks into it each swing: InSb field plates served as contactless, field-driven variable resistors."
+      },
+      {
+        "kind": "kept",
+        "line": "Shorted Hall field, longer paths",
+        "detail": "The wide strip's contacts short out its Hall field, its carriers' paths bend, and it resists more in either field direction."
+      },
+      {
+        "kind": "kept",
+        "line": "Noise rings a tank",
+        "detail": "The strip's thermal noise drives the tank at its own frequency; the higher its Q, the more of that noise it collects there, as in every tuned circuit."
+      },
+      {
+        "kind": "simplified",
+        "line": "An ideal coil and capacitor",
+        "detail": "The coil and the capacitor are ideal lumped parts with no losses of their own; only the strip damps the tank."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "A conductor seen end-on",
+        "detail": "The strip is infinitely long along z, its carriers lines of charge moving as one: currents are per unit length, and the noise is larger than a real conductor's, whose carriers move independently along its length."
+      }
+    ]
+  },
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 70.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "solenoid_fields": [
+      -16.0,
+      4.0,
+      11.0,
+      16.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        23,
+        19,
+        0
+      ],
+      "kind": "supply",
+      "value": 11.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        9,
+        10,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "wide strip, left contact (the tank's node: the coil from the step, the capacitor to ground)"
+    },
+    {
+      "center": [
+        15,
+        10,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "wide strip, right contact (grounded)"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "step": 0.035,
+    "circuits": [
+      {
+        "electrode": 0,
+        "source": {
+          "kind": "pulse",
+          "low": 0.0,
+          "high": 10.0,
+          "delay": 5.0,
+          "rise": 1.0,
+          "width": 10000.0,
+          "fall": 0.0
+        },
+        "inductance": 6.0,
+        "resistance": 0.0,
+        "capacitance": 1.5
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 0,
+        "measure": "amplitude",
+        "min": 2.15,
+        "max": 3.0,
+        "start": 5.0,
+        "end": 65.0,
+        "omega": 0.3141592653589793
+      }
+    ],
+    "solenoid": [
+      23,
+      19,
+      0
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            10,
+            5,
+            0
+          ],
+          [
+            14,
+            15,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 100.0,
+        "seed": 12,
+        "label": "short wide strip (magnetoresistive, the tank's resistor)"
+      }
+    ]
+  }
+}
