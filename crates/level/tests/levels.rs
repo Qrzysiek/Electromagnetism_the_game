@@ -467,6 +467,8 @@ fn switched_off_supplies_drive_nothing() {
                 amplitude == 0.0
             }
         }
+        // Exactly: a pulse whose top is its rest, as written in the level.
+        #[allow(clippy::float_cmp)]
         Source::Pulse { low, high, .. } => high == low,
     };
     let mut checked = 0;
