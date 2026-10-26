@@ -57,8 +57,8 @@ Entries are numbered in order and never renumbered.
   paths already hold the exact answer for the traced ones (the ones with trails, which the
   eye follows); the others' straight-line guess is the same kind of approximation as their
   straight-line motion between frames.
-- **Where:** `crates/level/src/tube.rs` (`frame_between`, `taken`, `given_off`,
-  `nearest_contact`, `contact_faces`); test `contacts_take_and_give_off_carriers_between_frames`.
+- **Where:** `crates/level/src/tube/run.rs` (`frame_between`, `taken`, `given_off`,
+  `nearest_contact`), `crates/level/src/tube/geometry.rs` (`contact_faces`); test `contacts_take_and_give_off_carriers_between_frames`.
 - **History:**
   - 2026-10-26: chosen, replacing "stays where it was / appears with the next frame".
 
@@ -98,7 +98,7 @@ Entries are numbered in order and never renumbered.
   particles) and a bound on memory and run time.
 - **Alternatives:** doubling both (tried for the Flip-flop, DEC-4: it ran, but the cell
   latched too slowly to make a level, so there was no reason to keep it).
-- **Where:** `crates/physics/src/tube.rs`, `crates/level/src/tube.rs`; PHYSICS.md §2.9, §2.11.
+- **Where:** `crates/physics/src/tube/`, `crates/level/src/tube/`; PHYSICS.md §2.9, §2.11.
 - **History:**
   - 2026-10-26: doubling considered and reverted (DEC-4).
 
@@ -448,10 +448,38 @@ Entries are numbered in order and never renumbered.
   swaps; the mobility had been copied between test files.
 - **Alternatives:** leaving them (each bug class stays possible); a full builder type with a
   method per field for `Tube` (more code than the struct update syntax for the same safety).
-- **Where:** `crates/physics/src/tube.rs`, `crates/physics/src/lattice.rs`,
-  `crates/physics/tests/common/mod.rs`.
+- **Where:** `crates/physics/src/tube/` (`fields.rs`: the pipeline; `mod.rs`: `Tube::new`),
+  `crates/physics/src/lattice.rs`, `crates/physics/tests/common/mod.rs`.
 - **History:**
   - 2026-10-26: done in four commits, each bit for bit (golden hashes of representative
     levels, the shared helpers against the old ones bit for bit). The consistency test's
     threshold came from `tree2d`'s documented truncation (5e-7 a node), after a comment in the
     step claiming ~1e-11 proved wrong (measured 1.2e-8 of the largest field).
+
+## DEC-19: The largest engine files split into modules by concern
+
+- **Status:** in use (2026-10-27)
+- **Area:** code structure (physics, level)
+- **Choice:** the three largest engine files became directories of modules: the types and
+  the main loop stay in the parent (`mod.rs`, `lib.rs`), each concern's methods and helpers
+  move to a child module. `physics/src/tube/`: `circuits`, `fields`, `emission`, `metals`,
+  `darwin` (`mod.rs` keeps the types, `Tube::new`, `state` and `step`). `level/src/tube/`:
+  `frames`, `run`, `sim`, `verdict`, `geometry`, `build`, `verify`, `issues`, `tests`.
+  `level/src/`: `geometry`, `placement`, `issues`, `drives`, `fields`, `scenarios`, and the
+  unit tests in `tests`, `flight_tests`, `model_tests`. Pure moves: a private item takes
+  `pub(super)` (exactly its old visibility: the old module and its descendants), the parent
+  re-exports what was public, so every path stays.
+- **Purpose:** test selection by coverage (DEC-16) works per file: a test depends on the
+  files it executes, so a 4000-line file made every test depend on any change in it. The
+  files had also become hard to find one's way in. Approved by the owner (2026-10-26).
+- **Alternatives:** selection per function (the coverage maps report line regions, which
+  shift with every edit; per-file hashes are robust); new crates (separate compilation would
+  help incremental builds, but the level crate's types and methods are interlocked, and a
+  crate boundary changes privacy, which a pure move must not).
+- **Where:** the directories above. `physics/src/beam.rs` (2850 lines) was left whole: half
+  of it is one function, which only a change of code, not a move, could split, and only beam
+  levels execute it.
+- **History:**
+  - 2026-10-27: moved bit for bit (golden hashes of representative levels, the tests); the
+    level crate's split made by a mover that lexes Rust (strings, raw strings, chars,
+    comments) and checks that the files after hold the lines before.
