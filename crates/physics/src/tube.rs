@@ -220,6 +220,9 @@ pub enum Fate {
 /// its own emitting the charge a passing ion induced, at a weight of its own charge).
 pub const MAX_PARTICLES: usize = 20_000;
 
+/// The Darwin field's solve: its relative residual (`darwin2d::Darwin2d::solve`).
+pub const DARWIN_TOLERANCE: f64 = 1e-10;
+
 /// Tag of projectile `j` (`TubeState::tag`); emitted carriers carry their emitter's
 /// index.
 pub const PROJECTILE_TAG: u32 = 1 << 16;
@@ -290,6 +293,10 @@ pub struct Tube {
     /// `emitters.len() + k`), every carrier inside one scatters off its ion cores and
     /// walls, and their backgrounds add to the field.
     pub lattices: Vec<Lattice>,
+    /// The charges' own magnetic field in the Darwin limit (`darwin2d`, docs/DARWIN.md,
+    /// PHYSICS.md §2.12): its grid and speed of light. None: none (the electrostatic model
+    /// alone, bit for bit as before).
+    pub darwin: Option<crate::darwin2d::Darwin2d>,
 }
 
 /// A lattice's accounts by cell (`Lattice::account_cell`, row by row), so far: bookkeeping
@@ -394,6 +401,13 @@ pub struct TubeState {
     /// The particles' induced surface density now (all electrodes grounded), kept from
     /// the end of the last step: the next step's emission and the display reuse it.
     induced: Vec<f64>,
+    /// With the carriers' own magnetic field (`Tube::darwin`): each particle's canonical
+    /// velocity `u = v + (q/m) A_T(x)` (its canonical momentum per mass), the field's solver
+    /// with its last solution, and that solution's `A_T` on the grid's edges. Empty and None
+    /// without it.
+    pub u: Vec<DVec3>,
+    pub darwin: Option<crate::darwin2d::Darwin2d>,
+    pub self_a: Option<crate::darwin2d::Edges>,
 }
 
 impl TubeState {
@@ -564,6 +578,8 @@ impl Tube {
             circuit_current: vec![0.0; self.circuits.len()],
             inductor_current: vec![0.0; self.circuits.len()],
             induced: vec![0.0; self.electrodes.segments.len()],
+            darwin: self.darwin.clone(),
+            self_a: self.darwin.as_ref().map(crate::darwin2d::Edges::zeros),
             ..TubeState::default()
         };
         // The conductors: their carriers, and the charge their backgrounds induce.
@@ -862,8 +878,21 @@ impl Tube {
         }
     }
 
-    /// The field at `x` of the surface charge `sigma` and of every particle but `skip`.
+    /// The field at `x` of the surface charge `sigma`, of every particle but `skip` and of
+    /// the lattices' backgrounds.
     fn field(&self, s: &TubeState, sigma: &[f64], x: DVec3, skip: Option<usize>) -> DVec3 {
+        let mut e = self.charges_field(s, sigma, x, skip);
+        for l in &self.lattices {
+            e += l.background_at(x).1;
+        }
+        e
+    }
+
+    /// The field at `x` of the surface charge `sigma` and of every particle but `skip`: the
+    /// direct sums the step uses below `TREE_MIN` particles, like the trees above it, without
+    /// the backgrounds, which the push adds (until 2026-10-26 these sums included them too,
+    /// and below `TREE_MIN` the backgrounds pulled twice: PHYSICS.md §2.11).
+    fn charges_field(&self, s: &TubeState, sigma: &[f64], x: DVec3, skip: Option<usize>) -> DVec3 {
         let mut e = DVec3::ZERO;
         for ((p, q), d) in self.electrodes.segments.iter().zip(sigma) {
             e += segment_field_fast(*p, *q, x) * *d;
@@ -876,9 +905,6 @@ impl Tube {
             let r = DVec3::new(x.x - p.x, x.y - p.y, 0.0);
             let r2 = (r.x * r.x + r.y * r.y).max(h2);
             e += r * (2.0 * l / r2);
-        }
-        for l in &self.lattices {
-            e += l.background_at(x).1;
         }
         e
     }
@@ -911,6 +937,11 @@ impl Tube {
     }
 
     fn add(&self, s: &mut TubeState, x: DVec3, v: DVec3, charge: f64, qm: f64, tag: u32) {
+        // Its canonical velocity: born at v where the field's vector potential is A.
+        if let (Some(d), Some(a)) = (s.darwin.as_ref(), s.self_a.as_ref()) {
+            let (ax, ay) = d.interpolate(a, x.x, x.y);
+            s.u.push(v + DVec3::new(ax, ay, 0.0) * qm);
+        }
         s.x.push(x);
         s.v.push(v);
         s.charge.push(charge);
@@ -1151,7 +1182,7 @@ impl Tube {
             (0..s.x.len())
                 .into_par_iter()
                 .with_min_len(PAR_CHUNK)
-                .map(|k| self.field(s, &sigma, s.x[k], Some(k)))
+                .map(|k| self.charges_field(s, &sigma, s.x[k], Some(k)))
                 .collect()
         };
         let before = if self.lattices.is_empty() {
@@ -1161,6 +1192,10 @@ impl Tube {
         };
         // A changing field: B at the positions' time, and its induced field below.
         let b_z = self.b_wave.map_or(self.b_z, |w| w.b(s.t));
+        // With the charges' own magnetic field (Darwin) the positions move after the field's
+        // solve (`darwin_step`).
+        let moves = s.darwin.is_none();
+        let v_start: Vec<DVec3> = if moves { Vec::new() } else { s.v.clone() };
         // The field's work on each lattice's carriers over the step.
         let mut work = vec![0.0; self.lattices.len()];
         let mut induced_work = vec![0.0; self.lattices.len()];
@@ -1211,7 +1246,12 @@ impl Tube {
                     s.cells[k].induced[c] += w;
                 }
             }
-            *x += *v * self.dt;
+            if moves {
+                *x += *v * self.dt;
+            }
+        }
+        if !moves {
+            self.darwin_step(s, &v_start);
         }
         for (total, w) in s.field_work.iter_mut().zip(&work) {
             *total += w;
@@ -1308,6 +1348,9 @@ impl Tube {
                 s.id.swap_remove(k);
                 s.left.swap_remove(k);
                 s.side.swap_remove(k);
+                if !s.u.is_empty() {
+                    s.u.swap_remove(k);
+                }
             } else {
                 k += 1;
             }
@@ -1335,6 +1378,44 @@ impl Tube {
     /// step's kick): through the cores it entered (`Lattice::advance`: bounces, new
     /// thermal speeds, the lattice taking the energy), then the walls (reflecting, but
     /// where an electrode lies beyond: a contact, which absorbs the carrier below).
+    /// The self-field's part of a step (docs/DARWIN.md §2.1): the canonical velocities take
+    /// the step's other impulses (`v − v_start`); the field is solved from them, the induced
+    /// field implicitly through the carriers' response `β = q²/m`; the velocities follow as
+    /// `v = u − (q/m) A(x)`, then the canonical force `(q/m) ∇(v·A)` from the field just
+    /// solved at the same positions kicks both; the particles move. (Until 2026-10-26 the
+    /// kick came first, from the last step's field, solved where the particles had been: each
+    /// one's own vector potential then peaked a move behind it and dragged it, a loss growing
+    /// as the step and the grid's sharpness, PHYSICS.md §2.12.)
+    fn darwin_step(&self, s: &mut TubeState, v_start: &[DVec3]) {
+        let Some(mut d) = s.darwin.take() else {
+            return;
+        };
+        for ((u, v), v0) in s.u.iter_mut().zip(&s.v).zip(v_start) {
+            *u += *v - *v0;
+        }
+        let mut j = crate::darwin2d::Edges::zeros(&d);
+        let mut beta = crate::darwin2d::Edges::zeros(&d);
+        for k in 0..s.x.len() {
+            let (x, u, q, qm) = (s.x[k], s.u[k], s.charge[k], s.qm[k]);
+            d.deposit_vector(&mut j, x.x, x.y, q * u.x, q * u.y);
+            d.deposit_scalar(&mut beta, x.x, x.y, q * qm);
+        }
+        d.solve(&j, &beta, DARWIN_TOLERANCE);
+        let a = d.a();
+        for k in 0..s.x.len() {
+            let (x, qm) = (s.x[k], s.qm[k]);
+            let (ax, ay) = d.interpolate(&a, x.x, x.y);
+            let v = s.u[k] - DVec3::new(ax, ay, 0.0) * qm;
+            let (gx, gy) = d.grad_dot(&a, x.x, x.y, v.x, v.y);
+            let kick = DVec3::new(gx, gy, 0.0) * (qm * self.dt);
+            s.u[k] += kick;
+            s.v[k] = v + kick;
+            s.x[k] = x + s.v[k] * self.dt;
+        }
+        s.self_a = Some(a);
+        s.darwin = Some(d);
+    }
+
     fn scatter(
         &self,
         lattice: &Lattice,
@@ -1344,6 +1425,7 @@ impl Tube {
         v0: DVec3,
         step: u64,
     ) {
+        let v_entry = s.v[p];
         if let Some(m) = lattice.advance(a, v0, s.v[p], self.dt, s.id[p], step) {
             let mass = (s.charge[p] / s.qm[p]).abs();
             s.joule += mass * m.heat_per_mass;
@@ -1403,6 +1485,11 @@ impl Tube {
             }
             s.x[p] = x;
             s.v[p] = v;
+        }
+        // The canonical velocity changes by what the collisions and the walls did to v.
+        if !s.u.is_empty() {
+            let dv = s.v[p] - v_entry;
+            s.u[p] += dv;
         }
     }
 }

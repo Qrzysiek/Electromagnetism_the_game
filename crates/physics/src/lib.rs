@@ -9,6 +9,7 @@ pub mod bem;
 pub mod cancel;
 pub mod circuit;
 pub mod conductor;
+pub mod darwin2d;
 pub mod drive;
 pub mod dynamics;
 pub mod events;

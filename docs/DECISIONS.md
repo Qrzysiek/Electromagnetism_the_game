@@ -319,3 +319,65 @@ Entries are numbered in order and never renumbered.
     current −βA had nowhere to close (the field at its faces came out 0.4 B₀), as nothing
     in the field solver alone conserves charge; the electrostatic field will close it in
     the full model.
+  - 2026-10-26: in the tube engine (canonical velocities `u = v + (q/m)A`, the solve after
+    the push, collisions changing `u` by their `Δv`), metals with holes (rings). V-D5, a
+    ring's current rising at L/R: the measured rise (less the carriers' own inertia) 2.095
+    against L/R 2.125 over three seeds, the final current unchanged. The measurement
+    changed twice: from one arm's carriers' velocities (noisy, and `dt/τ` below the drift the
+    field sees, the splitting's first-order lag) to the field in the hole, `B/μ₀`; and R from
+    the external field's work instead of the Joule heat (10 % scatter against 1 %).
+  - 2026-10-26: V-D6 (the skin effect) changed from a slab to a disc (round metals, DEC-14).
+    The slab 40 × 6 at ω = 1 did not follow the slab formula even at weak coupling (its
+    middle's field 1.03 of the drive's at c = 10 against 0.96): the formula assumes a good
+    conductor (`4πσ/ω` ≫ 1; here 2.7) without charges, and in a long slab the charges that
+    close the eddy loops, and the Coulomb displacement current the Darwin limit keeps, make
+    fields of their own (PHYSICS.md §2.12). A disc needs no charge (its eddy current runs
+    along the induced field) and has the exact cylinder solution: worst 0.041 against 0.05.
+  - 2026-10-26: the canonical kick `(q/m) dt ∇(v·A)` moved after the solve, from the field
+    solved at the same positions: taken from the last step's field (solved a move before),
+    each particle's own vector potential dragged it (the energy test Y25: a closed
+    collisionless disc lost 0.35 per time unit at dt 0.02, 0.77 on a grid twice as fine;
+    0.18 and 0.21 after, the rest the walls' impulses below and the macroparticles' own
+    field; V-D6's worst 0.041 became 0.027). Two limits found and kept for now: the scheme is first order (time reversal 6.1 %
+    of the self-field's effect at dt 0.02, 3.1 % at 0.01: levels with the self-field step at
+    most ~0.015 until an implicit-midpoint scheme); collisions and walls lose the carrier's
+    electromagnetic mass (`½q²|Δv|²Γ` per impulse; the lattice's heat is not the Joule heat
+    under the self-field until impulses carry it: `Δu = Δv/(1 − q²Γ/m)`, to come). The same
+    test found the backgrounds counted twice below 2000 particles (PHYSICS.md §2.11), a bug
+    of the metals from before this stage, fixed. It had shaped one shipped level: Inverter's
+    contacts empty its metals below 2000 particles while its gate is off (457 in the
+    preview); its golden hash changed, its reference still solves (the drain off 24.97
+    against 24.47 before, on 17.45 unchanged).
+  - 2026-10-26: V-D5 changed from a ramp's rise time to the impedance at one frequency
+    (lock-in), on a thin ring (wall 1, a lumped inductor). The rise-time integral carried the
+    ring's thermal current long after the rise: ±1 a seed on τ ≈ 2, so nine seeds under either
+    kick order could not decide (1.18 against 2.00 with the new, a three-seed 2.89 against 2.35
+    with the old). The impedance gives L/R from the phases within 0.3 % of L from the field's
+    energy over R from the drive's work. Lesson kept in the test: a mean square of a measured
+    current holds its thermal part (`kT/L`), so powers and energies divide by the driven
+    amplitude's `|I_ω|²/2`.
+
+## DEC-14: Round metals: a polygon of walls with the disc's area, the disc's exact background
+
+- **Status:** in use (2026-10-26; tests only so far: V-D6)
+- **Area:** physics
+- **Choice:** `Lattice::with_disc(center, radius)` cuts a rectangular lattice (its bounding
+  square) to a disc: the outline a regular polygon of 96 walls (`DISC_SIDES`) whose area
+  is the disc's (vertices at `R √(θ/sin θ)`, θ = 2π/96: 0.036 % beyond the radius), the
+  cores centred outside it removed, no carriers put outside it, and the background the
+  uniform disc's in closed form (`disc_integrals`), not the polygon's.
+- **Purpose:** a conductor with no surface charge under a field about its centre: the skin
+  effect against an exact solution (V-D6); later round metals in levels (Corbino disc,
+  rotating fields; task 34).
+- **Alternatives:** a true circular wall (a new kind of wall in the engine's reflection loop,
+  which handles straight segments only); the polygon's own background (the integrals of a
+  uniformly charged polygon, a sum over its sides: exact for the walls, but the disc's is
+  simpler and the two differ only in slivers 0.002 thick at R = 6, alternating in sign);
+  a staircase of rectangles (holes) cut from the square (rough edges at any cost).
+- **Where:** `crates/physics/src/lattice.rs` (`with_disc`, `outside`, `disc_integrals`);
+  tests `disc_background_is_the_disc`, `disc_lattice_stays_inside`, V-D6 in
+  `crates/physics/tests/darwin.rs`.
+- **History:**
+  - 2026-10-26: introduced for V-D6. With it, a carrier drawn into a core that straddles a
+    hole's edge or the outline is put on the core's inner side (it had been pushed outward,
+    into the hole or out of the metal); levels have neither, so none changes.

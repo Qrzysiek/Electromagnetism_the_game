@@ -345,6 +345,7 @@ fn d5_screening() {
         b_wave: None,
         circuits: Vec::new(),
         lattices: vec![lattice],
+        darwin: None,
     };
     let mut s = tube.state();
     let band = 0.05;
@@ -483,6 +484,7 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64, seed: u64) -> Tube
         b_wave: None,
         circuits: vec![source(0, 0.0), source(1, v)],
         lattices: vec![lattice],
+        darwin: None,
     }
 }
 
@@ -734,6 +736,7 @@ fn plate(
         b_wave: Some(wave),
         circuits: Vec::new(),
         lattices: vec![lattice],
+        darwin: None,
     }
 }
 

@@ -189,6 +189,8 @@ fn t11_matches_golden_hashes() {
                 let level = Level::from_json(std::str::from_utf8(bytes).unwrap()).unwrap();
                 level_hash(&level)
             });
+        // Printed as each level is done (`--nocapture` shows the progress level by level).
+        println!("{name}: {hash}");
         hashes.insert(name.clone(), hash);
     }
     let record = |hashes: &BTreeMap<String, String>| {
@@ -226,7 +228,6 @@ fn t11_matches_golden_hashes() {
     let golden = std::fs::read_to_string(&golden_path).expect("golden_hashes.json missing");
     for (name, hash) in &hashes {
         let expected = format!("\"{name}\": \"{hash}\"");
-        println!("{name}: {hash}");
         assert!(
             golden.contains(&expected),
             "{name}: hash {hash} not in golden file (platform-dependent result or physics change)"

@@ -116,9 +116,14 @@ Field solver alone (prescribed currents, no particles):
 With carriers:
 
 - V-D5 a metal ring's current after a step of EMF rises as I = (V/R)(1 − e^{−tR/L}), L the
-  geometric inductance, R the ring's resistance from Drude (2 % on L/R).
-- V-D6 the skin effect: a slab in the swinging solenoid, its current density's profile
-  against the classical skin depth √(2/(μ₀σω)) at ωτ ≪ 1 (5 %).
+  geometric inductance, R the ring's resistance from Drude (2 % on L/R). (Measured so first;
+  since 2026-10-26 as the impedance R + iωL by lock-in on a thin ring, the rise's integral
+  being dominated by the ring's thermal current: PHYSICS.md §2.12.)
+- V-D6 the skin effect: a disc in the swinging solenoid, its field's profile against a
+  cylinder's I₀(kr)/I₀(kR), k² = iωμ₀σ(ω) with the model's AC conductivity (0.05 of the
+  drive). (A slab was planned and tried first: at ω = 1 this metal is too poor a conductor
+  for the slab formula, the charges closing its eddy loops making fields of their own;
+  PHYSICS.md §2.12, DEC-13.)
 - V-D7 nested rings as a transformer: the secondary's EMF against M dI₁/dt.
 - Conservation: the electrostatic, kinetic and magnetic energy (½∫B²/μ₀) plus the
   lattices' heat and the circuits' work, constant to the method's accuracy; the total
@@ -142,3 +147,29 @@ With carriers:
 6. Levels: Inductor, Transformer, Skin effect, Shielding, Induction heating; then the
    circuit levels rebuilt with real parts, the strip's properties as the player's controls
    (the owner: "consider also using properties of the strip as a parameter").
+
+## 5. Progress
+
+- 2026-10-26, step 1 done: `physics::darwin2d` (grid, sine-transform preconditioner,
+  CG); V-D1–V-D3 exact, V-D4 (a disc's London screening) 0.61 %.
+- 2026-10-26, step 2 (engine) in: `Tube::darwin`, canonical velocities in `TubeState::u`,
+  the solve after the push (`Tube::darwin_step`), collisions and walls changing `u` by
+  their Δv; `Lattice::with_hole` (rings). V-D5 (a ring's current rising at L/R) passes over
+  three seeds (2.095 against 2.125); `crates/physics/tests/darwin.rs`, `--ignored`.
+- 2026-10-26, V-D5 redone as the thin ring's impedance by lock-in: L/R from the phases within
+  0.3 % of the field's energy over the drive's work (the rise time's integral could not decide
+  between the kick's orders over nine seeds).
+- 2026-10-26, V-D6 passes on a disc (round metals, `Lattice::with_disc`): the field's
+  profile within 0.041 of a cylinder's skin effect (required 0.05; 0.027 since the kick follows
+  the solve). The slab tried first
+  failed, most likely for its charges rather than the coupling (PHYSICS.md §2.12).
+- 2026-10-26, symmetries and energy Y21–Y25 pass (PHYSICS.md § Symmetries). They found the
+  backgrounds counted twice below 2000 particles (a metals bug, fixed) and the kick taken from
+  the last step's field (a self-drag, fixed: the kick now follows the solve). Known limits:
+  first order in time (levels with the self-field: dt ≲ 0.015), and impulses (collisions,
+  walls) lose the carrier's electromagnetic mass, so heat is not measurable under the
+  self-field yet.
+- Still to do in step 2: V-D7 (a transformer); impulses with the electromagnetic mass
+  (`Δu = Δv/(1 − q²Γ/m)`, Γ the grid's self-response at the carrier, with the local β);
+  perhaps an implicit-midpoint step; then a level's speed of light (`TubeSpec`), the editor,
+  leads (task 43), electrodes' induced EMF.

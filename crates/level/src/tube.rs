@@ -2676,6 +2676,7 @@ impl Level {
             }),
             circuits: self.tube_circuits(player),
             lattices,
+            darwin: None,
         };
         // Each emitter's weight: 1/PREVIEW_PARTICLES of the largest charge its emitting face
         // holds (no particles) over 16 phases of the sources' longest period (t = 0 alone

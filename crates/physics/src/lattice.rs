@@ -33,11 +33,37 @@ pub struct Lattice {
     /// Insulating walls inside it (straight segments: cuts), which its carriers cannot cross
     /// (`physics::tube`: reflected off them as off its sides). Empty: none.
     pub walls: Vec<(DVec3, DVec3)>,
+    /// Holes (`with_hole`): rectangles inside it with no cores, no carriers and no
+    /// background, their edges walls (a ring: an inductor's turn). Empty: none.
+    pub holes: Vec<(DVec3, DVec3)>,
+    /// A round conductor (`with_disc`): the disc's centre and radius, inside the rectangle;
+    /// its outline walls. None: the rectangle.
+    pub disc: Option<(DVec3, f64)>,
     /// The cores by cell (`cell` wide, `nx × ny` from `lo`).
     cell: f64,
     nx: usize,
     ny: usize,
     buckets: Vec<Vec<u32>>,
+}
+
+/// A round conductor's outline: the sides of its polygon (`Lattice::with_disc`).
+pub const DISC_SIDES: usize = 96;
+
+/// Potential and field at `x` of the disc of `radius` about `center` carrying a unit charge
+/// per area, in the convention of `zinv::rect_integrals` (`φ = −∫∫ ln r² dA`): outside,
+/// that of its charge `πR²` on its axis, `φ = −πR² ln r²`, `E = 2πR² r̂/r`; inside, by Gauss,
+/// `E = 2π r` (r from the centre) and `φ = −πR² ln R² + π(R² − r²)` (test
+/// `disc_background_is_the_disc`).
+#[must_use]
+pub fn disc_integrals(center: DVec3, radius: f64, x: DVec3) -> (f64, DVec3) {
+    let pi = std::f64::consts::PI;
+    let d = DVec3::new(x.x - center.x, x.y - center.y, 0.0);
+    let (r2, big) = (d.x * d.x + d.y * d.y, radius * radius);
+    if r2 >= big {
+        (-pi * big * libm::log(r2), d * (2.0 * pi * big / r2))
+    } else {
+        (-pi * big * libm::log(big) + pi * (big - r2), d * (2.0 * pi))
+    }
 }
 
 /// splitmix64: a well-mixed 64-bit hash.
@@ -136,7 +162,116 @@ impl Lattice {
             ny,
             buckets,
             walls: Vec::new(),
+            holes: Vec::new(),
+            disc: None,
         }
+    }
+
+    /// The cores by cell again, after some went.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn rebucket(&mut self) {
+        self.buckets = vec![Vec::new(); self.nx * self.ny];
+        for (k, c) in self.cores.iter().enumerate() {
+            let i = (((c.x - self.lo.x) / self.cell) as usize).min(self.nx - 1);
+            let j = (((c.y - self.lo.y) / self.cell) as usize).min(self.ny - 1);
+            self.buckets[i + self.nx * j].push(u32::try_from(k).unwrap_or(u32::MAX));
+        }
+    }
+
+    /// The lattice with a rectangular hole `lo`..`hi` inside it, which makes it a ring: the
+    /// hole's edges become walls (its carriers reflect off them as off a cut), the cores
+    /// centred in it go (those across its edge stay: they scatter on the metal's side), and
+    /// neither carriers (`fill`) nor background (`background_at`, `carrier_charge`) are put
+    /// in it.
+    #[must_use]
+    pub fn with_hole(mut self, lo: DVec3, hi: DVec3) -> Self {
+        let corners = [
+            lo,
+            DVec3::new(hi.x, lo.y, 0.0),
+            hi,
+            DVec3::new(lo.x, hi.y, 0.0),
+        ];
+        for k in 0..4 {
+            self.walls.push((corners[k], corners[(k + 1) % 4]));
+        }
+        self.holes.push((lo, hi));
+        let inside = |c: &DVec3| c.x > lo.x && c.x < hi.x && c.y > lo.y && c.y < hi.y;
+        self.cores.retain(|c| !inside(c));
+        self.rebucket();
+        self
+    }
+
+    /// The lattice cut to the disc of `radius` about `center` (inside its rectangle): a round
+    /// conductor. Its outline is a regular polygon of `DISC_SIDES` walls with the disc's area
+    /// (within 0.04 % of the radius of the circle at 96 sides; its carriers reflect off them as
+    /// off a cut), the cores centred outside it go, no carriers are put outside it (`fill`),
+    /// and its background is the disc's, in closed form (`background_at`).
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn with_disc(mut self, center: DVec3, radius: f64) -> Self {
+        let n = DISC_SIDES as f64;
+        let step = 2.0 * std::f64::consts::PI / n;
+        // The vertices' radius that gives the polygon the disc's area: N/2 R_v² sin(2π/N) = πR².
+        let rv = radius * libm::sqrt(step / libm::sin(step));
+        let vertex = |k: usize| {
+            let a = step * k as f64;
+            center + DVec3::new(libm::cos(a), libm::sin(a), 0.0) * rv
+        };
+        for k in 0..DISC_SIDES {
+            self.walls.push((vertex(k), vertex((k + 1) % DISC_SIDES)));
+        }
+        self.disc = Some((center, radius));
+        let cores = std::mem::take(&mut self.cores);
+        self.cores = cores.into_iter().filter(|c| self.in_outline(*c)).collect();
+        self.rebucket();
+        self
+    }
+
+    /// Whether `x` lies inside its disc's outline (true without a disc): on the inner side of
+    /// every side of the polygon.
+    #[allow(clippy::cast_precision_loss)]
+    fn in_outline(&self, x: DVec3) -> bool {
+        let Some((center, radius)) = self.disc else {
+            return true;
+        };
+        let n = DISC_SIDES as f64;
+        let step = 2.0 * std::f64::consts::PI / n;
+        let apothem = radius * libm::sqrt(step / libm::sin(step)) * libm::cos(0.5 * step);
+        let d = x - center;
+        (0..DISC_SIDES).all(|k| {
+            let a = step * (k as f64 + 0.5);
+            d.x * libm::cos(a) + d.y * libm::sin(a) <= apothem
+        })
+    }
+
+    /// Whether `x` lies outside the conductor though in its rectangle: in a hole, or out of
+    /// its disc's outline.
+    #[must_use]
+    pub fn outside(&self, x: DVec3) -> bool {
+        self.in_hole(x) || !self.in_outline(x)
+    }
+
+    /// Whether `x` lies in one of its holes.
+    #[must_use]
+    pub fn in_hole(&self, x: DVec3) -> bool {
+        self.holes
+            .iter()
+            .any(|(lo, hi)| x.x > lo.x && x.x < hi.x && x.y > lo.y && x.y < hi.y)
+    }
+
+    /// Its conductor's area: the rectangle's (or its disc's) less its holes'.
+    #[must_use]
+    pub fn area(&self) -> f64 {
+        let whole = match self.disc {
+            Some((_, r)) => std::f64::consts::PI * r * r,
+            None => (self.hi.x - self.lo.x) * (self.hi.y - self.lo.y),
+        };
+        whole
+            - self
+                .holes
+                .iter()
+                .map(|(lo, hi)| (hi.x - lo.x) * (hi.y - lo.y))
+                .sum::<f64>()
     }
 
     /// `count` cores placed independently and uniformly over `lo`..`hi`, at least `radius`
@@ -232,7 +367,15 @@ impl Lattice {
     /// The background's potential and field at `x`.
     #[must_use]
     pub fn background_at(&self, x: DVec3) -> (f64, DVec3) {
-        let (p, e) = rect_integrals(self.lo, self.hi, x);
+        let (mut p, mut e) = match self.disc {
+            Some((center, radius)) => disc_integrals(center, radius, x),
+            None => rect_integrals(self.lo, self.hi, x),
+        };
+        for (lo, hi) in &self.holes {
+            let (ph, eh) = rect_integrals(*lo, *hi, x);
+            p -= ph;
+            e -= eh;
+        }
         (self.background * p, e * self.background)
     }
 
@@ -240,8 +383,15 @@ impl Lattice {
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
     pub fn carrier_charge(&self) -> f64 {
-        -self.background * (self.hi.x - self.lo.x) * (self.hi.y - self.lo.y)
-            / self.carriers.max(1) as f64
+        // A plain rectangle's product in its original order, `(−ρ w) h`: `−ρ (w h)` rounds
+        // differently at a density that is not a power of two (Eddy currents in silicon's 2.7
+        // changed its run, and its golden hash, by an ulp of every carrier's charge).
+        let whole = if self.holes.is_empty() && self.disc.is_none() {
+            -self.background * (self.hi.x - self.lo.x) * (self.hi.y - self.lo.y)
+        } else {
+            -self.background * self.area()
+        };
+        whole / self.carriers.max(1) as f64
     }
 
     /// The first core the straight move from `a` to `b` enters: the fraction of the move
@@ -386,7 +536,16 @@ impl Lattice {
                 self.lo.y + (j as f64 + unit(mix(hk))) / ny as f64 * h,
                 0.0,
             );
-            // Out of a core it fell in: to its rim, outward.
+            // Out of a hole (or off its disc) it fell in: drawn again uniformly over the
+            // rectangle until in the conductor (none without either: bit for bit as before).
+            let mut redraw = 0_u64;
+            while self.outside(x) && redraw < 1000 {
+                redraw += 1;
+                let hr = mix(hk ^ mix(0x0401e ^ redraw));
+                x = DVec3::new(self.lo.x + unit(hr) * w, self.lo.y + unit(mix(hr)) * h, 0.0);
+            }
+            // Out of a core it fell in: to its rim, outward (inward instead where outward is
+            // out of the conductor: a core across a hole's edge or the outline).
             if let Some(c) = self
                 .cores
                 .iter()
@@ -394,10 +553,94 @@ impl Lattice {
             {
                 let dir = (x - *c).normalize_or(DVec3::X);
                 x = *c + dir * (self.core_radius * 1.000_001);
+                if self.outside(x) {
+                    x = *c - dir * (self.core_radius * 1.000_001);
+                }
             }
             let (g1, g2) = normals(unit(mix(mix(hk))), unit(mix(mix(mix(hk)))));
             out.push((x, DVec3::new(g1, g2, 0.0) * self.thermal_speed));
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The disc's closed form against the disc summed from 2000 thin rectangles across it
+    /// (each exact, `rect_integrals`; the staircase's error O(h²) ~ 1e-6 away from the rim):
+    /// relative 1e-5, inside and outside.
+    #[test]
+    fn disc_background_is_the_disc() {
+        let (center, radius) = (DVec3::new(1.0, -2.0, 0.0), 3.0);
+        let n = 2000;
+        let h = 2.0 * radius / f64::from(n);
+        let stairs = |x: DVec3| {
+            let (mut p, mut e) = (0.0, DVec3::ZERO);
+            for i in 0..n {
+                let u = -radius + h * (f64::from(i) + 0.5);
+                let half = libm::sqrt(radius * radius - u * u);
+                let lo = center + DVec3::new(u - 0.5 * h, -half, 0.0);
+                let hi = center + DVec3::new(u + 0.5 * h, half, 0.0);
+                let (pi, ei) = rect_integrals(lo, hi, x);
+                p += pi;
+                e += ei;
+            }
+            (p, e)
+        };
+        let mut worst: f64 = 0.0;
+        for (r, a) in [(0.0, 0.0), (0.9, 0.3), (2.1, 2.0), (4.5, -1.0), (9.0, 4.0)] {
+            let x = center + DVec3::new(libm::cos(a), libm::sin(a), 0.0) * r;
+            let (p, e) = disc_integrals(center, radius, x);
+            let (ps, es) = stairs(x);
+            let scale = std::f64::consts::PI * radius * radius;
+            let dp = (p - ps).abs() / (scale * (1.0 + libm::log(r * r + 1.0).abs()));
+            let de = (e - es).length() / (2.0 * std::f64::consts::PI * radius);
+            println!(
+                "r {r}: φ {p:.6} vs {ps:.6}, E {:.6} vs {:.6}",
+                e.length(),
+                es.length()
+            );
+            worst = worst.max(dp).max(de);
+        }
+        println!("worst relative {worst:.2e}");
+        assert!(worst < 1e-5, "worst {worst}");
+    }
+
+    /// A round lattice: its carriers and cores inside its outline, its area the disc's, its
+    /// carriers' charge the background's, opposite.
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn disc_lattice_stays_inside() {
+        let (center, radius) = (DVec3::new(2.0, 3.0, 0.0), 4.0);
+        let half = DVec3::new(radius * 1.001, radius * 1.001, 0.0);
+        let (lo, hi) = (center - half, center + half);
+        let cores = Lattice::random_cores(lo, hi, 400, 0.01, 5);
+        let lattice =
+            Lattice::new(lo, hi, 1.0, cores, 0.01, -1.0, 1.0, 3000, 7).with_disc(center, radius);
+        let pi = std::f64::consts::PI;
+        assert!((lattice.area() - pi * radius * radius).abs() < 1e-12);
+        let total = lattice.carrier_charge() * lattice.carriers as f64;
+        assert!(
+            (total + pi * radius * radius).abs() < 1e-9,
+            "charge {total}"
+        );
+        // The outline's vertices lie 0.036 % beyond the radius at 96 sides.
+        let rv = radius * 1.000_357;
+        let fill = lattice.fill();
+        assert_eq!(fill.len(), 3000);
+        for (x, _) in &fill {
+            assert!(!lattice.outside(*x), "carrier at {x}");
+            assert!((*x - center).length() <= rv, "carrier at {x}");
+        }
+        assert!(lattice.cores.iter().all(|c| (*c - center).length() <= rv));
+        // Uniform: as many in the inner half of the area as in the outer.
+        let inner = fill
+            .iter()
+            .filter(|(x, _)| (*x - center).length() < radius / std::f64::consts::SQRT_2)
+            .count();
+        assert!((inner as f64 / 3000.0 - 0.5).abs() < 0.03, "inner {inner}");
+        assert_eq!(lattice.walls.len(), DISC_SIDES);
     }
 }
