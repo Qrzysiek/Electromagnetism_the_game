@@ -404,3 +404,28 @@ Entries are numbered in order and never renumbered.
 - **History:**
   - 2026-10-26: measured and decided. What costs time is the heavy per-level tests, which
     test selection (DEC-16, to come) addresses.
+
+## DEC-17: A pinned toolchain and CI's hygiene checks
+
+- **Status:** in use (2026-10-26)
+- **Area:** tooling
+- **Choice:** `rust-toolchain.toml` pins Rust 1.98.1 (with rustfmt, clippy and the LLVM tools
+  for coverage), and CI installs that toolchain instead of the moving `stable`. A CI job
+  `hygiene` (Linux) runs cargo-deny (`deny.toml`: permissive licences only, the security
+  advisories, the sources), cargo-machete (unused dependencies) and the documentation with
+  warnings as errors.
+- **Purpose:** the owner (2026-10-26): reproducible builds and a CI that checks what matters.
+  The golden hashes, the run cache and test selection (DEC-16) assume the compiler does not
+  change under them; an upgrade is a deliberate bump followed by every test.
+- **Alternatives:** `stable` in CI (results could change with a release, unnoticed until a
+  golden hash moved); a nightly pin (needed by nothing here).
+- **Where:** `rust-toolchain.toml`, `deny.toml`, `.github/workflows/ci.yml`.
+- **History:**
+  - 2026-10-26: introduced. cargo-deny found, all through Bevy and egui, a decompression bomb
+    in `ruzstd` 0.8 (RUSTSEC-2026-0344; the fix, 0.9.1, needs a Bevy upgrade; the game decodes
+    only its own bundled assets) and three unmaintained crates (`paste`, `rustybuzz`,
+    `ttf-parser`), ignored with those reasons, and two yanked ones, updated (`yoke-derive`
+    0.8.4, `clipboard-win` 5.4.3). cargo-machete found no unused dependency; the documentation
+    builds without warnings. CI's test job still runs every per-level check (hours on its
+    runners); the per-level harness (DEC-16) makes them selectable and its sampled golden
+    hashes on Linux the cross-platform check.

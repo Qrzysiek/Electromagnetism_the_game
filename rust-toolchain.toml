@@ -1,0 +1,6 @@
+# The pinned toolchain (docs/DECISIONS.md, DEC-17): the golden hashes, the run cache and the
+# tests' selection by the files they executed all assume the compiler does not change under
+# them. Upgrade deliberately: bump the version here, then run everything.
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]
