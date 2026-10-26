@@ -16,6 +16,8 @@ rayon = "1.12.0"
 
 [dev-dependencies]
 criterion = "0.8.2"
+# Complex arithmetic in the tests' references (tests/common).
+num-complex = "0.4.6"
 # Independent DOP853 implementation used as a cross-check in tests only.
 ode_solvers = "0.6.2"
 proptest = "1.11.0"

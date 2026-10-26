@@ -6,19 +6,18 @@
 //! solenoid's field is uniform inside and none outside).
 
 use physics::DVec3;
-use physics::bem::Bias;
 use physics::circuit::Waveform;
 use physics::darwin2d::Darwin2d;
 use physics::lattice::{Lattice, Material};
 use physics::tube::{SolenoidWave, Tube, TubeState};
-use physics::zinv::{Electrode, Electrodes, Section};
 use std::f64::consts::PI;
+
+mod common;
+use common::{Complex64, ci0, csqrt, mobility};
 
 /// The tests' metal (as `drude.rs`): cores of radius `A` for a mean free path of 0.5.
 const A: f64 = 0.00125;
 const MEAN_FREE_PATH: f64 = 0.5;
-/// The mean collision angle's cosine (specular hard discs, `drude.rs`).
-const COS_THETA: f64 = -1.0 / 3.0;
 
 /// A run's sample: (t, the ring's current, the magnetic energy, the external field's work).
 type Sample = (f64, f64, f64, f64);
@@ -39,37 +38,12 @@ fn ring(
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(144.0 / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, seed ^ 31);
-    let lattice = Lattice::new(
-        lo,
-        hi,
-        Material {
-            background: 1.0,
-            core_radius: A,
-            charge_per_mass: -1.0,
-            thermal_speed: 1.0,
-        },
-        cores,
-        carriers,
-        seed,
-    )
-    .with_hole(
+    let lattice = Lattice::new(lo, hi, common::metal(A), cores, carriers, seed).with_hole(
         DVec3::new(wall, wall, 0.0),
         DVec3::new(12.0 - wall, 12.0 - wall, 0.0),
     );
     // One small floating electrode far away (the electrostatics needs one; OP-1).
-    let electrodes = Electrodes::new(
-        vec![Electrode {
-            section: Section::Rect {
-                center: lo - DVec3::new(40.0, 40.0, 0.0),
-                angle: 0.0,
-                half_length: 0.25,
-                half_thickness: 0.25,
-            },
-            bias: Bias::Charge(0.0),
-        }],
-        &[],
-        0.25,
-    );
+    let electrodes = common::small_floating_electrode(lo - DVec3::new(40.0, 40.0, 0.0));
     Tube {
         arena: Some((
             lo - DVec3::new(2.0, 2.0, 0.0),
@@ -160,11 +134,11 @@ fn ring_impedance_is_r_plus_i_omega_l() {
             im -= r.1 * libm::sin(omega * r.0);
             energy += r.2;
         }
-        let phasor = (2.0 * re / n, 2.0 * im / n);
-        let z = cdiv(phasor, (-b0 * omega, 0.0));
+        let phasor = Complex64::new(2.0 * re / n, 2.0 * im / n);
+        let z = phasor / Complex64::new(-b0 * omega, 0.0);
         let (first, last) = (w[0], w[w.len() - 1]);
         let power = (last.3 - first.3) / (last.0 - first.0);
-        let square = 0.5 * (phasor.0 * phasor.0 + phasor.1 * phasor.1);
+        let square = 0.5 * (phasor.re * phasor.re + phasor.im * phasor.im);
         (z, power, energy / n, square)
     };
     let mut rows = Vec::new();
@@ -187,11 +161,11 @@ fn ring_impedance_is_r_plus_i_omega_l() {
         let (zf, pf, _, i2f) = lock_in(&free);
         let (zs, ps, ws, i2s) = lock_in(&selfish);
         let (_, _, wq, _) = lock_in(&quiet);
-        let (tf, ts) = (-zf.1 / zf.0, -zs.1 / zs.0);
+        let (tf, ts) = (-zf.im / zf.re, -zs.im / zs.re);
         let (rf, rs) = (pf / i2f, ps / i2s);
         let l = 2.0 * (ws - wq) / i2s;
         let measured = (ts - tf) / omega;
-        let magnitudes = libm::hypot(zf.0, zf.1) / libm::hypot(zs.0, zs.1);
+        let magnitudes = libm::hypot(zf.re, zf.im) / libm::hypot(zs.re, zs.im);
         let cosines = libm::sqrt((1.0 + ts * ts) / (1.0 + tf * tf));
         println!(
             "V-D5 seed {seed}: tan φ free {tf:.4}, self {ts:.4}: L/R {measured:.4}; L {l:.2} (μ₀ × {:.1}), R {rs:.3} (free {rf:.3}): L/R {:.4}; |I_free/I_self| {magnitudes:.4} vs {cosines:.4}",
@@ -220,75 +194,6 @@ fn ring_impedance_is_r_plus_i_omega_l() {
     );
 }
 
-/// The Boltzmann equation's mean velocity per unit acceleration of the tests' carriers
-/// (thermal speed 1, colliding at `κ v`) for a drive `∝ e^{iωt}` (`drude.rs`, D2:
-/// `(π/κ) P/(1 − ⟨cos θ⟩ Q)`, `P = κ ∫ v³ f₀/(κv + iω) dv`, `Q = κ ∫ v g/(κv + iω) dv`,
-/// Simpson on [0, 14]): with charge density 1 and |q/m| 1, the conductivity `σ(ω)`.
-fn mobility(kappa: f64, omega: f64) -> (f64, f64) {
-    let (n, top) = (28_000, 14.0);
-    let h = top / f64::from(n);
-    let (mut p, mut q) = ((0.0, 0.0), (0.0, 0.0));
-    for k in 0..=n {
-        let v = h * f64::from(k);
-        let w = if k == 0 || k == n {
-            1.0
-        } else if k % 2 == 1 {
-            4.0
-        } else {
-            2.0
-        };
-        let d = kappa * kappa * v * v + omega * omega;
-        if d == 0.0 {
-            continue;
-        }
-        let (re, im) = (kappa * kappa * v / d, -kappa * omega / d);
-        let e = libm::exp(-0.5 * v * v);
-        let fp = v * v * v * e / (2.0 * PI);
-        let fq = v * libm::sqrt(2.0 / PI) * v * v * e;
-        p = (p.0 + w * fp * re, p.1 + w * fp * im);
-        q = (q.0 + w * fq * re, q.1 + w * fq * im);
-    }
-    let (p, q) = (
-        (p.0 * h / 3.0, p.1 * h / 3.0),
-        (q.0 * h / 3.0, q.1 * h / 3.0),
-    );
-    let den = (1.0 - COS_THETA * q.0, -COS_THETA * q.1);
-    let dd = den.0 * den.0 + den.1 * den.1;
-    let ratio = (
-        (p.0 * den.0 + p.1 * den.1) / dd,
-        (p.1 * den.0 - p.0 * den.1) / dd,
-    );
-    (PI / kappa * ratio.0, PI / kappa * ratio.1)
-}
-
-/// Complex numbers as pairs: product, quotient, square root.
-fn cmul(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
-    (a.0 * b.0 - a.1 * b.1, a.0 * b.1 + a.1 * b.0)
-}
-fn cdiv(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
-    let d = b.0 * b.0 + b.1 * b.1;
-    ((a.0 * b.0 + a.1 * b.1) / d, (a.1 * b.0 - a.0 * b.1) / d)
-}
-fn csqrt(a: (f64, f64)) -> (f64, f64) {
-    let r = libm::hypot(a.0, a.1);
-    let re = libm::sqrt(0.5 * (r + a.0));
-    let im = libm::sqrt(0.5 * (r - a.0)).copysign(a.1);
-    (re, im)
-}
-/// The modified Bessel function `I₀(z) = Σ (z²/4)^m/(m!)²` of a complex `z` (|z| ≲ 5).
-fn ci0(z: (f64, f64)) -> (f64, f64) {
-    let q = cmul(z, z);
-    let q = (0.25 * q.0, 0.25 * q.1);
-    let (mut sum, mut term) = ((1.0, 0.0), (1.0, 0.0));
-    for m in 1..40 {
-        let m = f64::from(m);
-        term = cmul(term, q);
-        term = (term.0 / (m * m), term.1 / (m * m));
-        sum = (sum.0 + term.0, sum.1 + term.1);
-    }
-    sum
-}
-
 /// The disc: radius 6 about the origin, the tests' metal (`Lattice::with_disc`), in a field
 /// `B₀ sin ωt` about its centre, the self-field at the speed of light `c`.
 fn disc(c: f64, carriers: usize, b0: f64, omega: f64, dt: f64, seed: u64) -> Tube {
@@ -300,33 +205,9 @@ fn disc(c: f64, carriers: usize, b0: f64, omega: f64, dt: f64, seed: u64) -> Tub
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(square / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, seed ^ 31);
-    let lattice = Lattice::new(
-        lo,
-        hi,
-        Material {
-            background: 1.0,
-            core_radius: A,
-            charge_per_mass: -1.0,
-            thermal_speed: 1.0,
-        },
-        cores,
-        carriers,
-        seed,
-    )
-    .with_disc(DVec3::ZERO, radius);
-    let electrodes = Electrodes::new(
-        vec![Electrode {
-            section: Section::Rect {
-                center: DVec3::new(-40.0, -40.0, 0.0),
-                angle: 0.0,
-                half_length: 0.25,
-                half_thickness: 0.25,
-            },
-            bias: Bias::Charge(0.0),
-        }],
-        &[],
-        0.25,
-    );
+    let lattice = Lattice::new(lo, hi, common::metal(A), cores, carriers, seed)
+        .with_disc(DVec3::ZERO, radius);
+    let electrodes = common::small_floating_electrode(DVec3::new(-40.0, -40.0, 0.0));
     Tube {
         arena: Some((
             lo - DVec3::new(2.0, 2.0, 0.0),
@@ -391,57 +272,55 @@ fn disc_skin_effect() {
     // C = (2/T) ∫ B e^{−iωt} dt, the solenoid's added to the self-field.
     #[allow(clippy::cast_precision_loss)]
     let n = samples.len() as f64;
-    let amplitude = |k: Option<usize>| -> (f64, f64) {
-        let mut c = (0.0, 0.0);
+    let amplitude = |k: Option<usize>| -> Complex64 {
+        let mut c = Complex64::new(0.0, 0.0);
         for (t, row) in &samples {
             let b = b0 * libm::sin(omega * t) + k.map_or(0.0, |k| row[k]);
-            c.0 += b * libm::cos(omega * t);
-            c.1 -= b * libm::sin(omega * t);
+            c.re += b * libm::cos(omega * t);
+            c.im -= b * libm::sin(omega * t);
         }
-        (2.0 * c.0 / n, 2.0 * c.1 / n)
+        Complex64::new(2.0 * c.re / n, 2.0 * c.im / n)
     };
     let ext = amplitude(None);
     let sigma = mobility(1.0 / MEAN_FREE_PATH, omega);
-    let k = csqrt(cmul((0.0, omega * mu0), sigma));
-    let rim = ci0((k.0 * radius, k.1 * radius));
+    let k = csqrt(Complex64::new(0.0, omega * mu0) * sigma);
+    let rim = ci0(k * radius);
     let (mut worst, mut spread): (f64, f64) = (0.0, 0.0);
     for (i, r) in radii.iter().enumerate() {
-        let at: Vec<(f64, f64)> = (0..4)
-            .map(|q| cdiv(amplitude(Some(4 * i + q)), ext))
-            .collect();
-        let mean = (
-            at.iter().map(|z| z.0).sum::<f64>() / 4.0,
-            at.iter().map(|z| z.1).sum::<f64>() / 4.0,
+        let at: Vec<Complex64> = (0..4).map(|q| amplitude(Some(4 * i + q)) / ext).collect();
+        let mean = Complex64::new(
+            at.iter().map(|z| z.re).sum::<f64>() / 4.0,
+            at.iter().map(|z| z.im).sum::<f64>() / 4.0,
         );
         let want = if *r < radius {
-            cdiv(ci0((k.0 * r, k.1 * r)), rim)
+            ci0(k * *r) / rim
         } else {
-            (1.0, 0.0)
+            Complex64::new(1.0, 0.0)
         };
-        let err = libm::hypot(mean.0 - want.0, mean.1 - want.1);
+        let err = libm::hypot(mean.re - want.re, mean.im - want.im);
         let apart = at
             .iter()
-            .map(|z| libm::hypot(z.0 - mean.0, z.1 - mean.1))
+            .map(|z| libm::hypot(z.re - mean.re, z.im - mean.im))
             .fold(0.0, f64::max);
         println!(
             "V-D6 r {r}: measured ({:.3}, {:.3}) |{:.3}|, cylinder ({:.3}, {:.3}) |{:.3}|: {err:.3} (quarter turns within {apart:.3})",
-            mean.0,
-            mean.1,
-            libm::hypot(mean.0, mean.1),
-            want.0,
-            want.1,
-            libm::hypot(want.0, want.1)
+            mean.re,
+            mean.im,
+            libm::hypot(mean.re, mean.im),
+            want.re,
+            want.im,
+            libm::hypot(want.re, want.im)
         );
         worst = worst.max(err);
         spread = spread.max(apart);
     }
     println!(
         "V-D6: σ(ω) ({:.4}, {:.4}), k ({:.3}, {:.3}), |k|R {:.2}; worst {worst:.3}, quarter turns {spread:.3}",
-        sigma.0,
-        sigma.1,
-        k.0,
-        k.1,
-        libm::hypot(k.0, k.1) * radius
+        sigma.re,
+        sigma.im,
+        k.re,
+        k.im,
+        libm::hypot(k.re, k.im) * radius
     );
     assert!(worst < 0.05, "worst {worst}");
 }
@@ -519,19 +398,7 @@ impl Little {
         if !self.walls {
             lattice.walls.clear();
         }
-        let electrodes = Electrodes::new(
-            vec![Electrode {
-                section: Section::Rect {
-                    center: self.electrode,
-                    angle: 0.0,
-                    half_length: 0.25,
-                    half_thickness: 0.25,
-                },
-                bias: Bias::Charge(0.0),
-            }],
-            &[],
-            0.25,
-        );
+        let electrodes = common::small_floating_electrode(self.electrode);
         Tube {
             arena: Some((
                 lo - DVec3::new(2.0, 2.0, 0.0),

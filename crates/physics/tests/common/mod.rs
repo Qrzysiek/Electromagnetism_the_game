@@ -226,3 +226,109 @@ pub fn periapsis_times<F: physics::field::FieldSolver>(step: &StepView<'_, F>) -
     }
     out
 }
+
+// The Drude metal's and the self-field's tests (drude.rs, darwin.rs): their metal, the
+// small floating electrode that anchors their electrostatics, the Boltzmann equation's AC
+// mobility (their reference for σ(ω)), and complex helpers whose square root and Bessel
+// series stay on `libm` (num-complex's own square root goes through the platform's
+// library).
+
+pub use num_complex::Complex64;
+use physics::bem::Bias;
+use physics::lattice::Material;
+use physics::zinv::{Electrode, Electrodes, Section};
+use std::f64::consts::PI;
+
+/// The mean collision angle's cosine (specular hard discs).
+pub const COS_THETA: f64 = -1.0 / 3.0;
+
+/// The tests' metal: background 1 (the carriers' charge density −1), carriers of `q/m` −1
+/// and thermal speed 1, cores of radius `core_radius`.
+#[must_use]
+pub fn metal(core_radius: f64) -> Material {
+    Material {
+        background: 1.0,
+        core_radius,
+        charge_per_mass: -1.0,
+        thermal_speed: 1.0,
+    }
+}
+
+/// A small floating square electrode (side 0.5, no net charge) at `center`: the reference the
+/// z-invariant electrostatics needs (docs/OPEN_PROBLEMS.md, OP-1), far from the metal.
+#[must_use]
+pub fn small_floating_electrode(center: DVec3) -> Electrodes {
+    Electrodes::new(
+        vec![Electrode {
+            section: Section::Rect {
+                center,
+                angle: 0.0,
+                half_length: 0.25,
+                half_thickness: 0.25,
+            },
+            bias: Bias::Charge(0.0),
+        }],
+        &[],
+        0.25,
+    )
+}
+
+/// The Boltzmann equation's mean velocity per unit acceleration (along x) of carriers of
+/// thermal speed 1 colliding at `κ v`, rotating at `−ω` (PHYSICS.md §2.11; equally, the
+/// response to a drive `∝ e^{iωt}`, as V-D6 uses it): `(v_x + i v_y)/a = (π/κ) P/(1 − ⟨cos θ⟩ Q)`,
+/// `P = κ ∫ v³ f₀/(κ v + i ω) dv` with `f₀ = e^{−v²/2}/2π`, `Q = κ ∫ v g/(κ v + i ω) dv` with
+/// the drawn speeds' law `g = √(2/π) v² e^{−v²/2}`. At `ω = 0`: `(3/8) √(π/2)/κ`. Simpson's
+/// rule on [0, 14]. With charge density 1 and |q/m| 1 it is the conductivity σ(ω).
+#[must_use]
+pub fn mobility(kappa: f64, omega: f64) -> Complex64 {
+    let (n, top) = (28_000, 14.0);
+    let h = top / f64::from(n);
+    let (mut p, mut q) = (Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0));
+    for k in 0..=n {
+        let v = h * f64::from(k);
+        let w = if k == 0 || k == n {
+            1.0
+        } else if k % 2 == 1 {
+            4.0
+        } else {
+            2.0
+        };
+        // κ/(κv + iω) = κ (κv − iω)/(κ²v² + ω²).
+        let d = kappa * kappa * v * v + omega * omega;
+        if d == 0.0 {
+            continue;
+        }
+        let (re, im) = (kappa * kappa * v / d, -kappa * omega / d);
+        let e = libm::exp(-0.5 * v * v);
+        let fp = v * v * v * e / (2.0 * PI);
+        let fq = v * libm::sqrt(2.0 / PI) * v * v * e;
+        p += Complex64::new(w * fp * re, w * fp * im);
+        q += Complex64::new(w * fq * re, w * fq * im);
+    }
+    let (p, q) = (p * h / 3.0, q * h / 3.0);
+    // (π/κ) p / (1 − c q).
+    let den = Complex64::new(1.0 - COS_THETA * q.re, -COS_THETA * q.im);
+    p / den * (PI / kappa)
+}
+
+/// The principal square root, in `libm`.
+#[must_use]
+pub fn csqrt(a: Complex64) -> Complex64 {
+    let r = libm::hypot(a.re, a.im);
+    let re = libm::sqrt(0.5 * (r + a.re));
+    let im = libm::sqrt(0.5 * (r - a.re)).copysign(a.im);
+    Complex64::new(re, im)
+}
+
+/// The modified Bessel function `I₀(z) = Σ (z²/4)^m/(m!)²` of a complex `z` (|z| ≲ 5).
+#[must_use]
+pub fn ci0(z: Complex64) -> Complex64 {
+    let q = z * z * 0.25;
+    let (mut sum, mut term) = (Complex64::new(1.0, 0.0), Complex64::new(1.0, 0.0));
+    for m in 1..40 {
+        let m = f64::from(m);
+        term = term * q / (m * m);
+        sum += term;
+    }
+    sum
+}

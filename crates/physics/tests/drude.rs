@@ -13,19 +13,20 @@
 use physics::DVec3;
 use physics::bem::Bias;
 use physics::circuit::Waveform;
-use physics::lattice::{Lattice, Material};
+use physics::lattice::Lattice;
 use physics::tube::{Circuit, Emitter, OhmicContact, SolenoidWave, Tube};
 use physics::zinv::{Electrode, Electrodes, Section};
 use rayon::prelude::*;
 use std::f64::consts::{FRAC_PI_2, PI};
+
+mod common;
+use common::{Complex64, mobility};
 
 /// The cores' radius and the mean free path of the tests: `a² n_ion = a/(2ℓ) = 0.00125`
 /// (dilute: the medium's own correction, `≈ 1.1 a² n ln(a² n)` measured, is −0.7 %
 /// here and −2.5 % at 0.005; PHYSICS.md).
 const A: f64 = 0.00125;
 const MEAN_FREE_PATH: f64 = 0.5;
-/// `⟨cos θ⟩` of a specular bounce off a disc at a uniform impact parameter.
-const COS_THETA: f64 = -1.0 / 3.0;
 
 /// What a box run measured (per carrier, thermal speed 1).
 struct BoxRun {
@@ -59,19 +60,7 @@ fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, ac: f64, t0: f64, t1:
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(side * side * n_ion) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, 5);
-    let lattice = Lattice::new(
-        lo,
-        hi,
-        Material {
-            background: 1.0,
-            core_radius: A,
-            charge_per_mass: -1.0,
-            thermal_speed: 1.0,
-        },
-        cores,
-        carriers,
-        11,
-    );
+    let lattice = Lattice::new(lo, hi, common::metal(A), cores, carriers, 11);
     let kappa = 2.0 * A * lattice.cores.len() as f64 / (side * side);
     // Position, stored (half step) velocity, displacement over the window.
     let kick = DVec3::new(acc * dt, 0.0, 0.0);
@@ -162,50 +151,6 @@ fn run_box(carriers: usize, dt: f64, acc: f64, omega: f64, ac: f64, t0: f64, t1:
     }
 }
 
-/// The Boltzmann equation's mean velocity per unit acceleration (along x) of carriers of
-/// thermal speed 1 colliding at `κ v`, rotating at `−ω` (PHYSICS.md §2.11):
-/// `(v_x + i v_y)/a = (π/κ) P/(1 − ⟨cos θ⟩ Q)`, `P = κ ∫ v³ f₀/(κ v + i ω) dv` with
-/// `f₀ = e^{−v²/2}/2π`, `Q = κ ∫ v g/(κ v + i ω) dv` with the drawn speeds' law
-/// `g = √(2/π) v² e^{−v²/2}`. At `ω = 0`: `(3/8) √(π/2)/κ`. Simpson's rule on [0, 14].
-fn mobility(kappa: f64, omega: f64) -> (f64, f64) {
-    let (n, top) = (28_000, 14.0);
-    let h = top / f64::from(n);
-    let (mut p, mut q) = ((0.0, 0.0), (0.0, 0.0));
-    for k in 0..=n {
-        let v = h * f64::from(k);
-        let w = if k == 0 || k == n {
-            1.0
-        } else if k % 2 == 1 {
-            4.0
-        } else {
-            2.0
-        };
-        // κ/(κv + iω) = κ (κv − iω)/(κ²v² + ω²).
-        let d = kappa * kappa * v * v + omega * omega;
-        if d == 0.0 {
-            continue;
-        }
-        let (re, im) = (kappa * kappa * v / d, -kappa * omega / d);
-        let e = libm::exp(-0.5 * v * v);
-        let fp = v * v * v * e / (2.0 * PI);
-        let fq = v * libm::sqrt(2.0 / PI) * v * v * e;
-        p = (p.0 + w * fp * re, p.1 + w * fp * im);
-        q = (q.0 + w * fq * re, q.1 + w * fq * im);
-    }
-    let (p, q) = (
-        (p.0 * h / 3.0, p.1 * h / 3.0),
-        (q.0 * h / 3.0, q.1 * h / 3.0),
-    );
-    // (π/κ) p / (1 − c q).
-    let den = (1.0 - COS_THETA * q.0, -COS_THETA * q.1);
-    let dd = den.0 * den.0 + den.1 * den.1;
-    let ratio = (
-        (p.0 * den.0 + p.1 * den.1) / dd,
-        (p.1 * den.0 - p.0 * den.1) / dd,
-    );
-    (PI / kappa * ratio.0, PI / kappa * ratio.1)
-}
-
 /// D1, the conductivity: 100 000 carriers over cores with `a² n_ion = 0.005` and
 /// `ℓ = 0.5` (κ = 2), an acceleration 0.2 (the field gives `qEℓ/kT = 0.1` over a free
 /// path: the linear response), over t = 5–40 at dt 0.02. The drift (from the
@@ -218,7 +163,7 @@ fn mobility(kappa: f64, omega: f64) -> (f64, f64) {
 fn d1_conductivity_and_collision_rate() {
     let acc = 0.2;
     let r = run_box(200_000, 0.02, acc, 0.0, 0.0, 5.0, 40.0);
-    let theory = mobility(r.kappa, 0.0).0;
+    let theory = mobility(r.kappa, 0.0).re;
     let closed = 3.0 / 8.0 * libm::sqrt(FRAC_PI_2) / r.kappa;
     let rate = r.kappa * libm::sqrt(FRAC_PI_2);
     println!(
@@ -247,14 +192,14 @@ fn d2_ac_conductivity() {
     let (acc, w) = (0.2, 2.5);
     let periods = 14.0 * std::f64::consts::TAU / w;
     let r = run_box(200_000, 0.02, acc, 0.0, w, 5.0, 5.0 + periods);
-    let (tr, ti) = mobility(r.kappa, -w);
+    let Complex64 { re: tr, im: ti } = mobility(r.kappa, -w);
     let (mr, mi) = (r.ac.0 / acc, r.ac.1 / acc);
     let size = libm::sqrt(tr * tr + ti * ti);
     let error = libm::sqrt((mr - tr) * (mr - tr) + (mi - ti) * (mi - ti)) / size;
     println!(
         "D2: drift/a in phase {mr:.5}, behind {mi:.5} against {tr:.5}, {ti:.5}: {:.2} % of its size (DC {:.5})",
         100.0 * error,
-        mobility(r.kappa, 0.0).0
+        mobility(r.kappa, 0.0).re
     );
     assert!(error < 0.05);
 }
@@ -287,14 +232,14 @@ fn d3_joule_heat_is_the_fields_work() {
 fn d4_conductivity_in_a_magnetic_field() {
     let (acc, omega) = (0.2, 1.25);
     let r = run_box(200_000, 0.02, acc, omega, 0.0, 5.0, 40.0);
-    let (tx, ty) = mobility(r.kappa, omega);
+    let Complex64 { re: tx, im: ty } = mobility(r.kappa, omega);
     let (mx, my) = (r.drift.x / acc, r.drift.y / acc);
     let size = libm::sqrt(tx * tx + ty * ty);
     let error = libm::sqrt((mx - tx) * (mx - tx) + (my - ty) * (my - ty)) / size;
     // The Hall factor in a weak field: R_H n q = −Im(1/μ̃)/ω with μ̃ the mobility above
     // (σ̃ = n q² μ̃/m).
     let w = 1e-3;
-    let (wx, wy) = mobility(r.kappa, w);
+    let Complex64 { re: wx, im: wy } = mobility(r.kappa, w);
     let hall = -(wy / (wx * wx + wy * wy)) / w;
     println!(
         "D4: drift/a ({mx:.5}, {my:.5}) against ({tx:.5}, {ty:.5}): {:.2} % of its size; weak-field Hall factor {hall:.5} (4/π = {:.5})",
@@ -342,19 +287,7 @@ fn d5_screening() {
     let count = libm::round(l * w / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, 9);
     let carriers = 32_000;
-    let lattice = Lattice::new(
-        lo,
-        hi,
-        Material {
-            background: 1.0,
-            core_radius: A,
-            charge_per_mass: -1.0,
-            thermal_speed: 1.0,
-        },
-        cores,
-        carriers,
-        13,
-    );
+    let lattice = Lattice::new(lo, hi, common::metal(A), cores, carriers, 13);
     let tube = Tube {
         arena: Some((
             DVec3::new(-2.0, -3.0, 0.0),
@@ -430,7 +363,7 @@ fn d5_screening() {
 fn d6_einstein_relation() {
     let r = run_box(200_000, 0.02, 0.0, 0.0, 0.0, 5.0, 45.0);
     let d = (r.msd.1 - r.msd.0) / (2.0 * 20.0);
-    let theory = mobility(r.kappa, 0.0).0;
+    let theory = mobility(r.kappa, 0.0).re;
     println!(
         "D6: diffusion {d:.5} against mu kT/m {theory:.5}: {:+.2} %",
         100.0 * (d / theory - 1.0)
@@ -464,19 +397,7 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64, seed: u64) -> Tube
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(l * w / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, seed);
-    let lattice = Lattice::new(
-        lo,
-        hi,
-        Material {
-            background: 1.0,
-            core_radius: A,
-            charge_per_mass: -1.0,
-            thermal_speed: 1.0,
-        },
-        cores,
-        carriers,
-        seed + 4,
-    );
+    let lattice = Lattice::new(lo, hi, common::metal(A), cores, carriers, seed + 4);
     let weight = lattice.carrier_charge().abs();
     let emitter = |electrode: usize, toward: f64| Emitter {
         electrode,
@@ -523,7 +444,7 @@ fn d1_ohms_law_in_a_resistor() {
     let tube = resistor(l, w, 3.2, n, dt, 7);
     #[allow(clippy::cast_precision_loss)]
     let kappa = 2.0 * A * tube.lattices[0].cores.len() as f64 / (l * w);
-    let theory = mobility(kappa, 0.0).0;
+    let theory = mobility(kappa, 0.0).re;
     let mut s = tube.state();
     let (x0, x1) = (0.25 * l, 0.75 * l);
     let (mut bj, mut be, mut bn, mut ben) = (0.0, 0.0, 0.0, 0.0);
@@ -713,37 +634,13 @@ fn plate(
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let count = libm::round(w * b / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, 31);
-    let lattice = Lattice::new(
-        lo,
-        hi,
-        Material {
-            background: 1.0,
-            core_radius: A,
-            charge_per_mass: -1.0,
-            thermal_speed: 1.0,
-        },
-        cores,
-        carriers,
-        47,
-    );
+    let lattice = Lattice::new(lo, hi, common::metal(A), cores, carriers, 47);
     // One small electrode away from the metal (the electrostatics needs one), floating with
     // no charge: grounded in this open z-invariant world it could draw charge from the log
     // gauge's "infinity" (r = 1), and a floating metal beside it runs away (OP-1).
     // Far from the metal: beside it, even floating, its induced dipole bent the strip's field.
     let corner = lo - DVec3::new(40.0, 40.0, 0.0);
-    let electrodes = Electrodes::new(
-        vec![Electrode {
-            section: Section::Rect {
-                center: corner,
-                angle: 0.0,
-                half_length: 0.25,
-                half_thickness: 0.25,
-            },
-            bias: Bias::Charge(0.0),
-        }],
-        &[],
-        0.25,
-    );
+    let electrodes = common::small_floating_electrode(corner);
     let wave = SolenoidWave {
         waveform: Waveform::Pulse {
             low: -b0,
@@ -846,7 +743,7 @@ fn eddy(
 fn d8_eddy_currents() {
     let (n, dt, b0, period) = (20_000, 0.02, 0.25, 20.0);
     // The cores' density sets the collision rate: kappa = 2 a n_ion = 1/l.
-    let sigma = mobility(1.0 / MEAN_FREE_PATH, 0.0).0;
+    let sigma = mobility(1.0 / MEAN_FREE_PATH, 0.0).re;
     let bdot = 4.0 * b0 / period;
     let mut results = Vec::new();
     for (name, w, b) in [("square 16 x 16", 16.0, 16.0), ("strip 8 x 32", 8.0, 32.0)] {
@@ -993,12 +890,7 @@ fn d10_carriers_energy_account() {
     tube.lattices[0] = Lattice::new(
         DVec3::ZERO,
         DVec3::new(16.0, 4.0, 0.0),
-        Material {
-            background: 1.0,
-            core_radius: A,
-            charge_per_mass: -1.0,
-            thermal_speed: 1.0,
-        },
+        common::metal(A),
         Vec::new(),
         4000,
         11,
