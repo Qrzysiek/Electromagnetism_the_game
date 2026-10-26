@@ -515,6 +515,28 @@ fn distance_outside(section: &Section, x: DVec3) -> f64 {
 }
 
 impl Tube {
+    /// A tube of `electrodes`, its particles softened to rods of radius `softening`, stepped
+    /// by `dt`, with nothing else: no emitters, projectiles, arena, magnetic field, circuits,
+    /// metals or self-field. Build the rest with the struct update syntax,
+    /// `Tube { lattices, ..Tube::new(electrodes, softening, dt) }`, so that a field added to
+    /// `Tube` is given its default here alone.
+    #[must_use]
+    pub fn new(electrodes: Electrodes, softening: f64, dt: f64) -> Self {
+        Self {
+            electrodes,
+            emitters: Vec::new(),
+            projectiles: Vec::new(),
+            softening,
+            dt,
+            arena: None,
+            b_z: 0.0,
+            b_wave: None,
+            circuits: Vec::new(),
+            lattices: Vec::new(),
+            darwin: None,
+        }
+    }
+
     pub fn state(&self) -> TubeState {
         let n_el = self.electrodes.electrodes.len();
         // The potentials at t = 0: the electrodes' own (their biases, floating ones as
@@ -1532,17 +1554,9 @@ mod tests {
             0.25,
         );
         let tube = Tube {
-            electrodes,
-            emitters: Vec::new(),
-            projectiles: Vec::new(),
-            softening: 0.05,
-            dt: 0.02,
             arena: Some((DVec3::new(-2.0, -2.0, 0.0), DVec3::new(12.0, 9.0, 0.0))),
-            b_z: 0.0,
-            b_wave: None,
-            circuits: Vec::new(),
             lattices: vec![lattice],
-            darwin: None,
+            ..Tube::new(electrodes, 0.05, 0.02)
         };
         let mut s = tube.state();
         tube.step(&mut s);

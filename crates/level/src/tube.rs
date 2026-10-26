@@ -2662,11 +2662,8 @@ impl Level {
             })
             .map_or(spec.b_z, |e| e.value);
         let mut tube = Tube {
-            electrodes: prisms,
             emitters,
             projectiles,
-            softening: SOFTENING * size * res.softening,
-            dt: spec.step / r,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
             b_wave: spec.solenoid_drive.map(|s| physics::tube::SolenoidWave {
@@ -2676,7 +2673,7 @@ impl Level {
             }),
             circuits: self.tube_circuits(player),
             lattices,
-            darwin: None,
+            ..Tube::new(prisms, SOFTENING * size * res.softening, spec.step / r)
         };
         // Each emitter's weight: 1/PREVIEW_PARTICLES of the largest charge its emitting face
         // holds (no particles) over 16 phases of the sources' longest period (t = 0 alone

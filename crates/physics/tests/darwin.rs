@@ -58,16 +58,10 @@ fn ring(
         0.25,
     );
     Tube {
-        electrodes,
-        emitters: Vec::new(),
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt,
         arena: Some((
             lo - DVec3::new(2.0, 2.0, 0.0),
             hi + DVec3::new(2.0, 2.0, 0.0),
         )),
-        b_z: 0.0,
         b_wave: Some(SolenoidWave {
             waveform: Waveform::Sine {
                 offset: 0.0,
@@ -77,9 +71,9 @@ fn ring(
             },
             axis: DVec3::new(6.0, 6.0, 0.0),
         }),
-        circuits: Vec::new(),
         lattices: vec![lattice],
         darwin: c.map(|c| Darwin2d::new(127, 127, 0.25, (-10.0, -10.0), c)),
+        ..Tube::new(electrodes, 0.05, dt)
     }
 }
 
@@ -309,16 +303,10 @@ fn disc(c: f64, carriers: usize, b0: f64, omega: f64, dt: f64, seed: u64) -> Tub
         0.25,
     );
     Tube {
-        electrodes,
-        emitters: Vec::new(),
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt,
         arena: Some((
             lo - DVec3::new(2.0, 2.0, 0.0),
             hi + DVec3::new(2.0, 2.0, 0.0),
         )),
-        b_z: 0.0,
         b_wave: Some(SolenoidWave {
             waveform: Waveform::Sine {
                 offset: 0.0,
@@ -328,11 +316,11 @@ fn disc(c: f64, carriers: usize, b0: f64, omega: f64, dt: f64, seed: u64) -> Tub
             },
             axis: DVec3::ZERO,
         }),
-        circuits: Vec::new(),
         lattices: vec![lattice],
         // Nodes every 0.25 over ±16, one on the centre: the grid keeps the disc's symmetry
         // under quarter turns and reflections.
         darwin: Some(Darwin2d::new(127, 127, 0.25, (-16.0, -16.0), c)),
+        ..Tube::new(electrodes, 0.05, dt)
     }
 }
 
@@ -518,16 +506,10 @@ impl Little {
             0.25,
         );
         Tube {
-            electrodes,
-            emitters: Vec::new(),
-            projectiles: Vec::new(),
-            softening: 0.05,
-            dt: self.dt,
             arena: Some((
                 lo - DVec3::new(2.0, 2.0, 0.0),
                 hi + DVec3::new(2.0, 2.0, 0.0),
             )),
-            b_z: 0.0,
             b_wave: Some(SolenoidWave {
                 waveform: Waveform::Sine {
                     offset: self.b_static,
@@ -537,11 +519,11 @@ impl Little {
                 },
                 axis: self.center,
             }),
-            circuits: Vec::new(),
             lattices: vec![lattice],
             darwin: self.c.map(|c| {
                 Darwin2d::new(63, 63, 0.25, (self.center.x - 8.0, self.center.y - 8.0), c)
             }),
+            ..Tube::new(electrodes, 0.05, self.dt)
         }
     }
 }

@@ -332,20 +332,12 @@ fn d5_screening() {
     let carriers = 32_000;
     let lattice = Lattice::new(lo, hi, 1.0, cores, A, -1.0, 1.0, carriers, 13);
     let tube = Tube {
-        electrodes,
-        emitters: Vec::new(),
-        projectiles: Vec::new(),
-        softening: 0.025,
-        dt: 0.02,
         arena: Some((
             DVec3::new(-2.0, -3.0, 0.0),
             DVec3::new(l + 2.0, w + 3.0, 0.0),
         )),
-        b_z: 0.0,
-        b_wave: None,
-        circuits: Vec::new(),
         lattices: vec![lattice],
-        darwin: None,
+        ..Tube::new(electrodes, 0.025, 0.02)
     };
     let mut s = tube.state();
     let band = 0.05;
@@ -471,20 +463,14 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64, seed: u64) -> Tube
         to: None,
     };
     Tube {
-        electrodes,
         emitters: vec![emitter(0, 1.0), emitter(1, -1.0)],
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt,
         arena: Some((
             DVec3::new(-2.0, -2.0, 0.0),
             DVec3::new(l + 2.0, w + 2.0, 0.0),
         )),
-        b_z: 0.0,
-        b_wave: None,
         circuits: vec![source(0, 0.0), source(1, v)],
         lattices: vec![lattice],
-        darwin: None,
+        ..Tube::new(electrodes, 0.05, dt)
     }
 }
 
@@ -723,20 +709,13 @@ fn plate(
         axis,
     };
     Tube {
-        electrodes,
-        emitters: Vec::new(),
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt,
         arena: Some((
             lo - DVec3::new(2.0, 2.0, 0.0),
             hi + DVec3::new(2.0, 2.0, 0.0),
         )),
-        b_z: 0.0,
         b_wave: Some(wave),
-        circuits: Vec::new(),
         lattices: vec![lattice],
-        darwin: None,
+        ..Tube::new(electrodes, 0.05, dt)
     }
 }
 

@@ -203,7 +203,6 @@ fn v4_coaxial_diode_langmuir_blodgett() {
             size,
         );
         let tube = Tube {
-            electrodes,
             emitters: vec![physics::tube::Emitter {
                 electrode: 0,
                 charge_per_mass: -1.0,
@@ -213,15 +212,7 @@ fn v4_coaxial_diode_langmuir_blodgett() {
                 thermal_speed: 0.0,
                 ohmic: None,
             }],
-            projectiles: Vec::new(),
-            softening: 0.5 * size,
-            dt,
-            arena: None,
-            b_z: 0.0,
-            b_wave: None,
-            lattices: Vec::new(),
-            darwin: None,
-            circuits: Vec::new(),
+            ..Tube::new(electrodes, 0.5 * size, dt)
         };
         let mut s = tube.state();
         let start = std::time::Instant::now();
@@ -363,7 +354,6 @@ fn v6_bipolar_coaxial_diode() {
             size,
         );
         let tube = Tube {
-            electrodes,
             emitters: vec![
                 Emitter {
                     electrode: 0,
@@ -384,15 +374,7 @@ fn v6_bipolar_coaxial_diode() {
                     ohmic: None,
                 },
             ],
-            projectiles: Vec::new(),
-            softening: 0.5 * size,
-            dt,
-            arena: None,
-            b_z: 0.0,
-            b_wave: None,
-            lattices: Vec::new(),
-            darwin: None,
-            circuits: Vec::new(),
+            ..Tube::new(electrodes, 0.5 * size, dt)
         };
         let mut s = tube.state();
         let start = std::time::Instant::now();
@@ -466,8 +448,6 @@ fn v7_projectile_conserves_energy() {
     );
     let (lambda, mass) = (-0.05, 1.0);
     let tube = Tube {
-        electrodes,
-        emitters: Vec::new(),
         projectiles: vec![Projectile {
             x0: DVec3::new(2.0, 0.0, 0.0),
             // About the circular speed at r = 2 (√(λE r/m) = 0.213): with 0.25 the apogee
@@ -477,14 +457,7 @@ fn v7_projectile_conserves_energy() {
             charge: lambda,
             mass,
         }],
-        softening: 0.05,
-        dt: 0.01,
-        arena: None,
-        b_z: 0.0,
-        b_wave: None,
-        lattices: Vec::new(),
-        darwin: None,
-        circuits: Vec::new(),
+        ..Tube::new(electrodes, 0.05, 0.01)
     };
     let energy = |s: &physics::tube::TubeState| {
         let (x, v) = (s.x[0], s.v[0]);
@@ -613,17 +586,9 @@ fn v8_crossed_fields_hull() {
             })
             .collect();
         let tube = Tube {
-            electrodes,
-            emitters: Vec::new(),
             projectiles,
-            softening: 0.05,
-            dt: 0.002,
-            arena: None,
             b_z: bz,
-            b_wave: None,
-            lattices: Vec::new(),
-            darwin: None,
-            circuits: Vec::new(),
+            ..Tube::new(electrodes, 0.05, 0.002)
         };
         let mut s = tube.state();
         let mut largest = [0.0_f64; 8];
@@ -698,7 +663,6 @@ fn v9_temperature_limited_emission() {
             .map(|(_, (a, b))| (*b - *a).length())
             .sum();
         let tube = Tube {
-            electrodes,
             emitters: vec![Emitter {
                 electrode: 0,
                 charge_per_mass: -1.0,
@@ -708,15 +672,7 @@ fn v9_temperature_limited_emission() {
                 thermal_speed: 0.0,
                 ohmic: None,
             }],
-            projectiles: Vec::new(),
-            softening: 0.05,
-            dt: 0.01,
-            arena: None,
-            b_z: 0.0,
-            b_wave: None,
-            lattices: Vec::new(),
-            darwin: None,
-            circuits: Vec::new(),
+            ..Tube::new(electrodes, 0.05, 0.01)
         };
         let mut s = tube.state();
         let mut at4 = None;
@@ -787,16 +743,6 @@ fn v10_circuit_node_discharges() {
     let c11 = electrodes.capacitance[0][0];
     let tau = r * (c11 + c_ext);
     let tube = Tube {
-        electrodes,
-        emitters: Vec::new(),
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt,
-        arena: None,
-        b_z: 0.0,
-        b_wave: None,
-        lattices: Vec::new(),
-        darwin: None,
         circuits: vec![Circuit {
             electrode: 0,
             source: Waveform::Dc(0.0),
@@ -805,6 +751,7 @@ fn v10_circuit_node_discharges() {
             inductance: 0.0,
             to: None,
         }],
+        ..Tube::new(electrodes, 0.05, dt)
     };
     let mut s = tube.state();
     let (mut worst_discrete, mut worst_exp) = (0.0_f64, 0.0_f64);
@@ -840,7 +787,6 @@ fn v11_beam_charges_a_floating_collector() {
     let electrodes = coax(0.0, 4.0);
     let c22 = electrodes.capacitance[1][1];
     let tube = Tube {
-        electrodes,
         emitters: vec![Emitter {
             electrode: 0,
             charge_per_mass: -1.0,
@@ -850,14 +796,6 @@ fn v11_beam_charges_a_floating_collector() {
             thermal_speed: 0.0,
             ohmic: None,
         }],
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt: 0.01,
-        arena: None,
-        b_z: 0.0,
-        b_wave: None,
-        lattices: Vec::new(),
-        darwin: None,
         circuits: vec![Circuit {
             electrode: 1,
             source: Waveform::Dc(0.0),
@@ -866,6 +804,7 @@ fn v11_beam_charges_a_floating_collector() {
             inductance: 0.0,
             to: None,
         }],
+        ..Tube::new(electrodes, 0.05, 0.01)
     };
     let mut s = tube.state();
     let mut at4 = None;
@@ -988,7 +927,6 @@ fn v12_returning_carriers_are_absorbed() {
         / mf;
     let exact = 2.0 * out - skipped;
     let tube = Tube {
-        electrodes,
         emitters: vec![Emitter {
             electrode: 0,
             charge_per_mass: -1.0,
@@ -998,15 +936,8 @@ fn v12_returning_carriers_are_absorbed() {
             thermal_speed: 0.0,
             ohmic: None,
         }],
-        projectiles: Vec::new(),
-        softening: 0.5 * size,
-        dt: 0.002,
-        arena: None,
         b_z: bz,
-        b_wave: None,
-        lattices: Vec::new(),
-        darwin: None,
-        circuits: Vec::new(),
+        ..Tube::new(electrodes, 0.5 * size, 0.002)
     };
     let mut s = tube.state();
     let (mut sum, mut samples) = (0.0, 0.0);
@@ -1075,7 +1006,6 @@ fn magnetron_with_space_charge_measurement() {
             size,
         );
         let tube = Tube {
-            electrodes,
             emitters: vec![Emitter {
                 electrode: 0,
                 charge_per_mass: -1.0,
@@ -1085,15 +1015,8 @@ fn magnetron_with_space_charge_measurement() {
                 thermal_speed: 0.0,
                 ohmic: None,
             }],
-            projectiles: Vec::new(),
-            softening: 0.5 * size,
-            dt: 0.01,
-            arena: None,
             b_z: factor * b_h,
-            b_wave: None,
-            lattices: Vec::new(),
-            darwin: None,
-            circuits: Vec::new(),
+            ..Tube::new(electrodes, 0.5 * size, 0.01)
         };
         let mut s = tube.state();
         let mut at6 = None;
@@ -1270,7 +1193,6 @@ fn v15_finer_emitter_mesh() {
             &[0.25 * size, size],
         );
         let tube = Tube {
-            electrodes,
             emitters: vec![Emitter {
                 electrode: 0,
                 charge_per_mass: -1.0,
@@ -1280,15 +1202,7 @@ fn v15_finer_emitter_mesh() {
                 thermal_speed: 0.0,
                 ohmic: None,
             }],
-            projectiles: Vec::new(),
-            softening: 0.5 * size,
-            dt,
-            arena: None,
-            b_z: 0.0,
-            b_wave: None,
-            lattices: Vec::new(),
-            darwin: None,
-            circuits: Vec::new(),
+            ..Tube::new(electrodes, 0.5 * size, dt)
         };
         let mut s = tube.state();
         let start = std::time::Instant::now();
@@ -1381,8 +1295,6 @@ fn energy_balance(l: f64) {
             0.1,
         );
         let tube = Tube {
-            electrodes,
-            emitters: Vec::new(),
             // Slower than circular at r = 1.8 (0.213): an eccentric orbit between ~1.5 and
             // 1.8, clear of the conductors.
             projectiles: vec![Projectile {
@@ -1392,13 +1304,6 @@ fn energy_balance(l: f64) {
                 charge: lambda,
                 mass,
             }],
-            softening: 0.05,
-            dt,
-            arena: None,
-            b_z: 0.0,
-            b_wave: None,
-            lattices: Vec::new(),
-            darwin: None,
             circuits: vec![Circuit {
                 electrode: 1,
                 source: Waveform::Dc(0.0),
@@ -1407,6 +1312,7 @@ fn energy_balance(l: f64) {
                 inductance: l,
                 to: None,
             }],
+            ..Tube::new(electrodes, 0.05, dt)
         };
         let mut s = tube.state();
         // The energy now: kinetic, field, capacitor, coil.
@@ -1496,16 +1402,6 @@ fn v17_lc_tank_keeps_its_energy() {
     let omega = 1.0 / (l * c).sqrt();
     let theta = 2.0 * (0.5 * omega * dt).atan();
     let tube = Tube {
-        electrodes,
-        emitters: Vec::new(),
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt,
-        arena: None,
-        b_z: 0.0,
-        b_wave: None,
-        lattices: Vec::new(),
-        darwin: None,
         circuits: vec![Circuit {
             electrode: 0,
             source: Waveform::Dc(0.0),
@@ -1514,6 +1410,7 @@ fn v17_lc_tank_keeps_its_energy() {
             inductance: l,
             to: None,
         }],
+        ..Tube::new(electrodes, 0.05, dt)
     };
     let mut s = tube.state();
     let e0 = 0.5 * c;
@@ -1573,16 +1470,6 @@ fn v18_tank_between_two_electrodes() {
     let omega = (inv_c_eff / l).sqrt();
     let theta = 2.0 * (0.5 * omega * dt).atan();
     let tube = Tube {
-        electrodes,
-        emitters: Vec::new(),
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt,
-        arena: None,
-        b_z: 0.0,
-        b_wave: None,
-        lattices: Vec::new(),
-        darwin: None,
         circuits: vec![Circuit {
             electrode: 0,
             source: Waveform::Dc(0.0),
@@ -1591,6 +1478,7 @@ fn v18_tank_between_two_electrodes() {
             inductance: l,
             to: Some(1),
         }],
+        ..Tube::new(electrodes, 0.05, dt)
     };
     let mut s = tube.state();
     let d0 = s.potentials[1] - s.potentials[0];
@@ -1658,16 +1546,6 @@ fn v19_strapped_electrodes_are_one_node() {
     let omega = 1.0 / (l * c).sqrt();
     let theta = 2.0 * (0.5 * omega * dt).atan();
     let tube = Tube {
-        electrodes,
-        emitters: Vec::new(),
-        projectiles: Vec::new(),
-        softening: 0.05,
-        dt,
-        arena: None,
-        b_z: 0.0,
-        b_wave: None,
-        lattices: Vec::new(),
-        darwin: None,
         circuits: vec![
             Circuit {
                 electrode: 0,
@@ -1686,6 +1564,7 @@ fn v19_strapped_electrodes_are_one_node() {
                 to: Some(0),
             },
         ],
+        ..Tube::new(electrodes, 0.05, dt)
     };
     let mut s = tube.state();
     let e0 = 0.5 * c;
@@ -1739,7 +1618,6 @@ fn y19_tube_charge_account() {
         size,
     );
     let tube = Tube {
-        electrodes,
         emitters: vec![physics::tube::Emitter {
             electrode: 0,
             charge_per_mass: -1.0,
@@ -1749,15 +1627,7 @@ fn y19_tube_charge_account() {
             thermal_speed: 0.0,
             ohmic: None,
         }],
-        projectiles: Vec::new(),
-        softening: 0.5 * size,
-        dt: 0.01,
-        arena: None,
-        b_z: 0.0,
-        b_wave: None,
-        lattices: Vec::new(),
-        darwin: None,
-        circuits: Vec::new(),
+        ..Tube::new(electrodes, 0.5 * size, 0.01)
     };
     let mut s = tube.state();
     while s.t < 4.0 {
