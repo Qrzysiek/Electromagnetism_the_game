@@ -878,20 +878,65 @@ impl Tube {
         }
     }
 
-    /// The field at `x` of the surface charge `sigma`, of every particle but `skip` and of
-    /// the lattices' backgrounds.
-    fn field(&self, s: &TubeState, sigma: &[f64], x: DVec3, skip: Option<usize>) -> DVec3 {
-        let mut e = self.charges_field(s, sigma, x, skip);
-        for l in &self.lattices {
-            e += l.background_at(x).1;
+    /// Every particle's field from the surface charge `sigma` and every other particle, by
+    /// the trees (`tree2d`: the direct sums to its series' truncation, 5e-7 of a node's field)
+    /// or by the direct sums
+    /// (`charges_field`); the step takes the trees from `TREE_MIN` particles on. Neither
+    /// includes the backgrounds or a changing field's induced part: `with_external` adds them
+    /// to both alike. (Until 2026-10-26 the direct sums included the backgrounds and the push
+    /// added them again: below `TREE_MIN` they pulled twice, PHYSICS.md §2.11; test
+    /// `trees_and_direct_sums_agree`.)
+    fn charges_fields(&self, s: &TubeState, sigma: &[f64], trees: bool) -> Vec<DVec3> {
+        if trees {
+            let segments = &self.electrodes.tree;
+            let segment_m = segments.multipoles(sigma);
+            let particles = Tree::new(
+                s.x.iter().map(|p| Source::point(*p)).collect(),
+                self.softening,
+            );
+            let particle_m = particles.multipoles(&s.charge);
+            (0..s.x.len())
+                .into_par_iter()
+                .with_min_len(PAR_CHUNK)
+                .map(|k| {
+                    segments.field(&segment_m, s.x[k], None)
+                        + particles.field(&particle_m, s.x[k], Some(k))
+                })
+                .collect()
+        } else {
+            (0..s.x.len())
+                .into_par_iter()
+                .with_min_len(PAR_CHUNK)
+                .map(|k| self.charges_field(s, sigma, s.x[k], Some(k)))
+                .collect()
         }
-        e
     }
 
-    /// The field at `x` of the surface charge `sigma` and of every particle but `skip`: the
-    /// direct sums the step uses below `TREE_MIN` particles, like the trees above it, without
-    /// the backgrounds, which the push adds (until 2026-10-26 these sums included them too,
-    /// and below `TREE_MIN` the backgrounds pulled twice: PHYSICS.md §2.11).
+    /// The whole field at `x` at time `t` from the charges' part `charges`: the lattices'
+    /// backgrounds and a changing field's induced part added (no sum at all without a
+    /// lattice: bit for bit as before them), and that induced part apart (its work is booked
+    /// alone). The one place the push and the display (`field_at`) both take it from.
+    fn with_external(&self, charges: DVec3, t: f64, x: DVec3) -> (DVec3, Option<DVec3>) {
+        let e = if self.lattices.is_empty() {
+            charges
+        } else {
+            charges
+                + self
+                    .lattices
+                    .iter()
+                    .map(|l| l.background_at(x).1)
+                    .sum::<DVec3>()
+        };
+        let induced = self.b_wave.map(|w| w.induced(t, x));
+        let e = match induced {
+            Some(i) => e + i,
+            None => e,
+        };
+        (e, induced)
+    }
+
+    /// The field at `x` of the surface charge `sigma` and of every particle but `skip`, by
+    /// direct sums (`charges_fields`' below `TREE_MIN`).
     fn charges_field(&self, s: &TubeState, sigma: &[f64], x: DVec3, skip: Option<usize>) -> DVec3 {
         let mut e = DVec3::ZERO;
         for ((p, q), d) in self.electrodes.segments.iter().zip(sigma) {
@@ -909,9 +954,9 @@ impl Tube {
         e
     }
 
-    /// The potential of `field`'s sources at `x`: the segments' exact integrals, each
-    /// particle's rod (`−λ ln r²` outside its radius, `−λ (r²/h² − 1 + ln h²)` inside, whose
-    /// field `field` uses) and the lattices' backgrounds.
+    /// The potential at `x` of the segments' charge, the particles and the backgrounds: the
+    /// segments' exact integrals, each particle's rod (`−λ ln r²` outside its radius, `−λ (r²/h² − 1 + ln h²)` inside, whose
+    /// field `charges_field` uses) and the lattices' backgrounds.
     fn potential(&self, s: &TubeState, sigma: &[f64], x: DVec3, skip: Option<usize>) -> f64 {
         let mut phi = 0.0;
         for ((a, b), d) in self.electrodes.segments.iter().zip(sigma) {
@@ -1160,31 +1205,7 @@ impl Tube {
             .map(|(a, b)| a + b)
             .collect();
         // In parallel, each particle's field whole by one thread (bit-identical).
-        let fields: Vec<DVec3> = if s.x.len() >= TREE_MIN {
-            // Many particles: the segments' and the particles' trees (`tree2d`, the direct
-            // sums to ~1e-11).
-            let segments = &self.electrodes.tree;
-            let segment_m = segments.multipoles(&sigma);
-            let particles = Tree::new(
-                s.x.iter().map(|p| Source::point(*p)).collect(),
-                self.softening,
-            );
-            let particle_m = particles.multipoles(&s.charge);
-            (0..s.x.len())
-                .into_par_iter()
-                .with_min_len(PAR_CHUNK)
-                .map(|k| {
-                    segments.field(&segment_m, s.x[k], None)
-                        + particles.field(&particle_m, s.x[k], Some(k))
-                })
-                .collect()
-        } else {
-            (0..s.x.len())
-                .into_par_iter()
-                .with_min_len(PAR_CHUNK)
-                .map(|k| self.charges_field(s, &sigma, s.x[k], Some(k)))
-                .collect()
-        };
+        let fields = self.charges_fields(s, &sigma, s.x.len() >= TREE_MIN);
         let before = if self.lattices.is_empty() {
             Vec::new()
         } else {
@@ -1208,21 +1229,7 @@ impl Tube {
                 .zip(&s.tag)
         {
             let old = *v;
-            // The conductors' backgrounds (no sum at all without one: bit for bit as before).
-            let e = if self.lattices.is_empty() {
-                *e
-            } else {
-                *e + self
-                    .lattices
-                    .iter()
-                    .map(|l| l.background_at(*x).1)
-                    .sum::<DVec3>()
-            };
-            let induced = self.b_wave.map(|w| w.induced(s.t, *x));
-            let e = match induced {
-                Some(i) => e + i,
-                None => e,
-            };
+            let (e, induced) = self.with_external(*e, s.t, *x);
             let e = &e;
             let h = 0.5 * self.dt * qm;
             let minus = *v + *e * h;
@@ -1367,11 +1374,8 @@ impl Tube {
     #[must_use]
     pub fn field_at(&self, s: &TubeState, x: DVec3) -> DVec3 {
         let sigma = self.surface_density(s);
-        let e = self.field(s, &sigma, x, None);
-        match &self.b_wave {
-            Some(w) => e + w.induced(s.t, x),
-            None => e,
-        }
+        self.with_external(self.charges_field(s, &sigma, x, None), s.t, x)
+            .0
     }
 
     /// The carrier `p` of `lattice` after a move from `a` (its velocity `v0` before the
@@ -1491,5 +1495,67 @@ impl Tube {
             let dv = s.v[p] - v_entry;
             s.u[p] += dv;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bem::Bias;
+    use crate::lattice::Lattice;
+    use crate::zinv::{Electrode, Electrodes, Section};
+
+    /// The step's two ways of summing the charges' fields (`charges_fields`: the trees from
+    /// `TREE_MIN` particles, the direct sums below) give the same fields for the same state, to
+    /// the trees' accuracy: 1e-6 of the largest (`tree2d`'s series truncation is 5e-7 of a
+    /// node's field; first set at 1e-9 from a comment here that claimed ~1e-11, which
+    /// `tree2d`'s own bound contradicts; measured 1.2e-8). A metal of 2500 carriers over its
+    /// background beside a floating electrode, after one step. Until 2026-10-26 the direct sums
+    /// included the backgrounds and the push added them again: this test would have shown the
+    /// backgrounds' whole field between the two.
+    #[test]
+    fn trees_and_direct_sums_agree() {
+        let (lo, hi) = (DVec3::ZERO, DVec3::new(10.0, 4.0, 0.0));
+        let cores = Lattice::random_cores(lo, hi, 2000, 0.01, 3);
+        let lattice = Lattice::new(lo, hi, 1.0, cores, 0.01, -1.0, 1.0, 2500, 5);
+        let electrodes = Electrodes::new(
+            vec![Electrode {
+                section: Section::Rect {
+                    center: DVec3::new(5.0, 6.0, 0.0),
+                    angle: 0.0,
+                    half_length: 2.0,
+                    half_thickness: 0.25,
+                },
+                bias: Bias::Charge(0.0),
+            }],
+            &[],
+            0.25,
+        );
+        let tube = Tube {
+            electrodes,
+            emitters: Vec::new(),
+            projectiles: Vec::new(),
+            softening: 0.05,
+            dt: 0.02,
+            arena: Some((DVec3::new(-2.0, -2.0, 0.0), DVec3::new(12.0, 9.0, 0.0))),
+            b_z: 0.0,
+            b_wave: None,
+            circuits: Vec::new(),
+            lattices: vec![lattice],
+            darwin: None,
+        };
+        let mut s = tube.state();
+        tube.step(&mut s);
+        let sigma = tube.surface_density(&s);
+        let trees = tube.charges_fields(&s, &sigma, true);
+        let direct = tube.charges_fields(&s, &sigma, false);
+        let top = direct.iter().map(|e| e.length()).fold(0.0, f64::max);
+        let worst = trees
+            .iter()
+            .zip(&direct)
+            .map(|(a, b)| (*a - *b).length())
+            .fold(0.0, f64::max);
+        println!("trees against direct sums: {worst:.2e} of the largest field {top:.3e}");
+        assert!(worst < 1e-6 * top, "{worst} of {top}");
     }
 }
