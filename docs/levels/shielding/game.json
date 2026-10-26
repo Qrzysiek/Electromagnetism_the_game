@@ -1,8 +1,8 @@
 {
  "level_file": "levels/21_shielding.json",
- "level_sha256": "ebada2d20f8008c6",
+ "level_sha256": "d2c42b9915eab68b",
  "golden_hash": "67ac676a3ba6f142",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

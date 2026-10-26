@@ -1,8 +1,8 @@
 {
  "level_file": "levels/25_beam_pipe.json",
- "level_sha256": "a28f747aa7d73b98",
+ "level_sha256": "eca071ff34ca8e05",
  "golden_hash": "e62c1842865086b6",
- "recorded": "2026-10-17",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

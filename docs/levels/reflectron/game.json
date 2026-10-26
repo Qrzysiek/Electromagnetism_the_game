@@ -1,8 +1,8 @@
 {
  "level_file": "levels/10_reflectron.json",
- "level_sha256": "1fa34953959d976d",
+ "level_sha256": "718dbeb74fa87dde",
  "golden_hash": "a7d90d251ae50899",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

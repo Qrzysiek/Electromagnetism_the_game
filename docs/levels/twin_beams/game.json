@@ -1,8 +1,8 @@
 {
  "level_file": "levels/04_twin_beams.json",
- "level_sha256": "b9ed631a76c036fc",
+ "level_sha256": "c65be97dbd2e8b9e",
  "golden_hash": "32ff8b8b01c70310",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

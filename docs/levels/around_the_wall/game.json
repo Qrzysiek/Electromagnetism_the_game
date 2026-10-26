@@ -1,8 +1,8 @@
 {
  "level_file": "levels/08_around_the_wall.json",
- "level_sha256": "b6910f86734d5696",
+ "level_sha256": "87fa758a9a0d0c33",
  "golden_hash": "df9ac3f85e867025",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

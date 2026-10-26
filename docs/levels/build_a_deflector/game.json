@@ -1,8 +1,8 @@
 {
  "level_file": "levels/20_build_a_deflector.json",
- "level_sha256": "9647748f8bfc4567",
+ "level_sha256": "7c126cb87c2748f1",
  "golden_hash": "2430d7d201ce30b3",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

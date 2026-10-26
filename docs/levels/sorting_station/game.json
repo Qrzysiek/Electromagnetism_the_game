@@ -1,8 +1,8 @@
 {
  "level_file": "levels/14_sorting_station.json",
- "level_sha256": "5ac8ae436c5bcb3c",
+ "level_sha256": "4702ed9b99bdeaba",
  "golden_hash": "18d2db93ed38004b",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

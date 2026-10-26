@@ -1,8 +1,8 @@
 {
  "level_file": "levels/12_hemispherical_analyzer.json",
- "level_sha256": "7e6dc5c9554c57da",
+ "level_sha256": "020d6f332cb179be",
  "golden_hash": "04ca128258447f0d",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

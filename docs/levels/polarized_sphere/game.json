@@ -1,8 +1,8 @@
 {
  "level_file": "levels/16_polarized_sphere.json",
- "level_sha256": "dfc24c06d26e89d2",
+ "level_sha256": "aae338f3ab90f785",
  "golden_hash": "6fb2d6c00df294d6",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

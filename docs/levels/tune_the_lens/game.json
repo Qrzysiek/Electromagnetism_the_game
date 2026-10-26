@@ -1,8 +1,8 @@
 {
  "level_file": "levels/23_tune_the_lens.json",
- "level_sha256": "50fc18a32d73bf35",
+ "level_sha256": "88ad89e5a1db8ed1",
  "golden_hash": "6c20555dbd1ce104",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

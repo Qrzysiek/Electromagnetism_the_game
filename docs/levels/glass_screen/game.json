@@ -1,0 +1,70 @@
+{
+ "level_file": "levels/22_glass_screen.json",
+ "level_sha256": "8b46ad9de96b8f62",
+ "golden_hash": "4d4b216f748e583d",
+ "recorded": "2026-10-26",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.5840061767127016,
+        0.8821433343692127,
+        0.0
+       ],
+       "t": 32.82222057313208,
+       "x": [
+        27.0,
+        8.59078150942143,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.2632606072315866e-10,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 1.345240151133567e-13,
+      "steps": 96
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.5899899196702777,
+        0.8803039344251622,
+        0.0
+       ],
+       "t": 32.7388559551238,
+       "x": [
+        27.0,
+        8.481480564254342,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.517452830057664e-12,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 1.309141673428814e-13,
+      "steps": 148
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      22,
+      2,
+      0
+     ],
+     "value": -1000000.0
+    }
+   ]
+  }
+ ]
+}

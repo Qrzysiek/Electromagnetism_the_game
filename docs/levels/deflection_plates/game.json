@@ -1,8 +1,8 @@
 {
  "level_file": "levels/18_deflection_plates.json",
- "level_sha256": "2e96020ecfcc7872",
+ "level_sha256": "4bd4d27b837cfd50",
  "golden_hash": "f7b12e1d059810e5",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

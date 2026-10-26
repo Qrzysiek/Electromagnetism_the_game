@@ -1,8 +1,8 @@
 {
  "level_file": "levels/07_thomson_crt.json",
- "level_sha256": "c6e1d284c3444def",
+ "level_sha256": "b911bf29b11d3e2e",
  "golden_hash": "8b131c3e417cefc2",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

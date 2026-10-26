@@ -1,8 +1,8 @@
 {
  "level_file": "levels/03_geiger_marsden.json",
- "level_sha256": "30908b90c2beabdd",
+ "level_sha256": "5fa9ab7af19df06b",
  "golden_hash": "347be506a60c1fd9",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

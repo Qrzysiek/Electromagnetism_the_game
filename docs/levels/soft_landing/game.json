@@ -1,8 +1,8 @@
 {
  "level_file": "levels/13_soft_landing.json",
- "level_sha256": "57aff31382571059",
+ "level_sha256": "15a38b9e90ab8547",
  "golden_hash": "f46cb991215b8caa",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

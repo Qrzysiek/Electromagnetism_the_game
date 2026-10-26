@@ -1,8 +1,8 @@
 {
  "level_file": "levels/06_injection.json",
- "level_sha256": "6246e4478f92f6bb",
+ "level_sha256": "34c46d382b3df452",
  "golden_hash": "5a2dec114317593e",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

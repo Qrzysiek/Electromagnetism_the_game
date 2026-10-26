@@ -1,8 +1,8 @@
 {
  "level_file": "levels/26_microscope_column.json",
- "level_sha256": "c5366cdec29942ce",
+ "level_sha256": "904b55a73c30b329",
  "golden_hash": "f37d98ab0dfa1ddb",
- "recorded": "2026-10-17",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

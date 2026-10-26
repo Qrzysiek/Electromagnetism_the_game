@@ -1,8 +1,8 @@
 {
  "level_file": "levels/15_high_voltage_dome.json",
- "level_sha256": "11744f339a2542c2",
+ "level_sha256": "b3addd0fb5cfa9c8",
  "golden_hash": "0917a9579cde8876",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

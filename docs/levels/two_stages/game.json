@@ -1,8 +1,8 @@
 {
  "level_file": "levels/05_two_stages.json",
- "level_sha256": "fc835eddf67ec7b5",
+ "level_sha256": "4af7e32283102ed6",
  "golden_hash": "609d8edec4b9f9e9",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

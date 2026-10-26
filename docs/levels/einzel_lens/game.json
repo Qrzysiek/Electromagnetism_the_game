@@ -1,8 +1,8 @@
 {
  "level_file": "levels/09_einzel_lens.json",
- "level_sha256": "2e4791b0671ac730",
+ "level_sha256": "22ddec306bc12efc",
  "golden_hash": "cb1dc5a3537d68da",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

@@ -1,8 +1,8 @@
 {
  "level_file": "levels/11_collimator.json",
- "level_sha256": "01893770e72e06e9",
+ "level_sha256": "75db460e3d0bfbb2",
  "golden_hash": "923b8d266aa1bb50",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {

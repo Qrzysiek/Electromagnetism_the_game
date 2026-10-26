@@ -1,8 +1,8 @@
 {
  "level_file": "levels/17_image_charge.json",
- "level_sha256": "fb38620b55152bb2",
+ "level_sha256": "9fe5c4cdb74eb451",
  "golden_hash": "60f3ed01751e2569",
- "recorded": "2026-10-16",
+ "recorded": "2026-10-26",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {
