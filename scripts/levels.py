@@ -3902,6 +3902,51 @@ def magnetoresistance():
                           metal((10, 1), (14, 11), [2, 3], seed=12, **METAL)]),
         reference=[supply(21, 15, 7.0), supply(23, 19, 5.0)])
 
+def wheatstone_bridge():
+    # Designed with `generator tube-scan` (target/scratch/bridge_*.py): Magnetoresistance's two
+    # strips on one fixed supply at their right ends, each left end to ground through an
+    # ideal resistor (R0 the long strip's, R2 the short wide one's); the output, a voltmeter
+    # between the two left ends, is zero when X / Y = R2 / R0 (X, Y the short and the long
+    # strip's resistances). From the ends' potentials (V 10, R0 10, R2 2.8, preview,
+    # t = 10-80): X / Y 0.22, 0.28, 0.30, 0.33, 0.44 at B = 8, 10, 12, 14, 16 (X 2.6 to 6.5,
+    # Y 11.8 to 14.8: the long strip's own magnetoresistance, smaller), the output -2.0 at
+    # B = 0, 0.00 at 10, +1.04 at 16. The output moves ~0.17 per unit of B near the balance,
+    # and the preview's and verification's differed by up to 0.13 (the long strip's end
+    # noisier, ~0.1, through R0 = 10 than the short one's, ~0.05, through 2.8); halving the
+    # resistors (5 and 1.5, the same ratio), the supply 12 and the window to t = 150 made it
+    # monotonic (preview -0.47, -0.36, -0.07, 0.03, 0.16, 0.36, 0.46 at B = 9..15).
+    # Verification at 10.5, 12, 13.5: -0.270 +- 0.006, 0.061 +- 0.049, 0.238 +- 0.146 (the
+    # two ends' noise largely common: they moved together by ~0.1). Goal: the voltmeter
+    # within +-0.3: B solves on 11-13 (6.3 %; 10.5 too, 10.75 uncertain at the edge) and
+    # -13.5 to -10.5 (9.4 %; `generator window`, every 0.5; the bridge reads |B|).
+    return level(
+        "Wheatstone bridge",
+        "The classic way to measure a small change of resistance, here a field sensor. "
+        "Magnetoresistance's two strips share a supply of 12 at their right ends: the long "
+        "one, whose resistance barely changes in a field, and the short wide one, whose "
+        "resistance grows with the field's strength. Each strip's left end goes to ground "
+        "through a resistor, 5 for the long strip and 1.5 for the short one, and a voltmeter "
+        "reads the difference between those two ends. It reads zero, the bridge balanced, "
+        "when the strips' resistances stand in the resistors' ratio: the short one 1.5/5 of "
+        "the long one. Set your solenoid so that the voltmeter reads between -0.3 and 0.3 "
+        "(averaged over $t = 10$ to $150$). Real sensors work this way: magnetoresistors in a "
+        "bridge, its small output read by an amplifier.",
+        grid=(24, 20), c=None, t_max=170.0,
+        # 0, 1: the long strip's left and right ends; 2, 3: the short wide strip's. The right
+        # ends on the supply; the left ends to ground through 5 and 1.5.
+        electrodes=[contact(3, 15, 4), contact(21, 15, 4),
+                    contact(9, 6, 10), contact(15, 6, 10)],
+        solenoid_fields=slider(16.0, 12.0, 6.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 19),
+                  circuits=[tube_circuit(1, dc(12.0), resistance=0.0, linked=[3]),
+                            tube_circuit(0, dc(0.0), resistance=5.0),
+                            tube_circuit(2, dc(0.0), resistance=1.5)],
+                  potentials=[potential_goal(0, "mean", -0.3, 0.3, 10.0, 150.0, reference=2)],
+                  metals=[metal((4, 13), (20, 17), [0, 1], seed=11, **METAL),
+                          metal((10, 1), (14, 11), [2, 3], seed=12, **METAL)]),
+        reference=[supply(23, 19, 12.0)])
+
+
 
 def strength_and_sign():
     # The metals' master (task 6): a magnetic-field sensor of two parts in series on one
@@ -4266,6 +4311,7 @@ ARCS.append(("Inside the components: metals", [
         ("positive_carriers", positive_carriers),
         ("few_or_many", few_or_many),
         ("magnetoresistance", magnetoresistance),
+        ("wheatstone_bridge", wheatstone_bridge),
         ("eddy_currents", eddy_currents),
         ("eddy_silicon", eddy_silicon),
         ("laminations", laminations),

@@ -1590,6 +1590,25 @@ REALITY["magnetoresistance"] = R(
                 "wide strip, left contact (grounded)", "wide strip, right contact (your supply)"],
     metals=["long strip", "short wide strip"])
 
+REALITY["wheatstone_bridge"] = R(
+    "A Wheatstone bridge reading a magnetoresistor: a field sensor",
+    kept("A bridge balances on a ratio",
+         "It reads zero when its arms' resistances stand in the same ratio, so a small change "
+         "shows as a voltage from zero: how strain gauges and field sensors are read."),
+    kept("Shorted Hall field, longer paths",
+         "The short wide strip's contacts short out its Hall field, its carriers' paths bend, "
+         "and it resists more in either field direction: InSb field plates in sensor bridges."),
+    simpler("Two strips and two ideal resistors",
+            "A full sensor bridge has four matched elements whose drifts cancel; here two arms "
+            "are ideal lumped resistors, so the long strip's own small magnetoresistance shifts "
+            "the balance a little."),
+    METAL_CLASSICAL, METAL_Z, TUBE_CIRCUITS,
+    electrodes=["long strip, left end (to ground through 5; the voltmeter's +)",
+                "long strip, right end (the supply, 12)",
+                "wide strip, left contact (to ground through 1.5; the voltmeter's −)",
+                "wide strip, right contact (the supply, 12)"],
+    metals=["long strip (barely magnetoresistive)", "short wide strip (magnetoresistive)"])
+
 REALITY["strength_and_sign"] = R(
     "A two-part magnetic field sensor: strength and sign",
     kept("Even and odd in the field",

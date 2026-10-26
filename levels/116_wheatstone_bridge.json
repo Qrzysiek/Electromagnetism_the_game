@@ -1,0 +1,253 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Wheatstone bridge",
+  "description": "The classic way to measure a small change of resistance, here a field sensor. Magnetoresistance's two strips share a supply of 12 at their right ends: the long one, whose resistance barely changes in a field, and the short wide one, whose resistance grows with the field's strength. Each strip's left end goes to ground through a resistor, 5 for the long strip and 1.5 for the short one, and a voltmeter reads the difference between those two ends. It reads zero, the bridge balanced, when the strips' resistances stand in the resistors' ratio: the short one 1.5/5 of the long one. Set your solenoid so that the voltmeter reads between -0.3 and 0.3 (averaged over $t = 10$ to $150$). Real sensors work this way: magnetoresistors in a bridge, its small output read by an amplifier.",
+  "reality": {
+    "represents": "A Wheatstone bridge reading a magnetoresistor: a field sensor",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "A bridge balances on a ratio",
+        "detail": "It reads zero when its arms' resistances stand in the same ratio, so a small change shows as a voltage from zero: how strain gauges and field sensors are read."
+      },
+      {
+        "kind": "kept",
+        "line": "Shorted Hall field, longer paths",
+        "detail": "The short wide strip's contacts short out its Hall field, its carriers' paths bend, and it resists more in either field direction: InSb field plates in sensor bridges."
+      },
+      {
+        "kind": "simplified",
+        "line": "Two strips and two ideal resistors",
+        "detail": "A full sensor bridge has four matched elements whose drifts cancel; here two arms are ideal lumped resistors, so the long strip's own small magnetoresistance shifts the balance a little."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "A conductor seen end-on",
+        "detail": "The strip is infinitely long along z, its carriers lines of charge moving as one: currents are per unit length, and the noise is larger than a real conductor's, whose carriers move independently along its length."
+      },
+      {
+        "kind": "simplified",
+        "line": "Lumped circuits per unit length",
+        "detail": "Supplies, resistors, capacitors and coils are ideal lumped parts, per unit length of the tube; they drive the electrodes and feel the current the electrons induce (Ramo)."
+      }
+    ]
+  },
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 170.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "solenoid_fields": [
+      -16.0,
+      6.0,
+      12.0,
+      16.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        23,
+        19,
+        0
+      ],
+      "kind": "supply",
+      "value": 12.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        3,
+        15,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "long strip, left end (to ground through 5; the voltmeter's +)"
+    },
+    {
+      "center": [
+        21,
+        15,
+        0
+      ],
+      "length": 4,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "long strip, right end (the supply, 12)"
+    },
+    {
+      "center": [
+        9,
+        6,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "wide strip, left contact (to ground through 1.5; the voltmeter's −)"
+    },
+    {
+      "center": [
+        15,
+        6,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "wide strip, right contact (the supply, 12)"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "step": 0.035,
+    "circuits": [
+      {
+        "electrode": 1,
+        "source": {
+          "kind": "dc",
+          "value": 12.0
+        },
+        "linked": [
+          3
+        ],
+        "resistance": 0.0
+      },
+      {
+        "electrode": 0,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "resistance": 5.0
+      },
+      {
+        "electrode": 2,
+        "source": {
+          "kind": "dc",
+          "value": 0.0
+        },
+        "resistance": 1.5
+      }
+    ],
+    "potential_goals": [
+      {
+        "electrode": 0,
+        "measure": "mean",
+        "min": -0.3,
+        "max": 0.3,
+        "start": 10.0,
+        "end": 150.0,
+        "reference": 2
+      }
+    ],
+    "solenoid": [
+      23,
+      19,
+      0
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            4,
+            13,
+            0
+          ],
+          [
+            20,
+            17,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 11,
+        "label": "long strip (barely magnetoresistive)"
+      },
+      {
+        "corners": [
+          [
+            10,
+            1,
+            0
+          ],
+          [
+            14,
+            11,
+            0
+          ]
+        ],
+        "contacts": [
+          2,
+          3
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 12,
+        "label": "short wide strip (magnetoresistive)"
+      }
+    ]
+  }
+}

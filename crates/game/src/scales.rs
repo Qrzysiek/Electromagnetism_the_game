@@ -21,11 +21,12 @@ pub struct Scales {
     pub lines: Vec<Scale>,
 }
 
-/// The scales of the level shown with the player's `placement`; None for the families not
-/// covered yet.
-pub fn of(level: &Level, placement: &[Element]) -> Option<Scales> {
+/// The scales of the level shown with the player's `placement` (and a tube run's mean
+/// electrode potentials so far, where there is one: the fields across its metals); None for
+/// the families not covered yet.
+pub fn of(level: &Level, placement: &[Element], potentials: Option<&[f64]>) -> Option<Scales> {
     match &level.tube {
-        Some(spec) if !spec.metals.is_empty() => metals(level, spec, placement),
+        Some(spec) if !spec.metals.is_empty() => metals(level, spec, placement, potentials),
         Some(spec) => tubes(level, spec, placement),
         None => particles(level, placement),
     }
@@ -600,13 +601,54 @@ struct MetalScales {
 }
 
 /// Metal `m`'s scales in the field `b` (its magnitude), with the strongest supply `supply`.
-fn metal_scales(
+/// The field driving metal `m`'s carriers: a swinging solenoid's induced field at its edge;
+/// else, with a run's mean potentials (`potentials`, every electrode's), the largest voltage
+/// between two of its contacts over the distance between their faces (Wheatstone bridge's
+/// short strip is driven across 4, not along its 10, and a transistor's channel by its
+/// drain, not its gate); before a run, the player's largest supply over its longer side.
+fn drive_field(
     level: &Level,
     spec: &level::tube::TubeSpec,
     m: &level::tube::MetalSpec,
     b: f64,
     supply: f64,
-) -> MetalScales {
+    potentials: Option<&[f64]>,
+) -> f64 {
+    let (lo, hi) = level.metal_rect(m);
+    let length = (hi.x - lo.x).max(hi.y - lo.y);
+    if let Some(d) = spec.solenoid_drive {
+        let omega = match d {
+            level::Source::Sine { omega, .. } => omega,
+            _ => 0.0,
+        };
+        return 0.5 * b * omega * 0.5 * length;
+    }
+    let faces = level.contact_faces(m);
+    let across = potentials.and_then(|v| {
+        let mid = |f: &[[f64; 2]; 2]| [0.5 * (f[0][0] + f[1][0]), 0.5 * (f[0][1] + f[1][1])];
+        let mut best: Option<f64> = None;
+        for (i, &a) in m.contacts.iter().enumerate() {
+            for (j, &c) in m.contacts.iter().enumerate().skip(i + 1) {
+                let (Some(fa), Some(fc), Some(va), Some(vc)) =
+                    (faces.get(i), faces.get(j), v.get(a), v.get(c))
+                else {
+                    continue;
+                };
+                let (pa, pc) = (mid(fa), mid(fc));
+                let (dx, dy) = (pa[0] - pc[0], pa[1] - pc[1]);
+                let d = (dx * dx + dy * dy).sqrt();
+                if d > 0.0 {
+                    let e = (va - vc).abs() / d;
+                    best = Some(best.map_or(e, |x| x.max(e)));
+                }
+            }
+        }
+        best
+    });
+    across.unwrap_or(supply / length)
+}
+
+fn metal_scales(level: &Level, m: &level::tube::MetalSpec, b: f64, field: f64) -> MetalScales {
     let qm = m.charge_per_mass.abs();
     let sigma = m.thermal_speed;
     let ell = m.mean_free_path;
@@ -614,20 +656,7 @@ fn metal_scales(
     let mean_speed = sigma * 1.253_314_137_315_500_3;
     let tau = ell / mean_speed;
     let kt_over_q = sigma * sigma / qm;
-    // The strongest driving field: the largest supply over the metal's length (a strip's
-    // length between its contacts), or a swinging field's induced one at its edge.
     let (lo, hi) = level.metal_rect(m);
-    let length = (hi.x - lo.x).max(hi.y - lo.y);
-    let field = match spec.solenoid_drive {
-        Some(d) => {
-            let omega = match d {
-                level::Source::Sine { omega, .. } => omega,
-                _ => 0.0,
-            };
-            0.5 * b * omega * 0.5 * length
-        }
-        None => supply / length,
-    };
     MetalScales {
         wct: qm * b * tau,
         heating: field * ell / kt_over_q,
@@ -649,7 +678,12 @@ fn metal_scales(
 /// The metals (tube levels with Drude metals, PHYSICS.md §2.11): each different material once
 /// (its own parameters: the carriers' sign changes no ratio), its numbers after its metal's
 /// number where there are several (Few carriers or many's two strips).
-fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) -> Option<Scales> {
+fn metals(
+    level: &Level,
+    spec: &level::tube::TubeSpec,
+    placement: &[Element],
+    potentials: Option<&[f64]>,
+) -> Option<Scales> {
     spec.metals.first()?;
     // The field: the player's solenoid, else the level's own; a swinging one's amplitude.
     let b = spec
@@ -666,18 +700,27 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
         .filter(|e| e.kind == ElementKind::Supply && Some(e.node) != spec.solenoid)
         .map(|e| e.value.abs())
         .fold(0.0, f64::max);
-    let mut kinds: Vec<(usize, MetalScales)> = Vec::new();
-    let mut seen: Vec<[u64; 4]> = Vec::new();
-    for (k, m) in spec.metals.iter().enumerate() {
-        let key = [
+    let key = |m: &level::tube::MetalSpec| {
+        [
             m.density.to_bits(),
             m.charge_per_mass.abs().to_bits(),
             m.thermal_speed.to_bits(),
             m.mean_free_path.to_bits(),
-        ];
-        if !seen.contains(&key) {
-            seen.push(key);
-            kinds.push((k, metal_scales(level, spec, m, b, supply)));
+        ]
+    };
+    let mut kinds: Vec<(usize, MetalScales)> = Vec::new();
+    let mut seen: Vec<[u64; 4]> = Vec::new();
+    for (k, m) in spec.metals.iter().enumerate() {
+        if !seen.contains(&key(m)) {
+            seen.push(key(m));
+            // The strongest field on any metal of this material.
+            let field = spec
+                .metals
+                .iter()
+                .filter(|o| key(o) == key(m))
+                .map(|o| drive_field(level, spec, o, b, supply, potentials))
+                .fold(0.0, f64::max);
+            kinds.push((k, metal_scales(level, m, b, field)));
         }
     }
     let num = crate::ui::fmt_num;
@@ -787,7 +830,12 @@ fn metals(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) ->
             detail: "The energy a carrier gains from the electric field over one mean free path, \
                      against its thermal energy. Well below 1, Ohm's law holds (the current in \
                      proportion to the field); near 1 the carriers warm and the conductance \
-                     falls (hot carriers). The game's strips sit at 0.05-0.6.",
+                     falls (hot carriers). E here is the mean field between a metal's contacts \
+                     over the run so far (the largest voltage between two of them over their \
+                     distance), before the run the supply over the metal's length; a swinging \
+                     solenoid's induced field at the edge. Locally it can be larger (a \
+                     transistor's pinched channel by its drain). The game's strips sit at \
+                     0.05-0.7.",
         },
         Scale {
             quantity: "the strip's width in mean free paths",

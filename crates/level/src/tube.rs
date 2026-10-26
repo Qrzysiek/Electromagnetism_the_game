@@ -608,6 +608,9 @@ pub struct MetalView {
     pub cells: (usize, usize),
     pub walls: Vec<[[f64; 2]; 2]>,
     pub isolated: bool,
+    /// Its contacts' faces along its sides (each from one end to the other): where the
+    /// display takes carriers in and gives them off between frames (`TubeRun::frame_between`).
+    pub contacts: Vec<[[f64; 2]; 2]>,
 }
 
 /// Each metal's carriers' mean displacement (x, y) from frame `a` to frame `b`: the mean over
@@ -653,6 +656,18 @@ impl MetalView {
             (centre, DVec3::Y, DVec3::X, dy, dx)
         }
     }
+}
+
+/// The point a fraction `s` of the way from `a` to `b`.
+#[allow(clippy::cast_possible_truncation)]
+fn towards(a: [f32; 2], b: [f32; 2], s: f64) -> [f32; 2] {
+    let s = s as f32;
+    [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s]
+}
+
+/// The distance from `a` to `b`.
+fn distance(a: [f32; 2], b: [f32; 2]) -> f64 {
+    libm::hypot(f64::from(b[0] - a[0]), f64::from(b[1] - a[1]))
 }
 
 /// The metals' accounts a fraction `w` of the way from `a` to `b` (`TubeFrame::cells`).
@@ -1180,9 +1195,14 @@ impl TubeRun {
 
     /// The picture at time `t` between the stored frames, for the display (smooth at any
     /// playback speed): each particle in both neighbouring frames moved linearly between
-    /// them, the surface densities and potentials interpolated; a particle absorbed before
-    /// the next frame stays where it was, one emitted after it appears with that frame.
-    /// Before the first frame the first, after the last the last.
+    /// them, the surface densities and potentials interpolated. A metal's carrier that a
+    /// contact takes before the next frame goes into it and one it gives off after the
+    /// frame comes out of it (`taken`, `given_off`): frames a metal's run keeps steps apart,
+    /// where they stood still and then vanished, and the new ones appeared all at once (the
+    /// owner, 2026-10-26: the carriers by the contacts "locked", moving "in bursts"). Any
+    /// other particle absorbed before the next frame stays where it was, one emitted after
+    /// it appears with that frame (their frames are steps). Before the first frame the
+    /// first, after the last the last.
     pub fn frame_between(&self, t: f64) -> Option<TubeFrame> {
         let k = self.frames.partition_point(|f| f.t <= t).saturating_sub(1);
         let a = self.frames.get(k)?;
@@ -1194,24 +1214,49 @@ impl TubeRun {
         let next: std::collections::HashMap<u32, usize> =
             b.id.iter().enumerate().map(|(i, id)| (*id, i)).collect();
         let lerp = |u: f32, v: f32| u + (v - u) * w;
-        let x =
-            a.x.iter()
-                .enumerate()
-                .map(|(i, p)| match a.id.get(i).and_then(|id| next.get(id)) {
-                    // A sampled carrier along its steps, the others straight on.
-                    Some(&j) => b
-                        .path(a.id[i])
+        let n = a.x.len();
+        let (mut x, mut q, mut kind, mut id) = (
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+        );
+        for (i, p) in a.x.iter().enumerate() {
+            let now = match a.id.get(i).map(|me| (*me, next.get(me))) {
+                // A sampled carrier along its steps, the others straight on.
+                Some((me, Some(&j))) => Some(
+                    b.path(me)
                         .and_then(|path| self.along(*p, a.t, path, b.t, t))
                         .unwrap_or([lerp(p[0], b.x[j][0]), lerp(p[1], b.x[j][1])]),
-                    None => *p,
-                })
-                .collect();
+                ),
+                Some((me, None)) => self.taken(*p, me, a.t, b, t),
+                None => Some(*p),
+            };
+            if let Some(now) = now {
+                x.push(now);
+                q.push(a.q.get(i).copied().unwrap_or_default());
+                kind.push(a.kind.get(i).copied().unwrap_or_default());
+                id.push(a.id.get(i).copied().unwrap_or_default());
+            }
+        }
+        let before: std::collections::HashSet<u32> = a.id.iter().copied().collect();
+        for (j, me) in b.id.iter().enumerate() {
+            if before.contains(me) {
+                continue;
+            }
+            if let Some(now) = self.given_off(b.x[j], *me, a.t, b, t) {
+                x.push(now);
+                q.push(b.q[j]);
+                kind.push(b.kind[j]);
+                id.push(*me);
+            }
+        }
         Some(TubeFrame {
             t,
             x,
-            q: a.q.clone(),
-            kind: a.kind.clone(),
-            id: a.id.clone(),
+            q,
+            kind,
+            id,
             sigma: a
                 .sigma
                 .iter()
@@ -1259,6 +1304,89 @@ impl TubeRun {
         #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         let w = (u - k as f64) as f32;
         Some([p0[0] + (p1[0] - p0[0]) * w, p0[1] + (p1[1] - p0[1]) * w])
+    }
+
+    /// Where a metal's carrier at `x0` at `t0` that a contact takes before frame `b` is at
+    /// `t`: along its recorded steps if it is sampled (they end at its last step), else
+    /// straight to the nearest point of its metal's contact faces at the carriers' mean
+    /// speed, there by `b` at the latest; None once taken. Outside a metal with contacts,
+    /// where it was.
+    fn taken(&self, x0: [f32; 2], id: u32, t0: f64, b: &TubeFrame, t: f64) -> Option<[f32; 2]> {
+        if let Some(path) = b.path(id).filter(|p| !p.is_empty()) {
+            #[allow(clippy::cast_precision_loss)]
+            let last = t0 + self.dt * path.len() as f64;
+            return if t <= last {
+                self.along(x0, t0, path, last, t)
+            } else {
+                None
+            };
+        }
+        let Some((face, speed)) = self.nearest_contact(x0) else {
+            return Some(x0);
+        };
+        let span = (distance(x0, face) / speed).min(b.t - t0);
+        let s = if span > 0.0 {
+            (t - t0) / span
+        } else {
+            f64::INFINITY
+        };
+        (s <= 1.0).then(|| towards(x0, face, s))
+    }
+
+    /// Where a metal's carrier at `x1` in frame `b`, given off by a contact since `t0`, is
+    /// at `t`: from its first recorded step if it is sampled, else from the nearest point of
+    /// its metal's contact faces at the carriers' mean speed, leaving no earlier than `t0`;
+    /// None before. Outside a metal with contacts, None (it appears with `b`).
+    fn given_off(&self, x1: [f32; 2], id: u32, t0: f64, b: &TubeFrame, t: f64) -> Option<[f32; 2]> {
+        if let Some(path) = b.path(id).filter(|p| !p.is_empty()) {
+            #[allow(clippy::cast_precision_loss)]
+            let first = b.t - self.dt * (path.len() - 1) as f64;
+            if t < first || self.dt <= 0.0 {
+                return None;
+            }
+            let u = (t - first) / self.dt;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let k = (libm::floor(u) as usize).min(path.len() - 1);
+            let next = path.get(k + 1).copied().unwrap_or(path[k]);
+            #[allow(clippy::cast_precision_loss)]
+            return Some(towards(path[k], next, u - k as f64));
+        }
+        let (face, speed) = self.nearest_contact(x1)?;
+        let span = (distance(face, x1) / speed).min(b.t - t0);
+        let born = b.t - span;
+        if t < born {
+            return None;
+        }
+        let s = if span > 0.0 { (t - born) / span } else { 1.0 };
+        Some(towards(face, x1, s.min(1.0)))
+    }
+
+    /// The nearest point to `x` of the contact faces of the metal it is in, and that metal's
+    /// carriers' mean speed (`√(π/2)` times the thermal speed `√(kT/m)`, a 2D Maxwellian's).
+    fn nearest_contact(&self, x: [f32; 2]) -> Option<([f32; 2], f64)> {
+        let p = [f64::from(x[0]), f64::from(x[1])];
+        let m = self
+            .metals
+            .iter()
+            .find(|m| p[0] >= m.lo.x && p[0] <= m.hi.x && p[1] >= m.lo.y && p[1] <= m.hi.y)?;
+        let d2 = |u: &[f64; 2]| (u[0] - p[0]) * (u[0] - p[0]) + (u[1] - p[1]) * (u[1] - p[1]);
+        let nearest = m
+            .contacts
+            .iter()
+            .map(|[a, b]| {
+                let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+                let len2 = dx * dx + dy * dy;
+                let s = if len2 > 0.0 {
+                    (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                [a[0] + s * dx, a[1] + s * dy]
+            })
+            .min_by(|u, v| d2(u).total_cmp(&d2(v)))?;
+        let speed = m.thermal_speed * libm::sqrt(std::f64::consts::FRAC_PI_2);
+        #[allow(clippy::cast_possible_truncation)]
+        (speed > 0.0).then_some(([nearest[0] as f32, nearest[1] as f32], speed))
     }
 
     /// Carrier `id`'s path from `t0` to `t1`: its recorded steps where it is sampled
@@ -2205,6 +2333,31 @@ impl Level {
         }
     }
 
+    /// Metal `m`'s contacts' faces along its sides (`contact_side`), each a segment from one
+    /// end to the other within the metal's side (`MetalView::contacts`).
+    #[must_use]
+    pub fn contact_faces(&self, m: &MetalSpec) -> Vec<[[f64; 2]; 2]> {
+        let (lo, hi) = self.metal_rect(m);
+        m.contacts
+            .iter()
+            .filter_map(|&e| {
+                let side = self.contact_side(m, e)?;
+                let (b0, b1) = self.electrode_box(e)?;
+                let (y0, y1) = (b0.y.max(lo.y), b1.y.min(hi.y));
+                let (x0, x1) = (b0.x.max(lo.x), b1.x.min(hi.x));
+                Some(if side == DVec3::X {
+                    [[lo.x, y0], [lo.x, y1]]
+                } else if side == -DVec3::X {
+                    [[hi.x, y0], [hi.x, y1]]
+                } else if side == DVec3::Y {
+                    [[x0, lo.y], [x1, lo.y]]
+                } else {
+                    [[x0, hi.y], [x1, hi.y]]
+                })
+            })
+            .collect()
+    }
+
     /// The depth of the layer a metal's contacts keep neutral: half a mean free path, at
     /// most a quarter of the metal's width.
     #[must_use]
@@ -2606,6 +2759,11 @@ impl Level {
                         .collect(),
                     // A lattice per metal (`lattice_metal`).
                     isolated: spec.metals.get(k).is_some_and(|m| m.contacts.is_empty()),
+                    contacts: spec
+                        .metals
+                        .get(k)
+                        .map(|m| self.contact_faces(m))
+                        .unwrap_or_default(),
                 })
                 .collect(),
             b_z: tube.b_z,
@@ -3463,6 +3621,84 @@ mod tests {
         for (a, b) in trail.iter().zip(expected) {
             assert!(close(*a, b), "{trail:?}");
         }
+    }
+
+    /// A metal's carriers that its contacts take or give off between frames move between
+    /// them (the owner, 2026-10-26: they stood still, then vanished, and the new ones
+    /// appeared all at once). A metal 10 × 2 with contacts on both short sides, thermal
+    /// speed 2 (mean speed 2√(π/2) ≈ 2.507), frames 1 apart, steps 0.1. Taken: an unsampled
+    /// carrier at (1, 1) goes straight to the left face, (0, 1), in 1/2.507 = 0.399: at
+    /// t = 1.2 halfway, at 1.5 gone; a sampled one follows its two recorded steps (at 1.15
+    /// halfway between them, 9.8) and is gone after them. Given off: an unsampled carrier
+    /// at (1.5, 1) in the next frame leaves the face at 2 − 1.5/2.507 = 1.402 (absent at
+    /// 1.3, halfway at 1.701); a sampled one from its first recorded step, 1.7 (absent at
+    /// 1.65, between its first two steps at 1.75).
+    #[test]
+    fn contacts_take_and_give_off_carriers_between_frames() {
+        let frame = |t: f64, x: Vec<[f32; 2]>, id: Vec<u32>, paths| TubeFrame {
+            t,
+            q: vec![-1.0; x.len()],
+            kind: vec![KIND_NEGATIVE; x.len()],
+            x,
+            id,
+            paths,
+            ..TubeFrame::default()
+        };
+        let run = TubeRun {
+            frames: vec![
+                frame(1.0, vec![[1.0, 1.0], [9.5, 1.0]], vec![1, 14], Vec::new()),
+                frame(
+                    2.0,
+                    vec![[1.5, 1.0], [8.0, 1.0]],
+                    vec![3, 21],
+                    vec![
+                        (14, vec![[9.7, 1.0], [9.9, 1.0]]),
+                        (21, vec![[9.6, 1.0], [9.0, 1.0], [8.5, 1.0], [8.0, 1.0]]),
+                    ],
+                ),
+            ],
+            metals: vec![MetalView {
+                lo: DVec3::ZERO,
+                hi: DVec3::new(10.0, 2.0, 0.0),
+                thermal_speed: 2.0,
+                contacts: vec![[[0.0, 0.0], [0.0, 2.0]], [[10.0, 0.0], [10.0, 2.0]]],
+                ..MetalView::default()
+            }],
+            dt: 0.1,
+            fine_every: 7,
+            ..TubeRun::default()
+        };
+        let at = |t: f64, id: u32| {
+            let f = run.frame_between(t).unwrap();
+            f.id.iter().position(|i| *i == id).map(|k| f.x[k])
+        };
+        let near = |x: Option<[f32; 2]>, want: f32| {
+            x.is_some_and(|x| (x[0] - want).abs() < 2e-3 && (x[1] - 1.0).abs() < 1e-6)
+        };
+        assert!(
+            near(at(1.2, 1), 0.499),
+            "taken, unsampled: {:?}",
+            at(1.2, 1)
+        );
+        assert_eq!(at(1.5, 1), None, "taken, unsampled, gone");
+        assert!(
+            near(at(1.15, 14), 9.8),
+            "taken, sampled: {:?}",
+            at(1.15, 14)
+        );
+        assert_eq!(at(1.25, 14), None, "taken, sampled, gone");
+        assert_eq!(at(1.3, 3), None, "given off, unsampled, not yet");
+        assert!(
+            near(at(1.701, 3), 0.75),
+            "given off, unsampled: {:?}",
+            at(1.701, 3)
+        );
+        assert_eq!(at(1.65, 21), None, "given off, sampled, not yet");
+        assert!(
+            near(at(1.75, 21), 9.3),
+            "given off, sampled: {:?}",
+            at(1.75, 21)
+        );
     }
 
     /// The Fourier measures of a potential goal: `3 sin(ω t + φ)` plus a drift and an

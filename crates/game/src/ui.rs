@@ -862,7 +862,26 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
     }
     // What the numbers mean (`scales.rs`): the decisive ratios in the header, each quantity's
     // real-world scale inside.
-    if let Some(sc) = crate::scales::of(&level, &game.editor.placement) {
+    // The run's mean electrode potentials over the later half of its frames so far (the
+    // fields across the metals; past a supply's start-up, the Amplifier's drain settling
+    // from 120 to ~45).
+    let potentials = game
+        .tube_preview
+        .as_ref()
+        .filter(|v| v.revision == game.sent_revision && !v.run.frames.is_empty())
+        .map(|v| {
+            let later = &v.run.frames[v.run.frames.len() / 2..];
+            #[allow(clippy::cast_precision_loss)]
+            let n = later.len() as f64;
+            let mut sum = vec![0.0; later[0].potentials.len()];
+            for f in later {
+                for (s, p) in sum.iter_mut().zip(&f.potentials) {
+                    *s += f64::from(*p);
+                }
+            }
+            sum.into_iter().map(|s| s / n).collect::<Vec<f64>>()
+        });
+    if let Some(sc) = crate::scales::of(&level, &game.editor.placement, potentials.as_deref()) {
         egui::CollapsingHeader::new(format!("Scales: {}", sc.headline))
             .id_salt("scales")
             // Opened for developer captures with EM_SCALES=1.

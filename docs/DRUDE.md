@@ -283,7 +283,21 @@ design runs, repeated today across `tube-scan`, `check`, `window` and captures.
    steepest transconductance); **Inverter** (a pulse on the gate, a load strip: the output
    high, then low, two potential goals over two windows).
 3. *Transistors, master:* **Flip-flop.** Two inverters cross-coupled by wires: a bistable
-   cell, set by a pulse and holding its state, a bit of memory.
+   cell, set by a pulse and holding its state, a bit of memory. *Deferred (2026-10-26):* a
+   prototype (`target/scratch/ff_proto.py`: two of Gate's transistors, each pair of gates
+   wired to the other's drain through a level-shifting source −S, the depletion gates
+   needing −S ~ −70 to switch off; reset and set by dropping a drain's supply) met two
+   obstacles. (1) Two 8-long channels hold 25 600 carriers in the verification, over the
+   engine's 15 000 (`MAX_METAL_CARRIERS`, a share of `physics::tube::MAX_PARTICLES` 20 000);
+   4-long channels fit but do not switch (at V_DD 60 0.73 off against 1.32 on: the short
+   gates lose the channel). With the caps doubled the cell ran, but (2) it latches too
+   slowly: each drain carries the other transistor's gates (~0.6, more through the Miller
+   effect) through its load of 200, a time constant of ~200–400, so after a reset at
+   S = 70 both drains crept back towards the symmetric point (A 50, B 54 at t = 100–150)
+   and a set separated them by only ~7 by t = 300. A level would need runs of ~600–1000
+   (previews of minutes). Options: gates shorter than the channel, placed by the source
+   (less gate capacitance and a drift region shielding them from the drain), or a faster
+   engine.
 4. *Metals, intermediate:* **Wheatstone bridge.** Four strips joined by wires,
    magnetoresistive arms: the bridge balances at one |B|.
 5. *AC and induction, introduction:* **Relaxation** (a pulse on a floating contact: the

@@ -366,6 +366,7 @@
             "positive_carriers",
             "few_or_many",
             "magnetoresistance",
+            "wheatstone_bridge",
             "eddy_currents",
             "eddy_silicon",
             "laminations"
