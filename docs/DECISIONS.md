@@ -269,3 +269,53 @@ Entries are numbered in order and never renumbered.
     beam (the strip collected ~0.2 of 0.4); 8 apart around a 40 V beam the left end's share
     went only 0.51 → 0.63 over the supply 0 → 40 (a shift of ~2 of the strip's 16): a slower
     beam or another geometry needed before a level.
+
+## DEC-12: A switched-off supply drives nothing
+
+- **Status:** in use (since 2026-10-26)
+- **Area:** level design, tests
+- **Choice:** a player-tunable electrode's circuit (or driven plate's chain) carries, in
+  the level, a source at rest: a DC source at 0, a sine with no swing (no offset where the
+  supply sets the offset), a pulse whose top is its rest; the player's supply sets its
+  level. Switched on, a supply starts at 0, which the slider rule keeps out of every
+  solving window. Test `switched_off_supplies_drive_nothing`.
+- **Purpose:** a level must not solve, or half solve, with nothing done (the owner,
+  2026-10-26: "the winning conditions are trivial as it solves with the initial setting").
+- **Alternatives:** a source's level anywhere outside the solving window (an arbitrary
+  number the "off" hover would still show, and a test could not tell from a giveaway).
+- **Where:** `scripts/levels.py` (rectifier, klystron, inverter, ringing_tank),
+  `crates/level/tests/levels.rs`.
+- **History:**
+  - 2026-10-26: chosen. Ringing tank's step (14), the Inverter's pulse top (−10) and the
+    Rectifier's anodes' swing (30) were their references, the Klystron's buncher swing
+    (11) inside its window: they solved, or half solved, with the supplies off. Now each
+    fails with everything off (`target/scratch/check_off.py`).
+
+## DEC-13: The carriers' own magnetic field: the Darwin limit, canonical momenta
+
+- **Status:** in design (2026-10-26; docs/DARWIN.md)
+- **Area:** physics, numerics
+- **Choice:** the magnetoquasistatic (Darwin) limit in the z-invariant tube world: currents
+  in the plane make B_z, its change the transverse E_T. Particles carry canonical momenta
+  P = mv + qA_T; A_T (as a stream function χ, B_z = −∇²χ) solves
+  (−∇² + μ₀β)A_T = μ₀[J_P]_T on a board grid each step by conjugate gradients, β the
+  carriers' q²/m per area. Collisions redraw v (P follows). A finite speed of light per
+  level, none by default (existing levels unchanged). Electrodes transparent to E_T at
+  first; circuits' leads as current sources and their EMF in the branch equations.
+- **Purpose:** the owner chose this stage first (2026-10-26) to see whole circuits and the
+  fields they make: inductance from geometry, transformers, skin effect, shielding.
+- **Alternatives:** explicit Darwin (E_T from the last steps' dJ/dt: unstable once a metal
+  is larger than its skin depth c/ω_p, the regime that shows the effects); full
+  electrodynamics (FDTD acting on the particles, Phase 3.3: a time step bound by c/h, far
+  costlier, and radiation not needed at these sizes); lumped coils driving local solenoids
+  (the owner preferred the full field); drawing the circuits as symbols only (no fields).
+- **Where:** docs/DARWIN.md (plan), `physics::darwin2d` (to come).
+- **History:**
+  - 2026-10-26: designed (docs/DARWIN.md), tests written first (V-D1–V-D7, energy,
+    symmetries).
+  - 2026-10-26: the field solver (`physics::darwin2d`): V-D1–V-D3 exact to the solver's
+    tolerance (a loop is exactly a curl on the staggered grid), V-D4 0.61 % in 9 CG
+    iterations. V-D4 changed from a slab to a disc: in a slab that ends the screening
+    current −βA had nowhere to close (the field at its faces came out 0.4 B₀), as nothing
+    in the field solver alone conserves charge; the electrostatic field will close it in
+    the full model.

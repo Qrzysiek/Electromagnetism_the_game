@@ -446,6 +446,60 @@ fn slider_ranges_hide_the_answer() {
     }
 }
 
+/// A player's supply switched off leaves its electrode's circuit driving nothing: a DC
+/// source at 0, a sine with no swing (or, where the supply sets its offset, none), a pulse
+/// whose top is its rest. The owner (2026-10-26): Ringing tank's step, the Inverter's pulse
+/// and the Rectifier's and the Klystron's sources had their answers built into the circuit
+/// a switched-off supply leaves in place, so they solved (or half solved) with nothing
+/// done. Switched on, a supply starts at 0, which the slider rule keeps out of every
+/// solving window (`slider_ranges_hide_the_answer`).
+#[test]
+fn switched_off_supplies_drive_nothing() {
+    use level::Source;
+    let idle = |s: &Source, offset_is_level: bool| match *s {
+        Source::Dc { value } => value == 0.0,
+        Source::Sine {
+            offset, amplitude, ..
+        } => {
+            if offset_is_level {
+                offset == 0.0
+            } else {
+                amplitude == 0.0
+            }
+        }
+        Source::Pulse { low, high, .. } => high == low,
+    };
+    let mut checked = 0;
+    for (name, level) in shipped_levels() {
+        for (k, e) in level.electrodes.iter().enumerate() {
+            if !e.tunable {
+                continue;
+            }
+            if let Some(d) = &e.drive {
+                checked += 1;
+                assert!(
+                    idle(&d.source, false),
+                    "{name}: electrode {}'s drive {:?} with its supply off",
+                    k + 1,
+                    d.source
+                );
+            }
+            for c in level.tube.iter().flat_map(|t| &t.circuits) {
+                if c.electrode == k {
+                    checked += 1;
+                    assert!(
+                        idle(&c.source, c.supply_offset),
+                        "{name}: electrode {}'s circuit {:?} with its supply off",
+                        k + 1,
+                        c.source
+                    );
+                }
+            }
+        }
+    }
+    assert!(checked > 10, "only {checked} tunable circuits found");
+}
+
 /// Realistic iterations (chapter 15, SPEC §3) build an earlier level's idealised solution
 /// in and add a real effect that breaks it: on its own, without the player's elements,
 /// the built-in design must not solve the level (otherwise the effect is decoration).

@@ -165,7 +165,7 @@
         "source": {
           "kind": "pulse",
           "low": -60.0,
-          "high": -10.0,
+          "high": -60.0,
           "delay": 100.0,
           "rise": 2.0,
           "width": 100.0,

@@ -127,7 +127,7 @@
         "source": {
           "kind": "pulse",
           "low": 0.0,
-          "high": 14.0,
+          "high": 0.0,
           "delay": 5.0,
           "rise": 1.0,
           "width": 10000.0,

@@ -314,7 +314,7 @@
         "electrode": 0,
         "source": {
           "kind": "dc",
-          "value": -50.0
+          "value": 0.0
         },
         "linked": [
           1,
@@ -326,7 +326,7 @@
         "electrode": 5,
         "source": {
           "kind": "sine",
-          "amplitude": 11.0,
+          "amplitude": 0.0,
           "omega": 6.283185307179586
         },
         "linked": [

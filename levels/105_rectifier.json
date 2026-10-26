@@ -146,7 +146,7 @@
         "electrode": 1,
         "source": {
           "kind": "sine",
-          "amplitude": 30.0,
+          "amplitude": 0.0,
           "omega": 0.3141592653589793
         },
         "resistance": 0.0
@@ -155,7 +155,7 @@
         "electrode": 2,
         "source": {
           "kind": "sine",
-          "amplitude": 30.0,
+          "amplitude": 0.0,
           "omega": 0.3141592653589793,
           "phase": 3.141592653589793
         },
