@@ -429,3 +429,29 @@ Entries are numbered in order and never renumbered.
     builds without warnings. CI's test job still runs every per-level check (hours on its
     runners); the per-level harness (DEC-16) makes them selectable and its sampled golden
     hashes on Linux the cross-platform check.
+
+## DEC-18: Engine structure for safety (one force pipeline, a Tube builder, a named Material)
+
+- **Status:** in use (2026-10-26)
+- **Area:** code structure (physics, tests)
+- **Choice:** (1) the tube step's fields come from one place: `charges_fields` (the trees or
+  the direct sums, neither with the backgrounds) and `with_external` (the backgrounds and a
+  changing field's induced part) for the push and the display alike, with test
+  `trees_and_direct_sums_agree`; (2) `Tube::new(electrodes, softening, dt)` with every
+  optional part empty, literals naming only what they set (`..Tube::new(...)`); (3)
+  `lattice::Material` names the four numbers of a conductor's make-up in `Lattice::new`;
+  (4) the metal tests share `tests/common` (their metal, the small floating electrode, the
+  Boltzmann mobility, libm complex helpers on num-complex).
+- **Purpose:** the owner (2026-10-26) approved the refactors after this session's bugs:
+  the doubled background came from the fields being assembled in two places; the Darwin
+  field needed 18 literals edited; nine positional arguments of four alike floats invited
+  swaps; the mobility had been copied between test files.
+- **Alternatives:** leaving them (each bug class stays possible); a full builder type with a
+  method per field for `Tube` (more code than the struct update syntax for the same safety).
+- **Where:** `crates/physics/src/tube.rs`, `crates/physics/src/lattice.rs`,
+  `crates/physics/tests/common/mod.rs`.
+- **History:**
+  - 2026-10-26: done in four commits, each bit for bit (golden hashes of representative
+    levels, the shared helpers against the old ones bit for bit). The consistency test's
+    threshold came from `tree2d`'s documented truncation (5e-7 a node), after a comment in the
+    step claiming ~1e-11 proved wrong (measured 1.2e-8 of the largest field).
