@@ -6,12 +6,12 @@
 //!
 //! Sources: every particle's motion between frames (matched by identity; a new particle
 //! comes out of its emitter's surface, an absorbed one goes into the electrode it reached),
-//! and each electrode's circuit current along a straight lead (the owner's convention,
-//! 2026-10-12): from the innermost grounded ring enclosing it (an envelope), or, in an open
-//! level (one with an output), from the nearest envelope outside it, or else from the
-//! board's border; the shortest such segment that crosses no other electrode and no metal
-//! (a conductor: Positive carriers' inner Hall contacts were wired through the other
-//! strip). A lead
+//! and each electrode's circuit current along its lead (`level::leads`, the owner's
+//! convention, 2026-10-12): from the innermost grounded ring enclosing it (an envelope), or,
+//! in an open level (one with an output), from the nearest envelope outside it, or else from
+//! the board's border; routed along x and y with right-angle bends clear of every other
+//! electrode, every metal and the other wires (the owner, 2026-10-27; until then the
+//! shortest straight segment crossing no other electrode or metal). A lead
 //! carries the electrode's change of charge (from the frames' surface densities) less the
 //! particles it took in and gave off, plus what the leads starting on it drew. The
 //! electrodes are perfect conductors on the grid, so each one's charge follows the run's.
@@ -57,8 +57,9 @@ pub const EM_FRAME_RATIO: f64 = 0.4;
 /// The time step's fraction of the stability limit.
 const COURANT: f64 = 0.9;
 
-/// A lead: from its parent's metal (or the border) to its electrode's.
-pub type Lead = ((f64, f64), (f64, f64));
+/// A lead: its corners from its parent's metal (or the border) to its electrode's
+/// (`level::leads`).
+pub type Lead = crate::leads::Wire;
 
 /// A path a charge takes over a frame interval (from `a` at its start to `b` at its end).
 #[derive(Clone, Copy, Debug)]
@@ -133,23 +134,6 @@ fn nearest_on(a: DVec3, b: DVec3, p: DVec3) -> DVec3 {
     let d = b - a;
     let s = ((p - a).dot(d) / d.length_squared().max(1e-300)).clamp(0.0, 1.0);
     a + d * s
-}
-
-/// An outline's centre (a box's middle).
-fn centre(o: &Outline) -> DVec3 {
-    match *o {
-        Outline::Rect(r) => (r[0] + r[1] + r[2] + r[3]) * 0.25,
-        Outline::Circle { center, .. } | Outline::Ring { center, .. } => center,
-    }
-}
-
-/// The farthest distance from `c` to an outline's material.
-fn farthest(o: &Outline, c: DVec3) -> f64 {
-    match *o {
-        Outline::Rect(r) => r.iter().map(|p| (*p - c).length()).fold(0.0, f64::max),
-        Outline::Circle { center, radius } => (center - c).length() + radius,
-        Outline::Ring { center, outer, .. } => (center - c).length() + outer,
-    }
 }
 
 /// The nearest grid node to `p` of electrode `owner` (None: of the border's two rings),
@@ -439,113 +423,14 @@ impl TubeEm {
             .collect();
         let pml = if open { EM_PML } else { 0 };
         let mut fdtd = Fdtd::new(grid, c, COURANT, pml, metal);
-        // Envelopes: rings enclosing another electrode.
-        let encloses = |p: usize, e: usize| match outlines[p] {
-            Outline::Ring { center, inner, .. } => p != e && farthest(&outlines[e], center) < inner,
-            _ => false,
+        // The leads: the run's wiring (`Level::tube_leads`, routed for its placement along x
+        // and y), or the level's own where a run has none.
+        let plan = if run.leads.parent.len() == n_el {
+            run.leads.clone()
+        } else {
+            level.tube_leads(&[])
         };
-        let envelope: Vec<bool> = (0..n_el)
-            .map(|p| (0..n_el).any(|e| encloses(p, e)))
-            .collect();
-        let parent: Vec<Option<usize>> = (0..n_el)
-            .map(|e| {
-                // The innermost enclosing ring.
-                let inner = (0..n_el).filter(|&p| encloses(p, e)).min_by(|&p, &q| {
-                    let r = |k: usize| match outlines[k] {
-                        Outline::Ring { inner, .. } => inner,
-                        _ => f64::INFINITY,
-                    };
-                    r(p).total_cmp(&r(q))
-                });
-                inner.or_else(|| {
-                    if open && !envelope[e] {
-                        (0..n_el)
-                            .filter(|&p| envelope[p] && p != e)
-                            .min_by(|&p, &q| {
-                                outlines[p]
-                                    .distance(&outlines[e])
-                                    .total_cmp(&outlines[q].distance(&outlines[e]))
-                            })
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect();
-        // Leads: the shortest straight path from the electrode's surface to its parent's
-        // material (or the border) crossing no other electrode and no metal (its own
-        // included), over 144 directions.
-        let in_metal = |p: DVec3| {
-            run.metals
-                .iter()
-                .any(|m| p.x >= m.lo.x && p.x <= m.hi.x && p.y >= m.lo.y && p.y <= m.hi.y)
-        };
-        let inside_grid = |p: DVec3| {
-            let (x0, y0) = grid.origin;
-            let (x1, y1) = (x0 + nx as f64 * h, y0 + ny as f64 * h);
-            p.x > x0 + 1.5 * h && p.y > y0 + 1.5 * h && p.x < x1 - 1.5 * h && p.y < y1 - 1.5 * h
-        };
-        let leads: Vec<Option<Lead>> = (0..n_el)
-            .map(|e| {
-                if parent[e].is_none() && open && envelope[e] {
-                    return None;
-                }
-                let c0 = centre(&outlines[e]);
-                let reach = farthest(&outlines[e], c0) + 1.0;
-                let ring_outer = match outlines[e] {
-                    Outline::Ring { outer, .. } => Some(outer),
-                    _ => None,
-                };
-                let mut best: Option<(f64, DVec3, DVec3)> = None;
-                for k in 0..144 {
-                    let a = f64::from(k) * std::f64::consts::TAU / 144.0;
-                    let dir = DVec3::new(libm::cos(a), libm::sin(a), 0.0);
-                    // The surface along this direction (a ring's outer one).
-                    let s = if let Some(outer) = ring_outer {
-                        c0 + dir * outer
-                    } else {
-                        if outlines[e].distance_to(c0) > 0.0 {
-                            continue;
-                        }
-                        let (mut lo, mut hi) = (0.0, reach);
-                        for _ in 0..50 {
-                            let mid = 0.5 * (lo + hi);
-                            if outlines[e].distance_to(c0 + dir * mid) > 0.0 {
-                                hi = mid;
-                            } else {
-                                lo = mid;
-                            }
-                        }
-                        c0 + dir * hi
-                    };
-                    // March to the parent or the border.
-                    let step = 0.25 * h;
-                    let mut d = 0.0;
-                    let end = loop {
-                        d += step;
-                        let p = s + dir * d;
-                        match parent[e] {
-                            Some(q) if outlines[q].distance_to(p) == 0.0 => break Some(p),
-                            None if !inside_grid(p) => break Some(p),
-                            _ => {}
-                        }
-                        if !inside_grid(p)
-                            || in_metal(p)
-                            || (0..n_el).any(|o| o != e && outlines[o].distance_to(p) == 0.0)
-                        {
-                            break None;
-                        }
-                    };
-                    let Some(end) = end else { continue };
-                    let len = (end - s).length();
-                    if best.is_none_or(|(l, _, _)| len < l) {
-                        best = Some((len, s, end));
-                    }
-                }
-                // Each end on a node of its metal (snapped in `new`'s caller below).
-                best.map(|(_, s, end)| (p2(end), p2(s)))
-            })
-            .collect();
+        let parent = plan.parent.clone();
         // Children before parents: by depth.
         let depth = |mut e: usize| {
             let mut d = 0;
@@ -566,10 +451,22 @@ impl TubeEm {
         let snap = |owner: Option<usize>, p: (f64, f64)| {
             nearest_node(&grid, &node_owner, owner, p, &border)
         };
-        let leads: Vec<Option<Lead>> = leads
+        let leads: Vec<Option<Lead>> = plan
+            .leads
             .iter()
             .enumerate()
-            .map(|(e, l)| l.map(|(from, to)| (snap(parent[e], from), snap(Some(e), to))))
+            .map(|(e, l)| {
+                l.as_ref().map(|w| {
+                    let mut w = w.clone();
+                    if let Some(first) = w.first_mut() {
+                        *first = snap(parent[e], *first);
+                    }
+                    if let Some(last) = w.last_mut() {
+                        *last = snap(Some(e), *last);
+                    }
+                    w
+                })
+            })
             .collect();
         // The metals' backgrounds: each cell's share of a rectangle, at the share's centre.
         let mut background = vec![0.0; grid.nodes()];
@@ -804,7 +701,8 @@ impl TubeEm {
             leads
                 .iter()
                 .zip(&self.leads)
-                .filter_map(|(q, l)| l.map(|(a, b)| (*q, a, b))),
+                .filter_map(|(q, l)| l.as_ref().map(|w| (*q, w)))
+                .flat_map(|(q, w)| w.windows(2).map(move |s| (q, s[0], s[1]))),
         );
         for (q, a, b) in moves {
             if q != 0.0 {

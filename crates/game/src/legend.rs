@@ -473,6 +473,22 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
         ),
         _ => {}
     }
+    if game
+        .tube_preview
+        .as_ref()
+        .is_some_and(|v| v.run.leads.leads.iter().any(Option::is_some))
+    {
+        row(
+            ui,
+            Swatch::Line(rgb(0.95, 0.95, 0.85)),
+            "lead",
+            "Each electrode's lead: the wire its circuit current comes along, from the board's \
+             edge or the grounded ring enclosing it, drawn as a circuit diagram draws wires: \
+             along the axes with right-angle bends, round the electrodes and the metals. Its \
+             path is a convention (in the model's world, uniform along z, a real lead would \
+             leave along z); the field maps take its current along it.",
+        );
+    }
     if matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow))
         && game.em_snapshot.is_some()
     {
@@ -480,10 +496,9 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
             ui,
             Swatch::Beads(rgb(0.95, 0.95, 0.85)),
             "lead current",
-            "Each electrode's lead, the straight wire its circuit current comes along (from the \
-             board's edge or the enclosing grounded ring): its beads move with the charge it \
-             has carried, steadily on a steady current, to and fro on an oscillating one. The \
-             current makes the field around it on the map.",
+            "The beads on each lead move with the charge it has carried, steadily on a steady \
+             current, to and fro on an oscillating one. The current makes the field around it \
+             on the map.",
         );
     }
 }

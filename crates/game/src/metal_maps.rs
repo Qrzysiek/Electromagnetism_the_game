@@ -115,7 +115,6 @@ pub(super) fn metal_map_grid(
         radiated: 0.0,
         at_end: false,
         delay: 0.0,
-        leads: Vec::new(),
         lead_currents: Vec::new(),
         lead_charges: Vec::new(),
         lead_peak: 0.0,

@@ -52,10 +52,9 @@ pub struct EmSnapshot {
     pub at_end: bool,
     /// A closed box's smoothing's mean delay (`TubeEm::delay`; 0: the field as it is).
     pub delay: f64,
-    /// Per electrode: its lead (from its parent or the border to it), if it has one, the
-    /// lead's current and the charge it has carried, as the shown field sees them, and the
-    /// largest such current so far (`TubeEm::shown_leads`).
-    pub leads: Vec<Option<level::tube_em::Lead>>,
+    /// Per electrode: its lead's current and the charge it has carried, as the shown field
+    /// sees them, and the largest such current so far (`TubeEm::shown_leads`; the leads'
+    /// paths are the run's, `TubeRun::leads`).
     pub lead_currents: Vec<f64>,
     pub lead_charges: Vec<f64>,
     pub lead_peak: f64,
@@ -231,7 +230,6 @@ fn snapshot(revision: u64, em: Option<&TubeEm>, last: f64) -> EmSnapshot {
             radiated: 0.0,
             at_end: false,
             delay: 0.0,
-            leads: Vec::new(),
             lead_currents: Vec::new(),
             lead_charges: Vec::new(),
             lead_peak: 0.0,
@@ -302,7 +300,6 @@ fn snapshot(revision: u64, em: Option<&TubeEm>, last: f64) -> EmSnapshot {
         radiated: em.mean_outflow(2.0),
         at_end: em.fdtd.t + em.fdtd.dt > last,
         delay: em.delay(),
-        leads: em.leads.clone(),
         lead_currents: currents.to_vec(),
         lead_charges: charges.to_vec(),
         lead_peak: peak,

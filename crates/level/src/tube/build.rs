@@ -330,6 +330,7 @@ impl Level {
                 .collect(),
             b_z: tube.b_z,
             b_wave: tube.b_wave,
+            leads: self.tube_leads(player),
             ..TubeRun::default()
         };
         let n_goals = spec.potential_goals.len();

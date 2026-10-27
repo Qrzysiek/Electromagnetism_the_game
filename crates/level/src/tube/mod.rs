@@ -782,6 +782,9 @@ pub struct TubeRun {
     pub b_z: f64,
     /// A field that changes in time (`TubeSpec::solenoid_drive`), in place of `b_z`.
     pub b_wave: Option<physics::tube::SolenoidWave>,
+    /// The level's wiring for the run's placement (`Level::tube_leads`): its electrodes'
+    /// leads and its floating circuits' straps.
+    pub leads: crate::leads::LeadPlan,
     /// Per metal, in a field: the mean field in its middle at each frame, its x and its y
     /// component `(t, E)` (`middle_field`; the Hall diagram's electric push is its mean over
     /// the drift's time).

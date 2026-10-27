@@ -133,7 +133,7 @@ pub(super) fn rect_contains(r: &[DVec3; 4], p: DVec3) -> bool {
     })
 }
 
-pub(super) fn segment_distance(p: DVec3, a: DVec3, b: DVec3) -> f64 {
+pub(crate) fn segment_distance(p: DVec3, a: DVec3, b: DVec3) -> f64 {
     let ab = b - a;
     let t = ((p - a).dot(ab) / ab.length_squared().max(1e-300)).clamp(0.0, 1.0);
     (p - (a + ab * t)).length()

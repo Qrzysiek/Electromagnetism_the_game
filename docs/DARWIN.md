@@ -141,7 +141,8 @@ With carriers:
    V-D5–V-D7, energy, symmetries; PHYSICS.md §2.12.
 3. Ring-shaped metals (Phase 2.3, needed for rings and transformers) unless square frames
    built from a rectangle with a hole are enough for the tests.
-4. Leads as level geometry, drawn in every view; circuits' EMF from the induced field.
+4. Leads as level geometry, drawn in every view (done 2026-10-27, DEC-26: routed as
+   circuit wiring); circuits' EMF from the induced field.
 5. The display: the physics' own B_z on the magnetic map (today's map is `tube_em`'s FDTD
    field of the run, one-way).
 6. Levels: Inductor, Transformer, Skin effect, Shielding, Induction heating; then the

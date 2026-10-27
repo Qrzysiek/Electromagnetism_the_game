@@ -807,3 +807,41 @@ Entries are numbered in order and never renumbered.
     (`μ₀/(λ(λ + μ₀β̄))`, from half to eight times the grid's mean β) takes 14.5 to 21.4
     iterations against the vacuum's 13.5 (Y26's disc). The time is in each iteration's own
     cost (#55).
+
+## DEC-26: Leads and straps routed as circuit wiring, the level's geometry
+
+- **Status:** in use (2026-10-27)
+- **Area:** display, the tube field (`tube_em`), level geometry
+- **Choice:** every lead (the path of an electrode's circuit current, from its enclosing
+  grounded ring or the board's border) and every strap (between a floating circuit's
+  electrodes) is routed once per placement by `level::leads` (`Level::tube_leads`, carried by
+  `TubeRun::leads`): on a grid half a cell apart over the board, a shortest-path search in
+  whole steps where a bend costs 4, a stub meeting its surface on a slant 2, each step off a
+  box's face's middle 1 and a node another wire took 60 (a box met on its face, never at a
+  corner); a node within 0.3 of an electrode or a metal is closed to every wire but those
+  ending on it; straps first, then the leads, the shortest first; integer costs and ties by
+  index (deterministic). `tube_em` drives the leads' currents along these polylines (each end
+  snapped to a node of its metal); the game draws leads and straps in every view, beads on the
+  leads in the magnetic and energy-flow maps.
+- **Purpose:** the owner (2026-10-27): the cables were drawn only in the magnetic and energy
+  views; they should be drawn throughout, not overlap, and run along x and y with right-angle
+  bends unless there is a reason otherwise, as in circuit diagrams. One routing for the field
+  and the drawing keeps the wire drawn the one whose current the field shows.
+- **Alternatives:** the straight shortest segment (before: drawn only where the field ran,
+  lines at any angle, crossing one another); a channel or visibility-graph router (finer on
+  crowded boards, much more code; the grid search wires every shipped level without a shared
+  node in under 10 ms); routing in the game alone (the field would carry the currents along
+  other paths than those drawn).
+- **Where:** `crates/level/src/leads.rs` (tests in `leads/tests.rs`:
+  `every_shipped_tube_level_is_wired`, `a_free_electrode_gets_a_straight_lead`,
+  `leads_go_round_what_is_in_the_way`), `crates/level/src/tube_em.rs`,
+  `crates/game/src/draw.rs` (`draw_leads`, `draw_straps`), `crates/game/src/legend.rs`.
+- **History:**
+  - 2026-10-27: chosen. The first tie-break (by index) put Magnetron's antenna feed half a
+    node off its axis, slanted onto the ring and the rod (`magnetron_feed_field_is_smooth`
+    found the field's jump off the line it reads across): the slant's cost now keeps a wire
+    on a round electrode's axis where it can. The first captures showed leads meeting boxes
+    at their corners and running on along their edges (Positive carriers' end contacts'
+    leads continued the strips' bottom edges across the board, one line with them): a wire
+    now meets a box's face clear of its corners (by the clearance, or half a face shorter
+    than twice that) and pays a step for every grid step off the face's middle.

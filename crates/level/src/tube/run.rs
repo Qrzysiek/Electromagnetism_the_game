@@ -64,6 +64,9 @@ impl TubeRun {
         if self.self_b_grid.is_none() {
             self.self_b_grid = chunk.self_b_grid;
         }
+        if self.leads.parent.is_empty() {
+            self.leads = chunk.leads;
+        }
         self.frames.extend(chunk.frames);
         if self.collected.len() < chunk.collected.len() {
             self.collected.resize(chunk.collected.len(), Vec::new());

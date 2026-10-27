@@ -592,19 +592,22 @@ fn em_field_obeys_amperes_law() {
             }
             s / n.max(1.0)
         };
-        // Each lead's midpoint and the unit normal `ẑ × direction` (B_z rises across the
-        // lead along it by 4π I/c).
+        // Each lead's longest segment's midpoint and the unit normal `ẑ × direction` (B_z
+        // rises across the lead along it by 4π I/c).
         let probes: Vec<Option<Probe>> = leads
             .iter()
             .map(|l| {
-                l.map(|(a, b)| {
-                    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
-                    let len = libm::hypot(dx, dy);
-                    (
-                        (0.5 * (a.0 + b.0), 0.5 * (a.1 + b.1)),
-                        (-dy / len, dx / len),
-                    )
-                })
+                let longest = l.as_ref()?.windows(2).max_by(|s, t| {
+                    let len = |s: &[(f64, f64)]| libm::hypot(s[1].0 - s[0].0, s[1].1 - s[0].1);
+                    len(s).total_cmp(&len(t))
+                })?;
+                let (a, b) = (longest[0], longest[1]);
+                let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+                let len = libm::hypot(dx, dy);
+                Some((
+                    (0.5 * (a.0 + b.0), 0.5 * (a.1 + b.1)),
+                    (-dy / len, dx / len),
+                ))
             })
             .collect();
         let n_el = leads.len();
@@ -634,7 +637,11 @@ fn em_field_obeys_amperes_law() {
             let Some((m, _)) = probes[e] else { continue };
             let i = current[e] / samples;
             let isolated = leads.iter().enumerate().all(|(o, l)| {
-                o == e || l.is_none_or(|(a, b)| distance(m, (a.0, a.1, b.0, b.1)) > 2.0)
+                o == e
+                    || l.as_ref().is_none_or(|w| {
+                        w.windows(2)
+                            .all(|s| distance(m, (s[0].0, s[0].1, s[1].0, s[1].1)) > 2.0)
+                    })
             });
             if i.abs() < 0.2 * largest || !isolated {
                 continue;
@@ -762,14 +769,17 @@ fn leads_cross_no_metal() {
         let run = level.tube_run(&level.reference_solution, 1, 2.0);
         let em = level::tube_em::TubeEm::new(&level, &run);
         for (e, lead) in em.leads.iter().enumerate() {
-            let Some(((ax, ay), (bx, by))) = *lead else {
+            let Some(wire) = lead else {
                 continue;
             };
             for m in &run.metals {
-                let inside = (1..200).any(|k| {
-                    let u = f64::from(k) / 200.0;
-                    let (x, y) = (ax + (bx - ax) * u, ay + (by - ay) * u);
-                    x > m.lo.x && x < m.hi.x && y > m.lo.y && y < m.hi.y
+                let inside = wire.windows(2).any(|s| {
+                    let ((ax, ay), (bx, by)) = (s[0], s[1]);
+                    (1..200).any(|k| {
+                        let u = f64::from(k) / 200.0;
+                        let (x, y) = (ax + (bx - ax) * u, ay + (by - ay) * u);
+                        x > m.lo.x && x < m.hi.x && y > m.lo.y && y < m.hi.y
+                    })
                 });
                 assert!(
                     !inside,

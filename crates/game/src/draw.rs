@@ -1834,115 +1834,90 @@ fn draw_swing(gizmos: &mut Gizmos, game: &Game, frame: &level::tube::TubeFrame) 
 /// The wire between electrodes strapped into one floating node (`draw_straps`).
 pub const STRAP: Color = Color::srgb(0.85, 0.85, 0.7);
 
-/// Tube levels: the electrodes of a floating circuit (no source) and those linked to it,
-/// one conductor (`level::tube::TubeCircuit::linked`: Strength and sign's junction), joined
-/// by a wire between their closest points, a dot at each end. Wires to a supply are shown
-/// by its badge and focus instead (`ui::supply_badges`).
+/// Tube levels, in every view: the straps joining the electrodes of a floating circuit (no
+/// source) and those linked to it, one conductor (`level::tube::TubeCircuit::linked`:
+/// Strength and sign's junction), routed as circuit wires (`level::leads`), a dot at each
+/// end. Wires to a supply are shown by its badge and focus instead (`ui::supply_badges`).
 fn draw_straps(gizmos: &mut Gizmos, game: &Game) {
-    let level = &game.editor.level;
-    let Some(spec) = level.tube.as_ref() else {
+    let Some(view) = &game.tube_preview else {
         return;
     };
-    let boxes = level.all_box_electrodes(&game.editor.placement);
-    for c in spec.circuits.iter().filter(|c| c.resistance.is_none()) {
-        let Some(a) = boxes.get(c.electrode) else {
+    let fade = stale_fade(view.revision, game.sent_revision);
+    for w in &view.run.leads.straps {
+        let points = wire_points(w);
+        let (Some(a), Some(b)) = (points.first(), points.last()) else {
             continue;
         };
-        for b in c.linked.iter().filter_map(|&e| boxes.get(e)) {
-            let (p, q) = closest_points(a, b);
-            gizmos.line_2d(p, q, STRAP);
-            gizmos.circle_2d(p, 0.12, STRAP);
-            gizmos.circle_2d(q, 0.12, STRAP);
-        }
+        gizmos.linestrip_2d(points.iter().copied(), STRAP.with_alpha(fade));
+        gizmos.circle_2d(*a, 0.12, STRAP.with_alpha(fade));
+        gizmos.circle_2d(*b, 0.12, STRAP.with_alpha(fade));
     }
 }
 
-/// The closest points of two boxes' outlines (sampled 20 times along each side): where
-/// several pairs are as close (parallel faces), the middle of them.
-fn closest_points(a: &physics::bem::BoxElectrode, b: &physics::bem::BoxElectrode) -> (Vec2, Vec2) {
-    let sample = |e: &physics::bem::BoxElectrode| -> Vec<Vec2> {
-        let o = box_outline(e, 0.0);
-        (0..4)
-            .flat_map(|k| {
-                (0..20).map(move |i| {
-                    #[allow(clippy::cast_precision_loss)]
-                    let f = i as f32 / 20.0;
-                    o[k].lerp(o[k + 1], f)
-                })
-            })
-            .collect()
-    };
-    let (pa, pb) = (sample(a), sample(b));
-    let pairs: Vec<(Vec2, Vec2, f32)> = pa
-        .iter()
-        .flat_map(|p| pb.iter().map(move |q| (*p, *q, p.distance(*q))))
-        .collect();
-    let least = pairs.iter().map(|x| x.2).fold(f32::INFINITY, f32::min);
-    let near: Vec<&(Vec2, Vec2, f32)> = pairs.iter().filter(|x| x.2 <= least + 1e-3).collect();
-    #[allow(clippy::cast_precision_loss)]
-    let n = near.len().max(1) as f32;
-    (
-        near.iter().map(|x| x.0).sum::<Vec2>() / n,
-        near.iter().map(|x| x.1).sum::<Vec2>() / n,
-    )
+/// A wire's corners on the board.
+fn wire_points(w: &level::leads::Wire) -> Vec<Vec2> {
+    #[allow(clippy::cast_possible_truncation)]
+    w.iter()
+        .map(|p| Vec2::new(p.0 as f32, p.1 as f32))
+        .collect()
 }
 
-/// Tube levels' magnetic and energy-flow maps: each electrode's lead, the straight path by
-/// which its circuit current reaches it in the field (from its enclosing ring or the
-/// board's edge), a faint wire with beads that move with the charge it has carried (as the
-/// shown field sees it): the run's largest current moves them four spacings per time unit,
-/// an oscillating one swings them to and fro (a magnetron's tank leads and its antenna's
-/// feed together), a steady one marches them on.
+/// Tube levels, in every view: each electrode's lead, the wire by which its circuit current
+/// reaches it (`level::leads`: from its enclosing ring or the board's edge, along x and y with
+/// right-angle bends, round the electrodes and metals), faint; in the magnetic and
+/// energy-flow maps, beads that move with the charge it has carried, as the shown field sees
+/// it: the run's largest current moves them four spacings per time unit, an oscillating one
+/// swings them to and fro (a magnetron's tank leads and its antenna's feed together), a
+/// steady one marches them on.
 fn draw_leads(gizmos: &mut Gizmos, game: &Game) {
     const SPACING: f32 = 0.6;
-    if !matches!(
-        game.map,
-        Some(crate::potential::MapMode::Magnetic | crate::potential::MapMode::EnergyFlow)
-    ) {
-        return;
-    }
-    let Some(s) = &game.em_snapshot else {
+    let Some(view) = &game.tube_preview else {
         return;
     };
-    if game
-        .tube_preview
-        .as_ref()
-        .is_none_or(|v| v.revision != s.revision)
-    {
-        return;
-    }
+    let fade = stale_fade(view.revision, game.sent_revision);
     let wire = Color::srgb(0.95, 0.95, 0.85);
-    for (k, lead) in s.leads.iter().enumerate() {
-        let Some((a, b)) = lead else {
+    let beads = game.em_snapshot.as_ref().filter(|s| {
+        s.revision == view.revision
+            && s.lead_peak > 0.0
+            && matches!(
+                game.map,
+                Some(crate::potential::MapMode::Magnetic | crate::potential::MapMode::EnergyFlow)
+            )
+    });
+    for (k, lead) in view.run.leads.leads.iter().enumerate() {
+        let Some(w) = lead else {
             continue;
         };
-        #[allow(clippy::cast_possible_truncation)]
-        let (a, b) = (
-            Vec2::new(a.0 as f32, a.1 as f32),
-            Vec2::new(b.0 as f32, b.1 as f32),
-        );
-        let len = a.distance(b);
-        if len < 1e-3 {
+        let points = wire_points(w);
+        if points.len() < 2 {
             continue;
         }
-        gizmos.line_2d(a, b, wire.with_alpha(0.35));
+        gizmos.linestrip_2d(points.iter().copied(), wire.with_alpha(0.35 * fade));
+        let Some(s) = beads else {
+            continue;
+        };
         let (Some(i), Some(q)) = (s.lead_currents.get(k), s.lead_charges.get(k)) else {
             continue;
         };
-        if s.lead_peak <= 0.0 {
-            continue;
-        }
         // Positive current runs from the lead's start to its electrode.
         #[allow(clippy::cast_possible_truncation)]
         let (offset, alpha) = (
             ((q / (0.25 * s.lead_peak)) as f32 * SPACING).rem_euclid(SPACING),
             0.3 + 0.7 * (i.abs() / s.lead_peak).min(1.0) as f32,
         );
-        let dir = (b - a) / len;
-        let mut u = offset;
-        while u < len {
-            gizmos.circle_2d(a + dir * u, 0.07, wire.with_alpha(alpha));
-            u += SPACING;
+        // Every `SPACING` along the whole wire, its corners included.
+        let (mut u, mut walked) = (offset, 0.0_f32);
+        for seg in points.windows(2) {
+            let len = seg[0].distance(seg[1]);
+            if len < 1e-6 {
+                continue;
+            }
+            let dir = (seg[1] - seg[0]) / len;
+            while u < walked + len {
+                gizmos.circle_2d(seg[0] + dir * (u - walked), 0.07, wire.with_alpha(alpha));
+                u += SPACING;
+            }
+            walked += len;
         }
     }
 }
