@@ -385,8 +385,10 @@ pub const SELF_FIELD_CELL: f64 = 0.25;
 /// (z-invariance), the Coulomb gauge's vector potential has a long tail.
 pub const SELF_FIELD_MARGIN: f64 = 4.0;
 /// The largest preview step with the self-field: its splitting is first order, and the
-/// coupling's 5 % target holds from dt ≈ 0.015 (Y24, PHYSICS.md §2.12).
-pub const SELF_FIELD_MAX_STEP: f64 = 0.015;
+/// coupling's 5 % target holds up to dt ≈ 0.0125 (Y24: 4.0 % at 0.01, 7.8 % at 0.02;
+/// PHYSICS.md §2.12). (0.015 until 2026-10-27, from Y24's 3.1 % at 0.01 before the
+/// impulses' currents were fixed.)
+pub const SELF_FIELD_MAX_STEP: f64 = 0.012;
 /// The speeds of light a level may set (the editor's range, `check_editable`).
 pub const SPEED_OF_LIGHT_RANGE: std::ops::RangeInclusive<f64> = 0.5..=1.0e4;
 /// The self-field's largest grid (nodes per side): its solve each step is the cost.

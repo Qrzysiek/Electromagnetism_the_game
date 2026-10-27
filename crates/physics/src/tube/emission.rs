@@ -13,28 +13,14 @@ impl Tube {
         qm: f64,
         tag: u32,
     ) {
-        // Its canonical velocity: born at v where the field's vector potential is A, with its
-        // own inductance on the grid (in its metal, else the vacuum's), as an impulse carries
-        // it (`scatter`): its current appears at once, and its first velocity, `u − (q/m) A`
-        // with its own field in A, is then v. (Until 2026-10-27 `u = v + (q/m) A` alone: a
-        // contact's carriers were born slow, and the lattice reheated them, booking negative
-        // heat on a strip with its supply off.)
+        // With the self-field: born at v, its current fixed at `q v` in the next solve, which
+        // sets its canonical velocity (`darwin_step`); until then `v + (q/m) A` from the last.
+        // (Until 2026-10-27 `u = v + (q/m) A`, then with a uniform medium's self-inductance
+        // added: a contact's carriers were born slow, and the lattice reheated them.)
         if let (Some(d), Some(a)) = (s.darwin.as_ref(), s.self_a.as_ref()) {
             let (ax, ay) = d.interpolate(a, x.x, x.y);
-            let response = match self.lattices.iter().position(|l| l.contains(x)) {
-                Some(k) => s.self_response.get(k),
-                None => s.self_response_vacuum.as_ref(),
-            };
-            let own = response.map_or(DVec3::ZERO, |r| {
-                let g = r.at(d, x.x, x.y);
-                let qq = charge * qm;
-                DVec3::new(
-                    qq * (g[0][0] * v.x + g[0][1] * v.y),
-                    qq * (g[1][0] * v.x + g[1][1] * v.y),
-                    0.0,
-                )
-            });
-            s.u.push(v + own + DVec3::new(ax, ay, 0.0) * qm);
+            s.u.push(v + DVec3::new(ax, ay, 0.0) * qm);
+            s.set.push(VelocitySet::Born);
         }
         s.x.push(x);
         s.v.push(v);

@@ -689,7 +689,7 @@ fn reversal(c: Option<f64>, dt: f64, n: usize) -> (f64, f64) {
 /// first order (the canonical kick at the step's start position, the drift with the velocity
 /// there, `v = u − (q/m)A(x)` depending on x): the return error falling at least 1.6 times when
 /// the step is halved, and within the coupling's 5 % target (V-D6) of the self-field's effect
-/// on the paths over that time at dt = 0.01 (at 0.02 it is 6.1 %: PHYSICS.md §2.12).
+/// on the paths over that time at dt = 0.01 (at 0.02 it is 7.8 %: PHYSICS.md §2.12).
 #[test]
 fn y24_darwin_time_reversal() {
     let (plain, _) = reversal(None, 0.02, 100);
@@ -778,17 +778,18 @@ fn energy_drift(c: Option<f64>, carriers: usize, dt: f64, walls: bool) -> (f64, 
 
 /// Y25, the coupling's energy (the Darwin limit's: `E_kin + E_es + ½∫B²/μ₀` constant in a
 /// closed system), on `energy_drift`'s spun disc over 2.8 time units. Without the self-field
-/// the leapfrog's: within 1e-3 of the kinetic energy per time unit. With it (c = 3, U ≈ 1.3)
+/// the leapfrog's: within 1e-3 of the kinetic energy per time unit. With it (c = 3, U ≈ 10)
 /// the drift per time unit within the coupling's 5 % target (V-D6) of U at 1500 carriers
 /// (dt 0.02), the walled disc (its carriers bouncing off the rim) too, and falling at least
 /// 1.6 times when both the step halves and the carriers quadruple: the drift is the
-/// discretisation's, the step's first-order error and the macroparticles' own field (each
-/// one's vector potential at itself, `∝ q²/m`, which the continuum does not have), and goes
-/// with them. (Until 2026-10-27 the criterion was 1.6 times with the carriers alone: the
-/// impulses then lost each carrier's own inductance, an error `∝ 1/N` that dominated, 3.5 % and
-/// 2.1 %, and the walled disc lost 14.6 %. With the impulses carrying it (`SelfResponse`) the
-/// drift fits `α dt + β/N` with α ≈ 82 % of U per time per unit dt and β ≈ 720 % (from 2800):
-/// at dt 0.02 the step's part is most of it, and the carriers alone reduce it 1.28 times.)
+/// discretisation's, and goes with it. (Until 2026-10-27 the criterion was 1.6 times with the
+/// carriers alone: the impulses then lost each carrier's own inductance, an error `∝ 1/N` that
+/// dominated, 3.5 % and 2.1 %, and the walled disc lost 14.6 %; with a uniform medium's
+/// self-inductance added (DEC-24) the drift fitted `α dt + β/N`, α ≈ 80 % of U per time per
+/// unit dt, β ≈ 980 %, the walled disc 4.5 %. With a velocity set at once entering the next
+/// solve as a fixed current (DEC-25) the carriers' count no longer matters: the step's first
+/// order is all of it, and the spin is the carriers' current from the start, U ≈ 10 against
+/// 1.4 when it went into `u` and was screened.)
 #[test]
 fn y25_darwin_energy() {
     let (plain, _, k_plain) = energy_drift(None, 1500, 0.02, false);
@@ -820,4 +821,64 @@ fn y25_darwin_energy() {
         "walled {walled} of {u_walled}"
     );
     assert!(coarse / refined >= 1.6, "{coarse} then {refined}");
+}
+
+/// The energy budget with collisions: `energy_drift`'s disc at rest (thermal carriers, its
+/// walls) with its lattice's cores, `E_kin + E_es + ½∫B²/μ₀` plus the heat the lattice booked,
+/// per time unit over t = 0.3–6.1, and the kinetic energy.
+fn collision_budget(c: Option<f64>) -> (f64, f64) {
+    let dt = 0.02;
+    let mut p = Little::new(true);
+    (p.c, p.dt, p.b_wave, p.carriers) = (c, dt, 0.0, 1500);
+    let tube = p.tube();
+    let mut s = tube.state();
+    let kinetic = |v: &[DVec3], s: &TubeState| {
+        v.iter()
+            .zip(&s.charge)
+            .zip(&s.qm)
+            .map(|((v, q), qm)| 0.5 * (q / qm).abs() * v.length_squared())
+            .sum::<f64>()
+    };
+    let magnetic = |s: &TubeState| s.darwin.as_ref().map_or(0.0, |d| d.magnetic_energy());
+    let total = |s: &mut TubeState| {
+        let (x, v, u, j) = (s.x.clone(), s.v.clone(), magnetic(s), s.joule);
+        tube.step(s);
+        let um = 0.5 * (u + magnetic(s));
+        let ek = 0.5 * (kinetic(&v, s) + kinetic(&s.v, s));
+        (
+            ek + electrostatic(&tube, &x, &s.charge) + um + 0.5 * (j + s.joule),
+            ek,
+        )
+    };
+    while s.t < 0.3 - 0.5 * dt {
+        tube.step(&mut s);
+    }
+    let (t0, (e0, _)) = (s.t, total(&mut s));
+    while s.t < 6.1 - 0.5 * dt {
+        tube.step(&mut s);
+    }
+    let (t1, (e1, k1)) = (s.t, total(&mut s));
+    ((e1 - e0) / (t1 - t0), k1)
+}
+
+/// Y26, the coupling's energy with collisions: `collision_budget`'s disc, its carriers
+/// colliding with the lattice's cores, the total and the lattice's booked heat together
+/// constant within 1e-3 of the kinetic energy per time unit, Y25's bound for the leapfrog,
+/// without the self-field and with it (c = 3, dt 0.02). Set 2026-10-27 after the measurement
+/// that found the impulses' self-inductance 13 % short (DEC-24, superseded by DEC-25): the
+/// disc then lost 5.1e-3 of its kinetic energy per time unit, the lattice making it up as
+/// heat it booked negative.
+#[test]
+fn y26_darwin_energy_with_collisions() {
+    let (plain, k_plain) = collision_budget(None);
+    let (coupled, k) = collision_budget(Some(3.0));
+    println!(
+        "Y26: E + heat drifts by {:.2e} of the kinetic energy {k_plain:.2} per time without the self-field, {:.2e} of {k:.2} with it",
+        plain / k_plain,
+        coupled / k
+    );
+    measured("Y26.plain", (plain / k_plain).abs(), 2);
+    measured("Y26.coupled", (coupled / k).abs(), 2);
+    assert!(plain.abs() < 1e-3 * k_plain, "plain {plain} of {k_plain}");
+    assert!(coupled.abs() < 1e-3 * k, "coupled {coupled} of {k}");
 }

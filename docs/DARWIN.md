@@ -198,6 +198,19 @@ With carriers:
   the step (PHYSICS.md §2.12). Candidates: the absorbed carriers' field vanishing at once, and
   the solver's functional differing from the kinetic energy by the stencil's variance of A
   (`Σ w A² ≥ (Σ w A)²`). No level measures heat with the self-field until it is found.
+- 2026-10-27, found: the kernel's uniform medium screens everywhere, but a metal ends at its
+  edges; against direct solves the true self-inductance is 1.13 times the kernel's in Y25's
+  disc at c = 3, and each collision lost the difference (the disc with its cores 5.1e-3 of
+  its kinetic energy per time unit, linear in a factor on g, zero at 1.13). Replaced by fixed
+  currents (DEC-25): a velocity set at once enters the next solve fixed, its `u` following;
+  a jumped carrier at its would-be velocity (a first solve) plus the jump, so it keeps the
+  others' induction (fixed at the drawn velocity alone, V-D5's inductance came out 13 % low:
+  a fraction `ν dt` missed a step of back-EMF). The disc now 7.4e-4 (Y26, new: energy with
+  collisions), the strip at rest the same heat as without the self-field within the runs'
+  spread, Y25's drift the step's alone (0.69 % and 0.33 % at dt 0.02 and 0.01, the walled disc
+  0.19 %), V-D5 +4.6 % with R the same with and without the self-field (1.005). Y24 became
+  7.8 % and 4.0 %, so the step limit is 0.012. The self-field's time doubled (two solves):
+  the solver's tolerance and preconditioner next (#55). Then V-D7.
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.

@@ -414,12 +414,23 @@ pub struct TubeState {
     pub u: Vec<DVec3>,
     pub darwin: Option<crate::darwin2d::Darwin2d>,
     pub self_a: Option<crate::darwin2d::Edges>,
-    /// With the self-field: each lattice's carriers' self-inductance on the grid
-    /// (`SelfResponse`), which their impulses add back (`Tube::scatter`) and with which they
-    /// are given off (`Tube::add`), and the vacuum's, for particles given off outside the
-    /// metals.
-    pub self_response: Vec<crate::darwin2d::SelfResponse>,
-    pub self_response_vacuum: Option<crate::darwin2d::SelfResponse>,
+    /// With the self-field: what set each particle's velocity since the last solve
+    /// (`darwin_step` fixes its current from it). Empty without it.
+    pub set: Vec<VelocitySet>,
+}
+
+/// What set a particle's velocity since the self-field's last solve (`Tube::darwin_step`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum VelocitySet {
+    /// Nothing: its velocity follows its canonical one, `v = u − (q/m) A`.
+    #[default]
+    Free,
+    /// Given off (a contact's carrier, an emitter's electron, a metal's at the start): the
+    /// next solve fixes its current at the velocity it was given.
+    Born,
+    /// A collision or a wall changed its velocity by this: the next solve fixes its current at
+    /// the velocity it would have had without the jump, plus the jump.
+    Jumped(DVec3),
 }
 
 impl TubeState {
@@ -616,22 +627,6 @@ impl Tube {
             self_a: self.darwin.as_ref().map(crate::darwin2d::Edges::zeros),
             ..TubeState::default()
         };
-        // With the self-field: each metal's response per area, `Σ q²/m`, screening a carrier's
-        // own field, and the vacuum's; before the metals are filled (their carriers are given
-        // off with it, `add`).
-        if let Some(d) = &s.darwin {
-            s.self_response = self
-                .lattices
-                .iter()
-                .map(|l| {
-                    #[allow(clippy::cast_precision_loss)]
-                    let beta =
-                        l.carriers as f64 * l.carrier_charge() * l.charge_per_mass / l.area();
-                    d.self_response(beta, DARWIN_TOLERANCE)
-                })
-                .collect();
-            s.self_response_vacuum = Some(d.self_response(0.0, DARWIN_TOLERANCE));
-        }
         // The conductors: their carriers, and the charge their backgrounds induce.
         if !self.lattices.is_empty() {
             let n_em = u32::try_from(self.emitters.len()).unwrap_or(0);
@@ -843,6 +838,7 @@ impl Tube {
                 s.side.swap_remove(k);
                 if !s.u.is_empty() {
                     s.u.swap_remove(k);
+                    s.set.swap_remove(k);
                 }
             } else {
                 k += 1;

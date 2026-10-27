@@ -252,11 +252,11 @@ pub(super) fn edit_tube(
     ui.horizontal(|ui| {
         let mut on = speed_of_light.is_some();
         ui.checkbox(&mut on, "Carriers' own magnetic field, c")
-            .on_hover_text(
+            .on_hover_text(format!(
                 "The Darwin limit (PHYSICS.md §2.12): the carriers' currents make a magnetic \
                  field that acts back on them (inductance, skin effect, transformers), its \
-                 effects as 1/c². The step must then be at most 0.015.",
-            );
+                 effects as 1/c². The step must then be at most {SELF_FIELD_MAX_STEP}."
+            ));
         if on {
             let c = speed_of_light.get_or_insert(3.0);
             focus |= ui

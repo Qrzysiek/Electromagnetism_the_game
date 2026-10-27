@@ -368,6 +368,10 @@ Entries are numbered in order and never renumbered.
     map interpolates and averages as the frames' other fields, converted to the maps' Gaussian
     units (`c` times the engine's). The alternative, `tube_em`'s one-way FDTD field, would show
     a second model of the same field; the energy flow, which needs E with B, stays `tube_em`'s.
+  - 2026-10-27: the step limit 0.015 → 0.012 (`SELF_FIELD_MAX_STEP`). With the impulses'
+    currents fixed (DEC-25) the start takes the drawn velocities as the carriers' currents, and
+    Y24's return error became 4.0 % at dt 0.01 and 7.8 % at 0.02 (3.1 % and 6.1 % before): the
+    5 % target holds up to dt ≈ 0.0125.
 
 ## DEC-14: Round metals: a polygon of walls with the disc's area, the disc's exact background
 
@@ -688,7 +692,7 @@ Entries are numbered in order and never renumbered.
 
 ## DEC-24: A carrier's impulses carry its own inductance on the grid
 
-- **Status:** in use (2026-10-27)
+- **Status:** superseded by DEC-25 (2026-10-27)
 - **Area:** physics, numerics (the self-field, DEC-13)
 - **Choice:** when a collision or a wall changes a carrier's velocity by Δv, its canonical
   velocity takes `Δu = Δv + q(q/m) g Δv`, `g` the 2×2 self-response of the field solver at the
@@ -723,3 +727,59 @@ Entries are numbered in order and never renumbered.
     booked under the self-field (−6 to −12 per time unit against −3 without), which it
     reduced only partly: an excess of ~3–5, `∝ 1/c²`, not following the step, remains
     unexplained (PHYSICS.md §2.12). Y25 2.3 % and 0.95 % refined (2.7×), walled 4.5 %.
+  - 2026-10-27: superseded by DEC-25. The kernel's uniform medium screens a carrier's field
+    everywhere, but a metal ends at its edges: against direct solves with the carriers' own
+    response, the true `g` is 1.13 times the kernel's on average in Y25's disc at c = 3 (1.25
+    at its rim, 1.05 at its centre; 1.07 at c = 10). Each collision lost the difference: the
+    disc with its cores lost 5.1e-3 of its kinetic energy per time unit, a loss linear in a
+    factor on `g` and zero at 1.13, and Ohm's law's strip at rest booked −8.4 of heat per time
+    unit at c = 3 against −3.3 without the self-field, the excess the last entry had left
+    unexplained. A kernel for the actual medium would depend on the position (hundreds of
+    solves per metal) and still miss the carriers' own fluctuations.
+
+## DEC-25: A velocity set at once enters the next field solve as a fixed current
+
+- **Status:** in use (2026-10-27)
+- **Area:** physics, numerics (the self-field, DEC-13)
+- **Choice:** each particle records what set its velocity since the last solve
+  (`TubeState::set`, `VelocitySet`): nothing, given off (a contact's carrier, an emitter's
+  electron, a metal's carriers at the start), or a jump Δv (a collision, a wall), its `u` kept
+  from before it. The next solve takes such a particle's current fixed, without its response
+  `q²/m`, the other carriers responding to it, and sets its `u` from the solution,
+  `u = v + (q/m)A(x)`: a given-off one at the velocity it was given; a jumped one at the
+  velocity it would have had without the jump, `u − (q/m)A⁽⁰⁾`, plus the jump, `A⁽⁰⁾` from a
+  first solve with every carrier responding (`darwin_step`: two solves in a step with any
+  jump).
+- **Purpose:** a velocity jump realised exactly, the induction kept. On the grid a carrier's
+  own field acts as an inductance: a change of `u` moves `v = u − (q/m)A` by only
+  `(I + q(q/m)g)⁻¹` of it, and the part not realised is energy lost to the macroparticle's own
+  field, a self-energy the electrons it stands for do not have. Fixing the current realises the
+  jump to the solve's tolerance, with the real medium's screening (its edges, the carriers'
+  own fluctuations); the first solve gives the jumped particle the induction of the other
+  carriers' changing current (an inductor's back-EMF) as every carrier feels it. The disc of
+  Y26 with its cores keeps its energy and booked heat within 7.4e-4 of its kinetic energy per
+  time unit at dt 0.02 (5.1e-3 with DEC-24's kernel), Y25's drift no longer depends on the
+  carriers' count (the walled disc 0.19 %, 4.5 % before), V-D5's L/R by the phases is +4.6 %
+  of the one by the energy, its R the same with and without the self-field within 0.5 %
+  (5.6 % before), and Ohm's law's strip at rest books the same heat with the self-field as
+  without, within the runs' spread.
+- **Alternatives:** DEC-24's uniform medium's kernel (13 % short at a metal's edges); a kernel
+  for each metal's actual medium (position-dependent: hundreds of solves per metal, and still
+  blind to the fluctuations); a first-order (Born) correction of the uniform kernel for the
+  medium's edges (approximate where the correction is large); the fixed current at the drawn
+  velocity alone, one solve (measured: the jumped particles miss a step of induction, a
+  fraction `ν dt` at every step, and V-D5's inductance by the phases came out 13.1 % low);
+  that with the induction of the particle's last step added, the change of A along its path
+  (free, but the change holds its own field's, which varies as it crosses the cells: Y26
+  failed, 1.5e-3). The cost: a second solve as long as the first (13 and 14 iterations to
+  1e-10), the self-field's time doubled (Ohm's law's strip at c = 3: 92 s for 20 time units
+  against 50 s with one solve, 7 s without the self-field); to be won back in the solver
+  (its tolerance, its preconditioner).
+- **Where:** `crates/physics/src/tube/darwin.rs` (`darwin_step`, `deposit`),
+  `crates/physics/src/tube/metals.rs` (`scatter`), `crates/physics/src/tube/emission.rs`
+  (`add`), `crates/physics/src/tube/mod.rs` (`VelocitySet`, `TubeState::set`); tests Y25, Y26,
+  V-D5; PHYSICS.md §2.12.
+- **History:**
+  - 2026-10-27: chosen, replacing DEC-24; `darwin2d::SelfResponse` and its test removed. The
+    one-solve form came first and V-D5 found its missing induction; the two-solve form
+    replaced it before the commit.
