@@ -356,6 +356,13 @@ Entries are numbered in order and never renumbered.
     energy over R from the drive's work. Lesson kept in the test: a mean square of a measured
     current holds its thermal part (`kT/L`), so powers and energies divide by the driven
     amplitude's `|I_ω|²/2`.
+  - 2026-10-27: a tube level turns the self-field on by its speed of light
+    (`TubeSpec::speed_of_light`; absent, the electrostatic model and every level file
+    unchanged). Its grid: 0.25 apart as validated (V-D4–V-D6), the board and 4 round it, sides
+    rounded up to powers of two, centred (`self_field_grid`; a 40 × 20 board 255 × 127 nodes);
+    the verification's refinement keeps it. The level's issues hold its step to 0.015 (first
+    order: Y24's 5 % from there), its speed to 0.5–10⁴ (the editor's range) and its grid to 511
+    nodes a side. The sandbox edits it (the tube's section).
 
 ## DEC-14: Round metals: a polygon of walls with the disc's area, the disc's exact background
 
@@ -673,3 +680,34 @@ Entries are numbered in order and never renumbered.
 - **History:**
   - 2026-10-27: introduced, a hang stopping the job by default (the owner's revision of a first
     design that skipped it and went on).
+
+## DEC-24: A carrier's impulses carry its own inductance on the grid
+
+- **Status:** in use (2026-10-27)
+- **Area:** physics, numerics (the self-field, DEC-13)
+- **Choice:** when a collision or a wall changes a carrier's velocity by Δv, its canonical
+  velocity takes `Δu = Δv + q(q/m) g Δv`, `g` the 2×2 self-response of the field solver at the
+  carrier (its own vector potential per unit of its canonical current, through the deposit's
+  and the interpolation's stencil, screened by the other carriers): so its next velocity,
+  `u − (q/m)A`, has the jump whole. `g` comes from two solves per metal at its carriers'
+  response per area (a unit current on one x-edge and one y-edge at the grid's centre), read
+  at any carrier by translation (`darwin2d::SelfResponse`, held in `TubeState::self_response`).
+- **Purpose:** with `Δu = Δv` the solve realised only `(I + q(q/m)g)⁻¹ Δv`, and each jump lost
+  `½q²Δv·gΔv` to the macroparticle's own field: a self-energy of the macroparticle (its charge
+  that of many electrons, which jump independently) that the electrons do not have. The
+  walled disc of Y25 lost 14.6 % of the field's energy per time unit, the carriers ~2 % of
+  their kinetic energy, and the lattice's heat was not the Joule heat. In a one-carrier model of
+  the solver's functional the energy is `(m + q²g)v²/2`, which the corrected reversal keeps.
+- **Alternatives:** removing each carrier's own field from its velocity (`v = u − (q/m)(A −
+  A_self)`: breaks the scheme's variational structure, whose energy the tests check); a solve
+  per carrier for an exact `g` (thousands a step); the bulk `β` including the carrier's own
+  (taken: its share of the screening over a skin depth is ~0.5 %).
+- **Where:** `crates/physics/src/darwin2d.rs` (`SelfResponse`, `Darwin2d::self_response`),
+  `crates/physics/src/tube/metals.rs` (`scatter`), `crates/physics/src/tube/mod.rs` (`state`);
+  tests `self_response_matches_a_direct_solve`, Y25; PHYSICS.md §2.12.
+- **History:**
+  - 2026-10-27: Y25's walled disc 14.6 % → 4.6 % of U per time unit, the closed disc 3.5 % →
+    2.1 % (its core collisions too). What remains fits `α dt + β/N` (α ≈ 82 % of U per time per
+    unit dt, β ≈ 720 % from ~2800): the step's first-order error now dominates at dt 0.02, so
+    Y25's criterion of 1.6× with four times the carriers became 1.6× with the step halved as
+    well (measured 2.41×).

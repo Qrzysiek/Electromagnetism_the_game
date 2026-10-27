@@ -30,6 +30,7 @@ pub(super) fn edit_tube(
             particles: 1.0,
             emitter_mesh: 1.0,
             step: DEFAULT_STEP,
+            speed_of_light: None,
             goals: vec![CurrentGoal {
                 electrode: 1,
                 min: 0.0,
@@ -59,6 +60,7 @@ pub(super) fn edit_tube(
         particles,
         emitter_mesh,
         step,
+        speed_of_light,
         goals,
         circuits,
         potential_goals,
@@ -246,6 +248,27 @@ pub(super) fn edit_tube(
         focus |= free(ui, b_z, 0.01);
         ui.label("step");
         focus |= positive(ui, step, 0.001, MAX_POSITIVE);
+    });
+    ui.horizontal(|ui| {
+        let mut on = speed_of_light.is_some();
+        ui.checkbox(&mut on, "Carriers' own magnetic field, c")
+            .on_hover_text(
+                "The Darwin limit (PHYSICS.md §2.12): the carriers' currents make a magnetic \
+                 field that acts back on them (inductance, skin effect, transformers), its \
+                 effects as 1/c². The step must then be at most 0.015.",
+            );
+        if on {
+            let c = speed_of_light.get_or_insert(3.0);
+            focus |= ui
+                .add(
+                    egui::DragValue::new(c)
+                        .speed(0.05)
+                        .range(SPEED_OF_LIGHT_RANGE),
+                )
+                .has_focus();
+        } else {
+            *speed_of_light = None;
+        }
     });
     let mut has_solenoid = solenoid.is_some();
     ui.checkbox(&mut has_solenoid, "Player's solenoid (supply sets B)")

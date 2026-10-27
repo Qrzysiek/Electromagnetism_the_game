@@ -202,6 +202,34 @@ impl Level {
         if spec.cathode >= n {
             out.push("Tube: the cathode is not one of the level's electrodes.".into());
         }
+        if let Some(c) = spec.speed_of_light {
+            if !super::SPEED_OF_LIGHT_RANGE.contains(&c) {
+                out.push(format!(
+                    "Tube: the speed of light {c} lies outside {}–{}.",
+                    super::SPEED_OF_LIGHT_RANGE.start(),
+                    super::SPEED_OF_LIGHT_RANGE.end()
+                ));
+            }
+            if spec.step > super::SELF_FIELD_MAX_STEP {
+                out.push(format!(
+                    "Tube: with the carriers' own field the step is at most {} (its splitting is \
+                     first order, PHYSICS.md §2.12), not {}.",
+                    super::SELF_FIELD_MAX_STEP,
+                    spec.step
+                ));
+            }
+            let max = self.grid.position(self.grid.max_node());
+            let d = super::self_field_grid(max.x, max.y, c);
+            if d.nx > super::SELF_FIELD_MAX_NODES || d.ny > super::SELF_FIELD_MAX_NODES {
+                out.push(format!(
+                    "Tube: the board is too large for the carriers' own field ({} × {} nodes, \
+                     at most {} a side).",
+                    d.nx,
+                    d.ny,
+                    super::SELF_FIELD_MAX_NODES
+                ));
+            }
+        }
         for g in &spec.goals {
             // A carrier's own emitter takes back only those that return: not a goal.
             let emitter = match g.carriers {

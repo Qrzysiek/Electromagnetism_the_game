@@ -780,24 +780,44 @@ fn energy_drift(c: Option<f64>, carriers: usize, dt: f64, walls: bool) -> (f64, 
 /// closed system), on `energy_drift`'s spun disc over 2.8 time units. Without the self-field
 /// the leapfrog's: within 1e-3 of the kinetic energy per time unit. With it (c = 3, U ≈ 1.3)
 /// the drift per time unit within the coupling's 5 % target (V-D6) of U at 1500 carriers
-/// (dt 0.02), and falling at least 1.6 times with four times the carriers: what remains is the
-/// macroparticles' own field (each one's vector potential at itself, `∝ q²/m`), which the
-/// continuum does not have. The walled disc's drift is printed (its bounces').
+/// (dt 0.02), the walled disc (its carriers bouncing off the rim) too, and falling at least
+/// 1.6 times when both the step halves and the carriers quadruple: the drift is the
+/// discretisation's, the step's first-order error and the macroparticles' own field (each
+/// one's vector potential at itself, `∝ q²/m`, which the continuum does not have), and goes
+/// with them. (Until 2026-10-27 the criterion was 1.6 times with the carriers alone: the
+/// impulses then lost each carrier's own inductance, an error `∝ 1/N` that dominated, 3.5 % and
+/// 2.1 %, and the walled disc lost 14.6 %. With the impulses carrying it (`SelfResponse`) the
+/// drift fits `α dt + β/N` with α ≈ 82 % of U per time per unit dt and β ≈ 720 % (from 2800):
+/// at dt 0.02 the step's part is most of it, and the carriers alone reduce it 1.28 times.)
 #[test]
 fn y25_darwin_energy() {
     let (plain, _, k_plain) = energy_drift(None, 1500, 0.02, false);
     let (coarse, u, k) = energy_drift(Some(3.0), 1500, 0.02, false);
     let (fine, u_fine, _) = energy_drift(Some(3.0), 6000, 0.02, false);
+    let (half_dt, u_half, _) = energy_drift(Some(3.0), 1500, 0.01, false);
+    let (refined, u_refined, _) = energy_drift(Some(3.0), 6000, 0.01, false);
     let (walled, u_walled, _) = energy_drift(Some(3.0), 1500, 0.02, true);
+    let pct = |d: f64, u: f64| 100.0 * d.abs() / u;
     println!(
-        "Y25: without the self-field {plain:.2e} per time ({:.1e} of the kinetic {k_plain:.2}); with it {coarse:.4} per time at 1500 carriers ({:.2} % of U = {u:.3}; kinetic {k:.2}), {fine:.4} at 6000 ({:.2} % of U = {u_fine:.3}): falling {:.2}×; walled {walled:.4} ({:.2} % of U = {u_walled:.3})",
+        "Y25: without the self-field {plain:.2e} per time ({:.1e} of the kinetic {k_plain:.2}); with it, % of U per time: dt 0.02 {:.2} at 1500 carriers (U = {u:.3}, kinetic {k:.2}), {:.2} at 6000; dt 0.01 {:.2} and {:.2}: refined {:.2}×; walled {:.2}",
         plain.abs() / k_plain,
-        100.0 * coarse.abs() / u,
-        100.0 * fine.abs() / u_fine,
-        coarse / fine,
-        100.0 * walled.abs() / u_walled
+        pct(coarse, u),
+        pct(fine, u_fine),
+        pct(half_dt, u_half),
+        pct(refined, u_refined),
+        coarse / refined,
+        pct(walled, u_walled)
     );
+    measured("Y25.coarse_percent", pct(coarse, u), 2);
+    measured("Y25.fine_percent", pct(fine, u_fine), 2);
+    measured("Y25.half_dt_percent", pct(half_dt, u_half), 2);
+    measured("Y25.refined_percent", pct(refined, u_refined), 2);
+    measured("Y25.walled_percent", pct(walled, u_walled), 2);
     assert!(plain.abs() < 1e-3 * k_plain, "plain {plain}");
     assert!(coarse.abs() < 0.05 * u, "{coarse} of {u}");
-    assert!(coarse / fine >= 1.6, "{coarse} then {fine}");
+    assert!(
+        walled.abs() < 0.05 * u_walled,
+        "walled {walled} of {u_walled}"
+    );
+    assert!(coarse / refined >= 1.6, "{coarse} then {refined}");
 }

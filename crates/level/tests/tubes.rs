@@ -50,6 +50,7 @@ pub fn diode(v: f64) -> Level {
         output: None,
         metals: Vec::new(),
         step: level::tube::DEFAULT_STEP,
+        speed_of_light: None,
         goals: vec![CurrentGoal {
             electrode: 1,
             min: 0.0,

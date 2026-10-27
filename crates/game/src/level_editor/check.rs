@@ -47,6 +47,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             particles,
             emitter_mesh,
             step,
+            speed_of_light,
             goals,
             circuits,
             potential_goals,
@@ -202,6 +203,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             && drive_ok
             && any(*b_z)
             && (MIN_POSITIVE..=MAX_POSITIVE).contains(step)
+            && speed_of_light.is_none_or(|c| SPEED_OF_LIGHT_RANGE.contains(&c))
             && saturation.is_none_or(|j| (0.0..=MAX_POSITIVE).contains(&j));
         if *cathode >= n
             || !ratio_ok

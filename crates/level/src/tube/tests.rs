@@ -195,3 +195,52 @@ fn amplitude_and_phase() {
     };
     assert!((mean.compared(-170.0) + 170.0).abs() < 1e-12);
 }
+
+/// The self-field's grid (`self_field_grid`): it covers the board and `SELF_FIELD_MARGIN` round
+/// it, `SELF_FIELD_CELL` apart, its sides rounded up to powers of two, centred on the board.
+#[test]
+fn self_field_grid_covers_the_board() {
+    let d = self_field_grid(40.0, 20.0, 3.0);
+    assert_eq!((d.nx + 1, d.ny + 1), (256, 128));
+    assert!((d.h - SELF_FIELD_CELL).abs() < 1e-15);
+    #[allow(clippy::cast_precision_loss)]
+    let far = (
+        d.origin.0 + (d.nx + 1) as f64 * d.h,
+        d.origin.1 + (d.ny + 1) as f64 * d.h,
+    );
+    assert!(d.origin.0 <= -SELF_FIELD_MARGIN && d.origin.1 <= -SELF_FIELD_MARGIN);
+    assert!(far.0 >= 40.0 + SELF_FIELD_MARGIN && far.1 >= 20.0 + SELF_FIELD_MARGIN);
+    assert!(((d.origin.0 + far.0) / 2.0 - 20.0).abs() < 1e-12);
+    assert!(((d.origin.1 + far.1) / 2.0 - 10.0).abs() < 1e-12);
+}
+
+/// A tube level's speed of light: its issues (the step at most `SELF_FIELD_MAX_STEP`, the
+/// speed within `SPEED_OF_LIGHT_RANGE`), and the engine's tube built with the self-field
+/// exactly when the level has one.
+#[test]
+fn speed_of_light_turns_the_self_field_on() {
+    let mut level = crate::shipped("ohms_law");
+    let issues = |l: &Level| {
+        let mut out = Vec::new();
+        l.tube_issues(&l.reference_solution, &mut out);
+        out
+    };
+    assert!(issues(&level).is_empty(), "{:?}", issues(&level));
+    assert!(
+        level
+            .tube_sim(&level.reference_solution, 1)
+            .tube
+            .darwin
+            .is_none()
+    );
+    let spec = level.tube.as_mut().expect("a tube level");
+    spec.speed_of_light = Some(3.0);
+    assert!(issues(&level).iter().any(|i| i.contains("step is at most")));
+    level.tube.as_mut().expect("a tube level").step = 0.01;
+    assert!(issues(&level).is_empty(), "{:?}", issues(&level));
+    let sim = level.tube_sim(&level.reference_solution, 1);
+    let d = sim.tube.darwin.as_ref().expect("the self-field");
+    assert!((d.mu0 - 4.0 * std::f64::consts::PI / 9.0).abs() < 1e-12);
+    level.tube.as_mut().expect("a tube level").speed_of_light = Some(0.1);
+    assert!(issues(&level).iter().any(|i| i.contains("speed of light")));
+}

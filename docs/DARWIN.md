@@ -169,7 +169,25 @@ With carriers:
   first order in time (levels with the self-field: dt ≲ 0.015), and impulses (collisions,
   walls) lose the carrier's electromagnetic mass, so heat is not measurable under the
   self-field yet.
-- Still to do in step 2: V-D7 (a transformer); impulses with the electromagnetic mass
-  (`Δu = Δv/(1 − q²Γ/m)`, Γ the grid's self-response at the carrier, with the local β);
-  perhaps an implicit-midpoint step; then a level's speed of light (`TubeSpec`), the editor,
-  leads (task 43), electrodes' induced EMF.
+- 2026-10-27, impulses carry the carrier's own inductance (DEC-24): `Δu = Δv + q(q/m) g Δv`,
+  `g` the solver's self-response at the carrier from two solves per metal (`SelfResponse`).
+  Y25's walled disc 14.6 % → 4.6 % of U per time unit; the closed disc 3.5 % → 2.1 %, the rest
+  fitting `α dt + β/N` (the step's first order now dominating at dt 0.02). V-D5 and V-D6 pass
+  as before (L/R +3.9 %, R ratio 1.056; V-D6 0.025).
+- 2026-10-27, V-D7 tried twice, not passed yet. (1) A slotted secondary round a closed
+  primary, the slot's voltage against the primary's flux: the slot charges through the ring's
+  resistance with `RC` ≈ 24, longer than the run (its voltage reached 5 of an EMF of ~30).
+  (2) Two closed thin rings by lock-in, `G − G′ = Φ₁G′/(DS₂)` from the secondary's circuit law,
+  `S₂` measured as `F′/G′` (357–363, the uniform current's 361): 15 % apart over two seeds on
+  the engine before the impulses' correction, 25.5 % after (required 20 %): the seeds scatter
+  by ±25 % (the runs with the primary noisier) and the measured change lags the prediction by
+  6–10° in all four, as a ring that is not one lumped impedance would: at ω = 0.8 this metal is
+  a poor conductor (`4πσ/ω` ≈ 3, its surface charges lagging the drive, as in V-D6's slab), and
+  the primary's EMF and the solenoid's are spread differently along it. Next: ω ≈ 0.3
+  (`4πσ/ω` ≈ 9) and more seeds (`target/scratch/vd7_rings_wip.rs`).
+- 2026-10-27, a level's speed of light (`TubeSpec::speed_of_light`), its grid
+  (`self_field_grid`), its issues (step ≤ 0.015, speed 0.5–10⁴, grid ≤ 511 a side) and the
+  sandbox's control.
+- Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
+  heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
+  (task 43), electrodes' induced EMF.

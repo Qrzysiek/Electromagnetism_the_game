@@ -414,6 +414,9 @@ pub struct TubeState {
     pub u: Vec<DVec3>,
     pub darwin: Option<crate::darwin2d::Darwin2d>,
     pub self_a: Option<crate::darwin2d::Edges>,
+    /// With the self-field: each lattice's carriers' self-inductance on the grid
+    /// (`SelfResponse`), which their impulses add back (`Tube::scatter`).
+    pub self_response: Vec<crate::darwin2d::SelfResponse>,
 }
 
 impl TubeState {
@@ -627,6 +630,19 @@ impl Tube {
             for (i, b) in s.induced.iter_mut().zip(&s.background) {
                 *i += b;
             }
+            // Each metal's response per area, `Σ q²/m`, screening a carrier's own field.
+            if let Some(d) = &s.darwin {
+                s.self_response = self
+                    .lattices
+                    .iter()
+                    .map(|l| {
+                        #[allow(clippy::cast_precision_loss)]
+                        let beta =
+                            l.carriers as f64 * l.carrier_charge() * l.charge_per_mass / l.area();
+                        d.self_response(beta, DARWIN_TOLERANCE)
+                    })
+                    .collect();
+            }
         } else {
             s.background = vec![0.0; self.electrodes.segments.len()];
         }
@@ -741,7 +757,7 @@ impl Tube {
                 }
                 if let Some(k) = self.lattices.iter().position(|l| l.contains(*a)) {
                     let l = &self.lattices[k];
-                    self.scatter(l, s, p, *a, *v0, step);
+                    self.scatter(k, s, p, *a, *v0, step);
                     // The charge it carried over the step, along its chord.
                     l.book_flux(&mut s.cells[k].flux, *a, s.x[p], s.charge[p]);
                 }

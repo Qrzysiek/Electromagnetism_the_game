@@ -229,6 +229,9 @@ impl Level {
             }),
             circuits: self.tube_circuits(player),
             lattices,
+            darwin: spec
+                .speed_of_light
+                .map(|c| super::self_field_grid(max.x, max.y, c)),
             ..Tube::new(prisms, SOFTENING * size * res.softening, spec.step / r)
         };
         // Each emitter's weight: 1/PREVIEW_PARTICLES of the largest charge its emitting face
