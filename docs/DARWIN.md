@@ -237,6 +237,10 @@ With carriers:
   The primary driven alone at ω = 0.3: its field in the gap where V-D7 reads G is 1.7 % of
   its field at the centre (1.2 % at the gap's corners), at most 4 % of `G − G′`: its field
   does stay inside it, so that assumption is not the cause.
+- 2026-10-27, speed: in a self-field run the preconditioner's transforms took 78 % of the
+  time. Their factors computed once and the rows and columns in parallel (bit for bit the
+  same) halve them: Ohm's law's strip over 6 time units 42 s → 25 s. Next for #55: two rows
+  per complex transform (rounding changes), a quiet machine to measure.
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.

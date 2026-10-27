@@ -23,7 +23,10 @@
 //! infinite plane, where an infinitely long solenoid's field vanishes outside it.
 //!
 //! Deterministic: a radix-2 FFT of our own (twiddles from `libm`), fixed orders, no fused
-//! multiply-add.
+//! multiply-add; the rows' and the columns' transforms run in parallel, each with the same
+//! arithmetic whatever the thread.
+
+use rayon::prelude::*;
 
 /// A type-I discrete sine transform of `n` points, `n + 1` a power of two, through a
 /// complex FFT of `2(n + 1)` points.
@@ -119,6 +122,9 @@ pub struct Darwin2d {
     pub chi: Vec<f64>,
     dst_x: Dst,
     dst_y: Dst,
+    /// The preconditioner's factor per sine mode `(i, j)` (`i + nx j`): `μ₀` over L's
+    /// eigenvalue squared, with the transforms' normalisation.
+    inverse: Vec<f64>,
     /// The conjugate-gradient iterations of the last solve.
     pub iterations: usize,
 }
@@ -147,15 +153,32 @@ impl Darwin2d {
     /// for the speed of light `c`.
     #[must_use]
     pub fn new(nx: usize, ny: usize, h: f64, origin: (f64, f64), c: f64) -> Self {
+        let mu0 = 4.0 * std::f64::consts::PI / (c * c);
+        let h2 = h * h;
+        #[allow(clippy::cast_precision_loss)]
+        let (gx, gy) = ((nx + 1) as f64, (ny + 1) as f64);
+        let norm = (2.0 / gx) * (2.0 / gy);
+        let mut inverse = vec![0.0; nx * ny];
+        for j in 0..ny {
+            #[allow(clippy::cast_precision_loss)]
+            let sy = libm::sin(std::f64::consts::PI * (j + 1) as f64 / (2.0 * gy));
+            for i in 0..nx {
+                #[allow(clippy::cast_precision_loss)]
+                let sx = libm::sin(std::f64::consts::PI * (i + 1) as f64 / (2.0 * gx));
+                let lambda = 4.0 * (sx * sx + sy * sy) / h2;
+                inverse[i + nx * j] = norm * mu0 / (lambda * lambda);
+            }
+        }
         Self {
             nx,
             ny,
             h,
             origin,
-            mu0: 4.0 * std::f64::consts::PI / (c * c),
+            mu0,
             chi: vec![0.0; nx * ny],
             dst_x: Dst::new(nx),
             dst_y: Dst::new(ny),
+            inverse,
             iterations: 0,
         }
     }
@@ -225,58 +248,45 @@ impl Darwin2d {
         }
     }
 
-    /// `μ₀ L⁻² f` through sine transforms (the vacuum's inverse: the preconditioner).
+    /// `μ₀ L⁻² f` through sine transforms (the vacuum's inverse: the preconditioner): along x
+    /// row by row, along y column by column, each mode times its factor, and back.
     fn vacuum_inverse(&self, f: &[f64], out: &mut [f64]) {
         let (nx, ny) = (self.nx, self.ny);
-        let mut work = vec![(0.0, 0.0); 2 * (nx.max(ny) + 1)];
-        let mut row = vec![0.0; nx.max(ny)];
-        let mut col = vec![0.0; ny];
+        let work = || vec![(0.0, 0.0); 2 * (nx.max(ny) + 1)];
         let mut spec = vec![0.0; nx * ny];
-        // Along x, row by row.
-        for j in 0..ny {
-            self.dst_x
-                .apply(&f[nx * j..nx * (j + 1)], &mut row[..nx], &mut work);
-            spec[nx * j..nx * (j + 1)].copy_from_slice(&row[..nx]);
+        spec.par_chunks_mut(nx)
+            .zip(f.par_chunks(nx))
+            .for_each_init(work, |w, (o, row)| self.dst_x.apply(row, o, w));
+        self.along_y(&mut spec);
+        for (s, k) in spec.iter_mut().zip(&self.inverse) {
+            *s *= k;
         }
-        // Along y, column by column.
-        for i in 0..nx {
-            for j in 0..ny {
-                col[j] = spec[i + nx * j];
-            }
-            self.dst_y.apply(&col, &mut row[..ny], &mut work);
-            for j in 0..ny {
-                spec[i + nx * j] = row[j];
-            }
-        }
-        // Divide by L's eigenvalues squared, times μ₀ and the transforms' normalisation.
-        let h2 = self.h * self.h;
-        #[allow(clippy::cast_precision_loss)]
-        let (gx, gy) = ((nx + 1) as f64, (ny + 1) as f64);
-        let norm = (2.0 / gx) * (2.0 / gy);
+        self.along_y(&mut spec);
+        out.par_chunks_mut(nx)
+            .zip(spec.par_chunks(nx))
+            .for_each_init(work, |w, (o, row)| self.dst_x.apply(row, o, w));
+    }
+
+    /// The sine transform along y of each column of `spec` (`i + nx j`), in place.
+    fn along_y(&self, spec: &mut [f64]) {
+        let (nx, ny) = (self.nx, self.ny);
+        let mut columns = vec![0.0; nx * ny];
         for j in 0..ny {
-            #[allow(clippy::cast_precision_loss)]
-            let sy = libm::sin(std::f64::consts::PI * (j + 1) as f64 / (2.0 * gy));
             for i in 0..nx {
-                #[allow(clippy::cast_precision_loss)]
-                let sx = libm::sin(std::f64::consts::PI * (i + 1) as f64 / (2.0 * gx));
-                let lambda = 4.0 * (sx * sx + sy * sy) / h2;
-                spec[i + nx * j] *= norm * self.mu0 / (lambda * lambda);
+                columns[j + ny * i] = spec[i + nx * j];
             }
         }
-        // Back: along y, then x.
-        for i in 0..nx {
-            for j in 0..ny {
-                col[j] = spec[i + nx * j];
-            }
-            self.dst_y.apply(&col, &mut row[..ny], &mut work);
-            for j in 0..ny {
-                spec[i + nx * j] = row[j];
-            }
-        }
+        let mut done = vec![0.0; nx * ny];
+        done.par_chunks_mut(ny)
+            .zip(columns.par_chunks(ny))
+            .for_each_init(
+                || vec![(0.0, 0.0); 2 * (ny + 1)],
+                |w, (o, column)| self.dst_y.apply(column, o, w),
+            );
         for j in 0..ny {
-            self.dst_x
-                .apply(&spec[nx * j..nx * (j + 1)], &mut row[..nx], &mut work);
-            out[nx * j..nx * (j + 1)].copy_from_slice(&row[..nx]);
+            for i in 0..nx {
+                spec[i + nx * j] = done[j + ny * i];
+            }
         }
     }
 

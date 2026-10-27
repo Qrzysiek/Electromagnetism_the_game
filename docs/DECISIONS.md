@@ -368,6 +368,12 @@ Entries are numbered in order and never renumbered.
     map interpolates and averages as the frames' other fields, converted to the maps' Gaussian
     units (`c` times the engine's). The alternative, `tube_em`'s one-way FDTD field, would show
     a second model of the same field; the energy flow, which needs E with B, stays `tube_em`'s.
+  - 2026-10-27: the solver's preconditioner faster, bit for bit the same: its factor per sine
+    mode computed once with the grid, and the rows' and the columns' transforms in parallel
+    (rayon; each row the same arithmetic on any thread). Measured: the transforms were 78 % of
+    a self-field run; their time halved (Ohm's law's strip, 6 time units: 42 s → 25 s on a
+    loaded machine). The operator's stencils in parallel were slower (rows too short); two
+    rows packed in one complex transform (another 2×, the rounding changed) left for later.
   - 2026-10-27: the step limit 0.015 → 0.012 (`SELF_FIELD_MAX_STEP`). With the impulses'
     currents fixed (DEC-25) the start takes the drawn velocities as the carriers' currents, and
     Y24's return error became 4.0 % at dt 0.01 and 7.8 % at 0.02 (3.1 % and 6.1 % before): the
