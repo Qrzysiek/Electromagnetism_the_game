@@ -234,6 +234,9 @@ With carriers:
   threading the secondary, the primary's charges' currents having a transverse part outside
   it; one `Z₂` for both EMFs) or the coupling between two metals. No transformer level until
   it is understood.
+  The primary driven alone at ω = 0.3: its field in the gap where V-D7 reads G is 1.7 % of
+  its field at the centre (1.2 % at the gap's corners), at most 4 % of `G − G′`: its field
+  does stay inside it, so that assumption is not the cause.
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.
