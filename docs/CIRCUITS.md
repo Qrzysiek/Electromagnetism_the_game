@@ -112,7 +112,7 @@ The game's units are SI in form with `k = 1/(4πε₀) = 1` and `μ₀/4π = 1/c
 - Level format: an optional `drive` on plates and coils, a template with parameters, e.g.
   `{"rc": {"source": {"dc": 1e5}, "r": 2.0}}`, `{"lc": {"l": 3.0}}`,
   `{"switch": {"source": ..., "r": ..., "at": 12.0}}`. The level editor gets the controls
-  (the exhaustive destructuring of `level_editor.rs` enforces it); the player's plates and
+  (the exhaustive destructuring of `level_editor/` enforces it); the player's plates and
   coils can take the templates the level offers, with parameters from lists.
 - The panel shows each driven element's `V(t)` or `I(t)` over the flight, with the
   particle's times marked.

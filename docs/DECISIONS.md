@@ -77,7 +77,7 @@ Entries are numbered in order and never renumbered.
   Amplifier's drain, which sits near 45 behind its load); the latest frame's potentials
   (they flicker with the noise and the signal); the mean over all frames (biased by a
   supply's start-up, the Amplifier's drain settling from 120).
-- **Where:** `crates/game/src/scales.rs` (`drive_field`), `crates/game/src/ui.rs` (the mean
+- **Where:** `crates/game/src/scales.rs` (`drive_field`), `crates/game/src/ui/results.rs` (the mean
   potentials).
 - **History:**
   - before 2026-10-26: the player's largest supply over the metal's longer side. Wrong where
@@ -557,6 +557,13 @@ Entries are numbered in order and never renumbered.
   - 2026-10-27: moved bit for bit (golden hashes of representative levels, the tests); the
     level crate's split made by a mover that lexes Rust (strings, raw strings, chars,
     comments) and checks that the files after hold the lines before.
+  - 2026-10-27: the game's three largest files too, by the same mover: `ui.rs` (3986 lines)
+    into `ui/` (`format`, `tooltips`, `labels`, `results`, `controls`, `views`, `plots`,
+    `tests`; the 1300-line `contents` stays whole in `mod.rs`: splitting a function is a
+    change of code, not a move), `level_editor.rs` (3500) into `level_editor/` (`inputs`,
+    `circuits`, `shots`, `bodies`, `tube`, `limits`, `check`, `tests`), `main.rs` (2739,
+    now 983) with `capture`, `keys`, `maps`, `physics_sync`, `tube_views`, `camera`,
+    `metal_maps` beside it.
 
 ## DEC-20: The level designs as a package by arc
 

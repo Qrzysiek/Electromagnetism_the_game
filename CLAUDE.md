@@ -15,7 +15,7 @@ A puzzle game on accurate classical electrodynamics. `SPEC.md` describes the gam
 
 ## Sandbox completeness
 Every level that ships must be reproducible by hand in the sandbox.
-- `crates/game/src/level_editor.rs` edits every field of the level format. Each level type is destructured exhaustively, with no `..`. A new field in the level format therefore fails to compile until it gets a control there, or is explicitly marked as not user-editable with a reason.
+- `crates/game/src/level_editor/` edits every field of the level format. Each level type is destructured exhaustively, with no `..`. A new field in the level format therefore fails to compile until it gets a control there, or is explicitly marked as not user-editable with a reason.
 - The editor ranges are shared constants. `check_editable` validates each level against them, and the test `all_levels_are_reproducible_in_the_sandbox` runs it on every file in `levels/` and `levels/custom/`.
 - A new element kind, coil shape or other level feature needs a sandbox tool or control in the same change.
 
