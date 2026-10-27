@@ -226,7 +226,10 @@ pub enum Fate {
 /// its own emitting the charge a passing ion induced, at a weight of its own charge).
 pub const MAX_PARTICLES: usize = 20_000;
 
-/// The Darwin field's solve: its relative residual (`darwin2d::Darwin2d::solve`).
+/// The Darwin field's solve: its relative residual (`darwin2d::Darwin2d::solve`). Not
+/// looser: at 1e-6 (8–9 iterations against 13–14) the symmetry and energy tests Y21–Y26 are
+/// unchanged, but V-D5's driven ring fails, its R 20 % high with the self-field (the residual
+/// weighs the ring's large-scale current little against its error; PHYSICS.md §2.12).
 pub const DARWIN_TOLERANCE: f64 = 1e-10;
 
 /// Tag of projectile `j` (`TubeState::tag`); emitted carriers carry their emitter's

@@ -783,3 +783,10 @@ Entries are numbered in order and never renumbered.
   - 2026-10-27: chosen, replacing DEC-24; `darwin2d::SelfResponse` and its test removed. The
     one-solve form came first and V-D5 found its missing induction; the two-solve form
     replaced it before the commit.
+  - 2026-10-27: the solve's tolerance kept at 1e-10. At 1e-6 the two solves take 8–9
+    iterations against 13–14, and Y21–Y26 do not change (nor at 1e-4), but V-D5's driven ring
+    fails: its R with the self-field 1.195 times the one without, its magnitudes 1.137 times
+    its phases', its heat/work 1.095 times (bounds 15 %, 5 %, 5 %; 1.005, 0.959, 0.984 at
+    1e-10). The relative residual weighs the ring's large-scale current little against its
+    error. The second solve's time is to be won back by a preconditioner with the carriers'
+    screening (#55).
