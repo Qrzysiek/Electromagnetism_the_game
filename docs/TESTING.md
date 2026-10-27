@@ -80,6 +80,11 @@ A test is selected again when:
 | a test that failed, or was never recorded | that test |
 | any function's body, for a test whose coverage is older than its verdict | that test |
 
+The tests run through `scripts/runner.py` (DEC-23): `python scripts/runner.py ctl
+affected-coverage skip <test>` (or `pause`, `resume`, `stop`) while they run; a hung test
+(four times its expected time, ten minutes at least) stops the run, the incident log says
+where, and running again after the fix continues from there.
+
 Comments and formatting select nothing, nor do changes outside the engine (the game, the
 generator, the documents); `scripts/levels.py` reaches the heavy tests through the level
 files it writes. Measured on two levels (a charges level and a vacuum tube, 2026-10-27):

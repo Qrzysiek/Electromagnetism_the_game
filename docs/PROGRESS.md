@@ -50,6 +50,24 @@ that even a chunk cut short keeps most of its work. Ways to split this repositor
 - Design scripts: write each result as it comes (append to a JSON lines file) and skip the
   ones already written when restarted.
 
+## Runs of independent items: `scripts/runner.py` (DEC-23)
+
+Anything that runs many independent items (tests, a scan's points, design runs) goes through
+`scripts/runner.py`: from a plan (`runner.py run <job> --plan plan.json`: the items' commands
+and their inputs, the job's own inputs such as the program's binary) or as a library
+(`affected.py` does). Each item's outcome is saved as it finishes, keyed by the fingerprint of
+its command and inputs. While it runs, from another terminal:
+
+    python scripts/runner.py ctl <job> pause | resume | stop | skip ITEM | jobs N
+    python scripts/runner.py state <job>             # outcomes, and where it stopped
+
+An item past four times its expected time is hung: the job stops there (the next items may
+hang too; `--on-hang continue` goes on), and the incident log names it with its output's end.
+Fix it and run the same command again: the item that stopped the job runs first, finished
+items whose inputs are unchanged are not rerun, and those the fix changed are. `state --save
+FILE` keeps a ledger, `--load FILE` restores one. The heavy tests' jobs are
+`affected-verdicts` and `affected-coverage`.
+
 ## Item patterns and timings (owner's 16-thread machine, full speed, 2026-10-20)
 
 | computation | item | `--match` | per item |

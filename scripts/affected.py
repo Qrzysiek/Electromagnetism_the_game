@@ -38,7 +38,6 @@ bit for bit unchanged can only give its recorded result. Records live in `target
 """
 
 import argparse
-import concurrent.futures
 import datetime
 import glob
 import hashlib
@@ -48,7 +47,6 @@ import re
 import shutil
 import subprocess
 import sys
-import threading
 import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AFF = os.path.join(ROOT, "target", "affected")
@@ -474,75 +472,109 @@ def snapshot_now(records, before):
 
 
 def run_tests(chosen, exe, records, snap_id, coverage, jobs, threads):
-    """Runs `chosen` [(test, why)] in `exe`, `jobs` at a time, each its own process on
-    `threads` rayon threads, and records each as it finishes: its verdict (and, with
-    `coverage`, the files it executed). The failed tests' names."""
+    """Runs `chosen` [(test, why)] in `exe` through `scripts/runner.py`, `jobs` at a time, each
+    its own process on `threads` rayon threads, and records each as it finishes: its verdict
+    (and, with `coverage`, the files it executed). The job is `affected-verdicts` or
+    `affected-coverage`: `python scripts/runner.py ctl <job> skip <test>` (or pause, resume,
+    stop, jobs N) while it runs. A test that runs four times its expected time (ten minutes at
+    least) is killed as hung; a skipped or interrupted one keeps its old record (so it stays
+    selected); a timeout counts as a failure. The failed tests' names."""
+    import runner  # noqa: E402 (a sibling script)
     golden = golden_entries()
-    if coverage:
-        profdata, cov = llvm_tool("llvm-profdata"), llvm_tool("llvm-cov")
-    lock = threading.Lock()
-    done, failed, total = [0], [], len(chosen)
-    label = "coverage " if coverage else ""
-
-    def one(item):
-        name, why = item
+    failed = []
+    whys = dict(chosen)
+    job = "affected-coverage" if coverage else "affected-verdicts"
+    items = []
+    for name, _ in chosen:
+        r = records["tests"].get(name)
+        estimate = ((r or {}).get("seconds_cov") or expected_seconds(name, r)) if coverage \
+            else ((r or {}).get("seconds") or expected_seconds(name, r) / 10)
         d = os.path.join(PROF, name.replace(":", "_"))
+        items.append(runner.Item(
+            id=name, estimate=estimate,
+            cmd=[sys.executable, os.path.abspath(__file__), "_item", exe, name, d, "1" if coverage else "0"],
+            env={"RAYON_NUM_THREADS": str(threads)}))
+
+    def on_done(item, status, seconds, output):
+        name = item.id
+        if status in (runner.SKIPPED, runner.INTERRUPTED):
+            return "its record kept"
+        d = os.path.join(PROF, name.replace(":", "_"))
+        try:
+            with open(os.path.join(d, "result.json"), encoding="utf-8") as f:
+                result = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            result = {"ok": False, "files": None}
         shutil.rmtree(d, ignore_errors=True)
-        os.makedirs(d)
-        # One profile per process (`%p`; the merge pool `%m` writes nothing on Windows).
-        env = dict(os.environ, LLVM_PROFILE_FILE=os.path.join(d, "%p.profraw"),
-                   RAYON_NUM_THREADS=str(threads))
-        if coverage:
-            env["EM_TEST_FULL"] = "1"  # computed, not taken from a pass record: coverage sees it
-        t0 = time.time()
-        r = subprocess.run([exe, "--ignored", "--exact", name, "--test-threads", "1"], cwd=ROOT, env=env,
-                           capture_output=True, text=True, encoding="utf-8", errors="replace")
-        seconds = time.time() - t0
-        ok = r.returncode == 0 and "1 passed" in r.stdout
-        files = None
-        if coverage:
-            raws = glob.glob(os.path.join(d, "*.profraw"))
-            if not raws:
-                raise SystemExit(f"{name}: the instrumented run wrote no profile (exit {r.returncode})")
+        ok = status == runner.OK and result["ok"]
+        files = result["files"]
+        level = level_of(name)
+        rec = records["tests"].get(name) or {}
+        was_ok = rec.get("result") == "ok" and rec.get("snapshot") == snap_id
+        rec.update({"snapshot": snap_id, "result": "ok" if ok else ("timeout" if status == runner.TIMEOUT else "failed"),
+                    "level_file": sha(f"levels/{level}.json"), "physics": None,
+                    "golden": golden.get(level) if name.startswith("golden::") else None,
+                    "why": whys[name], "when": datetime.datetime.now().isoformat(timespec="seconds")})
+        rec.setdefault("files", None)
+        if coverage and ok:
+            rec.update({"files": files, "cov_snapshot": snap_id, "seconds_cov": round(seconds, 1)})
+        elif not coverage:
+            rec["seconds"] = round(seconds, 1)
+        records["tests"][name] = rec
+        save_records(records)
+        if not ok:
+            failed.append(name)
+            notes = [l for l in output.splitlines() if "panicked" in l or "assert" in l or "FAILED" in l][:8]
+            if was_ok and coverage:
+                notes.insert(0, f"{name} passed in the plain program and failed instrumented: "
+                                "a result that depends on the build")
+            print("\n".join("    " + l for l in notes), flush=True)
+            return "FAILED"
+        return f"{len(files)} files" if coverage and files is not None else ""
+
+    results = runner.Runner(job, items, jobs=jobs, on_done=on_done, ledger=False, timeout_factor=4.0,
+                            min_timeout=600.0).run()
+    if any(s == runner.INTERRUPTED for s in results.values()):
+        # Stopped (a hang, or `ctl stop`): what finished is recorded; the rest waits for the fix.
+        sys.exit(f"[affected] {job} stopped: see `python scripts/runner.py state {job}`; "
+                 "fix, then run again (what passed with unchanged inputs is not rerun)")
+    return failed
+
+
+def item_main(exe, name, d, coverage):
+    """One test as the runner's item (`_item`): the test in its own process, and with coverage
+    its profile merged and exported here, in parallel with the others; the outcome in
+    `<d>/result.json`. Exits as the test did."""
+    shutil.rmtree(d, ignore_errors=True)
+    os.makedirs(d)
+    # One profile per process (`%p`; the merge pool `%m` writes nothing on Windows).
+    env = dict(os.environ, LLVM_PROFILE_FILE=os.path.join(d, "%p.profraw"))
+    if coverage:
+        env["EM_TEST_FULL"] = "1"  # computed, not taken from a pass record: coverage sees it
+    r = subprocess.run([exe, "--ignored", "--exact", name, "--test-threads", "1"], cwd=ROOT, env=env,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    sys.stdout.write(r.stdout + r.stderr)
+    ok = r.returncode == 0 and "1 passed" in r.stdout
+    files = None
+    if coverage and ok:
+        raws = glob.glob(os.path.join(d, "*.profraw"))
+        if not raws:
+            print(f"{name}: the instrumented run wrote no profile")
+            ok = False
+        else:
             merged = os.path.join(d, "t.profdata")
-            subprocess.run([profdata, "merge", "-sparse", *raws, "-o", merged], check=True,
-                           capture_output=True)
-            export = subprocess.run([cov, "export", "-summary-only", f"-instr-profile={merged}", exe],
+            subprocess.run([llvm_tool("llvm-profdata"), "merge", "-sparse", *raws, "-o", merged],
+                           check=True, capture_output=True)
+            export = subprocess.run([llvm_tool("llvm-cov"), "export", "-summary-only",
+                                     f"-instr-profile={merged}", exe],
                                     capture_output=True, text=True, check=True).stdout
             files = sorted(p for f in json.loads(export)["data"][0]["files"]
                            if (p := rel(f["filename"])) is not None and f["summary"]["regions"]["covered"] > 0)
-        shutil.rmtree(d, ignore_errors=True)
-        level = level_of(name)
-        with lock:
-            rec = records["tests"].get(name) or {}
-            was_ok = rec.get("result") == "ok" and rec.get("snapshot") == snap_id
-            rec.update({"snapshot": snap_id, "result": "ok" if ok else "failed",
-                        "level_file": sha(f"levels/{level}.json"), "physics": None,
-                        "golden": golden.get(level) if name.startswith("golden::") else None,
-                        "why": why, "when": datetime.datetime.now().isoformat(timespec="seconds")})
-            rec.setdefault("files", None)
-            if coverage:
-                rec.update({"files": files, "cov_snapshot": snap_id, "seconds_cov": round(seconds, 1)})
-            else:
-                rec["seconds"] = round(seconds, 1)
-            records["tests"][name] = rec
-            save_records(records)
-            done[0] += 1
-            print(f"[{done[0]}/{total}] {label}{name} {'ok' if ok else 'FAILED'} ({seconds:.1f} s"
-                  + (f", {len(files)} files)" if coverage else ")"), flush=True)
-            if not ok:
-                failed.append(name)
-                if was_ok and coverage:
-                    print(f"    {name} passed in the plain program and failed instrumented: "
-                          "a result that depends on the build", flush=True)
-                tail = [l for l in (r.stdout + r.stderr).splitlines()
-                        if "panicked" in l or "assert" in l or "FAILED" in l][:8]
-                print("\n".join("    " + l for l in tail), flush=True)
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
-        for f in [pool.submit(one, item) for item in chosen]:
-            f.result()
-    return failed
+    for raw in glob.glob(os.path.join(d, "*.prof*")):
+        os.remove(raw)
+    with open(os.path.join(d, "result.json"), "w", encoding="utf-8") as f:
+        json.dump({"ok": ok, "files": files}, f)
+    return 0 if ok else 1
 
 
 def fill_physics(records, program):
@@ -684,6 +716,8 @@ def note(args):
 
 
 def main():
+    if len(sys.argv) == 6 and sys.argv[1] == "_item":
+        sys.exit(item_main(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5] == "1"))
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("status")

@@ -643,3 +643,33 @@ Entries are numbered in order and never renumbered.
 - **History:**
   - 2026-10-27: introduced on V-D5 and V-D6; the other tables move over as their tests are
     next run.
+
+## DEC-23: Long runs of independent items under one controllable runner
+
+- **Status:** in use (2026-10-27)
+- **Area:** tooling
+- **Choice:** `scripts/runner.py`, a library and a command line for any run of independent
+  items (tests, scans, design runs): each item its own process, N at a time; a ledger per job
+  (`target/progress/<job>.ledger.jsonl`) taking each outcome as it comes, keyed by the item's
+  fingerprint (its command and the contents of its declared inputs); controls while it runs
+  (`runner.py ctl <job> pause|resume|stop|skip ITEM|jobs N`); an item past four times its
+  expected time is hung: by default the job stops there (the next items may hang too), the
+  incident log names the item, its time against its limit and its output's end; run again
+  after the fix, the stopping item runs first, finished items whose fingerprint still matches
+  are not rerun, and those the fix changed are; `state --save/--load` keeps and restores a
+  ledger. `affected.py` runs its tests through it (jobs `affected-verdicts`,
+  `affected-coverage`; its coverage records, finer than file hashes, stay its validity);
+  `progress.py` shows its jobs as its own.
+- **Purpose:** the owner (2026-10-27): a run where one item hangs or fails had to be killed
+  whole and redone (this session's recordings twice); skip, pause, resume, save and load at run
+  time, nothing finished lost, a hang stopping the run with a record of where, and the reruns
+  after a fix redoing only what the fix affects; reusable for anything new of this kind.
+- **Alternatives:** nextest alone (per-test processes and timeouts, but no ledger across runs
+  nor validity by inputs, and tests only); GNU parallel and job queues (not on this Windows
+  machine, no fingerprints); a skip that goes on past a hang by default (the owner: the next
+  items may hang too, wasted time).
+- **Where:** `scripts/runner.py`, `scripts/tests/test_runner.py`, `scripts/affected.py`;
+  docs/PROGRESS.md; CLAUDE.md (long computations).
+- **History:**
+  - 2026-10-27: introduced, a hang stopping the job by default (the owner's revision of a first
+    design that skipped it and went on).

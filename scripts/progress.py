@@ -31,6 +31,9 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR = os.path.join(ROOT, "target", "progress")
+# A log line may hold what the console cannot show (G′, ∠): replaced, not a crash.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
 # A metal tube run's wall time per carrier and step on the owner's 16-thread machine at full
 # speed (2026-10-20: Laminations' preview 6400 carriers x 3571 steps in 36 s, its
 # verification 12 800 x 7143 in 124 s; Magnetoresistance 5200 x 2286 in 17 s, 10 400 x 4571
