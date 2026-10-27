@@ -77,7 +77,7 @@ symmetric under z → −z: E then lies in the plane and B is along z. So:
 
 ## Built levels
 
-Arc 7, "Jackson: charges in fields and collisions" (Ch. 12–13), `scripts/levels.py`:
+Arc 7, "Jackson: charges in fields and collisions" (Ch. 12–13), `scripts/designs/jackson.py`:
 
 - Jackson §12.3: E×B drift (introduction). Uniform crossed fields as a stray field; both
   signs drift with E×B/B² and their guiding centres follow the equipotentials.

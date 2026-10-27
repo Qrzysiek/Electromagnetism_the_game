@@ -8,8 +8,8 @@ choice and every time you change it ... append this note with the same info and 
 change").
 
 Scope: features, models and algorithms (physics, numerics, display, tools), and the main
-choices behind each level's design (the full measurements stay in `scripts/levels.py`'s
-comments and `docs/LEVELS.md`). The physics' models and their validation are in `PHYSICS.md`,
+choices behind each level's design (the full measurements stay in the designs' comments,
+`scripts/designs/`, and `docs/LEVELS.md`). The physics' models and their validation are in `PHYSICS.md`,
 whose sections also record their own earlier versions; plans in `docs/TUBES.md` and
 `docs/DRUDE.md`. Choices made before this log began (2026-10-26) are recorded there and are
 added here when they are next touched.
@@ -138,7 +138,7 @@ Entries are numbered in order and never renumbered.
   400 (gain ~2, runs ~50 % longer); a load of 300 (no more gain at period 300: the
   gain-bandwidth limit); V_DD 100 (the window −20 to −13, 6 %, against −20 to −5, 12.5 %, at
   120: a higher drain stays saturated to higher biases).
-- **Where:** `scripts/levels.py` (`amplifier`, its comment holds the scans), docs/LEVELS.md.
+- **Where:** `scripts/designs/components.py` (`amplifier`, its comment holds the scans), docs/LEVELS.md.
 - **History:**
   - 2026-10-26: chosen. The window's lower edge is set by the preview's unconverged
     pinch-off (the verdict's error is 1.5 × the runs' difference: at −22 the verification
@@ -157,7 +157,7 @@ Entries are numbered in order and never renumbered.
   t = 10–80 (the output moved ~0.17 per unit of B against error bars up to 0.19: noisy; the
   noise of a strip's end grows with the resistor behind it, so the resistors were halved,
   the supply raised and the window lengthened).
-- **Where:** `scripts/levels.py` (`wheatstone_bridge`), docs/LEVELS.md.
+- **Where:** `scripts/designs/components.py` (`wheatstone_bridge`), docs/LEVELS.md.
 - **History:**
   - 2026-10-26: chosen.
 
@@ -177,7 +177,7 @@ Entries are numbered in order and never renumbered.
   (the strip and its contact add ~0.3 to C: the tank rings at period ~23, not 21); a
   non-whole number of periods (leaks the step into the Fourier amplitude); a ±40 slider (the
   window would have reached the guessable 18–22).
-- **Where:** `scripts/levels.py` (`ringing_tank`), `target/scratch/rlc_proto.py`.
+- **Where:** `scripts/designs/components.py` (`ringing_tank`), `target/scratch/rlc_proto.py`.
 - **History:**
   - 2026-10-26: designed. The reference 14 verified 6.57 ± 0.29; the step solves on about
     10.5–18.5 (9.5–10 too, 10.25 uncertain at the goal's edge; an isolated 19.5) and −18 to
@@ -210,7 +210,7 @@ Entries are numbered in order and never renumbered.
   ~0.17 per unit of B: the strip's thermal noise rings the tank, the more the higher its Q;
   more carriers and a larger step halved it); a goal from 2.0 (its window would have reached
   the slider's guessable 7.2–8.8).
-- **Where:** `scripts/levels.py` (`field_tuned_damping`), `target/scratch/ftd_proto.py`.
+- **Where:** `scripts/designs/components.py` (`field_tuned_damping`), `target/scratch/ftd_proto.py`.
 - **History:**
   - 2026-10-26: designed. The reference 11 verified 2.42 ± 0.04; B solves on 9.5–13
     (10.9 % of ±16) and −13 to −11 (−9 not).
@@ -233,7 +233,7 @@ Entries are numbered in order and never renumbered.
   reached its end, 38–40, or its middle, 18–22, and the field's 7.2–8.8, where the Hall
   voltage turns sublinear); the supply in its lower half (a smaller signal against the
   same noise); a slower swing (twice the run time).
-- **Where:** `scripts/levels.py` (`lock_in_hall`), `target/scratch/lockin_proto.py`.
+- **Where:** `scripts/designs/components.py` (`lock_in_hall`), `target/scratch/lockin_proto.py`.
 - **History:**
   - 2026-10-26: designed. The phase lags the ideal by ~17° for either sign of the current:
     the contacts' capacitance charging through the strip (an inductive pickup would shift
@@ -283,7 +283,7 @@ Entries are numbered in order and never renumbered.
   2026-10-26: "the winning conditions are trivial as it solves with the initial setting").
 - **Alternatives:** a source's level anywhere outside the solving window (an arbitrary
   number the "off" hover would still show, and a test could not tell from a giveaway).
-- **Where:** `scripts/levels.py` (rectifier, klystron, inverter, ringing_tank),
+- **Where:** `scripts/designs/components.py` (rectifier, klystron, inverter, ringing_tank),
   `crates/level/tests/levels.rs`.
 - **History:**
   - 2026-10-26: chosen. Ringing tank's step (14), the Inverter's pulse top (−10) and the
@@ -549,3 +549,28 @@ Entries are numbered in order and never renumbered.
   - 2026-10-27: moved bit for bit (golden hashes of representative levels, the tests); the
     level crate's split made by a mover that lexes Rust (strings, raw strings, chars,
     comments) and checks that the files after hold the lines before.
+
+## DEC-20: The level designs as a package by arc
+
+- **Status:** in use (2026-10-27)
+- **Area:** code structure (level designs)
+- **Choice:** `scripts/levels.py` (4858 lines) became the package `scripts/designs/`:
+  `common` (units, particles, elements, `Auto` detectors, helpers, running the generator),
+  one module per group of arcs (`charges`, `fields`, `matter`, `instruments`, `jackson`,
+  `components`), `curriculum` (`ARCS`, `LEVELS`) and `build` (detector placement, solving
+  and checking references, writing levels and their texts, the formulas). `scripts/levels.py`
+  stays the entry point, with its commands unchanged. Statements moved whole with their
+  comments; each module's imports were computed from its global names (Python's `symtable`,
+  exact about scopes). Three deliberate edits: `ROOT` one directory up, `run_generator` into
+  `common` (two arcs call it), and the real instruments' one use of `LEVELS` imported in its
+  function (the curriculum imports that module).
+- **Purpose:** approved by the owner (2026-10-26) with the other refactors: one arc's design
+  is found and edited in its own file, and a change to one arc reads as such in a diff.
+- **Alternatives:** star imports between the modules (shorter, but hides where a helper comes
+  from); one module per level (126 files for designs that share helpers by arc).
+- **Where:** `scripts/designs/`, `scripts/levels.py`.
+- **History:**
+  - 2026-10-27: every level built by the old module and by the package (text-only, nothing
+    run) and compared in full: 126 alike, the 15 arcs alike; `python scripts/levels.py --text`
+    rewrote no level file and rendered the 95 formulas identically; every module's global
+    names resolve.

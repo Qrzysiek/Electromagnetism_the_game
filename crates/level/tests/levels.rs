@@ -113,7 +113,7 @@ fn shipped_setups_are_computable() {
 /// Voltages are set with sliders (the owner, 2026-10-06): each power supply's and
 /// plate's range is symmetric about 0, and no reference potential lies where a player
 /// would try first: within 5 % of the range's half from 0, from either end or from the
-/// middle of either half (`scripts/levels.py`, `guessable`; `generator window` shows
+/// middle of either half (`scripts/designs/common.py`, `guessable`; `generator window` shows
 /// each level's whole solving interval, which the level designs keep clear of them).
 #[test]
 fn slider_ranges_hide_the_answer() {

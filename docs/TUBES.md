@@ -283,7 +283,7 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   (`goals`; older files' single `goal` still loads), each counting the cathode's carriers
   or the ions (`carriers`), with the verdict, the panel (one plot per goal), the sandbox
   editor (add or remove goals, a carriers choice), `generator check`/`tube-scan` and
-  `levels.py` (`current_goal`, `tube(..., goals=, ions=)`). The golden hashes did not
+  `scripts/designs/common.py` (`current_goal`, `tube(..., goals=, ions=)`). The golden hashes did not
   change. First numbers for the bipolar levels (the game-scale diode with its anode
   emitting ions): at q/m = 0.01 the electron current rose ×2.2 (finite plates, not
   Langmuir's infinite 1.86) but the run must reach t ≈ 80 for the ions to settle, a
@@ -323,7 +323,7 @@ Order: 4, 2, inductors and the klystron, the magnetron, 1.
   (quieter emission, more macroparticles with a faster field sum: a treecode), which the
   magnetron needs anyway, then return; (b) an artificial mass ratio of ~4 so that the two
   cutoffs bound the field; (c) relax the slider rule for this level's field. The level's
-  design is kept in `scripts/levels.py` (`ion_diode`, not in the curriculum).
+  design is kept in `scripts/designs/components.py` (`ion_diode`, not in the curriculum).
 - **Klystron done (2026-10-13; level 106):** a weak beam (ballistic bunching) from a
   Wehnelt gun, a buncher on a sine and a tuned catcher (a tank) 21 further; the player sets
   the cathode's −V₀ (the beam's speed) and the drive V₁. Against Webster's small-signal

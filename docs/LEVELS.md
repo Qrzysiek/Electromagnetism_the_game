@@ -1,14 +1,15 @@
 # Levels: curriculum and difficulty
 
 `scripts/levels.py` is the single source of truth for the shipped levels: their order,
-designs, reference solutions and automatic detector placement. Rebuild with
+designs, reference solutions and automatic detector placement (the designs by arc in
+`scripts/designs/`: `common`, the arcs' modules, `curriculum`, `build`). Rebuild with
 `python scripts/levels.py` (or `--only NN` for one level). Every level must have a
 verified reference solution for every shot and negligible radiation
 (`crates/level/tests/per_level.rs`).
 
 ## Curriculum rules
 
-- The levels form arcs (docs/CURRICULUM.md; `ARCS` in `scripts/levels.py`, written
+- The levels form arcs (docs/CURRICULUM.md; `ARCS` in `scripts/designs/curriculum.py`, written
   to `levels/curriculum.json`). Each arc has introductions (one new element or condition
   each), intermediate levels (the arc's modules interact, or an earlier design meets a
   real effect) and a master level (a multi-stage finale built from the arc's modules).

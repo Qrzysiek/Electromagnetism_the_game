@@ -40,7 +40,7 @@ The existing level ideas stay; they are regrouped, improved or joined.
 ## Arcs as built
 
 The Jackson series (docs/JACKSON.md) continues the curriculum with arcs of the same
-shape, each citing the sections and problems of the book it follows. Every arc has three tiers (`ARCS` in `scripts/levels.py`, written to
+shape, each citing the sections and problems of the book it follows. Every arc has three tiers (`ARCS` in `scripts/designs/curriculum.py`, written to
 `levels/curriculum.json`; the game groups its level list by arc and shows each level's arc
 and tier):
 
