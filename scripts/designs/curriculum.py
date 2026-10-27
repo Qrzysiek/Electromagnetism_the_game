@@ -2,6 +2,7 @@
 
 import json
 import os
+from collections.abc import Callable
 from designs.common import ROOT
 from designs.charges import (
     around_the_wall,
@@ -144,7 +145,9 @@ from designs.components import (
 
 # Arcs: (name, [(tier, [(slug, function)])]). The level files are numbered in this order;
 # `levels/curriculum.json` tells the game each level's arc and tier.
-ARCS = [
+# Arcs, each in tiers, each a list of levels: (slug, the function that builds its design).
+Level = tuple[str, Callable[[], dict]]
+ARCS: list[tuple[str, list[tuple[str, list[Level]]]]] = [
     ("Charges: steering and optics", [
         ("Introduction", [
             ("first_bend", first_bend),

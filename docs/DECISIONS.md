@@ -574,3 +574,27 @@ Entries are numbered in order and never renumbered.
     run) and compared in full: 126 alike, the 15 arcs alike; `python scripts/levels.py --text`
     rewrote no level file and rendered the 95 formulas identically; every module's global
     names resolve.
+
+## DEC-21: The scripts type-checked and tested
+
+- **Status:** in use (2026-10-27)
+- **Area:** tooling (Python scripts)
+- **Choice:** `python -m mypy` (`mypy.ini`: mypy's defaults, which check the bodies of
+  annotated functions; imports resolved from `scripts/`) and `python -m pytest` (`pytest.ini`,
+  tests in `scripts/tests/`) on every script, locally and in CI's `python` job. The tests cover
+  what could go wrong silently: `affected.py`'s view of Rust (a body against declarations,
+  `const fn`, comments and layout, braces in strings and chars, lifetimes, nested comments,
+  every engine file parsing) and the designs (each builds without running anything, the
+  built files follow the curriculum's order, `curriculum.json` is current).
+- **Purpose:** approved by the owner (2026-10-26) with the other improvements: the scripts
+  had grown to 9300 lines (the levels' single source of truth among them) with no checks, and
+  the test selection now depends on one of them.
+- **Alternatives:** strict mypy (thousands of annotations to add to designs that are data);
+  pyright (equivalent here, one more tool); ruff for style (not asked; the code is consistent).
+- **Where:** `mypy.ini`, `pytest.ini`, `scripts/tests/`, `.github/workflows/ci.yml`.
+- **History:**
+  - 2026-10-27: mypy found five things, none a bug: three missing annotations in
+    `gen_dop853_coefficients.py` (its output could not be regenerated to compare: the source's
+    server refused the download; the edits are annotations and an assert on a match every
+    coefficient name makes), a reused exception variable's name in `level_docs.py`, and
+    `ARCS`'s type, now written out.

@@ -56,6 +56,21 @@ jobs:
           done
           exit $failed
 
+  # The scripts (DEC-21): their type checks (mypy.ini) and tests (pytest.ini).
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Tools
+        run: python -m pip install mypy pytest
+      - name: Type checks
+        run: python -m mypy
+      - name: Tests
+        run: python -m pytest
+
   # The dependencies' licences, advisories and sources (deny.toml), unused dependencies, and
   # the documentation's links (DEC-17).
   hygiene:

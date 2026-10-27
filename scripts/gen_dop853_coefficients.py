@@ -29,12 +29,12 @@ def main(path: str) -> None:
     if not pairs:
         sys.exit("no coefficients found")
 
-    a = [[None] * N for _ in range(N)]
-    b = [None] * N
-    c = [None] * N
-    e = [None] * N
-    bhh = [None] * 4
-    d = [[None] * N for _ in range(8)]
+    a: list[list[str | None]] = [[None] * N for _ in range(N)]
+    b: list[str | None] = [None] * N
+    c: list[str | None] = [None] * N
+    e: list[str | None] = [None] * N
+    bhh: list[str | None] = [None] * 4
+    d: list[list[str | None]] = [[None] * N for _ in range(8)]
 
     seen = set()
     for name, value in pairs:
@@ -43,7 +43,9 @@ def main(path: str) -> None:
             sys.exit(f"duplicate coefficient {name}")
         seen.add(name)
         lit = value.replace("D", "E")
-        prefix = re.match(r"[a-z]+", name).group(0)
+        m = re.match(r"[a-z]+", name)
+        assert m, name
+        prefix = m.group(0)
         digits = name[len(prefix):]
         if prefix == "a":
             # a{i}{j} with j < i <= 16: 2 digits -> i,j single; 3 -> i two-digit, j one;

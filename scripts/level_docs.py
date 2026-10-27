@@ -600,8 +600,8 @@ def check_doc(slug, levels, verbose=True):
             errors.append(f"no game.json: run python scripts/level_docs.py game {slug}")
         else:
             game = load_json(gpath)
-            e = by_slug[slug]
-            if game.get("level_sha256") != level_sha(e["path"]) or game.get("golden_hash") != golden_hash(e["path"]):
+            entry = by_slug[slug]
+            if game.get("level_sha256") != level_sha(entry["path"]) or game.get("golden_hash") != golden_hash(entry["path"]):
                 errors.append(f"game.json is stale (the level or its physics changed): run "
                               f"python scripts/level_docs.py game {slug}")
     if os.path.isfile(calc):
