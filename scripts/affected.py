@@ -33,8 +33,11 @@ global input, physics or golden entry its tests; a test that failed or was never
 selected; and a test whose coverage is older than its last verdict (a code change may have
 sent it into files it did not execute before) is selected by any change to the engine until
 `refresh` brings its coverage up to date. The runs are deterministic: a test whose inputs are
-bit for bit unchanged can only give its recorded result. Records live in `target/affected/`
-(per checkout; a fresh one records everything on its first run).
+bit for bit unchanged can only give its recorded result. The records live in the main
+checkout's `target/affected/records.json`, shared by its worktrees (what a test executes does not
+depend on the checkout; each builds its own programs in its own `target/affected/`);
+`EM_AFFECTED_RECORDS` names another file. One heavy run at a time: two writing the records at
+once would lose one's.
 """
 
 import argparse
@@ -52,7 +55,27 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AFF = os.path.join(ROOT, "target", "affected")
 BUILD = os.path.join(AFF, "build")
 PROF = os.path.join(AFF, "prof")
-RECORDS = os.path.join(AFF, "records.json")
+# Before 2026-10-27 each checkout kept its own: read once where the shared file is missing.
+LOCAL_RECORDS = os.path.join(AFF, "records.json")
+
+
+def shared_records():
+    """The records' file: `EM_AFFECTED_RECORDS`, else the main checkout's (the parent of git's
+    common directory), whichever checkout runs."""
+    named = os.environ.get("EM_AFFECTED_RECORDS")
+    if named:
+        return named
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return LOCAL_RECORDS
+    return os.path.join(os.path.dirname(common), "target", "affected", "records.json")
+
+
+RECORDS = shared_records()
 ENGINE = ["crates/physics/src", "crates/level/src"]
 TEST_FILE = "crates/level/tests/per_level.rs"
 GLOBAL_FILES = ["Cargo.lock", "Cargo.toml", "crates/physics/Cargo.toml",
@@ -207,8 +230,11 @@ def global_inputs():
 
 
 def load_records():
+    path = RECORDS
+    if not os.path.exists(path) and os.path.exists(LOCAL_RECORDS):
+        path = LOCAL_RECORDS  # a checkout's own, from before they were shared
     try:
-        with open(RECORDS, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             records = json.load(f)
     except FileNotFoundError:
         return {"snapshots": {}, "tests": {}}
@@ -222,7 +248,7 @@ def load_records():
 
 
 def save_records(records):
-    os.makedirs(AFF, exist_ok=True)
+    os.makedirs(os.path.dirname(RECORDS), exist_ok=True)
     tmp = RECORDS + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(records, f, indent=0, sort_keys=True)

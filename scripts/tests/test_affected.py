@@ -2,6 +2,7 @@
 select the tests that executed the file) and which are declarations (they select every
 test). A misclassified change would let a test that the change affects go unrun."""
 import hashlib
+import os
 
 import affected
 
@@ -94,3 +95,16 @@ def test_unit_test_modules_are_not_engine_files():
     assert "crates/level/src/tests.rs" in test_only
     assert "crates/level/src/tube/tests.rs" in test_only
     assert not test_only & set(affected.universe())
+
+
+def test_records_are_shared_by_every_checkout(monkeypatch):
+    """The records live in the main checkout, whichever checkout (a worktree too) runs: the
+    one whose `.git` is a directory, not a worktree's `.git` file; `EM_AFFECTED_RECORDS`
+    names another file."""
+    monkeypatch.setenv("EM_AFFECTED_RECORDS", "elsewhere.json")
+    assert affected.shared_records() == "elsewhere.json"
+    monkeypatch.delenv("EM_AFFECTED_RECORDS")
+    path = os.path.normpath(affected.shared_records())
+    assert path.endswith(os.path.join("target", "affected", "records.json"))
+    main = os.path.dirname(os.path.dirname(os.path.dirname(path)))
+    assert os.path.isdir(os.path.join(main, ".git")), main

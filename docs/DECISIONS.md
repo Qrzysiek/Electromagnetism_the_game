@@ -507,6 +507,13 @@ Entries are numbered in order and never renumbered.
     same files: measured identical on 39 and 99, whose two checks had been recorded
     independently. It now needs only its plain verdict, and its coverage follows its
     source's when both are of the same snapshot (else it runs instrumented).
+  - 2026-10-27: the records shared by every checkout, in the main one's
+    `target/affected/records.json` (`EM_AFFECTED_RECORDS` to name another): each worktree
+    had its own, so a recording made in one (10 h for all the heavy tests' coverage) was
+    unknown to the next, which selected every test again. Builds stay per checkout (each
+    compiles its own sources). A checkout's own records are read once where the shared file
+    is missing. One heavy run at a time (two would lose one's writes). `refresh_coverage.py`
+    (and `.cmd`) runs `affected.py run` unattended, keeping Windows awake.
 
 ## DEC-17: A pinned toolchain and CI's hygiene checks
 

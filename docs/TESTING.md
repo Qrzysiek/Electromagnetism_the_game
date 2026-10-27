@@ -48,6 +48,14 @@ Golden hashes change only when the physics or a level changes intentionally:
     python scripts/affected.py run --no-coverage   # verdicts only; coverage left for later
     python scripts/affected.py refresh    # the coverage left for later
     python scripts/affected.py note       # the change note for the commit message
+    python scripts/refresh_coverage.py    # everything up to date, unattended (or the .cmd)
+
+The records are the main checkout's (`target/affected/records.json`), shared by every
+worktree: a run in one is known to the others. `refresh_coverage.py` (or a double-click on
+`scripts/refresh_coverage.cmd`) starts `affected.py run` at once under `progress.py` and keeps
+Windows awake until it ends: for a night when the coverage of many tests is out of date (all
+of them after an engine change made with `--no-coverage`: about 1.5 h of verdicts and 10 h of
+coverage on this machine). Cut short, it continues where it stopped when started again.
 
 `run` gives the verdicts first, with the plain test program at full speed (four tests at a
 time on four threads each, as the program runs them itself), then takes the same tests'
