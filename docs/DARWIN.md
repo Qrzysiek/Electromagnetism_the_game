@@ -216,6 +216,9 @@ With carriers:
   required). The lattice's heat is the Joule heat under the self-field, so levels may measure
   heat with it. (Without the self-field the ring's heat runs 3.6 % above the external work in
   both seeds, a plain-model question left for later.)
+  Explained the same day: in seed 47 the electrostatic field's graininess heating at the
+  finite step (0.008 per time unit, 2 % of the external work: `induced_work`'s documented
+  ∝ dt² effect) and the kinetic energy's fall over the window (0.009, within its noise).
 - 2026-10-27, the solve's tolerance: 1e-6 would cut a third of the iterations and leaves
   Y21–Y26 unchanged, but V-D5's ring fails (R 20 % high with the self-field): 1e-10 stays. A
   preconditioner with a uniform screening takes more iterations (14.5–21.4 against 13.5): the
