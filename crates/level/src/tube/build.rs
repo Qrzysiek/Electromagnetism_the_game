@@ -232,6 +232,12 @@ impl Level {
             darwin: spec
                 .speed_of_light
                 .map(|c| super::self_field_grid(max.x, max.y, c)),
+            // With the self-field, each circuit's path from the ground terminal (DEC-27).
+            leads: if spec.speed_of_light.is_some() {
+                self.tube_leads(player).circuit_paths()
+            } else {
+                Vec::new()
+            },
             ..Tube::new(prisms, SOFTENING * size * res.softening, spec.step / r)
         };
         // Each emitter's weight: 1/PREVIEW_PARTICLES of the largest charge its emitting face

@@ -489,6 +489,22 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
              leave along z); the field maps take its current along it.",
         );
     }
+    if game
+        .tube_preview
+        .as_ref()
+        .is_some_and(|v| v.run.leads.ground.is_some())
+    {
+        row(
+            ui,
+            Swatch::Line(rgb(0.95, 0.95, 0.85)),
+            "ground and returns",
+            "With the carriers' own field every circuit is a closed loop: each lead's current \
+             returns along the board's edge to the ground terminal (the symbol below the lower \
+             edge, where the supplies stand). The loop's area is what its current's own \
+             magnetic field threads, so its inductance is the loop drawn; the field the loop's \
+             changing current induces along its wires acts back on the supply's circuit.",
+        );
+    }
     if matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow))
         && game.em_snapshot.is_some()
     {

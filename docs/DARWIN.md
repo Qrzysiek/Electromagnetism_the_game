@@ -142,7 +142,9 @@ With carriers:
 3. Ring-shaped metals (Phase 2.3, needed for rings and transformers) unless square frames
    built from a rectangle with a hole are enough for the tests.
 4. Leads as level geometry, drawn in every view (done 2026-10-27, DEC-26: routed as
-   circuit wiring); circuits' EMF from the induced field.
+   circuit wiring); circuits' EMF from the induced field (done 2026-10-27, DEC-27: closed
+   along the grounded envelope; leads from rings, circuits between electrodes and straps
+   still refused with the self-field).
 5. The display: the physics' own B_z on the magnetic map (today's map is `tube_em`'s FDTD
    field of the run, one-way).
 6. Levels: Inductor, Transformer, Skin effect, Shielding, Induction heating; then the
@@ -252,5 +254,18 @@ With carriers:
   ω = 0.8, 22.9 % at ω = 0.3 (the primary's effect there ~11 % of G, the seeds' noise 19 % of
   it); G within 3.2 % and 2° of the two-coil circuit at both frequencies. The transformer's
   coupling is validated to that accuracy: the Transformer level may follow (step 6).
-- Still to do in step 2: perhaps an implicit-midpoint step (the step's first order: dt ≲ 0.012
-  with the self-field); then the electrodes' induced EMF (step 4).
+- 2026-10-27, step 4 done (DEC-27): with the self-field each electrode with a lead from the
+  border and a supply to ground is a circuit node, its branch through the supply and the lead;
+  the lead's current is a field source, the EMF along it in the branch's equation (the leads'
+  inductances implicit, from one solve per lead at the start; the carriers' flux along them a
+  step behind). An open lead's inductance grew with the log of the frame's distance (16.5 at
+  6, 148 at 50), so every circuit closes: its return along the grounded envelope to a ground
+  terminal below the board's lower edge, drawn. Two leads' loop inductance −0.52 % from the
+  closed form; an RLC within 4.4e-6; the LC's energy and run back to rounding; Y27 (a lead
+  circuit round a metal ring) 0.004 % of the field's energy per time unit. Y27's first setup,
+  without an envelope, ran away: two circuit nodes' common charge has a negative capacitance
+  in the open world's gauge (OP-1); every level has the envelope.
+- Still to do: perhaps an implicit-midpoint step (the step's first order: dt ≲ 0.012 with the
+  self-field); under the self-field, leads from rings, circuits between electrodes and straps;
+  for the first self-field level, the model notes (`level::model`: the self-field, its grid
+  and step, the leads' closure).

@@ -845,3 +845,52 @@ Entries are numbered in order and never renumbered.
     leads continued the strips' bottom edges across the board, one line with them): a wire
     now meets a box's face clear of its corners (by the clearance, or half a face shorter
     than twice that) and pays a step for every grid step off the face's middle.
+
+## DEC-27: The leads' circuits under the self-field, closed along the envelope
+
+- **Status:** in use (2026-10-27)
+- **Area:** physics (the tube engine's circuits and the Darwin field), level geometry, display
+- **Choice:** with the carriers' own field, every electrode with a lead from the border and a
+  supply to ground is a circuit node whose branch runs through the supply (its circuit, or
+  its fixed potential as an ideal source) and along the lead; the lead's current is a source
+  of the field, and the field's EMF along the lead, `−dΛ/dt`, `Λ = ∫ A·dl`, is in the branch's
+  trapezoidal equation: the leads' own inductances `Mᵢⱼ` (one solve per lead at the start,
+  the metals' carriers screening as in the steps' solves) implicit with the circuits, the
+  rest of the flux along each lead (the carriers' currents') from the last solve, a step
+  behind (`physics::tube` `leads.rs`). Every circuit is closed: each lead returns along the
+  grounded envelope's inner face, the shorter way round, to a ground terminal below the
+  middle of the board's lower edge (`LeadPlan::ground`, `returns`, `circuit_paths`), drawn
+  with a ground symbol and in the legend. A lead from a ring, a circuit between two
+  electrodes and a strap are refused with the self-field until modelled.
+- **Purpose:** DARWIN.md §2.3 and step 4 (the owner's "how the whole circuit works at once and
+  what field it emits", 2026-10-26): a circuit's inductance from its geometry, its leads'
+  field acting on the carriers and theirs on it. The closure is what makes that inductance
+  physical: an open lead's current comes from nowhere, its field falls as 1/r and its
+  energy grows with the log of the grid's frame's distance (16.5 in a frame 6 away, 148 at
+  50, for the same lead), so a circuit closed only through infinity (Ohm's law's leads from
+  opposite sides) would have had a numerical parameter for its inductance. The envelope is
+  the electrostatics' ground already (every tube level's, `ENVELOPE_MARGIN`), so the return
+  runs where the ground conductor is.
+- **Alternatives:** open leads (the display's convention, `tube_em`; box-dependent, above);
+  the EMF explicit from the last steps (unstable: a loop's L/R of ~100 against a step of
+  0.01); the carriers' flux implicit too (a joint solve of the circuits and the field,
+  coupling the dense node system to the conjugate gradients; Y27 shows the lag's cost
+  unmeasurable, 0.004 % of the field's energy per time unit); the leads to one common terminal
+  routed by the router (tidier loops, but the routing of every level changes; the returns
+  keep DEC-26's leads as they are); the return along the board's edge rather than the
+  envelope (half a cell inside the conductor that carries it); a perfectly conducting
+  boundary for the field at the board's edge (the solver's sine transforms need the frame's
+  `χ = 0, B_z = 0`).
+- **Where:** `crates/physics/src/tube/leads.rs` (tests there: `two_leads_make_the_loop_inductance`
+  against `scripts/wolfram/d8_two_leads.wls`, `leads_inductance_is_the_field_energy`,
+  `a_lead_makes_an_rlc_circuit`, `a_lead_lc_keeps_its_energy_and_runs_back`,
+  `a_lead_field_is_odd_under_a_mirror`), `tube/circuits.rs`, `tube/darwin.rs`;
+  `crates/physics/tests/darwin.rs` (Y27); `crates/level/src/leads.rs` (`border_path`,
+  `returns`, `circuit_paths`; tests `returns_go_round_the_border_the_short_way`,
+  `self_field_circuits_return_to_the_ground_terminal`), `tube/build.rs`, `tube/issues.rs`
+  (test `self_field_tube_takes_the_paths`); `crates/game/src/draw.rs` (`draw_returns`),
+  `legend.rs`.
+- **History:**
+  - 2026-10-27: chosen. Y27's first setup had no envelope and ran away (both electrodes'
+    potentials falling as their currents rose: the open world's negative capacitance for
+    a common charge, OP-1); with the envelope every level has, it held.

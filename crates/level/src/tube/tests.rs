@@ -246,6 +246,42 @@ fn speed_of_light_turns_the_self_field_on() {
     assert!(issues(&level).iter().any(|i| i.contains("speed of light")));
 }
 
+/// With the self-field the engine's tube takes each circuit's path from the ground terminal
+/// (`LeadPlan::circuit_paths`, DEC-27), and its state the leads' field: Ohm's law's two
+/// contacts, grounded and the player's supply, both lead branches. Without it, no leads. And
+/// what the leads' EMF does not model yet is refused: an electrode inside a grounded ring.
+#[test]
+fn self_field_tube_takes_the_paths() {
+    let mut level = crate::shipped("ohms_law");
+    assert!(
+        level
+            .tube_sim(&level.reference_solution, 1)
+            .tube
+            .leads
+            .is_empty()
+    );
+    let spec = level.tube.as_mut().expect("a tube level");
+    spec.speed_of_light = Some(3.0);
+    spec.step = 0.01;
+    let paths = level.tube_leads(&level.reference_solution).circuit_paths();
+    let sim = level.tube_sim(&level.reference_solution, 1);
+    assert_eq!(sim.tube.leads, paths);
+    let s = sim.tube.state();
+    let leads = s.leads.as_ref().expect("the leads' field");
+    assert_eq!(leads.electrodes, vec![0, 1]);
+    // An electrode inside a grounded ring: Ion diode's inner electrode in its coaxial anode.
+    let mut ring = crate::shipped("ion_diode");
+    let spec = ring.tube.as_mut().expect("a tube level");
+    spec.speed_of_light = Some(3.0);
+    spec.step = 0.01;
+    let mut out = Vec::new();
+    ring.tube_issues(&ring.reference_solution, &mut out);
+    assert!(
+        out.iter().any(|i| i.contains("inside a grounded ring")),
+        "{out:?}"
+    );
+}
+
 /// The self-field drawn (`TubeFrame::self_b`): a level with a speed of light records its
 /// carriers' own `B_z` on the board's display grid in every frame, `SELF_B_SPACING` apart; a
 /// level without one records none, and its run has no such grid.

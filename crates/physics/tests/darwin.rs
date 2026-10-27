@@ -1036,3 +1036,166 @@ fn transformer_secondary_sees_the_primary_flux() {
     measured("V-D7.percent", 100.0 * err, 2);
     assert!(err < 0.20, "{err}");
 }
+
+/// Y27's tube: a lead circuit round a metal ring, in a grounded envelope (−2.5…22.5 square:
+/// the electrostatics' reference, as every level's; without one, the open world's free-space
+/// gauge gives two circuit nodes' common charge a negative capacitance, OP-1, and the circuit
+/// ran away). Two small boxes 12 apart at y = 18.5, each with its lead from the ground
+/// terminal (10, −2.5) on the envelope, along it and up (a loop 12 × 20.5, closed across the
+/// boxes' gap by their capacitance); the left one driven by `30 sin(0.3 t)` (an ideal source
+/// behind its lead), the right one grounded. Inside the loop a closed ring 8 × 8 (wall 1) of
+/// the tests' metal at V-D5's 55.5 carriers per area; the self-field at c = 3.
+fn lead_circuit(dt: f64) -> Tube {
+    use physics::bem::Bias;
+    use physics::tube::Circuit;
+    use physics::zinv::{Electrode, Electrodes, Section};
+    let (lo, hi) = (DVec3::new(6.0, 6.0, 0.0), DVec3::new(14.0, 14.0, 0.0));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let count = libm::round(64.0 / (2.0 * A * MEAN_FREE_PATH)) as usize;
+    let cores = Lattice::random_cores(lo, hi, count, A, 71);
+    let ring = Lattice::new(lo, hi, common::metal(A), cores, 1554, 73).with_hole(
+        lo + DVec3::new(1.0, 1.0, 0.0),
+        hi - DVec3::new(1.0, 1.0, 0.0),
+    );
+    let rect = |cx: f64| Section::Rect {
+        center: DVec3::new(cx, 18.5, 0.0),
+        angle: 0.0,
+        half_length: 1.0,
+        half_thickness: 0.5,
+    };
+    let electrodes = Electrodes::new(
+        vec![
+            Electrode {
+                section: rect(4.0),
+                bias: Bias::Grounded,
+            },
+            Electrode {
+                section: rect(16.0),
+                bias: Bias::Grounded,
+            },
+            Electrode {
+                section: Section::Frame {
+                    center: DVec3::new(10.0, 10.0, 0.0),
+                    half_width: 12.5,
+                    half_height: 12.5,
+                    segment: 0.5,
+                },
+                bias: Bias::Grounded,
+            },
+        ],
+        &[],
+        0.25,
+    );
+    let g = DVec3::new(10.0, -2.5, 0.0);
+    let lead = |x: f64| Some(vec![g, DVec3::new(x, -2.5, 0.0), DVec3::new(x, 18.0, 0.0)]);
+    Tube {
+        arena: Some((DVec3::new(-2.5, -2.5, 0.0), DVec3::new(22.5, 22.5, 0.0))),
+        circuits: vec![Circuit {
+            electrode: 0,
+            source: Waveform::Sine {
+                offset: 0.0,
+                amplitude: 30.0,
+                omega: 0.3,
+                phase: 0.0,
+            },
+            resistance: 0.0,
+            capacitance: 0.0,
+            inductance: 0.0,
+            to: None,
+        }],
+        lattices: vec![ring],
+        darwin: Some(Darwin2d::new(127, 127, 0.25, (-6.0, -6.0), 3.0)),
+        leads: vec![lead(4.0), lead(16.0)],
+        ..Tube::new(electrodes, 0.05, dt)
+    }
+}
+
+/// `lead_circuit`'s energy budget from t = 0.3 to `end`: the drift per time unit of
+/// `E_kin + E_es + ½VᵀCV + ½∫B²/μ₀ + heat − W`, `W` the source's work as the circuit books it
+/// (`½ (S₀ + S₁) h (I₀ + I₁)` a step), and the mean field energy; the electrodes' energy from
+/// their potentials and capacitances (the ring, neutral and far, induces little on them).
+fn lead_budget(dt: f64, end: f64) -> (f64, f64) {
+    let tube = lead_circuit(dt);
+    let source = tube.circuits[0].source;
+    let mut s = tube.state();
+    let cap = tube.electrodes.capacitance.clone();
+    let kinetic = |v: &[DVec3], s: &TubeState| {
+        v.iter()
+            .zip(&s.charge)
+            .zip(&s.qm)
+            .map(|((v, q), qm)| 0.5 * (q / qm).abs() * v.length_squared())
+            .sum::<f64>()
+    };
+    let magnetic = |s: &TubeState| s.darwin.as_ref().map_or(0.0, |d| d.magnetic_energy());
+    let electrodes = |s: &TubeState| {
+        let v = &s.potentials;
+        let mut w = 0.0;
+        for i in 0..v.len() {
+            for j in 0..v.len() {
+                w += 0.5 * v[i] * cap[i][j] * v[j];
+            }
+        }
+        w
+    };
+    let current = |s: &TubeState| s.leads.as_ref().expect("the leads").current[0];
+    let mut work = 0.0;
+    let step = |s: &mut TubeState, work: &mut f64| {
+        let (t0, i0) = (s.t, current(s));
+        tube.step(s);
+        let i1 = current(s);
+        *work += 0.5 * (source.value(t0) + source.value(s.t)) * 0.5 * dt * (i0 + i1);
+    };
+    // The total at a whole step: the kinetic energy the mean of the half steps' about it, the
+    // field's the mean of the solves' about it.
+    let total = |s: &mut TubeState, work: &mut f64| {
+        let (x, v, u, j, we) = (
+            s.x.clone(),
+            s.v.clone(),
+            magnetic(s),
+            s.joule,
+            electrodes(s),
+        );
+        let w0 = *work;
+        step(s, work);
+        let um = 0.5 * (u + magnetic(s));
+        let ek = 0.5 * (kinetic(&v, s) + kinetic(&s.v, s));
+        let e = ek + electrostatic(&tube, &x, &s.charge) + we + um + 0.5 * (j + s.joule)
+            - 0.5 * (w0 + *work);
+        (e, um)
+    };
+    while s.t < 0.3 - 0.5 * dt {
+        step(&mut s, &mut work);
+    }
+    let (t0, (e0, _)) = (s.t, total(&mut s, &mut work));
+    let (mut field, mut n) = (0.0, 0.0);
+    while s.t < end - 0.5 * dt {
+        step(&mut s, &mut work);
+        field += magnetic(&s);
+        n += 1.0;
+    }
+    let (t1, (e1, _)) = (s.t, total(&mut s, &mut work));
+    ((e1 - e0) / (t1 - t0), field / n)
+}
+
+/// Y27, the leads' circuits' energy (DEC-27): a lead circuit driven round a metal ring
+/// (`lead_circuit`), its supply's work against the ring's heat and every energy, the field's
+/// included, over 1.3 periods of the drive: the drift per time unit within 5 % of the mean
+/// field energy, Y25's bound, at dt 0.01 and 0.005 (set before measuring). The circuit takes
+/// the leads' own inductances implicitly and the ring's flux along them a step behind
+/// (`physics::tube` `leads.rs`): the lag's error is what this bounds.
+#[test]
+#[ignore = "four minutes: a ring of 1554 carriers with a lead circuit, 27 time units at two steps"]
+fn y27_lead_circuit_energy() {
+    let end = 27.6;
+    let (coarse, u) = lead_budget(0.01, end);
+    let (fine, u_fine) = lead_budget(0.005, end);
+    println!(
+        "Y27: the budget drifts by {coarse:.3e} per time at dt 0.01 ({:.3} % of the mean field energy {u:.2}), {fine:.3e} at 0.005 ({:.3} % of {u_fine:.2})",
+        100.0 * coarse.abs() / u,
+        100.0 * fine.abs() / u_fine
+    );
+    measured("Y27.coarse_percent", 100.0 * coarse.abs() / u, 2);
+    measured("Y27.fine_percent", 100.0 * fine.abs() / u_fine, 2);
+    assert!(coarse.abs() < 0.05 * u, "{coarse} of {u}");
+    assert!(fine.abs() < 0.05 * u_fine, "{fine} of {u_fine}");
+}

@@ -55,6 +55,80 @@ pub struct LeadPlan {
     pub leads: Vec<Option<Wire>>,
     /// The floating circuits' straps: from a circuit's electrode to each one linked to it.
     pub straps: Vec<Wire>,
+    /// With the carriers' own field (`TubeSpec::speed_of_light`; DEC-27): the ground
+    /// terminal, on the grounded envelope (`tube::ENVELOPE_MARGIN` beyond the board) below
+    /// the middle of the board's lower edge, where every circuit from the border returns.
+    pub ground: Option<(f64, f64)>,
+    /// With it, per level electrode with a lead from the border: the lead's return, along
+    /// the envelope's inner face from the ground terminal, the shorter way round, then across
+    /// the margin to where the lead starts. The envelope is then the circuits' ground wire as
+    /// it is the electrostatics' ground, and each circuit a closed loop (an open lead's
+    /// current, coming from nowhere, would have a field whose energy grows without bound with
+    /// the distance: no inductance of its own).
+    pub returns: Vec<Option<Wire>>,
+}
+
+/// The path along the border of the rectangle `lo`–`hi` from `a` (on it) to `b` (on it, or
+/// near it: the path ends at its foot on the nearest side, then at `b`), the shorter way
+/// round (counter-clockwise on a tie): its corners.
+fn border_path(lo: DVec3, hi: DVec3, a: DVec3, b: DVec3) -> Vec<DVec3> {
+    let (w, h) = (hi.x - lo.x, hi.y - lo.y);
+    let perimeter = 2.0 * (w + h);
+    // The foot of `p` on the nearest side, and its distance along the border
+    // counter-clockwise from `lo`.
+    let foot = |p: DVec3| {
+        let sides = [
+            (p.y - lo.y).abs(),
+            (hi.x - p.x).abs(),
+            (hi.y - p.y).abs(),
+            (p.x - lo.x).abs(),
+        ];
+        let side = (0..4)
+            .min_by(|&i, &j| sides[i].total_cmp(&sides[j]))
+            .unwrap_or(0);
+        let (x, y) = (p.x.clamp(lo.x, hi.x), p.y.clamp(lo.y, hi.y));
+        match side {
+            0 => (DVec3::new(x, lo.y, 0.0), x - lo.x),
+            1 => (DVec3::new(hi.x, y, 0.0), w + (y - lo.y)),
+            2 => (DVec3::new(x, hi.y, 0.0), w + h + (hi.x - x)),
+            _ => (DVec3::new(lo.x, y, 0.0), 2.0 * w + h + (hi.y - y)),
+        }
+    };
+    let (fa, sa) = foot(a);
+    let (fb, sb) = foot(b);
+    let corners = [
+        (0.0, DVec3::new(lo.x, lo.y, 0.0)),
+        (w, DVec3::new(hi.x, lo.y, 0.0)),
+        (w + h, DVec3::new(hi.x, hi.y, 0.0)),
+        (2.0 * w + h, DVec3::new(lo.x, hi.y, 0.0)),
+    ];
+    let forward = (sb - sa).rem_euclid(perimeter);
+    let mut out = vec![fa];
+    // The corners strictly between, in the order passed, over one turn either way.
+    let mut passed: Vec<(f64, DVec3)> = Vec::new();
+    for m in [-1.0, 0.0, 1.0] {
+        for &(s, c) in &corners {
+            let s = s + m * perimeter;
+            let between = if forward <= 0.5 * perimeter {
+                s > sa + 1e-9 && s < sa + forward - 1e-9
+            } else {
+                s < sa - 1e-9 && s > sa - (perimeter - forward) + 1e-9
+            };
+            if between {
+                passed.push((s, c));
+            }
+        }
+    }
+    if forward <= 0.5 * perimeter {
+        passed.sort_by(|x, y| x.0.total_cmp(&y.0));
+    } else {
+        passed.sort_by(|x, y| y.0.total_cmp(&x.0));
+    }
+    out.extend(passed.into_iter().map(|(_, c)| c));
+    out.push(fb);
+    out.push(b);
+    out.dedup_by(|p, q| (*p - *q).length() < 1e-9);
+    out
 }
 
 /// What a wire ends on.
@@ -489,12 +563,60 @@ impl Level {
             };
             leads[e] = router.route(from, End::Electrode(e));
         }
+        // With the carriers' own field, the border's leads return to the ground terminal along
+        // the grounded envelope's inner face, `ENVELOPE_MARGIN` beyond the board (DEC-27).
+        let m = crate::tube::ENVELOPE_MARGIN;
+        let (lo, hi) = (
+            DVec3::new(b.min.x - m, b.min.y - m, 0.0),
+            DVec3::new(b.max.x + m, b.max.y + m, 0.0),
+        );
+        let ground = spec
+            .speed_of_light
+            .map(|_| DVec3::new(0.5 * (lo.x + hi.x), lo.y, 0.0));
+        let returns = (0..n)
+            .map(|e| {
+                let g = ground?;
+                let start = leads[e].as_ref()?.first()?;
+                parent[e].is_none().then(|| {
+                    border_path(lo, hi, g, DVec3::new(start.0, start.1, 0.0))
+                        .into_iter()
+                        .map(|p| (p.x, p.y))
+                        .collect()
+                })
+            })
+            .collect();
         LeadPlan {
             parent,
             envelope,
             leads,
             straps,
+            ground: ground.map(|g| (g.x, g.y)),
+            returns,
         }
+    }
+}
+
+impl LeadPlan {
+    /// Per level electrode, with the carriers' own field: the whole path its circuit current
+    /// comes along from the ground terminal, its return along the border then its lead (the
+    /// field's sources, `physics::tube::Tube::leads`); None for an electrode without a lead
+    /// from the border.
+    #[must_use]
+    pub fn circuit_paths(&self) -> Vec<Option<Vec<DVec3>>> {
+        self.leads
+            .iter()
+            .zip(&self.returns)
+            .map(|(lead, back)| {
+                let (lead, back) = (lead.as_ref()?, back.as_ref()?);
+                let mut path: Vec<DVec3> = back
+                    .iter()
+                    .chain(lead.iter().skip(1))
+                    .map(|&(x, y)| DVec3::new(x, y, 0.0))
+                    .collect();
+                path.dedup_by(|p, q| (*p - *q).length() < 1e-9);
+                Some(path)
+            })
+            .collect()
     }
 }
 

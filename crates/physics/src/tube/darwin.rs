@@ -42,6 +42,9 @@ impl Tube {
         let (j, beta) = deposit(&d, s);
         d.solve(&j, &beta, DARWIN_TOLERANCE);
         let a = d.a();
+        if let Some(leads) = s.leads.as_mut() {
+            leads.update_rest(&d, &a);
+        }
         for k in 0..s.x.len() {
             let (x, qm) = (s.x[k], s.qm[k]);
             let (ax, ay) = d.interpolate(&a, x.x, x.y);
@@ -65,7 +68,8 @@ impl Tube {
 
 /// The current and the response on the grid's edges: a free particle's canonical current
 /// `q u` with its response `q²/m` (the solve's implicit induction), a jumped one's likewise (its
-/// `u` the one before the jump), a given-off one's current `q v`, fixed.
+/// `u` the one before the jump), a given-off one's current `q v`, fixed; the leads' currents,
+/// fixed (their circuits took their induction, `leads.rs`).
 fn deposit(d: &Darwin2d, s: &TubeState) -> (Edges, Edges) {
     let mut j = Edges::zeros(d);
     let mut beta = Edges::zeros(d);
@@ -79,6 +83,9 @@ fn deposit(d: &Darwin2d, s: &TubeState) -> (Edges, Edges) {
             d.deposit_vector(&mut j, x.x, x.y, q * u.x, q * u.y);
             d.deposit_scalar(&mut beta, x.x, x.y, q * qm);
         }
+    }
+    if let Some(leads) = &s.leads {
+        leads.deposit(d, &mut j);
     }
     (j, beta)
 }

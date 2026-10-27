@@ -67,7 +67,10 @@ mod circuits;
 mod darwin;
 mod emission;
 mod fields;
+mod leads;
 mod metals;
+
+pub use leads::LeadField;
 
 /// From this many particles in flight the step sums the fields and the induced charge's
 /// potentials by trees (`tree2d`) instead of directly: below it the direct sums are faster
@@ -306,6 +309,13 @@ pub struct Tube {
     /// PHYSICS.md §2.12): its grid and speed of light. None: none (the electrostatic model
     /// alone, bit for bit as before).
     pub darwin: Option<crate::darwin2d::Darwin2d>,
+    /// With the self-field: per electrode, the lead its circuit current comes along, its
+    /// corners from the board's border to the electrode's surface (`level::leads`; none:
+    /// empty or None). Such an electrode with a supply to ground is a circuit node whose
+    /// branch runs through the supply and along the lead: the lead's current makes a field,
+    /// and the field's EMF along the lead is in the branch's equation (`leads.rs`, DEC-27).
+    /// Ignored without the self-field.
+    pub leads: Vec<Option<Vec<DVec3>>>,
 }
 
 /// A lattice's accounts by cell (`Lattice::account_cell`, row by row), so far: bookkeeping
@@ -420,6 +430,8 @@ pub struct TubeState {
     /// With the self-field: what set each particle's velocity since the last solve
     /// (`darwin_step` fixes its current from it). Empty without it.
     pub set: Vec<VelocitySet>,
+    /// With the self-field and leads (`Tube::leads`): their branches' currents and fluxes.
+    pub leads: Option<LeadField>,
 }
 
 /// What set a particle's velocity since the self-field's last solve (`Tube::darwin_step`).
@@ -560,6 +572,7 @@ impl Tube {
             circuits: Vec::new(),
             lattices: Vec::new(),
             darwin: None,
+            leads: Vec::new(),
         }
     }
 
@@ -650,6 +663,8 @@ impl Tube {
         } else {
             s.background = vec![0.0; self.electrodes.segments.len()];
         }
+        // The leads' inductances, the metals' carriers in place.
+        s.leads = self.lead_field(&s);
         s
     }
 

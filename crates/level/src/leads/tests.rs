@@ -253,3 +253,68 @@ fn leads_go_round_what_is_in_the_way() {
         "{a:?} {b:?}"
     );
 }
+
+/// A return runs along the border the shorter way round, through the corners it passes, from
+/// its start to the foot of its end (then to the end, if off the border).
+#[test]
+fn returns_go_round_the_border_the_short_way() {
+    let (lo, hi) = (DVec3::ZERO, DVec3::new(20.0, 10.0, 0.0));
+    let g = DVec3::new(10.0, 0.0, 0.0);
+    // To the left side: by the lower left corner.
+    assert_eq!(
+        border_path(lo, hi, g, DVec3::new(0.0, 6.0, 0.0)),
+        vec![g, DVec3::ZERO, DVec3::new(0.0, 6.0, 0.0)]
+    );
+    // To the upper side's right half: by the lower right and upper right corners.
+    assert_eq!(
+        border_path(lo, hi, g, DVec3::new(15.0, 10.0, 0.0)),
+        vec![
+            g,
+            DVec3::new(20.0, 0.0, 0.0),
+            DVec3::new(20.0, 10.0, 0.0),
+            DVec3::new(15.0, 10.0, 0.0)
+        ]
+    );
+    // Along the lower side, and to a point a hair inside it.
+    assert_eq!(
+        border_path(lo, hi, g, DVec3::new(3.0, 0.0, 0.0)),
+        vec![g, DVec3::new(3.0, 0.0, 0.0)]
+    );
+    assert_eq!(
+        border_path(lo, hi, g, DVec3::new(3.0, 0.1, 0.0)),
+        vec![g, DVec3::new(3.0, 0.0, 0.0), DVec3::new(3.0, 0.1, 0.0)]
+    );
+}
+
+/// With the carriers' own field the wiring closes every circuit (DEC-27): Ohm's law's two
+/// contacts' leads, from the left and right sides, return along the grounded envelope to the
+/// ground terminal below the middle of the lower side; each circuit's path runs from the terminal to
+/// its contact (the engine's tube takes them: `tube::tests::self_field_tube_takes_the_paths`).
+/// Without a speed of light, no terminal and no returns.
+#[test]
+fn self_field_circuits_return_to_the_ground_terminal() {
+    let mut level = crate::shipped("ohms_law");
+    let plain = level.tube_leads(&level.reference_solution);
+    assert!(plain.ground.is_none() && plain.returns.iter().all(Option::is_none));
+    let spec = level.tube.as_mut().expect("a tube level");
+    spec.speed_of_light = Some(3.0);
+    spec.step = 0.01;
+    let plan = level.tube_leads(&level.reference_solution);
+    let b = level.bounds();
+    let g = plan.ground.expect("a ground terminal");
+    let m = crate::tube::ENVELOPE_MARGIN;
+    assert!((g.0 - 0.5 * (b.min.x + b.max.x)).abs() < 1e-12);
+    assert!((g.1 - (b.min.y - m)).abs() < 1e-12);
+    let paths = plan.circuit_paths();
+    assert_eq!(paths.len(), 2);
+    for ((back, lead), path) in plan.returns.iter().zip(&plan.leads).zip(&paths) {
+        let back = back.as_ref().expect("a return");
+        let lead = lead.as_ref().expect("a lead");
+        assert_eq!(back.first(), Some(&g));
+        assert_eq!(back.last(), lead.first());
+        assert!(back.windows(2).all(|w| straight(w[0], w[1])), "{back:?}");
+        let path = path.as_ref().expect("a path");
+        assert_eq!(path.first().map(|p| (p.x, p.y)), Some(g));
+        assert_eq!(path.last().map(|p| (p.x, p.y)), lead.last().copied());
+    }
+}

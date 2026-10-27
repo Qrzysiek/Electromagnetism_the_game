@@ -218,6 +218,27 @@ impl Level {
                     spec.step
                 ));
             }
+            // The leads' EMF is modelled for supplies to ground along leads from the border,
+            // returning along it (DEC-27): not yet for a lead from a ring, a branch returning
+            // to another electrode or a strap.
+            if spec
+                .circuits
+                .iter()
+                .any(|c| c.return_to.is_some() || (c.resistance.is_none() && !c.linked.is_empty()))
+            {
+                out.push(
+                    "Tube: with the carriers' own field, a circuit between two electrodes or a \
+                     strap is not modelled yet (only supplies to ground, DEC-27)."
+                        .into(),
+                );
+            }
+            if self.tube_leads(player).parent.iter().any(Option::is_some) {
+                out.push(
+                    "Tube: with the carriers' own field, an electrode inside a grounded ring is \
+                     not modelled yet (its lead's return through the ring, DEC-27)."
+                        .into(),
+                );
+            }
             let max = self.grid.position(self.grid.max_node());
             let d = super::self_field_grid(max.x, max.y, c);
             if d.nx > super::SELF_FIELD_MAX_NODES || d.ny > super::SELF_FIELD_MAX_NODES {

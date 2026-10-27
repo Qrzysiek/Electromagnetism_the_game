@@ -5,13 +5,17 @@ use super::*;
 
 impl Tube {
     /// The circuit nodes: electrodes with a circuit through a resistance or an inductance
-    /// (not an ideal source), then floating electrodes (a fixed charge) without a circuit.
+    /// (not an ideal source), then the leads' electrodes under the self-field (`leads.rs`:
+    /// their supplies, ideal or not, in series with their leads), then floating electrodes
+    /// (a fixed charge) without a circuit.
     pub(super) fn nodes(&self) -> Vec<Node> {
+        let branches = self.lead_branches();
         let mut out: Vec<Node> = self
             .circuits
             .iter()
-            .filter(|c| !c.is_ideal() && !c.is_strap())
-            .map(|c| Node {
+            .enumerate()
+            .filter(|&(ci, c)| !c.is_ideal() && !c.is_strap() && !self.has_lead(&branches, ci))
+            .map(|(_, c)| Node {
                 electrode: c.electrode,
                 conductance_dt: if c.resistance.is_finite() && !c.is_inductive() {
                     self.dt / c.resistance
@@ -22,6 +26,12 @@ impl Tube {
                 source: c.source,
             })
             .collect();
+        out.extend(branches.iter().map(|b| Node {
+            electrode: b.electrode,
+            conductance_dt: 0.0,
+            capacitance: b.capacitance,
+            source: b.source,
+        }));
         for (i, e) in self.electrodes.electrodes.iter().enumerate() {
             if matches!(e.bias, Bias::Charge(_)) && !self.circuits.iter().any(|c| c.electrode == i)
             {
@@ -81,12 +91,16 @@ impl Tube {
     /// `L (I₁ − I₀) = dt/2 [(S + V_to − V − R I)₀ + (S + V_to − V − R I)₁]` (the trapezoidal
     /// rule: with the capacitances, the implicit midpoint rule, which keeps an LC tank's
     /// energy exactly). The unknowns are the nodes' potentials and the inductive branches'
-    /// currents at `t`, from one linear system.
+    /// currents at `t`, from one linear system. A lead's branch under the self-field
+    /// (`leads.rs`) is an inductive one whose flux is `Lᵢ Iᵢ + Σⱼ Mᵢⱼ Iⱼ + Λᵢ′`: the leads'
+    /// inductances with the other leads' currents in the same system, the rest of the flux
+    /// along its lead from the last solve (its change since the last step's equation).
     #[allow(clippy::too_many_lines)]
     pub(super) fn update_potentials(&self, s: &mut TubeState, t: f64, q_ind: &[f64]) {
         let old = s.potentials.clone();
-        for c in &self.circuits {
-            if c.is_ideal() {
+        let branches = self.lead_branches();
+        for (ci, c) in self.circuits.iter().enumerate() {
+            if c.is_ideal() && !self.has_lead(&branches, ci) {
                 s.potentials[c.electrode] = c.source.value(t);
             }
         }
@@ -97,9 +111,11 @@ impl Tube {
         }
         let k = nodes.len();
         let inductive: Vec<usize> = (0..self.circuits.len())
-            .filter(|&c| self.circuits[c].is_inductive())
+            .filter(|&c| self.circuits[c].is_inductive() && !self.has_lead(&branches, c))
             .collect();
-        let size = k + inductive.len();
+        let m = branches.len();
+        let first_lead = k + inductive.len();
+        let size = first_lead + m;
         let n_el = self.electrodes.electrodes.len();
         let cap = &self.electrodes.capacitance;
         let mut a = vec![0.0; size * size];
@@ -176,6 +192,33 @@ impl Tube {
                 + h * (c.source.value(t - self.dt) + v_to0 - old[c.electrode] - c.resistance * i0)
                 + h * c.source.value(t);
         }
+        // The leads' branches, from ground: `Φ₁ − Φ₀ = h [(S − V − R I)₀ + (S − V − R I)₁]`.
+        let mut leads = s.leads.take();
+        if m > 0 {
+            let lf = leads
+                .as_ref()
+                .expect("the leads' field of a tube with leads");
+            for (i, br) in branches.iter().enumerate() {
+                let u = first_lead + i;
+                let i0 = lf.current[i];
+                let r = self
+                    .node_of(&nodes, br.electrode)
+                    .expect("a lead's electrode is a node");
+                a[r * size + u] -= h;
+                b[r] += h * i0;
+                a[u * size + u] += br.inductance + h * br.resistance;
+                let mut flux0 = br.inductance * i0;
+                for j in 0..m {
+                    let mij = lf.inductance[i * m + j];
+                    a[u * size + first_lead + j] += mij;
+                    flux0 += mij * lf.current[j];
+                }
+                a[u * size + r] += h;
+                b[u] += flux0 - (lf.rest[i] - lf.rest_used[i])
+                    + h * (br.source.value(t - self.dt) - old[br.electrode] - br.resistance * i0)
+                    + h * br.source.value(t);
+            }
+        }
         let x = Lu::new(a, size).solve(&b);
         for (r, n) in nodes.iter().enumerate() {
             s.potentials[n.electrode] = x[r];
@@ -218,6 +261,23 @@ impl Tube {
             s.inductor_current[ci] = i1;
             s.circuit_current[ci] = delivered / self.dt;
         }
+        if let Some(lf) = leads.as_mut() {
+            for (i, br) in branches.iter().enumerate() {
+                let i1 = x[first_lead + i];
+                let delivered = h * (lf.current[i] + i1);
+                let r = self
+                    .node_of(&nodes, br.electrode)
+                    .expect("a lead's electrode is a node");
+                s.node_charge[r] += delivered;
+                lf.current[i] = i1;
+                if let Some(ci) = br.circuit {
+                    s.inductor_current[ci] = i1;
+                    s.circuit_current[ci] = delivered / self.dt;
+                }
+            }
+            lf.rest_used.clone_from(&lf.rest);
+        }
+        s.leads = leads;
     }
 
     /// The surface density of the electrodes at their potentials (no particles).

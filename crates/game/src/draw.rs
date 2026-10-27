@@ -1514,6 +1514,7 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     draw_swing(gizmos, game, &frame);
     draw_straps(gizmos, game);
     draw_leads(gizmos, game);
+    draw_returns(gizmos, game);
     draw_hall(gizmos, game, stale_fade(view.revision, game.sent_revision));
     draw_drift(gizmos, game, view, &frame);
 }
@@ -1860,6 +1861,36 @@ fn wire_points(w: &level::leads::Wire) -> Vec<Vec2> {
     w.iter()
         .map(|p| Vec2::new(p.0 as f32, p.1 as f32))
         .collect()
+}
+
+/// Tube levels with the carriers' own field (DEC-27): each circuit's return along the board's
+/// edge to the ground terminal, faint as the leads, and the terminal's ground symbol below the
+/// edge: every circuit a closed loop, its inductance the drawn loop's.
+fn draw_returns(gizmos: &mut Gizmos, game: &Game) {
+    let Some(view) = &game.tube_preview else {
+        return;
+    };
+    let Some((gx, gy)) = view.run.leads.ground else {
+        return;
+    };
+    let fade = stale_fade(view.revision, game.sent_revision);
+    let wire = Color::srgb(0.95, 0.95, 0.85).with_alpha(0.35 * fade);
+    for back in view.run.leads.returns.iter().flatten() {
+        let points = wire_points(back);
+        if points.len() >= 2 {
+            gizmos.linestrip_2d(points.iter().copied(), wire);
+        }
+    }
+    // The ground symbol below the edge: a stub and three bars, narrowing.
+    #[allow(clippy::cast_possible_truncation)]
+    let g = Vec2::new(gx as f32, gy as f32);
+    let solid = Color::srgb(0.95, 0.95, 0.85).with_alpha(0.8 * fade);
+    gizmos.line_2d(g, g - Vec2::new(0.0, 0.35), solid);
+    for (k, half) in [0.45_f32, 0.28, 0.11].into_iter().enumerate() {
+        #[allow(clippy::cast_precision_loss)]
+        let y = 0.35 + 0.15 * k as f32;
+        gizmos.line_2d(g + Vec2::new(-half, -y), g + Vec2::new(half, -y), solid);
+    }
 }
 
 /// Tube levels, in every view: each electrode's lead, the wire by which its circuit current
