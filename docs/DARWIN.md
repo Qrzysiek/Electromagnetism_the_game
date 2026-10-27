@@ -223,6 +223,10 @@ With carriers:
   Y21–Y26 unchanged, but V-D5's ring fails (R 20 % high with the self-field): 1e-10 stays. A
   preconditioner with a uniform screening takes more iterations (14.5–21.4 against 13.5): the
   time is in each iteration's cost, for profiling (#55).
+- 2026-10-27, V-D7 passes with the fixed currents: the two closed rings 16.5 % apart (20 %
+  required; 25.5 % with DEC-24's kernel, 15 % before any impulse correction). Both seeds fall
+  ~12 % short in magnitude (lags 8.5° and 0.1°): at ω = 0.8 the metal conducts poorly and the
+  ring is not one lumped impedance. Next: the same at ω ≈ 0.3, whether that shrinks.
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.
