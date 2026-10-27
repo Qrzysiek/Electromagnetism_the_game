@@ -44,8 +44,17 @@ Golden hashes change only when the physics or a level changes intentionally:
 ## The heavy tests a change affects
 
     python scripts/affected.py status     # what the working tree selects, and why
-    python scripts/affected.py run        # runs them (instrumented), refreshing their records
+    python scripts/affected.py run        # their verdicts (plain program), then their coverage
+    python scripts/affected.py run --no-coverage   # verdicts only; coverage left for later
+    python scripts/affected.py refresh    # the coverage left for later
     python scripts/affected.py note       # the change note for the commit message
+
+`run` gives the verdicts first, with the plain test program at full speed (four tests at a
+time on four threads each, as the program runs them itself), then takes the same tests'
+coverage with the instrumented one. A test whose coverage is older than its verdict (`run
+--no-coverage`, or a coverage run cut short) counts as depending on every engine file until
+`refresh` brings it up to date: a change of code may have sent it into files it did not
+execute before.
 
 Each heavy test's record holds what its last run depended on:
 
@@ -69,6 +78,7 @@ A test is selected again when:
 | a level's physics (not its texts) | that level's tests |
 | a golden entry | that level's `golden::` |
 | a test that failed, or was never recorded | that test |
+| any function's body, for a test whose coverage is older than its verdict | that test |
 
 Comments and formatting select nothing, nor do changes outside the engine (the game, the
 generator, the documents); `scripts/levels.py` reaches the heavy tests through the level
@@ -90,11 +100,14 @@ Costs: only the workspace's crates are instrumented (`scripts/coverage_rustc.py`
 a tube level about 2.5 times slower than the plain one on one thread (14 s against 5.8 s;
 with every crate instrumented, glam's and libm's inner loops included, 38 s), and slower
 still on several, the counters being memory the threads share (23 s at 4 threads; the plain
-build 1.6 s at 16). `run` therefore gives each test one thread and runs as many tests as the
-machine has threads: about 2.5 times the plain tier's CPU time, spread over every core. A
-fresh checkout records everything on its first run (an estimated 1.5 to 2 hours, in chunks:
-`python scripts/affected.py run --filter golden:: --part 1/2` and so on, under
-`scripts/progress.py chain`).
+build 1.6 s at 16). The coverage runs therefore give each test one thread, as many tests
+at once as the machine has threads, the longest first (by their last coverage run, else ten
+times their plain run, else by their level's kind): about 2.5 times the plain tier's CPU time,
+spread over every core. Grouped by check instead (a first plan), each group ended with a few
+metal tube levels on a few cores while the rest waited. A fresh checkout records everything
+with `python scripts/affected.py run --coverage-only` (verdict and coverage in one
+instrumented run); each test's record is saved as it finishes, so an interruption loses only
+the tests in flight.
 
 ## Full runs
 

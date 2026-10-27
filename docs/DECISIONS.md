@@ -470,6 +470,14 @@ Entries are numbered in order and never renumbered.
     platform details: the merge-pool profile pattern `%m` writes nothing on Windows (`%p`
     used), and `libtest-mimic`'s `exit()` skips the exit handlers that write the profile (the
     program returns its exit code instead).
+  - 2026-10-27: verdicts and coverage taken apart. The first recording, in chunks by check,
+    would have taken about ten hours instead of the one or two estimated: each chunk ended
+    with a few metal tube levels running on one instrumented thread each (tens of minutes)
+    while the other cores waited, and every selected run would have cost 2.5 times the plain
+    one. Now `run` gives the verdicts with the plain program at full speed, then takes the
+    coverage, the longest tests first over every core (`--no-coverage` defers it to
+    `refresh`); a test whose coverage is older than its verdict depends on every engine file
+    until refreshed, which keeps the selection sound.
 
 ## DEC-17: A pinned toolchain and CI's hygiene checks
 
