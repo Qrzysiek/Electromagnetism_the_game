@@ -227,6 +227,13 @@ With carriers:
   required; 25.5 % with DEC-24's kernel, 15 % before any impulse correction). Both seeds fall
   ~12 % short in magnitude (lags 8.5° and 0.1°): at ω = 0.8 the metal conducts poorly and the
   ring is not one lumped impedance. Next: the same at ω ≈ 0.3, whether that shrinks.
+- 2026-10-27, V-D7 at ω = 0.3 (the drive scaled to keep the EMF): 72 % apart, the magnitudes
+  within 10 % (0.90, 1.06) but the measured change 37° and 46° ahead of the prediction. The
+  poor conduction at 0.8 does not explain the 12 % there; V-D7 does not validate the
+  transformer yet. Candidates: an assumption of the relation (the primary's whole flux
+  threading the secondary, the primary's charges' currents having a transverse part outside
+  it; one `Z₂` for both EMFs) or the coupling between two metals. No transformer level until
+  it is understood.
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.
