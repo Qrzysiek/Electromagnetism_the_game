@@ -17,6 +17,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RECORDS = os.path.join(ROOT, "target", "measured")
 MARK = re.compile(r"<!--m:([\w.-]+)-->(.*?)<!--/m-->")
+# The values hold − and ∠, which some consoles cannot show: replaced, not a crash.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
 
 
 def documents():
