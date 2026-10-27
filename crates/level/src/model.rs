@@ -500,6 +500,40 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
              error bar covers.",
         ));
     }
+    if let Some(c) = spec.speed_of_light {
+        out.push(note(
+            false,
+            &format!(
+                "The carriers' own magnetic field (the Darwin limit, at the speed of light \
+                 c = {c}): every current in the plane makes a field along z, and its change an \
+                 induced electric field that pushes every carrier, the carriers' inertia taken \
+                 implicitly (a ring is an inductor, nested rings a transformer, a metal larger \
+                 than its skin depth keeps a swinging field out). The magnetic map shows this \
+                 field. Left out: retardation and radiation (the field is instantaneous, valid \
+                 while the board is small against c/ω), and the field of currents along z."
+            ),
+        ));
+        out.push(note(
+            false,
+            &format!(
+                "The self-field's step is split, first order in time (a step of at most {}): \
+                 the energy drifts by under 1 % of the field's per time unit, and its grid is \
+                 {} apart over the board and {} round it.",
+                crate::tube::SELF_FIELD_MAX_STEP,
+                crate::tube::SELF_FIELD_CELL,
+                crate::tube::SELF_FIELD_MARGIN
+            ),
+        ));
+        out.push(note(
+            false,
+            "Each supplied electrode's circuit runs from the ground terminal along the \
+             grounded envelope and its lead, a closed loop (drawn): the lead's current makes a \
+             field like any current, and the field's EMF along it acts on the circuit, so the \
+             circuit's inductance is its loop's. The current crossing an electrode's body makes \
+             no field (an error of the electrode's size against the loop's), and electrodes \
+             are transparent to the induced field (their potential uniform).",
+        ));
+    }
     if let Some(o) = spec.output {
         out.push(note(
             false,
@@ -549,6 +583,11 @@ mod tests {
         let plates = crate::shipped("build_a_deflector");
         assert!(has(&plates, &[], "image force"));
         assert!(has(&plates, &[], "Radiation is neglected"));
+        // The carriers' own field: stated with a speed of light, absent without.
+        let mut ohm = crate::shipped("ohms_law");
+        assert!(!has(&ohm, &[], "own magnetic field"));
+        ohm.tube.as_mut().expect("a tube level").speed_of_light = Some(3.0);
+        assert!(has(&ohm, &[], "own magnetic field") && has(&ohm, &[], "ground terminal"));
         let sync = crate::shipped("synchrotron_light");
         assert!(has(&sync, &[], "Landau–Lifshitz"));
         assert!(has(&sync, &[], "Coils"));

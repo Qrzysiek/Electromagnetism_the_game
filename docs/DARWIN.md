@@ -266,6 +266,8 @@ With carriers:
   without an envelope, ran away: two circuit nodes' common charge has a negative capacitance
   in the open world's gauge (OP-1); every level has the envelope.
 - Still to do: perhaps an implicit-midpoint step (the step's first order: dt ≲ 0.012 with the
-  self-field); under the self-field, leads from rings, circuits between electrodes and straps;
-  for the first self-field level, the model notes (`level::model`: the self-field, its grid
-  and step, the leads' closure).
+  self-field); under the self-field, leads from rings, circuits between electrodes and straps.
+- 2026-10-28, the model notes (`level::model`, the panel's "Physics model and its limits"): a
+  level with a speed of light states the self-field (what it keeps and leaves out), its step
+  and grid, and its circuits' closure (test `notes_follow_the_level`). Next: the levels
+  (step 6).
