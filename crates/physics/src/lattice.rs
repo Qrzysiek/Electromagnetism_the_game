@@ -310,10 +310,19 @@ impl Lattice {
             .collect()
     }
 
-    /// Whether `x` lies in the conductor (its edges included).
+    /// Whether `x` lies in its rectangle (its edges included): the conductor's bounds, its
+    /// holes and a disc's corners included (`holds`: the conductor itself).
     #[must_use]
     pub fn contains(&self, x: DVec3) -> bool {
         x.x >= self.lo.x && x.x <= self.hi.x && x.y >= self.lo.y && x.y <= self.hi.y
+    }
+
+    /// Whether `x` lies in the conductor itself: in its rectangle, not in a hole, within its
+    /// disc's outline. Which of several metals a carrier is in, one maybe in another's hole
+    /// (V-D7's transformer: a ring inside a ring).
+    #[must_use]
+    pub fn holds(&self, x: DVec3) -> bool {
+        self.contains(x) && !self.outside(x)
     }
 
     /// The cells of the display's accounts (`physics::tube::CellAccounts`): `nx × ny` of

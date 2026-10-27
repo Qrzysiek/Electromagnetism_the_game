@@ -724,7 +724,7 @@ impl Tube {
             *v = plus + *e * h;
             if !work.is_empty()
                 && *tag < PROJECTILE_TAG
-                && let Some(k) = self.lattices.iter().position(|l| l.contains(*x))
+                && let Some(k) = self.metal_of(*x)
             {
                 // Its cell's share too (the same sums, split by place).
                 let c = self.lattices[k].account_cell(*x);
@@ -751,7 +751,8 @@ impl Tube {
             *total += w;
         }
         s.t += self.dt;
-        // The conductors: every carrier that was inside one scatters (lattice.rs).
+        // The conductors: every carrier that was inside one scatters (lattice.rs; which one:
+        // `metal_of`).
         if !self.lattices.is_empty() {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let step = libm::round(s.t / self.dt) as u64;
@@ -759,7 +760,7 @@ impl Tube {
                 if s.tag[p] >= PROJECTILE_TAG {
                     continue;
                 }
-                if let Some(k) = self.lattices.iter().position(|l| l.contains(*a)) {
+                if let Some(k) = self.metal_of(*a) {
                     let l = &self.lattices[k];
                     self.scatter(k, s, p, *a, *v0, step);
                     // The charge it carried over the step, along its chord.
@@ -918,5 +919,73 @@ mod tests {
             .fold(0.0, f64::max);
         println!("trees against direct sums: {worst:.2e} of the largest field {top:.3e}");
         assert!(worst < 1e-6 * top, "{worst} of {top}");
+    }
+
+    /// Nested metals (a ring in another's hole, as V-D7's transformer) keep their carriers
+    /// apart: after a time unit in a swinging field every carrier is still in its own ring, and
+    /// the inner ring's carriers book the field's work to it. Until 2026-10-27 a carrier's metal
+    /// was the first whose rectangle held it, so the inner ring's carriers took the outer's:
+    /// no cores in its hole, none of the inner ring's walls (they left it), their work booked
+    /// to the outer ring; the inner ring conducted without resistance.
+    #[test]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn nested_rings_keep_their_carriers() {
+        let material = Material {
+            background: 1.0,
+            core_radius: 0.01,
+            charge_per_mass: -1.0,
+            thermal_speed: 1.0,
+        };
+        // A mean free path of 1: 50 cores per area of radius 0.01.
+        let ring = |lo: DVec3, side: f64, carriers: usize, seed: u64| {
+            let hi = lo + DVec3::new(side, side, 0.0);
+            let cores = Lattice::random_cores(lo, hi, (50.0 * side * side) as usize, 0.01, seed);
+            Lattice::new(lo, hi, material, cores, carriers, seed).with_hole(
+                lo + DVec3::new(1.0, 1.0, 0.0),
+                hi - DVec3::new(1.0, 1.0, 0.0),
+            )
+        };
+        let electrodes = Electrodes::new(
+            vec![Electrode {
+                section: Section::Rect {
+                    center: DVec3::new(30.0, 30.0, 0.0),
+                    angle: 0.0,
+                    half_length: 0.5,
+                    half_thickness: 0.25,
+                },
+                bias: Bias::Charge(0.0),
+            }],
+            &[],
+            0.25,
+        );
+        let tube = Tube {
+            arena: Some((DVec3::new(-2.0, -2.0, 0.0), DVec3::new(12.0, 12.0, 0.0))),
+            b_wave: Some(SolenoidWave {
+                waveform: crate::circuit::Waveform::Sine {
+                    offset: 0.0,
+                    amplitude: 0.5,
+                    omega: 1.0,
+                    phase: 0.0,
+                },
+                axis: DVec3::new(5.0, 5.0, 0.0),
+            }),
+            lattices: vec![
+                ring(DVec3::ZERO, 10.0, 720, 3),
+                ring(DVec3::new(3.0, 3.0, 0.0), 4.0, 240, 4),
+            ],
+            ..Tube::new(electrodes, 0.05, 0.02)
+        };
+        let mut s = tube.state();
+        for _ in 0..50 {
+            tube.step(&mut s);
+        }
+        let mut count = [0; 2];
+        for (x, tag) in s.x.iter().zip(&s.tag) {
+            let k = *tag as usize;
+            assert!(tube.lattices[k].holds(*x), "a carrier of metal {k} at {x}");
+            count[k] += 1;
+        }
+        assert_eq!(count, [720, 240]);
+        assert!(s.induced_work[1] != 0.0, "no work booked to the inner ring");
     }
 }

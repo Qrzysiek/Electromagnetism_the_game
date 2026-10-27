@@ -242,6 +242,15 @@ With carriers:
   time. Their factors computed once and the rows and columns in parallel (bit for bit the
   same) halve them: Ohm's law's strip over 6 time units 42 s → 25 s. Next for #55: two rows
   per complex transform (rounding changes), a quiet machine to measure.
-- Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
-  heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
-  (task 43), electrodes' induced EMF.
+- 2026-10-27, V-D7's failure found: a bug, not the coupling. A carrier's metal was the first
+  whose rectangle held it, so the primary's carriers, in the secondary's hole, took the
+  secondary's lattice: no cores there, none of the primary's walls. The primary conducted
+  without resistance (a two-coil circuit fitted to the runs needed `Z₁` ≈ 6 + 83i at ω = 0.3,
+  against ~220 + 80i scaled from the secondary). Now the metal whose conductor holds the
+  carrier (`Tube::metal_of`, `Lattice::holds`; test `nested_rings_keep_their_carriers`; bit for
+  bit the same where no metal lies in another's rectangle, as in every level). V-D7: 11.6 % at
+  ω = 0.8, 22.9 % at ω = 0.3 (the primary's effect there ~11 % of G, the seeds' noise 19 % of
+  it); G within 3.2 % and 2° of the two-coil circuit at both frequencies. The transformer's
+  coupling is validated to that accuracy: the Transformer level may follow (step 6).
+- Still to do in step 2: perhaps an implicit-midpoint step (the step's first order: dt ≲ 0.012
+  with the self-field); then the electrodes' induced EMF (step 4).

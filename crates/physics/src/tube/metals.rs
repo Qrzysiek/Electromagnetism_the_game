@@ -4,6 +4,18 @@
 use super::*;
 
 impl Tube {
+    /// The metal a carrier at `x` is in: the one whose conductor holds it (`Lattice::holds`;
+    /// a metal may lie in another's hole), else the first whose rectangle does (one a rounding
+    /// left just past its walls stays with its metal, as before). (Until 2026-10-27 the first
+    /// rectangle alone: a ring's carriers in another's hole took that one, no cores and none of
+    /// their own walls; test `nested_rings_keep_their_carriers`.)
+    pub(super) fn metal_of(&self, x: DVec3) -> Option<usize> {
+        self.lattices
+            .iter()
+            .position(|l| l.holds(x))
+            .or_else(|| self.lattices.iter().position(|l| l.contains(x)))
+    }
+
     /// The carrier `p` of `lattice` after a move from `a` (its velocity `v0` before the
     /// step's kick): through the cores it entered (`Lattice::advance`: bounces, new
     /// thermal speeds, the lattice taking the energy), then the walls (reflecting, but
