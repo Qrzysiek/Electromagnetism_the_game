@@ -613,3 +613,26 @@ Entries are numbered in order and never renumbered.
     server refused the download; the edits are annotations and an assert on a match every
     coefficient name makes), a reused exception variable's name in `level_docs.py`, and
     `ARCS`'s type, now written out.
+
+## DEC-22: Measured values written into the documents by the tests that measure them
+
+- **Status:** in use (2026-10-27), for V-D5 and V-D6 first
+- **Area:** documentation, tests
+- **Choice:** a test records each number a document quotes (`measured(id, value, digits)`,
+  `crates/physics/tests/common`: the value to its significant digits in `target/measured/<id>`);
+  the document marks the quote, `<!--m:<id>-->0.027<!--/m-->` (invisible on GitHub and in the
+  PDF); `python scripts/measured.py update` writes the recorded values in, `check` lists the
+  quotes that differ. The prose around the numbers stays written by hand.
+- **Purpose:** approved by the owner (2026-10-26) with the other improvements: the numbers in
+  PHYSICS.md's tables were copied from test output by hand, and drifted (this session's V-D5
+  and V-D6 rows were rewritten twice as the method changed).
+- **Alternatives:** generating whole tables (the rows' setups and references are prose that
+  no test knows); the tests asserting the documented numbers (a test would then fail on a
+  documentation lag, not on physics); splitting PHYSICS.md into chapters (proposed with this;
+  not done: 325 references cite its sections by number from the code and documents, and a
+  generated PHYSICS.md would stop being the source the rules name).
+- **Where:** `scripts/measured.py`, `crates/physics/tests/common/mod.rs` (`measured`,
+  `significant`), the markers in PHYSICS.md (§2.12: V-D5, V-D6), `scripts/tests/test_measured.py`.
+- **History:**
+  - 2026-10-27: introduced on V-D5 and V-D6; the other tables move over as their tests are
+    next run.

@@ -227,6 +227,39 @@ pub fn periapsis_times<F: physics::field::FieldSolver>(step: &StepView<'_, F>) -
     out
 }
 
+/// A measured value that a document quotes (DEC-22): written to `target/measured/<id>` to
+/// `digits` significant digits, from where `python scripts/measured.py update` puts it
+/// between the document's markers `<!--m:<id>-->…<!--/m-->`.
+pub fn measured(id: &str, value: f64, digits: usize) {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/measured");
+    if std::fs::create_dir_all(&dir).is_ok() {
+        let _ = std::fs::write(dir.join(id), significant(value, digits));
+    }
+}
+
+/// `value` to `digits` significant digits: fixed-point from 1e-3 to 1e4 (`0.027`, `1.071`),
+/// scientific beyond (`1.2e-8`).
+pub fn significant(value: f64, digits: usize) -> String {
+    let sci = format!("{:.*e}", digits.saturating_sub(1), value);
+    // The exponent after rounding (9.99 to two digits is 1.0e1).
+    let exp: i32 = sci
+        .split('e')
+        .nth(1)
+        .and_then(|e| e.parse().ok())
+        .unwrap_or(0);
+    if (-3..4).contains(&exp) {
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
+        let decimals = (digits as i32 - 1 - exp).max(0) as usize;
+        format!("{value:.decimals$}")
+    } else {
+        sci
+    }
+}
+
 // The Drude metal's and the self-field's tests (drude.rs, darwin.rs): their metal, the
 // small floating electrode that anchors their electrostatics, the Boltzmann equation's AC
 // mobility (their reference for σ(ω)), and complex helpers whose square root and Bessel

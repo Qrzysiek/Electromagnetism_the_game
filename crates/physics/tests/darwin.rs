@@ -13,7 +13,7 @@ use physics::tube::{SolenoidWave, Tube, TubeState};
 use std::f64::consts::PI;
 
 mod common;
-use common::{Complex64, ci0, csqrt, mobility};
+use common::{Complex64, ci0, csqrt, measured, mobility, significant};
 
 /// The tests' metal (as `drude.rs`): cores of radius `A` for a mean free path of 0.5.
 const A: f64 = 0.00125;
@@ -183,6 +183,11 @@ fn ring_impedance_is_r_plus_i_omega_l() {
         "V-D5: L/R from the phases {measured:.4}, from the energy and power {predicted:.4} ({:+.1} %); R with/without the self-field {r_ratio:.4}; magnitudes/phases {m_ratio:.4}",
         100.0 * (measured / predicted - 1.0)
     );
+    common::measured("V-D5.lr_phases", measured, 3);
+    common::measured("V-D5.lr_energy", predicted, 3);
+    common::measured("V-D5.lr_percent", 100.0 * (measured / predicted - 1.0), 1);
+    common::measured("V-D5.r_ratio", r_ratio, 4);
+    common::measured("V-D5.magnitudes", m_ratio, 4);
     assert!(
         (measured / predicted - 1.0).abs() < 0.15,
         "L/R {measured} vs {predicted}"
@@ -322,7 +327,22 @@ fn disc_skin_effect() {
         k.im,
         libm::hypot(k.re, k.im) * radius
     );
+    measured("V-D6.worst", worst, 2);
+    measured("V-D6.spread", spread, 2);
     assert!(worst < 0.05, "worst {worst}");
+}
+
+/// The measured values' formatting (DEC-22): significant digits, fixed-point in the middle
+/// range, scientific beyond, the exponent taken after rounding.
+#[test]
+fn measured_values_keep_their_significant_digits() {
+    assert_eq!(significant(0.027_3, 2), "0.027");
+    assert_eq!(significant(1.071_3, 4), "1.071");
+    assert_eq!(significant(0.845_6, 3), "0.846");
+    assert_eq!(significant(-0.31, 1), "-0.3");
+    assert_eq!(significant(1.2e-8, 2), "1.2e-8");
+    assert_eq!(significant(9.996, 3), "10.0");
+    assert_eq!(significant(123_456.0, 2), "1.2e5");
 }
 
 /// The symmetry tests' small metal: a disc of radius 3 about `center`, its bounding square
