@@ -217,8 +217,9 @@ With carriers:
   heat with it. (Without the self-field the ring's heat runs 3.6 % above the external work in
   both seeds, a plain-model question left for later.)
 - 2026-10-27, the solve's tolerance: 1e-6 would cut a third of the iterations and leaves
-  Y21–Y26 unchanged, but V-D5's ring fails (R 20 % high with the self-field): 1e-10 stays, and
-  the time goes to a preconditioner with the carriers' screening (#55).
+  Y21–Y26 unchanged, but V-D5's ring fails (R 20 % high with the self-field): 1e-10 stays. A
+  preconditioner with a uniform screening takes more iterations (14.5–21.4 against 13.5): the
+  time is in each iteration's cost, for profiling (#55).
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.

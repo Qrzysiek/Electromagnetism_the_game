@@ -790,3 +790,7 @@ Entries are numbered in order and never renumbered.
     1e-10). The relative residual weighs the ring's large-scale current little against its
     error. The second solve's time is to be won back by a preconditioner with the carriers'
     screening (#55).
+  - 2026-10-27: nor a preconditioner with the carriers' screening: a uniform `β̄`
+    (`μ₀/(λ(λ + μ₀β̄))`, from half to eight times the grid's mean β) takes 14.5 to 21.4
+    iterations against the vacuum's 13.5 (Y26's disc). The time is in each iteration's own
+    cost (#55).
