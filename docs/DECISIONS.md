@@ -900,3 +900,6 @@ Entries are numbered in order and never renumbered.
   - 2026-10-27: chosen. Y27's first setup had no envelope and ran away (both electrodes'
     potentials falling as their currents rose: the open world's negative capacitance for
     a common charge, OP-1); with the envelope every level has, it held.
+  - 2026-10-28: approved by the owner ("whatever is more accurate"): the closure is the
+    accurate one, a circuit's inductance then the drawn loop's (two leads' within 0.52 % of
+    the closed form), not the grid's frame's distance.
