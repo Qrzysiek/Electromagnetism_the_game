@@ -23,6 +23,8 @@ pub struct MapAverage {
     cells: BTreeMap<(i64, i64, u8), [f64; 3]>,
     sigma: Vec<f64>,
     potentials: Vec<f64>,
+    /// The carriers' own field (`TubeFrame::self_b`).
+    self_b: Vec<f64>,
     em_revision: Option<u64>,
     em_t: f64,
     em: Vec<[f64; 3]>,
@@ -43,13 +45,17 @@ impl MapAverage {
         }
         let sigma: Vec<f64> = frame.sigma.iter().map(|s| f64::from(*s)).collect();
         let potentials: Vec<f64> = frame.potentials.iter().map(|v| f64::from(*v)).collect();
-        let restart =
-            self.revision != Some(revision) || frame.t < self.t || self.sigma.len() != sigma.len();
+        let self_b: Vec<f64> = frame.self_b.iter().map(|b| f64::from(*b)).collect();
+        let restart = self.revision != Some(revision)
+            || frame.t < self.t
+            || self.sigma.len() != sigma.len()
+            || self.self_b.len() != self_b.len();
         if restart {
             self.revision = Some(revision);
             self.cells = now;
             self.sigma = sigma;
             self.potentials = potentials;
+            self.self_b = self_b;
             self.t = frame.t;
         } else if frame.t > self.t {
             let w = 1.0 - libm_exp(-(frame.t - self.t) / tau.max(1e-9));
@@ -73,12 +79,16 @@ impl MapAverage {
             for (a, n) in self.potentials.iter_mut().zip(&potentials) {
                 *a += w * (n - *a);
             }
+            for (a, n) in self.self_b.iter_mut().zip(&self_b) {
+                *a += w * (n - *a);
+            }
             self.t = frame.t;
         }
         let mut out = TubeFrame {
             t: frame.t,
             sigma: self.sigma.iter().map(|s| *s as f32).collect(),
             potentials: self.potentials.iter().map(|v| *v as f32).collect(),
+            self_b: self.self_b.iter().map(|b| *b as f32).collect(),
             currents: frame.currents.clone(),
             heat: frame.heat,
             ..TubeFrame::default()

@@ -7,6 +7,7 @@ use super::*;
 #[test]
 fn frames_interpolate() {
     let frame = |t: f64, x: Vec<[f32; 2]>, id: Vec<u32>, sigma: f32| TubeFrame {
+        self_b: Vec::new(),
         t,
         q: vec![-1.0; x.len()],
         kind: vec![KIND_NEGATIVE; x.len()],
@@ -243,4 +244,29 @@ fn speed_of_light_turns_the_self_field_on() {
     assert!((d.mu0 - 4.0 * std::f64::consts::PI / 9.0).abs() < 1e-12);
     level.tube.as_mut().expect("a tube level").speed_of_light = Some(0.1);
     assert!(issues(&level).iter().any(|i| i.contains("speed of light")));
+}
+
+/// The self-field drawn (`TubeFrame::self_b`): a level with a speed of light records its
+/// carriers' own `B_z` on the board's display grid in every frame, `SELF_B_SPACING` apart; a
+/// level without one records none, and its run has no such grid.
+#[test]
+fn frames_carry_the_self_field() {
+    let mut level = crate::shipped("ohms_law");
+    let plain = level.tube_run(&level.reference_solution, 1, 0.2);
+    assert!(plain.self_b_grid.is_none());
+    assert!(plain.frames.iter().all(|f| f.self_b.is_empty()));
+    let spec = level.tube.as_mut().expect("a tube level");
+    spec.speed_of_light = Some(3.0);
+    spec.step = 0.01;
+    let run = level.tube_run(&level.reference_solution, 1, 0.2);
+    let g = run.self_b_grid.expect("the self-field's display grid");
+    let max = level.grid.position(level.grid.max_node());
+    assert_eq!(g, DisplayGrid::board(max.x, max.y, SELF_B_SPACING));
+    assert!(!run.frames.is_empty());
+    assert!(run.frames.iter().all(|f| f.self_b.len() == g.nx * g.ny));
+    // The carriers' thermal currents make a field at once.
+    let last = run.frames.last().expect("a frame");
+    assert!(last.self_b.iter().any(|b| *b != 0.0));
+    let between = run.frame_between(last.t - 0.005).expect("a frame between");
+    assert_eq!(between.self_b.len(), g.nx * g.ny);
 }

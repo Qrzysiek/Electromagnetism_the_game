@@ -223,6 +223,13 @@ impl TubeSim {
             if self.steps.is_multiple_of(self.frame_stride) {
                 #[allow(clippy::cast_possible_truncation)]
                 let frame = TubeFrame {
+                    self_b: match (&s.darwin, &self.self_b_grid) {
+                        (Some(d), Some(g)) => {
+                            let b = d.b_z();
+                            g.points().map(|(x, y)| d.b_at(&b, x, y) as f32).collect()
+                        }
+                        _ => Vec::new(),
+                    },
                     t: s.t,
                     x: s.x.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
                     q: s.charge.iter().map(|q| *q as f32).collect(),

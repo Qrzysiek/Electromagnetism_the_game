@@ -339,6 +339,45 @@ fn electron_ratio() -> f64 {
 /// The preview's default time step: 1/30 (the first tube levels' 600 steps over 20).
 pub const DEFAULT_STEP: f64 = 1.0 / 30.0;
 
+/// The self-field's display samples apart (cells): two a cell, the frames' `self_b`.
+pub const SELF_B_SPACING: f64 = 0.5;
+
+/// A grid of display samples: `nx × ny` points `spacing` apart from `origin`, row by row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DisplayGrid {
+    pub origin: (f64, f64),
+    pub spacing: f64,
+    pub nx: usize,
+    pub ny: usize,
+}
+
+impl DisplayGrid {
+    /// The board `width × height` from the origin, `spacing` apart, its edges included.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn board(width: f64, height: f64, spacing: f64) -> Self {
+        Self {
+            origin: (0.0, 0.0),
+            spacing,
+            nx: libm::floor(width / spacing) as usize + 1,
+            ny: libm::floor(height / spacing) as usize + 1,
+        }
+    }
+
+    /// The points, row by row.
+    #[allow(clippy::cast_precision_loss)]
+    pub fn points(&self) -> impl Iterator<Item = (f64, f64)> + '_ {
+        (0..self.ny).flat_map(move |j| {
+            (0..self.nx).map(move |i| {
+                (
+                    self.origin.0 + i as f64 * self.spacing,
+                    self.origin.1 + j as f64 * self.spacing,
+                )
+            })
+        })
+    }
+}
+
 /// The self-field's grid spacing (`physics::darwin2d`; V-D4–V-D6 were validated at it: a
 /// metal's skin depth of ~2 is eight cells). The verification's refinement keeps it.
 pub const SELF_FIELD_CELL: f64 = 0.25;
@@ -590,6 +629,9 @@ pub const KIND_PROJECTILE: u8 = 2;
 /// induced), so that the maps can show the field at any frame.
 #[derive(Clone, Debug, Default)]
 pub struct TubeFrame {
+    /// With the carriers' own magnetic field (`speed_of_light`): its `B_z` on the run's
+    /// display grid (`TubeRun::self_b_grid`), row by row; empty without it.
+    pub self_b: Vec<f32>,
     pub t: f64,
     pub x: Vec<[f32; 2]>,
     pub q: Vec<f32>,
@@ -693,6 +735,9 @@ pub struct HallForces {
 pub struct TubeRun {
     /// A frame every step.
     pub frames: Vec<TubeFrame>,
+    /// With the carriers' own magnetic field: the grid its frames' `self_b` are sampled on
+    /// (the board, `SELF_B_SPACING` apart).
+    pub self_b_grid: Option<DisplayGrid>,
     /// Per current goal: its electrode's collected charge of its carriers (positive for
     /// arrivals) over time.
     pub collected: Vec<Vec<(f64, f64)>>,
@@ -749,6 +794,8 @@ pub struct TubeRun {
 /// A tube run in progress: advanced in pieces (`advance_to`), its frames taken as they
 /// are made (`take_chunk`), so that a long display run can be streamed.
 pub struct TubeSim {
+    /// With the self-field: where its frames sample it (`TubeFrame::self_b`).
+    self_b_grid: Option<DisplayGrid>,
     tube: Tube,
     state: TubeState,
     spec: TubeSpec,

@@ -289,7 +289,12 @@ impl Level {
             .iter()
             .flatten()
             .fold((0.0_f64, 0.0_f64), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+        let self_b_grid = tube
+            .darwin
+            .as_ref()
+            .map(|_| super::DisplayGrid::board(max.x, max.y, super::SELF_B_SPACING));
         let pending = TubeRun {
+            self_b_grid,
             segments: tube.electrodes.segments.clone(),
             owners: (0..tube.electrodes.segments.len())
                 .map(|j| tube.electrodes.owner_of(j))
@@ -355,6 +360,7 @@ impl Level {
             0
         };
         TubeSim {
+            self_b_grid,
             tube,
             state,
             spec,

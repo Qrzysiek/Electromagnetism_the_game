@@ -134,6 +134,7 @@ pub fn map_frame(frame: &level::tube::TubeFrame) -> std::borrow::Cow<'_, level::
         let mut cells: std::collections::BTreeMap<(i64, i64, u8), [f64; 3]> =
             std::collections::BTreeMap::new();
         let mut out = level::tube::TubeFrame {
+            self_b: frame.self_b.clone(),
             t: frame.t,
             x: Vec::new(),
             q: Vec::new(),

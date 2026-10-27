@@ -188,7 +188,45 @@ pub(super) fn update_map(
                 }
                 // The electromagnetic field's maps (`em.rs`).
                 if matches!(mode, MapMode::Magnetic | MapMode::EnergyFlow) {
-                    let Some(snap) = em_averaged.as_ref().or(game.em_snapshot.as_ref()) else {
+                    // With the carriers' own magnetic field (the Darwin limit,
+                    // `speed_of_light`), the magnetic map is the physics' own `B_z` (the frames'
+                    // `self_b`), in the snapshots' Gaussian units (`c` times the engine's, whose
+                    // force is `q v × B`); the energy flow stays `tube_em`'s.
+                    let own = match (mode, &run.self_b_grid, spec.speed_of_light) {
+                        (MapMode::Magnetic, Some(g), Some(c))
+                            if picture.self_b.len() == g.nx * g.ny =>
+                        {
+                            #[allow(clippy::cast_possible_truncation)]
+                            let c32 = c as f32;
+                            Some(crate::em::EmSnapshot {
+                                revision: v.revision,
+                                t: picture.t,
+                                origin: g.origin,
+                                spacing: g.spacing,
+                                nx: g.nx,
+                                ny: g.ny,
+                                samples: picture
+                                    .self_b
+                                    .iter()
+                                    .map(|b| [c32 * b, 0.0, 0.0])
+                                    .collect(),
+                                c,
+                                radiated: 0.0,
+                                at_end: true,
+                                delay: 0.0,
+                                leads: Vec::new(),
+                                lead_currents: Vec::new(),
+                                lead_charges: Vec::new(),
+                                lead_peak: 0.0,
+                            })
+                        }
+                        _ => None,
+                    };
+                    let Some(snap) = own
+                        .as_ref()
+                        .or(em_averaged.as_ref())
+                        .or(game.em_snapshot.as_ref())
+                    else {
                         break 'arm None;
                     };
                     // The colour unit: the 99th percentile over the board; for a tube that

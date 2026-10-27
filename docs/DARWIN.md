@@ -188,6 +188,10 @@ With carriers:
 - 2026-10-27, a level's speed of light (`TubeSpec::speed_of_light`), its grid
   (`self_field_grid`), its issues (step ≤ 0.015, speed 0.5–10⁴, grid ≤ 511 a side) and the
   sandbox's control.
+- 2026-10-27, step 5: the field drawn. Each frame samples the self-field's `B_z` on the board
+  (0.5 apart); the magnetic map shows it for a level with a speed of light (`maps.rs`), its
+  caption saying so. A strip with its supply off, the self-field on, booked −11.4 of Joule
+  heat per time unit in the panel: the heat under the self-field is the next thing to measure.
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.

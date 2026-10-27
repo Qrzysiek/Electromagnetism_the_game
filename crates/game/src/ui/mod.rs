@@ -983,15 +983,25 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                 .on_hover_text("What the background shows; V cycles through the maps");
             ui.selectable_value(&mut game.map, Some(MapMode::Potential), "potential")
                 .on_hover_text("The carriers' potential energy at the time shown");
+            let self_field = level
+                .tube
+                .as_ref()
+                .is_some_and(|t| t.speed_of_light.is_some());
             ui.selectable_value(&mut game.map, Some(MapMode::Magnetic), "magnetic B")
-                .on_hover_text(
+                .on_hover_text(if self_field {
+                    "B_z of the carriers' own currents, the field that acts back on them in \
+                     this level (the Darwin limit: their inductance, the skin effect; PHYSICS.md \
+                     §2.12), as the run computed it. Your solenoid's field is not in it: uniform \
+                     and much stronger, it would swamp the map; the ⊙/⊗ marks round the board \
+                     show its way."
+                } else {
                     "B_z that the run's own charges and currents make (the current through \
                      the metal and along its leads, the beams), with retardation, computed as \
                      the animation plays. Your solenoid's field is not in it: uniform and \
                      hundreds of times stronger, it would swamp the map; the ⊙/⊗ marks round \
                      the board show its way. So the map flips with the current, not with the \
-                     solenoid.",
-                );
+                     solenoid."
+                });
             ui.selectable_value(&mut game.map, Some(MapMode::Electric), "electric field")
                 .on_hover_text("|E| and its direction at the time shown");
             ui.selectable_value(&mut game.map, Some(MapMode::EnergyFlow), "energy flow")

@@ -61,6 +61,9 @@ impl TubeRun {
 
     /// Appends a streamed chunk (its frames and samples follow this run's).
     pub fn extend(&mut self, chunk: TubeRun) {
+        if self.self_b_grid.is_none() {
+            self.self_b_grid = chunk.self_b_grid;
+        }
         self.frames.extend(chunk.frames);
         if self.collected.len() < chunk.collected.len() {
             self.collected.resize(chunk.collected.len(), Vec::new());
@@ -181,6 +184,12 @@ impl TubeRun {
             }
         }
         Some(TubeFrame {
+            self_b: a
+                .self_b
+                .iter()
+                .zip(&b.self_b)
+                .map(|(u, v)| lerp(*u, *v))
+                .collect(),
             t,
             x,
             q,

@@ -363,6 +363,11 @@ Entries are numbered in order and never renumbered.
     the verification's refinement keeps it. The level's issues hold its step to 0.015 (first
     order: Y24's 5 % from there), its speed to 0.5–10⁴ (the editor's range) and its grid to 511
     nodes a side. The sandbox edits it (the tube's section).
+  - 2026-10-27: drawn on the magnetic map from the engine itself: each frame samples `B_z`
+    on the board 0.5 apart (`TubeFrame::self_b`, 13 KB a frame on a 40 × 20 board), which the
+    map interpolates and averages as the frames' other fields, converted to the maps' Gaussian
+    units (`c` times the engine's). The alternative, `tube_em`'s one-way FDTD field, would show
+    a second model of the same field; the energy flow, which needs E with B, stays `tube_em`'s.
 
 ## DEC-14: Round metals: a polygon of walls with the disc's area, the disc's exact background
 
