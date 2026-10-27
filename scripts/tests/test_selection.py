@@ -101,3 +101,22 @@ def test_failed_and_unrecorded_tests_are_selected(tree):
     recs = records(failed, record(["b.rs"], physics="p2"))
     del recs["tests"]["golden::two"]
     assert selected(recs) == ["golden::one", "golden::two"]
+
+
+def test_repeated_takes_goldens_coverage(monkeypatch):
+    # repeated:: runs golden::'s computation twice: the same files (measured identical on two
+    # levels); it takes them once both were given at the same snapshot.
+    monkeypatch.setattr(affected, "save_records", lambda records: None)
+    recs = {"snapshots": {}, "tests": {
+        "golden::one": {"snapshot": "s2", "cov_snapshot": "s2", "files": ["a.rs", "b.rs"]},
+        "repeated::one": {"snapshot": "s2", "cov_snapshot": "s1", "files": ["a.rs"]},
+        "golden::two": {"snapshot": "s2", "cov_snapshot": "s1", "files": ["a.rs"]},
+        "repeated::two": {"snapshot": "s2", "cov_snapshot": "s1", "files": None},
+    }}
+    rest = affected.derive_coverage(recs, "s2", ["repeated::one", "repeated::two"])
+    assert recs["tests"]["repeated::one"]["files"] == ["a.rs", "b.rs"]
+    assert recs["tests"]["repeated::one"]["cov_snapshot"] == "s2"
+    # golden::two's coverage is older than the snapshot: repeated::two must run instrumented.
+    assert rest == ["repeated::two"]
+    assert affected.source_of("golden::one") is None
+    assert affected.source_of("repeated::one") == "golden::one"

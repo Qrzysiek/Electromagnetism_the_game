@@ -103,7 +103,10 @@ still on several, the counters being memory the threads share (23 s at 4 threads
 build 1.6 s at 16). The coverage runs therefore give each test one thread, as many tests
 at once as the machine has threads, the longest first (by their last coverage run, else ten
 times their plain run, else by their level's kind): about 2.5 times the plain tier's CPU time,
-spread over every core. Grouped by check instead (a first plan), each group ended with a few
+spread over every core. `repeated::` takes `golden::`'s coverage (it runs the same
+computation twice; the two were measured identical, file for file, on two levels) and
+needs only its plain verdict: on one instrumented thread a metal tube's `repeated::` took
+34 minutes (Ohm's law), 57 times its plain run. Grouped by check instead (a first plan), each group ended with a few
 metal tube levels on a few cores while the rest waited. A fresh checkout records everything
 with `python scripts/affected.py run --coverage-only` (verdict and coverage in one
 instrumented run); each test's record is saved as it finishes, so an interruption loses only

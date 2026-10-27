@@ -478,6 +478,13 @@ Entries are numbered in order and never renumbered.
     coverage, the longest tests first over every core (`--no-coverage` defers it to
     `refresh`); a test whose coverage is older than its verdict depends on every engine file
     until refreshed, which keeps the selection sound.
+  - 2026-10-27: `repeated::` takes `golden::`'s coverage. The first finished test of the
+    recording, `repeated::109_ohms_law`, took 34 minutes on one instrumented thread (57 times
+    its plain run at full speed), putting the whole recording at 3.5 to 4 hours. It computes
+    `golden::`'s hash twice on the same level, the runs deterministic, so it executes the
+    same files: measured identical on 39 and 99, whose two checks had been recorded
+    independently. It now needs only its plain verdict, and its coverage follows its
+    source's when both are of the same snapshot (else it runs instrumented).
 
 ## DEC-17: A pinned toolchain and CI's hygiene checks
 

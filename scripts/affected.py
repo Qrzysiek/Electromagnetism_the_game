@@ -393,6 +393,55 @@ def all_tests(records, program):
     return names
 
 
+# Checks whose coverage is another check's of the same level: `repeated::` computes
+# `golden::`'s hash twice in one process, the same engine code on the same level (the runs
+# are deterministic: the same path), so it executes exactly the files `golden::` does. Its
+# verdict needs a run (the plain program's); its coverage needs none. The metal tubes'
+# `repeated::` took 34 minutes and more on one instrumented thread.
+DERIVED = {"repeated": "golden"}
+
+
+def source_of(name):
+    """The test whose coverage `name` takes, or None."""
+    check, level = name.split("::", 1)
+    return f"{DERIVED[check]}::{level}" if check in DERIVED else None
+
+
+def derive_coverage(records, snap_id, names):
+    """Each derived test among `names` takes its source's coverage where both were given at
+    `snap_id`; the names left (their source's coverage is not current) are returned."""
+    rest = []
+    for n in names:
+        r, src = records["tests"].get(n), records["tests"].get(source_of(n))
+        if r and src and r.get("snapshot") == snap_id and src.get("cov_snapshot") == snap_id \
+                and src.get("files") is not None:
+            r.update({"files": list(src["files"]), "cov_snapshot": snap_id, "derived_from": source_of(n)})
+        else:
+            rest.append(n)
+    save_records(records)
+    return rest
+
+
+def take_coverage(chosen, exe, records, snap_id, jobs):
+    """The coverage of `chosen` [(test, why)]: the derived tests' from their sources, the
+    others' by instrumented runs, the longest first. The failed tests' names."""
+    direct = [(n, why) for n, why in chosen if source_of(n) is None]
+    derived = [n for n, _ in chosen if source_of(n) is not None]
+    direct.sort(key=lambda t: -expected_seconds(t[0], records["tests"].get(t[0])))
+    print(f"[affected] coverage of {len(direct)} tests, the longest first"
+          + (f" ({len(derived)} more take their source's)" if derived else ""), flush=True)
+    # One rayon thread per test, as many tests as threads: the coverage counters are memory
+    # shared by a process's threads, and threads contending for them ran a tube level slower
+    # at 4 threads (23 s) than at 1 (14 s; plain build: 5.8 s at 1 thread, 1.6 s at 16).
+    failed = run_tests(direct, exe, records, snap_id, coverage=True, jobs=jobs, threads=1)
+    rest = derive_coverage(records, snap_id, derived)
+    if rest:
+        print(f"[affected] {len(rest)} whose source's coverage is not current: run instrumented", flush=True)
+        failed += run_tests([(n, "coverage") for n in rest], exe, records, snap_id, coverage=True,
+                            jobs=jobs, threads=1)
+    return failed
+
+
 def stale(records):
     """The tests whose coverage is older than their verdict (or missing)."""
     return sorted(n for n, r in records["tests"].items()
@@ -525,26 +574,23 @@ def run(args):
     print(f"[affected] {len(chosen)} of {len(names)} heavy tests selected", flush=True)
     snap_id = snapshot_now(records, before)
     failed = []
-    if chosen and not args.coverage_only:
+    # The verdicts with the plain program: all of them, or with --coverage-only those of the
+    # tests whose coverage is another's (they need no instrumented run).
+    plain_ones = [t for t in chosen if not args.coverage_only or source_of(t[0]) is not None]
+    if plain_ones:
         plain = build(instrumented=False)
         if universe() != before:
             raise SystemExit("engine files changed during the build: run again")
         # The plain program as it runs these tests itself: four at a time on four threads each.
         cpus = os.cpu_count() or 4
-        failed = run_tests(chosen, plain, records, snap_id, coverage=False, jobs=4,
+        failed = run_tests(plain_ones, plain, records, snap_id, coverage=False, jobs=4,
                            threads=max(1, cpus // 4))
     if not args.no_coverage:
-        todo = [(n, why) for n, why in chosen if n not in failed] if not args.coverage_only else chosen
+        todo = [(n, why) for n, why in chosen if n not in failed]
         # Coverage is still needed where it is older than the verdict just given.
         todo = [(n, why) for n, why in todo
-                if args.coverage_only or records["tests"][n].get("cov_snapshot") != snap_id]
-        todo.sort(key=lambda t: -expected_seconds(t[0], records["tests"].get(t[0])))
-        print(f"[affected] coverage of {len(todo)} tests, the longest first", flush=True)
-        # One rayon thread per test, as many tests as threads: the coverage counters are
-        # memory shared by a process's threads, and threads contending for them ran a tube
-        # level slower at 4 threads (23 s) than at 1 (14 s; plain build: 5.8 s at 1 thread,
-        # 1.6 s at 16).
-        failed += run_tests(todo, inst.get(), records, snap_id, coverage=True, jobs=args.jobs, threads=1)
+                if records["tests"].get(n, {}).get("cov_snapshot") != snap_id]
+        failed += take_coverage(todo, inst.get(), records, snap_id, args.jobs)
     fill_physics(records, inst)
     left = stale(records)
     print(f"[affected] {len(chosen) - len(set(failed))} ok, {len(set(failed))} failed"
@@ -566,11 +612,9 @@ def refresh(args):
     # Coverage taken now stands for the verdict's state only if nothing changed since.
     todo = [n for n in stale(records) if records["tests"][n]["snapshot"] == snap_id]
     skipped = len(stale(records)) - len(todo)
-    todo.sort(key=lambda n: -expected_seconds(n, records["tests"].get(n)))
-    print(f"[affected] coverage of {len(todo)} tests, the longest first"
-          + (f" ({skipped} others changed since their verdict: `run` them)" if skipped else ""), flush=True)
-    failed = run_tests([(n, "refresh") for n in todo], inst.get(), records, snap_id, coverage=True,
-                       jobs=args.jobs, threads=1)
+    if skipped:
+        print(f"[affected] {skipped} tests changed since their verdict: `run` them", flush=True)
+    failed = take_coverage([(n, "refresh") for n in todo], inst.get(), records, snap_id, args.jobs)
     fill_physics(records, inst)
     return 1 if failed else 0
 
