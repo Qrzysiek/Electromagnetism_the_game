@@ -716,3 +716,10 @@ Entries are numbered in order and never renumbered.
     unit dt, β ≈ 720 % from ~2800): the step's first-order error now dominates at dt 0.02, so
     Y25's criterion of 1.6× with four times the carriers became 1.6× with the step halved as
     well (measured 2.41×).
+  - 2026-10-27: a particle given off (a contact's carrier, an emitter's electron) carries its
+    own inductance from the start too, `u = v + q(q/m) g v + (q/m)A` (its metal's g, else the
+    vacuum's, a third solve with β = 0; the kernels made before the metals are filled): its
+    current appears at once as an impulse's. Found by the heat a strip with its supply off
+    booked under the self-field (−6 to −12 per time unit against −3 without), which it
+    reduced only partly: an excess of ~3–5, `∝ 1/c²`, not following the step, remains
+    unexplained (PHYSICS.md §2.12). Y25 2.3 % and 0.95 % refined (2.7×), walled 4.5 %.

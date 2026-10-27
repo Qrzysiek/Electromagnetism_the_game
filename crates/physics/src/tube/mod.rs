@@ -415,8 +415,11 @@ pub struct TubeState {
     pub darwin: Option<crate::darwin2d::Darwin2d>,
     pub self_a: Option<crate::darwin2d::Edges>,
     /// With the self-field: each lattice's carriers' self-inductance on the grid
-    /// (`SelfResponse`), which their impulses add back (`Tube::scatter`).
+    /// (`SelfResponse`), which their impulses add back (`Tube::scatter`) and with which they
+    /// are given off (`Tube::add`), and the vacuum's, for particles given off outside the
+    /// metals.
     pub self_response: Vec<crate::darwin2d::SelfResponse>,
+    pub self_response_vacuum: Option<crate::darwin2d::SelfResponse>,
 }
 
 impl TubeState {
@@ -613,6 +616,22 @@ impl Tube {
             self_a: self.darwin.as_ref().map(crate::darwin2d::Edges::zeros),
             ..TubeState::default()
         };
+        // With the self-field: each metal's response per area, `Σ q²/m`, screening a carrier's
+        // own field, and the vacuum's; before the metals are filled (their carriers are given
+        // off with it, `add`).
+        if let Some(d) = &s.darwin {
+            s.self_response = self
+                .lattices
+                .iter()
+                .map(|l| {
+                    #[allow(clippy::cast_precision_loss)]
+                    let beta =
+                        l.carriers as f64 * l.carrier_charge() * l.charge_per_mass / l.area();
+                    d.self_response(beta, DARWIN_TOLERANCE)
+                })
+                .collect();
+            s.self_response_vacuum = Some(d.self_response(0.0, DARWIN_TOLERANCE));
+        }
         // The conductors: their carriers, and the charge their backgrounds induce.
         if !self.lattices.is_empty() {
             let n_em = u32::try_from(self.emitters.len()).unwrap_or(0);
@@ -629,19 +648,6 @@ impl Tube {
             s.induced = self.induced_density(&s);
             for (i, b) in s.induced.iter_mut().zip(&s.background) {
                 *i += b;
-            }
-            // Each metal's response per area, `Σ q²/m`, screening a carrier's own field.
-            if let Some(d) = &s.darwin {
-                s.self_response = self
-                    .lattices
-                    .iter()
-                    .map(|l| {
-                        #[allow(clippy::cast_precision_loss)]
-                        let beta =
-                            l.carriers as f64 * l.carrier_charge() * l.charge_per_mass / l.area();
-                        d.self_response(beta, DARWIN_TOLERANCE)
-                    })
-                    .collect();
             }
         } else {
             s.background = vec![0.0; self.electrodes.segments.len()];

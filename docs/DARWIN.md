@@ -192,6 +192,12 @@ With carriers:
   (0.5 apart); the magnetic map shows it for a level with a speed of light (`maps.rs`), its
   caption saying so. A strip with its supply off, the self-field on, booked −11.4 of Joule
   heat per time unit in the panel: the heat under the self-field is the next thing to measure.
+- 2026-10-27, the heat under the self-field: given-off carriers now carry their inductance
+  too (DEC-24); with the supply off a strip still books ~3–5 per time unit more heat with the
+  self-field at c = 3 than without (−3.3 without, itself unexplained), `∝ 1/c²`, not following
+  the step (PHYSICS.md §2.12). Candidates: the absorbed carriers' field vanishing at once, and
+  the solver's functional differing from the kinetic energy by the stencil's variance of A
+  (`Σ w A² ≥ (Σ w A)²`). No level measures heat with the self-field until it is found.
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.
