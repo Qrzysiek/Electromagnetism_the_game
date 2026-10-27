@@ -367,6 +367,23 @@ Calibrated field. The design decisions: docs/DECISIONS.md.
    reflection (Fresnel with ε(ω)), a half-wave antenna's resonance. **Shiny metal**
    (reflects below ω_p), **Transparent metal** (passes above), **Half-wave antenna**;
    perhaps surface plasmons.
+4. **Classical blackbody radiation** (after item 3, which it needs: the field acting back on
+   the charges; the owner, 2026-10-27). Thermal charges (a metal's carriers, or charged
+   oscillators spread over frequencies, Planck's own set-up) in a closed conducting cavity,
+   run to equilibrium with the field: classically each cavity mode holds `kT`
+   (equipartition), the Rayleigh–Jeans law, `u(ω) ∝ ω kT` in this z-invariant world (the
+   mode density grows as ω; `ω² kT` in 3D). On a grid the modes stop at its finest
+   wavelength, so the total stays finite but grows with the resolution: refining the grid
+   pours energy into the new high-frequency modes, the ultraviolet catastrophe as a slider.
+   Tests: each mode's mean energy `kT` (statistical, over long runs, as D7, the
+   one-dimensional blackbody of a circuit's modes); the spectrum against `ω kT`; the total
+   against the mode count. A cheaper step first, needing no two-way solver: Planck's
+   oscillator, a charged harmonic oscillator in a thermal radiation field with radiation
+   reaction (the 3D engine's Landau–Lifshitz), its mean energy `kT` tied to the field's
+   spectral density at its frequency. *Why classical physics failed:* **Planck's
+   oscillator**, **Equipartition in a cavity**, **The ultraviolet catastrophe** (Planck's
+   curve drawn beside it as what nature does: quantisation, which the game does not model,
+   stated in the level's "How real").
 
 ### Phase 4: joining (the backlog)
 
