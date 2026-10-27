@@ -665,6 +665,32 @@ fn em_field_obeys_amperes_law() {
     assert!(checked >= 6, "only {checked} leads checked");
 }
 
+/// The beads' currents in every view (`level::tube_em::LeadFlow`, the charge each lead
+/// carries, frame by frame, by charge conservation) obey Kirchhoff's law: in Ohm's law's
+/// reference solution the current the left contact's lead brings in and the right one's
+/// takes out, averaged over the goal's window (t = 10–40), are opposite within 5 % of their
+/// size (set before measuring, from the window's noise), and as large as the electron current
+/// the level asks for (2.6–3.2 into the right contact; what solves the level).
+#[test]
+fn lead_flow_keeps_kirchhoffs_law() {
+    let level = level::shipped("ohms_law");
+    let run = level.tube_run(&level.reference_solution, 1, 41.0);
+    let mut flow = level::tube_em::LeadFlow::new(&level, &run);
+    flow.advance(&run, 40.0);
+    let carried = |t: f64| flow.at(t).expect("the flow reckoned").1;
+    let (q0, q1) = (carried(10.0), carried(40.0));
+    let (left, right) = ((q1[0] - q0[0]) / 30.0, (q1[1] - q0[1]) / 30.0);
+    println!(
+        "Ohm's law: the leads' mean currents {left:.4} (left) and {right:.4} (right), the peak {:.3}",
+        flow.peak
+    );
+    assert!(
+        (left + right).abs() < 0.05 * right.abs(),
+        "{left} against {right}"
+    );
+    assert!((2.6..=3.2).contains(&right.abs()), "{right}");
+}
+
 /// The maps show no waves at the run's frame rate (PHYSICS.md §2.11, the smoothing): the
 /// run's currents step from frame to frame (Magnetron's every 0.05), and the steps radiated
 /// stripes along its antenna's feed, alternating every 1.5–2 (ω ≈ 126), strongest where the

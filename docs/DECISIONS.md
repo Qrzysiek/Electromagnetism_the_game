@@ -845,6 +845,12 @@ Entries are numbered in order and never renumbered.
     leads continued the strips' bottom edges across the board, one line with them): a wire
     now meets a box's face clear of its corners (by the clearance, or half a face shorter
     than twice that) and pays a step for every grid step off the face's middle.
+  - 2026-10-28: the beads in every view (the owner: the leads were shown in every view but
+    without the charge moving through them, as the magnetic and energy maps show it). The
+    leads' charge accounting moved out of `TubeEm` into `LeadAccounts`, shared by the field
+    (bit for bit as before) and `LeadFlow`, which reckons each lead's charge frame by frame
+    without the field, as far as the playback has reached; the field maps keep the field's
+    own currents, in step with the field they show.
 
 ## DEC-27: The leads' circuits under the self-field, closed along the envelope
 

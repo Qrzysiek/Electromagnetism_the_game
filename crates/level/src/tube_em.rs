@@ -85,25 +85,268 @@ struct Interval {
     jy: Vec<(usize, f64)>,
 }
 
-/// The field of a tube run, advanced along it.
+/// What a particle did over a frame interval (`LeadAccounts::interval`): stayed, moving from
+/// `a` to `b`; vanished into an electrode (absorbed there, or lost: the nearest one); or
+/// appeared out of one (the nearest emitter of its sign).
+#[derive(Clone, Copy, Debug)]
+enum Move {
+    Stay { q: f64, a: DVec3, b: DVec3 },
+    Into { q: f64, x: DVec3, electrode: usize },
+    Out { q: f64, x: DVec3, electrode: usize },
+}
+
+/// What the leads' charges are reckoned from, by charge conservation (`TubeEm`, `LeadFlow`): a
+/// lead carries its electrode's change of charge (from the frames' surface densities) less
+/// the particles it took in and gave off, plus what the leads starting on it drew.
 #[derive(Clone, Debug)]
-pub struct TubeEm {
-    pub fdtd: Fdtd,
+struct LeadAccounts {
     outlines: Vec<Outline>,
     /// Per electrode: its segments (indices into the run's).
     segments: Vec<Vec<usize>>,
-    /// Each grid node's electrode (None: vacuum or the border).
-    node_owner: Vec<Option<usize>>,
-    /// Per electrode: the electrode its lead starts on (None: the border, or no lead).
+    /// Per electrode: the electrode its lead starts on (None: the border, or no lead), and
+    /// whether it has a lead.
     parent: Vec<Option<usize>>,
-    /// Per electrode: its lead (from the parent or the border, to it), if it has one.
-    pub leads: Vec<Option<Lead>>,
+    has_lead: Vec<bool>,
     /// The electrodes children first (each lead's charge includes its children's).
     order: Vec<usize>,
     /// The emitting electrodes and whether their carriers are negative (the cathode, the
     /// ion source, the metals' contacts): a newborn particle comes from the nearest of
     /// its sign.
     emitters: Vec<(usize, bool)>,
+}
+
+impl LeadAccounts {
+    fn new(level: &Level, run: &TubeRun, plan: &crate::leads::LeadPlan) -> Self {
+        let spec = level.tube.as_ref().expect("a tube level");
+        let outlines = level.electrode_outlines(&[]);
+        let n_el = outlines.len();
+        let mut segments = vec![Vec::new(); n_el];
+        for (s, &o) in run.owners.iter().enumerate() {
+            if o < n_el {
+                segments[o].push(s);
+            }
+        }
+        let parent = plan.parent.clone();
+        // Children before parents: by depth.
+        let depth = |mut e: usize| {
+            let mut d = 0;
+            while let Some(p) = parent.get(e).copied().flatten() {
+                d += 1;
+                e = p;
+                if d > n_el {
+                    break;
+                }
+            }
+            d
+        };
+        let mut order: Vec<usize> = (0..n_el).collect();
+        order.sort_by_key(|&e| std::cmp::Reverse(depth(e)));
+        Self {
+            outlines,
+            segments,
+            has_lead: (0..n_el)
+                .map(|e| plan.leads.get(e).is_some_and(Option::is_some))
+                .collect(),
+            parent,
+            order,
+            emitters: std::iter::once((
+                spec.cathode,
+                spec.metal_of(spec.cathode)
+                    .map_or(spec.charge_per_mass, |m| spec.metals[m].charge_per_mass)
+                    < 0.0,
+            ))
+            .chain(spec.ions.map(|i| (i.electrode, false)))
+            .chain(spec.metals.iter().flat_map(|m| {
+                m.contacts
+                    .iter()
+                    .map(move |&e| (e, m.charge_per_mass < 0.0))
+            }))
+            .collect(),
+        }
+    }
+
+    /// Each electrode's charge per unit length in frame `k` (its segments' densities).
+    fn charges(&self, run: &TubeRun, k: usize) -> Vec<f64> {
+        let f = &run.frames[k];
+        self.segments
+            .iter()
+            .map(|segs| {
+                segs.iter()
+                    .map(|&s| {
+                        let (a, b) = run.segments[s];
+                        f64::from(f.sigma.get(s).copied().unwrap_or(0.0)) * (b - a).length()
+                    })
+                    .sum()
+            })
+            .collect()
+    }
+
+    /// Frames `k`..`k + 1`: every particle's move (those of frame `k` in its order, then the
+    /// newborn in frame `k + 1`'s), and per electrode the charge its lead carried.
+    fn interval(&self, run: &TubeRun, k: usize) -> (Vec<Move>, Vec<f64>) {
+        let (f0, f1) = (&run.frames[k], &run.frames[k + 1]);
+        let n_el = self.outlines.len();
+        let next: HashMap<u32, usize> = f1.id.iter().enumerate().map(|(i, id)| (*id, i)).collect();
+        let prev: HashMap<u32, usize> = f0.id.iter().enumerate().map(|(i, id)| (*id, i)).collect();
+        let mut exchange = vec![0.0; n_el];
+        let mut moves = Vec::new();
+        let at = |x: [f32; 2]| DVec3::new(f64::from(x[0]), f64::from(x[1]), 0.0);
+        let nearest = |x: DVec3, of: &mut dyn Iterator<Item = usize>| {
+            of.min_by(|&a, &b| {
+                self.outlines[a]
+                    .distance_to(x)
+                    .total_cmp(&self.outlines[b].distance_to(x))
+            })
+        };
+        for (i, id) in f0.id.iter().enumerate() {
+            let (x, q) = (at(f0.x[i]), f64::from(f0.q[i]));
+            match next.get(id) {
+                Some(&j) => moves.push(Move::Stay {
+                    q,
+                    a: x,
+                    b: at(f1.x[j]),
+                }),
+                None => {
+                    // Absorbed by the nearest electrode (lost ones too: none leave a tube
+                    // closed by an envelope; elsewhere their charge goes to the nearest).
+                    let electrode = nearest(x, &mut (0..n_el)).unwrap_or(0);
+                    exchange[electrode] += q;
+                    moves.push(Move::Into { q, x, electrode });
+                }
+            }
+        }
+        for (j, id) in f1.id.iter().enumerate() {
+            if prev.contains_key(id) {
+                continue;
+            }
+            let (x, q, kind) = (at(f1.x[j]), f64::from(f1.q[j]), f1.kind[j]);
+            if kind == KIND_PROJECTILE {
+                continue;
+            }
+            // From the nearest emitter of its sign.
+            let negative = kind == KIND_NEGATIVE;
+            let mut of = self
+                .emitters
+                .iter()
+                .filter(|(_, n)| *n == negative)
+                .map(|(e, _)| *e);
+            let Some(electrode) = nearest(x, &mut of) else {
+                continue;
+            };
+            exchange[electrode] -= q;
+            moves.push(Move::Out { q, x, electrode });
+        }
+        let (q0, q1) = (self.charges(run, k), self.charges(run, k + 1));
+        let mut leads = vec![0.0; n_el];
+        for &e in &self.order {
+            let children: f64 = (0..n_el)
+                .filter(|&c| self.parent.get(c).copied().flatten() == Some(e) && self.has_lead[c])
+                .map(|c| leads[c])
+                .sum();
+            leads[e] = q1[e] - q0[e] - exchange[e] + children;
+        }
+        (moves, leads)
+    }
+}
+
+/// The charge each electrode's lead carries along a run, frame by frame (`LeadAccounts`, the
+/// same reckoning as `TubeEm`'s, without its field): for the beads that show it in every view.
+/// (The magnetic and energy-flow maps take `TubeEm::shown_leads`, in step with the field they
+/// show.) Reckoned only as far as asked (`advance`): the playback's frame.
+#[derive(Clone, Debug)]
+pub struct LeadFlow {
+    accounts: LeadAccounts,
+    /// The smoothing's time constant (`EM_FRAME_RATIO` frames: a lead's current steps from
+    /// frame to frame with the particles its electrode takes in and gives off).
+    tau: f64,
+    /// Per frame reckoned: its time, each lead's charge carried since the first frame and
+    /// its current, smoothed.
+    frames: Vec<(f64, Vec<f64>, Vec<f64>)>,
+    /// The largest smoothed current so far.
+    pub peak: f64,
+}
+
+impl LeadFlow {
+    /// Its accounts for `run` (the run's wiring, or the level's own where it has none); no
+    /// frame reckoned yet.
+    #[must_use]
+    pub fn new(level: &Level, run: &TubeRun) -> Self {
+        let n_el = level.electrode_outlines(&[]).len();
+        let plan = if run.leads.parent.len() == n_el {
+            run.leads.clone()
+        } else {
+            level.tube_leads(&[])
+        };
+        let frame = match (run.frames.first(), run.frames.get(1)) {
+            (Some(a), Some(b)) => b.t - a.t,
+            _ => level.tube.as_ref().map_or(1.0, |s| s.step),
+        };
+        Self {
+            accounts: LeadAccounts::new(level, run, &plan),
+            tau: EM_FRAME_RATIO * frame,
+            frames: Vec::new(),
+            peak: 0.0,
+        }
+    }
+
+    /// Reckons the frames up to the first at or after `t` (as far as `run` has them).
+    pub fn advance(&mut self, run: &TubeRun, t: f64) {
+        let n_el = self.accounts.outlines.len();
+        if self.frames.is_empty() {
+            let Some(first) = run.frames.first() else {
+                return;
+            };
+            self.frames
+                .push((first.t, vec![0.0; n_el], vec![0.0; n_el]));
+        }
+        while let Some((t0, carried, smooth)) = self.frames.last()
+            && *t0 < t
+            && self.frames.len() < run.frames.len()
+        {
+            let k = self.frames.len() - 1;
+            let t1 = run.frames[k + 1].t;
+            let span = (t1 - t0).max(1e-300);
+            let a = 1.0 - libm::exp(-span / self.tau.max(1e-300));
+            let (_, leads) = self.accounts.interval(run, k);
+            let carried: Vec<f64> = carried.iter().zip(&leads).map(|(c, q)| c + q).collect();
+            let smooth: Vec<f64> = smooth
+                .iter()
+                .zip(&leads)
+                .map(|(s, q)| s + a * (q / span - s))
+                .collect();
+            self.peak = smooth.iter().fold(self.peak, |m, i| m.max(i.abs()));
+            self.frames.push((t1, carried, smooth));
+        }
+    }
+
+    /// At `t` (within the frames reckoned): each lead's current, smoothed, and the charge it
+    /// has carried, interpolated between the frames about `t`. None before any frame.
+    #[must_use]
+    pub fn at(&self, t: f64) -> Option<(Vec<f64>, Vec<f64>)> {
+        let k = self.frames.partition_point(|f| f.0 <= t);
+        if k == 0 {
+            return self.frames.first().map(|f| (f.2.clone(), f.1.clone()));
+        }
+        let (t0, c0, i0) = &self.frames[k - 1];
+        let Some((t1, c1, _)) = self.frames.get(k) else {
+            return Some((i0.clone(), c0.clone()));
+        };
+        let g = ((t - t0) / (t1 - t0).max(1e-300)).clamp(0.0, 1.0);
+        let carried = c0.iter().zip(c1).map(|(a, b)| a + g * (b - a)).collect();
+        Some((i0.clone(), carried))
+    }
+}
+
+/// The field of a tube run, advanced along it.
+#[derive(Clone, Debug)]
+pub struct TubeEm {
+    pub fdtd: Fdtd,
+    /// The leads' charge accounting (the electrodes, the leads' tree, the emitters).
+    accounts: LeadAccounts,
+    /// Each grid node's electrode (None: vacuum or the border).
+    node_owner: Vec<Option<usize>>,
+    /// Per electrode: its lead (from the parent or the border, to it), if it has one.
+    pub leads: Vec<Option<Lead>>,
     /// The metals' backgrounds (the ions' charge) on the grid's nodes: fixed.
     background: Vec<f64>,
     /// Whether the grid is open (an absorbing layer inside its border).
@@ -400,12 +643,6 @@ impl TubeEm {
         };
         let outlines = level.electrode_outlines(&[]);
         let n_el = outlines.len();
-        let mut segments = vec![Vec::new(); n_el];
-        for (s, &o) in run.owners.iter().enumerate() {
-            if o < n_el {
-                segments[o].push(s);
-            }
-        }
         // The nodes: inside an electrode, or on the border (two rings: a lead ends there).
         let owner_of = |p: DVec3| outlines.iter().position(|o| o.distance_to(p) == 0.0);
         let node_owner: Vec<Option<usize>> = (0..grid.nodes())
@@ -430,21 +667,8 @@ impl TubeEm {
         } else {
             level.tube_leads(&[])
         };
-        let parent = plan.parent.clone();
-        // Children before parents: by depth.
-        let depth = |mut e: usize| {
-            let mut d = 0;
-            while let Some(p) = parent[e] {
-                d += 1;
-                e = p;
-                if d > n_el {
-                    break;
-                }
-            }
-            d
-        };
-        let mut order: Vec<usize> = (0..n_el).collect();
-        order.sort_by_key(|&e| std::cmp::Reverse(depth(e)));
+        let accounts = LeadAccounts::new(level, run, &plan);
+        let parent = &accounts.parent;
         // Each lead's ends on nodes of their metal: all of the charge it carries leaves and
         // arrives there (a point near a thin vane would spread some onto vacuum nodes,
         // where it would stay as a spurious charge).
@@ -525,25 +749,9 @@ impl TubeEm {
         let smoothing = Some(Smoothing::new(&fdtd, tau, n_el));
         Self {
             fdtd,
-            outlines,
-            segments,
+            accounts,
             node_owner,
-            parent,
             leads,
-            order,
-            emitters: std::iter::once((
-                spec.cathode,
-                spec.metal_of(spec.cathode)
-                    .map_or(spec.charge_per_mass, |m| spec.metals[m].charge_per_mass)
-                    < 0.0,
-            ))
-            .chain(spec.ions.map(|i| (i.electrode, false)))
-            .chain(spec.metals.iter().flat_map(|m| {
-                m.contacts
-                    .iter()
-                    .map(move |&e| (e, m.charge_per_mass < 0.0))
-            }))
-            .collect(),
             background,
             open,
             smoothing,
@@ -580,26 +788,10 @@ impl TubeEm {
         if t1 > t0 { (w1 - w0) / (t1 - t0) } else { 0.0 }
     }
 
-    /// Each electrode's charge per unit length in a frame (its segments' densities).
-    fn charges(&self, run: &TubeRun, k: usize) -> Vec<f64> {
-        let f = &run.frames[k];
-        self.segments
-            .iter()
-            .map(|segs| {
-                segs.iter()
-                    .map(|&s| {
-                        let (a, b) = run.segments[s];
-                        f64::from(f.sigma.get(s).copied().unwrap_or(0.0)) * (b - a).length()
-                    })
-                    .sum()
-            })
-            .collect()
-    }
-
     /// The node of electrode `e` nearest to its surface's nearest point to `p`: where a
     /// charge leaving or entering it at `p` comes from or goes to.
     fn surface_node(&self, run: &TubeRun, e: usize, p: DVec3) -> (f64, f64) {
-        let s = self.segments[e]
+        let s = self.accounts.segments[e]
             .iter()
             .map(|&s| {
                 let (a, b) = run.segments[s];
@@ -617,78 +809,27 @@ impl TubeEm {
     #[allow(clippy::too_many_lines)]
     fn interval(&self, run: &TubeRun, k: usize) -> Interval {
         let (f0, f1) = (&run.frames[k], &run.frames[k + 1]);
-        let n_el = self.outlines.len();
-        let next: HashMap<u32, usize> = f1.id.iter().enumerate().map(|(i, id)| (*id, i)).collect();
-        let prev: HashMap<u32, usize> = f0.id.iter().enumerate().map(|(i, id)| (*id, i)).collect();
-        let mut exchange = vec![0.0; n_el];
-        let mut paths = Vec::new();
-        let at = |x: [f32; 2]| DVec3::new(f64::from(x[0]), f64::from(x[1]), 0.0);
-        for (i, id) in f0.id.iter().enumerate() {
-            let (x, q) = (at(f0.x[i]), f64::from(f0.q[i]));
-            match next.get(id) {
-                Some(&j) => paths.push(Path {
+        let (moves, leads) = self.accounts.interval(run, k);
+        let paths: Vec<Path> = moves
+            .iter()
+            .map(|m| match *m {
+                Move::Stay { q, a, b } => Path {
+                    q,
+                    a: p2(a),
+                    b: p2(b),
+                },
+                Move::Into { q, x, electrode } => Path {
                     q,
                     a: p2(x),
-                    b: p2(at(f1.x[j])),
-                }),
-                None => {
-                    // Absorbed by the nearest electrode (lost ones too: none leave a tube
-                    // closed by an envelope; elsewhere their charge goes to the nearest).
-                    let e = (0..n_el)
-                        .min_by(|&a, &b| {
-                            self.outlines[a]
-                                .distance_to(x)
-                                .total_cmp(&self.outlines[b].distance_to(x))
-                        })
-                        .unwrap_or(0);
-                    exchange[e] += q;
-                    paths.push(Path {
-                        q,
-                        a: p2(x),
-                        b: self.surface_node(run, e, x),
-                    });
-                }
-            }
-        }
-        for (j, id) in f1.id.iter().enumerate() {
-            if prev.contains_key(id) {
-                continue;
-            }
-            let (x, q, kind) = (at(f1.x[j]), f64::from(f1.q[j]), f1.kind[j]);
-            if kind == KIND_PROJECTILE {
-                continue;
-            }
-            // From the nearest emitter of its sign.
-            let negative = kind == KIND_NEGATIVE;
-            let Some(e) = self
-                .emitters
-                .iter()
-                .filter(|(_, n)| *n == negative)
-                .map(|(e, _)| *e)
-                .min_by(|&a, &b| {
-                    self.outlines[a]
-                        .distance_to(x)
-                        .total_cmp(&self.outlines[b].distance_to(x))
-                })
-            else {
-                continue;
-            };
-            exchange[e] -= q;
-            paths.push(Path {
-                q,
-                a: self.surface_node(run, e, x),
-                b: p2(x),
-            });
-        }
-        let (q0, q1) = (self.charges(run, k), self.charges(run, k + 1));
-        let mut leads = vec![0.0; n_el];
-        for &e in &self.order {
-            let children: f64 = (0..n_el)
-                .filter(|&c| self.parent[c] == Some(e) && self.leads[c].is_some())
-                .map(|c| leads[c])
-                .sum();
-            leads[e] = q1[e] - q0[e] - exchange[e] + children;
-        }
+                    b: self.surface_node(run, electrode, x),
+                },
+                Move::Out { q, x, electrode } => Path {
+                    q,
+                    a: self.surface_node(run, electrode, x),
+                    b: p2(x),
+                },
+            })
+            .collect();
         // The interval's current, deposited once (it was each step's share of every move,
         // a step's cost growing with the particles: Klystron's field ran slower than its
         // playback). A path's charge then passes from its start to its end in proportion
@@ -756,7 +897,7 @@ impl TubeEm {
     #[must_use]
     pub fn lead_currents(&self) -> Vec<f64> {
         self.interval.as_ref().map_or_else(
-            || vec![0.0; self.outlines.len()],
+            || vec![0.0; self.accounts.outlines.len()],
             |iv| {
                 let span = (iv.t1 - iv.t0).max(1e-300);
                 iv.leads.iter().map(|q| q / span).collect()

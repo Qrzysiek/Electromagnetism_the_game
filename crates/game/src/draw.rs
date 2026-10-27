@@ -1895,11 +1895,13 @@ fn draw_returns(gizmos: &mut Gizmos, game: &Game) {
 
 /// Tube levels, in every view: each electrode's lead, the wire by which its circuit current
 /// reaches it (`level::leads`: from its enclosing ring or the board's edge, along x and y with
-/// right-angle bends, round the electrodes and metals), faint; in the magnetic and
-/// energy-flow maps, beads that move with the charge it has carried, as the shown field sees
-/// it: the run's largest current moves them four spacings per time unit, an oscillating one
-/// swings them to and fro (a magnetron's tank leads and its antenna's feed together), a
-/// steady one marches them on.
+/// right-angle bends, round the electrodes and metals), faint, with beads that move with the
+/// charge it has carried (in the magnetic and energy-flow maps as the shown field sees it,
+/// elsewhere as the run's frames give it, `level::tube_em::LeadFlow`; along its return first
+/// where it has one, DEC-27): the run's largest current moves them four spacings per time
+/// unit, an oscillating one swings them to and fro (a magnetron's tank leads and its
+/// antenna's feed together), a steady one marches them on. (Until 2026-10-28 the beads were in
+/// the field maps alone.)
 fn draw_leads(gizmos: &mut Gizmos, game: &Game) {
     const SPACING: f32 = 0.6;
     let Some(view) = &game.tube_preview else {
@@ -1907,14 +1909,26 @@ fn draw_leads(gizmos: &mut Gizmos, game: &Game) {
     };
     let fade = stale_fade(view.revision, game.sent_revision);
     let wire = Color::srgb(0.95, 0.95, 0.85);
-    let beads = game.em_snapshot.as_ref().filter(|s| {
-        s.revision == view.revision
-            && s.lead_peak > 0.0
-            && matches!(
-                game.map,
-                Some(crate::potential::MapMode::Magnetic | crate::potential::MapMode::EnergyFlow)
-            )
-    });
+    // The beads' currents, charges carried and scale: in the field maps the field's own (in
+    // step with the field shown, smoothed as it is), elsewhere the run's (`LeadFlow`).
+    let field_map = matches!(
+        game.map,
+        Some(crate::potential::MapMode::Magnetic | crate::potential::MapMode::EnergyFlow)
+    );
+    let flow;
+    let beads: Option<(&[f64], &[f64], f64)> = if field_map {
+        game.em_snapshot
+            .as_ref()
+            .filter(|s| s.revision == view.revision && s.lead_peak > 0.0)
+            .map(|s| (&s.lead_currents[..], &s.lead_charges[..], s.lead_peak))
+    } else {
+        flow = game
+            .lead_flow
+            .as_ref()
+            .filter(|(r, f)| *r == view.revision && f.peak > 0.0)
+            .and_then(|(_, f)| f.at(game.anim_time).map(|(i, q)| (i, q, f.peak)));
+        flow.as_ref().map(|(i, q, p)| (&i[..], &q[..], *p))
+    };
     for (k, lead) in view.run.leads.leads.iter().enumerate() {
         let Some(w) = lead else {
             continue;
@@ -1924,21 +1938,31 @@ fn draw_leads(gizmos: &mut Gizmos, game: &Game) {
             continue;
         }
         gizmos.linestrip_2d(points.iter().copied(), wire.with_alpha(0.35 * fade));
-        let Some(s) = beads else {
+        let Some((currents, charges, peak)) = beads else {
             continue;
         };
-        let (Some(i), Some(q)) = (s.lead_currents.get(k), s.lead_charges.get(k)) else {
+        let (Some(i), Some(q)) = (currents.get(k), charges.get(k)) else {
             continue;
         };
         // Positive current runs from the lead's start to its electrode.
         #[allow(clippy::cast_possible_truncation)]
         let (offset, alpha) = (
-            ((q / (0.25 * s.lead_peak)) as f32 * SPACING).rem_euclid(SPACING),
-            0.3 + 0.7 * (i.abs() / s.lead_peak).min(1.0) as f32,
+            ((q / (0.25 * peak)) as f32 * SPACING).rem_euclid(SPACING),
+            0.3 + 0.7 * (i.abs() / peak).min(1.0) as f32,
         );
-        // Every `SPACING` along the whole wire, its corners included.
+        // Every `SPACING` along the whole path, its return first (the same current), the
+        // corners included.
+        let mut path = view
+            .run
+            .leads
+            .returns
+            .get(k)
+            .and_then(Option::as_ref)
+            .map(wire_points)
+            .unwrap_or_default();
+        path.extend(points.iter().skip(usize::from(!path.is_empty())));
         let (mut u, mut walked) = (offset, 0.0_f32);
-        for seg in points.windows(2) {
+        for seg in path.windows(2) {
             let len = seg[0].distance(seg[1]);
             if len < 1e-6 {
                 continue;

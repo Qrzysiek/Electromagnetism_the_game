@@ -32,10 +32,43 @@ pub(super) fn tube_flow_arrows(level: &Level, snap: &em::EmSnapshot) -> TubeArro
     arrows
 }
 
+/// Tube levels: the charge each lead carries along the preview run, reckoned up to the time
+/// shown (`level::tube_em::LeadFlow`; a new run starts it over): the beads on the leads in
+/// every view but the field maps, which take the field's own (`draw::draw_leads`).
+fn update_lead_flow(game: &mut Game) {
+    let Game {
+        tube_preview,
+        lead_flow,
+        editor,
+        animate,
+        anim_time,
+        ..
+    } = game;
+    let Some(v) = tube_preview.as_ref().filter(|v| v.run.frames.len() >= 2) else {
+        *lead_flow = None;
+        return;
+    };
+    if lead_flow.as_ref().is_none_or(|(r, _)| *r != v.revision) {
+        *lead_flow = Some((
+            v.revision,
+            level::tube_em::LeadFlow::new(&editor.level, &v.run),
+        ));
+    }
+    let t = if *animate {
+        *anim_time
+    } else {
+        v.run.frames.last().map_or(0.0, |f| f.t)
+    };
+    if let Some((_, flow)) = lead_flow.as_mut() {
+        flow.advance(&v.run, t);
+    }
+}
+
 /// Tube levels' field maps: keeps the field's thread on the preview and the time shown,
 /// and takes its snapshots.
 pub(super) fn update_em(mut game: ResMut<Game>) {
     let game = &mut *game;
+    update_lead_flow(game);
     update_swing(game);
     update_drift(game);
     update_traced(game);

@@ -505,16 +505,22 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
              changing current induces along its wires acts back on the supply's circuit.",
         );
     }
-    if matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow))
-        && game.em_snapshot.is_some()
-    {
+    let field_map = matches!(game.map, Some(MapMode::Magnetic | MapMode::EnergyFlow));
+    let beads = if field_map {
+        game.em_snapshot.is_some()
+    } else {
+        game.lead_flow.as_ref().is_some_and(|(_, f)| f.peak > 0.0)
+    };
+    if beads {
         row(
             ui,
             Swatch::Beads(rgb(0.95, 0.95, 0.85)),
             "lead current",
-            "The beads on each lead move with the charge it has carried, steadily on a steady \
-             current, to and fro on an oscillating one. The current makes the field around it \
-             on the map.",
+            "The beads on each lead move with the charge it has carried into its electrode (the \
+             charge the electrode gained less what its particles took in and gave off), \
+             steadily on a steady current, to and fro on an oscillating one; the brighter, the \
+             larger the current. In the magnetic and energy-flow maps the current makes the \
+             field around it.",
         );
     }
 }

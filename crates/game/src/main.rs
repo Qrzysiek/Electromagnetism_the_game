@@ -203,6 +203,9 @@ pub struct Game {
     pub em_run: Option<u64>,
     pub em_asked: f64,
     pub em_snapshot: Option<em::EmSnapshot>,
+    /// Tube levels: the charge each lead carries along the preview run (its revision), for
+    /// the beads in every view but the field maps (`level::tube_em::LeadFlow`).
+    pub lead_flow: Option<(u64, level::tube_em::LeadFlow)>,
     pub em_units: (u64, f64, f64),
     /// What the field map was computed for (`MapKey`).
     pub map_key: MapKey,
@@ -423,6 +426,7 @@ impl Game {
             em_run: None,
             em_asked: -1.0,
             em_snapshot: None,
+            lead_flow: None,
             em_units: (0, 0.0, 0.0),
             map_key: (0, 0, 0, false, None, false, 0, (0, 0)),
             field_lines: Vec::new(),
@@ -500,6 +504,7 @@ impl Game {
         // The previous level's electromagnetic field (a tube's).
         self.em_run = None;
         self.em_snapshot = None;
+        self.lead_flow = None;
         self.active_shot = 0;
         self.active_disturbance = 0;
         self.anim_time = 0.0;
