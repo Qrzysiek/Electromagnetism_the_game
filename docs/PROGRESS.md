@@ -39,8 +39,12 @@ that even a chunk cut short keeps most of its work. Ways to split this repositor
   (`--from`/`--to`), each part's intervals appended to a results file.
 - `generator analyze`: one level per run (and fewer `--samples`/`--runs` if a level alone
   exceeds an hour).
-- Golden hashes for every level (`UPDATE_GOLDEN=1`, about an hour): in groups with
-  `GOLDEN_ONLY=<part of the names>` (the file keeps the other entries).
+- Golden hashes for every level (`UPDATE_GOLDEN=1 cargo test --release -p level --test
+  per_level`, about an hour): in groups with `GOLDEN_ONLY=<part of the names>` (the file
+  keeps the other entries).
+- The per-level checks (`-- --ignored`): by check or by a range of levels, each a filter
+  (`golden::`, `reference::1`); a check that passed is skipped when rerun, so a chain of
+  them resumes.
 - `generator tube-scan`: a placements file per chunk (or one placement per process, run in
   parallel when the machine is free).
 - Design scripts: write each result as it comes (append to a JSON lines file) and skip the
@@ -50,7 +54,10 @@ that even a chunk cut short keeps most of its work. Ways to split this repositor
 
 | computation | item | `--match` | per item |
 |---|---|---|---|
-| `cargo test --workspace` | a test binary (38) | `^test result:` | very uneven: ~10 min in all; the determinism and levels binaries take most (at idle priority on 2 threads ~30 and ~13 min) |
+| `cargo test --workspace` | a test binary | `^test result:` | the fast tier: the per-level checks are ignored (DEC-16) |
+| `cargo test --release -p level --test per_level -- --ignored` | one check of one level (521) | `^test \S+ \.\.\. ` | seconds for most, minutes for metal tubes and beams |
+| `python scripts/affected.py run [--filter F] [--part K/N]` | one heavy test, instrumented | `^\[\d+/\d+\] ` | ~6.5x the plain build on one thread; a test per hardware thread |
+| `UPDATE_GOLDEN=1 cargo test --release -p level --test per_level` | a level | `^\S+: [0-9a-f]{16}$` | its golden hash: both runs of its reference |
 | `generator window` (tube level) | one slider value | `^\[window\]` | one preview run (`estimate`) |
 | `generator tube-scan` | one placement | `^\d+: ` | one run at `--refine` (`estimate`: preview or verification) |
 | `generator check` (tube level) | the level | `^  cost:` | preview + verification (Laminations 36 + 124 s) |

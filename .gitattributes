@@ -1,2 +1,4 @@
 # LF everywhere, so golden files and level JSON are byte-identical on Windows and Linux.
 * text=auto eol=lf
+# Windows batch files keep CRLF (cmd.exe misreads LF in some constructs).
+*.cmd text eol=crlf

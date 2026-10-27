@@ -28,8 +28,33 @@ jobs:
         run: cargo fmt --all --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      # The fast tier (DEC-16): every test but the per-level checks, which are ignored by
+      # default (the test profile: optimized, with debug assertions and overflow checks).
       - name: Test
         run: cargo test --workspace
+
+  # T11 across platforms (PHYSICS.md §9): the golden hashes are committed from Windows;
+  # here one level per feature is flown on Linux and must hash alike, bit for bit
+  # (charges, box electrodes, ferrites, finite c, drives, beams, radiation reaction, free
+  # particles, metal spheres, clouds, radiation goals, waves, vacuum and metal tubes, a
+  # transistor circuit).
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Golden hashes, one level per feature
+        run: |
+          failed=0
+          for level in 25_beam_pipe 30_ferrite_shield 39_rf_kick 52_induction_kick \
+              55_space_charge 57_relativistic_beam 68_throw_a_charge 76_jackson_own_image \
+              85_jackson_bound_charge 89_jackson_beaming 93_jackson_thomson 100_sideways \
+              109_ohms_law 119_laminations 122_inverter; do
+            cargo test --release -p level --test per_level -- --ignored --exact "golden::$level" || failed=1
+          done
+          exit $failed
 
   # The dependencies' licences, advisories and sources (deny.toml), unused dependencies, and
   # the documentation's links (DEC-17).

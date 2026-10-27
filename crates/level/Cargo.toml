@@ -16,3 +16,11 @@ libm = "0.2.16"
 rayon = "1.12.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
+
+[dev-dependencies]
+# The per-level checks as one test each (tests/per_level.rs, DEC-16).
+libtest-mimic = "0.8.2"
+
+[[test]]
+name = "per_level"
+harness = false

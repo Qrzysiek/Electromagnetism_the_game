@@ -4,7 +4,7 @@
 designs, reference solutions and automatic detector placement. Rebuild with
 `python scripts/levels.py` (or `--only NN` for one level). Every level must have a
 verified reference solution for every shot and negligible radiation
-(`crates/level/tests/levels.rs`).
+(`crates/level/tests/per_level.rs`).
 
 ## Curriculum rules
 
@@ -417,7 +417,7 @@ Notes:
   the detector distances (plus gate shortfalls) of the closest missing particles.
   Relativistic beam includes radiation reaction because its particles would otherwise
   neglect 5.3e-6 of their energy (above the 1e-10 allowed); the test
-  `radiation_levels_need_radiation` accepts that reason for beams. Beam preparation
+  `needs_radiation::<level>` accepts that reason for beams. Beam preparation
   combines the collimated beam with a second stage; the search found its reference in 44 s
   and solves it in 9 of 32 runs.
 - The analysis logs its progress to stderr (`[analyze]` lines: phases with timing, distinct
@@ -468,7 +468,7 @@ Notes:
     the same time), but no search finds a solution with fewer than 3 charges, and 3-charge
     ones in 2 of 24 runs. Every radiation-damping level needs radiation by construction:
     its detector accepts kinetic energy up to 0.26, and an electron that has not radiated
-    arrives with at least 0.27 (test `radiation_levels_need_radiation` checks it).
+    arrives with at least 0.27 (test `needs_radiation::<level>` checks it).
   - Jackson Ch. 16: spectroscopy: the reference drives each atom with its own antenna at
     its own natural frequency (0.125 and 0.1925). In Jackson §16.8: resonance, with ω₀
     removed from the frequency list, no search finds a solution even with two antennas:

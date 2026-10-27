@@ -1,0 +1,9 @@
+# cargo-nextest (DEC-16). Each test runs in its own process.
+
+# The per-level checks (crates/level/tests/per_level.rs) each use the machine's threads
+# (rayon) and up to a level's memory budget (level::cost): four at a time, as the test
+# program itself runs them.
+[[profile.default.overrides]]
+filter = 'binary(per_level)'
+threads-required = 4
+slow-timeout = { period = "120s" }

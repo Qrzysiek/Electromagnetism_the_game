@@ -405,6 +405,72 @@ Entries are numbered in order and never renumbered.
   - 2026-10-26: measured and decided. What costs time is the heavy per-level tests, which
     test selection (DEC-16, to come) addresses.
 
+## DEC-16: Tests in two tiers; the heavy ones one per check and level, selected by what they executed
+
+- **Status:** in use (2026-10-27)
+- **Area:** tooling, tests
+- **Choice:** two tiers. The fast tier (every unit and integration test that runs in seconds
+  to minutes) runs whole before every commit and in CI (`cargo test --workspace`).
+  The heavy tier is one test per check and level in `crates/level/tests/per_level.rs`
+  (`golden::`, `repeated::`, `reference::`, `radiation::`, `needs_radiation::<level>`: 521
+  tests), data-driven through `libtest-mimic` (`harness = false`) and ignored by default, so
+  that any of them runs by name (`-- --ignored <part of a name>`, or nextest's filters), each
+  reported as it finishes, four at a time (they share the process's rayon threads;
+  `.config/nextest.toml` reserves four threads each). The pass records
+  (`level::run_cache::TestPasses`) stay, so an interrupted run resumes; the golden check
+  compares a recorded hash with the golden file all the same. `UPDATE_GOLDEN=1` is a mode of
+  the same program, writing the file once. Selection: `scripts/affected.py` keeps, for each
+  heavy test, the source files its last run executed (LLVM source-based coverage of an
+  instrumented build, one process per test) with their hashes, and the inputs that are not
+  code (the level's physics, its golden entry, `Cargo.lock`, the toolchain); it runs every
+  test whose recorded inputs differ from the working tree's (instrumented, refreshing its
+  record) and writes the commit's change note (files changed, what they affect, tests run,
+  results). The runs are deterministic, so a test whose inputs are bit for bit unchanged can
+  only give its recorded result.
+- **Purpose:** the owner (2026-10-26): the per-level checks had grown to ~1.5 h and reran in
+  full after any change to the engine's or the levels' code (the pass records are keyed on the
+  test program as a whole); test only what a change affects, note per change what it
+  affects, and run everything when a bug escapes the selection. Their progress was counted
+  per test binary, one of which held an hour of levels ("hangs on one item for several
+  hours"): one test per check and level makes it linear.
+- **Alternatives:** static selection from the module graph (STARTS-like: cheaper, but trait
+  impls, macros and generics make Rust's graph unsafe to under-approximate); a hand-written
+  map from level kinds to modules (goes stale silently); selection per crate (cargo's
+  granularity: any change to `physics` reruns everything); predictive (learned) selection
+  (needs a history this project does not have); Bazel (a migration out of proportion);
+  per-level loops inside one test each (the status quo before: correct but coarse and opaque);
+  nextest alone without `libtest-mimic` (it runs tests, it cannot make one per level).
+- **Full runs:** when a global input changes (the toolchain, `Cargo.lock`, the build profile:
+  every record then differs), on request, and when a bug escapes the selected tests (logged
+  with the dependency the records missed). No fixed cadence (the owner, 2026-10-26: "every
+  few levels" may be superseded by a better alternative). CI checks the golden hashes of one
+  level per feature on Linux (T11 across platforms).
+- **Where:** `crates/level/tests/per_level.rs`, `.config/nextest.toml`,
+  `.github/workflows/ci.yml`, `scripts/affected.py`, `docs/TESTING.md`; CLAUDE.md § Workflow.
+- **History:**
+  - 2026-10-26: chosen with the owner (Ekstazi, Gligoric et al., ISSTA 2015; Microsoft's Test
+    Impact Analysis).
+  - 2026-10-27: the per-level tests (from `levels.rs`'s and `determinism.rs`'s loops, bodies
+    unchanged); found while testing them that skipping a golden check on its pass record would
+    no longer compare the hash with the golden file (a planted wrong entry passed): the
+    record now stands in for the computation only.
+  - 2026-10-27: the selection (`scripts/affected.py`). Its first rule (a test depends on the
+    files it executed, plus those without any code region) missed constants: `reference::`
+    reads `level::cost::STEPS_LIMIT` without executing a function of `cost.rs`, as constants
+    are folded in at compile time. Replaced by declarations against bodies: a change outside
+    the functions' bodies (and in `const fn` bodies) selects every test, a body only the
+    tests that executed its file; the unit tests' files are left out (not in the program).
+    Measured on two levels (`docs/TESTING.md`): each kind of change selected what it should.
+    Coverage costs: with every crate instrumented, 6.5 times the plain build's time on one
+    thread (a tube level 38 s against 5.8 s); with the workspace's crates alone
+    (`RUSTC_WORKSPACE_WRAPPER`: the dependencies' inner loops, glam's and libm's, without
+    counters) 2.5 times (14 s); more on several threads, the counters being shared memory
+    (23 s at 4), so each instrumented test gets one thread and the machine's threads run as
+    many tests. Two
+    platform details: the merge-pool profile pattern `%m` writes nothing on Windows (`%p`
+    used), and `libtest-mimic`'s `exit()` skips the exit handlers that write the profile (the
+    program returns its exit code instead).
+
 ## DEC-17: A pinned toolchain and CI's hygiene checks
 
 - **Status:** in use (2026-10-26)
