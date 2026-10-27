@@ -20,7 +20,7 @@ const A: f64 = 0.00125;
 const MEAN_FREE_PATH: f64 = 0.5;
 
 /// A run's sample: (t, the ring's current, the magnetic energy, the external field's work).
-type Sample = (f64, f64, f64, f64);
+type Sample = (f64, f64, f64, f64, f64);
 
 /// The ring: 12 × 12 with a square hole leaving a wall `wall` wide, background charge
 /// density 1, carriers of q/m −1 and thermal speed 1, in a field `b0 sin ωt` about its
@@ -85,6 +85,7 @@ fn run(tube: &Tube, end: f64, every: f64) -> Vec<Sample> {
                 d.b_at(&b, 6.0, 6.0) / d.mu0,
                 d.magnetic_energy(),
                 s.induced_work[0],
+                s.joule,
             ));
             next += every;
         }
@@ -105,6 +106,9 @@ fn run(tube: &Tube, end: f64, every: f64) -> Vec<Sample> {
 /// with the self-field than without, whichever the kick's order: the current crowds across
 /// the wall, and R by the external field's work, which grows as r across it, follows; a
 /// lumped R does not exist there.)
+/// And the lattice's heat against that work, the Joule heat with the self-field: its ratio to
+/// the work within 5 % of the one without (the coupling's target; set 2026-10-27 before
+/// measuring it; the free run holds the plain model's own gap, if any).
 /// Required (set before measuring from the noise: each phase ~0.03 rad, L's energy ~5 %):
 /// L/R within 15 %; the currents' magnitudes in the ratio their phases give,
 /// `|I_free/I_self| = cos φ_free/cos φ_self` (the same EMF and R), within 5 %; R the same with
@@ -138,8 +142,9 @@ fn ring_impedance_is_r_plus_i_omega_l() {
         let z = phasor / Complex64::new(-b0 * omega, 0.0);
         let (first, last) = (w[0], w[w.len() - 1]);
         let power = (last.3 - first.3) / (last.0 - first.0);
+        let heat = (last.4 - first.4) / (last.0 - first.0);
         let square = 0.5 * (phasor.re * phasor.re + phasor.im * phasor.im);
-        (z, power, energy / n, square)
+        (z, power, energy / n, square, heat)
     };
     let mut rows = Vec::new();
     for seed in [47_u64, 53] {
@@ -158,9 +163,9 @@ fn ring_impedance_is_r_plus_i_omega_l() {
             end,
             0.1,
         );
-        let (zf, pf, _, i2f) = lock_in(&free);
-        let (zs, ps, ws, i2s) = lock_in(&selfish);
-        let (_, _, wq, _) = lock_in(&quiet);
+        let (zf, pf, _, i2f, hf) = lock_in(&free);
+        let (zs, ps, ws, i2s, hs) = lock_in(&selfish);
+        let (_, _, wq, _, _) = lock_in(&quiet);
         let (tf, ts) = (-zf.im / zf.re, -zs.im / zs.re);
         let (rf, rs) = (pf / i2f, ps / i2s);
         let l = 2.0 * (ws - wq) / i2s;
@@ -172,15 +177,27 @@ fn ring_impedance_is_r_plus_i_omega_l() {
             l * c * c / (4.0 * PI),
             l / rs
         );
-        rows.push((measured, l / rs, rs / rf, magnitudes / cosines));
+        println!(
+            "V-D5 seed {seed}: heat/work {:.4} with the self-field ({hs:.3} of {ps:.3}), {:.4} without ({hf:.3} of {pf:.3})",
+            hs / ps,
+            hf / pf
+        );
+        rows.push((
+            measured,
+            l / rs,
+            rs / rf,
+            magnitudes / cosines,
+            (hs / ps) / (hf / pf),
+        ));
     }
     #[allow(clippy::cast_precision_loss)]
     let n = rows.len() as f64;
     let mean = |f: &dyn Fn(&Sample) -> f64| rows.iter().map(f).sum::<f64>() / n;
     let (measured, predicted) = (mean(&|r| r.0), mean(&|r| r.1));
     let (r_ratio, m_ratio) = (mean(&|r| r.2), mean(&|r| r.3));
+    let heat_ratio = mean(&|r| r.4);
     println!(
-        "V-D5: L/R from the phases {measured:.4}, from the energy and power {predicted:.4} ({:+.1} %); R with/without the self-field {r_ratio:.4}; magnitudes/phases {m_ratio:.4}",
+        "V-D5: L/R from the phases {measured:.4}, from the energy and power {predicted:.4} ({:+.1} %); R with/without the self-field {r_ratio:.4}; magnitudes/phases {m_ratio:.4}; heat/work with/without {heat_ratio:.4}",
         100.0 * (measured / predicted - 1.0)
     );
     common::measured("V-D5.lr_phases", measured, 3);
@@ -188,6 +205,7 @@ fn ring_impedance_is_r_plus_i_omega_l() {
     common::measured("V-D5.lr_percent", 100.0 * (measured / predicted - 1.0), 1);
     common::measured("V-D5.r_ratio", r_ratio, 4);
     common::measured("V-D5.magnitudes", m_ratio, 4);
+    common::measured("V-D5.heat_ratio", heat_ratio, 4);
     assert!(
         (measured / predicted - 1.0).abs() < 0.15,
         "L/R {measured} vs {predicted}"
@@ -196,6 +214,10 @@ fn ring_impedance_is_r_plus_i_omega_l() {
     assert!(
         (m_ratio - 1.0).abs() < 0.05,
         "magnitudes against phases {m_ratio}"
+    );
+    assert!(
+        (heat_ratio - 1.0).abs() < 0.05,
+        "heat/work with/without the self-field {heat_ratio}"
     );
 }
 

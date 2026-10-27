@@ -211,6 +211,11 @@ With carriers:
   0.19 %), V-D5 +4.6 % with R the same with and without the self-field (1.005). Y24 became
   7.8 % and 4.0 %, so the step limit is 0.012. The self-field's time doubled (two solves):
   the solver's tolerance and preconditioner next (#55). Then V-D7.
+- 2026-10-27, the heat with a current: V-D5 now compares the lattice's heat with the external
+  field's work, with and without the self-field: their ratios agree within 1.6 % (0.984; 5 %
+  required). The lattice's heat is the Joule heat under the self-field, so levels may measure
+  heat with it. (Without the self-field the ring's heat runs 3.6 % above the external work in
+  both seeds, a plain-model question left for later.)
 - Still to do in step 2: V-D7 (above); the lattice's heat under the self-field against the Joule
   heat; perhaps an implicit-midpoint step; then the field drawn on the board (step 5), leads
   (task 43), electrodes' induced EMF.
