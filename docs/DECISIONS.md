@@ -948,3 +948,25 @@ Entries are numbered in order and never renumbered.
     times faster than their drives swing, so neither a cut nor a gap of a unit or two opens a
     turn at a level's frequencies, and a transformer level cannot use a cut to open its
     secondary.
+
+## DEC-29: The README's screenshots taken by the game's capture mode, stored as WebP
+
+- **Status:** in use (since 2026-11-02)
+- **Area:** tools
+- **Choice:** `scripts/readme_shots.py` opens each pictured level (named by slug) with its
+  reference placement in the game's capture mode (`EM_CAPTURE`, `EM_WAIT=1`, the editor's
+  cursor parked on node 0,0 by `EM_CURSOR`), and ImageMagick writes each window as
+  `docs/screenshots/<name>.webp` (quality 90, method 6). Six levels across the arcs:
+  hemispherical analyzer, synchrotron light, calutron at full current, klystron, magnetron,
+  magnetoresistance.
+- **Purpose:** the README shows what the game looks like, and the pictures can be retaken
+  in one command whenever the interface changes.
+- **Alternatives:** PNG (lossless, but 0.3–0.8 MB a shot, four times the WebP, and every
+  retake adds that to the history); JPEG (not tried: WebP is smaller at the same quality,
+  and GitHub shows both); screenshots taken by hand (not reproducible, and the cursor sat in the board's
+  middle).
+- **Where:** `scripts/readme_shots.py`, `crates/game/src/capture.rs` (`EM_CURSOR`),
+  `docs/screenshots/`, `README.md`.
+- **History:**
+  - 2026-11-02: chosen. At 1400 × 860 the six WebP files total 0.87 MB against 3.4 MB as
+    PNG, and they cannot be told from the PNGs at full size.

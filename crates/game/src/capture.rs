@@ -7,7 +7,8 @@ use super::*;
 /// opens level `EM_LEVEL` (1-based) or the level file `EM_LEVEL_FILE`, enters the sandbox if `EM_SANDBOX=1`, shows the
 /// flight of shot `EM_SHOT` under disturbance `EM_DISTURBANCE` (1-based), selects the map
 /// `EM_MAP` (potential, magnetic, waves, particle, off), places `EM_PLACE` (JSON list of
-/// elements, or "reference"; in units of 1/`EM_GRID` cell with the grid refined 1-4×), holds
+/// elements, or "reference"; in units of 1/`EM_GRID` cell with the grid refined 1-4×), puts
+/// the editor's cursor on node `EM_CURSOR` ("x,y"), holds
 /// the animation at `EM_TIME`, lets the
 /// physics settle, saves a screenshot of its own window and exits. With `EM_WAIT=1` the
 /// screenshot waits until the verdicts are in. No clicks or keys are sent to the desktop.
@@ -175,6 +176,18 @@ pub(super) fn dev_capture(
                     serde_json::from_str(&p).unwrap_or_default()
                 };
                 game.editor.set_placement(placement);
+            }
+            // The editor's cursor on node `EM_CURSOR` ("x,y"; the README's screenshots keep
+            // it in a corner, off the board's middle).
+            if let Some(node) = std::env::var("EM_CURSOR").ok().and_then(|v| {
+                let (x, y) = v.split_once(',')?;
+                Some([
+                    x.trim().parse::<i64>().ok()?,
+                    y.trim().parse::<i64>().ok()?,
+                    0,
+                ])
+            }) {
+                game.editor.cursor = node;
             }
         }
         10 if std::env::var("EM_SPHERE_TEST").is_ok() => {

@@ -7,6 +7,31 @@ A puzzle game built on accurate classical electrodynamics. Place charges so that
 - `docs/levels/`: the physics of each level derived from first principles, down to the game's
   numbers (a PDF per level, opened from the level panel; `docs/levels/README.md`).
 
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/analyzer.webp" alt="Level 12, Hemispherical analyzer: three orbits about a point charge on the potential map with field lines"><br><b>Hemispherical analyzer</b> (level 12): three energies leave the source, and each must
+bend through 180° into its own detector in a point charge's field. Potential map and field lines.</td>
+<td width="50%"><img src="docs/screenshots/synchrotron.webp" alt="Level 41, Synchrotron light: a charge spiralling inwards in a magnet's field, its own field drawn as arrows"><br><b>Synchrotron light</b> (level 41): a circling charge radiates and spirals in; radiation
+reaction takes 82 % of its energy on the way. The map shows the particle's own field.</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/calutron.webp" alt="Level 63, Calutron at full current: three isotope beams of interacting ions bent into their collectors"><br><b>Calutron at full current</b> (level 63): fifteen ions in three isotope beams repel
+each other through their exact retarded fields; the beams spread into each other, and a placed charge
+brings 80 % of each isotope to its own collector.</td>
+<td width="50%"><img src="docs/screenshots/klystron.webp" alt="Level 107, Klystron: an electron beam bunched along a tube between plates"><br><b>Klystron</b> (level 107): the buncher's small sine bunches the electron beam, and the
+bunches ring the catcher's tuned circuit with the amplitude and phase asked for.</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/magnetron.webp" alt="Level 108, Magnetron: an eight-vane magnetron radiating through its antenna, the magnetic map showing the outgoing wave"><br><b>Magnetron</b> (level 108): electrons curling in the solenoid's field drive the strapped
+vanes' oscillation; the antenna radiates it, and the magnetic map shows the microwaves spreading
+over the board.</td>
+<td width="50%"><img src="docs/screenshots/magnetoresistance.webp" alt="Level 115, Magnetoresistance: carriers in two metal strips with their forces drawn"><br><b>Magnetoresistance</b> (level 115): in the long strip the Hall field lets the carriers flow
+straight; the short, wide strip's contacts short it out, so its carriers' paths bend and it resists more.</td>
+</tr>
+</table>
+
+Each level's reference solution, captured by the game itself (`python scripts/readme_shots.py`).
+
 ## Running
 
 Requires Rust (stable) and, on Windows, the Visual Studio C++ build tools.
