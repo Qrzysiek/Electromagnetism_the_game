@@ -110,7 +110,8 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
     }
     // Cuts through the metals (any length and angle are allowed; the search tries these):
     // from edge to edge along every interior row and column, and from each edge to the
-    // middle along them.
+    // middle along them; across a ring's walls, from its edge to its hole's (opening the
+    // turn).
     if level.limits.max_cuts > 0
         && let Some(spec) = &level.tube
     {
@@ -132,6 +133,18 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
                 add([x, y0, 0], [x, y1, 0]);
                 add([x, y0, 0], [x, my, 0]);
                 add([x, y1, 0], [x, my, 0]);
+            }
+            if let Some([a, b]) = metal.hole {
+                let (hx0, hx1) = (a[0].min(b[0]), a[0].max(b[0]));
+                let (hy0, hy1) = (a[1].min(b[1]), a[1].max(b[1]));
+                for y in hy0 + 1..hy1 {
+                    add([x0, y, 0], [hx0, y, 0]);
+                    add([hx1, y, 0], [x1, y, 0]);
+                }
+                for x in hx0 + 1..hx1 {
+                    add([x, y0, 0], [x, hy0, 0]);
+                    add([x, hy1, 0], [x, y1, 0]);
+                }
             }
         }
     }

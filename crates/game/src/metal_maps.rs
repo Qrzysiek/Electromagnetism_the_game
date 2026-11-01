@@ -93,13 +93,16 @@ pub(super) fn metal_map_grid(
             .iter()
             .zip(rates)
             .flat_map(|(m, r)| {
-                (0..r.j.len()).map(move |c| {
-                    let x = m.cell_centre(c);
-                    (
-                        Vec2::new(x[0] as f32, x[1] as f32),
-                        Vec2::new(r.j[c][0] as f32, r.j[c][1] as f32),
-                    )
-                })
+                // None in a ring's hole.
+                (0..r.j.len())
+                    .filter(|c| m.holds(m.cell_centre(*c)))
+                    .map(move |c| {
+                        let x = m.cell_centre(c);
+                        (
+                            Vec2::new(x[0] as f32, x[1] as f32),
+                            Vec2::new(r.j[c][0] as f32, r.j[c][1] as f32),
+                        )
+                    })
             })
             .collect()
     };

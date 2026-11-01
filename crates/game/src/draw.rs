@@ -1314,12 +1314,14 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
     // than their radius, a few hundredths of their spacing: dots).
     let stale = stale_fade(view.revision, game.sent_revision);
     for m in &view.run.metals {
+        let outline = Color::srgb(0.78, 0.72, 0.62).with_alpha(0.9);
         let (lo, hi) = (to_vec2(m.lo), to_vec2(m.hi));
-        gizmos.rect_2d(
-            (lo + hi) * 0.5,
-            hi - lo,
-            Color::srgb(0.78, 0.72, 0.62).with_alpha(0.9),
-        );
+        gizmos.rect_2d((lo + hi) * 0.5, hi - lo, outline);
+        // A ring's hole: its inner outline.
+        if let Some((a, b)) = m.hole {
+            let (a, b) = (to_vec2(a), to_vec2(b));
+            gizmos.rect_2d((a + b) * 0.5, b - a, outline);
+        }
         #[allow(clippy::cast_possible_truncation)]
         let r = (m.core_radius as f32).max(0.028);
         let core = Color::srgb(0.85, 0.78, 0.65).with_alpha(0.32 * stale);
@@ -1332,12 +1334,10 @@ fn draw_tube(gizmos: &mut Gizmos, game: &Game) {
         }
     }
     let in_metal = |x: &[f32; 2]| {
-        view.run.metals.iter().any(|m| {
-            f64::from(x[0]) >= m.lo.x
-                && f64::from(x[0]) <= m.hi.x
-                && f64::from(x[1]) >= m.lo.y
-                && f64::from(x[1]) <= m.hi.y
-        })
+        view.run
+            .metals
+            .iter()
+            .any(|m| m.holds([f64::from(x[0]), f64::from(x[1])]))
     };
     let in_metals = if view.run.metals.is_empty() {
         0
@@ -1562,10 +1562,15 @@ fn draw_drift(
         };
         Some(x0 + (x1 - x0) * s)
     };
+    // Not on a ring: its carriers go round, their mean displacement nothing (the current map
+    // shows the circulation).
     for (m, x) in view.run.metals.iter().zip(&drift.x) {
         let (Some(now), Some(then)) = (at(x, frame.t), at(x, frame.t - 1.0)) else {
             continue;
         };
+        if m.hole.is_some() {
+            continue;
+        }
         // Along the way the carriers have gone since the start (a square metal's drift is
         // along its contacts, not its longer side).
         let along_x = now.x.abs() >= now.y.abs();

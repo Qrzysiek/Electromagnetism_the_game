@@ -327,10 +327,7 @@ impl TubeRun {
     /// carriers' mean speed (`√(π/2)` times the thermal speed `√(kT/m)`, a 2D Maxwellian's).
     pub(super) fn nearest_contact(&self, x: [f32; 2]) -> Option<([f32; 2], f64)> {
         let p = [f64::from(x[0]), f64::from(x[1])];
-        let m = self
-            .metals
-            .iter()
-            .find(|m| p[0] >= m.lo.x && p[0] <= m.hi.x && p[1] >= m.lo.y && p[1] <= m.hi.y)?;
+        let m = self.metals.iter().find(|m| m.holds(p))?;
         let d2 = |u: &[f64; 2]| (u[0] - p[0]) * (u[0] - p[0]) + (u[1] - p[1]) * (u[1] - p[1]);
         let nearest = m
             .contacts
@@ -408,7 +405,7 @@ impl TubeRun {
             e += r * (2.0 * f64::from(*q) / (r.x * r.x + r.y * r.y).max(h2));
         }
         for m in &self.metals {
-            e += physics::zinv::rect_integrals(m.lo, m.hi, x).1 * m.background;
+            e += m.background_at(x).1;
         }
         // A changing field's induced part (no potential: it circulates).
         if let Some(w) = &self.b_wave {
@@ -553,9 +550,9 @@ impl TubeRun {
             }
         }
         for m in &self.metals {
-            let (f, g) = physics::zinv::rect_integrals(m.lo, m.hi, x);
-            phi += m.background * f;
-            e += g * m.background;
+            let (f, g) = m.background_at(x);
+            phi += f;
+            e += g;
         }
         if let Some(w) = &self.b_wave {
             e += w.induced(frame.t, x);

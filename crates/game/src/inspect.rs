@@ -254,7 +254,7 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
     if let Some(t) = &level.tube {
         for (k, m) in t.metals.iter().enumerate() {
             let (lo, hi) = level.metal_rect(m);
-            if p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y {
+            if level.metal_holds(m, p) {
                 return Some(metal(level, k, m, lo, hi));
             }
         }
@@ -277,12 +277,12 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
     None
 }
 
-/// A metal (the Drude model): its rectangle, carriers, cores and contacts.
+/// A metal (the Drude model): its rectangle (a ring's hole), carriers, cores and contacts.
 fn metal(level: &Level, k: usize, m: &level::tube::MetalSpec, lo: DVec3, hi: DVec3) -> Inspection {
-    let area = (hi.x - lo.x) * (hi.y - lo.y);
+    let area = level.metal_area(m);
     let contacts: Vec<String> = m.contacts.iter().map(|e| (e + 1).to_string()).collect();
-    Inspection::new(format!("{} (the Drude model)", level.metal_name(k)))
-        .line(format!(
+    let rect = |lo: DVec3, hi: DVec3| {
+        format!(
             "{} × {}, from ({}, {}) to ({}, {})",
             fmt_num(hi.x - lo.x),
             fmt_num(hi.y - lo.y),
@@ -290,7 +290,19 @@ fn metal(level: &Level, k: usize, m: &level::tube::MetalSpec, lo: DVec3, hi: DVe
             fmt_num(lo.y),
             fmt_num(hi.x),
             fmt_num(hi.y)
-        ))
+        )
+    };
+    let shape = match level.metal_hole(m) {
+        Some((a, b)) => format!(
+            "a ring {}; its hole {}; walls {} wide at the thinnest",
+            rect(lo, hi),
+            rect(a, b),
+            fmt_num(level.metal_width(m))
+        ),
+        None => rect(lo, hi),
+    };
+    Inspection::new(format!("{} (the Drude model)", level.metal_name(k)))
+        .line(shape)
         .line(format!(
             "carriers: charge density {}, q/m = {}, thermal speed {}",
             fmt_num(m.density),

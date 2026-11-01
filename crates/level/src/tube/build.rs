@@ -5,7 +5,7 @@ use super::*;
 
 impl Level {
     /// A metal's lattice (`lo`..`hi`) with `many` times its preview's carriers (`piece` 0:
-    /// the metal's own seeds).
+    /// the metal's own seeds); a ring's with its hole (`MetalSpec::hole`).
     pub(super) fn metal_lattice(
         &self,
         m: &MetalSpec,
@@ -16,11 +16,15 @@ impl Level {
     ) -> Lattice {
         let seed = m.seed.wrapping_add(piece.wrapping_mul(0x9e37_79b9));
         let area = (hi.x - lo.x) * (hi.y - lo.y);
+        let hole = self.metal_hole(m);
+        // The cores over the whole rectangle (the hole takes those centred in it, leaving the
+        // walls their density), the carriers over the conductor alone.
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let cores = libm::round(area * m.core_density()) as usize;
+        let net = hole.map_or(area, |(a, b)| area - (b.x - a.x) * (b.y - a.y));
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let carriers = libm::round(area * m.carriers_per_area * many).max(1.0) as usize;
-        Lattice::new(
+        let carriers = libm::round(net * m.carriers_per_area * many).max(1.0) as usize;
+        let lattice = Lattice::new(
             lo,
             hi,
             physics::lattice::Material {
@@ -32,7 +36,11 @@ impl Level {
             Lattice::random_cores(lo, hi, cores, m.core_radius, seed),
             carriers,
             seed.wrapping_add(METAL_SEED),
-        )
+        );
+        match hole {
+            Some((a, b)) => lattice.with_hole(a, b),
+            None => lattice,
+        }
     }
 
     /// A tube run at `refine` = 1 (preview) or 2 (verification), at t = 0.
@@ -99,7 +107,8 @@ impl Level {
         // weight, toward the metal).
         let many = r * res.particles * spec.particles;
         // A lattice per metal, the player's cuts in it as walls (one that ends on the metal's
-        // edge reaching a tenth of a unit past it, so that no carrier slips round its end).
+        // edge, or on a ring's hole's, reaching a tenth of a unit past it, so that no carrier
+        // slips round its end).
         let mut lattices: Vec<Lattice> = spec
             .metals
             .iter()
@@ -115,11 +124,22 @@ impl Level {
             let (lo, hi) = (lattices[k].lo, lattices[k].hi);
             let d = (b - a) / (b - a).length();
             let tol = 1e-9 * (1.0 + hi.x.abs() + hi.y.abs());
+            let hole = self.metal_hole(&spec.metals[k]);
+            let on_hole = |p: DVec3| {
+                hole.is_some_and(|(h0, h1)| {
+                    let across = |u: f64, u0: f64, u1: f64| u >= u0 - tol && u <= u1 + tol;
+                    (((p.x - h0.x).abs() < tol || (p.x - h1.x).abs() < tol)
+                        && across(p.y, h0.y, h1.y))
+                        || (((p.y - h0.y).abs() < tol || (p.y - h1.y).abs() < tol)
+                            && across(p.x, h0.x, h1.x))
+                })
+            };
             let edge = |p: DVec3| {
                 (p.x - lo.x).abs() < tol
                     || (p.x - hi.x).abs() < tol
                     || (p.y - lo.y).abs() < tol
                     || (p.y - hi.y).abs() < tol
+                    || on_hole(p)
             };
             let a = if edge(a) { a - d * 0.1 } else { a };
             let b = if edge(b) { b + d * 0.1 } else { b };
@@ -315,6 +335,7 @@ impl Level {
                 .map(|(k, l)| MetalView {
                     lo: l.lo,
                     hi: l.hi,
+                    hole: l.holes.first().copied(),
                     background: l.background,
                     cores: l.cores.iter().map(|c| [c.x as f32, c.y as f32]).collect(),
                     core_radius: l.core_radius,

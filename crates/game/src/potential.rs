@@ -327,10 +327,9 @@ pub fn tube_params(
     // The particles: first those that glow, then a metal's carriers (its density is
     // uniform: they would only veil the potential).
     let in_metal = |x: &[f32; 2]| {
-        run.metals.iter().any(|m| {
-            (m.lo.x..=m.hi.x).contains(&f64::from(x[0]))
-                && (m.lo.y..=m.hi.y).contains(&f64::from(x[1]))
-        })
+        run.metals
+            .iter()
+            .any(|m| m.holds([f64::from(x[0]), f64::from(x[1])]))
     };
     let mut glowing = 0;
     for metal in [false, true] {
@@ -343,22 +342,27 @@ pub fn tube_params(
         }
     }
     // The metals' backgrounds (the ions' charge): fixed line charges on the cells the
-    // carriers are binned on (`map_frame`), so that a neutral metal reads neutral.
+    // carriers are binned on (`map_frame`), so that a neutral metal reads neutral (a ring's
+    // walls one by one).
     let mut charges = frame.x.len();
-    for m in &run.metals {
+    for (m, (lo, hi)) in run
+        .metals
+        .iter()
+        .flat_map(|m| m.pieces().into_iter().map(move |p| (m, p)))
+    {
         #[allow(clippy::cast_possible_truncation)]
         let (i0, i1, j0, j1) = (
-            (m.lo.x / MAP_BIN).floor() as i64,
-            (m.hi.x / MAP_BIN).ceil() as i64,
-            (m.lo.y / MAP_BIN).floor() as i64,
-            (m.hi.y / MAP_BIN).ceil() as i64,
+            (lo.x / MAP_BIN).floor() as i64,
+            (hi.x / MAP_BIN).ceil() as i64,
+            (lo.y / MAP_BIN).floor() as i64,
+            (hi.y / MAP_BIN).ceil() as i64,
         );
         for j in j0..j1 {
             for i in i0..i1 {
                 #[allow(clippy::cast_precision_loss)]
                 let (x0, y0) = (i as f64 * MAP_BIN, j as f64 * MAP_BIN);
-                let (ax, bx) = (x0.max(m.lo.x), (x0 + MAP_BIN).min(m.hi.x));
-                let (ay, by) = (y0.max(m.lo.y), (y0 + MAP_BIN).min(m.hi.y));
+                let (ax, bx) = (x0.max(lo.x), (x0 + MAP_BIN).min(hi.x));
+                let (ay, by) = (y0.max(lo.y), (y0 + MAP_BIN).min(hi.y));
                 if bx > ax && by > ay {
                     items.push(v4(
                         0.5 * (ax + bx),

@@ -250,16 +250,42 @@ def make_tube_metal(lv, pl, p, o, w):
                               "core_radius": 0.005, "carriers_per_area": 20.0, "seed": 1}]}
 
 
+def make_tube_ring(lv, pl, p, o, w):
+    """A tube level with a ring (PHYSICS.md 2.11, the Drude metal's rings: `hole`): an
+    isolated 6 x 6 conductor about p with a 2 x 2 hole (walls 2) in the solenoid's swinging
+    field, its eddy currents circulating round the hole, heated as its goal measures; a small
+    floating cathode that emits nothing (an isolated metal needs every electrode floating),
+    so that the other element lands in the hole, on the wall or beside it. A metal must
+    refuse what lies inside it, its hole included, and accept another metal wholly in the
+    hole (`metal_issues`)."""
+    lv["shots"] = []
+    es = lv.setdefault("electrodes", [])
+    k = len(es)
+    es.append(electrode((p[0] - 6, p[1] - 5), length=0.5, thickness=0.5,
+                        bias={"kind": "charge", "value": 0.0}))
+    lv["tube"] = {"cathode": k, "charge_per_mass": -1.0, "step": 0.05, "saturation": 0.0,
+                  "b_z": 0.5, "solenoid_drive": {"kind": "sine", "amplitude": 1.0, "omega": 0.5},
+                  "heat_goals": [{"metal": 0, "min": 0.0, "max": 1.0, "start": 2.0, "end": 4.0}],
+                  "metals": [{"corners": [node((p[0] - 3, p[1] - 3)), node((p[0] + 3, p[1] + 3))],
+                              "hole": [node((p[0] - 1, p[1] - 1)), node((p[0] + 1, p[1] + 1))],
+                              "contacts": [], "density": 1.0, "charge_per_mass": -1.0,
+                              "thermal_speed": 1.0, "mean_free_path": 0.5,
+                              "core_radius": 0.005, "carriers_per_area": 20.0, "seed": 1}]}
+
+
 def make_player_cut(lv, pl, p, o, w):
     """The player's insulating cut (PHYSICS.md 2.11): from edge to edge across the middle of
     the level's first metal if it has one, so that the cut metal's physics runs beside the
-    other element; else at p, where it must be refused."""
+    other element (a ring's: across its lower wall, opening the turn); else at p, where it
+    must be refused."""
     lv["limits"].update(PLAYER_LIMITS["cut"])
     metals = (lv.get("tube") or {}).get("metals") or []
     if metals:
-        # From edge to edge across its middle.
+        # From edge to edge across its middle (a ring's: up to its hole).
         (x0, y0, _), (x1, y1, _) = metals[0]["corners"]
-        at, length = ((x0 + x1) // 2, y0), y1 - y0
+        hole = metals[0].get("hole")
+        top = min(hole[0][1], hole[1][1]) if hole else y1
+        at, length = ((x0 + x1) // 2, y0), top - y0
     else:
         at, length = p, 2.0
     pl.append({"node": node(at), "kind": "cut", "value": float(length), "angle_deg": 90.0})
@@ -345,6 +371,7 @@ ELEMENTS = {
     "tube_tank": make_tube_tank,
     "tube_coax": make_tube_coax,
     "tube_metal": make_tube_metal,
+    "tube_ring": make_tube_ring,
     "player_charge": player(lambda p, o, w: {"node": node(p), "kind": "charge", "value": -1.0}),
     "player_magnet": player(lambda p, o, w: {"node": node(p), "kind": "magnet", "value": 2.0}),
     "player_antenna": player(lambda p, o, w: {"node": node(p), "kind": "antenna", "value": 1.0,

@@ -33,7 +33,8 @@ impl Level {
     }
 
     /// What a tube level's metals refuse (PHYSICS.md §2.11, the Drude metal): a
-    /// rectangle off the board or crossing another metal or an electrode, contacts that
+    /// rectangle off the board or crossing another metal (other than one wholly in a ring's
+    /// hole) or an electrode, a hole that leaves a wall thinner than a cell, contacts that
     /// do not lie along a side, a medium of cores too dense for the model, a plasma period
     /// or a mean free path the step does not resolve, too many carriers.
     #[allow(clippy::too_many_lines)]
@@ -50,6 +51,20 @@ impl Level {
             }
             if lo.x <= 0.0 || lo.y <= 0.0 || hi.x >= max.x || hi.y >= max.y {
                 out.push(format!("{name} must lie inside the board."));
+            }
+            if let Some((a, b)) = self.metal_hole(m) {
+                let cell = 1.0 / f64::from(self.grid.subdivision);
+                let tol = 1e-9 * (1.0 + hi.x.abs() + hi.y.abs());
+                if !(b.x > a.x && b.y > a.y) {
+                    out.push(format!("{name}: its hole's corners must span a rectangle."));
+                    continue;
+                }
+                if self.metal_width(m) < cell - tol {
+                    out.push(format!(
+                        "{name}: its hole must lie inside it, leaving walls at least a cell wide."
+                    ));
+                    continue;
+                }
             }
             let positive = |v: f64| v.is_finite() && v > 0.0;
             if !(positive(m.density)
@@ -74,11 +89,11 @@ impl Level {
                      longer."
                 ));
             }
-            let width = (hi.x - lo.x).min(hi.y - lo.y);
-            if m.mean_free_path > 0.25 * width {
+            if m.mean_free_path > 0.25 * self.metal_width(m) {
                 out.push(format!(
-                    "{name}: its mean free path must be at most a quarter of its width (the \
-                     carriers scatter off the cores, not off its walls)."
+                    "{name}: its mean free path must be at most a quarter of its width (a \
+                     ring's: of its thinnest wall; the carriers scatter off the cores, not off \
+                     its walls)."
                 ));
             }
             let wp = m.plasma_frequency();
@@ -105,7 +120,8 @@ impl Level {
                      (the step cannot follow their gyration): a weaker field."
                 ));
             }
-            let area = (hi.x - lo.x) * (hi.y - lo.y);
+            // The conductor's (a ring's hole has neither carriers nor cores).
+            let area = self.metal_area(m);
             carriers += area * m.carriers_per_area;
             #[allow(clippy::cast_precision_loss)]
             let cores = area * m.core_density();
@@ -164,9 +180,15 @@ impl Level {
                     out.push(format!("{name} overlaps electrode {}.", e + 1));
                 }
             }
+            // A metal may lie wholly in another's hole (a transformer's rings, V-D7).
+            let within = |(h0, h1): (DVec3, DVec3), p0: DVec3, p1: DVec3| {
+                p0.x >= h0.x && p1.x <= h1.x && p0.y >= h0.y && p1.y <= h1.y
+            };
             for (j, o) in spec.metals.iter().enumerate().skip(k + 1) {
                 let (a0, a1) = self.metal_rect(o);
-                if overlaps(a0, a1) {
+                let nested = self.metal_hole(m).is_some_and(|h| within(h, a0, a1))
+                    || self.metal_hole(o).is_some_and(|h| within(h, lo, hi));
+                if overlaps(a0, a1) && !nested {
                     out.push(format!("{name} overlaps metal {}.", j + 1));
                 }
             }

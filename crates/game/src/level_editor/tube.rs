@@ -311,6 +311,7 @@ pub(super) fn edit_tube(
         ui.push_id(("metal", k), |ui| {
             let MetalSpec {
                 corners,
+                hole,
                 contacts,
                 density,
                 charge_per_mass,
@@ -334,6 +335,27 @@ pub(super) fn edit_tube(
                 ui.label("  corners");
                 focus |= node(ui, &mut corners[0], grid);
                 focus |= node(ui, &mut corners[1], grid);
+            });
+            ui.horizontal(|ui| {
+                let mut ring = hole.is_some();
+                ui.checkbox(&mut ring, "  hole").on_hover_text(
+                    "A hole through it (its corners inside the metal, walls at least a cell \
+                     wide): a ring, a one-turn coil along z. Another metal may lie in it",
+                );
+                if ring {
+                    // A new hole: the metal's middle, a cell in from each side at least.
+                    let h = hole.get_or_insert_with(|| {
+                        let (a, b) = (corners[0], corners[1]);
+                        let (x0, x1) = (a[0].min(b[0]), a[0].max(b[0]));
+                        let (y0, y1) = (a[1].min(b[1]), a[1].max(b[1]));
+                        let (dx, dy) = (((x1 - x0) / 4).max(1), ((y1 - y0) / 4).max(1));
+                        [[x0 + dx, y0 + dy, 0], [x1 - dx, y1 - dy, 0]]
+                    });
+                    focus |= node(ui, &mut h[0], grid);
+                    focus |= node(ui, &mut h[1], grid);
+                } else {
+                    *hole = None;
+                }
             });
             let mut remove_contact = None;
             ui.horizontal(|ui| {
@@ -397,6 +419,7 @@ pub(super) fn edit_tube(
         let m = grid.max_node();
         metals.push(MetalSpec {
             corners: [[m[0] / 4, m[1] / 3, 0], [3 * m[0] / 4, 2 * m[1] / 3, 0]],
+            hole: None,
             contacts: Vec::new(),
             density: 1.0,
             charge_per_mass: -1.0,

@@ -1022,6 +1022,251 @@ fn isolated_metal_heat_is_the_induced_work() {
     );
 }
 
+/// The rings' setup rules (`Level::metal_issues`, `cut_metal`) on Eddy currents' plate (12 ×
+/// 12 from (6, 4); here a mean free path of 0.5): a hole 4 × 4 in its middle (walls 4) is
+/// accepted; refused: no wall on a side, a hole reaching out of the plate, walls thinner than
+/// four mean free paths. A second metal wholly in the hole is accepted (a transformer's rings),
+/// one across the ring's wall refused. A cut across a wall lies in the ring, one in the hole
+/// in neither metal, one in the inner metal in that one.
+#[test]
+fn ring_setup_rules() {
+    let base = level::shipped("eddy_currents");
+    let with = |hole: [[i64; 2]; 2], inner: Option<[[i64; 2]; 2]>| {
+        let mut level = base.clone();
+        level.limits.max_cuts = 1;
+        let t = level.tube.as_mut().expect("a tube level");
+        t.metals[0].hole = Some(hole.map(|n| [n[0], n[1], 0]));
+        t.metals[0].mean_free_path = 0.5;
+        t.metals[0].core_radius = 0.004;
+        if let Some(c) = inner {
+            let mut m = t.metals[0].clone();
+            m.corners = c.map(|n| [n[0], n[1], 0]);
+            m.hole = None;
+            m.seed += 1;
+            t.metals.push(m);
+        }
+        level
+    };
+    let issues = |l: &Level| l.setup_issues(&l.reference_solution);
+    let ok = with([[10, 8], [14, 12]], None);
+    assert!(issues(&ok).is_empty(), "{:?}", issues(&ok));
+    for (hole, why) in [
+        ([[6, 8], [14, 12]], "no wall on the left"),
+        ([[10, 8], [20, 12]], "out of the plate"),
+        ([[7, 5], [17, 15]], "walls 1, the mean free path 0.5"),
+    ] {
+        assert!(!issues(&with(hole, None)).is_empty(), "{why}");
+    }
+    let nested = with([[8, 6], [16, 14]], Some([[9, 7], [15, 13]]));
+    assert!(issues(&nested).is_empty(), "{:?}", issues(&nested));
+    let across = with([[10, 8], [14, 12]], Some([[9, 9], [12, 11]]));
+    assert!(
+        issues(&across)
+            .iter()
+            .any(|s| s.contains("overlaps metal 2")),
+        "{:?}",
+        issues(&across)
+    );
+    let cut = |l: &Level, a: [i64; 2], b: [i64; 2]| l.cut_metal(&cut(l, a, b));
+    assert_eq!(cut(&nested, [6, 10], [8, 10]), Some(0));
+    assert_eq!(cut(&nested, [12, 7], [12, 13]), Some(1));
+    assert_eq!(cut(&ok, [11, 9], [13, 11]), None);
+}
+
+/// A ring (`MetalSpec::hole`, PHYSICS.md §2.11): Eddy currents' plate 12 × 12 with a hole
+/// 8 × 8 in its middle (walls 2; a mean free path of 0.5, a quarter of the wall, cores of
+/// radius 0.004 and 90 carriers per area), its solenoid swinging at its full 3. (a) Its lattice: no carrier at the
+/// start and no core in the hole, the carriers' number from the conductor's area (80, not
+/// 144), their charge the background's over it. (b) Closed, over the half period t =
+/// 1.5π/ω…2.5π/ω where Ḃ > 0, it circulates against the field's change as Ohm's law has it:
+/// `L/P = −2⟨Ḃ⟩/⟨Ḃ²⟩`, `L` the current's circulation `∫(r × j)_z dA` and `P` the induced
+/// field's work (`P = ∫ j·E_ind dA = −Ḃ L/2` for any closed conductor about the solenoid's
+/// axis, and `L ∝ Ḃ` Ohmic), within 10 % (as `metal_maps_add_up`'s plate); the current around
+/// it, clockwise through each wall's middle four rows, positive. (c) Cut across its left wall
+/// (from its edge to the hole's): no carrier crosses the cut (of those recorded at every step,
+/// `TubeFrame::paths`; ~370 cross the same line in the closed ring), yet at this frequency the
+/// turn stays closed for the current: the cut ring is a capacitor in series with its
+/// resistance, `R ≈ 85` (the closed ring's mean EMF `⟨Ḃ⟩·100` over its current; ~18 squares
+/// at the model's σ = 0.235, `(3/16)√(π/2) ρ|q/m|/(a n σ_v)`, give 77). The slit has no width,
+/// so its faces hold opposite charges screening lengths apart, by linear screening `C ≈
+/// w/(4π·2λ_D) ≈ 0.2` (`ωRC ≈ 2.1`: ~80 % of the closed ring's current over the half period,
+/// 0.90 of its amplitude 25° ahead); in parallel, the ring's two arms face each other across
+/// the hole and round the outside, a capacitance logarithmic in a z-invariant world, of order a
+/// few tenths (with C ≈ 0.5, ~97 %). Required: above the slit alone at half its linear C (its
+/// depletion side thickens at several kT/q), ~53 %: the three uncut walls' mean above 50 % of
+/// the closed ring's (an open turn: ~0). (Their noise: the cells' thermal noise over the half period, `√(2Nq²σ_v²τ/T)` per
+/// cell, ~0.07, so the three walls' mean of four rows each ~0.02, against a current through a
+/// wall of `σ⟨Ḃ⟩r/2 × 2 ≈ 0.28`, the induced field at r = 5 across a wall 2 wide.) A cut
+/// opens a ring only where `ωRC = ωP/(4πσd) ≪ 1` (P the ring's perimeter, d the faces'
+/// distance): below ω of a few hundredths here; it blocks a steady current (`cuts_insulate`).
+/// (d) Isotropy (PHYSICS.md §9, Symmetries): the closed ring turned a quarter, its hole,
+/// solenoid and board with it (its cores fall elsewhere, from the same seed in the turned
+/// rectangle), circulates and heats the same, L and P each within 6 % (the heat's scatter
+/// between runs is a few per cent, `isolated_metal_heat_is_the_induced_work`; L sums 64
+/// cells' noise, ~2 %).
+#[test]
+#[allow(clippy::cast_precision_loss)]
+fn rings_circulate() {
+    let mut level = level::shipped("eddy_currents");
+    level.limits.max_cuts = 1;
+    {
+        let m = &mut level.tube.as_mut().expect("a tube level").metals[0];
+        m.hole = Some([[8, 6, 0], [16, 14, 0]]);
+        m.mean_free_path = 0.5;
+        m.core_radius = 0.004;
+        m.carriers_per_area = 90.0;
+    }
+    let drive = level::Element::supply([23, 19, 0], 3.0);
+    assert!(
+        level.setup_issues(&[drive]).is_empty(),
+        "{:?}",
+        level.setup_issues(&[drive])
+    );
+    let omega = 0.125;
+    let (t0, t1) = (
+        1.5 * std::f64::consts::PI / omega,
+        2.5 * std::f64::consts::PI / omega,
+    );
+    let run = |placement: &[level::Element]| {
+        assert!(level.check_placement(placement).is_ok());
+        level.tube_run(placement, 1, t1 + 1.0)
+    };
+    let closed = run(&[drive]);
+    // (a) The lattice.
+    let m = &closed.metals[0];
+    let (h0, h1) = m.hole.expect("a ring");
+    let in_hole = |x: [f64; 2]| x[0] > h0.x && x[0] < h1.x && x[1] > h0.y && x[1] < h1.y;
+    let first = &closed.frames[0];
+    let carriers: Vec<usize> = (0..first.x.len())
+        .filter(|&k| first.kind[k] == level::tube::KIND_NEGATIVE)
+        .collect();
+    let charge: f64 = carriers.iter().map(|&k| f64::from(first.q[k])).sum();
+    let (held, holed) = carriers.iter().fold((0, 0), |(a, b), &k| {
+        let x = [f64::from(first.x[k][0]), f64::from(first.x[k][1])];
+        (a + usize::from(m.holds(x)), b + usize::from(in_hole(x)))
+    });
+    let cores_in_hole = m
+        .cores
+        .iter()
+        .filter(|c| in_hole([f64::from(c[0]), f64::from(c[1])]))
+        .count();
+    assert_eq!((held, holed, cores_in_hole), (7200, 0, 0));
+    assert!(
+        (charge / (-m.background * 80.0) - 1.0).abs() < 1e-5,
+        "the carriers' charge {charge} against the background's {}",
+        m.background * 80.0
+    );
+    // (b), (c): the circulation and the current through each wall's middle.
+    let around = |r: &level::tube::TubeRun| {
+        let rates = r.metal_rates(t0, t1, false).expect("frames");
+        let (j, power) = (&rates[0].j, &rates[0].power);
+        let m = &r.metals[0];
+        let centre = [0.5 * (m.lo.x + m.hi.x), 0.5 * (m.lo.y + m.hi.y)];
+        let circulation: f64 = (0..j.len())
+            .map(|c| {
+                let x = m.cell_centre(c);
+                ((x[0] - centre[0]) * j[c][1] - (x[1] - centre[1]) * j[c][0]) * m.cell_area(c)
+            })
+            .sum();
+        let heat: f64 = (0..power.len()).map(|c| power[c] * m.cell_area(c)).sum();
+        // Cells a unit wide, 12 a row: the walls are columns 0–1 and 10–11, rows 0–1 and
+        // 10–11; their middles rows (columns) 4–7. Clockwise: down the right wall, up the
+        // left, along +x on top, −x at the bottom.
+        let cell = |i: usize, k: usize| j[i + 12 * k];
+        let middle = |f: &dyn Fn(usize) -> f64| (4..8).map(f).sum::<f64>() / 4.0;
+        let walls = [
+            middle(&|k| -(cell(10, k)[1] + cell(11, k)[1])),
+            middle(&|i| cell(i, 10)[0] + cell(i, 11)[0]),
+            middle(&|i| -(cell(i, 0)[0] + cell(i, 1)[0])),
+            middle(&|k| cell(0, k)[1] + cell(1, k)[1]),
+        ];
+        (circulation, heat, walls)
+    };
+    let (circulation, heat, walls) = around(&closed);
+    let n = 4000;
+    let h = (t1 - t0) / f64::from(n);
+    let bdot = |t: f64| (closed.b_at(t + 1e-4) - closed.b_at(t - 1e-4)) / 2e-4;
+    let mean_bdot = (closed.b_at(t1) - closed.b_at(t0)) / (t1 - t0);
+    let mean_bdot2 = (0..n)
+        .map(|k| bdot(t0 + (f64::from(k) + 0.5) * h).powi(2))
+        .sum::<f64>()
+        / f64::from(n);
+    let ohmic = -2.0 * mean_bdot / mean_bdot2;
+    let cut = run(&[drive, level.cut_between([6, 10, 0], [8, 10, 0])]);
+    let (_, _, open) = around(&cut);
+    // (d) The closed ring turned a quarter (its hole, solenoid and board with it).
+    let quarter = turned(&level);
+    let node = quarter
+        .tube
+        .as_ref()
+        .and_then(|t| t.solenoid)
+        .expect("a solenoid");
+    let turned_drive = level::Element::supply(node, 3.0);
+    assert!(quarter.setup_issues(&[turned_drive]).is_empty());
+    let (turned_l, turned_p, _) = around(&quarter.tube_run(&[turned_drive], 1, t1 + 1.0));
+    let three = |w: &[f64; 4]| (w[0] + w[1] + w[2]) / 3.0;
+    // The carriers recorded at every step (`TubeFrame::paths`) that cross the cut's line
+    // between two steps, in the cut ring and in the closed one.
+    let crossings = |r: &level::tube::TubeRun| {
+        let mut paths: std::collections::BTreeMap<u32, Vec<[f32; 2]>> =
+            std::collections::BTreeMap::new();
+        for f in &r.frames {
+            for (id, p) in &f.paths {
+                paths.entry(*id).or_default().extend(p);
+            }
+        }
+        let steps: usize = paths.values().map(Vec::len).sum();
+        let crossed = paths
+            .values()
+            .flat_map(|p| p.windows(2))
+            .filter(|w| {
+                let (a, b) = (w[0], w[1]);
+                let (ya, yb) = (f64::from(a[1]) - 10.0, f64::from(b[1]) - 10.0);
+                if ya * yb >= 0.0 {
+                    return false;
+                }
+                let x = f64::from(a[0]) + (f64::from(b[0]) - f64::from(a[0])) * ya / (ya - yb);
+                (6.0..=8.0).contains(&x)
+            })
+            .count();
+        (crossed, paths.len(), steps)
+    };
+    let (through_cut, sampled, steps) = crossings(&cut);
+    let (through_closed, _, _) = crossings(&closed);
+    println!(
+        "ring: L {circulation:.3}, P {heat:.4}: L/P {:.4} against Ohm's −2⟨Ḃ⟩/⟨Ḃ²⟩ = {ohmic:.4} \
+         ({:+.2} %); clockwise through the walls (right, top, bottom, left) closed {walls:.4?}, \
+         cut across the left {open:.4?}: {:.4} against {:.4} ({:.1} %); of {sampled} carriers \
+         traced over {steps} steps, {through_cut} crossed the cut's line, {through_closed} the \
+         same line in the closed ring; turned a quarter L {turned_l:.3} ({:+.2} %), P \
+         {turned_p:.4} ({:+.2} %)",
+        circulation / heat,
+        100.0 * (circulation / heat / ohmic - 1.0),
+        three(&open),
+        three(&walls),
+        100.0 * three(&open) / three(&walls),
+        100.0 * (turned_l / circulation - 1.0),
+        100.0 * (turned_p / heat - 1.0)
+    );
+    assert!(
+        (circulation / heat / ohmic - 1.0).abs() < 0.10,
+        "(b) {circulation} {heat} {ohmic}"
+    );
+    assert!(walls.iter().all(|w| *w > 0.0), "(b) {walls:?}");
+    assert!(
+        through_cut == 0 && through_closed > 100,
+        "(c) {through_cut} crossed the cut, {through_closed} the closed ring's line"
+    );
+    assert!(
+        three(&open) > 0.5 * three(&walls),
+        "(c) {open:?} against {walls:?}"
+    );
+    assert!(
+        (turned_l / circulation - 1.0).abs() < 0.06 && (turned_p / heat - 1.0).abs() < 0.06,
+        "(d) turned: L {turned_l} against {circulation}, P {turned_p} against {heat}"
+    );
+}
+
 /// Y10, Onsager's reciprocity in the Drude metal (PHYSICS.md §9, Symmetries): Hall probe at
 /// its reference supply (30) with the solenoid at +3 and at −3, over t = 10–80: the current
 /// along the strip is even in B (the same both ways, within 4 %: the runs' scatter is ~1.3 %)
@@ -1079,6 +1324,7 @@ fn turned(level: &Level) -> Level {
                 [a[0].min(b[0]), a[1].min(b[1]), 0],
                 [a[0].max(b[0]), a[1].max(b[1]), 0],
             ];
+            m.hole = m.hole.map(|[a, b]| [turn(a), turn(b)]);
         }
     }
     l
@@ -1134,6 +1380,7 @@ fn mirrored(level: &Level) -> Level {
         for m in &mut t.metals {
             let (a, b) = (flip(m.corners[0]), flip(m.corners[1]));
             m.corners = [[b[0], a[1], 0], [a[0], b[1], 0]];
+            m.hole = m.hole.map(|[a, b]| [flip(a), flip(b)]);
         }
     }
     l

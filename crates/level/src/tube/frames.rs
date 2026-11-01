@@ -25,10 +25,7 @@ pub fn metal_steps(metals: &[MetalView], a: &TubeFrame, b: &TubeFrame) -> Vec<[f
         a.id.iter().zip(&a.x).map(|(id, x)| (*id, *x)).collect();
     let mut sums = vec![([0.0_f64; 2], 0_usize); metals.len()];
     for (x, id) in b.x.iter().zip(&b.id) {
-        let inside = |m: &MetalView| {
-            let (px, py) = (f64::from(x[0]), f64::from(x[1]));
-            px >= m.lo.x && px <= m.hi.x && py >= m.lo.y && py <= m.hi.y
-        };
+        let inside = |m: &MetalView| m.holds([f64::from(x[0]), f64::from(x[1])]);
         let (Some(m), Some(x0)) = (metals.iter().position(inside), before.get(id)) else {
             continue;
         };
@@ -97,7 +94,74 @@ impl MetalView {
         ]
     }
 
-    /// The cell `x` lies in, if it is inside the metal.
+    /// Whether `x` lies in its conductor: in its rectangle (its edges included), not inside
+    /// a ring's hole (where another metal may lie).
+    #[must_use]
+    pub fn holds(&self, x: [f64; 2]) -> bool {
+        let in_rect =
+            x[0] >= self.lo.x && x[0] <= self.hi.x && x[1] >= self.lo.y && x[1] <= self.hi.y;
+        in_rect
+            && self
+                .hole
+                .is_none_or(|(a, b)| !(x[0] > a.x && x[0] < b.x && x[1] > a.y && x[1] < b.y))
+    }
+
+    /// Its conductor as rectangles that do not overlap (lower and upper corners): the
+    /// rectangle, or a ring's four walls (the bottom and top ones its whole width).
+    #[must_use]
+    pub fn pieces(&self) -> Vec<(DVec3, DVec3)> {
+        let (lo, hi) = (self.lo, self.hi);
+        let Some((a, b)) = self.hole else {
+            return vec![(lo, hi)];
+        };
+        [
+            (lo, DVec3::new(hi.x, a.y, 0.0)),
+            (DVec3::new(lo.x, b.y, 0.0), hi),
+            (DVec3::new(lo.x, a.y, 0.0), DVec3::new(a.x, b.y, 0.0)),
+            (DVec3::new(b.x, a.y, 0.0), DVec3::new(hi.x, b.y, 0.0)),
+        ]
+        .into_iter()
+        .filter(|(p, q)| q.x > p.x && q.y > p.y)
+        .collect()
+    }
+
+    /// Cell `c`'s area of conductor: the cell's, less its part in a ring's hole.
+    #[allow(clippy::cast_precision_loss)]
+    #[must_use]
+    pub fn cell_area(&self, c: usize) -> f64 {
+        let (nx, ny) = self.cells;
+        let whole = (self.hi.x - self.lo.x) * (self.hi.y - self.lo.y) / (nx * ny).max(1) as f64;
+        let Some((a, b)) = self.hole else {
+            return whole;
+        };
+        let (nx, ny) = (nx.max(1), ny.max(1));
+        let (w, h) = (
+            (self.hi.x - self.lo.x) / nx as f64,
+            (self.hi.y - self.lo.y) / ny as f64,
+        );
+        let (x0, y0) = (
+            self.lo.x + (c % nx) as f64 * w,
+            self.lo.y + (c / nx) as f64 * h,
+        );
+        let overlap = |u0: f64, u1: f64, v0: f64, v1: f64| (u1.min(v1) - u0.max(v0)).max(0.0);
+        whole - overlap(x0, x0 + w, a.x, b.x) * overlap(y0, y0 + h, a.y, b.y)
+    }
+
+    /// Its background's potential and field at `x` (the rectangle's less a ring's hole's,
+    /// as `physics::lattice::Lattice::background_at`).
+    #[must_use]
+    pub fn background_at(&self, x: DVec3) -> (f64, DVec3) {
+        let (mut p, mut e) = physics::zinv::rect_integrals(self.lo, self.hi, x);
+        if let Some((a, b)) = self.hole {
+            let (ph, eh) = physics::zinv::rect_integrals(a, b, x);
+            p -= ph;
+            e -= eh;
+        }
+        (self.background * p, e * self.background)
+    }
+
+    /// The cell `x` lies in, if it is inside the metal (in its conductor: none in a ring's
+    /// hole).
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -110,7 +174,12 @@ impl MetalView {
             (x[0] - self.lo.x) / (self.hi.x - self.lo.x),
             (x[1] - self.lo.y) / (self.hi.y - self.lo.y),
         );
-        if nx == 0 || ny == 0 || !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
+        if nx == 0
+            || ny == 0
+            || !(0.0..=1.0).contains(&u)
+            || !(0.0..=1.0).contains(&v)
+            || !self.holds(x)
+        {
             return None;
         }
         let i = ((u * nx as f64) as usize).min(nx - 1);
@@ -323,10 +392,14 @@ impl TubeRun {
         }
         let rms = libm::sqrt(den / (t1 - t0));
         for ((r, m), num) in rates.iter_mut().zip(&self.metals).zip(&num) {
-            let (nx, ny) = m.cells;
-            let area = (m.hi.x - m.lo.x) * (m.hi.y - m.lo.y) / (nx * ny).max(1) as f64;
-            for (j, n) in r.j.iter_mut().zip(num) {
-                *j = [n[0] / (area * den) * rms, n[1] / (area * den) * rms];
+            for (c, (j, n)) in r.j.iter_mut().zip(num).enumerate() {
+                // A cell wholly in a ring's hole carries nothing.
+                let area = m.cell_area(c);
+                *j = if area > 0.0 {
+                    [n[0] / (area * den) * rms, n[1] / (area * den) * rms]
+                } else {
+                    [0.0; 2]
+                };
             }
         }
         Some(rates)
@@ -352,17 +425,24 @@ impl TubeRun {
                 .iter()
                 .zip(a.iter().zip(&b))
                 .map(|(m, (a, b))| {
-                    let (nx, ny) = m.cells;
-                    let area = (m.hi.x - m.lo.x) * (m.hi.y - m.lo.y) / (nx * ny).max(1) as f64;
-                    let per = 1.0 / ((t1 - t0) * area);
+                    // Per unit time and area of conductor (a cell wholly in a ring's hole: 0).
+                    let per = |c: usize| {
+                        let area = m.cell_area(c);
+                        if area > 0.0 {
+                            1.0 / ((t1 - t0) * area)
+                        } else {
+                            0.0
+                        }
+                    };
                     let j: Vec<[f64; 2]> = a
                         .flux
                         .iter()
                         .zip(&b.flux)
-                        .map(|(p, q)| {
+                        .enumerate()
+                        .map(|(c, (p, q))| {
                             [
-                                (f64::from(q[0]) - f64::from(p[0])) * per,
-                                (f64::from(q[1]) - f64::from(p[1])) * per,
+                                (f64::from(q[0]) - f64::from(p[0])) * per(c),
+                                (f64::from(q[1]) - f64::from(p[1])) * per(c),
                             ]
                         })
                         .collect();
@@ -370,7 +450,8 @@ impl TubeRun {
                         .work
                         .iter()
                         .zip(&b.work)
-                        .map(|(p, q)| (f64::from(*q) - f64::from(*p)) * per)
+                        .enumerate()
+                        .map(|(c, (p, q))| (f64::from(*q) - f64::from(*p)) * per(c))
                         .collect();
                     let rates = MetalRates { j, power };
                     if smooth { smoothed(m, &rates) } else { rates }

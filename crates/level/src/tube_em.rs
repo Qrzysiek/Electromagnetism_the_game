@@ -692,23 +692,28 @@ impl TubeEm {
                 })
             })
             .collect();
-        // The metals' backgrounds: each cell's share of a rectangle, at the share's centre.
+        // The metals' backgrounds: each cell's share of a rectangle (a ring's walls one by
+        // one), at the share's centre.
         let mut background = vec![0.0; grid.nodes()];
-        for m in &run.metals {
+        for (m, (lo, hi)) in run
+            .metals
+            .iter()
+            .flat_map(|m| m.pieces().into_iter().map(move |p| (m, p)))
+        {
             let h = grid.h;
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let (i0, i1, j0, j1) = (
-                ((m.lo.x - grid.origin.0) / h).floor().max(0.0) as usize,
-                ((m.hi.x - grid.origin.0) / h).ceil().max(0.0) as usize,
-                ((m.lo.y - grid.origin.1) / h).floor().max(0.0) as usize,
-                ((m.hi.y - grid.origin.1) / h).ceil().max(0.0) as usize,
+                ((lo.x - grid.origin.0) / h).floor().max(0.0) as usize,
+                ((hi.x - grid.origin.0) / h).ceil().max(0.0) as usize,
+                ((lo.y - grid.origin.1) / h).floor().max(0.0) as usize,
+                ((hi.y - grid.origin.1) / h).ceil().max(0.0) as usize,
             );
             for j in j0..j1.min(grid.ny) {
                 for i in i0..i1.min(grid.nx) {
                     #[allow(clippy::cast_precision_loss)]
                     let (cx0, cy0) = grid.node(i, j);
-                    let (ax, bx) = (cx0.max(m.lo.x), (cx0 + h).min(m.hi.x));
-                    let (ay, by) = (cy0.max(m.lo.y), (cy0 + h).min(m.hi.y));
+                    let (ax, bx) = (cx0.max(lo.x), (cx0 + h).min(hi.x));
+                    let (ay, by) = (cy0.max(lo.y), (cy0 + h).min(hi.y));
                     if bx > ax && by > ay {
                         fdtd.add_charge(
                             &mut background,

@@ -1,87 +1,86 @@
-# Handoff (2026-10-28): where the work stands and what comes next
+# Handoff (2026-10-28, afternoon): where the work stands and what comes next
 
-Read this instead of the previous session's transcript. Project rules: `CLAUDE.md`; the
-self-field plan and its log: `docs/DARWIN.md` §4–5; decisions: `docs/DECISIONS.md` (DEC-26,
-DEC-27 are the latest).
+Read this instead of the previous sessions' transcripts. Project rules: `CLAUDE.md`; the
+self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/DRUDE.md`
+"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-27, DEC-28 the latest).
 
 ## State
 
-`main` = `worktree-tubes-next` (worktree `.claude/worktrees/tubes-next`). Landed on 2026-10-27/28:
+`main` = `worktree-tubes-next` (worktree `.claude/worktrees/tubes-next`).
 
-- `1e3fdf7` nested metals keep their carriers (`Tube::metal_of`, `Lattice::holds`): V-D7, the
-  transformer test, passes (11.6 %); its old 40° failure was this bug.
-- `08f57fd` self-field circuits (DEC-27, approved by the owner): with a level's speed of light,
-  each supplied electrode with a border lead is a circuit node; the lead's current is a field
-  source and its EMF is in the branch (`crates/physics/src/tube/leads.rs`); every circuit
-  closes along the grounded envelope to a ground terminal (`LeadPlan::returns`,
-  `circuit_paths`). Refused with the self-field until modelled: leads from rings, circuits
-  between electrodes, straps. Tests: leads.rs unit tests, Y27 (`darwin.rs`, `--ignored`).
-- `76e2bc8` lead beads in every view (`level::tube_em::LeadFlow`, test
-  `lead_flow_keeps_kirchhoffs_law`).
-- `b2185e7`, `4597a78` DEC-27's approval; model notes for self-field levels (`level::model`).
+- The heavy-test verification of `4597a78` (the self-field circuits, nested metals): all 521
+  verdicts passed, golden hashes included (`scripts/refresh_coverage.py`, 02:50–07:24, 4.6 h
+  against the 11.4 h estimated; the coverage of 395 tests recorded with it).
+- Ring-shaped metals in the level format (task #34, DEC-28): `MetalSpec::hole`, one
+  rectangular hole with walls at least a cell wide; the builder (`Lattice::with_hole`,
+  carriers from the net area), setup issues (the thinnest wall for the mean-free-path rule, a
+  metal allowed wholly in a ring's hole), cuts (the metal whose conductor holds the middle;
+  past a hole's edge), the editor (a hole checkbox, two node pickers; `check_editable`), the
+  display (`MetalView::{hole, holds, pieces, cell_area, background_at}`: the hole's outline,
+  the backgrounds wall by wall, map cells counting their conductor only, no drift chevrons on
+  a ring), the solver's cuts across a ring's walls, `pairs.py` `tube_ring` (and its cut
+  element now cuts a ring's wall). Tests: `rings_circulate` (lattice; `L/P = −2⟨Ḃ⟩/⟨Ḃ²⟩` to
+  −0.75 %; a cut ring; the quarter turn, PHYSICS.md Y29), `ring_setup_rules`,
+  `ring_holes_are_editable`. Levels without a hole are bit for bit unchanged (every number
+  keeps its original arithmetic; the 521 verdicts on the commit say so).
+- Not done from DRUDE.md Phase 2 item 3: contacts on a ring's inner side (an electrode in the
+  hole is refused: its lead would cross the ring; the Corbino disc needs one). In the
+  electrostatic model a lead is only drawn, so it could be allowed there with the lead drawn
+  across (refused with the self-field, as a lead from a ring is, DEC-27).
+- Coverage of the commit's heavy tests not yet recorded: `python scripts/affected.py refresh`
+  (hours; or `scripts\refresh_coverage.cmd`) before the next engine change, else that change
+  selects all 521 again.
 
-## 1. The heavy-test verification (running since 2026-10-28 02:50)
+## The finding that changes the Transformer's design
 
-`scripts/refresh_coverage.py` (job `coverage-refresh`, 874 items: 521 verdicts then 353
-coverage runs, ~11.4 h, expected end ~14:15) on `4597a78`, in its own window, building in the
-worktree's `target/`. Do not build in that worktree while it runs.
+**A cut does not open a ring at a level's frequencies** (PHYSICS.md §2.11 *Rings*, test
+`rings_circulate` (c)). A cut ring is a capacitor in series with its resistance: the slit's
+faces, screening lengths apart (~0.2 per unit length), in parallel with its two arms facing
+each other across the hole and round the outside (a few tenths). At ω = 0.125 a cut ring 12 ×
+12 (walls 2) carried 103 % of the closed ring's current though no carrier crossed the cut. A
+slit opens a ring only where `ωP/(4πσd) ≪ 1`: the levels' metals have `4πσ ≈ 3`, conducting
+only a few times faster than the drives swing (a real metal's `4πσ` is ~10¹⁸ s⁻¹), so a cut,
+or a gap a unit or two wide, opens a turn only at ω of a few hundredths, where the self-field's
+effects (`ωL/R`, ~0.45 ω for V-D7's secondary at c = 3: L ≈ 100, R ≈ 220 by its two-coil
+fit) are gone. A more conductive metal hardly helps: a cut ring is a series RLC, open only
+below its resonance `1/√(LC)` (~0.15–0.2 at c = 3) and inductive only above `R/L`; both at
+once need `√(L/C) ≫ R` (√(L/C) ≈ 14 here), which the levels' metals miss by an order of
+magnitude, and the densest carriers the self-field's step allows (`ω_p dt ≤ 0.2` at dt 0.012:
+ρ ≲ 20) only bring R to about √(L/C). (That resonance is itself a level: a split-ring
+resonator, the metamaterials' element.)
 
-- Progress: `python scripts/progress.py status` (or `/progress`). If it shows `lost` or
-  stopped early, run `scripts\refresh_coverage.cmd` again: finished tests are kept.
-- Results: `python scripts/affected.py status` (failures, stale records). A failing test runs
-  alone: `cargo test --release -p level --test per_level -- --ignored <name>` (one name per
-  invocation: the harness takes one filter).
-- Expectation: every verdict passes. The session's engine changes are bit for bit unchanged for
-  levels without a speed of light (none ships one), checked on golden 106, 107, 108, 109, 113.
-  A golden-hash mismatch is then a real regression: suspect `1e3fdf7` (which lattice a carrier
-  belongs to, `crates/physics/src/tube/metals.rs`) or `08f57fd` (`circuits.rs`: nodes and the
-  circuit system with no lead branches must be as before). Never update golden hashes to make
-  them pass.
-- After it: note the outcome in the next commit's `affected.py note`.
+## Next: the Transformer (task #61) — a decision for the owner
 
-## 2. Ring-shaped metals in the level format (task #34; needed by the Transformer level)
+The handoff's suggested controls (the drive's amplitude and a cut in the secondary) cannot
+work, and a level with only the solenoid's amplitude is one slider scaling everything (the
+owner's rule: an introduction at most). The other player controls of a swinging-field level
+cannot act on the induction: plates and supplies are refused beside an isolated metal (every
+electrode must float, OP-1), free charges do not couple.
 
-Physics already has rings: `Lattice::with_hole` (walls, no cores, carriers or background inside)
-and nested metals since `1e3fdf7`. Steps:
+Recommended: **first the drive's frequency on a slider** (DRUDE.md Phase 2 item 2, already
+approved; 1–2 days: the format, the editor and its ranges, `generator window` over it, the
+AC conductivity test through the level path against D2), then the Transformer with two
+sliders, the solenoid's amplitude B₀ and its frequency ω:
 
-1. Format: `MetalSpec::hole: Option<[Node; 2]>` (`crates/level/src/tube/mod.rs`, serde default,
-   skipped when None): the hole's grid corners strictly inside `corners`, walls ≥ 1 cell.
-2. Builder (`crates/level/src/tube/build.rs`, the lattices ~line 103, `metal_lattice` ~line 9):
-   apply `.with_hole(...)`; the carriers' count from the net area (area − hole), not the
-   rectangle's.
-3. Editor (`crates/game/src/level_editor/tube.rs` ~line 312, destructured exhaustively, no `..`):
-   a hole checkbox and two `node()` pickers; `check.rs` (~line 174): corners on the grid, inside
-   the metal by ≥ 1 cell (sandbox completeness: `all_levels_are_reproducible_in_the_sandbox`).
-4. Issues (`tube/issues.rs`): the hole inside its metal, clear of its contacts' faces; a metal
-   may lie wholly inside another's hole (relax the metals' overlap check for that case only).
-5. Geometry and display: everything using `metal_rect` must leave the hole open: the leads'
-   router obstacles (`crates/level/src/leads.rs`), `TubeEm::new`'s background deposit
-   (`tube_em.rs`), the metal maps and cell accounts, the board's drawing of a metal.
-6. Tests: a ring's lattice (no carriers in the hole, the count from the net area); a ring in a
-   swinging field circulates (a short run); sandbox reproducibility; add a ring metal to
-   `scripts/pairs.py`'s `ELEMENTS`; a capture (`EM_CAPTURE`, `EM_LEVEL_FILE`).
-7. Docs: PHYSICS.md (metals), a DECISIONS.md entry, LEVELS.md if a level uses it.
+- Physics shown: the secondary screens the primary as `ωL₂/R₂` grows (the field inside it
+  `B_ext R₂/(R₂ + iωL₂)`): over `ωL₂/R₂` = 0.3–3 the primary's heat against the secondary's
+  falls about tenfold. Goals on both rings' heats (or on the gap field's amplitude and phase):
+  the ratio pins ω, the size then pins B₀. Interacting controls, both rings visible on the
+  self-field map.
+- Parameters to reach `ωL/R` ~ 1 at playable frequencies (ω ≲ 1, well below ω_p and with
+  ωτ < 1): c = 2 (L ×2.25 against c = 3), walls 2 with ℓ = 0.5 (R halved against V-D7's walls
+  1; ℓ ≤ a quarter of the wall, `metal_issues`): `L₂/R₂` ≈ 2 instead of 0.45.
+- To ask the owner with it: the slider rule for a frequency (the potentials' "symmetric about
+  0" does not apply; a range [ω_min, ω_max] with the answer clear of its ends and middle?),
+  and the preview's time: V-D7 runs ~4 min per 9 periods at ω = 0.8 with ~7000 carriers; at
+  ω ≈ 0.5 a few periods is 30–40 time units, ~2 min a preview and ~8 a verification unless the
+  carriers per area drop (more noise).
 
-## 3. The first self-field level: Transformer (task #61, after #34)
-
-From V-D7 (`crates/physics/tests/darwin.rs`, `transformer`): two nested closed rings (primary
-14 × 14 in a secondary 20 × 20, walls 1, the tests' metal) in the solenoid's swinging field
-(`solenoid_drive`), speed of light 3, step ≤ 0.012 (`SELF_FIELD_MAX_STEP`).
-
-- Controls must interact (no one-slider scaling; the owner's rule): e.g. the drive's amplitude
-  and a cut in the secondary or the primary's size, the goal (the secondary's current, read as
-  `B_z` in the gap, or its heat) needing both; sliders symmetric about 0, a comfortable solving
-  interval (≥ ~5 % of the range) avoiding 0, the ends and the halves' middles
-  (`generator window`).
-- Show: the self-field magnetic map (the primary screening its hole, the secondary's field in
-  the gap). The model notes already state the self-field (`4597a78`).
-- Run times: V-D7's runs take ~4 min per 9 periods at ω 0.8 with ~7000 carriers; keep the
-  level's runs to a few periods, carriers per area modest; check the preview's time.
-- Checklist (CLAUDE.md): `scripts/designs/` (its arc) and `curriculum.py`; `scripts/reality.py`
-  (headline: a transformer's mutual inductance; simplified: z-invariant one-turn coils, slow
-  light); scales; `python scripts/levels.py --only <slug>`; golden hash with
-  `GOLDEN_ONLY=<slug>`; reference and radiation tests; the level document
-  (`scripts/level_docs.py new`); `docs/LEVELS.md`; a capture.
+The rest of the Transformer's checklist stands (CLAUDE.md): `scripts/designs/` and
+`curriculum.py`; `scripts/reality.py` (headline: a transformer's mutual inductance;
+simplified: z-invariant one-turn coils, slow light); scales; `python scripts/levels.py --only
+<slug>`; golden hash with `GOLDEN_ONLY=<slug>`; reference and radiation tests; the level
+document (`scripts/level_docs.py new`); `docs/LEVELS.md`; a capture.
 
 ## Working notes
 
@@ -89,8 +88,12 @@ From V-D7 (`crates/physics/tests/darwin.rs`, `transformer`): two nested closed r
   `git push -q origin worktree-tubes-next:main` and `git push -q origin worktree-tubes-next`.
   The owner pulls and builds `cargo build --release -p game -p generator`.
 - Before committing: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo test --workspace`, the affected heavy tests; `python -m mypy` / `pytest` for scripts;
-  `python scripts/measured.py update`, `python scripts/physics_pdf.py` after PHYSICS.md edits.
+  `cargo test --workspace`, the affected heavy tests (`affected.py run --no-coverage`, then
+  `refresh`); `python -m mypy` / `pytest` for scripts; `python scripts/measured.py update`,
+  `python scripts/physics_pdf.py` after PHYSICS.md edits.
+- Edit scripts written through a Bash heredoc lose doubled backslashes (`\\` became `\`, so a
+  replacement matching Rust's string continuations silently missed): use the Edit tool for
+  such text, or write the script with the Write tool.
 - The Bash guard refuses compound commands with computed values: write small Python scripts in
   `target/scratch` and run them. Windows file locks (Errno 22): retry.
 - Never send clicks or keys to the desktop; captures through the game's own `EM_CAPTURE`.

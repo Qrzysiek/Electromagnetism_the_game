@@ -165,6 +165,12 @@ const METAL_SEED: u64 = 0x6d65_7461_6c73;
 pub struct MetalSpec {
     /// Two opposite corners of the rectangle.
     pub corners: [Node; 2],
+    /// A hole through it (two opposite corners, inside the rectangle with walls at least a
+    /// cell wide), which makes it a ring, a one-turn coil along z (`Lattice::with_hole`: no
+    /// cores, carriers or background in it, its edges walls). Another metal may lie in it.
+    /// None: solid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hole: Option<[Node; 2]>,
     /// Its contacts (indices into the level's `electrodes`): boxes along its sides, each
     /// touching one side with its whole face.
     pub contacts: Vec<usize>,
@@ -674,12 +680,15 @@ pub struct MetalRates {
     pub power: Vec<f64>,
 }
 
-/// A metal as the display shows it (`TubeSpec::metals`): its rectangle, its background's
-/// charge per area (the ions'), its cores and its carriers' thermal speed `√(kT/m)`.
+/// A metal as the display shows it (`TubeSpec::metals`): its rectangle, a ring's hole, its
+/// background's charge per area (the ions'), its cores and its carriers' thermal speed
+/// `√(kT/m)`.
 #[derive(Clone, Debug, Default)]
 pub struct MetalView {
     pub lo: DVec3,
     pub hi: DVec3,
+    /// A ring's hole (`MetalSpec::hole`: the format's one), its corners; None: solid.
+    pub hole: Option<(DVec3, DVec3)>,
     pub background: f64,
     pub cores: Vec<[f32; 2]>,
     pub core_radius: f64,

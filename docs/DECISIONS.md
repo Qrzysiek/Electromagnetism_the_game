@@ -903,3 +903,48 @@ Entries are numbered in order and never renumbered.
   - 2026-10-28: approved by the owner ("whatever is more accurate"): the closure is the
     accurate one, a circuit's inductance then the drawn loop's (two leads' within 0.52 % of
     the closed form), not the grid's frame's distance.
+
+## DEC-28: Ring-shaped metals in the level format: one rectangular hole
+
+- **Status:** in use (2026-10-28)
+- **Area:** level format, level geometry, display
+- **Choice:** a tube level's metal may have one rectangular hole (`MetalSpec::hole`: two grid
+  corners inside the metal, walls at least a cell wide), built as the physics' ring
+  (`Lattice::with_hole`): the cores drawn over the whole rectangle at its density and those
+  centred in the hole removed, the carriers counted from the conductor's area alone. The
+  mean free path rule and the contacts' neutral layer take the thinnest wall; contacts lie
+  along the outer sides; another metal may lie wholly in the hole, but no electrode,
+  projectile or free charge. Cuts belong to the metal whose conductor holds their middle, and
+  reach past a hole's edge as past the outer one. The leads' router keeps the whole rectangle
+  as its obstacle (nothing in a hole has a lead). The display (`MetalView::hole`) builds the
+  background wall by wall (`pieces`), counts each map cell's conductor only (`cell_area`),
+  draws the hole's outline and no drift chevrons on a ring.
+- **Purpose:** the Transformer level (V-D7's nested rings) and any inductor's turn in a level
+  (docs/DRUDE.md Phase 2, "ring shapes"; the handoff's task #34); the physics had rings
+  since the Darwin stage, the format did not.
+- **Alternatives:** several holes per metal (no level needs them; the walls' decomposition
+  into rectangles, `pieces`, is then a general one); a ring as four strip metals touching at
+  the corners (four lattices, carriers unable to pass between them: not one conductor);
+  round rings (`Lattice::with_disc` with a hole: the board's grid and the cells are
+  rectangular, and nothing asks for one); electrodes in a hole (a contact on a ring's inner
+  side, a rod inside a ring): its lead would have to cross the ring, which the router cannot
+  and the self-field's circuits do not model (DEC-27), so refused until a level needs it.
+- **Where:** `crates/level/src/tube/mod.rs` (`MetalSpec::hole`, `MetalView::hole`),
+  `geometry.rs` (`metal_hole`, `metal_width`, `metal_area`, `metal_holds`, `cut_metal`),
+  `build.rs`, `issues.rs`, `frames.rs` (`MetalView::{holds, pieces, cell_area,
+  background_at}`), `run.rs`, `tube_em.rs`, `solve.rs` (cuts across a ring's walls);
+  `crates/game/src/level_editor/{tube,check}.rs`, `draw.rs`, `legend.rs`, `potential.rs`,
+  `metal_maps.rs`, `tube_views.rs`, `inspect.rs`, `probe.rs`, `scales.rs`; tests
+  `rings_circulate`, `ring_setup_rules` (`crates/level/tests/tubes.rs`),
+  `ring_holes_are_editable` (the editor), `scripts/pairs.py` `tube_ring`.
+- **History:**
+  - 2026-10-28: chosen. Found in testing it: a cut does not open a ring at the levels'
+    frequencies. The cut ring is a capacitor (the slit's faces screening lengths apart,
+    ~0.2 per unit length, and its two arms facing each other across the hole and round the
+    outside, a few tenths) in series with its resistance (~85): at ω = 0.125 it passes the
+    closed ring's current (measured 103 %, no carrier crossing the cut; test
+    `rings_circulate`, PHYSICS.md §2.11 *Rings*). A slit opens
+    a ring only where `ωP/(4πσd) ≪ 1`: the levels' metals (`4πσ ≈ 3`) conduct only a few
+    times faster than their drives swing, so neither a cut nor a gap of a unit or two opens a
+    turn at a level's frequencies, and a transformer level cannot use a cut to open its
+    secondary.

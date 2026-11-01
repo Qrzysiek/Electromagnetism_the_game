@@ -390,15 +390,18 @@ fn tube_rows(ui: &mut egui::Ui, game: &Game) {
                  replaced by another.",
             );
         }
-        row(
-            ui,
-            Swatch::Chevrons(rgb(0.95, 0.95, 0.9)),
-            "drift (the current)",
-            "The chevrons move with the metal's carriers as a whole (their mean \
-             displacement) and point the way they went over the last time unit: the drift, \
-             slow against each carrier's thermal speed. They fade when it is only the thermal \
-             motion's noise.",
-        );
+        // Drawn on solid metals alone (`draw::draw_drift`: a ring's carriers go round).
+        if spec.metals.iter().any(|m| m.hole.is_none()) {
+            row(
+                ui,
+                Swatch::Chevrons(rgb(0.95, 0.95, 0.9)),
+                "drift (the current)",
+                "The chevrons move with the metal's carriers as a whole (their mean \
+                 displacement) and point the way they went over the last time unit: the drift, \
+                 slow against each carrier's thermal speed. They fade when it is only the \
+                 thermal motion's noise.",
+            );
+        }
         if view.is_some_and(|v| v.run.has_field()) && !game.hall.is_empty() {
             let c = |k: [f32; 3]| rgb(k[0], k[1], k[2]);
             row(

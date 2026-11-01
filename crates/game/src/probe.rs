@@ -167,12 +167,12 @@ fn tube_particle(game: &Game, at: DVec3) -> Option<Section> {
 fn metal_here(game: &Game, at: DVec3) -> Option<Section> {
     let level = &game.editor.level;
     let spec = level.tube.as_ref()?;
-    let (k, m) = spec.metals.iter().enumerate().find(|(_, m)| {
-        let (lo, hi) = level.metal_rect(m);
-        (lo.x..=hi.x).contains(&at.x) && (lo.y..=hi.y).contains(&at.y)
-    })?;
+    let (k, m) = spec
+        .metals
+        .iter()
+        .enumerate()
+        .find(|(_, m)| level.metal_holds(m, at))?;
     let frame = game.tube_display_frame()?;
-    let (lo, hi) = level.metal_rect(m);
     let kind = if m.charge_per_mass < 0.0 {
         KIND_NEGATIVE
     } else {
@@ -203,8 +203,7 @@ fn metal_here(game: &Game, at: DVec3) -> Option<Section> {
                 continue;
             }
             all += 1;
-            let (x, y) = (at.x + u, at.y + w);
-            if (lo.x..=hi.x).contains(&x) && (lo.y..=hi.y).contains(&y) {
+            if level.metal_holds(m, DVec3::new(at.x + u, at.y + w, 0.0)) {
                 inside += 1;
             }
         }

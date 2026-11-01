@@ -121,12 +121,9 @@ pub(super) fn update_em(mut game: ResMut<Game>) {
 
 /// Whether a point lies in a metal of the run.
 pub(super) fn in_metals(metals: &[level::tube::MetalView], x: [f32; 2]) -> Option<usize> {
-    metals.iter().position(|m| {
-        f64::from(x[0]) >= m.lo.x
-            && f64::from(x[0]) <= m.hi.x
-            && f64::from(x[1]) >= m.lo.y
-            && f64::from(x[1]) <= m.hi.y
-    })
+    metals
+        .iter()
+        .position(|m| m.holds([f64::from(x[0]), f64::from(x[1])]))
 }
 
 /// Tube levels with metals: each metal's carriers' mean displacement, frame by frame from
@@ -260,13 +257,12 @@ pub(super) fn update_hall(game: &mut Game) {
             .filter(|v| v.run.has_field() && !v.run.metals.is_empty())?;
         let level = &game.editor.level;
         let spec = level.tube.as_ref()?;
-        // A piece (`run.metals`) belongs to the metal its centre lies in.
-        let fed = |m: &level::tube::MetalView| {
-            let c = (m.lo + m.hi) * 0.5;
-            spec.metals.iter().any(|s| {
-                let (lo, hi) = level.metal_rect(s);
-                !s.contacts.is_empty() && c.x > lo.x && c.x < hi.x && c.y > lo.y && c.y < hi.y
-            })
+        // A lattice per metal (`run.metals`, in the level's order); a strip's diagram, not a
+        // ring's (its middle is the hole).
+        let fed = |k: usize| {
+            spec.metals
+                .get(k)
+                .is_some_and(|s| !s.contacts.is_empty() && s.hole.is_none())
         };
         let frame = game.tube_display_frame()?;
         let before = v.run.frame_between(frame.t - draw::DRIFT_SPAN)?;
@@ -275,7 +271,7 @@ pub(super) fn update_hall(game: &mut Game) {
         }
         Some(
             (0..v.run.metals.len())
-                .filter(|&k| fed(&v.run.metals[k]))
+                .filter(|&k| fed(k))
                 .filter_map(|k| v.run.hall_forces(&frame, &before, k))
                 .collect(),
         )

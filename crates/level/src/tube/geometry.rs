@@ -77,6 +77,48 @@ impl Level {
         )
     }
 
+    /// A ring's hole (lower and upper corners; `MetalSpec::hole`), None for a solid metal.
+    #[must_use]
+    pub fn metal_hole(&self, m: &MetalSpec) -> Option<(DVec3, DVec3)> {
+        let [a, b] = m.hole?;
+        let (a, b) = (self.grid.position(a), self.grid.position(b));
+        Some((
+            DVec3::new(a.x.min(b.x), a.y.min(b.y), 0.0),
+            DVec3::new(a.x.max(b.x), a.y.max(b.y), 0.0),
+        ))
+    }
+
+    /// A metal's narrowest width: its rectangle's shorter side, a ring's thinnest wall.
+    #[must_use]
+    pub fn metal_width(&self, m: &MetalSpec) -> f64 {
+        let (lo, hi) = self.metal_rect(m);
+        let whole = (hi.x - lo.x).min(hi.y - lo.y);
+        self.metal_hole(m).map_or(whole, |(a, b)| {
+            (a.x - lo.x).min(hi.x - b.x).min(a.y - lo.y).min(hi.y - b.y)
+        })
+    }
+
+    /// A metal's conductor's area: its rectangle's, less its hole's.
+    #[must_use]
+    pub fn metal_area(&self, m: &MetalSpec) -> f64 {
+        let (lo, hi) = self.metal_rect(m);
+        let whole = (hi.x - lo.x) * (hi.y - lo.y);
+        self.metal_hole(m)
+            .map_or(whole, |(a, b)| whole - (b.x - a.x) * (b.y - a.y))
+    }
+
+    /// Whether `x` lies in a metal's conductor: in its rectangle (its edges included), not
+    /// inside its hole.
+    #[must_use]
+    pub fn metal_holds(&self, m: &MetalSpec, x: DVec3) -> bool {
+        let (lo, hi) = self.metal_rect(m);
+        let in_rect = x.x >= lo.x && x.x <= hi.x && x.y >= lo.y && x.y <= hi.y;
+        in_rect
+            && self
+                .metal_hole(m)
+                .is_none_or(|(a, b)| !(x.x > a.x && x.x < b.x && x.y > a.y && x.y < b.y))
+    }
+
     /// An axis-aligned box electrode's corners (None for another shape or angle).
     pub(super) fn electrode_box(&self, e: usize) -> Option<(DVec3, DVec3)> {
         let el = self.electrodes.get(e)?;
@@ -149,11 +191,10 @@ impl Level {
     }
 
     /// The depth of the layer a metal's contacts keep neutral: half a mean free path, at
-    /// most a quarter of the metal's width.
+    /// most a quarter of the metal's width (a ring's thinnest wall).
     #[must_use]
     pub fn contact_depth(&self, m: &MetalSpec) -> f64 {
-        let (lo, hi) = self.metal_rect(m);
-        (0.5 * m.mean_free_path).min(0.25 * (hi.x - lo.x).min(hi.y - lo.y))
+        (0.5 * m.mean_free_path).min(0.25 * self.metal_width(m))
     }
 
     /// A cut's slit (`ElementKind::Cut`): from its node along `angle_deg` for `value` (its
@@ -176,7 +217,8 @@ impl Level {
     }
 
     /// The metal a cut lies in: both its ends in the metal's rectangle (on its edges too),
-    /// its middle inside.
+    /// its middle inside, in the conductor (a ring's: not in its hole, where another metal
+    /// may lie).
     #[must_use]
     pub fn cut_metal(&self, e: &Element) -> Option<usize> {
         let spec = self.tube.as_ref()?;
@@ -188,7 +230,13 @@ impl Level {
             let within = |p: DVec3| {
                 p.x >= lo.x - tol && p.x <= hi.x + tol && p.y >= lo.y - tol && p.y <= hi.y + tol
             };
-            within(a) && within(b) && m.x > lo.x && m.x < hi.x && m.y > lo.y && m.y < hi.y
+            within(a)
+                && within(b)
+                && m.x > lo.x
+                && m.x < hi.x
+                && m.y > lo.y
+                && m.y < hi.y
+                && self.metal_holds(metal, m)
         })
     }
 

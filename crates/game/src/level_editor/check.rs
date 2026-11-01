@@ -173,6 +173,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             && metals.iter().all(|m| {
                 let MetalSpec {
                     corners,
+                    hole,
                     contacts,
                     density,
                     charge_per_mass,
@@ -185,7 +186,14 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     label: _,
                 } = m;
                 let positive = |v: f64| (MIN_POSITIVE..=MAX_POSITIVE).contains(&v);
+                // A hole's corners on the grid, strictly inside the metal (its walls' width
+                // the setup's issue, `Level::metal_issues`).
+                let inside = |c: &level::Node| {
+                    let (a, b) = (corners[0], corners[1]);
+                    (0..2).all(|i| c[i] > a[i].min(b[i]) && c[i] < a[i].max(b[i]))
+                };
                 corners.iter().all(|c| grid.contains(*c))
+                    && hole.is_none_or(|h| h.iter().all(|c| grid.contains(*c) && inside(c)))
                     && contacts.len() <= MAX_COUNT as usize
                     && contacts.iter().all(|e| *e < n)
                     && positive(*density)

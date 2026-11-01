@@ -656,11 +656,11 @@ fn metal_scales(level: &Level, m: &level::tube::MetalSpec, b: f64, field: f64) -
     let mean_speed = sigma * 1.253_314_137_315_500_3;
     let tau = ell / mean_speed;
     let kt_over_q = sigma * sigma / qm;
-    let (lo, hi) = level.metal_rect(m);
     MetalScales {
         wct: qm * b * tau,
         heating: field * ell / kt_over_q,
-        width: (hi.x - lo.x).min(hi.y - lo.y) / ell,
+        // A ring's: its thinnest wall.
+        width: level.metal_width(m) / ell,
         debye: (kt_over_q / (4.0 * std::f64::consts::PI * m.density)).sqrt() / ell,
         wp_tau: (4.0 * std::f64::consts::PI * m.density * qm).sqrt() * tau,
         gyration: if b > 0.0 {
@@ -865,7 +865,6 @@ fn metals(
     if let (Some(v), Some(m)) = (gate, spec.metals.first()) {
         let kt_over_q = m.thermal_speed * m.thermal_speed / m.charge_per_mass.abs();
         let debye = (kt_over_q / (4.0 * std::f64::consts::PI * m.density)).sqrt();
-        let (lo, hi) = level.metal_rect(m);
         lines.push(Scale {
             quantity: "the gate's potential in thermal voltages kT/q",
             here: format!("{} / {} = {}", num(v), num(kt_over_q), num(v / kt_over_q)),
@@ -879,7 +878,7 @@ fn metals(
         });
         lines.push(Scale {
             quantity: "the channel's width in screening (Debye) lengths",
-            here: num((hi.x - lo.x).min(hi.y - lo.y) / debye),
+            here: num(level.metal_width(m) / debye),
             real: "a transistor's channel: a few nm, a few screening lengths; a metal screens \
                    within an atom, so no gate reaches inside it",
             detail: "How far a gate's field reaches into the channel before the carriers screen \
