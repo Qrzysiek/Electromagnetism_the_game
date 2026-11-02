@@ -361,8 +361,9 @@ pub(super) fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Lev
         ui.label(egui::RichText::new(format!("{shown} particles in flight now")).small());
         // The Joule heat: the power the field gave the metals' carriers over the last 10 time
         // units, what a heat goal measures (`MetalCells::work`: in a metal without contacts
-        // the induced field's alone). Not the lattices' tally (`TubeFrame::heat`), which also
-        // holds the macroparticles' stirring of each other (DEC-33).
+        // the drive's work and the other metals' currents' power, DEC-34). Not the lattices'
+        // tally (`TubeFrame::heat`), which also holds the macroparticles' stirring of each
+        // other (DEC-33).
         if !spec.metals.is_empty()
             && let Some(k) = game.tube_frame()
             && let Some(f1) = v.run.frames.get(k)
@@ -391,7 +392,8 @@ pub(super) fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Lev
                     ),
                     "The power the field gives the metals' carriers, per unit length along z, \
                      over the last 10 time units: what a heat goal measures (in a metal \
-                     without contacts the induced field's alone). In a steady state it is \
+                     without contacts the drive's alone and the power the other metals' \
+                     currents pass it). In a steady state it is \
                      all heat: the lattice takes it at the collisions, but for the energy \
                      carriers bring into a contact (about a tenth of the supplies' I V). Not \
                      the lattice's own tally: that also holds the macroparticles' stirring of \

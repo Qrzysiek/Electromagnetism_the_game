@@ -129,6 +129,9 @@ pub struct Darwin2d {
     pub iterations: usize,
 }
 
+/// Points on the plane, one per edge (`Darwin2d::edge_positions`).
+pub type EdgePoints = Vec<(f64, f64)>;
+
 /// Edge-centred fields: `x` on the vertical edges (`A_x`, `J_x` at `(i, j + ½)`, `i = 1..=nx`,
 /// `j = 0..=ny`: index `(i − 1) + nx j`), `y` on the horizontal ones (`(i + ½, j)`,
 /// `i = 0..=nx`, `j = 1..=ny`: index `i + (nx + 1)(j − 1)`).
@@ -361,6 +364,45 @@ impl Darwin2d {
         b
     }
 
+    /// The vector potential of the current density `j` (per area, on the edges) alone in the
+    /// vacuum: `A = ∇ × χẑ` with `(1/μ₀) L² χ = curlᵀ j` (`vacuum_inverse`, one pass of sine
+    /// transforms, no iterations). The solve's `χ` is that of the physical current, the
+    /// canonical less the carriers' response (`j − β A`): in the Darwin limit `A` is the
+    /// vacuum's field of the currents, so a part of them has its part of `A` (test
+    /// `vacuum_field_of_the_physical_current_is_the_solves`; `Tube::book_mutual`).
+    #[must_use]
+    pub fn vacuum_field(&self, j: &Edges) -> Edges {
+        let n = self.nx * self.ny;
+        let mut rhs = vec![0.0; n];
+        self.curl_t(j, &mut rhs);
+        let mut chi = vec![0.0; n];
+        self.vacuum_inverse(&rhs, &mut chi);
+        let mut a = Edges::zeros(self);
+        self.curl(&chi, &mut a);
+        a
+    }
+
+    /// The edges' middles: the x-edges' `(i, j + ½)` and the y-edges' `(i + ½, j)`, in
+    /// `Edges` order.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn edge_positions(&self) -> (EdgePoints, EdgePoints) {
+        let (o, h) = (self.origin, self.h);
+        let mut x = Vec::with_capacity(self.nx * (self.ny + 1));
+        for j in 0..=self.ny {
+            for i in 1..=self.nx {
+                x.push((o.0 + i as f64 * h, o.1 + (j as f64 + 0.5) * h));
+            }
+        }
+        let mut y = Vec::with_capacity((self.nx + 1) * self.ny);
+        for j in 1..=self.ny {
+            for i in 0..=self.nx {
+                y.push((o.0 + (i as f64 + 0.5) * h, o.1 + j as f64 * h));
+            }
+        }
+        (x, y)
+    }
+
     /// `A_T = ∇ × χẑ` on the edges.
     #[must_use]
     pub fn a(&self) -> Edges {
@@ -535,6 +577,71 @@ mod tests {
         for (a, b) in back.iter().zip(&x) {
             assert!((a * 2.0 / (n + 1) as f64 - b).abs() < 1e-12);
         }
+    }
+
+    /// A part of the currents alone in the vacuum (`vacuum_field`): the solve's `A`, with a
+    /// screening medium (β over a band of the grid) and two loops' canonical currents, is
+    /// the vacuum's field of the physical current `j − β A`, to the solve's tolerance; split
+    /// into the two loops' physical currents (the response shared evenly), the parts add up
+    /// to it. Required 1e-9 of its largest value (the solve's 1e-12 residual).
+    #[test]
+    fn vacuum_field_of_the_physical_current_is_the_solves() {
+        let mut g = Darwin2d::new(31, 31, 0.25, (-4.0, -4.0), 3.0);
+        let first = loop_current(&g, 0.7, (6, 6), (14, 20));
+        let second = loop_current(&g, -0.3, (18, 10), (26, 24));
+        let mut j = Edges::zeros(&g);
+        let mut beta = Edges::zeros(&g);
+        for k in 0..j.x.len() {
+            j.x[k] = first.x[k] + second.x[k];
+            beta.x[k] = if (k % 31) > 4 && (k % 31) < 27 {
+                2.0
+            } else {
+                0.0
+            };
+        }
+        for k in 0..j.y.len() {
+            j.y[k] = first.y[k] + second.y[k];
+            beta.y[k] = if (k % 32) > 4 && (k % 32) < 27 {
+                2.0
+            } else {
+                0.0
+            };
+        }
+        g.solve(&j, &beta, 1e-12);
+        let a = g.a();
+        let physical = |part: &Edges| Edges {
+            x: part
+                .x
+                .iter()
+                .zip(&beta.x)
+                .zip(&a.x)
+                .map(|((p, b), a)| p - b * a * 0.5)
+                .collect(),
+            y: part
+                .y
+                .iter()
+                .zip(&beta.y)
+                .zip(&a.y)
+                .map(|((p, b), a)| p - b * a * 0.5)
+                .collect(),
+        };
+        let (v1, v2) = (
+            g.vacuum_field(&physical(&first)),
+            g.vacuum_field(&physical(&second)),
+        );
+        let scale = a.x.iter().chain(&a.y).map(|v| v.abs()).fold(0.0, f64::max);
+        let mut worst: f64 = 0.0;
+        for (k, a) in a.x.iter().enumerate() {
+            worst = worst.max((v1.x[k] + v2.x[k] - a).abs());
+        }
+        for (k, a) in a.y.iter().enumerate() {
+            worst = worst.max((v1.y[k] + v2.y[k] - a).abs());
+        }
+        println!(
+            "the parts' vacuum fields against the solve's A: {:.1e} of its largest",
+            worst / scale
+        );
+        assert!(worst < 1e-9 * scale, "worst {worst} of {scale}");
     }
 
     /// A square loop of current: `J = curl ψ₀`, ψ₀ = K on the nodes inside (a sheet current

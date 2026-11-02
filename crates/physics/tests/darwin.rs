@@ -455,6 +455,22 @@ fn concentric_heats(
     mu0: f64,
     b0: f64,
 ) -> Vec<f64> {
+    concentric(rings, sigma, omega, mu0, b0)
+        .into_iter()
+        .map(|(heat, _)| heat)
+        .collect()
+}
+
+/// `concentric_heats` with each conductor's share of the drive's work,
+/// `½ Re ∫ E_d·J* 2πr dr`, `E_d = −iωB₀r/2` the solenoid's own induced field: (heat, drive's
+/// work) per conductor.
+fn concentric(
+    rings: &[(f64, f64)],
+    sigma: Complex64,
+    omega: f64,
+    mu0: f64,
+    b0: f64,
+) -> Vec<(f64, f64)> {
     let zero = Complex64::new(0.0, 0.0);
     // The pieces from the centre out: (from, to, whether a conductor).
     let mut pieces = Vec::new();
@@ -482,6 +498,8 @@ fn concentric_heats(
         let n = 2 * (libm::ceil(2000.0 * (b - a)) as u32).max(1);
         let h = (b - a) / f64::from(n);
         let mut integral = 0.0;
+        // ∫ E_d J* 2πr dr per unit B₀, with the unscaled solution.
+        let mut drive = zero;
         for i in 0..=n {
             let r = a + h * f64::from(i);
             let weight = if i == 0 || i == n {
@@ -492,8 +510,10 @@ fn concentric_heats(
                 2.0
             };
             if r > 0.0 {
-                let e = phi * (omega / (2.0 * PI * r));
+                let e = phi * Complex64::new(0.0, -omega / (2.0 * PI * r));
                 integral += weight * e.norm_sqr() * 2.0 * PI * r;
+                let e_drive = Complex64::new(0.0, -0.5 * omega * r);
+                drive += e_drive * (s * e).conj() * (weight * 2.0 * PI * r);
             }
             if i == n {
                 break;
@@ -506,16 +526,22 @@ fn concentric_heats(
             bz += (k1.1 + k2.1 * 2.0 + k3.1 * 2.0 + k4.1) * (h / 6.0);
         }
         if conductor {
-            heats.push(0.5 * s.re * integral * h / 3.0);
+            heats.push((0.5 * s.re * integral * h / 3.0, drive * (h / 3.0)));
         }
     }
+    // The solution scaled by B₀/B(outside): the heat by its square, the drive's work (the
+    // drive's field fixed, the current scaled) by its conjugate.
     let scale = b0 * b0 / bz.norm_sqr();
-    heats.into_iter().map(|p| p * scale).collect()
+    let conj = (Complex64::new(1.0, 0.0) / bz).conj();
+    heats
+        .into_iter()
+        .map(|(p, d)| (p * scale, 0.5 * b0 * b0 * (conj * d).re))
+        .collect()
 }
 
-/// An annulus of the tests' metal about the origin (`inner` 0: a disc), `carriers`
+/// An annulus of `material` about the origin (`inner` 0: a disc), `carriers`
 /// macroparticles, its cores as V-D6's disc's (a mean free path of 0.5).
-fn annulus(inner: f64, outer: f64, carriers: usize, seed: u64) -> Lattice {
+fn annulus(inner: f64, outer: f64, material: Material, carriers: usize, seed: u64) -> Lattice {
     let half = DVec3::new(outer * 1.001, outer * 1.001, 0.0);
     let (lo, hi) = (-half, half);
     let square = (hi.x - lo.x) * (hi.y - lo.y);
@@ -523,7 +549,7 @@ fn annulus(inner: f64, outer: f64, carriers: usize, seed: u64) -> Lattice {
     let count = libm::round(square / (2.0 * A * MEAN_FREE_PATH)) as usize;
     let cores = Lattice::random_cores(lo, hi, count, A, seed ^ 31);
     let lattice =
-        Lattice::new(lo, hi, common::metal(A), cores, carriers, seed).with_disc(DVec3::ZERO, outer);
+        Lattice::new(lo, hi, material, cores, carriers, seed).with_disc(DVec3::ZERO, outer);
     if inner > 0.0 {
         lattice.with_round_hole(DVec3::ZERO, inner)
     } else {
@@ -531,16 +557,134 @@ fn annulus(inner: f64, outer: f64, carriers: usize, seed: u64) -> Lattice {
     }
 }
 
+/// One run of concentric rings (`annulus`, each with `per_area` carriers of `material`) in a
+/// field `b0 sin ωt` with the self-field at c, step `dt`, its seed: each ring's heat over
+/// periods 2–14 by the induced fields' work (`inductive_work`), by the drive's
+/// (`induced_work`) and by the drive's with the others' currents' power (`induced_work +
+/// mutual_work`, an isolated metal's heat goal).
+#[allow(clippy::too_many_arguments)]
+fn concentric_run(
+    rings: &[(f64, f64)],
+    material: Material,
+    per_area: f64,
+    (c, omega, b0, dt): (f64, f64, f64, f64),
+    seed: u64,
+) -> Vec<(f64, f64, f64)> {
+    let period = 2.0 * PI / omega;
+    let (start, end) = (2.0 * period, 14.0 * period);
+    let lattices: Vec<Lattice> = rings
+        .iter()
+        .enumerate()
+        .map(|(j, (a, b))| {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let carriers = libm::round(per_area * PI * (b * b - a * a)) as usize;
+            annulus(*a, *b, material, carriers, seed + 100 * j as u64)
+        })
+        .collect();
+    let outer = rings[rings.len() - 1].1;
+    let electrodes = common::small_floating_electrode(DVec3::new(-40.0, -40.0, 0.0));
+    let tube = Tube {
+        arena: Some((
+            DVec3::new(-outer - 2.0, -outer - 2.0, 0.0),
+            DVec3::new(outer + 2.0, outer + 2.0, 0.0),
+        )),
+        b_wave: Some(SolenoidWave {
+            waveform: Waveform::Sine {
+                offset: 0.0,
+                amplitude: b0,
+                omega,
+                phase: 0.0,
+            },
+            axis: DVec3::ZERO,
+        }),
+        lattices,
+        darwin: Some(Darwin2d::new(127, 127, 0.25, (-16.0, -16.0), c)),
+        ..Tube::new(electrodes, 0.05, dt)
+    };
+    let mut s = tube.state();
+    let mut first = None;
+    while s.t < end - 0.5 * dt {
+        tube.step(&mut s);
+        if first.is_none() && s.t >= start - 0.5 * dt {
+            first = Some((
+                s.t,
+                s.inductive_work.clone(),
+                s.induced_work.clone(),
+                s.mutual_work.clone(),
+            ));
+        }
+    }
+    let (t0, w0, d0, m0) = first.expect("the window's start");
+    let span = s.t - t0;
+    (0..rings.len())
+        .map(|j| {
+            let drive = (s.induced_work[j] - d0[j]) / span;
+            (
+                (s.inductive_work[j] - w0[j]) / span,
+                drive,
+                drive + (s.mutual_work[j] - m0[j]) / span,
+            )
+        })
+        .collect()
+}
+
+/// Two seeds of `concentric_run` against the exact heats: per ring the mean ratios
+/// (induced fields', drive's, drive's with the mutual power), each seed's printed.
+fn concentric_ratios(
+    test: &str,
+    rings: &[(f64, f64)],
+    material: Material,
+    per_area: f64,
+    run: (f64, f64, f64, f64),
+    exact: &[f64],
+) -> Vec<(f64, f64, f64)> {
+    let mut sums = vec![(0.0, 0.0, 0.0); rings.len()];
+    let seeds = [47_u64, 53];
+    for seed in seeds {
+        for (j, (inductive, drive, heat)) in concentric_run(rings, material, per_area, run, seed)
+            .into_iter()
+            .enumerate()
+        {
+            let p = |v: f64| 100.0 * (v / exact[j] - 1.0);
+            println!(
+                "{test} seed {seed}, ring {}: heat {heat:.4} against {:.4} ({:+.1} %); the drive's work alone {drive:.4} ({:+.1} %); the induced fields' {inductive:.4} ({:+.1} %)",
+                j + 1,
+                exact[j],
+                p(heat),
+                p(drive),
+                p(inductive)
+            );
+            sums[j].0 += inductive / exact[j];
+            sums[j].1 += drive / exact[j];
+            sums[j].2 += heat / exact[j];
+        }
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let n = seeds.len() as f64;
+    sums.iter().map(|(a, b, c)| (a / n, b / n, c / n)).collect()
+}
+
+/// The rings' exchange (their mutual parts, the drive's work with the mutual power less the
+/// drive's alone, summed) against their heat: it conserves energy, adding up to the
+/// windows' ends alone (`TubeState::mutual_work`).
+fn exchange_left(r: &[(f64, f64, f64)], exact: &[f64]) -> f64 {
+    let exchange: f64 = r.iter().zip(exact).map(|(r, e)| (r.2 - r.1) * e).sum();
+    let heat: f64 = r.iter().zip(exact).map(|(r, e)| r.2 * e).sum();
+    exchange / heat
+}
+
 /// V-D9, a transformer's heats. Two concentric rings of the tests' metal, radii 2.5–4.5 and
 /// 5–6 (~4700 and ~3700 carriers, V-D6's disc's density), in V-D8's field (`0.2 sin t`, c = 3,
 /// dt 0.012): the outer ring's current screens the inner one, whose heat falls to ~0.5 of
 /// its own alone, and the power the outer one's field brings it through their mutual
 /// induction makes ~40 % of its heat (the drive's work on its carriers, `induced_work`, is
-/// 0.61 of it, on the outer one's 1.15). Each ring's heat by the induced fields' work, the
-/// drive's and the self-field's (`TubeState::inductive_work`, for metals coupled by their own
-/// fields), over periods 2–14, against the exact concentric conductors'
-/// (`concentric_heats`, the Boltzmann equation's σ(ω)). Required (set before measuring):
-/// each ring's two seeds' mean within 5 % (V-D8's target). The drive's work alone, the
+/// 0.61 of it, on the outer one's 1.15). Each ring's heat by the drive's work and the power
+/// the other ring's macroscopic current passes it (`induced_work + mutual_work`, an
+/// isolated metal's heat goal), and by the induced fields' work (`inductive_work`), over
+/// periods 2–14, against the exact concentric conductors' (`concentric_heats`, the Boltzmann
+/// equation's σ(ω)). Required (set before measuring): each ring's two seeds' mean within 5 %
+/// by either (V-D8's target); the rings' exchange, the sum of their mutual parts, within 1e-3
+/// of their heat (it adds up to the windows' ends alone). The drive's work alone, the
 /// measure before 2026-11-02, is printed: it fails by ~40 % and ~15 %.
 #[test]
 #[ignore = "ten minutes: two runs of 8400 carriers over 14 periods"]
@@ -548,8 +692,6 @@ fn concentric_rings_heats_are_exact() {
     let (c, omega, b0, dt) = (3.0, 1.0, 0.2, 0.012);
     let rings = [(2.5, 4.5), (5.0, 6.0)];
     let mu0 = 4.0 * PI / (c * c);
-    let period = 2.0 * PI / omega;
-    let (start, end) = (2.0 * period, 14.0 * period);
     let sigma = mobility(1.0 / MEAN_FREE_PATH, omega);
     // The radial integration against the cylinder's Bessel functions (V-D8's disc).
     let k = csqrt(Complex64::new(0.0, omega * mu0) * sigma);
@@ -579,89 +721,100 @@ fn concentric_rings_heats_are_exact() {
     let exact = concentric_heats(&rings, sigma, omega, mu0, b0);
     let alone = concentric_heats(&rings[..1], sigma, omega, mu0, b0);
     let per_area = 12_000.0 / (PI * 36.0);
-    let mut ratios = vec![Vec::new(); 2];
-    let mut drive = vec![Vec::new(); 2];
-    for seed in [47_u64, 53] {
-        let lattices: Vec<Lattice> = rings
-            .iter()
-            .enumerate()
-            .map(|(j, (a, b))| {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let carriers = libm::round(per_area * PI * (b * b - a * a)) as usize;
-                annulus(*a, *b, carriers, seed + 100 * j as u64)
-            })
-            .collect();
-        let outer = rings[1].1;
-        let electrodes = common::small_floating_electrode(DVec3::new(-40.0, -40.0, 0.0));
-        let tube = Tube {
-            arena: Some((
-                DVec3::new(-outer - 2.0, -outer - 2.0, 0.0),
-                DVec3::new(outer + 2.0, outer + 2.0, 0.0),
-            )),
-            b_wave: Some(SolenoidWave {
-                waveform: Waveform::Sine {
-                    offset: 0.0,
-                    amplitude: b0,
-                    omega,
-                    phase: 0.0,
-                },
-                axis: DVec3::ZERO,
-            }),
-            lattices,
-            darwin: Some(Darwin2d::new(127, 127, 0.25, (-16.0, -16.0), c)),
-            ..Tube::new(electrodes, 0.05, dt)
-        };
-        let mut s = tube.state();
-        let mut first = None;
-        while s.t < end - 0.5 * dt {
-            tube.step(&mut s);
-            if first.is_none() && s.t >= start - 0.5 * dt {
-                first = Some((s.t, s.inductive_work.clone(), s.induced_work.clone()));
-            }
-        }
-        let (t0, w0, d0) = first.expect("the window's start");
-        for j in 0..2 {
-            let heat = (s.inductive_work[j] - w0[j]) / (s.t - t0);
-            let by_drive = (s.induced_work[j] - d0[j]) / (s.t - t0);
-            println!(
-                "V-D9 seed {seed}, ring {}: heat {heat:.4} against {:.4} ({:+.1} %); the drive's work alone {by_drive:.4} ({:+.1} %)",
-                j + 1,
-                exact[j],
-                100.0 * (heat / exact[j] - 1.0),
-                100.0 * (by_drive / exact[j] - 1.0)
-            );
-            ratios[j].push(heat / exact[j]);
-            drive[j].push(by_drive / exact[j]);
-        }
-    }
-    #[allow(clippy::cast_precision_loss)]
-    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+    let r = concentric_ratios(
+        "V-D9",
+        &rings,
+        common::metal(A),
+        per_area,
+        (c, omega, b0, dt),
+        &exact,
+    );
     println!(
-        "V-D9: exact heats {:.4} (alone {:.4}) and {:.4}; measured/exact {:.4} and {:.4}; the drive's work alone {:.4} and {:.4}",
-        exact[0],
-        alone[0],
-        exact[1],
-        mean(&ratios[0]),
-        mean(&ratios[1]),
-        mean(&drive[0]),
-        mean(&drive[1])
+        "V-D9: exact heats {:.4} (alone {:.4}) and {:.4}; measured/exact {:.4} and {:.4}; by the induced fields' work {:.4} and {:.4}; the drive's work alone {:.4} and {:.4}",
+        exact[0], alone[0], exact[1], r[0].2, r[1].2, r[0].0, r[1].0, r[0].1, r[1].1
     );
-    measured("V-D9.inner_percent", 100.0 * (mean(&ratios[0]) - 1.0), 1);
-    measured("V-D9.outer_percent", 100.0 * (mean(&ratios[1]) - 1.0), 1);
-    measured(
-        "V-D9.drive_inner_percent",
-        100.0 * (mean(&drive[0]) - 1.0),
-        2,
-    );
-    measured(
-        "V-D9.drive_outer_percent",
-        100.0 * (mean(&drive[1]) - 1.0),
-        2,
-    );
-    for (j, r) in ratios.iter().enumerate() {
-        let m = mean(r);
-        assert!((m - 1.0).abs() < 0.05, "ring {}: heat/exact {m}", j + 1);
+    measured("V-D9.inner_percent", 100.0 * (r[0].2 - 1.0), 2);
+    measured("V-D9.outer_percent", 100.0 * (r[1].2 - 1.0), 2);
+    measured("V-D9.inductive_inner_percent", 100.0 * (r[0].0 - 1.0), 2);
+    measured("V-D9.inductive_outer_percent", 100.0 * (r[1].0 - 1.0), 2);
+    measured("V-D9.drive_inner_percent", 100.0 * (r[0].1 - 1.0), 2);
+    measured("V-D9.drive_outer_percent", 100.0 * (r[1].1 - 1.0), 2);
+    let left = exchange_left(&r, &exact);
+    println!("V-D9: the exchange's sum {left:.1e} of the rings' heat");
+    assert!(left.abs() < 1e-3, "exchange {left}");
+    for (j, (inductive, _, heat)) in r.iter().enumerate() {
+        assert!(
+            (heat - 1.0).abs() < 0.05,
+            "ring {}: heat/exact {heat}",
+            j + 1
+        );
+        assert!(
+            (inductive - 1.0).abs() < 0.05,
+            "ring {}: induced fields' work/exact {inductive}",
+            j + 1
+        );
     }
+}
+
+/// V-D10, a transformer's heats in a dense metal. V-D9's rings in a metal like
+/// Self-inductance's: density 60 and 35 carriers per area (~2750 in all: each macroparticle
+/// ~180 times V-D9's charge), c = 24 (the inertial skin depth `c/ω_p` ≈ 0.87, as there, and
+/// `μ₀σ` within 7 % of V-D9's: the same screening), dt 0.0072 (`ω_p dt` ≈ 0.2), V-D8's field
+/// `0.2 sin t`. There the induced fields' work (`inductive_work`) carries the self-field's
+/// numerical cooling of heavy macroparticles (~`q dt`: in Self-inductance's ring −251 per
+/// time unit with the drive at rest), and the drive's work alone misses the rings'
+/// exchange; the drive's work with the macroscopic currents' mutual power
+/// (`induced_work + mutual_work`) is an isolated metal's heat goal. Required: the rings'
+/// exchange within 1e-3 of their heat (it adds up to the windows' ends alone). Recorded, not
+/// asserted, against the exact heats: the 5 % set before measuring (V-D8's target) is not
+/// met, and not by the measure. The rings came out +20 % and +0.3 % at this step and +9 % and
+/// +6 % at half of it (2026-11-02), while the drive's work on the inner ring, which no heat
+/// measure enters, was +12 % and +17.5 % of the exact one's (`concentric`): the dense
+/// rings' dynamics is off: the self-field's cell, 0.25, spans `c/ω_p` in 3.5 cells (at 0.125
+/// the inner ring came out +0.3 %; PHYSICS.md §2.12, *Two metals*).
+#[test]
+#[ignore = "twelve minutes: two runs of 2750 heavy carriers over 14 periods at dt 0.0072"]
+fn dense_concentric_rings_heats_are_exact() {
+    let (c, omega, b0, dt, density) = (24.0, 1.0, 0.2, 0.0072, 60.0);
+    let rings = [(2.5, 4.5), (5.0, 6.0)];
+    let mu0 = 4.0 * PI / (c * c);
+    // σ ∝ the density at the same thermal speed and mean free path.
+    let sigma = mobility(1.0 / MEAN_FREE_PATH, omega) * density;
+    let exact = concentric_heats(&rings, sigma, omega, mu0, b0);
+    let alone = concentric_heats(&rings[..1], sigma, omega, mu0, b0);
+    let drives: Vec<f64> = concentric(&rings, sigma, omega, mu0, b0)
+        .into_iter()
+        .map(|(_, d)| d)
+        .collect();
+    let material = Material {
+        background: density,
+        ..common::metal(A)
+    };
+    let r = concentric_ratios("V-D10", &rings, material, 35.0, (c, omega, b0, dt), &exact);
+    println!(
+        "V-D10: exact heats {:.3} (alone {:.3}) and {:.3}; measured/exact {:.4} and {:.4}; by the induced fields' work {:.4} and {:.4}; the drive's work alone {:.4} and {:.4}",
+        exact[0], alone[0], exact[1], r[0].2, r[1].2, r[0].0, r[1].0, r[0].1, r[1].1
+    );
+    measured("V-D10.inner_percent", 100.0 * (r[0].2 - 1.0), 2);
+    measured("V-D10.outer_percent", 100.0 * (r[1].2 - 1.0), 2);
+    measured("V-D10.inductive_inner_percent", 100.0 * (r[0].0 - 1.0), 2);
+    measured("V-D10.inductive_outer_percent", 100.0 * (r[1].0 - 1.0), 2);
+    measured("V-D10.drive_inner_percent", 100.0 * (r[0].1 - 1.0), 2);
+    measured("V-D10.drive_outer_percent", 100.0 * (r[1].1 - 1.0), 2);
+    // The drive's work against the exact drive's work: the dynamics alone.
+    let versus = |j: usize| 100.0 * (r[j].1 * exact[j] / drives[j] - 1.0);
+    println!(
+        "V-D10: the drive's work against the exact one's {:.3} and {:.3}: {:+.1} % and {:+.1} %",
+        drives[0],
+        drives[1],
+        versus(0),
+        versus(1)
+    );
+    measured("V-D10.drive_vs_exact_inner_percent", versus(0), 2);
+    measured("V-D10.drive_vs_exact_outer_percent", versus(1), 2);
+    let left = exchange_left(&r, &exact);
+    println!("V-D10: the exchange's sum {left:.1e} of the rings' heat");
+    assert!(left.abs() < 1e-3, "exchange {left}");
 }
 
 /// The measured values' formatting (DEC-22): significant digits, fixed-point in the middle

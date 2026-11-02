@@ -833,6 +833,8 @@ fn d9_cell_accounts_add_up() {
     check("inductive work", &cells.inductive, s.inductive_work[0]);
     // Without the self-field the induced fields' work is the drive's, bit for bit.
     assert_eq!(s.inductive_work[0].to_bits(), s.induced_work[0].to_bits());
+    // One lattice: nothing passed to it by others.
+    assert!(s.mutual_work[0] == 0.0 && cells.mutual.iter().all(|w| *w == 0.0));
     let fx: Vec<f64> = cells.flux.iter().map(|f| f[0]).collect();
     let fy: Vec<f64> = cells.flux.iter().map(|f| f[1]).collect();
     check("charge carried along x", &fx, flux[0]);

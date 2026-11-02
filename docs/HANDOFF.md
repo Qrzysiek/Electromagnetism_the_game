@@ -2,7 +2,7 @@
 
 Read this instead of the previous sessions' transcripts. Project rules: `CLAUDE.md`; the
 self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/DRUDE.md`
-"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-28 to DEC-34 the latest).
+"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-28 to DEC-35 the latest).
 
 ## State
 
@@ -108,25 +108,27 @@ the frequency slider logarithmic; the run time decided after measuring the desig
   and ~8 a verification unless the carriers per area drop (more noise).
 - Scales (`scales.rs`): `self_field_lines` shows the first ring's `ωL/R`; extend it to both
   rings (and `ωτ`).
-- **The heat measure for two rings (DEC-34, V-D9).** The engine books per metal the induced
-  fields' work, the drive's and the self-field's (`TubeState::inductive_work`): a ring
-  inside another within 5 % of the exact concentric conductors' (V-D9, where the drive's
-  work alone is ~40 % off), at V-D9's light macroparticles (106 per area, density 1). Not a
-  level's measure yet: in a dense metal of heavy macroparticles its self-field part cools
-  numerically (Self-inductance's ring at rest: −251 per time at the preview's resolution,
-  −61 at the verification's; its reference by it 428 ± 258, uncertain). For the
-  Transformer, light macroparticles do not fit: the Darwin limit wants c/ω about the board,
-  which with `c/ω_p` over three cells needs Self-inductance's density (35 per area there
-  gives 75 s previews; ten times the carriers, ~12 min). The bias goes as the charge per
-  macroparticle (×4 the carriers: 4.1 times smaller) and is there with the drive at rest.
-  Tried and failed: the work of the fields of all but the metal itself (each metal's
-  physical current alone in the vacuum, `Darwin2d` sine transforms, exact to 1e-13): V-D9
-  +165 % and +75 %, each ring's thermal noise heating the other, which in the whole
-  self-field each one's own field's drag balances (DEC-34; the code: `target/scratch/
-  mutual_patch.py` in this worktree). Open: a measure of a coupled metal's heat that keeps
-  the drag and drops the macroparticles' self-cooling; or the Transformer's goal on another
-  quantity (the field in the gap, its amplitude and phase, as V-D7 measures, or the
-  secondary's current), which needs no heat measure.
+- **The heat measure for two rings: done (DEC-35).** An isolated metal's heat goal measures
+  the drive's work plus the power the other metals' macroscopic currents pass it
+  (`TubeState::mutual_work`: window-averaged currents on the self-field's grid, each one's
+  vacuum field, `−∫ J̄_k·∂Ā_j/∂t`); one metal: as before, bit for bit. V-D9 (light rings)
+  within 5 %. The research (the owner's choice, 2026-11-02) and the measures tried and
+  dropped: PHYSICS.md §2.12 *Two metals*, DEC-34/35.
+- **The dense rings' dynamics is off (V-D10, recorded, not asserted):** in Self-inductance's
+  metal two nested rings come out +20 % (inner) and +0.3 % against the exact heats at the
+  levels' step, +9 % and +6 % at half of it, and the drive's work on the inner ring, no heat
+  measure in it, is +12 % (+17.5 % at half the step): the outer ring screens too little.
+  Tested (2026-11-02, scratch, one seed each): each ring alone within a few per cent, so
+  not the σ; coupled, the gap's field 6.7 % high (the outer ring screens too little); a gap
+  of four cells no better; the self-field's cell 0.125 (`c/ω_p` 7 cells) brings the inner
+  ring to +0.3 % (outer +6.3 %, ~2 seeds' spread). Open: the inner ring's drive's work
+  stays +21 % there (the split drive/exchange, not the heat).
+- **Next for the Transformer (the owner decides the run time):** coupled dense rings need
+  the self-field's cell at about `c/ω_p`/7: `SELF_FIELD_CELL` per level (from its density
+  and c) or a finer constant, ~4 times the preview (Self-inductance's ~75 s would be ~5 min);
+  or a metal whose `c/ω_p` spans more cells at 0.25 (a lower density, with c lowered so
+  that c/ω stays about the board). Scratch tests: `target/scratch/scratch_cell.rs` in this
+  worktree (copy into `crates/physics/tests/` to run), outputs `target/scratch/scratch_*.out`.
 - With the self-field the residual above (~0.6 % of the unscreened heat) and DEC-31's
   half-swings apply; Self-inductance's metal (density 60, c 24, dt 0.0072) is a starting
   point: two rings nested need the secondary's `L₂/R₂` near the primary's frequency.

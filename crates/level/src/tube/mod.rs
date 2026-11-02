@@ -719,7 +719,8 @@ pub struct TubeFrame {
 
 /// A metal's accounts by cell at a frame (`physics::tube::CellAccounts`, `MetalView::cells`,
 /// row by row, so far): the charge carried (x, y) and the heat goal's work (the field's on
-/// the carriers; in an isolated metal the induced field's: `MetalView::isolated`).
+/// the carriers; in an isolated metal the induced fields' but its own, the drive's and the
+/// other metals': `MetalView::isolated`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MetalCells {
     pub flux: Vec<[f32; 2]>,
@@ -749,7 +750,7 @@ pub struct MetalView {
     pub thermal_speed: f64,
     /// Its accounts' cells (`physics::lattice::Lattice::account_size`), its cuts (the
     /// lattice's walls) and whether it is isolated (no contacts: its heat is the induced
-    /// field's work, `TubeSim::metal_work`), for the maps inside it.
+    /// fields' work, `TubeSim::metal_work`), for the maps inside it.
     pub cells: (usize, usize),
     pub walls: Vec<[[f64; 2]; 2]>,
     pub isolated: bool,

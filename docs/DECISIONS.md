@@ -1180,3 +1180,52 @@ Entries are numbered in order and never renumbered.
     with the charge per macroparticle. The level measure stays the drive's work. The work
     of the fields of all but the metal itself, tried next, failed V-D9 (+165 % and +75 %):
     see Alternatives.
+  - 2026-11-02: the cooling's cause found (the owner: research the heat measure): the
+    self-field step's first-order energy error on each heavy macroparticle's own field and
+    its screening, `∝ q dt` (PHYSICS.md §2.12, *Two metals*). `inductive_work` stays in the
+    engine (V-D9 checks it); a level's isolated metal now measures DEC-35's.
+
+## DEC-35: An isolated metal's heat: the drive's work and the power the other metals' currents pass it
+
+- **Status:** in use (since 2026-11-02)
+- **Area:** physics measures, levels
+- **Choice:** a heat goal on a metal without contacts, and the heat map's cells there,
+  measure the drive's work on its carriers (`induced_work`) plus the power the other
+  metals' macroscopic currents pass it through their mutual induction
+  (`TubeState::mutual_work`, `Tube::book_mutual`): each lattice's carriers' `q v` at the
+  middle of their step deposited on the self-field's grid and averaged over windows of
+  `MUTUAL_WINDOW` = 0.05, its field alone in the vacuum (`Darwin2d::vacuum_field`, one pass
+  of sine transforms), and on each other lattice `−∫ J̄_k·∂Ā_j/∂t dA` by central differences
+  across the windows, booked a window late, edge by edge into the cells.
+- **Purpose:** the Transformer (#61): two rings coupled by their own fields, each with a
+  heat goal. A metal's own field's work on itself only stores and returns energy, but per
+  carrier it holds the step's first-order cooling of heavy macroparticles (DEC-34); the
+  other metals' fields per carrier pick up their step-to-step noise unbalanced. Averaged
+  currents carry neither, and the vacuum's field being symmetric the exchange adds up to
+  the windows' ends: the metals' heats add up to the drive's work exactly. One metal:
+  nothing booked, every level as before, bit for bit.
+- **Alternatives:** the drive's work alone (misses the exchange: V-D9 −37 % and +13 %); the
+  induced fields' work per carrier (DEC-34: cools heavy macroparticles, V-D10 −170 % and
+  −86 %); the self-field's induced field at a fixed point per carrier (each macroparticle's
+  own field moving with it dominates: −5679 per time at rest in Self-inductance's ring); the
+  other metals' fields per carrier, step by step (V-D9 +165 % and +75 %: the noise); the
+  lattice's heat (the macroparticles' stirring, DEC-33); a second-order self-field step,
+  which would remove the cooling at its source (a day or more, 1.5–2 times the run time;
+  not needed for the measure); goals on the field or the currents instead of heat.
+- **Where:** `crates/physics/src/tube/darwin.rs` (`MUTUAL_WINDOW`, `MutualAccount`,
+  `book_mutual`), `tube/mod.rs` (`TubeState::mutual_work`, `CellAccounts::mutual`),
+  `crates/physics/src/darwin2d.rs` (`vacuum_field`, `edge_positions`),
+  `crates/level/src/tube/sim.rs` (`metal_work`, the frames' cells); the panel's texts;
+  tests `vacuum_field_of_the_physical_current_is_the_solves`, D9, V-D9, V-D10; PHYSICS.md
+  §2.12 (*Two metals*).
+- **History:**
+  - 2026-11-02: chosen. V-D9 +4.6 % and −3.1 % (the induced fields' work +3.3 % and −2.6 %).
+    V-D10 (Self-inductance's dense metal) +20 % and +0.3 %, +9 % and +6 % at half the step:
+    the dynamics', not the measure's (the drive's work on the inner ring, no heat measure
+    in it, +12 % and +17.5 % of the exact); V-D8's 5 % not met there, recorded; the
+    self-field's cell and the dense metal's σ under test (the owner's choice).
+  - 2026-11-02: tested (scratch runs, one seed each): each dense ring alone within a few
+    per cent (−3.5 %, +1.9 %); coupled, the gap's field 6.7 % above the exact; a gap of four
+    cells no better (+19.5 %); the self-field's cell 0.125 brings the inner ring to +0.3 %
+    (outer +6.3 %, within ~2 seeds' spread). The measure stands; coupled dense rings need a
+    cell of about `c/ω_p`/7 (the levels' 0.25 gives 3.5 cells), ~4 times the run.

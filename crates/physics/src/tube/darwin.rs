@@ -78,9 +78,33 @@ pub(super) struct PendingWork {
     /// The field at the step's start (the push's), and its induced part.
     pub field: DVec3,
     pub induced: Option<DVec3>,
-    /// The velocity at the step's start, and after the push (before the self-field's part).
+    /// The velocity at the step's start, and after the push (before the self-field's part),
+    /// and the position at the step's start.
     pub old: DVec3,
     pub pushed: DVec3,
+    pub at: DVec3,
+}
+
+/// The averaging window of the macroscopic currents of `TubeState::mutual_work`: short
+/// against a drive's period (its central differences' error `(ωT)²/6`, 0.4 % at ω = 3), long
+/// against a step (the macroparticles' grid-crossing noise averaged out).
+pub const MUTUAL_WINDOW: f64 = 0.05;
+
+/// The macroscopic currents' accounts (`Tube::book_mutual`).
+#[derive(Clone, Debug, Default)]
+pub(super) struct MutualAccount {
+    /// Per lattice, this window's sum of its carriers' currents (per area, on the edges),
+    /// and the window's steps.
+    sums: Vec<Edges>,
+    steps: usize,
+    /// The last closed window's mean currents and fields, and the fields of the one before
+    /// (per lattice).
+    current: Vec<Edges>,
+    field: Vec<Edges>,
+    before: Vec<Edges>,
+    /// Per lattice, each x-edge's and y-edge's account cell (`Lattice::account_cell` of its
+    /// middle).
+    cells: Vec<(Vec<usize>, Vec<usize>)>,
 }
 
 impl Tube {
@@ -124,6 +148,93 @@ impl Tube {
             inductive_work[w.lattice] += inductive;
             s.cells[w.lattice].inductive[w.cell] += inductive;
         }
+    }
+}
+
+impl Tube {
+    /// The power the lattices' macroscopic currents pass to each other
+    /// (`TubeState::mutual_work`), with two lattices or more: each lattice's carriers' `q v`
+    /// at the middle of their step deposited on the self-field's grid and averaged over a
+    /// window of `MUTUAL_WINDOW` (`J̄`), its field alone in the vacuum (`Ā`,
+    /// `Darwin2d::vacuum_field`); when window m + 1 closes, lattice k takes from each other
+    /// lattice j `−∫ J̄_kᵐ·(Ā_jᵐ⁺¹ − Ā_jᵐ⁻¹)/2 dA` for window m, edge by edge into the cell
+    /// of the edge's middle.
+    pub(super) fn book_mutual(&self, s: &mut TubeState, pending: &[PendingWork]) {
+        let n = self.lattices.len();
+        if n < 2 {
+            return;
+        }
+        let Some(d) = s.darwin.take() else {
+            return;
+        };
+        let mut acc = s.mutual.take().unwrap_or_default();
+        if acc.sums.is_empty() {
+            let (xs, ys) = d.edge_positions();
+            acc.sums = (0..n).map(|_| Edges::zeros(&d)).collect();
+            acc.cells = self
+                .lattices
+                .iter()
+                .map(|l| {
+                    let cell = |p: &(f64, f64)| l.account_cell(DVec3::new(p.0, p.1, 0.0));
+                    (xs.iter().map(cell).collect(), ys.iter().map(cell).collect())
+                })
+                .collect();
+        }
+        for w in pending {
+            let x = (w.at + s.x[w.particle]) * 0.5;
+            let v = s.v[w.particle] * w.charge;
+            d.deposit_vector(&mut acc.sums[w.lattice], x.x, x.y, v.x, v.y);
+        }
+        acc.steps += 1;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let window = libm::round(MUTUAL_WINDOW / self.dt).max(1.0) as usize;
+        if acc.steps >= window {
+            #[allow(clippy::cast_precision_loss)]
+            let per = 1.0 / acc.steps as f64;
+            let mean: Vec<Edges> = acc
+                .sums
+                .iter()
+                .map(|e| Edges {
+                    x: e.x.iter().map(|v| v * per).collect(),
+                    y: e.y.iter().map(|v| v * per).collect(),
+                })
+                .collect();
+            let field: Vec<Edges> = mean.iter().map(|j| d.vacuum_field(j)).collect();
+            if !acc.before.is_empty() {
+                let area = d.h * d.h;
+                for k in 0..n {
+                    let (cx, cy) = &acc.cells[k];
+                    let jk = &acc.current[k];
+                    for j in (0..n).filter(|j| *j != k) {
+                        let (now, then) = (&field[j], &acc.before[j]);
+                        let mut total = 0.0;
+                        for (e, c) in cx.iter().enumerate() {
+                            let w = -0.5 * area * jk.x[e] * (now.x[e] - then.x[e]);
+                            s.cells[k].mutual[*c] += w;
+                            total += w;
+                        }
+                        for (e, c) in cy.iter().enumerate() {
+                            let w = -0.5 * area * jk.y[e] * (now.y[e] - then.y[e]);
+                            s.cells[k].mutual[*c] += w;
+                            total += w;
+                        }
+                        s.mutual_work[k] += total;
+                    }
+                }
+            }
+            if !acc.current.is_empty() {
+                acc.before = std::mem::take(&mut acc.field);
+            }
+            acc.field = field;
+            acc.current = mean;
+            for e in &mut acc.sums {
+                e.x.fill(0.0);
+                e.y.fill(0.0);
+            }
+            acc.steps = 0;
+        }
+        s.mutual = Some(acc);
+        s.darwin = Some(d);
     }
 }
 

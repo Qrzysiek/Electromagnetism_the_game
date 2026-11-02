@@ -286,3 +286,8 @@ With carriers:
   yet: with heavy macroparticles (Self-inductance's) its self-field part cools numerically;
   the other metals' fields' work alone failed V-D9 (+165 %, +75 %: the rings' noise heats
   each other, which only the whole self-field balances).
+- 2026-11-02, the heat of coupled metals (DEC-35): the self-cooling's cause (the step's
+  first-order energy error on each heavy macroparticle's own field, `∝ q dt`); an isolated
+  metal's heat is now the drive's work plus the power the other metals' window-averaged
+  currents pass it (`mutual_work`). V-D9 within 5 %; V-D10 (dense rings) shows the dynamics
+  off by up to +20 % on a strongly screened inner ring (recorded); the cell and σ next.

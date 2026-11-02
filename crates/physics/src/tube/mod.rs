@@ -321,7 +321,7 @@ pub struct Tube {
 /// A lattice's accounts by cell (`Lattice::account_cell`, row by row), so far: bookkeeping
 /// for the display's maps of the current and the heat inside a metal. Nothing here acts on
 /// the motion (the golden hashes stayed); the cells add up to `TubeState::field_work`,
-/// `induced_work` and `inductive_work` (test `d9_cell_accounts_add_up`).
+/// `induced_work`, `inductive_work` and `mutual_work` (test `d9_cell_accounts_add_up`).
 #[derive(Clone, Debug, Default)]
 pub struct CellAccounts {
     /// The charge the carriers carry through the cell, `Σ q Δx` of the pieces of their steps'
@@ -329,11 +329,13 @@ pub struct CellAccounts {
     /// the current density's time integral over the cell.
     pub flux: Vec<[f64; 2]>,
     /// The field's work on the carriers in the cell (their share of `TubeState::field_work`),
-    /// the induced field's (of `induced_work`), and the induced fields' with the carriers'
-    /// own (of `inductive_work`).
+    /// the induced field's (of `induced_work`), the induced fields' with the carriers' own
+    /// (of `inductive_work`), and the power the other metals' currents pass it (of
+    /// `mutual_work`, at its edges' middles).
     pub work: Vec<f64>,
     pub induced: Vec<f64>,
     pub inductive: Vec<f64>,
+    pub mutual: Vec<f64>,
 }
 
 /// The particles and the bookkeeping of a running tube.
@@ -400,6 +402,20 @@ pub struct TubeState {
     /// part also holds a numerical cooling that grows with the charge per macroparticle
     /// (PHYSICS.md §2.12, *Two metals*; DEC-34): a level's heat goal stays `induced_work`.
     pub inductive_work: Vec<f64>,
+    /// Per lattice, with the self-field and other lattices: the power the others' currents
+    /// pass to it through their mutual induction (`Tube::book_mutual`), from the macroscopic
+    /// currents: each lattice's `Σ q v` on the self-field's grid averaged over windows of
+    /// `MUTUAL_WINDOW`, its field alone in the vacuum `Ā_j`, and `−∫ J̄_k·∂Ā_j/∂t dA` (central
+    /// differences across the windows, booked a window late). With `induced_work` an
+    /// isolated metal's heat (its own field's work on itself only stores and returns
+    /// energy). Not from the carriers one by one: their own fields' numerical cooling
+    /// (`inductive_work`) and the step-to-step noise each lattice's macroparticles stir in
+    /// the others (`(q²/2m)|ΔA|²` a step, which the drag balances only in the whole field)
+    /// are left out (DEC-34). Exchanged: the lattices' parts add up to the change of their
+    /// mutual energy. Zero with one lattice or without the self-field.
+    pub mutual_work: Vec<f64>,
+    /// The macroscopic currents' accounts for `mutual_work` (None until its first step).
+    mutual: Option<darwin::MutualAccount>,
     /// Per lattice: the current and those works by cell (`CellAccounts`).
     pub cells: Vec<CellAccounts>,
     /// Per electrode: the kinetic energy of the carriers it took in less that of those it
@@ -632,6 +648,7 @@ impl Tube {
             field_work: vec![0.0; self.lattices.len()],
             induced_work: vec![0.0; self.lattices.len()],
             inductive_work: vec![0.0; self.lattices.len()],
+            mutual_work: vec![0.0; self.lattices.len()],
             cells: self
                 .lattices
                 .iter()
@@ -642,6 +659,7 @@ impl Tube {
                         work: vec![0.0; nx * ny],
                         induced: vec![0.0; nx * ny],
                         inductive: vec![0.0; nx * ny],
+                        mutual: vec![0.0; nx * ny],
                     }
                 })
                 .collect(),
@@ -783,6 +801,7 @@ impl Tube {
                         induced,
                         old,
                         pushed: *v,
+                        at: *x,
                     });
                 }
             }
@@ -799,6 +818,7 @@ impl Tube {
                 &mut induced_work,
                 &mut inductive_work,
             );
+            self.book_mutual(s, &pending);
         }
         for (total, w) in s.field_work.iter_mut().zip(&work) {
             *total += w;

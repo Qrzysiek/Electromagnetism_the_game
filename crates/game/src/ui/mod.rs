@@ -1062,7 +1062,8 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
                     "E·j: orange heats the carriers, teal takes back",
                     "the power per area the field gives the carriers, E·j, orange (teal where \
                      it takes energy back): in a steady state the heat made there; in an \
-                     isolated metal the induced field's part, which the heat goals measure",
+                     isolated metal the drive's part and the power the other metals' currents \
+                     pass it, which the heat goals measure",
                 )
             };
             explain(

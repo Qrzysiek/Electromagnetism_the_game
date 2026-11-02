@@ -282,10 +282,15 @@ impl TubeSim {
                         .zip(&self.layout.metals)
                         .map(|(c, m)| MetalCells {
                             flux: c.flux.iter().map(|f| [f[0] as f32, f[1] as f32]).collect(),
-                            work: (if m.isolated { &c.induced } else { &c.work })
-                                .iter()
-                                .map(|w| *w as f32)
-                                .collect(),
+                            work: if m.isolated {
+                                c.induced
+                                    .iter()
+                                    .zip(&c.mutual)
+                                    .map(|(w, u)| (w + u) as f32)
+                                    .collect()
+                            } else {
+                                c.work.iter().map(|w| *w as f32).collect()
+                            },
                         })
                         .collect(),
                 };
@@ -348,29 +353,31 @@ impl TubeSim {
     }
 
     /// Metal `m`'s heat so far, the sum over its pieces: the field's work on its carriers
-    /// (`TubeState::field_work`), or, in a metal without contacts, the induced field's alone
-    /// (`TubeState::induced_work`: there the electrostatic field's work is only the time
-    /// step's numerical heating). Not the induced fields' with the carriers' own
-    /// (`inductive_work`), which a metal beside another needs for the power their mutual
-    /// induction brings it: in a dense metal of heavy macroparticles its self-field part
-    /// holds a numerical cooling (DEC-34; Self-inductance's ring −251 per time at rest at
-    /// the preview's resolution).
+    /// (`TubeState::field_work`), or, in a metal without contacts, the work of the fields
+    /// induced by all but itself: the drive's (`TubeState::induced_work`) and, with the
+    /// self-field, the other metals' currents' (`mutual_work`, the power their mutual
+    /// induction brings it; DEC-34). There the electrostatic field's work is only numerical
+    /// heating, and the metal's own field's work on itself only stores and returns energy,
+    /// with heavy macroparticles each one's own field's numerical cooling besides (−251 per
+    /// time at rest in Self-inductance's ring at the preview's resolution). One metal: the
+    /// drive's work, as before 2026-11-02.
     fn metal_work(&self, m: usize) -> f64 {
         let isolated = self
             .spec
             .metals
             .get(m)
             .is_some_and(|x| x.contacts.is_empty());
-        let work = if isolated {
-            &self.state.induced_work
-        } else {
-            &self.state.field_work
-        };
         self.lattice_metal
             .iter()
-            .zip(work)
-            .filter(|(k, _)| **k == m)
-            .map(|(_, w)| w)
+            .enumerate()
+            .filter(|(_, k)| **k == m)
+            .map(|(p, _)| {
+                if isolated {
+                    self.state.induced_work[p] + self.state.mutual_work[p]
+                } else {
+                    self.state.field_work[p]
+                }
+            })
             .sum()
     }
 

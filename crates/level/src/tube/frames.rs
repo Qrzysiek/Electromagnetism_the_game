@@ -408,7 +408,7 @@ impl TubeRun {
     /// Each metal's mean current density and power per area by cell (`MetalView::cells`)
     /// over `[t0, t1]` (within the frames), from the frames' accounts (`TubeFrame::cells`):
     /// the power the heat goal measures (the field's work on the carriers there; an
-    /// isolated metal's, the induced field's). With `smooth`, each cell's mean with those of
+    /// isolated metal's, the induced fields'). With `smooth`, each cell's mean with those of
     /// its eight neighbours that no cut separates from it (`METAL_MAP_SPAN`). None without
     /// two frames in the span.
     #[allow(clippy::cast_precision_loss)]
