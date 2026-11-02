@@ -145,9 +145,25 @@ pub fn inspect_at(level: &Level, placement: &[Element], at: DVec3) -> Option<Ins
             return Some(
                 Inspection::new("Solenoid around the tube (its terminal)")
                     .line("a uniform magnetic field B along z, out of the board when positive")
-                    .line(match supply {
-                        Some(s) => format!("your supply: B = {}", fmt_num(s.value)),
-                        None => format!("off: B = {} (the level's)", fmt_num(t.b_z)),
+                    .line(match (supply, t.solenoid_drive) {
+                        // A frequency-only supply: its sine's own swing at the player's ω.
+                        (
+                            Some(s),
+                            Some(Source::Sine {
+                                amplitude, omega, ..
+                            }),
+                        ) if level.frequency_only(level::SupplyTarget::Solenoid) => format!(
+                            "your supply: B = {} sin ωt, ω = {}",
+                            fmt_num(amplitude),
+                            fmt_num(s.omega.unwrap_or(omega))
+                        ),
+                        (Some(s), Some(Source::Sine { omega, .. })) => format!(
+                            "your supply: B = {} sin ωt, ω = {}",
+                            fmt_num(s.value),
+                            fmt_num(s.omega.unwrap_or(omega))
+                        ),
+                        (Some(s), _) => format!("your supply: B = {}", fmt_num(s.value)),
+                        (None, _) => format!("off: B = {} (the level's)", fmt_num(t.b_z)),
                     }),
             );
         }

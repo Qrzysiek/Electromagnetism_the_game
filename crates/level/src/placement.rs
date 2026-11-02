@@ -167,7 +167,13 @@ impl Level {
                 return Err(PlacementError::Occupied(e.node));
             }
             supplied.push(e.node);
-            if !Limits::allows_potential(self.supply_list(target), e.value) {
+            // A frequency-only supply sets nothing else: its value is 0.
+            let allowed = if self.frequency_only(target) {
+                e.value == 0.0
+            } else {
+                Limits::allows_potential(self.supply_list(target), e.value)
+            };
+            if !allowed {
                 return Err(PlacementError::MagnitudeNotAllowed(e.value));
             }
             if let Some(w) = e.omega {
@@ -199,6 +205,17 @@ impl Level {
             },
             SupplyTarget::Solenoid => self.tube.as_ref().and_then(|t| t.solenoid_drive),
         }
+    }
+
+    /// Whether a supply sets only its target's frequency: a swinging solenoid whose level
+    /// lists no fields (`limits.solenoid_fields` empty) but frequencies. Switched on, the
+    /// solenoid swings at its sine's own amplitude at the supply's frequency; off, its field
+    /// is the level's `b_z` (0: nothing driven, DEC-12). Electrodes and coils have none: their
+    /// source runs with the supply off.
+    pub fn frequency_only(&self, target: SupplyTarget) -> bool {
+        target == SupplyTarget::Solenoid
+            && self.limits.solenoid_fields.is_empty()
+            && self.supply_frequencies(target).is_some()
     }
 
     /// The range of a supply's frequency slider (`limits.supply_omegas`), if its target is

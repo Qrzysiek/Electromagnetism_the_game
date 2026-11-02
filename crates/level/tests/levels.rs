@@ -244,6 +244,13 @@ fn switched_off_supplies_drive_nothing() {
         }
     }
     assert!(checked > 10, "only {checked} tunable circuits found");
+    // A player's solenoid switched off: no field (its level's `b_z`), so that a supply that
+    // sets only the frequency of its swing (`Level::frequency_only`) drives nothing off.
+    for (name, level) in shipped_levels() {
+        if let Some(t) = level.tube.as_ref().filter(|t| t.solenoid.is_some()) {
+            assert!(t.b_z == 0.0, "{name}: the solenoid off at B = {}", t.b_z);
+        }
+    }
 }
 
 /// Realistic iterations (chapter 15, SPEC §3) build an earlier level's idealised solution

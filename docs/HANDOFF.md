@@ -67,20 +67,28 @@ carriers' own field and with a frequency slider). The owner chose: one ring alon
 swinging solenoid, B₀ fixed, ω on the slider; its heat grows as ω² until `ωL/R ≈ 1`, where
 its own field screens the drive and the heat levels off; a heat goal pins ω.
 
-- Needs a supply that sets only a frequency (its target's level list empty: switched off the
-  solenoid's field stays `b_z` = 0, DEC-12; on, its sine's own amplitude at the player's ω),
-  a small extension of DEC-30: placement, the solver's candidates, `analyze`'s steps, the
-  panel's row (no level slider), the solenoid's wave in `tube/build.rs`.
-- First scans (ring 20 × 20, walls 2, ℓ 0.5, c = 2, B₀ 0.5, heat over t = 10–40; the
-  worktree's `target/scratch/inductance/`): heat 0.11, 0.64, 1.50, 2.42, 6.5, 22.5, 73 at
-  ω = 0.05–3.2 (doubling). Without the self-field (c = 100) 0.92, 13.6, 219 at 0.1, 0.4, 1.6
-  (as ω²). The ratio 0.70 at ω = 0.1 is the loop's `1/(1 + (ωL/R)²)` with `L/R` = 6.55
-  (estimated `4πA/c² · σw/P` = 6.6); at high ω ~10 % of the unscreened heat remains, the
-  wall's own eddy currents (skin depth 1.3 at ω = 1.6, under the wall's 2). Next: walls 1
-  with ℓ 0.25 (that share ~4× smaller), c ≈ 1.2 to keep the bend near ω ≈ 0.2. About 4 min
-  per run of 40 time units alone.
-- How real: at c = 2 the Darwin limit's own condition (the board small against c/ω) holds
-  only below ω ≈ 0.08; the whole bend lies beyond it (slow light, as V-D7).
+- The supply that sets only a frequency is in place (`Level::frequency_only`, DEC-30's
+  history): a player's swinging solenoid whose level lists no fields but frequencies.
+- Ring scans (the worktree's `target/scratch/inductance/NOTES.md`, `inductance_scan.py`; a
+  ring 20 × 20 centred on the solenoid, heat over t = 10–40, each run against the same ring
+  at c = 100, its own field negligible). The loop's screening `1/(1 + (ωL/R)²)` with
+  `L = 4πA/c²`, `R = P/(σw)` holds up to `ωL/R` ≈ 2 (density 20, walls 2, ℓ 0.5, c 7.3:
+  0.72 and 0.21 measured at ω = 0.1 and 0.4 against 0.80 and 0.20). Beyond it a residual of
+  about 9–10 % of the unscreened heat (walls 2) or 14–16 % (walls 1) is not screened,
+  whatever the density (2 or 20) or c (1.2–7.3): so the heat levels off over about one
+  octave only, then grows as ω² again. Ruled out: the wall's own eddy currents, the
+  corners' steering charges (4πσ = 30 changes nothing), the wall's own flux (thinner walls
+  leave more). Untested: the walls' resistance above `P/(σw)` (the thin ring fits R about
+  twice that), a square ring's uneven current, a round ring (`Lattice::with_disc`, not in
+  the level format).
+- The best candidate so far: density 20 (`ω_p dt` = 0.19), walls 2, ℓ 0.5, c = 7.3 (the bend
+  at ω ≈ 0.2, and there `c/ω` exceeds the board: the Darwin limit's own condition holds),
+  B₀ ≈ 0.15. About 4 min per 40 time units (7200 carriers): a preview of the 2–3 heat
+  periods a goal needs at ω ≈ 0.2 is ~6 min, its verification ~4 times that.
+- For the owner: (1) accept the residual (the heat levels off over one octave, then rises
+  again; the level describes it) or first find its cause; (2) the run time (fewer carriers,
+  a smaller ring, a bend at higher ω with a larger c); (3) the metal: density 20 is ten
+  times the levels' metal (a doped semiconductor's ratios become a poorer metal's).
 
 ## Then the Transformer (task #61), with B₀ and ω on sliders (the owner, 2026-11-02)
 

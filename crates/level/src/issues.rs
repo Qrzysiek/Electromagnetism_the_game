@@ -478,6 +478,17 @@ impl Level {
                     .into(),
             );
         }
+        // A player's solenoid needs fields to set, or frequencies alone on its sine.
+        if self.tube.as_ref().is_some_and(|t| t.solenoid.is_some())
+            && self.limits.solenoid_fields.is_empty()
+            && !self.frequency_only(SupplyTarget::Solenoid)
+        {
+            out.push(
+                "a player's solenoid needs solenoid fields, or supply frequencies on a sine \
+                 drive"
+                    .into(),
+            );
+        }
         // Its sine's own frequency is where the slider starts: on it.
         for (_, t) in self.supply_targets() {
             if let (Some((lo, hi)), Some(Source::Sine { omega, .. })) =

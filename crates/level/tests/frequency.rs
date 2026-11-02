@@ -127,6 +127,52 @@ fn a_supplys_frequency_is_its_sines_own() {
     }
 }
 
+/// A supply that sets only a frequency (`Level::frequency_only`: a swinging solenoid whose
+/// level lists no fields): switched on, its sine's own amplitude at the supply's frequency,
+/// bit for bit the run of a supply that sets the same amplitude and frequency; off, no field
+/// (`b_z` = 0); its value 0 only, without fields nothing to set.
+#[test]
+fn a_frequency_only_supply_sets_the_swings_frequency() {
+    let level = level::shipped("eddy_currents");
+    let b0 = level.reference_solution[0].value;
+    let node = level.reference_solution[0].node;
+    let mut only = level.clone();
+    only.limits.supply_omegas = vec![0.05, 5.0];
+    only.limits.solenoid_fields.clear();
+    let t = only.tube.as_mut().expect("tube");
+    t.solenoid_drive = t.solenoid_drive.map(|s| s.with_level(b0));
+    assert!(only.model_issues().is_empty(), "{:?}", only.model_issues());
+    assert!(only.frequency_only(level::SupplyTarget::Solenoid));
+    let on = Element {
+        omega: Some(0.2),
+        ..Element::supply(node, 0.0)
+    };
+    only.check_placement(&[on]).expect("frequency-only supply");
+    let (both, placement) = with_slider(&level, 0.05, 5.0, 0.2);
+    let a = only.tube_run(&[on], 1, 6.0);
+    let b = both.tube_run(&placement, 1, 6.0);
+    assert_same_run(&a, &b, "frequency-only");
+    // Off: no field.
+    let off = only.tube_run(&[], 1, 1.0);
+    let peak = off.b_wave.map_or(0.0, |w| w.peak());
+    assert!(peak == 0.0, "off: B peaks at {peak}");
+    // Its value is 0: nothing else to set.
+    assert!(matches!(
+        only.check_placement(&[Element { value: 0.5, ..on }]),
+        Err(PlacementError::MagnitudeNotAllowed(_))
+    ));
+    // Without frequencies a player's solenoid needs fields.
+    let mut none = only.clone();
+    none.limits.supply_omegas.clear();
+    assert!(
+        none.model_issues()
+            .iter()
+            .any(|i| i.contains("needs solenoid fields")),
+        "{:?}",
+        none.model_issues()
+    );
+}
+
 /// The frequency slider's rules: a frequency only on a supply whose target a sine drives,
 /// within the slider's range, and only where the level lists frequencies (placement); the
 /// list positive, set on a sine, which starts on the slider (setup issues).

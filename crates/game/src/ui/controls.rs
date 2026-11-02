@@ -258,6 +258,9 @@ pub(super) fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level)
                 let r = ui.add_enabled(on, potential_slider(&mut v, lo, hi));
                 game.text_focus |= r.has_focus();
                 choice = on.then_some(v);
+            } else if level.frequency_only(target) {
+                // Only its frequency is set (the row below): on or off.
+                choice = on.then_some(0.0);
             }
             if choice != current {
                 game.focus_supply(centre, 1.5);

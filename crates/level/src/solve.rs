@@ -113,7 +113,12 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
         } else {
             vec![None]
         };
-        for &v in level.supply_list(target) {
+        let levels: &[f64] = if level.frequency_only(target) {
+            &[0.0]
+        } else {
+            level.supply_list(target)
+        };
+        for &v in levels {
             for &w in &omegas {
                 let s = Element {
                     omega: w,

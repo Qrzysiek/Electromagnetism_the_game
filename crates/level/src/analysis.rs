@@ -392,17 +392,18 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
                     // Signed lists: step to a neighbouring potential, or turn a plate, or
                     // step a supply's frequency where it has a frequency slider.
                     kind @ (ElementKind::Plate | ElementKind::Supply) => {
+                        let target = level
+                            .supply_targets()
+                            .iter()
+                            .find(|(c, _)| *c == t[i].node)
+                            .map(|&(_, target)| target);
                         let tuned = kind == ElementKind::Supply
-                            && level
-                                .supply_targets()
-                                .iter()
-                                .find(|(c, _)| *c == t[i].node)
-                                .is_some_and(|&(_, target)| {
-                                    level.supply_frequencies(target).is_some()
-                                });
+                            && target.is_some_and(|t| level.supply_frequencies(t).is_some());
+                        // A frequency-only supply has nothing else to step.
+                        let only = target.is_some_and(|t| level.frequency_only(t));
                         if kind == ElementKind::Plate && rng.below(2) == 0 {
                             t[i].angle_deg = if t[i].angle_deg == 0.0 { 90.0 } else { 0.0 };
-                        } else if tuned && rng.below(2) == 0 {
+                        } else if tuned && (only || rng.below(2) == 0) {
                             let mut omegas = level.limits.supply_omegas.clone();
                             omegas.sort_by(f64::total_cmp);
                             let k = omegas

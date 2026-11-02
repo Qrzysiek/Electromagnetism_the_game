@@ -1013,3 +1013,11 @@ Entries are numbered in order and never renumbered.
     Triode with `supply_offset`, Eddy currents' solenoid). The AC response through a
     level's metal against D2's Boltzmann mobility did not meet its 5 % (DRUDE.md
     Progress, 2026-11-02): left open, not committed as a test.
+  - 2026-11-02: extended: a supply that sets only a frequency (`Level::frequency_only`): a
+    player's swinging solenoid whose level lists no fields but frequencies. On, the sine's
+    own amplitude at the supply's ω; off, the level's `b_z` (every shipped solenoid's is 0,
+    now asserted by `switched_off_supplies_drive_nothing`); its value 0. For the
+    self-inductance introduction (the owner: B₀ fixed, ω on the slider). Electrodes and
+    coils have none: their sources run with the supply off (DEC-12). Test
+    `a_frequency_only_supply_sets_the_swings_frequency` (bit for bit a supply setting the
+    same amplitude and frequency; off, no field).

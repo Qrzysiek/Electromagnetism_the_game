@@ -258,11 +258,21 @@ pub fn resemblance(level: &Level, m: &level::tube::MetalSpec) -> Option<Resembla
         .sqrt()
         / m.mean_free_path;
     let field = level.tube.as_ref().map_or(0.0, |t| t.b_z.abs());
+    // A frequency-only solenoid swings at its sine's own amplitude.
+    let own = level
+        .tube
+        .as_ref()
+        .filter(|_| level.frequency_only(level::SupplyTarget::Solenoid))
+        .and_then(|t| match t.solenoid_drive {
+            Some(level::Source::Sine { amplitude, .. }) => Some(amplitude.abs()),
+            _ => None,
+        })
+        .unwrap_or(0.0);
     let strongest = level
         .limits
         .solenoid_fields
         .iter()
-        .fold(field, |a, v| a.max(v.abs()));
+        .fold(field.max(own), |a, v| a.max(v.abs()));
     let wct = qm * strongest * tau;
     let candidates: Vec<(&Material, f64, Ratios)> = MATERIALS
         .iter()

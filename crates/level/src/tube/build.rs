@@ -228,32 +228,35 @@ impl Level {
         }
         let n_proj = detectors.len();
         let max = self.grid.position(self.grid.max_node());
-        // The solenoid's field: the player's supply on its terminal, else the level's.
-        let b_z = spec
-            .solenoid
-            .and_then(|n| {
-                player
-                    .iter()
-                    .find(|e| e.kind == ElementKind::Supply && e.node == n)
-            })
-            .map_or(spec.b_z, |e| e.value);
-        // Its frequency: the supply's, if it sets one (`limits.supply_omegas`).
-        let b_omega = spec.solenoid.and_then(|n| {
+        // The solenoid's field: the player's supply on its terminal, else the level's; a
+        // frequency-only supply (`Level::frequency_only`) leaves its sine's own amplitude.
+        let supply = spec.solenoid.and_then(|n| {
             player
                 .iter()
                 .find(|e| e.kind == ElementKind::Supply && e.node == n)
-                .and_then(|e| e.omega)
         });
+        let only_frequency = self.frequency_only(crate::SupplyTarget::Solenoid);
+        let b_z = match supply {
+            Some(e) if !only_frequency => e.value,
+            _ => spec.b_z,
+        };
+        // Its frequency: the supply's, if it sets one (`limits.supply_omegas`).
+        let b_omega = supply.and_then(|e| e.omega);
+        let swing = |s: crate::Source| {
+            let s = b_omega.map_or(s, |w| s.with_omega(w));
+            if only_frequency && supply.is_some() {
+                s
+            } else {
+                s.with_level(b_z)
+            }
+        };
         let mut tube = Tube {
             emitters,
             projectiles,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
             b_wave: spec.solenoid_drive.map(|s| physics::tube::SolenoidWave {
-                waveform: b_omega
-                    .map_or(s, |w| s.with_omega(w))
-                    .with_level(b_z)
-                    .waveform(),
+                waveform: swing(s).waveform(),
                 // The solenoid around the board: its axis at the board's centre.
                 axis: DVec3::new(0.5 * max.x, 0.5 * max.y, 0.0),
             }),

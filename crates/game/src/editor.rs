@@ -577,10 +577,19 @@ impl Editor {
                 })
                 .unwrap_or(0.0),
         };
-        let Some((lo, hi)) = value_range(self.supply_list_at(centre)) else {
-            return Ok(());
+        let only_frequency = self
+            .level
+            .supply_targets()
+            .iter()
+            .any(|&(c, t)| c == centre && self.level.frequency_only(t));
+        let v = if only_frequency {
+            0.0
+        } else {
+            let Some((lo, hi)) = value_range(self.supply_list_at(centre)) else {
+                return Ok(());
+            };
+            own.clamp(lo, hi)
         };
-        let v = own.clamp(lo, hi);
         let mut trial = self.placement.clone();
         trial.push(Element::supply(centre, v));
         self.try_placement(trial)
