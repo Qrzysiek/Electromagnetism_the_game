@@ -1270,7 +1270,8 @@ pub fn describe(e: &PlacementError) -> String {
         PlacementError::SignNotAllowed(_) => "That sign is not allowed here.".into(),
         PlacementError::MagnitudeNotAllowed(_) => "That value is not allowed here.".into(),
         PlacementError::FrequencyNotAllowed(_) => {
-            "That antenna frequency is not available in this level.".into()
+            // An antenna's or a supply's (DEC-30).
+            "That frequency is not available in this level.".into()
         }
         PlacementError::AngleNotAllowed(_) => {
             "Antennas point along 0°, 45°, 90° or 135°; plates lie along 0° or 90°; free \

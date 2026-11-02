@@ -11,7 +11,7 @@ driven), free particles at rest and thrown, gates, the launch, the
 detector, a beam, a tube level's cathode and anode (also with the player's solenoid on,
 and with circuits: an AC anode and an RC cathode node with goals on its potential; and
 with the player's frequencies: a tunable AC anode and a swinging solenoid on frequency
-sliders),
+sliders, also one whose supply sets only the frequency),
 player charges, magnets, antennas, plates and free charges, stray fields
 and waves) is put next to every other at several separations, from far to overlapping,
 in a Newtonian world and in a relativistic one with radiation reaction. A pair the game
@@ -213,6 +213,18 @@ def make_tube_tuned(lv, pl, p, o, w):
     pl.append({"node": [30, 20, 0], "kind": "supply", "value": 0.5, "omega": 0.3})
 
 
+def make_tube_frequency_only(lv, pl, p, o, w):
+    """A tube level (`make_tube`) whose player's solenoid swings at its own amplitude, its
+    supply setting only the frequency (`Level::frequency_only`: the level lists frequencies
+    but no fields; the self-inductance introduction's control)."""
+    make_tube(lv, pl, p, o, w)
+    lv["tube"]["solenoid"] = [30, 20, 0]
+    lv["tube"]["solenoid_drive"] = {"kind": "sine", "amplitude": 1.0, "omega": 0.5}
+    lv["limits"].update({"supply_omegas": [0.1, 2.0]})
+    lv["limits"].pop("solenoid_fields", None)
+    pl.append({"node": [30, 20, 0], "kind": "supply", "value": 0.0, "omega": 0.3})
+
+
 def make_tube_tank(lv, pl, p, o, w):
     """A tube level (`make_tube`) whose anode is an LC tank biased by its supply (a DC
     source through R and a coil, C to ground: a cavity) with a third electrode strapped to
@@ -391,6 +403,7 @@ ELEMENTS = {
     "tube_solenoid": make_tube_solenoid,
     "tube_circuit": make_tube_circuit,
     "tube_tuned": make_tube_tuned,
+    "tube_frequency_only": make_tube_frequency_only,
     "tube_tank": make_tube_tank,
     "tube_coax": make_tube_coax,
     "tube_metal": make_tube_metal,
