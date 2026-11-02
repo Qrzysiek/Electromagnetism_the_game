@@ -73,11 +73,14 @@ pub(super) struct PendingWork {
     pub lattice: usize,
     pub cell: usize,
     pub charge: f64,
+    /// Its mass, `q/(q/m)`.
+    pub mass: f64,
     /// The field at the step's start (the push's), and its induced part.
     pub field: DVec3,
     pub induced: Option<DVec3>,
-    /// The velocity at the step's start.
+    /// The velocity at the step's start, and after the push (before the self-field's part).
     pub old: DVec3,
+    pub pushed: DVec3,
 }
 
 impl Tube {
@@ -89,23 +92,37 @@ impl Tube {
     /// and time, ~`dt/2τ` of a screened metal's unscreened Joule heat (the self-field's part
     /// of the step books it back: the energy's account holds either way; until 2026-11-02,
     /// 8 % of the unscreened heat in excess in a ring 20 × 20 at dt 0.012, docs/HANDOFF.md).
+    ///
+    /// And the induced fields' work, the drive's and the carriers' own (`inductive_work`):
+    /// the drive's at the push, `(q dt/2) E_ind·(v_old + v_push)`, the push's exact energy
+    /// account of it, and the self-field's part of the step's change of the kinetic energy,
+    /// `½ m (v_new² − v_push²)`. Together the carriers' energy gained from the induced fields
+    /// over the step, to round-off (the electrostatic field's part of the push, its numerical
+    /// heating, left out): the induction that takes back the push's impulse is the
+    /// self-field's negative work, booked with it.
     pub(super) fn book_work(
         &self,
         s: &mut TubeState,
         pending: &[PendingWork],
         work: &mut [f64],
         induced_work: &mut [f64],
+        inductive_work: &mut [f64],
     ) {
         for w in pending {
-            let mean = w.old + s.v[w.particle];
+            let v = s.v[w.particle];
+            let mean = w.old + v;
             let done = 0.5 * self.dt * w.charge * w.field.dot(mean);
             work[w.lattice] += done;
             s.cells[w.lattice].work[w.cell] += done;
+            let mut inductive = 0.5 * w.mass * (v.length_squared() - w.pushed.length_squared());
             if let Some(i) = w.induced {
                 let done = 0.5 * self.dt * w.charge * i.dot(mean);
                 induced_work[w.lattice] += done;
                 s.cells[w.lattice].induced[w.cell] += done;
+                inductive += 0.5 * self.dt * w.charge * i.dot(w.old + w.pushed);
             }
+            inductive_work[w.lattice] += inductive;
+            s.cells[w.lattice].inductive[w.cell] += inductive;
         }
     }
 }

@@ -2,7 +2,7 @@
 
 Read this instead of the previous sessions' transcripts. Project rules: `CLAUDE.md`; the
 self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/DRUDE.md`
-"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-28 to DEC-33 the latest).
+"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-28 to DEC-34 the latest).
 
 ## State
 
@@ -108,12 +108,25 @@ the frequency slider logarithmic; the run time decided after measuring the desig
   and ~8 a verification unless the carriers per area drop (more noise).
 - Scales (`scales.rs`): `self_field_lines` shows the first ring's `ωL/R`; extend it to both
   rings (and `ωτ`).
-- **The heat measure for two rings**: an isolated metal's heat is the drive's induced field's
-  work (`induced_work`), which for one ring is its Joule heat on average (its own field's
-  work averages out). A secondary also takes power from the primary through the self-field
-  (mutual induction), which `induced_work` misses. Book the self-field's part of the step's
-  work per metal too (`½m(v_end² − v_push²)` in `darwin_step`) and measure the total, or the
-  lattice's heat (noisy).
+- **The heat measure for two rings (DEC-34, V-D9).** The engine books per metal the induced
+  fields' work, the drive's and the self-field's (`TubeState::inductive_work`): a ring
+  inside another within 5 % of the exact concentric conductors' (V-D9, where the drive's
+  work alone is ~40 % off), at V-D9's light macroparticles (106 per area, density 1). Not a
+  level's measure yet: in a dense metal of heavy macroparticles its self-field part cools
+  numerically (Self-inductance's ring at rest: −251 per time at the preview's resolution,
+  −61 at the verification's; its reference by it 428 ± 258, uncertain). For the
+  Transformer, light macroparticles do not fit: the Darwin limit wants c/ω about the board,
+  which with `c/ω_p` over three cells needs Self-inductance's density (35 per area there
+  gives 75 s previews; ten times the carriers, ~12 min). The bias goes as the charge per
+  macroparticle (×4 the carriers: 4.1 times smaller) and is there with the drive at rest.
+  Tried and failed: the work of the fields of all but the metal itself (each metal's
+  physical current alone in the vacuum, `Darwin2d` sine transforms, exact to 1e-13): V-D9
+  +165 % and +75 %, each ring's thermal noise heating the other, which in the whole
+  self-field each one's own field's drag balances (DEC-34; the code: `target/scratch/
+  mutual_patch.py` in this worktree). Open: a measure of a coupled metal's heat that keeps
+  the drag and drops the macroparticles' self-cooling; or the Transformer's goal on another
+  quantity (the field in the gap, its amplitude and phase, as V-D7 measures, or the
+  secondary's current), which needs no heat measure.
 - With the self-field the residual above (~0.6 % of the unscreened heat) and DEC-31's
   half-swings apply; Self-inductance's metal (density 60, c 24, dt 0.0072) is a starting
   point: two rings nested need the secondary's `L₂/R₂` near the primary's frequency.

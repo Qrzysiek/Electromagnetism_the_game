@@ -350,7 +350,11 @@ impl TubeSim {
     /// Metal `m`'s heat so far, the sum over its pieces: the field's work on its carriers
     /// (`TubeState::field_work`), or, in a metal without contacts, the induced field's alone
     /// (`TubeState::induced_work`: there the electrostatic field's work is only the time
-    /// step's numerical heating).
+    /// step's numerical heating). Not the induced fields' with the carriers' own
+    /// (`inductive_work`), which a metal beside another needs for the power their mutual
+    /// induction brings it: in a dense metal of heavy macroparticles its self-field part
+    /// holds a numerical cooling (DEC-34; Self-inductance's ring −251 per time at rest at
+    /// the preview's resolution).
     fn metal_work(&self, m: usize) -> f64 {
         let isolated = self
             .spec

@@ -278,3 +278,11 @@ With carriers:
   levels' step: +0.9 %. Left: a discretisation residual of ~0.6 % of the unscreened heat at
   dt 0.012 and cells of 0.25, shrinking with either (PHYSICS.md §2.12): a level's heat goals
   stay where the screening leaves more than ~10 %; the second-order step would cut it.
+- 2026-11-02, two metals: the engine books per metal the induced fields' work, the drive's
+  and the self-field's (`TubeState::inductive_work`; DEC-34): the power the other metals'
+  currents bring it through mutual induction included. V-D9, two concentric rings against the
+  exact concentric conductors': within 5 % each (the drive's work alone ~40 % and ~15 % off).
+  The lattice takes round holes (`Lattice::with_round_hole`) for it. Not a level's measure
+  yet: with heavy macroparticles (Self-inductance's) its self-field part cools numerically;
+  the other metals' fields' work alone failed V-D9 (+165 %, +75 %: the rings' noise heats
+  each other, which only the whole self-field balances).

@@ -1130,3 +1130,53 @@ Entries are numbered in order and never renumbered.
   - 2026-11-02: chosen. Measured with the level's reference run and the drive at rest (ω
     0.03), with and without the self-field, and with 70 carriers per area
     (`target/scratch/joule/`).
+
+## DEC-34: The induced fields' work per metal, the drive's and the carriers' own
+
+- **Status:** in use in the engine (since 2026-11-02); not a level's measure yet
+- **Area:** physics measures
+- **Choice:** the engine books per metal `TubeState::inductive_work` (and per cell,
+  `CellAccounts::inductive`): per carrier and step the drive's induced field's work at the
+  push, `(q dt/2) E_ind·(v_old + v_push)`, plus the kinetic energy the self-field's part of
+  the step adds, `½ m (v_new² − v_push²)` (`Tube::book_work`). Without the self-field it is
+  `induced_work`, bit for bit. A level's heat goal on a metal without contacts stays the
+  drive's work (`induced_work`, `TubeSim::metal_work`).
+- **Purpose:** the Transformer (#61). A metal beside another takes the power the other's
+  current brings it through their mutual induction, which the drive's work alone misses
+  (V-D9: a ring inside another 37 % low, the outer one 13 % high). The self-field's work
+  holds it, and a metal's own field's work on itself only stores and returns energy. The two
+  parts together are the carriers' energy gained from the induced fields, to round-off,
+  without the electrostatic field's numerical heating (DEC-33).
+- **Alternatives:** the lattice's heat (it holds the macroparticles' stirring, DEC-33);
+  `field_work` (the electrostatic field's numerical heating, the same); the self-field's
+  work as `(q dt/2) E_self·(v_old + v_new)` with `E_self` from the change of A at each
+  carrier (another interpolation per carrier, and the canonical kick's part left out); the
+  self-field's kinetic part added to `induced_work` as booked since the V-D8 fix, with
+  `v_new` (the sum then misses `½ m δv²` per step, δv the push's impulse the induction
+  takes back: a bias as large as the one that fix removed). As every isolated metal's heat
+  goal (tried 2026-11-02, see History): its self-field part holds a numerical cooling in a
+  dense metal of heavy macroparticles. The work of the fields induced by all but the metal
+  itself, the drive's and each other metal's (each one's physical current alone in the
+  vacuum, `L²χ = μ₀ curlᵀ J`, exact to 1e-13 against the solve's `A`; tried 2026-11-02):
+  V-D9's rings +165 % and +75 %. Each ring's thermal current noise kicks the other's
+  carriers, `(q²/2m)|ΔA|²` per step, a heating that in the whole self-field each ring's own
+  field's drag balances (the fluctuations' and the dissipation's two sides); without its
+  own field only the heating is left. Light macroparticles (V-D9's) do not fit a level:
+  the Darwin limit wants c/ω about the board, which with `c/ω_p` over three cells needs
+  Self-inductance's density.
+- **Where:** `crates/physics/src/tube/mod.rs` (`TubeState::inductive_work`,
+  `CellAccounts::inductive`), `tube/darwin.rs` (`PendingWork`, `book_work`),
+  `crates/physics/src/lattice.rs` (`with_round_hole`, for V-D9); tests V-D8, V-D9
+  (`concentric_rings_heats_are_exact`), D9 (`d9_cell_accounts_add_up`),
+  `annulus_lattice_stays_between_its_outlines`; PHYSICS.md §2.12 (*Two metals*).
+- **History:**
+  - 2026-11-02: chosen. V-D8 +0.9 % by it (+0.9 % by the drive's work alone); V-D9 +3 % and
+    −3 % (the drive's work alone −37 % and +13 %). Tried as every isolated metal's heat
+    goal: Self-inductance's reference became uncertain, 428 ± 258 (preview 256) instead of
+    490 ± 46 (preview 521), every ω from 0.52 to 0.9 uncertain. With the drive at rest it
+    read −251 per time at the preview's resolution and −61 at the verification's (four
+    times the macroparticles, the ring's 35 per area at density 60; V-D8's and V-D9's 106 at
+    density 1 show none): a numerical cooling in the self-field's part of the step, growing
+    with the charge per macroparticle. The level measure stays the drive's work. The work
+    of the fields of all but the metal itself, tried next, failed V-D9 (+165 % and +75 %):
+    see Alternatives.

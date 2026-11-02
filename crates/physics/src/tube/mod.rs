@@ -320,8 +320,8 @@ pub struct Tube {
 
 /// A lattice's accounts by cell (`Lattice::account_cell`, row by row), so far: bookkeeping
 /// for the display's maps of the current and the heat inside a metal. Nothing here acts on
-/// the motion (the golden hashes stayed); the cells add up to `TubeState::field_work` and
-/// `induced_work` (test `d9_cell_accounts_add_up`).
+/// the motion (the golden hashes stayed); the cells add up to `TubeState::field_work`,
+/// `induced_work` and `inductive_work` (test `d9_cell_accounts_add_up`).
 #[derive(Clone, Debug, Default)]
 pub struct CellAccounts {
     /// The charge the carriers carry through the cell, `Σ q Δx` of the pieces of their steps'
@@ -329,9 +329,11 @@ pub struct CellAccounts {
     /// the current density's time integral over the cell.
     pub flux: Vec<[f64; 2]>,
     /// The field's work on the carriers in the cell (their share of `TubeState::field_work`),
-    /// and the induced field's (of `induced_work`).
+    /// the induced field's (of `induced_work`), and the induced fields' with the carriers'
+    /// own (of `inductive_work`).
     pub work: Vec<f64>,
     pub induced: Vec<f64>,
+    pub inductive: Vec<f64>,
 }
 
 /// The particles and the bookkeeping of a running tube.
@@ -390,6 +392,14 @@ pub struct TubeState {
     /// isolated plate 12 × 12, 2.57 per time at the preview's resolution and 0.60 at the
     /// verification's, against an eddy-current heat of 1.24).
     pub induced_work: Vec<f64>,
+    /// Per lattice: the work of the induced fields, the drive's (`induced_work`'s) and, with
+    /// the self-field, the carriers' own (`Tube::book_work`): the heat of an isolated metal
+    /// among others, which their fields' mutual induction feeds (a transformer's secondary;
+    /// `induced_work` misses it, while a metal's own field's work on itself averages to
+    /// nothing). Without the self-field `induced_work` itself, bit for bit. Its self-field
+    /// part also holds a numerical cooling that grows with the charge per macroparticle
+    /// (PHYSICS.md §2.12, *Two metals*; DEC-34): a level's heat goal stays `induced_work`.
+    pub inductive_work: Vec<f64>,
     /// Per lattice: the current and those works by cell (`CellAccounts`).
     pub cells: Vec<CellAccounts>,
     /// Per electrode: the kinetic energy of the carriers it took in less that of those it
@@ -621,6 +631,7 @@ impl Tube {
             released: vec![0.0; self.emitters.len()],
             field_work: vec![0.0; self.lattices.len()],
             induced_work: vec![0.0; self.lattices.len()],
+            inductive_work: vec![0.0; self.lattices.len()],
             cells: self
                 .lattices
                 .iter()
@@ -630,6 +641,7 @@ impl Tube {
                         flux: vec![[0.0; 2]; nx * ny],
                         work: vec![0.0; nx * ny],
                         induced: vec![0.0; nx * ny],
+                        inductive: vec![0.0; nx * ny],
                     }
                 })
                 .collect(),
@@ -720,6 +732,7 @@ impl Tube {
         // The field's work on each lattice's carriers over the step.
         let mut work = vec![0.0; self.lattices.len()];
         let mut induced_work = vec![0.0; self.lattices.len()];
+        let mut inductive_work = vec![0.0; self.lattices.len()];
         // With the self-field, booked after its part of the step (`book_work`): each
         // carrier's metal, cell, charge, field, induced field and velocity at the start.
         let mut pending: Vec<darwin::PendingWork> = Vec::new();
@@ -756,6 +769,8 @@ impl Tube {
                         let w = 0.5 * self.dt * charge * i.dot(old + *v);
                         induced_work[k] += w;
                         s.cells[k].induced[c] += w;
+                        inductive_work[k] += w;
+                        s.cells[k].inductive[c] += w;
                     }
                 } else {
                     pending.push(darwin::PendingWork {
@@ -763,9 +778,11 @@ impl Tube {
                         lattice: k,
                         cell: c,
                         charge: *charge,
+                        mass: charge / qm,
                         field: *e,
                         induced,
                         old,
+                        pushed: *v,
                     });
                 }
             }
@@ -775,12 +792,21 @@ impl Tube {
         }
         if !moves {
             self.darwin_step(s, &v_start);
-            self.book_work(s, &pending, &mut work, &mut induced_work);
+            self.book_work(
+                s,
+                &pending,
+                &mut work,
+                &mut induced_work,
+                &mut inductive_work,
+            );
         }
         for (total, w) in s.field_work.iter_mut().zip(&work) {
             *total += w;
         }
         for (total, w) in s.induced_work.iter_mut().zip(&induced_work) {
+            *total += w;
+        }
+        for (total, w) in s.inductive_work.iter_mut().zip(&inductive_work) {
             *total += w;
         }
         s.t += self.dt;

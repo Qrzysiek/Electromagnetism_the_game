@@ -788,7 +788,8 @@ fn d8_eddy_currents() {
 
 /// D9, the display's accounts by cell (`physics::tube::CellAccounts`): an isolated plate 6 × 4
 /// of the tests' metal (4000 carriers) in D8's swinging field, 400 steps of 0.02: the cells'
-/// works add up to the lattice's (`field_work`, `induced_work`), and their charge carried to
+/// works add up to the lattice's (`field_work`, `induced_work`, `inductive_work`, the last
+/// the second without the self-field), and their charge carried to
 /// every carrier's own `Σ q Δx` over the steps it started inside, here booked independently,
 /// each to 1e-9 of the sums' scale (the sum of the cells' sizes: rounding over 1.6 million
 /// terms is ~1e-10 of it; a carrier missed or booked twice would be ~1e-4).
@@ -829,6 +830,9 @@ fn d9_cell_accounts_add_up() {
     };
     check("field's work", &cells.work, s.field_work[0]);
     check("induced work", &cells.induced, s.induced_work[0]);
+    check("inductive work", &cells.inductive, s.inductive_work[0]);
+    // Without the self-field the induced fields' work is the drive's, bit for bit.
+    assert_eq!(s.inductive_work[0].to_bits(), s.induced_work[0].to_bits());
     let fx: Vec<f64> = cells.flux.iter().map(|f| f[0]).collect();
     let fy: Vec<f64> = cells.flux.iter().map(|f| f[1]).collect();
     check("charge carried along x", &fx, flux[0]);
