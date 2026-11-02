@@ -187,7 +187,7 @@ With carriers:
   6–10° in all four, as a ring that is not one lumped impedance would: at ω = 0.8 this metal is
   a poor conductor (`4πσ/ω` ≈ 3, its surface charges lagging the drive, as in V-D6's slab), and
   the primary's EMF and the solenoid's are spread differently along it. Next: ω ≈ 0.3
-  (`4πσ/ω` ≈ 9) and more seeds (`target/scratch/vd7_rings_wip.rs`).
+  (`4πσ/ω` ≈ 9) and more seeds (`prototypes/vd7_rings_wip.rs`).
 - 2026-10-27, a level's speed of light (`TubeSpec::speed_of_light`), its grid
   (`self_field_grid`), its issues (step ≤ 0.015, speed 0.5–10⁴, grid ≤ 511 a side) and the
   sandbox's control.

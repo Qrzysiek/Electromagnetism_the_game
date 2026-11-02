@@ -28,7 +28,7 @@ meanwhile. Resolved entries stay, marked resolved. Maintained with the `open-pro
   `crates/physics/tests/drude.rs`; the explorations that gave the numbers below were
   temporary tests in that file (`eddy_param_explore`, `eddy_profile_explore`,
   `strip_profile_explore`, `strip_long_explore`; their code is in the session's scratch
-  scripts `target/scratch/add_*_explore.py`).
+  scripts `prototypes/add_*_explore.py`).
 - **Question:** an isolated rectangle of the tests' metal (macroparticles of `q/m = −1` over
   a background 1, thermal speed 1, random hard-disc cores with `ℓ = 0.5`, specular walls,
   z-invariant electrostatics with the particles as rods of radius 0.05; σ = 0.235 from the
@@ -63,7 +63,7 @@ meanwhile. Resolved entries stay, marked resolved. Maintained with the `open-pro
     across it (~5.4, σE_y A with E_y ≈ 0.3), decaying with τ ≈ 6 (expected
     `1/(4πσN)` ≈ 1.7 with N ≈ 0.2 for a single strip): no carrier crosses between the
     strips (0 of 20 000 in 10 time units).
-- **Narrowed (later on 2026-10-19), continuum model** (`target/scratch/eddy_continuum.py`,
+- **Narrowed (later on 2026-10-19), continuum model** (`prototypes/eddy_continuum.py`,
   dense, h 0.5/0.25; `eddy_continuum_fft.py`, FFT, h 0.1 resolving the Debye layers):
   Ohm's law with the model's Hall tensor (drude.rs `mobility`), diffusion, charge
   conservation and the z-invariant kernel reproduces the square's series to 4 digits and

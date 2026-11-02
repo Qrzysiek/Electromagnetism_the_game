@@ -12,7 +12,7 @@
        = (mu0/Pi) Integral_0^l (l - u) f(u) du,
    which tends to mu0 d l for long leads (Integral_R f = 2 Pi d). Checked independently by
    summing psi^2 on a fine grid from the angles the leads subtend, psi = (Omega1 - Omega2)/(2 Pi)
-   (target/scratch/two_leads_reference.py: 0.13 % below, its tail cut at 40).
+   (prototypes/two_leads_reference.py: 0.13 % below, its tail cut at 40).
    Usage: wolframscript -file d8_two_leads.wls [d] [l] [c]  (defaults 4, 24, 3). Output: the
    closed form and its value to 15 digits. *)
 

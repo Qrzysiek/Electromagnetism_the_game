@@ -137,7 +137,7 @@ drive's frequency as a control, metal shapes other than rectangles with cuts.
 - *The field effect, the transistor's principle.* A gate electrode beside a thin strip
   pushes its carriers out (depletion) or draws more in (accumulation): the strip's current
   follows the gate's potential. A metal cannot be gated (it screens within an atom); the
-  model's low density can. Prototype (`target/scratch/fet_proto*.py`; a strip 16 × 2 of
+  model's low density can. Prototype (`prototypes/fet_proto*.py`; a strip 16 × 2 of
   density 0.5 between a source and a drain at 5, gates 1 above and below on one supply):
   the strip held 3158 carriers at gate 0, 1945, 1006, 655, 494 at −20, −40, −60, −80 (84 %
   depleted), 7761 at +20; the drain current over t = 10–30 still followed the channel's
@@ -290,7 +290,7 @@ Calibrated field. The design decisions: docs/DECISIONS.md.
    high, then low, two potential goals over two windows).
 3. *Transistors, master:* **Flip-flop.** Two inverters cross-coupled by wires: a bistable
    cell, set by a pulse and holding its state, a bit of memory. *Deferred (2026-10-26):* a
-   prototype (`target/scratch/ff_proto.py`: two of Gate's transistors, each pair of gates
+   prototype (`prototypes/ff_proto.py`: two of Gate's transistors, each pair of gates
    wired to the other's drain through a level-shifting source −S, the depletion gates
    needing −S ~ −70 to switch off; reset and set by dropping a drain's supply) met two
    obstacles. (1) Two 8-long channels hold 25 600 carriers in the verification, over the
@@ -523,7 +523,7 @@ the magnetic field first).
   frequency written into the level (`crates/level/tests/frequency.rs`: Rectifier, Triode,
   Eddy currents). `generator window --omega` scans it.
 - **Open: the AC mobility through a level** (the plan's test, not committed: its draft in
-  the worktree's `target/scratch/ac_mobility_test.rs`). Ohm's law's strip on a sine of
+  `prototypes/ac_mobility_test.rs`). Ohm's law's strip on a sine of
   amplitude 10 (200 macroparticles per area, cores of radius 0.001 so that the medium's own
   correction is −0.4 %), the carriers' drift over the strip's middle against the mean field
   there (the potential's drop across it), fitted at ω over 16 and 24 periods, three seeds:

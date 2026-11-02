@@ -1,0 +1,46 @@
+Traceback (most recent call last):
+  File "C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\.claude\worktrees\tubes-next\target\scratch\inductance_scan.py", line 79, in <module>
+    results = list(pool.map(run, omegas))
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\concurrent\futures\_base.py", line 672, in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\concurrent\futures\_base.py", line 312, in _result_or_cancel
+    return fut.result(timeout)
+           ~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\concurrent\futures\_base.py", line 454, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\concurrent\futures\_base.py", line 396, in __get_result
+    raise self._exception
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\.claude\worktrees\tubes-next\target\scratch\inductance_scan.py", line 67, in run
+    r = subprocess.run([opts["--gen"], "--no-cache", "tube-scan", path, place], capture_output=True,
+                       text=True, encoding="utf-8", errors="replace", cwd=ROOT)
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\subprocess.py", line 669, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\subprocess.py", line 1213, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\qrzys\AppData\Local\Python\pythoncore-3.15-64\Lib\subprocess.py", line 1719, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                       ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+                             # no special security
+                             ^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                             cwd,
+                             ^^^^
+                             startupinfo)
+                             ^^^^^^^^^^^^
+FileNotFoundError: [WinError 2] Nie można odnaleźć określonego pliku
+exit 1

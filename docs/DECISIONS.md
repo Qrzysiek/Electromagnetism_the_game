@@ -115,7 +115,7 @@ Entries are numbered in order and never renumbered.
   0.73 off against 1.32 on); fewer carriers per area (the depletion is then an artefact, at
   200 per area Gate's current plateaued from −10); gates shorter than the channel by the
   source (less gate capacitance, a drift region shielding them) — not yet tried.
-- **Where:** `target/scratch/ff_proto.py`; docs/DRUDE.md (Phase 1, item 3).
+- **Where:** `prototypes/ff_proto.py`; docs/DRUDE.md (Phase 1, item 3).
 - **History:**
   - 2026-10-26: deferred. Two 8-long channels need 25 600 carriers in the verification
     (DEC-3); with the caps doubled the cell latched too slowly: each drain carries the other
@@ -177,7 +177,7 @@ Entries are numbered in order and never renumbered.
   (the strip and its contact add ~0.3 to C: the tank rings at period ~23, not 21); a
   non-whole number of periods (leaks the step into the Fourier amplitude); a ±40 slider (the
   window would have reached the guessable 18–22).
-- **Where:** `scripts/designs/components.py` (`ringing_tank`), `target/scratch/rlc_proto.py`.
+- **Where:** `scripts/designs/components.py` (`ringing_tank`), `prototypes/rlc_proto.py`.
 - **History:**
   - 2026-10-26: designed. The reference 14 verified 6.57 ± 0.29; the step solves on about
     10.5–18.5 (9.5–10 too, 10.25 uncertain at the goal's edge; an isolated 19.5) and −18 to
@@ -210,7 +210,7 @@ Entries are numbered in order and never renumbered.
   ~0.17 per unit of B: the strip's thermal noise rings the tank, the more the higher its Q;
   more carriers and a larger step halved it); a goal from 2.0 (its window would have reached
   the slider's guessable 7.2–8.8).
-- **Where:** `scripts/designs/components.py` (`field_tuned_damping`), `target/scratch/ftd_proto.py`.
+- **Where:** `scripts/designs/components.py` (`field_tuned_damping`), `prototypes/ftd_proto.py`.
 - **History:**
   - 2026-10-26: designed. The reference 11 verified 2.42 ± 0.04; B solves on 9.5–13
     (10.9 % of ±16) and −13 to −11 (−9 not).
@@ -233,7 +233,7 @@ Entries are numbered in order and never renumbered.
   reached its end, 38–40, or its middle, 18–22, and the field's 7.2–8.8, where the Hall
   voltage turns sublinear); the supply in its lower half (a smaller signal against the
   same noise); a slower swing (twice the run time).
-- **Where:** `scripts/designs/components.py` (`lock_in_hall`), `target/scratch/lockin_proto.py`.
+- **Where:** `scripts/designs/components.py` (`lock_in_hall`), `prototypes/lockin_proto.py`.
 - **History:**
   - 2026-10-26: designed. The phase lags the ideal by ~17° for either sign of the current:
     the contacts' capacitance charging through the strip (an inductive pickup would shift
@@ -260,7 +260,7 @@ Entries are numbered in order and never renumbered.
   (the heat goal measures the field's work on the carriers inside the metal, not the energy
   a beam brings in: it read −3.6, the wrong measure); steering with the player's solenoid
   (it also acts on the strip: Hall and magnetoresistance in the anode).
-- **Where:** `target/scratch/anode_proto.py`.
+- **Where:** `prototypes/anode_proto.py`.
 - **History:**
   - 2026-10-26: prototype. The engine joins them as it is: a beam electron (q/m −1, the
     metal's carriers' too) inside a metal at a step's start scatters off its cores and walls
@@ -289,7 +289,7 @@ Entries are numbered in order and never renumbered.
   - 2026-10-26: chosen. Ringing tank's step (14), the Inverter's pulse top (−10) and the
     Rectifier's anodes' swing (30) were their references, the Klystron's buncher swing
     (11) inside its window: they solved, or half solved, with the supplies off. Now each
-    fails with everything off (`target/scratch/check_off.py`).
+    fails with everything off (`prototypes/check_off.py`).
 
 ## DEC-13: The carriers' own magnetic field: the Darwin limit, canonical momenta
 
@@ -1091,7 +1091,7 @@ Entries are numbered in order and never renumbered.
   own field cancels most of the drive).
 - **Where:** `scripts/designs/components.py` (`self_inductance`), `scripts/reality.py`,
   `crates/game/src/scales.rs` (`self_field_lines`: `ωL/R`, the skin depth, the board
-  against c/ω); `target/scratch/inductance/` (the scans, `eddy2d.py`).
+  against c/ω); `prototypes/inductance/` (the scans, `eddy2d.py`).
 - **History:**
   - 2026-11-02: chosen. Verified 490 ± 46 (preview 521) at ω 0.67; ω solves on 0.58–0.8
     verified, 0.52 and 0.9 uncertain (7.0–10 % of the slider), 409 at 0.58 and 597 at 0.8
@@ -1139,7 +1139,7 @@ Entries are numbered in order and never renumbered.
 - **History:**
   - 2026-11-02: chosen. Measured with the level's reference run and the drive at rest (ω
     0.03), with and without the self-field, and with 70 carriers per area
-    (`target/scratch/joule/`).
+    (`prototypes/joule/`).
 
 ## DEC-34: The induced fields' work per metal, the drive's and the carriers' own
 
@@ -1269,3 +1269,45 @@ Entries are numbered in order and never renumbered.
 - **History:**
   - 2026-11-02: chosen. V-D11 (V-D10 at the cell 0.125, two seeds) failed V-D8's 5 % (inner
     +7.2 %, outer +3.7 %, the exchange −2.9e-3): not kept as a test; recorded in PHYSICS.md.
+
+## DEC-37: Disk hygiene: one place per output, a cleanup tool with caps, cited scratch versioned
+
+- **Status:** in use (since 2026-11-02)
+- **Area:** process, tools
+- **Choice:** builds only in a checkout's `target/release`, `target/debug` and
+  `target/affected/build`; temporary target directories under `target/temp/`; a session's
+  files in `target/scratch/`, and what a tracked file cites from there moved to `prototypes/`.
+  `scripts/cleanup.py` (`status`, read-only; `run`) deletes, in every checkout git lists:
+  `target/temp/` and what under `target/` its `KNOWN` does not name; a build over its cap
+  (release 5 GB, debug 9 GB, the instrumented build 1 GB: about twice their fresh size), by
+  `cargo clean`, the main checkout's game and generator rebuilt after; run-cache records
+  older than the checkout's generator (another engine's: never hit again); scratch entries
+  untouched for 14 days that no tracked file cites; folders under `.claude/worktrees/` that
+  git does not list and that hold no `.git`. A merged worktree with nothing uncommitted is
+  reported for `git worktree remove`, not removed. Run after each merge to main and when a
+  checkout's `target/` passes 20 GB (CLAUDE.md, *Disk*).
+- **Purpose:** the owner (2026-11-02): the project took 84 GB; "make some rules for periodic
+  cleanups so that there will be no problems such as that in the future". 66 GB of it were
+  extra target directories sessions had left (`target/claude`, `claude-gen`, `claude-r2`,
+  `claude-e`, `scratch_build*`, …, 0.2–14 GB each: built while the game's executable was
+  locked, or for an experiment, and never removed), the rest mostly stale builds inside the
+  profiles (26 versions of the level library in one release profile: a change of
+  `Cargo.lock`, the toolchain or a feature set leaves the old ones, and cargo never deletes
+  them). And 29 citations in tracked files (DECISIONS.md's *Where*, the designs' comments,
+  HANDOFF.md) pointed into one worktree's unversioned `target/scratch/`.
+- **Alternatives:** cargo's own garbage collection (`cargo clean gc`, `-Zgc`: unstable, not
+  on the pinned toolchain, DEC-17); `cargo-sweep` (a third-party tool: by access times, which
+  Windows does not reliably keep, or by toolchain, which misses the feature sets); pruning the
+  stale builds exactly from cargo's JSON messages (the units' hashes depend on which packages
+  a command builds together, so the set to keep would need every command anyone runs, and a
+  miss costs the rebuild a cap costs anyway); a check at every session's start (a hook:
+  sizing 40 GB each time is slow, and it could delete what another running session uses);
+  deleting the scratch whole (it held what the citations name).
+- **Where:** `scripts/cleanup.py`, `scripts/tests/test_cleanup.py`, `prototypes/`
+  (`README.md`), CLAUDE.md (*Workflow*, *Disk*), `.gitignore` (`.claude/worktrees/`),
+  docs/HANDOFF.md (the finishing steps).
+- **History:**
+  - 2026-11-02: chosen. The cleanup took the project from 84 GB to 11 GB; fresh
+    builds: release 2.3–2.4 GB (the game and the generator in ~6 min, the heavy tests 30 s
+    more), debug 4.4 GB (the fast tier in ~4.5 min, clippy 1 min). 54 scratch entries (29
+    citations in 8 tracked files) copied to `prototypes/` (1.1 MB), the citations rewritten.

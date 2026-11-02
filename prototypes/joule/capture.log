@@ -1,0 +1,7 @@
+[2m2026-11-02T07:03:50.176309Z[0m [32m INFO[0m [2mbevy_diagnostic::system_information_diagnostics_plugin::internal[0m[2m:[0m SystemInfo { os: "Windows 11 Home", kernel: "26200", cpu: "AMD Ryzen 7 9800X3D 8-Core Processor", core_count: "8", memory: "61.6 GiB" }
+[2m2026-11-02T07:03:50.358144Z[0m [32m INFO[0m [2mbevy_render::renderer[0m[2m:[0m AdapterInfo { name: "AMD Radeon RX 9070 XT", vendor: 4098, device: 30032, device_type: DiscreteGpu, device_pci_bus_id: "", driver: "AMD proprietary driver", driver_info: "26.10.2 (LLPC)", backend: Vulkan, subgroup_min_size: 32, subgroup_max_size: 64, transient_saves_memory: false }
+[2m2026-11-02T07:03:50.523393Z[0m [32m INFO[0m [2mbevy_pbr::cluster[0m[2m:[0m GPU clustering is supported on this device.
+[2m2026-11-02T07:03:50.523572Z[0m [32m INFO[0m [2mbevy_render::batching::gpu_preprocessing[0m[2m:[0m GPU preprocessing is fully supported on this device.
+[2m2026-11-02T07:03:50.523931Z[0m [32m INFO[0m [2mbevy_egui::render[0m[2m:[0m Using bindless_mode_array_size 16 (Device maximum 4294967295)
+[2m2026-11-02T07:03:50.524050Z[0m [32m INFO[0m [2mbevy_winit::system[0m[2m:[0m Creating new window Electromagnetism – the game (66v0)
+[2m2026-11-02T07:08:41.263928Z[0m [32m INFO[0m [2mbevy_render::view::window::screenshot[0m[2m:[0m Screenshot saved to target/scratch/joule/panel125.png

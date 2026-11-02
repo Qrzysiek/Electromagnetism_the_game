@@ -1,0 +1,16 @@
+   Compiling physics v0.1.0 (C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\.claude\worktrees\tubes-next\crates\physics)
+    Finished `release` profile [optimized] target(s) in 12.58s
+     Running tests\darwin.rs (target\release\deps\darwin-36bbc9f6b2e9edf6.exe)
+
+running 1 test
+test ring_impedance_is_r_plus_i_omega_l has been running for over 60 seconds
+V-D5 seed 47: tan φ free 0.2040, self 0.8590: L/R 0.8187; L 156.03 (μ₀ × 111.7), R 171.518 (free 171.983): L/R 0.9097; |I_free/I_self| 1.2744 vs 1.2917
+V-D5 seed 47: heat/work 1.0297 with the self-field (0.241 of 0.234), 1.0358 without (0.396 of 0.382)
+V-D5 seed 53: tan φ free 0.1435, self 0.9681: L/R 1.0308; L 158.67 (μ₀ × 113.6), R 171.941 (free 182.362): L/R 0.9228; |I_free/I_self| 1.2830 vs 1.3778
+V-D5 seed 53: heat/work 1.0825 with the self-field (0.232 of 0.215), 1.0361 without (0.388 of 0.375)
+V-D5: L/R from the phases 0.9248, from the energy and power 0.9163 (+0.9 %); R with/without the self-field 0.9701; magnitudes/phases 0.9590; heat/work with/without 1.0195
+test ring_impedance_is_r_plus_i_omega_l ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 434.28s
+
+exit 0

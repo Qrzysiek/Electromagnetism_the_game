@@ -1,0 +1,168 @@
+{
+ "format_version": 2,
+ "engine_version": "0.1.0",
+ "name": "Self-inductance",
+ "description": "A metal ring alone in your solenoid, whose field swings with a fixed amplitude, $B = B_0 \\sin \\omega t$: your supply sets only how fast. The changing field drives a current round the ring (Faraday's law), and that current makes a field of its own, against the change (Lenz's law): the ring is a one-turn coil, an inductance $L$ in series with its resistance $R$. While $\\omega L/R$ is small the heat grows as $\\omega^2$; past $\\omega L/R \\approx 1$ the ring's own field cancels the drive's in its hole and the heat levels off. Set $\\omega$ so that the ring takes between 360 and 650 of heat per unit time (averaged from $t = 4$ to $24$).",
+ "reality": {
+  "represents": "A closed metal ring's self-inductance: a shorted turn in a swinging field",
+  "remarks": [
+   {
+    "kind": "kept",
+    "line": "Lenz's law as an inductance",
+    "detail": "The ring's current makes a field against the change of the drive's flux through it. Past \u03c9L/R \u2248 1 its own field cancels the drive's in the hole and the current, held by L, no longer grows: the heat levels off, as an inductor's reactance limits its current."
+   },
+   {
+    "kind": "kept",
+    "line": "The skin effect",
+    "detail": "At the highest frequencies the current crowds to the ring's outer face and the heat grows only as \u221a\u03c9."
+   },
+   {
+    "kind": "simplified",
+    "line": "A slow light",
+    "detail": "The model's speed of light is slow, so that the ring bends at a playable frequency: there c/\u03c9 is about the ring's size. A real ring that large would radiate and its field would lag; the model leaves both out (the Darwin limit). A copper ring 2 cm across bends near 6 kHz, where c/\u03c9 is 8 km."
+   },
+   {
+    "kind": "simplified",
+    "line": "A dense classical metal",
+    "detail": "The carriers are thirty times denser than the other levels' metals (\u03c9_p \u03c4 \u2248 5, a heavily doped semiconductor's; copper's is ~250), so that the ring's inductance outweighs its resistance at a frequency the model can follow."
+   },
+   {
+    "kind": "simplified",
+    "line": "Hard-disc collisions, a fixed-temperature lattice",
+    "detail": "Carriers bounce off randomly placed hard discs and leave with a fresh thermal speed; the lattice takes the heat and never warms. Real carriers scatter off lattice vibrations and impurities at rates that depend on energy and temperature."
+   },
+   {
+    "kind": "simplified",
+    "line": "A conductor seen end-on",
+    "detail": "The strip is infinitely long along z, its carriers lines of charge moving as one: currents are per unit length, and the noise is larger than a real conductor's, whose carriers move independently along its length."
+   }
+  ]
+ },
+ "grid": {
+  "nx": 24,
+  "ny": 24,
+  "nz": 0,
+  "subdivision": 1
+ },
+ "physics": {
+  "c": null,
+  "charge_radius": 0.3,
+  "magnet_radius": 0.3,
+  "wire_radius": 0.1,
+  "antenna_radius": 0.3,
+  "t_max": 24.0,
+  "tolerances": {
+   "preview": 1e-10,
+   "verify": 1e-12
+  }
+ },
+ "shots": [],
+ "elements": [],
+ "coils": [],
+ "limits": {
+  "max_charges": 0,
+  "magnitudes": [],
+  "allow_positive": true,
+  "allow_negative": true,
+  "max_magnets": 0,
+  "magnet_strengths": [],
+  "supply_omegas": [
+   0.03,
+   0.67,
+   3.0
+  ]
+ },
+ "reference_solution": [
+  {
+   "node": [
+    23,
+    23,
+    0
+   ],
+   "kind": "supply",
+   "value": 0.0,
+   "omega": 0.67
+  }
+ ],
+ "electrodes": [
+  {
+   "center": [
+    1,
+    1,
+    0
+   ],
+   "length": 0.5,
+   "thickness": 0.5,
+   "height": 4.0,
+   "angle_deg": 0.0,
+   "bias": {
+    "kind": "charge",
+    "value": 0.0
+   },
+   "label": "inert electrode (floating, emits nothing; the model needs one)"
+  }
+ ],
+ "tube": {
+  "cathode": 0,
+  "charge_per_mass": -1.0,
+  "speed_of_light": 24.0,
+  "heat_goals": [
+   {
+    "metal": 0,
+    "min": 360.0,
+    "max": 650.0,
+    "start": 4.0,
+    "end": 24.0
+   }
+  ],
+  "solenoid_drive": {
+   "kind": "sine",
+   "amplitude": 0.45,
+   "omega": 0.1
+  },
+  "step": 0.0072,
+  "saturation": 0.0,
+  "solenoid": [
+   23,
+   23,
+   0
+  ],
+  "metals": [
+   {
+    "corners": [
+     [
+      2,
+      2,
+      0
+     ],
+     [
+      22,
+      22,
+      0
+     ]
+    ],
+    "contacts": [],
+    "density": 60.0,
+    "charge_per_mass": -1.0,
+    "thermal_speed": 2.0,
+    "mean_free_path": 0.5,
+    "core_radius": 0.005,
+    "carriers_per_area": 35.0,
+    "seed": 21,
+    "hole": [
+     [
+      4,
+      4,
+      0
+     ],
+     [
+      20,
+      20,
+      0
+     ]
+    ],
+    "label": "ring (a shorted turn)"
+   }
+  ]
+ }
+}

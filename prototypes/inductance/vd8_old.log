@@ -1,0 +1,20 @@
+
+running 1 test
+test screened_disc_heat_is_the_cylinders has been running for over 60 seconds
+V-D8 seed 47: heat 0.4871 against the cylinder's 0.4390 (+11.0 %; unscreened 2.1777)
+V-D8 seed 53: heat 0.4868 against the cylinder's 0.4390 (+10.9 %; unscreened 2.1777)
+V-D8: |k|R 3.34, the cylinder's heat 0.4390 (0.202 of the unscreened 2.1777); measured/exact 1.1093
+
+thread 'screened_disc_heat_is_the_cylinders' (300) panicked at crates\physics\tests\darwin.rs:427:5:
+heat/exact 1.1093007172903855
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test screened_disc_heat_is_the_cylinders ... FAILED
+
+failures:
+
+failures:
+    screened_disc_heat_is_the_cylinders
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out; finished in 1368.23s
+
+exit 101

@@ -630,7 +630,7 @@ def hall_probe():
     # The solenoid's full range (the owner, 2026-10-20: every behaviour the model can
     # show): +-16, from straight paths between collisions to circles 0.12 across
     # (omega_c tau = 8; the step turns the carriers by at most 0.56 rad).
-    # Over it at 30 (target/scratch/b_range_scan.py; preview): current 3.14, 3.12, 3.06,
+    # Over it at 30 (prototypes/b_range_scan.py; preview): current 3.14, 3.12, 3.06,
     # 3.00, 2.91, 2.73, 2.55, 2.21, 1.96 and the top against the bottom -0.45, -1.05, -2.43,
     # -3.68, -4.67, -6.61, -8.12, -10.57, -12.52 at B = 0.5, 1, 2, 3, 4, 6, 8, 12, 16 (the
     # Hall voltage ever more sublinear). The goal moved to -6.0 to -3.5: B about 2.9-5.5.
@@ -740,7 +740,7 @@ DENSE_STEP = 0.019
 
 
 def few_or_many():
-    # Designed with `generator tube-scan` (target/scratch/few_scratch.py): at (30, B, 30)
+    # Designed with `generator tube-scan` (prototypes/few_scratch.py): at (30, B, 30)
     # (preview, t = 10-80) over B = 0, 1, 2, 3, 4.2, 6, 9, 12, 16: upper current 3.18, 3.16,
     # 3.14, 3.03, 2.93, 2.77, 2.53, 2.29, 2.04; lower 3.25, 3.40, 3.33, 3.29, 3.25, 3.10, 3.13,
     # 2.94, 2.68; upper Hall (top less bottom) -0.19, -1.58, -3.13, -3.91, -5.22, -6.73, -9.27,
@@ -793,7 +793,7 @@ def few_or_many():
 
 
 def magnetoresistance():
-    # Designed with `generator tube-scan` (target/scratch/design_mr_intro.py): a strip 16 x 4
+    # Designed with `generator tube-scan` (prototypes/design_mr_intro.py): a strip 16 x 4
     # (current along it) and one 4 x 10 (short along the current, wide across it), both on
     # one supply, in the player's solenoid. In the long strip the Hall field holds the
     # carriers back from the sides and they flow straight; the short wide strip's contacts
@@ -842,7 +842,7 @@ def magnetoresistance():
 
 
 def wheatstone_bridge():
-    # Designed with `generator tube-scan` (target/scratch/bridge_*.py): Magnetoresistance's two
+    # Designed with `generator tube-scan` (prototypes/bridge_*.py): Magnetoresistance's two
     # strips on one fixed supply at their right ends, each left end to ground through an
     # ideal resistor (R0 the long strip's, R2 the short wide one's); the output, a voltmeter
     # between the two left ends, is zero when X / Y = R2 / R0 (X, Y the short and the long
@@ -895,7 +895,7 @@ def strength_and_sign():
     # carries positive carriers (Positive carriers' lower strip), its Hall voltage odd in B.
     # The current pins the supply, the junction's potential (the wide strip's share of it)
     # |B|, and the Hall voltage's sign B's sign.
-    # Designed with `generator tube-scan` (target/scratch/level_scratch.py): at 30 over B =
+    # Designed with `generator tube-scan` (prototypes/level_scratch.py): at 30 over B =
     # -16, -8, -5, -3, 0, 3, 5, 8, 12, 16 (preview, t = 10-80) the current 1.20, 2.02, 2.48,
     # 2.72, 2.98, 2.75, 2.43, 2.05, 1.58, 1.16, the junction 7.44, 5.10, 4.16, 3.37, 2.86, 3.34,
     # 4.06, 5.00, 5.94, 6.48 (both even in B: the two strips' magnetoresistance) and the Hall
@@ -958,7 +958,7 @@ CHANNEL_STEP = 0.04
 
 
 def gate():
-    # Designed with `generator tube-scan` (target/scratch/gate_design*.py): a channel 8 x 2
+    # Designed with `generator tube-scan` (prototypes/gate_design*.py): a channel 8 x 2
     # between a grounded source and a drain held at 10, gates 1.5 above and below it on the
     # player's supply. The channel charges through its own resistance (R C ~ L^2: a channel 16
     # long had not settled by t = 30; 8 long settles within ~10). Convergence: with the gates
@@ -1003,7 +1003,7 @@ def gate():
 
 
 def inverter():
-    # Designed with `generator tube-scan --trace` (target/scratch/fet_inverter*.py): Gate's
+    # Designed with `generator tube-scan --trace` (prototypes/fet_inverter*.py): Gate's
     # channel with its drain fed from 25 through a load of 30, the gate at -60
     # (off) until a pulse (rise 2) brings it to the player's supply at t = 100 for 100.
     # The drain's potential (preview, window means): at V_DD 25 off 24.08 (the channel leaks
@@ -1046,7 +1046,7 @@ def inverter():
 
 
 def amplifier():
-    # Designed with `generator tube-scan` (target/scratch/amp_*.py): Gate's channel, a sine
+    # Designed with `generator tube-scan` (prototypes/amp_*.py): Gate's channel, a sine
     # of amplitude 3 on both gates around the player's supply (the bias), the drain fed from
     # V_DD through R_L. The DC characteristics (fet_dc.py, preview, the drain through 20):
     # at V_D ~ 39 g_m ~ 0.018 between gates -20 and -10 and the output conductance ~0.0026
@@ -1102,7 +1102,7 @@ def amplifier():
 
 
 def ringing_tank():
-    # Designed with `generator tube-scan` (target/scratch/rlc_proto.py): Magnetoresistance's
+    # Designed with `generator tube-scan` (prototypes/rlc_proto.py): Magnetoresistance's
     # long strip (16 x 4, R ~ 8.8 at DC) as the resistor of a parallel tank: its left contact
     # fed through a coil L = 7.5 (no series resistance) by the player's step at t = 5, a
     # capacitor C = 1.5 from it to ground, its right contact grounded. Ideal: omega0 =
@@ -1143,7 +1143,7 @@ def ringing_tank():
 
 
 def field_tuned_damping():
-    # Designed with `generator tube-scan` (target/scratch/ftd_proto.py): Ringing tank's
+    # Designed with `generator tube-scan` (prototypes/ftd_proto.py): Ringing tank's
     # parallel tank (no series resistance) with Magnetoresistance's short wide strip (4 along
     # the current, 10 across, R ~ 1 at B = 0 to ~6 at 16) as its resistor, in the player's
     # solenoid: Q = R sqrt(C/L) from ~0.5 to ~3 with L 6, C 1.5. The tank rings with a period
@@ -1183,7 +1183,7 @@ def field_tuned_damping():
 
 
 def lock_in_hall():
-    # Designed with `generator tube-scan` (target/scratch/lockin_proto.py): Hall probe's strip
+    # Designed with `generator tube-scan` (prototypes/lockin_proto.py): Hall probe's strip
     # (16 x 4 at the board's centre, 100 carriers per area, floating side contacts C = 1) with
     # a steady current from the player's supply on its right end, in the player's solenoid
     # swinging as B0 sin(EDDY_OMEGA t) (period 50.3). The top contact against the bottom one,
@@ -1243,7 +1243,7 @@ def lock_in_hall():
 # one ring alone in the swinging solenoid, B0 fixed, omega on the slider; a preview of at
 # most 30 s). A ring 20 x 20 with walls 2 is a one-turn solenoid along z: L = mu0 A,
 # R = P/(sigma w), L/R = tau (A w/P)/(c/omega_p)^2 whatever the density. Its curve against the
-# exact eddy currents (target/scratch/inductance/eddy2d.py, finite differences with the
+# exact eddy currents (prototypes/inductance/eddy2d.py, finite differences with the
 # Boltzmann sigma(omega)) for B0 = 1 (times 0.2025 at the level's 0.45): heat 74, 401, 1168,
 # 2963, 4312, 5821, 7296, 8588, 9655 at omega = 0.1, 0.24, 0.42, 0.75, 1, 1.33, 1.78, 2.37,
 # 3.16: as omega^2 up to ~0.5, the bend at omega ~1.1-1.3, then the plateau. The design:
@@ -1312,7 +1312,7 @@ def cold_electrode(x, y):
 
 
 def eddy_currents():
-    # Designed with `generator tube-scan` (target/scratch/eddy_window.py): an isolated plate
+    # Designed with `generator tube-scan` (prototypes/eddy_window.py): an isolated plate
     # 12 x 12 on the solenoid's axis, its field B0 sin(0.125 t). Local Ohm's law (PHYSICS.md
     # 2.11, D8): heat sigma <Bdot^2> int u dA = 0.47 x 728.75 x (0.125 B0)^2 / 2 = 2.68 B0^2;
     # the carriers' linear response holds up to Bdot ~ 0.1 (qEl/kT = 0.1 at the edges'
@@ -1366,7 +1366,7 @@ SILICON_OMEGA = 0.13 * math.pi
 
 
 def eddy_silicon():
-    # Designed with `generator tube-scan` (target/scratch/copper_scratch.py): heat (preview)
+    # Designed with `generator tube-scan` (prototypes/copper_scratch.py): heat (preview)
     # 0.114, 0.471, 1.02, 1.11, 1.19, 1.67, 2.06, 4.42, 7.35, 16.4 at B0 = 0.1, 0.2, 0.3, 0.32,
     # 0.35, 0.38, 0.43, 0.6, 0.8, 1.2: 11.5 B0^2, local Ohm's law's 11.1 (sigma <Bdot^2> int u
     # dA; 40 mean free paths across, its walls matter less than the other plate's, 5-7 %
@@ -1396,7 +1396,7 @@ def eddy_silicon():
 
 
 def laminations():
-    # Designed with `generator tube-scan` (target/scratch/lam20_*.py): a transformer's core
+    # Designed with `generator tube-scan` (prototypes/lam20_*.py): a transformer's core
     # 20 x 12 on the solenoid's axis (30 carriers per area: 14 400 in the verification), the
     # field fixed (B0 = 0.68 at omega 0.125), three cuts of any length and angle (the owner:
     # a bigger plate, cuts not only across the whole metal). Verification (local Ohm's law):

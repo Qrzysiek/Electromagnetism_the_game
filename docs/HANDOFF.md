@@ -39,7 +39,7 @@ self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/D
 - **Open: the AC mobility through a level** misses its 5 % (5.2 % at ω/κs = 0.4, 7.6 % at
   1.2): the drift lags the field 3–4° less than the Boltzmann equation, 2.5–3° more than
   D2's box shows. Data, what was ruled out and what to try: DRUDE.md Progress, 2026-11-02;
-  the test's draft: `target/scratch/ac_mobility_test.rs` (this worktree). Phase goals at
+  the test's draft: `prototypes/ac_mobility_test.rs`. Phase goals at
   ωτ ≈ 1 (Carriers' inertia) wait for it.
 
 ## The finding that changes the Transformer's design
@@ -80,12 +80,12 @@ resonator, the metamaterials' element.)
   24.4 s, verification 62 s. (The first design: density 60, c 24, the bend at 0.7, ~75 s.)
   Scales:
   `ωL/R`, the skin depth, the board against c/ω (`self_field_lines`). The exact curve:
-  `target/scratch/inductance/eddy2d.py` (this worktree); the scans: `NOTES.md` there.
+  `prototypes/inductance/eddy2d.py`; the scans: `NOTES.md` there.
 - Checked: the panel's "Joule heat" (then the lattice's take) read ~750 per time above the
   drive's work on this level: the macroparticles' stirring of each other (`∝ n²/N`; with
   the drive at rest 748 without the self-field, 742 with it, 400 at twice the carriers),
   not the self-field. The panel now shows the field's work, what the goal measures (DEC-33;
-  PHYSICS.md §2.12 *The heat at rest*; the runs: `target/scratch/joule/`).
+  PHYSICS.md §2.12 *The heat at rest*; the runs: `prototypes/joule/`).
 - Not written: the level's document (`scripts/level_docs.py new self_inductance`; none of the
   metal or AC levels has one yet); `eddy2d.py` would be its `calc.py`.
 - **The 30 s rule (the owner, 2026-11-02; CLAUDE.md):** a level's preview at most 30 s
@@ -145,12 +145,12 @@ the frequency slider logarithmic; the run time decided after measuring the desig
   ring's bend (c/ω_b against the rings' size) and the validated accuracy (ω_p dt ≈ 0.04,
   c/ω_p ≥ 3.4 cells), not by the density; the cost per step is the self-field's two solves
   (~7 ms on the 128-node grid every board up to 24 rounds up to; 64 nodes only for a board
-  of 8 or less) plus ~1.5 µs per carrier. Exact heats (`target/scratch/inductance/
+  of 8 or less) plus ~1.5 µs per carrier. Exact heats (`prototypes/inductance/
   transformer2d.py`, nested square rings): thin walls (1) screen too little (the bend at
   ω ≈ 2–3, c/ω ≈ 2 against rings 10–12 wide); thick walls (3 in a ring 24 wide, density 1,
   thermal speed 1, c 3.2) work (the inner/outer heat ratio 0.19 → 0.02 over ω 0.03–1.2) but
   preview in ~3–9 min. A small dense prototype (rings 10 and 6 wide, walls 1, density 44,
-  c 21, dt 0.0017; `target/scratch/proto_transformer.json`): preview 73 s for 12 time units,
+  c 21, dt 0.0017; `prototypes/proto_transformer.json`): preview 73 s for 12 time units,
   the outer ring's heat ±0.4 % but the inner one's 44 ± 30: at two periods (~26 s) a goal on
   it is noise. As an interlude it can run the thick-walled rings or the dense metal on a
   finer cell (V-D11).
@@ -158,8 +158,8 @@ the frequency slider logarithmic; the run time decided after measuring the desig
   the self-field's cell at about `c/ω_p`/7: `SELF_FIELD_CELL` per level (from its density
   and c) or a finer constant, ~4 times the preview (Self-inductance's ~75 s would be ~5 min);
   or a metal whose `c/ω_p` spans more cells at 0.25 (a lower density, with c lowered so
-  that c/ω stays about the board). Scratch tests: `target/scratch/scratch_cell.rs` in this
-  worktree (copy into `crates/physics/tests/` to run), outputs `target/scratch/scratch_*.out`.
+  that c/ω stays about the board). Scratch tests: `prototypes/scratch_cell.rs`
+  (copy into `crates/physics/tests/` to run), outputs `prototypes/scratch_*.out`.
 - With the self-field the residual above (~0.6 % of the unscreened heat) and DEC-31's
   half-swings apply; Self-inductance's metal (density 60, c 24, dt 0.0072) is a starting
   point: two rings nested need the secondary's `L₂/R₂` near the primary's frequency.
@@ -174,10 +174,13 @@ document (`scripts/level_docs.py new`); `docs/LEVELS.md`; a capture.
 
 - Finished work: `git fetch -q origin`, `git merge-base --is-ancestor origin/main HEAD`, then
   `git push -q origin worktree-tubes-next:main` and `git push -q origin worktree-tubes-next`.
-  The owner pulls and builds `cargo build --release -p game -p generator`.
+  The main checkout is fast-forwarded (`git merge --ff-only worktree-tubes-next` there) and
+  rebuilt (`cargo build --release -p game -p generator` there: the owner plays from it), then
+  `python scripts/cleanup.py run` (CLAUDE.md, *Disk*; DEC-37).
 - Before committing: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo test --workspace`, the affected heavy tests (`affected.py run --no-coverage`, then
-  `refresh`); `python -m mypy` / `pytest` for scripts; `python scripts/measured.py update`,
+  `cargo test --workspace`, the affected heavy tests (`affected.py run`, coverage on: a
+  verdict-only run leaves the records' coverage stale and every later change runs all 525);
+  `python -m mypy` / `pytest` for scripts; `python scripts/measured.py update`,
   `python scripts/physics_pdf.py` after PHYSICS.md edits.
 - Edit scripts written through a Bash heredoc lose doubled backslashes (`\\` became `\`, so a
   replacement matching Rust's string continuations silently missed): use the Edit tool for

@@ -1,0 +1,10 @@
+thin w=0.2: heat Some(0.6708729464822311) (236 s)
+thin w=0.1: heat Some(0.22500552466712287) (237 s)
+thin w=0.05: heat Some(0.012713459835829277) (238 s)
+thin w=0.4: heat Some(1.057988851897267) (233 s)
+thin w=1.6: heat Some(10.621509669503054) (233 s)
+thin w=0.8: heat Some(3.0839005067442655) (234 s)
+thin100 w=0.1: heat Some(0.3307882082383527) (49 s)
+thin100 w=1.6: heat Some(64.84215533518174) (49 s)
+thin100 w=0.4: heat Some(3.8925659828942094) (49 s)
+exit 0

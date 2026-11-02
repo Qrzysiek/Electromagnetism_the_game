@@ -1,0 +1,9 @@
+
+running 1 test
+test scratch_wide_gap has been running for over 60 seconds
+SCRATCH wide gap seed 47 ring (2.5, 4.0): heat 7.5996 vs exact 6.3608 (+19.5 %); drive 5.2025 vs exact 4.3779 (+18.8 %)
+SCRATCH wide gap seed 47 ring (5.0, 6.0): heat 27.0775 vs exact 26.3919 (+2.6 %); drive 29.4220 vs exact 28.3748 (+3.7 %)
+test scratch_wide_gap ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 485.88s
+

@@ -1,0 +1,26 @@
+[
+ [
+  1.1,
+  "  shot heat of metal 1: 962.277033 \u00b1 12.141380 (preview 970.371286), goal 1000 to 1500: Missed: outcome Rejected, status NotVerified"
+ ],
+ [
+  1.13,
+  "  shot heat of metal 1: 1022.093177 \u00b1 56.743592 (preview 1059.922238), goal 1000 to 1500: Uncertain: outcome Rejected, status NotVerified"
+ ],
+ [
+  1.3,
+  "  shot heat of metal 1: 1195.117071 \u00b1 135.654261 (preview 1104.680897), goal 1000 to 1500: Met: outcome Arrived, status Verified"
+ ],
+ [
+  1.55,
+  "  shot heat of metal 1: 1408.678978 \u00b1 13.122758 (preview 1399.930473), goal 1000 to 1500: Met: outcome Arrived, status Verified"
+ ],
+ [
+  1.6,
+  "  shot heat of metal 1: 1466.193099 \u00b1 82.325039 (preview 1411.309740), goal 1000 to 1500: Uncertain: outcome Rejected, status NotVerified"
+ ],
+ [
+  1.65,
+  "  shot heat of metal 1: 1458.340612 \u00b1 154.691257 (preview 1355.213108), goal 1000 to 1500: Uncertain: outcome Rejected, status NotVerified"
+ ]
+]

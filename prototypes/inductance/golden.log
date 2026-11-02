@@ -1,0 +1,3 @@
+   Compiling level v0.1.0 (C:\Users\qrzys\Documents\Projects\Electromagnetism_the_game\.claude\worktrees\tubes-next\crates\level)
+    Finished `release` profile [optimized] target(s) in 49.13s
+     Running tests\per_level.rs (target\release\deps\per_level-34d53f831e12d9e8.exe)

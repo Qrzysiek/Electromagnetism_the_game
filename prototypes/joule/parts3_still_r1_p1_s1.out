@@ -1,0 +1,1 @@
+target/scratch/joule/still.json r1 p1 s1: lattice heat 755.82; field work 512.69; drive work 2.84; inductive -251.41; self free -208.08; self jumped -46.19; self born 0.00; jumped count 27980.78; self E-work -5678.74; split conv 209.33; split induced -423.62; split kick 6.21; split total -208.08; carriers 5040

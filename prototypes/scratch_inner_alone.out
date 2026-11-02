@@ -1,0 +1,8 @@
+
+running 1 test
+test scratch_inner_alone has been running for over 60 seconds
+SCRATCH inner alone seed 47 ring (2.5, 4.5): heat 16.9895 vs exact 17.6007 (-3.5 %); drive 16.9895 vs exact 17.6007 (-3.5 %)
+test scratch_inner_alone ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 535.21s
+

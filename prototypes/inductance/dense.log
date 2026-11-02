@@ -1,0 +1,11 @@
+dense w=0.2: heat Some(0.9821198554876934) (246 s)
+dense w=0.4: heat Some(2.6405404788694806) (246 s)
+dense w=0.05: heat Some(0.09857059867053557) (246 s)
+dense w=0.1: heat Some(0.7610166370493239) (246 s)
+dense w=3.2: heat Some(63.71573197471782) (202 s)
+dense w=0.8: heat Some(7.28793454569363) (202 s)
+dense w=1.6: heat Some(17.40699865757879) (202 s)
+dense100 w=0.4: heat Some(12.526942664139323) (77 s)
+dense100 w=1.6: heat Some(183.72807421700278) (77 s)
+dense100 w=0.1: heat Some(1.053640787329127) (78 s)
+exit 0

@@ -1,0 +1,4 @@
+    Finished `release` profile [optimized] target(s) in 0.20s
+     Running tests\per_level.rs (target\release\deps\per_level-34d53f831e12d9e8.exe)
+125_self_inductance: 63e711eb12ffa215
+exit 0
