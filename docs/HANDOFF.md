@@ -73,10 +73,12 @@ resonator, the metamaterials' element.)
   unscreened heat (dt 0.012, cells 0.25), felt where the screening leaves under ~10 %.
 - With the self-field a heat goal averages over whole half-swings of the drive (DEC-31): the
   ring's stored energy swings by up to `√(1 + (ωL/R)²)` times the heat per period.
-- The level: a ring 20 × 20 (walls 2), density 60, c = 24, dt 0.0072, B₀ 0.45 fixed, ω on a
-  log slider 0.03–3, heat 360–650 over t = 4–24 at the bend (answer ω 0.67, ωL/R 0.93;
-  verified 490 ± 46, the preview 521; ω solves on 0.58–0.8 verified, 7 %). Preview ~75 s,
-  verification ~185 s. Scales:
+- The level (redesigned 2026-11-02 for the owner's 30 s preview, DEC-32's history): a ring
+  20 × 20 (walls 2), density 41, c = 27.4, dt 0.0088 (`c/ω_p` 1.21, `ω_p dt` 0.2), B₀ 0.45
+  fixed, ω on a log slider 0.05–5, heat 1000–1500 over t = 2.5–10 at the bend (answer ω 1.3;
+  verified 1195 ± 136, the preview 1105; ω solves on 1.15–1.55 verified, 6.5 %). Preview
+  24.4 s, verification 62 s. (The first design: density 60, c 24, the bend at 0.7, ~75 s.)
+  Scales:
   `ωL/R`, the skin depth, the board against c/ω (`self_field_lines`). The exact curve:
   `target/scratch/inductance/eddy2d.py` (this worktree); the scans: `NOTES.md` there.
 - Checked: the panel's "Joule heat" (then the lattice's take) read ~750 per time above the
@@ -86,6 +88,20 @@ resonator, the metamaterials' element.)
   PHYSICS.md §2.12 *The heat at rest*; the runs: `target/scratch/joule/`).
 - Not written: the level's document (`scripts/level_docs.py new self_inductance`; none of the
   metal or AC levels has one yet); `eddy2d.py` would be its `calc.py`.
+- **The 30 s rule (the owner, 2026-11-02; CLAUDE.md):** a level's preview at most 30 s
+  (`generator check --no-cache`). To audit: every tube level's preview time; LEVELS.md
+  already records Eddy currents in silicon (118) at 38 s and Lock-in Hall (127) at 30–70 s.
+  Simplify what is over, or move it to the interludes.
+- **Optics (asked 2026-11-02):** SPEC.md §8 plans wave optics. In place: `physics::fdtd2d`
+  (Yee, the TE polarisation: E in the plane, B_z; perfect conductors, the CPML border,
+  charges as sources), the Poynting tools; mirrors, apertures and slits as conductors work
+  now, and a 2D run of ~10⁹ cell updates takes seconds (well inside 30 s). Missing: a
+  permittivity ε(x) and its dispersion ε(ω) in the wave solver (lenses, prisms), the other
+  polarisation (E_z), a light source element (plane wave or beam of a band), detectors and
+  goals on intensity and spot size, free-curve shapes with their editor tools, and the
+  validation (Fresnel and Snell, total internal reflection and the evanescent wave, a
+  dielectric cylinder's exact scattering, the grid's numerical dispersion, the symmetry and
+  energy tests).
 
 ## Then the Transformer (task #61), with B₀ and ω on sliders (the owner, 2026-11-02)
 
@@ -123,7 +139,22 @@ the frequency slider logarithmic; the run time decided after measuring the desig
   of four cells no better; the self-field's cell 0.125 (`c/ω_p` 7 cells) brings the inner
   ring to +0.3 % (outer +6.3 %, ~2 seeds' spread). Open: the inner ring's drive's work
   stays +21 % there (the split drive/exchange, not the heat).
-- **Next for the Transformer (the owner decides the run time):** coupled dense rings need
+- **The Transformer is simulation material, not a level (the owner, 2026-11-02: a level's
+  preview at most 30 s, accurate, simpler if need be; otherwise an interlude, SPEC.md §14).**
+  Measured: the steps a preview needs are set by the Darwin limit's quality at the outer
+  ring's bend (c/ω_b against the rings' size) and the validated accuracy (ω_p dt ≈ 0.04,
+  c/ω_p ≥ 3.4 cells), not by the density; the cost per step is the self-field's two solves
+  (~7 ms on the 128-node grid every board up to 24 rounds up to; 64 nodes only for a board
+  of 8 or less) plus ~1.5 µs per carrier. Exact heats (`target/scratch/inductance/
+  transformer2d.py`, nested square rings): thin walls (1) screen too little (the bend at
+  ω ≈ 2–3, c/ω ≈ 2 against rings 10–12 wide); thick walls (3 in a ring 24 wide, density 1,
+  thermal speed 1, c 3.2) work (the inner/outer heat ratio 0.19 → 0.02 over ω 0.03–1.2) but
+  preview in ~3–9 min. A small dense prototype (rings 10 and 6 wide, walls 1, density 44,
+  c 21, dt 0.0017; `target/scratch/proto_transformer.json`): preview 73 s for 12 time units,
+  the outer ring's heat ±0.4 % but the inner one's 44 ± 30: at two periods (~26 s) a goal on
+  it is noise. As an interlude it can run the thick-walled rings or the dense metal on a
+  finer cell (V-D11).
+- **Earlier notes for the Transformer:** coupled dense rings need
   the self-field's cell at about `c/ω_p`/7: `SELF_FIELD_CELL` per level (from its density
   and c) or a finer constant, ~4 times the preview (Self-inductance's ~75 s would be ~5 min);
   or a metal whose `c/ω_p` spans more cells at 0.25 (a lower density, with c lowered so

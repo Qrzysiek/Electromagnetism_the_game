@@ -251,3 +251,25 @@ Inspired by Turing Complete's "build a component, then use it as a component". H
   - Scaling laws hold.
   - The response operator matches a full BEM solve of two nearby parts.
   - A particle through a transparent part matches the flat scene.
+
+## 14. Interludes (future stage; the owner, 2026-11-02)
+
+Starred extensions after a chapter's basics, as a tutor gives a starred exercise once the
+simpler one is worked out: the same phenomenon on a harder system than a level can run at
+interactive speed, still accurate.
+
+- **What:** a scene the player watches and studies more than plays: precomputed runs, or a
+  few parameters to tweak and then compute (minutes, not the levels' ~1 min previews), with
+  the views, plots and scales the levels have. First candidate: the Transformer, two nested
+  rings each with its heat, which no accurate version fits in a level's 30 s preview (the
+  owner's limit; measured, docs/HANDOFF.md): thick-walled rings in a light metal (~3–9
+  minutes) or a dense metal on a finer self-field grid (`TubeSpec::self_field_cell`,
+  DEC-36; V-D11).
+- **Accuracy:** the same engine and the same validation as the levels (PHYSICS.md); a heavier
+  resolution, not a different model. Precomputed results are stored with the run cache's
+  hashes (`level::run_cache`), so they are reproducible bit for bit.
+- **Place in the curriculum:** after the level whose basics it extends, optional, marked
+  as an extension; it unlocks nothing and blocks nothing.
+- **Open:** the format (a level kind without goals, or with goals checked offline), how long
+  a computation the player may start, where precomputed runs ship (size), and which
+  scenes come first.

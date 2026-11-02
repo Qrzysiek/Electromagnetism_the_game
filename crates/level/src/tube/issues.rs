@@ -262,15 +262,24 @@ impl Level {
                 );
             }
             let max = self.grid.position(self.grid.max_node());
-            let d = super::self_field_grid(max.x, max.y, c);
-            if d.nx > super::SELF_FIELD_MAX_NODES || d.ny > super::SELF_FIELD_MAX_NODES {
+            let cell = spec.self_field_cell;
+            if !super::SELF_FIELD_CELL_RANGE.contains(&cell) {
                 out.push(format!(
-                    "Tube: the board is too large for the carriers' own field ({} × {} nodes, \
-                     at most {} a side).",
-                    d.nx,
-                    d.ny,
-                    super::SELF_FIELD_MAX_NODES
+                    "Tube: the carriers' own field's grid cell {cell} is outside {}–{}.",
+                    super::SELF_FIELD_CELL_RANGE.start(),
+                    super::SELF_FIELD_CELL_RANGE.end()
                 ));
+            } else {
+                let d = super::self_field_grid(max.x, max.y, c, cell);
+                if d.nx > super::SELF_FIELD_MAX_NODES || d.ny > super::SELF_FIELD_MAX_NODES {
+                    out.push(format!(
+                        "Tube: the board is too large for the carriers' own field ({} × {} \
+                         nodes {cell} apart, at most {} a side).",
+                        d.nx,
+                        d.ny,
+                        super::SELF_FIELD_MAX_NODES
+                    ));
+                }
             }
         }
         for g in &spec.goals {

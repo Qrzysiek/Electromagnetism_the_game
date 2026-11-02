@@ -102,6 +102,15 @@ pub struct TubeSpec {
     /// order: a preview step of at most `SELF_FIELD_MAX_STEP`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speed_of_light: Option<f64>,
+    /// With the self-field: its grid's cell (`SELF_FIELD_CELL` by default; finer within
+    /// `SELF_FIELD_CELL_RANGE`). Two metals coupled through the field in a dense metal need a
+    /// finer one, or a shorter step (V-D10, DEC-36): each halving of it costs about four
+    /// times the solve.
+    #[serde(
+        default = "default_self_field_cell",
+        skip_serializing_if = "is_default_self_field_cell"
+    )]
+    pub self_field_cell: f64,
     /// The current goals (older level files: a single `goal`).
     #[serde(
         default,
@@ -438,9 +447,15 @@ impl DisplayGrid {
     }
 }
 
-/// The self-field's grid spacing (`physics::darwin2d`; V-D4–V-D6 were validated at it: a
-/// metal's skin depth of ~2 is eight cells). The verification's refinement keeps it.
+/// The self-field's grid spacing by default (`physics::darwin2d`; V-D4–V-D6 were validated at
+/// it: a metal's skin depth of ~2 is eight cells). The verification's refinement keeps it.
+/// A level may set a finer one (`TubeSpec::self_field_cell`, DEC-36).
 pub const SELF_FIELD_CELL: f64 = 0.25;
+/// The self-field cells a level may set (the editor's range, `check_editable`): from a
+/// sixteenth of the default to it; the grid's nodes per side then limit the board
+/// (`SELF_FIELD_MAX_NODES`).
+pub const SELF_FIELD_CELL_RANGE: std::ops::RangeInclusive<f64> =
+    SELF_FIELD_CELL / 16.0..=SELF_FIELD_CELL;
 /// The self-field's grid beyond the board on every side: a loop's field stays inside it
 /// (z-invariance), the Coulomb gauge's vector potential has a long tail.
 pub const SELF_FIELD_MARGIN: f64 = 4.0;
@@ -455,25 +470,34 @@ pub const SPEED_OF_LIGHT_RANGE: std::ops::RangeInclusive<f64> = 0.5..=1.0e4;
 pub const SELF_FIELD_MAX_NODES: usize = 511;
 
 /// The self-field's grid for a board `width × height` from the origin at the speed of light
-/// `c`: `SELF_FIELD_CELL` apart, the board and `SELF_FIELD_MARGIN` round it, its sides rounded
-/// up to the sine transforms' powers of two, centred on the board.
+/// `c`, `cell` apart (`TubeSpec::self_field_cell`): the board and `SELF_FIELD_MARGIN` round
+/// it, its sides rounded up to the sine transforms' powers of two, centred on the board.
 #[must_use]
-pub fn self_field_grid(width: f64, height: f64, c: f64) -> physics::darwin2d::Darwin2d {
+pub fn self_field_grid(width: f64, height: f64, c: f64, cell: f64) -> physics::darwin2d::Darwin2d {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let cells = |len: f64| {
-        (libm::ceil((len + 2.0 * SELF_FIELD_MARGIN) / SELF_FIELD_CELL) as usize).next_power_of_two()
+        (libm::ceil((len + 2.0 * SELF_FIELD_MARGIN) / cell) as usize).next_power_of_two()
     };
     let (cx, cy) = (cells(width), cells(height));
     #[allow(clippy::cast_precision_loss)]
     let origin = (
-        0.5 * width - 0.5 * cx as f64 * SELF_FIELD_CELL,
-        0.5 * height - 0.5 * cy as f64 * SELF_FIELD_CELL,
+        0.5 * width - 0.5 * cx as f64 * cell,
+        0.5 * height - 0.5 * cy as f64 * cell,
     );
-    physics::darwin2d::Darwin2d::new(cx - 1, cy - 1, SELF_FIELD_CELL, origin, c)
+    physics::darwin2d::Darwin2d::new(cx - 1, cy - 1, cell, origin, c)
 }
 
 fn default_step() -> f64 {
     DEFAULT_STEP
+}
+
+fn default_self_field_cell() -> f64 {
+    SELF_FIELD_CELL
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if signature
+fn is_default_self_field_cell(v: &f64) -> bool {
+    *v == SELF_FIELD_CELL
 }
 
 fn default_rate() -> f64 {

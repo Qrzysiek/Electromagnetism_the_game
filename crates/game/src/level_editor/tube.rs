@@ -31,6 +31,7 @@ pub(super) fn edit_tube(
             emitter_mesh: 1.0,
             step: DEFAULT_STEP,
             speed_of_light: None,
+            self_field_cell: SELF_FIELD_CELL,
             goals: vec![CurrentGoal {
                 electrode: 1,
                 min: 0.0,
@@ -61,6 +62,7 @@ pub(super) fn edit_tube(
         emitter_mesh,
         step,
         speed_of_light,
+        self_field_cell,
         goals,
         circuits,
         potential_goals,
@@ -264,6 +266,19 @@ pub(super) fn edit_tube(
                     egui::DragValue::new(c)
                         .speed(0.05)
                         .range(SPEED_OF_LIGHT_RANGE),
+                )
+                .has_focus();
+            ui.label("cell");
+            focus |= ui
+                .add(
+                    egui::DragValue::new(self_field_cell)
+                        .speed(0.001)
+                        .range(SELF_FIELD_CELL_RANGE),
+                )
+                .on_hover_text(
+                    "The self-field's grid cell: finer for metals coupled through the field \
+                     in a dense metal (V-D10: +20 % in an inner ring's heat at 0.25, right at \
+                     0.125); each halving costs about four times the run.",
                 )
                 .has_focus();
         } else {

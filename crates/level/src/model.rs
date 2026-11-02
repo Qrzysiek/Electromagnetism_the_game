@@ -521,10 +521,36 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
                  screens a swinging field takes ~0.6 % of its unscreened heat too much, and \
                  the grid is {} apart over the board and {} round it.",
                 crate::tube::SELF_FIELD_MAX_STEP,
-                crate::tube::SELF_FIELD_CELL,
+                spec.self_field_cell,
                 crate::tube::SELF_FIELD_MARGIN
             ),
         ));
+        if spec.metals.len() > 1 {
+            // The densest metal's plasma frequency, `ω_p² = 4π n |q/m|`.
+            let omega_p = spec
+                .metals
+                .iter()
+                .map(|m| {
+                    libm::sqrt(
+                        4.0 * std::f64::consts::PI * m.density.abs() * m.charge_per_mass.abs(),
+                    )
+                })
+                .fold(0.0, f64::max);
+            out.push(note(
+                false,
+                &format!(
+                    "Metals coupled through this field (one ring screening another) take each \
+                     other's heat through it, which their heat goals count (DEC-35). Measured \
+                     against two exact concentric rings: within 5 % with light macroparticles \
+                     (ω_p dt 0.04, c/ω_p over 3.4 cells), but the inner ring +20 % in a dense \
+                     metal at ω_p dt 0.2 and 3.5 cells, the outer one screening too little, \
+                     and right with cells half as large (V-D9, V-D10). Here ω_p dt = {:.2} and \
+                     c/ω_p spans {:.1} cells.",
+                    omega_p * spec.step,
+                    c / omega_p.max(1e-300) / spec.self_field_cell
+                ),
+            ));
+        }
         out.push(note(
             false,
             "Each supplied electrode's circuit runs from the ground terminal along the \

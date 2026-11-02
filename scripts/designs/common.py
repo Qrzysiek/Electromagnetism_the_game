@@ -333,7 +333,7 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
          potentials=(), goals=(), ions=None, step=None, particle_rate=None, particles=None,
          emitter_mesh=None, output=None, metals=(), solenoid_drive=None, heat_goals=(),
-         speed_of_light=None):
+         speed_of_light=None, self_field_cell=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -347,10 +347,13 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
     `dc`, `sine`; its level set by the supply on the terminal), which induces an electric
     field circulating about the board's centre. `heat_goals`: goals on a metal's mean heat
     (`heat_goal`). `speed_of_light`: the carriers' own magnetic field at this c (PHYSICS.md
-    2.12, the Darwin limit: inductance, transformers)."""
+    2.12, the Darwin limit: inductance, transformers); `self_field_cell`: its grid's cell
+    (default 0.25; finer for metals coupled through it in a dense metal, DEC-36)."""
     t = {"cathode": cathode, "charge_per_mass": q_over_m}
     if speed_of_light is not None:
         t["speed_of_light"] = speed_of_light
+    if self_field_cell is not None:
+        t["self_field_cell"] = self_field_cell
     if heat_goals:
         t["heat_goals"] = list(heat_goals)
     if solenoid_drive is not None:

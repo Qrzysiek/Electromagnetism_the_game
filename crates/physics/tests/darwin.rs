@@ -568,6 +568,7 @@ fn concentric_run(
     material: Material,
     per_area: f64,
     (c, omega, b0, dt): (f64, f64, f64, f64),
+    cell: f64,
     seed: u64,
 ) -> Vec<(f64, f64, f64)> {
     let period = 2.0 * PI / omega;
@@ -598,7 +599,15 @@ fn concentric_run(
             axis: DVec3::ZERO,
         }),
         lattices,
-        darwin: Some(Darwin2d::new(127, 127, 0.25, (-16.0, -16.0), c)),
+        // The grid over ±16 whatever its cell: 0.25 apart, 127 nodes a side.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        darwin: Some(Darwin2d::new(
+            libm::round(32.0 / cell) as usize - 1,
+            libm::round(32.0 / cell) as usize - 1,
+            cell,
+            (-16.0, -16.0),
+            c,
+        )),
         ..Tube::new(electrodes, 0.05, dt)
     };
     let mut s = tube.state();
@@ -636,14 +645,16 @@ fn concentric_ratios(
     material: Material,
     per_area: f64,
     run: (f64, f64, f64, f64),
+    cell: f64,
     exact: &[f64],
 ) -> Vec<(f64, f64, f64)> {
     let mut sums = vec![(0.0, 0.0, 0.0); rings.len()];
     let seeds = [47_u64, 53];
     for seed in seeds {
-        for (j, (inductive, drive, heat)) in concentric_run(rings, material, per_area, run, seed)
-            .into_iter()
-            .enumerate()
+        for (j, (inductive, drive, heat)) in
+            concentric_run(rings, material, per_area, run, cell, seed)
+                .into_iter()
+                .enumerate()
         {
             let p = |v: f64| 100.0 * (v / exact[j] - 1.0);
             println!(
@@ -727,6 +738,7 @@ fn concentric_rings_heats_are_exact() {
         common::metal(A),
         per_area,
         (c, omega, b0, dt),
+        0.25,
         &exact,
     );
     println!(
@@ -790,7 +802,15 @@ fn dense_concentric_rings_heats_are_exact() {
         background: density,
         ..common::metal(A)
     };
-    let r = concentric_ratios("V-D10", &rings, material, 35.0, (c, omega, b0, dt), &exact);
+    let r = concentric_ratios(
+        "V-D10",
+        &rings,
+        material,
+        35.0,
+        (c, omega, b0, dt),
+        0.25,
+        &exact,
+    );
     println!(
         "V-D10: exact heats {:.3} (alone {:.3}) and {:.3}; measured/exact {:.4} and {:.4}; by the induced fields' work {:.4} and {:.4}; the drive's work alone {:.4} and {:.4}",
         exact[0], alone[0], exact[1], r[0].2, r[1].2, r[0].0, r[1].0, r[0].1, r[1].1

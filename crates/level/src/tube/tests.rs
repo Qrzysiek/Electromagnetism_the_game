@@ -201,9 +201,13 @@ fn amplitude_and_phase() {
 /// it, `SELF_FIELD_CELL` apart, its sides rounded up to powers of two, centred on the board.
 #[test]
 fn self_field_grid_covers_the_board() {
-    let d = self_field_grid(40.0, 20.0, 3.0);
+    let d = self_field_grid(40.0, 20.0, 3.0, SELF_FIELD_CELL);
     assert_eq!((d.nx + 1, d.ny + 1), (256, 128));
     assert!((d.h - SELF_FIELD_CELL).abs() < 1e-15);
+    // A finer cell (`TubeSpec::self_field_cell`): the same board and margin covered.
+    let f = self_field_grid(40.0, 20.0, 3.0, 0.125);
+    assert!((f.h - 0.125).abs() < 1e-15);
+    assert!(f.nx + 1 >= 2 * (d.nx + 1) && f.ny + 1 >= 2 * (d.ny + 1));
     #[allow(clippy::cast_precision_loss)]
     let far = (
         d.origin.0 + (d.nx + 1) as f64 * d.h,

@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Self-inductance",
-  "description": "A metal ring alone in your solenoid, whose field swings with a fixed amplitude, $B = B_0 \\sin \\omega t$: your supply sets only how fast. The changing field drives a current round the ring (Faraday's law), and that current makes a field of its own, against the change (Lenz's law): the ring is a one-turn coil, an inductance $L$ in series with its resistance $R$. While $\\omega L/R$ is small the heat grows as $\\omega^2$; past $\\omega L/R \\approx 1$ the ring's own field cancels the drive's in its hole and the heat levels off. Set $\\omega$ so that the ring takes between 360 and 650 of heat per unit time (averaged from $t = 4$ to $24$).",
+  "description": "A metal ring alone in your solenoid, whose field swings with a fixed amplitude, $B = B_0 \\sin \\omega t$: your supply sets only how fast. The changing field drives a current round the ring (Faraday's law), and that current makes a field of its own, against the change (Lenz's law): the ring is a one-turn coil, an inductance $L$ in series with its resistance $R$. While $\\omega L/R$ is small the heat grows as $\\omega^2$; past $\\omega L/R \\approx 1$ the ring's own field cancels the drive's in its hole and the heat levels off. Set $\\omega$ so that the ring takes between 1000 and 1500 of heat per unit time (averaged from $t = 2.5$ to $10$).",
   "reality": {
     "represents": "A closed metal ring's self-inductance: a shorted turn in a swinging field",
     "remarks": [
@@ -50,7 +50,7 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
-    "t_max": 24.0,
+    "t_max": 10.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
@@ -67,9 +67,9 @@
     "max_magnets": 0,
     "magnet_strengths": [],
     "supply_omegas": [
-      0.03,
-      0.67,
-      3.0
+      0.05,
+      1.3,
+      5.0
     ]
   },
   "reference_solution": [
@@ -81,7 +81,7 @@
       ],
       "kind": "supply",
       "value": 0.0,
-      "omega": 0.67
+      "omega": 1.3
     }
   ],
   "electrodes": [
@@ -105,14 +105,14 @@
   "tube": {
     "cathode": 0,
     "charge_per_mass": -1.0,
-    "speed_of_light": 24.0,
+    "speed_of_light": 27.4,
     "heat_goals": [
       {
         "metal": 0,
-        "min": 360.0,
-        "max": 650.0,
-        "start": 4.0,
-        "end": 24.0
+        "min": 1000.0,
+        "max": 1500.0,
+        "start": 2.5,
+        "end": 10.0
       }
     ],
     "solenoid_drive": {
@@ -120,7 +120,7 @@
       "amplitude": 0.45,
       "omega": 0.1
     },
-    "step": 0.0072,
+    "step": 0.0088,
     "saturation": 0.0,
     "solenoid": [
       23,
@@ -142,7 +142,7 @@
           ]
         ],
         "contacts": [],
-        "density": 60.0,
+        "density": 41.0,
         "charge_per_mass": -1.0,
         "thermal_speed": 2.0,
         "mean_free_path": 0.5,

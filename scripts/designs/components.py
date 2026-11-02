@@ -1240,34 +1240,37 @@ def lock_in_hall():
 
 
 # Self-inductance (the AC arc's introduction to the carriers' own field; the owner, 2026-11-02:
-# one ring alone in the swinging solenoid, B0 fixed, omega on the slider). A ring 20 x 20 with
-# walls 2 is a one-turn solenoid along z: L = mu0 A, R = P/(sigma w). Its curve against the
-# exact eddy currents (target/scratch/inductance/eddy2d.py: finite differences with the
-# Boltzmann sigma(omega)) for B0 = 0.15 (times 9 at the level's 0.45): heat 0.61, 2.39, 8.98, 28.8, 57.4, 71.2, 81.2, 88.6,
-# 96.6, 104, 110, 115 at omega = 0.05, 0.1, 0.2, 0.4, 0.7, 0.9, 1.1, 1.3, 1.6, 2, 2.5, 3: as
-# omega^2 up to ~0.4, the bend at L/R = 1.4 (omega ~0.7), then the plateau. The design keeps
-# c/omega_p = 0.87 (3.5 of the self-field's cells) and omega_p dt = 0.198 (density 60, c = 24,
-# dt 0.0072), so c/omega at the answer is the board's size (the Darwin limit's condition,
-# stretched; the level says so). PHYSICS.md 2.12: heat over whole half-swings (DEC-31); the
-# self-field's residual ~0.6 % of the unscreened heat (+5 % at the answer).
-SELF_INDUCTANCE_METAL = dict(density=60.0, thermal_speed=2.0, mean_free_path=0.5,
+# one ring alone in the swinging solenoid, B0 fixed, omega on the slider; a preview of at
+# most 30 s). A ring 20 x 20 with walls 2 is a one-turn solenoid along z: L = mu0 A,
+# R = P/(sigma w), L/R = tau (A w/P)/(c/omega_p)^2 whatever the density. Its curve against the
+# exact eddy currents (target/scratch/inductance/eddy2d.py, finite differences with the
+# Boltzmann sigma(omega)) for B0 = 1 (times 0.2025 at the level's 0.45): heat 74, 401, 1168,
+# 2963, 4312, 5821, 7296, 8588, 9655 at omega = 0.1, 0.24, 0.42, 0.75, 1, 1.33, 1.78, 2.37,
+# 3.16: as omega^2 up to ~0.5, the bend at omega ~1.1-1.3, then the plateau. The design:
+# c/omega_p = 1.21 (4.8 of the self-field's cells), omega_p dt = 0.2 (density 41, c = 27.4,
+# dt 0.0088), so c/omega at the answer is ~21, the ring's size (the Darwin limit's
+# condition, stretched; the level says so). The steps a preview needs go as the periods it
+# runs times omega_p/omega_bend, which a larger c/omega_p lowers: the bend at ~1.3 instead of
+# 0.7 (density 60, c 24 until 2026-11-02, 75 s), a run to t = 10 of ~1100 steps, ~25 s.
+# PHYSICS.md 2.12: heat over whole half-swings (DEC-31); the self-field's residual (~+5 % at
+# the answer: 1193 at omega 1.3 against the exact 1144; 875 against 873 at 1.0, 1503 against
+# 1430 at 1.7).
+SELF_INDUCTANCE_METAL = dict(density=41.0, thermal_speed=2.0, mean_free_path=0.5,
                              core_radius=0.005, carriers_per_area=35.0)
-SELF_INDUCTANCE_STEP = 0.0072
+SELF_INDUCTANCE_STEP = 0.0088
 
 
 def self_inductance():
     # B0 0.45: the heat grows as B0^2 and the thermal current's work against the drive (the
-    # noise) as B0, so the preview's +-15 % at B0 0.15 (cpa 35) falls threefold; the
-    # carriers stay linear (their drift ~6 % of the thermal speed at the bend; above it the
-    # ring's own field cancels most of the drive). At B0 0.15 the interval was 0.67-0.8
-    # verified, 0.58 and 0.9 uncertain (+-13-17 %): 3.8 % of the slider.
-    # The goal at the bend (omega L/R ~ 0.94 at the answer): heat 360-650 (40-72 at B0
-    # 0.15), the exact curve's omega ~0.52-0.9 (45-65 left the verdict uncertain), about half what omega^2 from slow swings predicts there. On the
-    # plateau the heat is too flat to pin omega against a preview's +-5-8 % (two seeds,
-    # whole half-swings: 71.5, 88.2, 105, 106, 116, 113 at 0.9, 1.1, 1.3, 1.6, 2, 2.5;
-    # ~10 % above the exact curve there, the self-field's residual and noise). The
-    # slider 0.03-3 (log): the answer 67 % along it. The sine's own omega 0.1, where
-    # the slider starts when the supply is switched on, gives heat ~2.4.
+    # noise) as B0; the carriers stay linear (their drift a few per cent of the thermal
+    # speed at the bend; above it the ring's own field cancels most of the drive).
+    # The goal at the bend: heat 1000-1500 over t = 2.5-10 (three half-swings at the answer,
+    # after the ring's settling, L/R ~0.9), the game's curve's omega ~1.13-1.6 (8 % of the
+    # slider; with 1000-1400, 1.15-1.4 verified, 4 %), about half what omega^2 from slow swings predicts there (0.45 at 1.3). With a
+    # window of two half-swings (t = 3-8, a 19 s preview) the answer's verdict was 1195 +-
+    # 225; with three, 1193 +- 101. On the plateau the heat is too flat to pin omega. The
+    # slider 0.05-5 (log): the answer 71 % along it. The sine's own omega 0.1, where the
+    # slider starts when the supply is switched on, gives heat ~15.
     return level(
         "Self-inductance",
         "A metal ring alone in your solenoid, whose field swings with a fixed amplitude, "
@@ -1277,16 +1280,16 @@ def self_inductance():
         "series with its resistance $R$. While $\\omega L/R$ is small the heat grows as "
         "$\\omega^2$; past $\\omega L/R \\approx 1$ the ring's own field cancels the drive's "
         "in its hole and the heat levels off. Set $\\omega$ so that the ring takes between "
-        "360 and 650 of heat per unit time (averaged from $t = 4$ to $24$).",
-        grid=(24, 24), c=None, t_max=24.0,
+        "1000 and 1500 of heat per unit time (averaged from $t = 2.5$ to $10$).",
+        grid=(24, 24), c=None, t_max=10.0,
         electrodes=[cold_electrode(1, 1)],
-        supply_omegas=omega_slider(0.03, 3.0, 0.67),
+        supply_omegas=omega_slider(0.05, 5.0, 1.3),
         tube=tube(0, None, 0, 0, 0, 0, step=SELF_INDUCTANCE_STEP, saturation=0.0,
-                  solenoid=(23, 23), solenoid_drive=sine(0.45, 0.1), speed_of_light=24.0,
-                  heat_goals=[heat_goal(0, 360.0, 650.0, 4.0, 24.0)],
+                  solenoid=(23, 23), solenoid_drive=sine(0.45, 0.1), speed_of_light=27.4,
+                  heat_goals=[heat_goal(0, 1000.0, 1500.0, 2.5, 10.0)],
                   metals=[metal((2, 2), (22, 22), [], seed=21, hole=((4, 4), (20, 20)),
                                 **SELF_INDUCTANCE_METAL)]),
-        reference=[supply(23, 23, 0.0, 0.67)])
+        reference=[supply(23, 23, 0.0, 1.3)])
 
 
 

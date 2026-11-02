@@ -10,8 +10,8 @@ use bevy_egui::egui;
 use level::beam::{BeamSpec, Distribution};
 use level::tube::{
     Carriers, CurrentGoal, DEFAULT_STEP, HeatGoal, IonSource, Measure, MetalSpec, PotentialGoal,
-    ProjectileSpec, SELF_FIELD_MAX_STEP, SPEED_OF_LIGHT_RANGE, TL_RATE, TubeCircuit, TubeOutput,
-    TubeSpec,
+    ProjectileSpec, SELF_FIELD_CELL, SELF_FIELD_CELL_RANGE, SELF_FIELD_MAX_STEP,
+    SPEED_OF_LIGHT_RANGE, TL_RATE, TubeCircuit, TubeOutput, TubeSpec,
 };
 use level::{
     Cloud, Coil, Conductor, ConductorBias, Detector, DetectorAcceptance, Dielectric,

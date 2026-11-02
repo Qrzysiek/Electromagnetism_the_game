@@ -264,7 +264,7 @@ impl Level {
             lattices,
             darwin: spec
                 .speed_of_light
-                .map(|c| super::self_field_grid(max.x, max.y, c)),
+                .map(|c| super::self_field_grid(max.x, max.y, c, spec.self_field_cell)),
             // With the self-field, each circuit's path from the ground terminal (DEC-27).
             leads: if spec.speed_of_light.is_some() {
                 self.tube_leads(player).circuit_paths()

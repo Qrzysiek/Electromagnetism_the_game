@@ -51,6 +51,7 @@ pub fn diode(v: f64) -> Level {
         metals: Vec::new(),
         step: level::tube::DEFAULT_STEP,
         speed_of_light: None,
+        self_field_cell: level::tube::SELF_FIELD_CELL,
         goals: vec![CurrentGoal {
             electrode: 1,
             min: 0.0,

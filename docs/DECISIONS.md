@@ -1097,6 +1097,16 @@ Entries are numbered in order and never renumbered.
     verified, 0.52 and 0.9 uncertain (7.0–10 % of the slider), 409 at 0.58 and 597 at 0.8
     against the exact curve's ~414 and ~579. At B₀ 0.15 with the goal 45–65 the reference
     was uncertain (56.4 ± 9.4), with 40–72 the interval 3.8 %.
+  - 2026-11-02: redesigned under the owner's limit of 30 s a preview (the first design's
+    took ~75 s): density 41 and c = 27.4 (`c/ω_p` 1.21, 4.8 cells; `ω_p dt` 0.2 at dt
+    0.0088), the bend at ω ≈ 1.3 instead of 0.7, so a run to t = 10 holds three half-swings
+    at the answer after the ring's settling. The goal 1000–1500 over t = 2.5–10, the slider
+    0.05–5 (log), the answer 1.3: verified 1195 ± 136 (preview 1105), ω solves on 1.15–1.55
+    verified (6.5 % of the slider; 1.13 and 1.6 uncertain, 1.1 missed). Against the exact
+    curve +0.2 % at ω 1.0, +4.3 % at 1.3, +5.1 % at 1.7 (the self-field's residual). Preview
+    24.4 s, verification 62 s. With the goal 1000–1400, 1.15–1.4 verified (4 %); with two
+    half-swings (to t = 8, 19 s) the answer's bar was ±225. c/ω at the answer ≈ 21, the
+    ring's size.
 
 ## DEC-33: The panel's Joule heat is the field's work on the carriers, not the lattice's tally
 
@@ -1229,3 +1239,33 @@ Entries are numbered in order and never renumbered.
     cells no better (+19.5 %); the self-field's cell 0.125 brings the inner ring to +0.3 %
     (outer +6.3 %, within ~2 seeds' spread). The measure stands; coupled dense rings need a
     cell of about `c/ω_p`/7 (the levels' 0.25 gives 3.5 cells), ~4 times the run.
+
+## DEC-36: The self-field's grid cell, a level's setting
+
+- **Status:** in use (since 2026-11-02)
+- **Area:** level format, physics resolution
+- **Choice:** a tube level with the self-field may set its grid's cell
+  (`TubeSpec::self_field_cell`, default `SELF_FIELD_CELL` = 0.25, from 1/64 to 0.25,
+  `SELF_FIELD_CELL_RANGE`; the editor's control beside the speed of light, the board still
+  limited to `SELF_FIELD_MAX_NODES` a side). Every level keeps the default: their files and
+  runs are unchanged. With two metals or more the model's notes state the metal's `ω_p dt`
+  and the cells across its `c/ω_p` beside what V-D9 and V-D10 measured.
+- **Purpose:** the owner (2026-11-02): levels with a lighter metal, but the engine able to
+  run denser ones. Two nested rings in Self-inductance's first, dense metal came out +20 %
+  in the inner one's heat at the cell 0.25 (V-D10), +7.2 % at 0.125 over two seeds (the
+  bias mostly gone, heavy macroparticles' scatter of ±7 % a seed left): such runs need a
+  finer cell and more carriers, an interlude's cost (SPEC.md §14).
+- **Alternatives:** an automatic cell from the densest metal's `c/ω_p` with two metals or
+  more (tried: V-D9's light rings pass at 3.4 cells while V-D10's dense ones fail at 3.5,
+  so the cells across `c/ω_p` alone do not decide it; `ω_p dt` and the macroparticles'
+  weight matter too, and four points do not make a rule); a finer constant cell for every
+  level (four times every self-field run); a cell set by the verification only (the
+  preview's verdict would differ by the bias).
+- **Where:** `crates/level/src/tube/mod.rs` (`TubeSpec::self_field_cell`,
+  `SELF_FIELD_CELL_RANGE`, `self_field_grid`), `tube/build.rs`, `tube/issues.rs`,
+  `crates/level/src/model.rs` (the note), `crates/game/src/level_editor/{tube,check}.rs`,
+  `scripts/designs/common.py` (`tube(self_field_cell=...)`); tests
+  `self_field_grid_covers_the_board`; PHYSICS.md §2.12 (*In a level*, *Two metals*).
+- **History:**
+  - 2026-11-02: chosen. V-D11 (V-D10 at the cell 0.125, two seeds) failed V-D8's 5 % (inner
+    +7.2 %, outer +3.7 %, the exchange −2.9e-3): not kept as a test; recorded in PHYSICS.md.

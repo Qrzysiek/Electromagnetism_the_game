@@ -1,15 +1,15 @@
 {
+ "10": {
+  "file": "4a44dc15364204a8.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.557,
+  "baseline_ex": 0.05
+ },
  "20": {
   "file": "f5ca38f748a1d6ea.svg",
   "width_ex": 2.262,
   "height_ex": 1.557,
   "baseline_ex": 0.05
- },
- "24": {
-  "file": "c2356069e9d1e79c.svg",
-  "width_ex": 2.262,
-  "height_ex": 1.532,
-  "baseline_ex": 0
  },
  "30": {
   "file": "624b60c58c9d8bfb.svg",
@@ -545,6 +545,12 @@
   "height_ex": 1.692,
   "baseline_ex": 0.186
  },
+ "t = 2.5": {
+  "file": "e506f5f41380fa39.svg",
+  "width_ex": 6.725,
+  "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
  "t = 20": {
   "file": "56c9fe7f82f5edc4.svg",
   "width_ex": 6.096,
@@ -555,12 +561,6 @@
   "file": "ea59d0816cd954b7.svg",
   "width_ex": 6.096,
   "height_ex": 1.692,
-  "baseline_ex": 0.186
- },
- "t = 4": {
-  "file": "9bef5b02aba95047.svg",
-  "width_ex": 4.965,
-  "height_ex": 1.717,
   "baseline_ex": 0.186
  },
  "t = 40": {
