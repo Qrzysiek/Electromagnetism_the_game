@@ -2,7 +2,7 @@
 
 Read this instead of the previous sessions' transcripts. Project rules: `CLAUDE.md`; the
 self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/DRUDE.md`
-"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-28 to DEC-30 the latest).
+"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-28 to DEC-33 the latest).
 
 ## State
 
@@ -60,35 +60,32 @@ magnitude, and the densest carriers the self-field's step allows (`ω_p dt ≤ 0
 ρ ≲ 20) only bring R to about √(L/C). (That resonance is itself a level: a split-ring
 resonator, the metamaterials' element.)
 
-## Next: first a self-inductance introduction (the owner, 2026-11-02)
+## Done: Self-inductance (level 125, DEC-32), the self-field's heat measure fixed
 
-The curriculum rule wants an introduction before the Transformer (the first level with the
-carriers' own field and with a frequency slider). The owner chose: one ring alone in the
-swinging solenoid, B₀ fixed, ω on the slider; its heat grows as ω² until `ωL/R ≈ 1`, where
-its own field screens the drive and the heat levels off; a heat goal pins ω.
-
-- The supply that sets only a frequency is in place (`Level::frequency_only`, DEC-30's
-  history): a player's swinging solenoid whose level lists no fields but frequencies.
-- Ring scans (the worktree's `target/scratch/inductance/NOTES.md`, `inductance_scan.py`; a
-  ring 20 × 20 centred on the solenoid, heat over t = 10–40, each run against the same ring
-  at c = 100, its own field negligible). The loop's screening `1/(1 + (ωL/R)²)` with
-  `L = 4πA/c²`, `R = P/(σw)` holds up to `ωL/R` ≈ 2 (density 20, walls 2, ℓ 0.5, c 7.3:
-  0.72 and 0.21 measured at ω = 0.1 and 0.4 against 0.80 and 0.20). Beyond it a residual of
-  about 9–10 % of the unscreened heat (walls 2) or 14–16 % (walls 1) is not screened,
-  whatever the density (2 or 20) or c (1.2–7.3): so the heat levels off over about one
-  octave only, then grows as ω² again. Ruled out: the wall's own eddy currents, the
-  corners' steering charges (4πσ = 30 changes nothing), the wall's own flux (thinner walls
-  leave more). Untested: the walls' resistance above `P/(σw)` (the thin ring fits R about
-  twice that), a square ring's uneven current, a round ring (`Lattice::with_disc`, not in
-  the level format).
-- The best candidate so far: density 20 (`ω_p dt` = 0.19), walls 2, ℓ 0.5, c = 7.3 (the bend
-  at ω ≈ 0.2, and there `c/ω` exceeds the board: the Darwin limit's own condition holds),
-  B₀ ≈ 0.15. About 4 min per 40 time units (7200 carriers): a preview of the 2–3 heat
-  periods a goal needs at ω ≈ 0.2 is ~6 min, its verification ~4 times that.
-- For the owner: (1) accept the residual (the heat levels off over one octave, then rises
-  again; the level describes it) or first find its cause; (2) the run time (fewer carriers,
-  a smaller ring, a bend at higher ω with a larger c); (3) the metal: density 20 is ten
-  times the levels' metal (a doped semiconductor's ratios become a poorer metal's).
+- The owner's answers (2026-11-02): find the residual's cause first; make the runs faster;
+  a metal ten times denser is acceptable (the level's is 30 times: more metal-like, ω_p τ 5.5;
+  say so if that is not what the owner meant).
+- The residual's cause (DEC-13's history, PHYSICS.md §2.12, test V-D8): the heat measure
+  booked the drive's work at the push's velocity, before the self-field's part of the step
+  took back its impulse: ~`dt/2τ` of the unscreened heat too much, whatever the density or c.
+  Fixed (`Tube::book_work`); V-D8 (a disc's screened heat against the cylinder's) +0.9 %, and
+  +10.9 % on the old booking (it fails). Left: a discretisation residual ~0.6 % of the
+  unscreened heat (dt 0.012, cells 0.25), felt where the screening leaves under ~10 %.
+- With the self-field a heat goal averages over whole half-swings of the drive (DEC-31): the
+  ring's stored energy swings by up to `√(1 + (ωL/R)²)` times the heat per period.
+- The level: a ring 20 × 20 (walls 2), density 60, c = 24, dt 0.0072, B₀ 0.45 fixed, ω on a
+  log slider 0.03–3, heat 360–650 over t = 4–24 at the bend (answer ω 0.67, ωL/R 0.93;
+  verified 490 ± 46, the preview 521; ω solves on 0.58–0.8 verified, 7 %). Preview ~75 s,
+  verification ~185 s. Scales:
+  `ωL/R`, the skin depth, the board against c/ω (`self_field_lines`). The exact curve:
+  `target/scratch/inductance/eddy2d.py` (this worktree); the scans: `NOTES.md` there.
+- Checked: the panel's "Joule heat" (then the lattice's take) read ~750 per time above the
+  drive's work on this level: the macroparticles' stirring of each other (`∝ n²/N`; with
+  the drive at rest 748 without the self-field, 742 with it, 400 at twice the carriers),
+  not the self-field. The panel now shows the field's work, what the goal measures (DEC-33;
+  PHYSICS.md §2.12 *The heat at rest*; the runs: `target/scratch/joule/`).
+- Not written: the level's document (`scripts/level_docs.py new self_inductance`; none of the
+  metal or AC levels has one yet); `eddy2d.py` would be its `calc.py`.
 
 ## Then the Transformer (task #61), with B₀ and ω on sliders (the owner, 2026-11-02)
 
@@ -109,8 +106,17 @@ the frequency slider logarithmic; the run time decided after measuring the desig
 - The preview's time, to measure and show the owner: V-D7 runs ~4 min per 9 periods at ω =
   0.8 with ~7000 carriers; at ω ≈ 0.5 a few periods is 30–40 time units, ~2 min a preview
   and ~8 a verification unless the carriers per area drop (more noise).
-- Scales (`scales.rs`): with a frequency slider, show `ωτ` and the rings' `ωL/R` for the
-  current setting.
+- Scales (`scales.rs`): `self_field_lines` shows the first ring's `ωL/R`; extend it to both
+  rings (and `ωτ`).
+- **The heat measure for two rings**: an isolated metal's heat is the drive's induced field's
+  work (`induced_work`), which for one ring is its Joule heat on average (its own field's
+  work averages out). A secondary also takes power from the primary through the self-field
+  (mutual induction), which `induced_work` misses. Book the self-field's part of the step's
+  work per metal too (`½m(v_end² − v_push²)` in `darwin_step`) and measure the total, or the
+  lattice's heat (noisy).
+- With the self-field the residual above (~0.6 % of the unscreened heat) and DEC-31's
+  half-swings apply; Self-inductance's metal (density 60, c 24, dt 0.0072) is a starting
+  point: two rings nested need the secondary's `L₂/R₂` near the primary's frequency.
 
 The rest of the Transformer's checklist stands (CLAUDE.md): `scripts/designs/` and
 `curriculum.py`; `scripts/reality.py` (headline: a transformer's mutual inductance;

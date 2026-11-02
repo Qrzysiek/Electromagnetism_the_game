@@ -378,6 +378,21 @@ Entries are numbered in order and never renumbered.
     currents fixed (DEC-25) the start takes the drawn velocities as the carriers' currents, and
     Y24's return error became 4.0 % at dt 0.01 and 7.8 % at 0.02 (3.1 % and 6.1 % before): the
     5 % target holds up to dt ≈ 0.0125.
+  - 2026-11-02: the field's work on a metal's carriers (`field_work`, `induced_work`: a heat
+    goal's measure) booked with the step's velocity after the self-field's part
+    (`Tube::book_work`), not the push's. The push's velocity still held the impulse the
+    induction then takes back (all of it in a screened metal), and booked
+    `(q²/2m) E·(∂A/∂t) dt` too much per carrier and time, ~`dt/2τ` of a screened conductor's
+    unscreened Joule heat, whatever its density or c. Found by the self-inductance ring's
+    scans (HANDOFF.md): beyond `ωL/R` ≈ 2 its heat kept ~8 % of the unscreened one where the
+    exact eddy currents (a finite-difference solution with the Boltzmann σ(ω)) leave 2 %. The
+    energy's account was right (the self-field's part booked the excess back); only the
+    measure was off. New test V-D8 (a disc's screened heat against the cylinder's, at the
+    levels' step): +0.9 % (seeds +0.9 % and +1.0 %; on the old booking +10.9 %, which fails it). No shipped level
+    has the self-field. What remains in the ring is the discretisation's, ~0.6 % of the
+    unscreened heat at dt 0.012 and cells of 0.25, shrinking with either (PHYSICS.md §2.12):
+    felt only where the screening leaves under ~10 %, so a level's heat goals stay above
+    that; a second-order step (DARWIN.md) would cut it.
 
 ## DEC-14: Round metals: a polygon of walls with the disc's area, the disc's exact background
 
@@ -1021,3 +1036,97 @@ Entries are numbered in order and never renumbered.
     coils have none: their sources run with the supply off (DEC-12). Test
     `a_frequency_only_supply_sets_the_swings_frequency` (bit for bit a supply setting the
     same amplitude and frequency; off, no field).
+
+## DEC-31: With the self-field, a heat goal averages over whole half-swings of the drive
+
+- **Status:** in use (since 2026-11-02)
+- **Area:** physics measures, levels
+- **Choice:** in a level with the carriers' own field (`speed_of_light`) and a swinging
+  drive, a heat goal's mean is taken from its window's start over as many whole half-periods
+  `π/ω` of the actual drive (the player's frequency, DEC-30) as fit before its end
+  (`HeatGoal::window`, used by `TubeSim::heat_goals`); a window shorter than one half-period
+  stays as it is. Without the self-field the window is the level's.
+- **Purpose:** the drive's work on a ring swings at 2ω round its mean, by up to
+  `√(1 + (ωL/R)²)` times it (the energy its own field stores and returns), and a part of a
+  half-period leaves up to `√(1 + (ωL/R)²)/(ωT)` of the heat in the mean: the
+  self-inductance ring's heat wobbled by ±20 % from one frequency to the next over a window
+  of 16, which no goal could pin. Whole half-swings average a steady state exactly.
+- **Alternatives:** long windows (a factor 10 in run time for 2 %); the window rounded by the
+  level's designer for one frequency (the player's frequency moves); subtracting the
+  self-field's energy change (the whole board's: no share per metal, and the carriers'
+  kinetic part left, `L_k/L` ~10 %); rounding without the self-field too (the stored energy
+  is small there, and Eddy currents' and laminations' verdicts would move for nothing).
+- **Where:** `crates/level/src/tube/mod.rs` (`HeatGoal::window`), `tube/sim.rs`
+  (`heat_goals`); the results panel's hover text; PHYSICS.md §2.12 (*Heat goals*).
+- **History:**
+  - 2026-11-02: chosen with the self-inductance introduction.
+
+## DEC-32: Self-inductance, the AC arc's introduction to the carriers' own field
+
+- **Status:** in use (since 2026-11-02)
+- **Area:** level design
+- **Choice:** a closed metal ring 20 × 20 with walls 2 (a one-turn solenoid along z) alone in
+  the player's solenoid, which swings at a fixed amplitude (B₀ 0.45); the player's supply
+  sets only the frequency (DEC-30's frequency-only supply), on a logarithmic slider
+  0.03–3. The ring's heat grows as ω² until `ωL/R` ≈ 1 (L/R ≈ 1.4), then levels off as its
+  own field cancels the drive's in its hole. The goal (heat 360–650 over t = 4–24, whole
+  half-swings, DEC-31) sits at the bend, where the heat is about half what ω² from slow
+  swings predicts: the answer ω ≈ 0.67. The metal: density 60 (30 times the other levels'),
+  ℓ 0.5, thermal speed 2, 35 carriers per area; c = 24; the step 0.0072.
+- **Purpose:** the owner (2026-11-02): an introduction before the Transformer, the first level
+  with the carriers' own field and a frequency slider. The parameters follow from three
+  conditions: the inertial skin depth `c/ω_p` over three of the self-field's cells (0.87;
+  `L/R = τ(Aw/P)/(c/ω_p)²` then fixes the bend near 0.7), `ω_p dt` ≤ 0.2, and c/ω about the
+  board at the answer (the Darwin limit's condition, stretched: the level says so). The
+  owner asked for faster runs: a preview ~75 s against ~6 min for the first candidate
+  (c 7.3, the bend at 0.2), whose answer needed windows three times longer.
+- **Alternatives:** the goal on the plateau (too flat: a preview's ±5–8 % spans the plateau
+  from ω 1.2 to the slider's top, which the slider rule forbids); on the steep rise below
+  the bend (pinned, but no inductance in play); the first candidate (density 20, c 7.3: valid
+  Darwin limit at its bend, but ~6 min previews and an under-resolved `c/ω_p` 0.46); a
+  smaller ring (`ωτ` near 1 at the bend: the carriers' inertia, not the ring's inductance,
+  would set the curve); B₀ 0.15 (the previews scattered ±15 %: the thermal current's work
+  against the drive grows as B₀, the heat as B₀², so the interval came out 3.8 %; at 0.45 the
+  carriers' drift is still ~6 % of their thermal speed at the bend, and above it the ring's
+  own field cancels most of the drive).
+- **Where:** `scripts/designs/components.py` (`self_inductance`), `scripts/reality.py`,
+  `crates/game/src/scales.rs` (`self_field_lines`: `ωL/R`, the skin depth, the board
+  against c/ω); `target/scratch/inductance/` (the scans, `eddy2d.py`).
+- **History:**
+  - 2026-11-02: chosen. Verified 490 ± 46 (preview 521) at ω 0.67; ω solves on 0.58–0.8
+    verified, 0.52 and 0.9 uncertain (7.0–10 % of the slider), 409 at 0.58 and 597 at 0.8
+    against the exact curve's ~414 and ~579. At B₀ 0.15 with the goal 45–65 the reference
+    was uncertain (56.4 ± 9.4), with 40–72 the interval 3.8 %.
+
+## DEC-33: The panel's Joule heat is the field's work on the carriers, not the lattice's tally
+
+- **Status:** in use (since 2026-11-02)
+- **Area:** interface, physics measures
+- **Choice:** the results panel's "Joule heat" line shows the power the field gives the
+  metals' carriers over the last 10 time units, summed over their cells (`MetalCells::work`:
+  the field's work, in a metal without contacts the induced field's alone): what a heat
+  goal measures. Until now it showed the heat the lattices booked at the collisions
+  (`TubeFrame::heat`).
+- **Purpose:** the lattice's tally also holds the macroparticles' stirring of each other:
+  each stands for many electrons, so the fields they feel from each other jitter far more
+  than a real metal's, they gain energy from that jitter even with no field applied, and the
+  collisions hand it to the lattice. The rate grows as the charge per macroparticle, `∝
+  n²/N` (density squared over carriers per area). In Self-inductance's ring (density 60, 35
+  carriers per area) it is ~750 per time unit with the drive at rest, with or without the
+  self-field (748 and 742 over t = 4–24; 400 with 70 carriers per area, and the start's
+  transient also halves), beside the drive's ~520 at the answer: the panel read ~1210 while
+  the goal measured 521. The lattice's heat less that rest heat is the drive's work to the
+  runs' noise (832 against 889 without the self-field, 469 against 521 with it), so nothing
+  in the energy budget is missing. In the other metal levels (density 1–8, 50–400 carriers
+  per area) the rest heat is ~10³ times smaller.
+- **Alternatives:** the lattice's tally less the rest heat (it would need a second run with
+  the field off, and the jitter's share changes with the drive); more macroparticles in
+  Self-inductance (twice the run time to halve it, still ~400); the lattice's tally with a
+  note (the panel would show a number that disagrees with the goal's by more than the goal's
+  width); leaving it (the HANDOFF's check, which found it).
+- **Where:** `crates/game/src/ui/results.rs` (the Joule heat line and its hover text);
+  PHYSICS.md §2.12 (*The heat at rest*).
+- **History:**
+  - 2026-11-02: chosen. Measured with the level's reference run and the drive at rest (ω
+    0.03), with and without the self-field, and with 70 carriers per area
+    (`target/scratch/joule/`).

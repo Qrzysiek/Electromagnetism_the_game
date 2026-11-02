@@ -594,6 +594,103 @@ fn tubes(level: &Level, spec: &level::tube::TubeSpec, placement: &[Element]) -> 
     Some(Scales { headline, lines })
 }
 
+/// The carriers' own field's scales (a level with a speed of light `c`, its drive at `omega`):
+/// the first ring's `ωL/R`, its own induction against its resistance (`L = μ₀A`, a one-turn
+/// solenoid along z, A inside the wall's middle line; `R = P/(σw)` along that line, σ the DC
+/// Drude conductivity, PHYSICS.md §2.11); the skin depth against the thinnest wall; the board
+/// against `c/ω` (the Darwin limit's condition).
+fn self_field_lines(level: &Level, spec: &level::tube::TubeSpec, c: f64, omega: f64) -> Vec<Scale> {
+    let num = crate::ui::fmt_num;
+    let mu0 = 4.0 * std::f64::consts::PI / (c * c);
+    // The DC conductivity, ρ |q/m| (3/8) √(π/2) ℓ/s.
+    let sigma = |m: &level::tube::MetalSpec| {
+        m.density * m.charge_per_mass.abs() * 0.375 * 1.253_314_137_315_500_3 * m.mean_free_path
+            / m.thermal_speed
+    };
+    let mut lines = Vec::new();
+    let ring = spec
+        .metals
+        .iter()
+        .find_map(|m| level.metal_hole(m).map(|h| (m, h)));
+    if let Some((m, (a, b))) = ring {
+        let (lo, hi) = level.metal_rect(m);
+        let (sx, sy) = (
+            0.5 * ((hi.x - lo.x) + (b.x - a.x)),
+            0.5 * ((hi.y - lo.y) + (b.y - a.y)),
+        );
+        let wall = level.metal_width(m);
+        let l = mu0 * sx * sy;
+        let r = 2.0 * (sx + sy) / (sigma(m) * wall);
+        let tau = l / r;
+        lines.push(Scale {
+            quantity: "ωL/R, the ring's own induction against its resistance",
+            here: format!(
+                "{} (L/R = {}: the bend at ω ≈ {}; ω = {})",
+                num(omega * tau),
+                num(tau),
+                num(1.0 / tau),
+                num(omega)
+            ),
+            real: "a copper ring 2 cm across of 1 mm wire: L/R ≈ 30 µs, the bend near 6 kHz; a \
+                   superconducting ring: L/R without end",
+            detail: "How strongly the ring's own current opposes the change of the field \
+                     through it (Lenz's law): its self-inductance L = μ₀A (a one-turn solenoid \
+                     along z, A inside the wall's middle line) against its resistance \
+                     R = P/(σw) (P that line's length, w the wall, σ the DC conductivity). \
+                     Below 1 the induced field drives the current through R alone and the heat \
+                     grows as ω²; above 1 the current is held by L, its own field cancels the \
+                     drive's in the hole, and the heat levels off.",
+        });
+    }
+    if let Some(m) = spec.metals.first() {
+        let wall = level.metal_width(m);
+        let delta = if omega > 0.0 {
+            (2.0 / (omega * mu0 * sigma(m))).sqrt()
+        } else {
+            f64::INFINITY
+        };
+        lines.push(Scale {
+            quantity: "the skin depth against the metal's width",
+            here: format!(
+                "δ = {} against {}",
+                if delta.is_finite() {
+                    num(delta)
+                } else {
+                    "∞".into()
+                },
+                num(wall)
+            ),
+            real: "copper: 9 mm at 50 Hz, 65 µm at 1 MHz",
+            detail: "How deep a swinging field reaches into the metal, δ = √(2/(ωμ₀σ)), σ the \
+                     DC conductivity. Wider than the metal, the current fills it; narrower, \
+                     the current crowds to the surface facing the field and the heat grows \
+                     only as √ω.",
+        });
+    }
+    let board = f64::from(level.grid.nx.max(level.grid.ny).saturating_sub(1));
+    lines.push(Scale {
+        quantity: "the board against c/ω",
+        here: format!(
+            "{} (c = {}, c/ω = {}, the board {})",
+            num(board * omega / c),
+            num(c),
+            if omega > 0.0 {
+                num(c / omega)
+            } else {
+                "∞".into()
+            },
+            num(board)
+        ),
+        real: "a ring 2 cm across at 6 kHz: 4e-7 (c/ω = 8 km)",
+        detail: "The carriers' own field is instantaneous here (the Darwin limit): valid while \
+                 the board is small against c/ω, the distance light travels in 1/ω. Near 1 a \
+                 real ring would radiate and its field lag; the model leaves both out (the \
+                 model's notes). The game's c is slow, so that its rings bend at playable \
+                 frequencies.",
+    });
+    lines
+}
+
 /// One metal's numbers for its scales (`metals`).
 struct MetalScales {
     /// ω_c τ, qEℓ/kT, its width and Debye length in mean free paths, ω_p τ.
@@ -610,8 +707,25 @@ struct MetalScales {
     like: Option<Resemblance>,
 }
 
+/// The solenoid's swing frequency: the player's supply's if it sets one (DEC-30), else the
+/// level's sine's; 0 for no sine.
+fn swing_omega(spec: &level::tube::TubeSpec, placement: &[Element]) -> f64 {
+    spec.solenoid
+        .and_then(|n| {
+            placement
+                .iter()
+                .find(|e| e.kind == ElementKind::Supply && e.node == n)
+        })
+        .and_then(|e| e.omega)
+        .unwrap_or(match spec.solenoid_drive {
+            Some(level::Source::Sine { omega, .. }) => omega,
+            _ => 0.0,
+        })
+}
+
 /// Metal `m`'s scales in the field `b` (its magnitude), with the strongest supply `supply`.
-/// The field driving metal `m`'s carriers: a swinging solenoid's induced field at its edge;
+/// The field driving metal `m`'s carriers: a swinging solenoid's induced field at its edge
+/// (swinging at `omega`, `swing_omega`);
 /// else, with a run's mean potentials (`potentials`, every electrode's), the largest voltage
 /// between two of its contacts over the distance between their faces (Wheatstone bridge's
 /// short strip is driven across 4, not along its 10, and a transistor's channel by its
@@ -621,16 +735,13 @@ fn drive_field(
     spec: &level::tube::TubeSpec,
     m: &level::tube::MetalSpec,
     b: f64,
+    omega: f64,
     supply: f64,
     potentials: Option<&[f64]>,
 ) -> f64 {
     let (lo, hi) = level.metal_rect(m);
     let length = (hi.x - lo.x).max(hi.y - lo.y);
-    if let Some(d) = spec.solenoid_drive {
-        let omega = match d {
-            level::Source::Sine { omega, .. } => omega,
-            _ => 0.0,
-        };
+    if spec.solenoid_drive.is_some() {
         return 0.5 * b * omega * 0.5 * length;
     }
     let faces = level.contact_faces(m);
@@ -695,7 +806,13 @@ fn metals(
     potentials: Option<&[f64]>,
 ) -> Option<Scales> {
     spec.metals.first()?;
-    // The field: the player's solenoid, else the level's own; a swinging one's amplitude.
+    // The field: the player's solenoid, else the level's own; a swinging one's amplitude (a
+    // frequency-only supply's, its sine's own: DEC-30).
+    let only_frequency = level.frequency_only(level::SupplyTarget::Solenoid);
+    let own = match spec.solenoid_drive {
+        Some(level::Source::Sine { amplitude, .. }) => amplitude,
+        _ => 0.0,
+    };
     let b = spec
         .solenoid
         .and_then(|n| {
@@ -703,8 +820,9 @@ fn metals(
                 .iter()
                 .find(|e| e.kind == ElementKind::Supply && e.node == n)
         })
-        .map_or(spec.b_z, |e| e.value)
+        .map_or(spec.b_z, |e| if only_frequency { own } else { e.value })
         .abs();
+    let omega = swing_omega(spec, placement);
     let supply = placement
         .iter()
         .filter(|e| e.kind == ElementKind::Supply && Some(e.node) != spec.solenoid)
@@ -728,7 +846,7 @@ fn metals(
                 .metals
                 .iter()
                 .filter(|o| key(o) == key(m))
-                .map(|o| drive_field(level, spec, o, b, supply, potentials))
+                .map(|o| drive_field(level, spec, o, b, omega, supply, potentials))
                 .fold(0.0, f64::max);
             kinds.push((k, metal_scales(level, m, b, field)));
         }
@@ -896,10 +1014,9 @@ fn metals(
                      its whole width.",
         });
     }
-    let omega = match spec.solenoid_drive {
-        Some(level::Source::Sine { omega, .. }) => omega,
-        _ => 0.0,
-    };
+    if let Some(c) = spec.speed_of_light {
+        lines.extend(self_field_lines(level, spec, c, omega));
+    }
     // The model's τ and ℓ read as the material's; B from ω_c τ = μB.
     let reading = |s: &MetalScales| match &s.like {
         Some(r) => {

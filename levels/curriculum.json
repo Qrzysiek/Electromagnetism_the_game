@@ -404,7 +404,8 @@
         {
           "name": "Introduction",
           "levels": [
-            "ringing_tank"
+            "ringing_tank",
+            "self_inductance"
           ]
         },
         {

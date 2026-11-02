@@ -378,7 +378,8 @@ pub struct TubeState {
     pub collisions: u64,
     /// Per lattice: the work the field has done on the carriers inside it, `Σ (q dt/2)
     /// E·(v_old + v_new)` (the push's exact energy account: the magnetic rotation does no
-    /// work). In a steady state the Joule heat, the lattice's take, with far less noise:
+    /// work; with the self-field `v_new` after its part of the step, `Tube::book_work`). In
+    /// a steady state the Joule heat, the lattice's take, with far less noise:
     /// each collision exchanges about kT at random, while the field's work fluctuates by
     /// `qEℓ/kT` times as much.
     pub field_work: Vec<f64>,
@@ -719,13 +720,17 @@ impl Tube {
         // The field's work on each lattice's carriers over the step.
         let mut work = vec![0.0; self.lattices.len()];
         let mut induced_work = vec![0.0; self.lattices.len()];
-        for (((((x, v), qm), e), charge), tag) in
+        // With the self-field, booked after its part of the step (`book_work`): each
+        // carrier's metal, cell, charge, field, induced field and velocity at the start.
+        let mut pending: Vec<darwin::PendingWork> = Vec::new();
+        for (p, (((((x, v), qm), e), charge), tag)) in
             s.x.iter_mut()
                 .zip(&mut s.v)
                 .zip(&s.qm)
                 .zip(&fields)
                 .zip(&s.charge)
                 .zip(&s.tag)
+                .enumerate()
         {
             let old = *v;
             let (e, induced) = self.with_external(*e, s.t, *x);
@@ -743,13 +748,25 @@ impl Tube {
             {
                 // Its cell's share too (the same sums, split by place).
                 let c = self.lattices[k].account_cell(*x);
-                let w = 0.5 * self.dt * charge * e.dot(old + *v);
-                work[k] += w;
-                s.cells[k].work[c] += w;
-                if let Some(i) = induced {
-                    let w = 0.5 * self.dt * charge * i.dot(old + *v);
-                    induced_work[k] += w;
-                    s.cells[k].induced[c] += w;
+                if moves {
+                    let w = 0.5 * self.dt * charge * e.dot(old + *v);
+                    work[k] += w;
+                    s.cells[k].work[c] += w;
+                    if let Some(i) = induced {
+                        let w = 0.5 * self.dt * charge * i.dot(old + *v);
+                        induced_work[k] += w;
+                        s.cells[k].induced[c] += w;
+                    }
+                } else {
+                    pending.push(darwin::PendingWork {
+                        particle: p,
+                        lattice: k,
+                        cell: c,
+                        charge: *charge,
+                        field: *e,
+                        induced,
+                        old,
+                    });
                 }
             }
             if moves {
@@ -758,6 +775,7 @@ impl Tube {
         }
         if !moves {
             self.darwin_step(s, &v_start);
+            self.book_work(s, &pending, &mut work, &mut induced_work);
         }
         for (total, w) in s.field_work.iter_mut().zip(&work) {
             *total += w;

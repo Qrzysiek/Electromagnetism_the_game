@@ -517,8 +517,9 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
             false,
             &format!(
                 "The self-field's step is split, first order in time (a step of at most {}): \
-                 the energy drifts by under 1 % of the field's per time unit, and its grid is \
-                 {} apart over the board and {} round it.",
+                 the energy drifts by under 1 % of the field's per time unit, a metal that \
+                 screens a swinging field takes ~0.6 % of its unscreened heat too much, and \
+                 the grid is {} apart over the board and {} round it.",
                 crate::tube::SELF_FIELD_MAX_STEP,
                 crate::tube::SELF_FIELD_CELL,
                 crate::tube::SELF_FIELD_MARGIN

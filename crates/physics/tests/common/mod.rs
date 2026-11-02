@@ -353,6 +353,20 @@ pub fn csqrt(a: Complex64) -> Complex64 {
     Complex64::new(re, im)
 }
 
+/// `I₁(z)/z = ½ Σ (z²/4)^m/(m! (m+1)!)`, the modified Bessel function `I₁` over its argument,
+/// of a complex `z` (|z| ≲ 5; finite at 0, where it is ½).
+#[must_use]
+pub fn ci1_by(z: Complex64) -> Complex64 {
+    let q = z * z * 0.25;
+    let (mut sum, mut term) = (Complex64::new(0.5, 0.0), Complex64::new(0.5, 0.0));
+    for m in 1..40 {
+        let m = f64::from(m);
+        term = term * q / (m * (m + 1.0));
+        sum += term;
+    }
+    sum
+}
+
 /// The modified Bessel function `I₀(z) = Σ (z²/4)^m/(m!)²` of a complex `z` (|z| ≲ 5).
 #[must_use]
 pub fn ci0(z: Complex64) -> Complex64 {

@@ -207,7 +207,9 @@ pub(super) fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Lev
         ))
         .on_hover_text(
             "The mean power the field gives the metal's carriers (per unit length along z): \
-             what its lattice takes as heat, the Joule heat, in a steady state",
+             what its lattice takes as heat, the Joule heat, in a steady state. With the \
+             carriers' own field, over whole half-swings of the drive from the window's \
+             start, so that the energy the field stores and returns each swing averages out",
         );
         if let Some(v) = view {
             ui.label(match v.run.heat.get(k).copied().flatten() {
@@ -357,26 +359,45 @@ pub(super) fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Lev
             .and_then(|k| v.run.frames.get(k))
             .map_or(0, |f| f.x.len());
         ui.label(egui::RichText::new(format!("{shown} particles in flight now")).small());
-        // The Joule heat: the energy the metals' lattices took over the last time unit.
+        // The Joule heat: the power the field gave the metals' carriers over the last 10 time
+        // units, what a heat goal measures (`MetalCells::work`: in a metal without contacts
+        // the induced field's alone). Not the lattices' tally (`TubeFrame::heat`), which also
+        // holds the macroparticles' stirring of each other (DEC-33).
         if !spec.metals.is_empty()
             && let Some(k) = game.tube_frame()
             && let Some(f1) = v.run.frames.get(k)
         {
-            // Over the last 10 time units: each collision's heat fluctuates by about kT,
-            // over one unit the rate was uncertain by a third.
+            // Over the last 10 time units: the carriers' thermal motion makes the rate over
+            // one unit uncertain by a third.
             let k0 = v.run.frames.partition_point(|f| f.t < f1.t - 10.0);
-            if let Some(f0) = v.run.frames.get(k0).filter(|f0| f1.t > f0.t) {
+            let work = |f: &level::tube::TubeFrame| -> f64 {
+                f.cells
+                    .iter()
+                    .flat_map(|c| &c.work)
+                    .map(|w| f64::from(*w))
+                    .sum()
+            };
+            if let Some(f0) = v
+                .run
+                .frames
+                .get(k0)
+                .filter(|f0| f1.t > f0.t && f0.cells.len() == f1.cells.len())
+            {
                 explain(
                     ui,
                     &format!(
                         "Joule heat: {} per time",
-                        fmt_num((f1.heat - f0.heat) / (f1.t - f0.t))
+                        fmt_num((work(f1) - work(f0)) / (f1.t - f0.t))
                     ),
-                    "The heat the metal's lattice takes, per unit length along z per time \
-                     unit, over the last 10 time units (each collision's share fluctuates by \
-                     about kT). The lattice takes it at the collisions: about nine tenths of \
-                     the supplies' I V; the carriers bring the rest into the contact they \
-                     reach, the energy the field gave them since their last collision.",
+                    "The power the field gives the metals' carriers, per unit length along z, \
+                     over the last 10 time units: what a heat goal measures (in a metal \
+                     without contacts the induced field's alone). In a steady state it is \
+                     all heat: the lattice takes it at the collisions, but for the energy \
+                     carriers bring into a contact (about a tenth of the supplies' I V). Not \
+                     the lattice's own tally: that also holds the macroparticles' stirring of \
+                     each other (each stands for many electrons, so their fields jitter far \
+                     more than a real metal's), a heat even with no field, large in a dense \
+                     metal of few macroparticles.",
                 );
             }
         }

@@ -5,6 +5,12 @@
   "height_ex": 1.557,
   "baseline_ex": 0.05
  },
+ "24": {
+  "file": "c2356069e9d1e79c.svg",
+  "width_ex": 2.262,
+  "height_ex": 1.532,
+  "baseline_ex": 0
+ },
  "30": {
   "file": "624b60c58c9d8bfb.svg",
   "width_ex": 2.262,
@@ -203,11 +209,23 @@
   "height_ex": 2.587,
   "baseline_ex": 0.566
  },
+ "L": {
+  "file": "72dfcfb0c470ac25.svg",
+  "width_ex": 1.541,
+  "height_ex": 1.545,
+  "baseline_ex": 0
+ },
  "N\\omega_0": {
   "file": "a8d640d1d02d85c0.svg",
   "width_ex": 4.404,
   "height_ex": 1.92,
   "baseline_ex": 0.375
+ },
+ "R": {
+  "file": "8c2574892063f995.svg",
+  "width_ex": 1.717,
+  "height_ex": 1.593,
+  "baseline_ex": 0.048
  },
  "R = L/(\\sigma W)": {
   "file": "c090c32d73340c65.svg",
@@ -281,6 +299,12 @@
   "height_ex": 2.514,
   "baseline_ex": 0.691
  },
+ "\\omega": {
+  "file": "11baa595827a4e0f.svg",
+  "width_ex": 1.407,
+  "height_ex": 1.027,
+  "baseline_ex": 0.025
+ },
  "\\omega = 1/\\sqrt{LC}": {
   "file": "6992344e3134db1c.svg",
   "width_ex": 11.877,
@@ -293,6 +317,18 @@
   "height_ex": 1.69,
   "baseline_ex": 0.186
  },
+ "\\omega L/R": {
+  "file": "333a1f45ad703855.svg",
+  "width_ex": 5.796,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
+ "\\omega L/R \\approx 1": {
+  "file": "5a291e49f9d07239.svg",
+  "width_ex": 9.945,
+  "height_ex": 2.262,
+  "baseline_ex": 0.566
+ },
  "\\omega/4": {
   "file": "d550f49a98e45424.svg",
   "width_ex": 3.67,
@@ -303,6 +339,12 @@
   "file": "ac8add78df66600e.svg",
   "width_ex": 4.486,
   "height_ex": 1.645,
+  "baseline_ex": 0.025
+ },
+ "\\omega^2": {
+  "file": "f2f53155f7e59bd3.svg",
+  "width_ex": 2.395,
+  "height_ex": 1.912,
   "baseline_ex": 0.025
  },
  "\\omega^4": {
@@ -513,6 +555,12 @@
   "file": "ea59d0816cd954b7.svg",
   "width_ex": 6.096,
   "height_ex": 1.692,
+  "baseline_ex": 0.186
+ },
+ "t = 4": {
+  "file": "9bef5b02aba95047.svg",
+  "width_ex": 4.965,
+  "height_ex": 1.717,
   "baseline_ex": 0.186
  },
  "t = 40": {

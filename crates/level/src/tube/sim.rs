@@ -376,16 +376,23 @@ impl TubeSim {
         if self.pending.heat.len() < self.heat.len() {
             self.pending.heat.resize(self.heat.len(), None);
         }
+        // The drive's swing, for the windows with the self-field (`HeatGoal::window`).
+        let omega = self.tube.b_wave.as_ref().and_then(|w| match w.waveform {
+            physics::circuit::Waveform::Sine { omega, .. } => Some(omega),
+            _ => None,
+        });
+        let self_field = self.spec.speed_of_light.is_some();
         for k in 0..self.spec.heat_goals.len() {
             let g = self.spec.heat_goals[k];
             if self.heat[k].is_some() {
                 continue;
             }
+            let (start, end) = g.window(self_field, omega);
             let w = self.metal_work(g.metal);
-            if self.heat_start[k].is_none() && t >= g.start - 0.5 * dt {
+            if self.heat_start[k].is_none() && t >= start - 0.5 * dt {
                 self.heat_start[k] = Some((t, w));
             }
-            if t >= g.end - 0.5 * dt {
+            if t >= end - 0.5 * dt {
                 let (t0, w0) = self.heat_start[k].unwrap_or((0.0, 0.0));
                 let p = if t > t0 { (w - w0) / (t - t0) } else { 0.0 };
                 self.heat[k] = Some(p);

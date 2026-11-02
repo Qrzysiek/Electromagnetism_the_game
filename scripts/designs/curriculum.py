@@ -135,6 +135,7 @@ from designs.components import (
     potentiometer,
     rectifier,
     ringing_tank,
+    self_inductance,
     sideways,
     strength_and_sign,
     through_the_cloud,
@@ -394,6 +395,7 @@ ARCS.append(("Inside the components: transistors", [
 ARCS.append(("AC and induction", [
     ("Introduction", [
         ("ringing_tank", ringing_tank),
+        ("self_inductance", self_inductance),
     ]),
     ("Intermediate", [
         ("field_tuned_damping", field_tuned_damping),

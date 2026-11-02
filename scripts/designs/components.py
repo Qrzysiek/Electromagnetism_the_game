@@ -11,6 +11,7 @@ from designs.common import (
     heat_goal,
     level,
     metal,
+    omega_slider,
     plate,
     player_plate,
     potential_goal,
@@ -1235,6 +1236,57 @@ def lock_in_hall():
                                              omega=EDDY_OMEGA, reference=3)],
                   metals=[metal((4, 6), (20, 10), [0, 1, 2, 3], seed=11, **hall)]),
         reference=[supply(21, 8, -30.0), supply(23, 15, 5.0)])
+
+
+
+# Self-inductance (the AC arc's introduction to the carriers' own field; the owner, 2026-11-02:
+# one ring alone in the swinging solenoid, B0 fixed, omega on the slider). A ring 20 x 20 with
+# walls 2 is a one-turn solenoid along z: L = mu0 A, R = P/(sigma w). Its curve against the
+# exact eddy currents (target/scratch/inductance/eddy2d.py: finite differences with the
+# Boltzmann sigma(omega)) for B0 = 0.15 (times 9 at the level's 0.45): heat 0.61, 2.39, 8.98, 28.8, 57.4, 71.2, 81.2, 88.6,
+# 96.6, 104, 110, 115 at omega = 0.05, 0.1, 0.2, 0.4, 0.7, 0.9, 1.1, 1.3, 1.6, 2, 2.5, 3: as
+# omega^2 up to ~0.4, the bend at L/R = 1.4 (omega ~0.7), then the plateau. The design keeps
+# c/omega_p = 0.87 (3.5 of the self-field's cells) and omega_p dt = 0.198 (density 60, c = 24,
+# dt 0.0072), so c/omega at the answer is the board's size (the Darwin limit's condition,
+# stretched; the level says so). PHYSICS.md 2.12: heat over whole half-swings (DEC-31); the
+# self-field's residual ~0.6 % of the unscreened heat (+5 % at the answer).
+SELF_INDUCTANCE_METAL = dict(density=60.0, thermal_speed=2.0, mean_free_path=0.5,
+                             core_radius=0.005, carriers_per_area=35.0)
+SELF_INDUCTANCE_STEP = 0.0072
+
+
+def self_inductance():
+    # B0 0.45: the heat grows as B0^2 and the thermal current's work against the drive (the
+    # noise) as B0, so the preview's +-15 % at B0 0.15 (cpa 35) falls threefold; the
+    # carriers stay linear (their drift ~6 % of the thermal speed at the bend; above it the
+    # ring's own field cancels most of the drive). At B0 0.15 the interval was 0.67-0.8
+    # verified, 0.58 and 0.9 uncertain (+-13-17 %): 3.8 % of the slider.
+    # The goal at the bend (omega L/R ~ 0.94 at the answer): heat 360-650 (40-72 at B0
+    # 0.15), the exact curve's omega ~0.52-0.9 (45-65 left the verdict uncertain), about half what omega^2 from slow swings predicts there. On the
+    # plateau the heat is too flat to pin omega against a preview's +-5-8 % (two seeds,
+    # whole half-swings: 71.5, 88.2, 105, 106, 116, 113 at 0.9, 1.1, 1.3, 1.6, 2, 2.5;
+    # ~10 % above the exact curve there, the self-field's residual and noise). The
+    # slider 0.03-3 (log): the answer 67 % along it. The sine's own omega 0.1, where
+    # the slider starts when the supply is switched on, gives heat ~2.4.
+    return level(
+        "Self-inductance",
+        "A metal ring alone in your solenoid, whose field swings with a fixed amplitude, "
+        "$B = B_0 \\sin \\omega t$: your supply sets only how fast. The changing field drives a "
+        "current round the ring (Faraday's law), and that current makes a field of its own, "
+        "against the change (Lenz's law): the ring is a one-turn coil, an inductance $L$ in "
+        "series with its resistance $R$. While $\\omega L/R$ is small the heat grows as "
+        "$\\omega^2$; past $\\omega L/R \\approx 1$ the ring's own field cancels the drive's "
+        "in its hole and the heat levels off. Set $\\omega$ so that the ring takes between "
+        "360 and 650 of heat per unit time (averaged from $t = 4$ to $24$).",
+        grid=(24, 24), c=None, t_max=24.0,
+        electrodes=[cold_electrode(1, 1)],
+        supply_omegas=omega_slider(0.03, 3.0, 0.67),
+        tube=tube(0, None, 0, 0, 0, 0, step=SELF_INDUCTANCE_STEP, saturation=0.0,
+                  solenoid=(23, 23), solenoid_drive=sine(0.45, 0.1), speed_of_light=24.0,
+                  heat_goals=[heat_goal(0, 360.0, 650.0, 4.0, 24.0)],
+                  metals=[metal((2, 2), (22, 22), [], seed=21, hole=((4, 4), (20, 20)),
+                                **SELF_INDUCTANCE_METAL)]),
+        reference=[supply(23, 23, 0.0, 0.67)])
 
 
 

@@ -336,7 +336,9 @@ impl PotentialGoal {
 }
 
 /// A metal's heat, the power the field gives its carriers (`TubeState::field_work`: the
-/// Joule heat in a steady state), averaged over `start..end`, must lie in `min..max`.
+/// Joule heat in a steady state), averaged over `start..end` (with the carriers' own field
+/// and a swinging drive, whole half-swings of it: `HeatGoal::window`), must lie in
+/// `min..max`.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HeatGoal {
     pub metal: usize,
@@ -344,6 +346,32 @@ pub struct HeatGoal {
     pub max: f64,
     pub start: f64,
     pub end: f64,
+}
+
+impl HeatGoal {
+    /// The window the heat is averaged over, its drive swinging at `omega` (None: not a
+    /// sine) in a level with the carriers' own field (`self_field`): from `start`, as many
+    /// whole half-periods `π/ω` as fit before `end` (at least the window itself if none
+    /// does). A ring's own field stores energy that swings with the drive at 2ω, up to
+    /// `√(1 + (ωL/R)²)` times the heat it takes over a period, and a part of a half-period
+    /// would leave that much of it in the mean (2026-11-02: the self-inductance ring's
+    /// heat wobbled by ±20 % with ω over a window of 16). Without the self-field the
+    /// carriers' inertia (`ωτ`) and the edges' charges store little: `start..end`.
+    #[must_use]
+    pub fn window(&self, self_field: bool, omega: Option<f64>) -> (f64, f64) {
+        match omega {
+            Some(w) if self_field && w > 0.0 => {
+                let half = std::f64::consts::PI / w;
+                let n = libm::floor((self.end - self.start) / half);
+                if n >= 1.0 {
+                    (self.start, self.start + n * half)
+                } else {
+                    (self.start, self.end)
+                }
+            }
+            _ => (self.start, self.end),
+        }
+    }
 }
 
 /// An electrode's potential, measured over `start..end`, must lie in `min..max`.

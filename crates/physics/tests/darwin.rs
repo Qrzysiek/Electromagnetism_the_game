@@ -13,7 +13,7 @@ use physics::tube::{SolenoidWave, Tube, TubeState};
 use std::f64::consts::PI;
 
 mod common;
-use common::{Complex64, ci0, csqrt, measured, mobility, significant};
+use common::{Complex64, ci0, ci1_by, csqrt, measured, mobility, significant};
 
 /// The tests' metal (as `drude.rs`): cores of radius `A` for a mean free path of 0.5.
 const A: f64 = 0.00125;
@@ -352,6 +352,79 @@ fn disc_skin_effect() {
     measured("V-D6.worst", worst, 2);
     measured("V-D6.spread", spread, 2);
     assert!(worst < 0.05, "worst {worst}");
+}
+
+/// V-D8, a screened conductor's heat. V-D6's disc at c = 3 (`|k|R` ≈ 3.3: the centre's field
+/// ~0.3 of the rim's) at the levels' largest step with the self-field (`SELF_FIELD_MAX_STEP`,
+/// 0.012): its heat, the drive's work on its carriers per time (`TubeState::induced_work`,
+/// what a level's heat goal measures in an isolated metal), over periods 2–14 (the field's
+/// diffusion time `μ₀σR²/j₀₁²` ≈ 1.8, so the start's transient is gone), against the
+/// cylinder's `P = ½ Re(1/σ) ∫|J|² dA`, `J = −(1/μ₀) ∂B/∂r = −B₀ iωσ r (I₁(kr)/kr)/I₀(kR)`,
+/// `k² = iωμ₀σ(ω)` (V-D6's field), the Boltzmann equation's σ(ω): about 0.20 of the heat
+/// without screening, `Re σ ω² B₀² πR⁴/16`. Required (set before measuring): the two seeds'
+/// mean within 5 % (the coupling's target; σ(ω) is the model's to 2–3 %, which moves a
+/// screened heat, `∝ σ^{−1/2}` or so, by ~1.5 %). Until 2026-11-02 the work was booked at
+/// the push's velocity, before the induction took back its impulse: ~`dt/2τ` (~3 %) of the
+/// unscreened heat too much: measured +10.9 %, which fails it.
+#[test]
+#[ignore = "eight minutes: two runs of 12 000 carriers over 14 periods"]
+fn screened_disc_heat_is_the_cylinders() {
+    let (c, omega, b0, dt, carriers, radius) = (3.0, 1.0, 0.2, 0.012, 12_000, 6.0);
+    let mu0 = 4.0 * PI / (c * c);
+    let period = 2.0 * PI / omega;
+    let (start, end) = (2.0 * period, 14.0 * period);
+    let sigma = mobility(1.0 / MEAN_FREE_PATH, omega);
+    let k = csqrt(Complex64::new(0.0, omega * mu0) * sigma);
+    let rim = ci0(k * radius);
+    // ∫₀^R r³ |(I₁(kr)/kr)/I₀(kR)|² dr by Simpson's rule.
+    let n = 2000;
+    let h = radius / f64::from(n);
+    let mut integral = 0.0;
+    for i in 0..=n {
+        let r = h * f64::from(i);
+        let w = if i == 0 || i == n {
+            1.0
+        } else if i % 2 == 1 {
+            4.0
+        } else {
+            2.0
+        };
+        let f = ci1_by(k * r) / rim;
+        integral += w * r * r * r * (f.re * f.re + f.im * f.im);
+    }
+    integral *= h / 3.0;
+    // ½ Re(1/σ) |σ|² ω² B₀² 2π ∫ = π Re σ ω² B₀² ∫.
+    let exact = PI * sigma.re * omega * omega * b0 * b0 * integral;
+    let unscreened =
+        sigma.re * omega * omega * b0 * b0 * PI * radius * radius * radius * radius / 16.0;
+    let mut ratios = Vec::new();
+    for seed in [47_u64, 53] {
+        let tube = disc(c, carriers, b0, omega, dt, seed);
+        let mut s = tube.state();
+        let mut first = None;
+        while s.t < end - 0.5 * dt {
+            tube.step(&mut s);
+            if first.is_none() && s.t >= start - 0.5 * dt {
+                first = Some((s.t, s.induced_work[0]));
+            }
+        }
+        let (t0, w0) = first.expect("the window's start");
+        let heat = (s.induced_work[0] - w0) / (s.t - t0);
+        println!(
+            "V-D8 seed {seed}: heat {heat:.4} against the cylinder's {exact:.4} ({:+.1} %; unscreened {unscreened:.4})",
+            100.0 * (heat / exact - 1.0)
+        );
+        ratios.push(heat / exact);
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let mean = ratios.iter().sum::<f64>() / ratios.len() as f64;
+    println!(
+        "V-D8: |k|R {:.2}, the cylinder's heat {exact:.4} ({:.3} of the unscreened {unscreened:.4}); measured/exact {mean:.4}",
+        libm::hypot(k.re, k.im) * radius,
+        exact / unscreened
+    );
+    measured("V-D8.percent", 100.0 * (mean - 1.0), 1);
+    assert!((mean - 1.0).abs() < 0.05, "heat/exact {mean}");
 }
 
 /// The measured values' formatting (DEC-22): significant digits, fixed-point in the middle

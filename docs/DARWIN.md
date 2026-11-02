@@ -271,3 +271,10 @@ With carriers:
   level with a speed of light states the self-field (what it keeps and leaves out), its step
   and grid, and its circuits' closure (test `notes_follow_the_level`). Next: the levels
   (step 6).
+- 2026-11-02, the heat under the self-field: the field's work on a metal's carriers is booked
+  with the velocity after the self-field's part of the step (`Tube::book_work`); the push's
+  velocity booked ~`dt/2τ` of a screened conductor's unscreened heat too much (the
+  self-inductance ring's residual). V-D8, a disc's screened heat against the cylinder's at the
+  levels' step: +0.9 %. Left: a discretisation residual of ~0.6 % of the unscreened heat at
+  dt 0.012 and cells of 0.25, shrinking with either (PHYSICS.md §2.12): a level's heat goals
+  stay where the screening leaves more than ~10 %; the second-order step would cut it.

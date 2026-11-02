@@ -1827,3 +1827,26 @@ REALITY["lock_in_hall"] = R(
                 "top side contact (a floating voltmeter)",
                 "bottom side contact (a floating voltmeter, the reference)"],
     metals=["Hall bar"])
+
+REALITY["self_inductance"] = R(
+    "A closed metal ring's self-inductance: a shorted turn in a swinging field",
+    kept("Lenz's law as an inductance",
+         "The ring's current makes a field against the change of the drive's flux through "
+         "it. Past ωL/R ≈ 1 its own field cancels the drive's in the hole and the current, "
+         "held by L, no longer grows: the heat levels off, as an inductor's reactance limits "
+         "its current."),
+    kept("The skin effect",
+         "At the highest frequencies the current crowds to the ring's outer face and the heat "
+         "grows only as √ω."),
+    simpler("A slow light",
+            "The model's speed of light is slow, so that the ring bends at a playable "
+            "frequency: there c/ω is about the ring's size. A real ring that large would "
+            "radiate and its field would lag; the model leaves both out (the Darwin limit). A "
+            "copper ring 2 cm across bends near 6 kHz, where c/ω is 8 km."),
+    simpler("A dense classical metal",
+            "The carriers are thirty times denser than the other levels' metals (ω_p τ ≈ 5, "
+            "a heavily doped semiconductor's; copper's is ~250), so that the ring's inductance "
+            "outweighs its resistance at a frequency the model can follow."),
+    METAL_SCATTERING, METAL_Z,
+    electrodes=[IDLE_ELECTRODE],
+    metals=["ring (a shorted turn)"])

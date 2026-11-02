@@ -66,6 +66,50 @@ impl Tube {
     }
 }
 
+/// A metal's carrier's share of the field's work over a step with the self-field, booked
+/// once the step's velocities are known (`Tube::book_work`).
+pub(super) struct PendingWork {
+    pub particle: usize,
+    pub lattice: usize,
+    pub cell: usize,
+    pub charge: f64,
+    /// The field at the step's start (the push's), and its induced part.
+    pub field: DVec3,
+    pub induced: Option<DVec3>,
+    /// The velocity at the step's start.
+    pub old: DVec3,
+}
+
+impl Tube {
+    /// The field's work on the metals' carriers over a step with the self-field:
+    /// `(q dt/2) E·(v_old + v_new)` with `v_new` the velocity after the self-field's part
+    /// (`darwin_step`), the kinetic current the field drives. Not the push's own `v_new`:
+    /// the induction then takes back part of the push's impulse (all of it in a screened
+    /// metal), and the push's velocity would book `(q²/2m) E·(∂A/∂t) dt` too much per carrier
+    /// and time, ~`dt/2τ` of a screened metal's unscreened Joule heat (the self-field's part
+    /// of the step books it back: the energy's account holds either way; until 2026-11-02,
+    /// 8 % of the unscreened heat in excess in a ring 20 × 20 at dt 0.012, docs/HANDOFF.md).
+    pub(super) fn book_work(
+        &self,
+        s: &mut TubeState,
+        pending: &[PendingWork],
+        work: &mut [f64],
+        induced_work: &mut [f64],
+    ) {
+        for w in pending {
+            let mean = w.old + s.v[w.particle];
+            let done = 0.5 * self.dt * w.charge * w.field.dot(mean);
+            work[w.lattice] += done;
+            s.cells[w.lattice].work[w.cell] += done;
+            if let Some(i) = w.induced {
+                let done = 0.5 * self.dt * w.charge * i.dot(mean);
+                induced_work[w.lattice] += done;
+                s.cells[w.lattice].induced[w.cell] += done;
+            }
+        }
+    }
+}
+
 /// The current and the response on the grid's edges: a free particle's canonical current
 /// `q u` with its response `q²/m` (the solve's implicit induction), a jumped one's likewise (its
 /// `u` the one before the jump), a given-off one's current `q v`, fixed; the leads' currents,
