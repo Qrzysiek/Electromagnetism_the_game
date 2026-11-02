@@ -389,10 +389,32 @@ fn neighbour(level: &Level, p: &[Element], options: &[Element], rng: &mut Rng) -
                         }
                         continue;
                     }
-                    // Signed lists: step to a neighbouring potential, or turn a plate.
+                    // Signed lists: step to a neighbouring potential, or turn a plate, or
+                    // step a supply's frequency where it has a frequency slider.
                     kind @ (ElementKind::Plate | ElementKind::Supply) => {
+                        let tuned = kind == ElementKind::Supply
+                            && level
+                                .supply_targets()
+                                .iter()
+                                .find(|(c, _)| *c == t[i].node)
+                                .is_some_and(|&(_, target)| {
+                                    level.supply_frequencies(target).is_some()
+                                });
                         if kind == ElementKind::Plate && rng.below(2) == 0 {
                             t[i].angle_deg = if t[i].angle_deg == 0.0 { 90.0 } else { 0.0 };
+                        } else if tuned && rng.below(2) == 0 {
+                            let mut omegas = level.limits.supply_omegas.clone();
+                            omegas.sort_by(f64::total_cmp);
+                            let k = omegas
+                                .iter()
+                                .position(|w| Some(w.to_bits()) == t[i].omega.map(f64::to_bits))
+                                .unwrap_or(0);
+                            let k2 = if rng.below(2) == 0 {
+                                k.saturating_sub(1)
+                            } else {
+                                (k + 1).min(omegas.len() - 1)
+                            };
+                            t[i].omega = Some(omegas[k2]);
                         } else {
                             let list = if kind == ElementKind::Plate {
                                 &level.limits.plate_voltages

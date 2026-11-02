@@ -170,6 +170,7 @@ pub fn empty_level() -> Level {
             supply_voltages: vec![],
             coil_rates: vec![],
             solenoid_fields: vec![],
+            supply_omegas: vec![],
             max_free: 0,
             max_cuts: 0,
             free_charges: vec![],
@@ -206,6 +207,7 @@ fn sync_texts(game: &mut Game) {
     game.sandbox.texts.supply_voltages = list_to_text(&limits.supply_voltages);
     game.sandbox.texts.coil_rates = list_to_text(&limits.coil_rates);
     game.sandbox.texts.solenoid_fields = list_to_text(&limits.solenoid_fields);
+    game.sandbox.texts.supply_omegas = list_to_text(&limits.supply_omegas);
     game.sandbox.texts.free_charges = list_to_text(&limits.free_charges);
     game.sandbox.texts.free_speeds = list_to_text(&limits.free_speeds);
 }

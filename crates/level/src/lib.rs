@@ -709,7 +709,8 @@ pub struct Element {
     /// Orientation in the plane, degrees from +x (antennas only).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub angle_deg: f64,
-    /// Own angular frequency (antennas only); `None`: the level's RF generator.
+    /// Own angular frequency: an antenna's (`None`: the level's RF generator), or the one a
+    /// power supply gives the sine it drives (`limits.supply_omegas`; `None`: the sine's own).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub omega: Option<f64>,
     /// Launch speed, cells per time unit (free charges only).
@@ -980,6 +981,27 @@ impl Source {
         self
     }
 
+    /// The source with a sine's angular frequency set (a supply's frequency slider); any
+    /// other source unchanged.
+    #[must_use]
+    pub fn with_omega(mut self, w: f64) -> Self {
+        if let Source::Sine { omega, .. } = &mut self {
+            *omega = w;
+        }
+        self
+    }
+
+    /// The source as a power supply sets it: its level (`with_level`) and, if the supply
+    /// has one, its frequency (`with_omega`).
+    #[must_use]
+    pub fn supplied(self, supply: &Element) -> Self {
+        let s = self.with_level(supply.value);
+        match supply.omega {
+            Some(w) => s.with_omega(w),
+            None => s,
+        }
+    }
+
     /// Whether every parameter is finite and the times and the frequency are not negative.
     pub fn is_valid(&self) -> bool {
         match *self {
@@ -1097,6 +1119,13 @@ pub struct Limits {
     /// (`tube::TubeSpec::solenoid`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub solenoid_fields: Vec<f64>,
+    /// Angular frequencies ω a power supply may give the sine it drives (positive): a
+    /// logarithmic slider over the range of the list (`Level::supply_frequencies`), on every
+    /// supply whose target a sine drives (a tube circuit, an electrode's or a coil's drive, a
+    /// swinging solenoid); the listed values are what the solver tries. Empty: the sines keep
+    /// their own ω.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub supply_omegas: Vec<f64>,
     /// Maximum number of free charges the player may place (dynamic particles).
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub max_free: u32,
@@ -1227,6 +1256,19 @@ pub fn shipped(slug: &str) -> Level {
         .unwrap_or_else(|| panic!("no shipped level '{slug}'"));
     Level::from_json(&std::fs::read_to_string(&path).expect("level file"))
         .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+/// A logarithmic slider over `[lo, hi]` (positive: a supply's frequency): its value at the
+/// fraction `f` of its length.
+#[must_use]
+pub fn log_slider_value(lo: f64, hi: f64, f: f64) -> f64 {
+    lo * libm::pow(hi / lo, f)
+}
+
+/// Where `v` lies along a logarithmic slider over `[lo, hi]`, as a fraction of its length.
+#[must_use]
+pub fn log_slider_position(lo: f64, hi: f64, v: f64) -> f64 {
+    libm::log(v / lo) / libm::log(hi / lo)
 }
 
 pub fn value_range(list: &[f64]) -> Option<(f64, f64)> {

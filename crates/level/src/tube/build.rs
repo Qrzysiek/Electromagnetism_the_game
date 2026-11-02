@@ -237,13 +237,23 @@ impl Level {
                     .find(|e| e.kind == ElementKind::Supply && e.node == n)
             })
             .map_or(spec.b_z, |e| e.value);
+        // Its frequency: the supply's, if it sets one (`limits.supply_omegas`).
+        let b_omega = spec.solenoid.and_then(|n| {
+            player
+                .iter()
+                .find(|e| e.kind == ElementKind::Supply && e.node == n)
+                .and_then(|e| e.omega)
+        });
         let mut tube = Tube {
             emitters,
             projectiles,
             arena: Some((DVec3::ZERO, DVec3::new(max.x, max.y, 0.0))),
             b_z,
             b_wave: spec.solenoid_drive.map(|s| physics::tube::SolenoidWave {
-                waveform: s.with_level(b_z).waveform(),
+                waveform: b_omega
+                    .map_or(s, |w| s.with_omega(w))
+                    .with_level(b_z)
+                    .waveform(),
                 // The solenoid around the board: its axis at the board's centre.
                 axis: DVec3::new(0.5 * max.x, 0.5 * max.y, 0.0),
             }),
@@ -424,24 +434,7 @@ impl Level {
                 let supply = player.iter().find(|e| {
                     e.kind == ElementKind::Supply && electrode.tunable && e.node == electrode.center
                 });
-                let source = match (supply, c.source) {
-                    (
-                        Some(s),
-                        crate::Source::Sine {
-                            amplitude,
-                            omega,
-                            phase,
-                            ..
-                        },
-                    ) if c.supply_offset => crate::Source::Sine {
-                        offset: s.value,
-                        amplitude,
-                        omega,
-                        phase,
-                    },
-                    (Some(s), source) => source.with_level(s.value),
-                    (None, source) => source,
-                };
+                let source = c.source_with(supply);
                 let primary = physics::tube::Circuit {
                     electrode: c.electrode,
                     source: source.waveform(),

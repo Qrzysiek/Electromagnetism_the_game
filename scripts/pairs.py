@@ -9,7 +9,9 @@ metal spheres of each bias, clouds, electrodes fixed, tunable and driven, dielec
 coils steady, ramped, driven, tunable (with a player's supply) and polygonal (also
 driven), free particles at rest and thrown, gates, the launch, the
 detector, a beam, a tube level's cathode and anode (also with the player's solenoid on,
-and with circuits: an AC anode and an RC cathode node with goals on its potential),
+and with circuits: an AC anode and an RC cathode node with goals on its potential; and
+with the player's frequencies: a tunable AC anode and a swinging solenoid on frequency
+sliders),
 player charges, magnets, antennas, plates and free charges, stray fields
 and waves) is put next to every other at several separations, from far to overlapping,
 in a Newtonian world and in a relativistic one with radiation reaction. A pair the game
@@ -191,6 +193,26 @@ def make_tube_circuit(lv, pl, p, o, w):
     ]
 
 
+def make_tube_tuned(lv, pl, p, o, w):
+    """A tube level (`make_tube`) whose frequencies the player sets (`limits.supply_omegas`,
+    a supply's frequency slider): the anode tunable on an ideal sine, its supply setting the
+    amplitude and the frequency, and the solenoid swinging, its supply setting B₀ and its
+    frequency."""
+    make_tube(lv, pl, p, o, w)
+    k = lv["tube"]["cathode"]
+    anode = lv["electrodes"][k + 1]
+    anode["tunable"] = True
+    lv["tube"]["circuits"] = [
+        {"electrode": k + 1, "source": {"kind": "sine", "amplitude": 0.0, "omega": 0.5},
+         "resistance": 0.0}]
+    lv["tube"]["solenoid"] = [30, 20, 0]
+    lv["tube"]["solenoid_drive"] = {"kind": "sine", "amplitude": 1.0, "omega": 0.5}
+    lv["limits"].update({"supply_voltages": [-1.0, 1.0], "solenoid_fields": [-2.0, 2.0],
+                         "supply_omegas": [0.1, 2.0]})
+    pl.append({"node": anode["center"], "kind": "supply", "value": 0.8, "omega": 1.3})
+    pl.append({"node": [30, 20, 0], "kind": "supply", "value": 0.5, "omega": 0.3})
+
+
 def make_tube_tank(lv, pl, p, o, w):
     """A tube level (`make_tube`) whose anode is an LC tank biased by its supply (a DC
     source through R and a coil, C to ground: a cavity) with a third electrode strapped to
@@ -368,6 +390,7 @@ ELEMENTS = {
     "tube": make_tube,
     "tube_solenoid": make_tube_solenoid,
     "tube_circuit": make_tube_circuit,
+    "tube_tuned": make_tube_tuned,
     "tube_tank": make_tube_tank,
     "tube_coax": make_tube_coax,
     "tube_metal": make_tube_metal,

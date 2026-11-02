@@ -115,6 +115,9 @@ fn shipped_setups_are_computable() {
 /// would try first: within 5 % of the range's half from 0, from either end or from the
 /// middle of either half (`scripts/designs/common.py`, `guessable`; `generator window` shows
 /// each level's whole solving interval, which the level designs keep clear of them).
+/// Frequencies (the owner, 2026-11-02): a supply's frequency slider is logarithmic over a
+/// positive range, and no reference frequency lies within 5 % of its logarithmic length
+/// from either end or its middle (`guessable_omega`; `generator window --omega`).
 #[test]
 fn slider_ranges_hide_the_answer() {
     use level::ElementKind;
@@ -160,6 +163,27 @@ fn slider_ranges_hide_the_answer() {
                     "{name}: {:?} {} near {p} on the slider ±{hi}",
                     e.kind,
                     e.value
+                );
+            }
+        }
+        // A supply's frequency against its logarithmic slider: its own, or its sine's.
+        for e in &level.reference_solution {
+            let Some(&(_, t)) = targets.iter().find(|(c, _)| *c == e.node) else {
+                continue;
+            };
+            let Some((lo, hi)) = level.supply_frequencies(t) else {
+                continue;
+            };
+            assert!(lo > 0.0 && lo < hi, "{name}: frequency slider [{lo}, {hi}]");
+            let w = e.omega.unwrap_or_else(|| match level.supply_source(t) {
+                Some(level::Source::Sine { omega, .. }) => omega,
+                _ => unreachable!("a frequency slider sets a sine"),
+            });
+            let at = level::log_slider_position(lo, hi, w);
+            for p in [0.0, 0.5, 1.0] {
+                assert!(
+                    (at - p).abs() >= 0.05,
+                    "{name}: frequency {w} near {p} of the slider [{lo}, {hi}] (log scale)"
                 );
             }
         }

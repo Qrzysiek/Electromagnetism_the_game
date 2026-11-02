@@ -37,7 +37,7 @@ impl Level {
             .filter_map(|(i, e)| {
                 let d = e.drive?;
                 let source = match self.supply_of(e, player) {
-                    Some(s) => d.source.with_level(s.value),
+                    Some(s) => d.source.supplied(s),
                     None => d.source,
                 };
                 Some((i, d.chain(source)))
@@ -51,7 +51,7 @@ impl Level {
             .filter_map(|(i, c)| match c {
                 Coil::Circle { drive: Some(d), .. } => {
                     let source = match c.supply_node().and_then(|n| self.supply_at(n, player)) {
-                        Some(s) => d.source.with_level(s.value),
+                        Some(s) => d.source.supplied(s),
                         None => d.source,
                     };
                     Some((i, d.chain(source)))

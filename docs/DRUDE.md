@@ -516,3 +516,34 @@ the magnetic field first).
   `hall_forces_balance` now covers all three strips: 1.049, 0.957, 1.288. The lower
   strip's ratio follows its weaker drive (driven at −30 like the upper: 1.043), not its
   carriers' sign.
+- **2026-11-02, Phase 2 item 2, a drive's frequency on a slider (DEC-30):** a level lists
+  `limits.supply_omegas`; every supply whose target a sine drives gets a logarithmic
+  frequency slider (the owner: logarithmic, the answer clear of its ends and middle by 5 %
+  of its length), the supply's `omega`. A frequency set on it runs bit for bit as the same
+  frequency written into the level (`crates/level/tests/frequency.rs`: Rectifier, Triode,
+  Eddy currents). `generator window --omega` scans it.
+- **Open: the AC mobility through a level** (the plan's test, not committed: its draft in
+  the worktree's `target/scratch/ac_mobility_test.rs`). Ohm's law's strip on a sine of
+  amplitude 10 (200 macroparticles per area, cores of radius 0.001 so that the medium's own
+  correction is −0.4 %), the carriers' drift over the strip's middle against the mean field
+  there (the potential's drop across it), fitted at ω over 16 and 24 periods, three seeds:
+
+  | ω/κs | measured μ | Boltzmann (D2's `mobility`) | error |
+  |---|---|---|---|
+  | 0.4 | 0.2245 ∠−9.5° | 0.2255 ∠−12.4° | 5.2 % |
+  | 1.2 | 0.1970 ∠−26.4° | 0.1915 ∠−30.4° | 7.6 % |
+
+  Required 5 % (as D1, D2). The magnitude agrees (−0.4 %, +2.9 %); the drift lags the field
+  3–4° less than the Boltzmann equation says, the seeds within about 1°. D2's periodic box
+  at the same ω/κs (1.25, dt 0.02) lags 1.3° less (−30.0° against −31.3°), so 2.5–3° come
+  from the level. Not the frames' timing (the driven contact's potential in each frame is
+  `10 sin ωt` at its time to 1e-7), not the walls' layers (the inner band, 1.25 from the
+  walls, lags less still: −24.8°). The step: at ω/κs = 1.2, seed 1, steps 0.035, 0.0175,
+  0.00875 give −26.5°, −27.3°, −28.2°, toward the theory but within the seeds' scatter. To
+  try next: more seeds per step (a first-order error of the carriers' kick against the
+  field, which D2's smaller step hides); the carriers' mutual scattering as macroparticles
+  (in the level they interact, in D2's box they do not: momentum-conserving collisions that
+  mix fast and slow carriers would narrow the spread of their free times, and with it the
+  lag; it would fall with the macroparticles' weight, `carriers_per_area`). Until settled,
+  levels whose answer is a phase at ωτ ≈ 1 (Carriers' inertia) wait; the Transformer's
+  goals on heat do not depend on it.

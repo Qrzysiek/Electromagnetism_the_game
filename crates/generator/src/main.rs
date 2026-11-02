@@ -96,6 +96,12 @@ enum Command {
         /// Scan up to this potential instead of the slider's highest.
         #[arg(long, allow_hyphen_values = true)]
         to: Option<f64>,
+        /// Scan each supply's frequency instead of its level (the supplies with a frequency
+        /// slider, `limits.supply_omegas`), in steps equal on its logarithmic scale; `--from`
+        /// and `--to` are then frequencies, the intervals' percentages of the slider's
+        /// logarithmic length.
+        #[arg(long)]
+        omega: bool,
         /// Also print every evaluation and interval as JSON at the end.
         #[arg(long)]
         json: bool,
@@ -472,13 +478,15 @@ fn tube_field(level: &Level, every: f64, end: Option<f64>) {
 
 /// `generator window`: the solving intervals of each slider-set potential (or of the
 /// reference's element `only`, 1-based), over its slider's range or the part `scan` of it,
-/// each evaluation logged to stderr.
+/// each evaluation logged to stderr. With `omega`, of each supply's frequency on its
+/// logarithmic slider instead.
 #[allow(clippy::cast_precision_loss, clippy::too_many_lines)]
 fn window(
     level: &Level,
     steps: u32,
     only: Option<usize>,
     scan: (Option<f64>, Option<f64>),
+    omega: bool,
     json: bool,
 ) {
     use level::ElementKind;
@@ -488,23 +496,43 @@ fn window(
         if only.is_some_and(|k| k != i + 1) {
             continue;
         }
-        // A supply's own slider: an electrode's potentials or a coil's ramp rates.
+        // A supply's own slider: an electrode's potentials or a coil's ramp rates, or with
+        // `omega` its frequency slider.
         let targets = level.supply_targets();
-        let list: &[f64] = match e.kind {
-            ElementKind::Supply => targets
-                .iter()
-                .find(|(c, _)| *c == e.node)
-                .map_or(&[][..], |&(_, t)| level.supply_list(t)),
-            ElementKind::Plate => &level.limits.plate_voltages,
-            _ => continue,
+        let target = targets.iter().find(|(c, _)| *c == e.node).map(|&(_, t)| t);
+        let range = match (e.kind, omega) {
+            (ElementKind::Supply, true) => target.and_then(|t| level.supply_frequencies(t)),
+            (ElementKind::Supply, false) => {
+                target.and_then(|t| level::value_range(level.supply_list(t)))
+            }
+            (ElementKind::Plate, false) => level::value_range(&level.limits.plate_voltages),
+            _ => None,
         };
-        let Some((lo, hi)) = level::value_range(list) else {
+        let Some((lo, hi)) = range else {
             continue;
+        };
+        // The reference's value: a supply's frequency, or its sine's own without one.
+        let own = if omega {
+            e.omega
+                .or_else(|| match target.and_then(|t| level.supply_source(t)) {
+                    Some(level::Source::Sine { omega, .. }) => Some(omega),
+                    _ => None,
+                })
+                .unwrap_or(f64::NAN)
+        } else {
+            e.value
+        };
+        let set = |trial: &mut Vec<level::Element>, v: f64| {
+            if omega {
+                trial[i].omega = Some(v);
+            } else {
+                trial[i].value = v;
+            }
         };
         let mut trial = reference.clone();
         let mut evaluations: Vec<serde_json::Value> = Vec::new();
         let mut solves = |v: f64| {
-            trial[i].value = v;
+            set(&mut trial, v);
             let started = std::time::Instant::now();
             let ok = search::objective(level, &trial).1 == physics::trajectory::Outcome::Arrived;
             let seconds = started.elapsed().as_secs_f64();
@@ -517,7 +545,22 @@ fn window(
             ok
         };
         let (from, to) = (scan.0.unwrap_or(lo), scan.1.unwrap_or(hi));
-        let at = |k: u32| from + (to - from) * f64::from(k) / f64::from(steps);
+        // A frequency in equal steps on its logarithmic slider.
+        let at = |k: u32| {
+            let f = f64::from(k) / f64::from(steps);
+            if omega {
+                level::log_slider_value(from, to, f)
+            } else {
+                from + (to - from) * f
+            }
+        };
+        let length = |a: f64, b: f64| {
+            if omega {
+                level::log_slider_position(lo, hi, b) - level::log_slider_position(lo, hi, a)
+            } else {
+                (b - a) / (hi - lo)
+            }
+        };
         let mut intervals: Vec<(f64, f64)> = Vec::new();
         let mut start: Option<f64> = None;
         for k in 0..=steps {
@@ -535,16 +578,21 @@ fn window(
             intervals.push((s, to));
         }
         println!(
-            "{}: {:?} at {:?}, reference {:.4e}, range [{lo:.4e}, {hi:.4e}], scanned \
+            "{}: {:?} at {:?}{}, reference {own:.4e}, range [{lo:.4e}, {hi:.4e}], scanned \
              [{from:.4e}, {to:.4e}]",
-            level.name, e.kind, e.node, e.value
+            level.name,
+            e.kind,
+            e.node,
+            if omega { " (frequency)" } else { "" }
         );
         let mut found = Vec::new();
         for (a, b) in intervals {
             let mut mid = reference.clone();
-            mid[i].value = 0.5 * (a + b);
+            // The middle on the slider's own scale.
+            let middle = if omega { (a * b).sqrt() } else { 0.5 * (a + b) };
+            set(&mut mid, middle);
             let verified = search::is_verified_solution(level, &mid);
-            let percent = 100.0 * (b - a) / (hi - lo);
+            let percent = 100.0 * length(a, b);
             println!(
                 "  solves on [{a:.4e}, {b:.4e}] ({percent:.1} % of the range; middle verified: {verified})"
             );
@@ -553,7 +601,7 @@ fn window(
         }
         report.push(serde_json::json!({
             "element": i + 1, "kind": format!("{:?}", e.kind), "node": e.node,
-            "reference": e.value, "range": [lo, hi], "scanned": [from, to],
+            "frequency": omega, "reference": own, "range": [lo, hi], "scanned": [from, to],
             "evaluations": evaluations, "intervals": found,
         }));
     }
@@ -703,8 +751,9 @@ fn run(command: Command) {
             element,
             from,
             to,
+            omega,
             json,
-        } => window(&load(&path), steps, element, (from, to), json),
+        } => window(&load(&path), steps, element, (from, to), omega, json),
         Command::TubeScan {
             path,
             placements,

@@ -105,6 +105,7 @@ pub(super) fn edit_limits(
         supply_voltages,
         coil_rates,
         solenoid_fields,
+        supply_omegas,
         max_free,
         max_cuts,
         free_charges,
@@ -208,6 +209,19 @@ pub(super) fn edit_limits(
         }
         r.on_hover_text("Fields B along z of a tube level's solenoid supply (signed)")
             .has_focus()
+    });
+    focus |= row(ui, "Supply ω values", |ui| {
+        let r =
+            ui.add(egui::TextEdit::singleline(&mut texts.supply_omegas).desired_width(LIST_WIDTH));
+        if r.lost_focus() {
+            *supply_omegas = parse_list(&texts.supply_omegas);
+            texts.supply_omegas = list_to_text(supply_omegas);
+        }
+        r.on_hover_text(
+            "Frequencies a supply may give the sine it drives: a logarithmic slider over \
+             their range. Empty: every sine keeps its own ω",
+        )
+        .has_focus()
     });
     focus |= row(ui, "Coil ramp rates dκ/dt", |ui| {
         let r = ui.add(egui::TextEdit::singleline(&mut texts.coil_rates).desired_width(LIST_WIDTH));

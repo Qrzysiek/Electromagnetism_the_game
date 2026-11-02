@@ -433,8 +433,9 @@ fn nearest_node(
 }
 
 /// The fastest frequency of a tube level's run in a field `b_z` along z, as far as its
-/// level fixes it: its sources' (a sine's ω, a pulse's edges' `1/rise`) and its carriers'
-/// cyclotron frequency `|q/m| B`.
+/// level fixes it: its sources' (a sine's ω, a pulse's edges' `1/rise`; the top of the
+/// supplies' frequency sliders, `limits.supply_omegas`, where a supply sets a sine's) and
+/// its carriers' cyclotron frequency `|q/m| B`.
 #[must_use]
 pub fn fastest_frequency(level: &Level, b_z: f64) -> f64 {
     let Some(spec) = level.tube.as_ref() else {
@@ -453,13 +454,19 @@ pub fn fastest_frequency(level: &Level, b_z: f64) -> f64 {
                 .fold(0.0, f64::max),
         })
         .fold(0.0, f64::max);
+    let sliders = level
+        .supply_targets()
+        .into_iter()
+        .filter_map(|(_, t)| level.supply_frequencies(t))
+        .map(|(_, hi)| hi)
+        .fold(sources, f64::max);
     let ratio = spec
         .ions
         .iter()
         .map(|i| i.charge_per_mass.abs())
         .chain(spec.metals.iter().map(|m| m.charge_per_mass.abs()))
         .fold(spec.charge_per_mass.abs(), f64::max);
-    sources.max(ratio * b_z.abs())
+    sliders.max(ratio * b_z.abs())
 }
 
 /// The field smoothed in time: `EM_SMOOTH_STAGES` first-order low-passes in cascade, each

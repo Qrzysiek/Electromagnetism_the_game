@@ -863,6 +863,31 @@ impl Editor {
             .map(|e| e.value)
     }
 
+    /// The frequency the power supply on `centre` gives the sine it drives (`None`: switched
+    /// off, or at the sine's own).
+    pub fn supply_omega(&self, centre: Node) -> Option<f64> {
+        self.placement
+            .iter()
+            .find(|e| e.kind == ElementKind::Supply && e.node == centre)
+            .and_then(|e| e.omega)
+    }
+
+    /// Sets the frequency of the power supply on `centre`, if it is on; kept if allowed.
+    pub fn set_supply_omega(&mut self, centre: Node, omega: f64) {
+        if self.supply_omega(centre).map(f64::to_bits) == Some(omega.to_bits()) {
+            return;
+        }
+        let mut trial = self.placement.clone();
+        let Some(e) = trial
+            .iter_mut()
+            .find(|e| e.kind == ElementKind::Supply && e.node == centre)
+        else {
+            return;
+        };
+        e.omega = Some(omega);
+        let _ = self.try_placement(trial);
+    }
+
     /// Sets or switches off the power supply of the tunable electrode centred at
     /// `centre`; kept if allowed.
     pub fn set_supply(&mut self, centre: Node, value: Option<f64>) {

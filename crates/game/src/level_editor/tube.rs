@@ -672,25 +672,27 @@ pub(super) fn edit_tube(
             // Further electrodes wired to this one (a grid's wires on an ideal source, a
             // magnetron's strapped vanes on a tank), 1-based.
             ui.horizontal(|ui| {
-                    ui.label("linked electrodes").on_hover_text(
-                        "Wired to this electrode: on an ideal source they follow it (a grid's                          wires); on a tank or a resistance they are one node with it (a                          magnetron's strapped vanes)",
-                    );
-                    let mut text = linked
-                        .iter()
-                        .map(|e| (e + 1).to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(LIST_WIDTH));
-                    if r.changed() {
-                        *linked = text
-                            .split(',')
-                            .filter_map(|t| t.trim().parse::<usize>().ok())
-                            .filter(|&e| (1..=last + 1).contains(&e))
-                            .map(|e| e - 1)
-                            .collect();
-                    }
-                    focus |= r.has_focus();
-                });
+                ui.label("linked electrodes").on_hover_text(
+                    "Wired to this electrode: on an ideal source they follow it (a grid's \
+                         wires); on a tank or a resistance they are one node with it (a \
+                         magnetron's strapped vanes)",
+                );
+                let mut text = linked
+                    .iter()
+                    .map(|e| (e + 1).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(LIST_WIDTH));
+                if r.changed() {
+                    *linked = text
+                        .split(',')
+                        .filter_map(|t| t.trim().parse::<usize>().ok())
+                        .filter(|&e| (1..=last + 1).contains(&e))
+                        .map(|e| e - 1)
+                        .collect();
+                }
+                focus |= r.has_focus();
+            });
         });
     }
     if let Some(k) = remove {

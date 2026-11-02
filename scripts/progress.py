@@ -144,8 +144,10 @@ def alive(pid):
     if pid is None:
         return False
     if os.name == "nt":
+        # tasklist writes the console's code page, not UTF-8 (Python 3.15's default: a
+        # localized line's byte 0xFF left stdout None, and `status` crashed).
         out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True,
-                             text=True).stdout
+                             text=True, errors="replace").stdout or ""
         return str(pid) in out
     try:
         os.kill(pid, 0)

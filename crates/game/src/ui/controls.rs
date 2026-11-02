@@ -264,7 +264,48 @@ pub(super) fn supplies(ui: &mut egui::Ui, game: &mut Game, level: &level::Level)
             }
             game.editor.set_supply(centre, choice);
         });
-        if ui.rect_contains_pointer(row.response.rect) {
+        // Its frequency, where the level lets the player set it: a logarithmic slider (the
+        // physics it shows goes by ratios: ωτ, ωL/R, a resonance), at the sine's own ω until
+        // moved.
+        let frequency = level.supply_frequencies(target).map(|(lo, hi)| {
+            let own = match level.supply_source(target) {
+                Some(level::Source::Sine { omega, .. }) => omega,
+                _ => lo,
+            };
+            let on = game.editor.supply(centre).is_some();
+            ui.horizontal(|ui| {
+                ui.label("   ω:")
+                    .on_hover_text("The angular frequency of the sine this supply drives");
+                let mut w = game
+                    .editor
+                    .supply_omega(centre)
+                    .unwrap_or(own)
+                    .clamp(lo, hi);
+                let before = w;
+                let r = ui
+                    .add_enabled(
+                        on,
+                        egui::Slider::new(&mut w, lo..=hi)
+                            .logarithmic(true)
+                            .custom_formatter(|v, _| fmt_si(v))
+                            .custom_parser(parse_si),
+                    )
+                    .on_hover_text(format!(
+                        "Its frequency ω, {} to {} on a logarithmic scale (period 2π/ω); \
+                         switch the supply on to set it",
+                        fmt_si(lo),
+                        fmt_si(hi)
+                    ));
+                game.text_focus |= r.has_focus();
+                if on && w.to_bits() != before.to_bits() {
+                    game.focus_supply(centre, 1.5);
+                    game.editor.set_supply_omega(centre, w);
+                }
+            })
+            .response
+        });
+        let over = |r: &egui::Response| ui.rect_contains_pointer(r.rect);
+        if over(&row.response) || frequency.as_ref().is_some_and(over) {
             game.focus_supply(centre, 0.15);
         }
     }

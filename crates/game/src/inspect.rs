@@ -2,7 +2,7 @@
 //! player's or the level's, shows its kind and every parameter that defines it, and a
 //! time-dependent source its signal): the tooltip's content.
 
-use level::{Coil, ConductorBias, Element, ElementKind, Level, Node, Source, tube::TubeCircuit};
+use level::{Coil, ConductorBias, Element, ElementKind, Level, Node, Source};
 use physics::DVec3;
 
 use crate::ui::{fmt_num, fmt_si};
@@ -497,7 +497,7 @@ fn coil(level: &Level, placement: &[Element], k: usize, c: &Coil) -> Inspection 
     };
     if let Some(d) = drive {
         let source = match supply {
-            Some(s) => d.source.with_level(s.value),
+            Some(s) => d.source.supplied(s),
             None => d.source,
         };
         i = i.line(format!("driven: {}", source_text(&source)));
@@ -558,7 +558,7 @@ fn electrode(level: &Level, placement: &[Element], k: usize) -> Inspection {
     let t_max = level.physics.t_max;
     if let Some(d) = e.drive {
         let source = match supply {
-            Some(s) => d.source.with_level(s.value),
+            Some(s) => d.source.supplied(s),
             None => d.source,
         };
         i = i.line(format!("driven: {}", source_text(&source)));
@@ -594,7 +594,7 @@ fn electrode(level: &Level, placement: &[Element], k: usize) -> Inspection {
             .iter()
             .filter(|c| c.electrode == k || c.linked.contains(&k))
         {
-            let source = tube_source(c, supply.map(|s| s.value));
+            let source = c.source_with(supply);
             if c.electrode != k {
                 i = i.line(format!("wired to electrode {}'s circuit:", c.electrode + 1));
             } else if !c.linked.is_empty() {
@@ -628,28 +628,6 @@ fn electrode(level: &Level, placement: &[Element], k: usize) -> Inspection {
         }
     }
     i
-}
-
-/// A tube circuit's source with the player's supply applied (as `Level::tube_circuits`).
-fn tube_source(c: &TubeCircuit, supply: Option<f64>) -> Source {
-    match (supply, c.source) {
-        (
-            Some(v),
-            Source::Sine {
-                amplitude,
-                omega,
-                phase,
-                ..
-            },
-        ) if c.supply_offset => Source::Sine {
-            offset: v,
-            amplitude,
-            omega,
-            phase,
-        },
-        (Some(v), s) => s.with_level(v),
-        (None, s) => s,
-    }
 }
 
 fn source_text(s: &Source) -> String {

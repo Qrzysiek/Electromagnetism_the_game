@@ -211,6 +211,47 @@ def guessable(v, vmax):
 
 
 
+def omega_slider(lo, hi, *candidates):
+    """The frequencies of a supply's frequency slider (`limits.supply_omegas`): a
+    logarithmic slider over [lo, hi] (the owner, 2026-11-02), whose ends and middle do not
+    give the answer away (`guessable_omega`, also checked by the level tests). The
+    candidates are the frequencies the solver and the difficulty analysis try."""
+    return sorted({lo, hi, *candidates})
+
+
+
+def guessable_omega(w, lo, hi):
+    """Whether a frequency is near a point of its logarithmic slider that a player would
+    try first: either end or the middle (within 5 % of the slider's length)."""
+    at = math.log(w / lo) / math.log(hi / lo)
+    return any(abs(at - p) < 0.05 for p in (0.0, 0.5, 1.0))
+
+
+
+def supply_sine_omega(lvl, node):
+    """The frequency of the sine the supply on `node` drives (`Level::supply_source`): a
+    tube circuit's on a tunable electrode, an electrode's or a driven coil's drive, a
+    swinging solenoid's; None if no sine."""
+    tube = lvl.get("tube") or {}
+    if tube.get("solenoid") == node:
+        source = tube.get("solenoid_drive")
+    else:
+        source = None
+        for i, e in enumerate(lvl.get("electrodes", [])):
+            if e.get("tunable") and e["center"] == node:
+                circuit = next((c for c in tube.get("circuits", []) if c["electrode"] == i), None)
+                source = circuit["source"] if circuit else (e.get("drive") or {}).get("source")
+        for c in lvl.get("coils", []):
+            if (c.get("shape") == "circle" and c.get("tunable") and c.get("drive")
+                    and [c["center"][0] + math.floor(c["radius"] + 0.5), c["center"][1],
+                         c["center"][2]] == node):
+                source = c["drive"]["source"]
+    if source and source.get("kind") == "sine":
+        return source["omega"]
+    return None
+
+
+
 def slider_problems(lvl):
     """The slider rules (see `slider`) on a built level: each list symmetric about 0, and
     no reference value at a guessable point of its own slider (a plate's potentials, or
@@ -241,6 +282,19 @@ def slider_problems(lvl):
         if vals and max(vals) > 0 and guessable(e["value"], max(vals)):
             out.append(f"{e['kind']} at {e['node'][:2]}: {e['value']:g} is guessable on "
                        f"the slider +-{max(vals):g}")
+    # A supply's frequency on its logarithmic slider: its own, or its sine's.
+    omegas = limits.get("supply_omegas", [])
+    if omegas:
+        lo, hi = min(omegas), max(omegas)
+        if not 0 < lo < hi:
+            out.append(f"frequency slider [{lo}, {hi}] not positive and open")
+        else:
+            for e in lvl["reference_solution"]:
+                own = supply_sine_omega(lvl, e["node"]) if e["kind"] == "supply" else None
+                w = e.get("omega", own)
+                if w is not None and guessable_omega(w, lo, hi):
+                    out.append(f"supply at {e['node'][:2]}: frequency {w:g} is guessable on "
+                               f"the slider [{lo:g}, {hi:g}]")
     return out
 
 
@@ -278,7 +332,8 @@ def current_goal(electrode, lo, hi, start, end, carriers=None):
 def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=-1.0,
          saturation=None, projectiles=(), b_z=0.0, solenoid=None, circuits=(),
          potentials=(), goals=(), ions=None, step=None, particle_rate=None, particles=None,
-         emitter_mesh=None, output=None, metals=(), solenoid_drive=None, heat_goals=()):
+         emitter_mesh=None, output=None, metals=(), solenoid_drive=None, heat_goals=(),
+         speed_of_light=None):
     """A tube level (z-invariant, docs/TUBES.md): electrode `cathode` emits electrons
     (from its faces toward `emit_toward_deg` only, if given; at most `saturation` per unit
     length of its surface, if given: a temperature-limited cathode); the goal is the
@@ -291,8 +346,11 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
     c=None to `level`). `solenoid_drive`: the solenoid's field over time (a source, see
     `dc`, `sine`; its level set by the supply on the terminal), which induces an electric
     field circulating about the board's centre. `heat_goals`: goals on a metal's mean heat
-    (`heat_goal`)."""
+    (`heat_goal`). `speed_of_light`: the carriers' own magnetic field at this c (PHYSICS.md
+    2.12, the Darwin limit: inductance, transformers)."""
     t = {"cathode": cathode, "charge_per_mass": q_over_m}
+    if speed_of_light is not None:
+        t["speed_of_light"] = speed_of_light
     if heat_goals:
         t["heat_goals"] = list(heat_goals)
     if solenoid_drive is not None:
@@ -336,16 +394,20 @@ def tube(cathode, electrode, lo, hi, start, end, emit_toward_deg=None, q_over_m=
 
 
 def metal(lo, hi, contacts, density, thermal_speed, mean_free_path, core_radius,
-          carriers_per_area, seed=0, q_over_m=-1.0):
+          carriers_per_area, seed=0, q_over_m=-1.0, hole=None):
     """A metal in a tube level (PHYSICS.md 2.11, the Drude metal): the rectangle from the
     grid corner `lo` to `hi`, its `contacts` (electrodes: boxes along its sides), its
     carriers' charge density (magnitude), q/m and thermal speed, its mean free path and
     its ion cores' radius (their number per area follows: a/(2l) at most 0.005), its
-    macroparticles per area in the preview."""
-    return {"corners": [[lo[0], lo[1], 0], [hi[0], hi[1], 0]], "contacts": list(contacts),
-            "density": density, "charge_per_mass": q_over_m, "thermal_speed": thermal_speed,
-            "mean_free_path": mean_free_path, "core_radius": core_radius,
-            "carriers_per_area": carriers_per_area, "seed": seed}
+    macroparticles per area in the preview. `hole` = (lo, hi): a rectangular hole through
+    it, which makes it a ring (a one-turn coil along z; walls at least a cell wide)."""
+    m = {"corners": [[lo[0], lo[1], 0], [hi[0], hi[1], 0]], "contacts": list(contacts),
+         "density": density, "charge_per_mass": q_over_m, "thermal_speed": thermal_speed,
+         "mean_free_path": mean_free_path, "core_radius": core_radius,
+         "carriers_per_area": carriers_per_area, "seed": seed}
+    if hole is not None:
+        m["hole"] = [[hole[0][0], hole[0][1], 0], [hole[1][0], hole[1][1], 0]]
+    return m
 
 
 
@@ -444,9 +506,13 @@ def player_plate(x, y, v, angle_deg=0.0):
 
 
 
-def supply(x, y, v):
-    """The player's power supply of the tunable electrode centred at (x, y)."""
-    return {"node": [x, y, 0], "kind": "supply", "value": v}
+def supply(x, y, v, omega=None):
+    """The player's power supply of the tunable electrode centred at (x, y); `omega`: the
+    frequency it gives the sine it drives (`level(supply_omegas=...)`)."""
+    s = {"node": [x, y, 0], "kind": "supply", "value": v}
+    if omega is not None:
+        s["omega"] = omega
+    return s
 
 
 
@@ -482,7 +548,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
           electrodes=(), max_plates=0, plate_voltages=(), plate_size=None, supplies=(),
           beam_interaction=False, gates=(), clouds=(), free_particles=(), max_free=0,
           free_charges=(), free_speeds=(), free_mass=1.0, free_radius=0.3, dielectrics=(),
-          coil_rates=(), ferrites=(), tube=None, solenoid_fields=(), max_cuts=0):
+          coil_rates=(), ferrites=(), tube=None, solenoid_fields=(), max_cuts=0,
+          supply_omegas=()):
     limits = {"max_charges": max_charges, "magnitudes": list(magnitudes),
               "allow_positive": signs[0], "allow_negative": signs[1],
               "max_magnets": max_magnets, "magnet_strengths": list(strengths)}
@@ -504,6 +571,8 @@ def level(name, desc, grid=(30, 20), shots=(), elements=(), coils=(), max_charge
         limits["coil_rates"] = list(coil_rates)
     if solenoid_fields:
         limits["solenoid_fields"] = list(solenoid_fields)
+    if supply_omegas:
+        limits["supply_omegas"] = list(supply_omegas)
     if max_free:
         limits["max_free"] = max_free
         limits["free_charges"] = list(free_charges)

@@ -86,6 +86,7 @@ fn sample_level() -> Level {
             supply_voltages: vec![-1e4, 1e4],
             coil_rates: vec![],
             solenoid_fields: vec![],
+            supply_omegas: vec![],
             max_free: 2,
             max_cuts: 0,
             free_charges: vec![-1e-6, 2e-6],

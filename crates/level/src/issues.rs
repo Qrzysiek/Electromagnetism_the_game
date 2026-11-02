@@ -462,6 +462,34 @@ impl Level {
         if tunable(true) && self.limits.supply_voltages.is_empty() {
             out.push("tunable driven coils need at least one supply voltage".into());
         }
+        // A frequency slider (logarithmic): positive frequencies, and a supply that drives a
+        // sine to set them on.
+        let omegas = &self.limits.supply_omegas;
+        if omegas.iter().any(|w| !(w.is_finite() && *w > 0.0)) {
+            out.push("supply frequencies must be positive".into());
+        } else if !omegas.is_empty()
+            && !self
+                .supply_targets()
+                .iter()
+                .any(|&(_, t)| self.supply_frequencies(t).is_some())
+        {
+            out.push(
+                "supply frequencies need a tunable electrode, coil or solenoid driven by a sine"
+                    .into(),
+            );
+        }
+        // Its sine's own frequency is where the slider starts: on it.
+        for (_, t) in self.supply_targets() {
+            if let (Some((lo, hi)), Some(Source::Sine { omega, .. })) =
+                (self.supply_frequencies(t), self.supply_source(t))
+                && !(lo..=hi).contains(&omega)
+            {
+                out.push(format!(
+                    "a sine whose frequency a supply sets runs at ω = {omega} outside its slider \
+                     [{lo}, {hi}]"
+                ));
+            }
+        }
         if !self.ferrites.is_empty() {
             // Magnetized by the static fields only; a changing magnetization would also
             // induce an electric field, not modelled yet.
@@ -609,7 +637,8 @@ impl Level {
             let Some(d) = e.drive else { continue };
             if !d.is_valid() {
                 out.push(
-                    "a drive needs a positive resistance, valid source parameters and                      non-negative times, inductance and capacitance"
+                    "a drive needs a positive resistance, valid source parameters and \
+                     non-negative times, inductance and capacitance"
                         .into(),
                 );
             }
@@ -642,7 +671,8 @@ impl Level {
             };
             if !d.is_valid() {
                 out.push(
-                    "a drive needs a positive resistance, valid source parameters and                      non-negative times, inductance and capacitance"
+                    "a drive needs a positive resistance, valid source parameters and \
+                     non-negative times, inductance and capacitance"
                         .into(),
                 );
             }

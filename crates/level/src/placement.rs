@@ -155,7 +155,7 @@ impl Level {
     }
 
     /// Power supplies: each on the centre of a different tunable electrode or coil, at a
-    /// value on its slider.
+    /// value on its slider, and a frequency on its frequency slider if it has one.
     pub(super) fn check_supplies(&self, player: &[Element]) -> Result<(), PlacementError> {
         let targets = self.supply_targets();
         let mut supplied: Vec<Node> = Vec::new();
@@ -170,8 +170,43 @@ impl Level {
             if !Limits::allows_potential(self.supply_list(target), e.value) {
                 return Err(PlacementError::MagnitudeNotAllowed(e.value));
             }
+            if let Some(w) = e.omega {
+                let allowed = self
+                    .supply_frequencies(target)
+                    .is_some_and(|(lo, hi)| w.is_finite() && (lo..=hi).contains(&w));
+                if !allowed {
+                    return Err(PlacementError::FrequencyNotAllowed(e.omega));
+                }
+            }
         }
         Ok(())
+    }
+
+    /// The source a supply's target is driven by, whose level (and frequency) the supply
+    /// sets: an electrode's tube circuit or drive, a driven coil's, a swinging solenoid's.
+    /// None for an undriven target (a supply then sets a potential, a ramp rate or a field).
+    pub fn supply_source(&self, target: SupplyTarget) -> Option<Source> {
+        match target {
+            SupplyTarget::Electrode(i) => self
+                .tube
+                .as_ref()
+                .and_then(|t| t.circuits.iter().find(|c| c.electrode == i))
+                .map(|c| c.source)
+                .or_else(|| self.electrodes[i].drive.map(|d| d.source)),
+            SupplyTarget::Coil(i) => match &self.coils[i] {
+                Coil::Circle { drive: Some(d), .. } => Some(d.source),
+                _ => None,
+            },
+            SupplyTarget::Solenoid => self.tube.as_ref().and_then(|t| t.solenoid_drive),
+        }
+    }
+
+    /// The range of a supply's frequency slider (`limits.supply_omegas`), if its target is
+    /// driven by a sine and the level lets the player set its frequency.
+    pub fn supply_frequencies(&self, target: SupplyTarget) -> Option<(f64, f64)> {
+        matches!(self.supply_source(target), Some(Source::Sine { .. }))
+            .then(|| value_range(&self.limits.supply_omegas))
+            .flatten()
     }
 
     /// What the player's power supplies operate: the tunable electrodes, each at its

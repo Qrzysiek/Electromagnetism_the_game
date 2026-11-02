@@ -1646,7 +1646,9 @@ fn metal_energy_balance() {
         (on.join().expect("the run"), off)
     });
     println!(
-        "metal energy: the contacts' potential steps take {steps:.3} ({:.1} % of IV), the          remainder W + S − IV is {rest:+.3} ± {err:.3} ({:.1} %); with the supply at 0, steps          {idle_steps:+.3}, remainder {idle:+.3} ± {idle_err:.3}: {:.1} standard errors apart",
+        "metal energy: the contacts' potential steps take {steps:.3} ({:.1} % of IV), the \
+         remainder W + S − IV is {rest:+.3} ± {err:.3} ({:.1} %); with the supply at 0, steps \
+         {idle_steps:+.3}, remainder {idle:+.3} ± {idle_err:.3}: {:.1} standard errors apart",
         100.0 * steps / supplied,
         100.0 * rest / supplied,
         (rest - idle).abs() / libm::hypot(err, idle_err)

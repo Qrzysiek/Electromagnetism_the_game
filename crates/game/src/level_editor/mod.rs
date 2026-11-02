@@ -75,6 +75,7 @@ pub struct EditTexts {
     pub supply_voltages: String,
     pub coil_rates: String,
     pub solenoid_fields: String,
+    pub supply_omegas: String,
     pub free_charges: String,
     pub free_speeds: String,
 }

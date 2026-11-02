@@ -970,3 +970,46 @@ Entries are numbered in order and never renumbered.
 - **History:**
   - 2026-11-02: chosen. At 1400 × 860 the six WebP files total 0.87 MB against 3.4 MB as
     PNG, and they cannot be told from the PNGs at full size.
+
+## DEC-30: A power supply's frequency on a logarithmic slider
+
+- **Status:** in use (since 2026-11-02)
+- **Area:** level format, interface, tools
+- **Choice:** a level may list frequencies (`Limits::supply_omegas`, positive); every player
+  supply whose target a sine drives (a tube circuit on a tunable electrode, an electrode's
+  or a driven coil's drive, a swinging solenoid: `Level::supply_source`) then has a second
+  slider, logarithmic over the list's range (`Level::supply_frequencies`), stored in the
+  supply's `Element::omega` (`None`: the sine's own ω, where the slider starts). One rule
+  applies the supply everywhere: `Source::supplied` (level and frequency),
+  `TubeCircuit::source_with` (with `supply_offset`, the offset and the frequency), the
+  solenoid's wave. The slider rule (the owner, 2026-11-02): no reference frequency within
+  5 % of the slider's logarithmic length from either end or its middle
+  (`slider_ranges_hide_the_answer`, `common.py` `omega_slider`/`guessable_omega`);
+  `generator window --omega` scans a supply's frequency in equal logarithmic steps; the
+  solver and `analyze` try the listed frequencies. The EM field's grid takes the sliders' top
+  frequency (`tube_em::fastest_frequency`), so that it does not move with the slider.
+- **Purpose:** DRUDE.md Phase 2 item 2: AC levels whose answer is a frequency (the
+  carriers' inertia at ωτ ≈ 1, a tank's resonance, the plasma frequency) and the
+  Transformer's second control (its secondary screens the primary as `ωL₂/R₂` grows).
+- **Alternatives:** a linear slider from 0 (DC at its start, as the potentials' halves; but
+  the physics goes by ratios, ωτ and ωL/R over a decade or two, which a linear slider
+  crowds into its first tenth); a linear slider between two positive frequencies (the same
+  crowding); a frequency as a separate element kind (a second element on the same node,
+  with its own placement rules, for what is one supply's setting); the frequency in the
+  level's own sine, edited by the level only (no player control).
+- **Where:** `crates/level/src/lib.rs` (`Limits::supply_omegas`, `Source::with_omega`,
+  `Source::supplied`, `log_slider_value`, `log_slider_position`), `placement.rs`
+  (`supply_source`, `supply_frequencies`, `check_supplies`), `issues.rs` (positive,
+  set on a sine, the sine's own ω on its slider), `drives.rs`, `tube/build.rs`,
+  `tube/mod.rs` (`TubeCircuit::source_with`), `tube_em.rs`, `solve.rs`, `analysis.rs`;
+  `crates/generator/src/main.rs` (`window --omega`); `crates/game/src/ui/controls.rs`
+  (the slider), `editor.rs` (`supply_omega`, `set_supply_omega`), `inspect.rs`,
+  `level_editor/{limits,check}.rs`, `sandbox.rs`; tests `crates/level/tests/frequency.rs`,
+  `slider_ranges_hide_the_answer`; `scripts/designs/common.py`; `scripts/pairs.py`
+  `tube_tuned`.
+- **History:**
+  - 2026-11-02: chosen (the owner chose the logarithmic slider). A frequency set on the
+    slider runs bit for bit as the same frequency written into the level's sine (Rectifier,
+    Triode with `supply_offset`, Eddy currents' solenoid). The AC response through a
+    level's metal against D2's Boltzmann mobility did not meet its 5 % (DRUDE.md
+    Progress, 2026-11-02): left open, not committed as a test.

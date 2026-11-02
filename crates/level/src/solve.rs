@@ -99,12 +99,29 @@ pub fn single_element_options(level: &Level) -> Vec<Element> {
         }
     }
     let mut out = Vec::new();
-    // Power supplies sit on the centres of the tunable electrodes and coils.
+    // Power supplies sit on the centres of the tunable electrodes and coils; one that sets
+    // a sine's frequency tries each listed frequency with each level.
     for (centre, target) in level.supply_targets() {
+        let omegas: Vec<Option<f64>> = if level.supply_frequencies(target).is_some() {
+            level
+                .limits
+                .supply_omegas
+                .iter()
+                .copied()
+                .map(Some)
+                .collect()
+        } else {
+            vec![None]
+        };
         for &v in level.supply_list(target) {
-            let s = Element::supply(centre, v);
-            if level.check_placement(&[s]).is_ok() {
-                out.push(s);
+            for &w in &omegas {
+                let s = Element {
+                    omega: w,
+                    ..Element::supply(centre, v)
+                };
+                if level.check_placement(&[s]).is_ok() {
+                    out.push(s);
+                }
             }
         }
     }

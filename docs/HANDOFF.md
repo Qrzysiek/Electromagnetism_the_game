@@ -1,8 +1,8 @@
-# Handoff (2026-10-28, afternoon): where the work stands and what comes next
+# Handoff (2026-11-02): where the work stands and what comes next
 
 Read this instead of the previous sessions' transcripts. Project rules: `CLAUDE.md`; the
 self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/DRUDE.md`
-"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-27, DEC-28 the latest).
+"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-28 to DEC-30 the latest).
 
 ## State
 
@@ -27,9 +27,20 @@ self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/D
   hole is refused: its lead would cross the ring; the Corbino disc needs one). In the
   electrostatic model a lead is only drawn, so it could be allowed there with the lead drawn
   across (refused with the self-field, as a lead from a ring is, DEC-27).
-- Coverage of the commit's heavy tests not yet recorded: `python scripts/affected.py refresh`
-  (hours; or `scripts\refresh_coverage.cmd`) before the next engine change, else that change
-  selects all 521 again.
+- Coverage of the heavy tests not yet recorded since the rings: `python scripts/affected.py
+  refresh` (hours; or `scripts\refresh_coverage.cmd`) before the next engine change, else that
+  change selects all 521 again.
+- README screenshots (DEC-29): `python scripts/readme_shots.py` retakes them.
+- **A supply's frequency on a slider** (DRUDE.md Phase 2 item 2, DEC-30): `limits.supply_omegas`,
+  a logarithmic slider on every supply whose target a sine drives, `Element::omega`;
+  `generator window --omega`; the slider rule (no reference within 5 % of the log length from
+  an end or the middle); tests `crates/level/tests/frequency.rs` (bit for bit the sine's own
+  frequency), `slider_ranges_hide_the_answer`; `pairs.py` `tube_tuned`.
+- **Open: the AC mobility through a level** misses its 5 % (5.2 % at ω/κs = 0.4, 7.6 % at
+  1.2): the drift lags the field 3–4° less than the Boltzmann equation, 2.5–3° more than
+  D2's box shows. Data, what was ruled out and what to try: DRUDE.md Progress, 2026-11-02;
+  the test's draft: `target/scratch/ac_mobility_test.rs` (this worktree). Phase goals at
+  ωτ ≈ 1 (Carriers' inertia) wait for it.
 
 ## The finding that changes the Transformer's design
 
@@ -49,18 +60,35 @@ magnitude, and the densest carriers the self-field's step allows (`ω_p dt ≤ 0
 ρ ≲ 20) only bring R to about √(L/C). (That resonance is itself a level: a split-ring
 resonator, the metamaterials' element.)
 
-## Next: the Transformer (task #61) — a decision for the owner
+## Next: first a self-inductance introduction (the owner, 2026-11-02)
 
-The handoff's suggested controls (the drive's amplitude and a cut in the secondary) cannot
-work, and a level with only the solenoid's amplitude is one slider scaling everything (the
-owner's rule: an introduction at most). The other player controls of a swinging-field level
-cannot act on the induction: plates and supplies are refused beside an isolated metal (every
-electrode must float, OP-1), free charges do not couple.
+The curriculum rule wants an introduction before the Transformer (the first level with the
+carriers' own field and with a frequency slider). The owner chose: one ring alone in the
+swinging solenoid, B₀ fixed, ω on the slider; its heat grows as ω² until `ωL/R ≈ 1`, where
+its own field screens the drive and the heat levels off; a heat goal pins ω.
 
-Recommended: **first the drive's frequency on a slider** (DRUDE.md Phase 2 item 2, already
-approved; 1–2 days: the format, the editor and its ranges, `generator window` over it, the
-AC conductivity test through the level path against D2), then the Transformer with two
-sliders, the solenoid's amplitude B₀ and its frequency ω:
+- Needs a supply that sets only a frequency (its target's level list empty: switched off the
+  solenoid's field stays `b_z` = 0, DEC-12; on, its sine's own amplitude at the player's ω),
+  a small extension of DEC-30: placement, the solver's candidates, `analyze`'s steps, the
+  panel's row (no level slider), the solenoid's wave in `tube/build.rs`.
+- First scans (ring 20 × 20, walls 2, ℓ 0.5, c = 2, B₀ 0.5, heat over t = 10–40; the
+  worktree's `target/scratch/inductance/`): heat 0.11, 0.64, 1.50, 2.42, 6.5, 22.5, 73 at
+  ω = 0.05–3.2 (doubling). Without the self-field (c = 100) 0.92, 13.6, 219 at 0.1, 0.4, 1.6
+  (as ω²). The ratio 0.70 at ω = 0.1 is the loop's `1/(1 + (ωL/R)²)` with `L/R` = 6.55
+  (estimated `4πA/c² · σw/P` = 6.6); at high ω ~10 % of the unscreened heat remains, the
+  wall's own eddy currents (skin depth 1.3 at ω = 1.6, under the wall's 2). Next: walls 1
+  with ℓ 0.25 (that share ~4× smaller), c ≈ 1.2 to keep the bend near ω ≈ 0.2. About 4 min
+  per run of 40 time units alone.
+- How real: at c = 2 the Darwin limit's own condition (the board small against c/ω) holds
+  only below ω ≈ 0.08; the whole bend lies beyond it (slow light, as V-D7).
+
+## Then the Transformer (task #61), with B₀ and ω on sliders (the owner, 2026-11-02)
+
+The suggested controls (the drive's amplitude and a cut in the secondary) cannot work, and a
+level with only the solenoid's amplitude is one slider scaling everything (the owner's rule:
+an introduction at most). The owner approved (2026-11-02): the Transformer with two sliders
+on the solenoid's supply, its amplitude B₀ and its frequency ω (now in place, DEC-30);
+the frequency slider logarithmic; the run time decided after measuring the designed level:
 
 - Physics shown: the secondary screens the primary as `ωL₂/R₂` grows (the field inside it
   `B_ext R₂/(R₂ + iωL₂)`): over `ωL₂/R₂` = 0.3–3 the primary's heat against the secondary's
@@ -70,11 +98,11 @@ sliders, the solenoid's amplitude B₀ and its frequency ω:
 - Parameters to reach `ωL/R` ~ 1 at playable frequencies (ω ≲ 1, well below ω_p and with
   ωτ < 1): c = 2 (L ×2.25 against c = 3), walls 2 with ℓ = 0.5 (R halved against V-D7's walls
   1; ℓ ≤ a quarter of the wall, `metal_issues`): `L₂/R₂` ≈ 2 instead of 0.45.
-- To ask the owner with it: the slider rule for a frequency (the potentials' "symmetric about
-  0" does not apply; a range [ω_min, ω_max] with the answer clear of its ends and middle?),
-  and the preview's time: V-D7 runs ~4 min per 9 periods at ω = 0.8 with ~7000 carriers; at
-  ω ≈ 0.5 a few periods is 30–40 time units, ~2 min a preview and ~8 a verification unless the
-  carriers per area drop (more noise).
+- The preview's time, to measure and show the owner: V-D7 runs ~4 min per 9 periods at ω =
+  0.8 with ~7000 carriers; at ω ≈ 0.5 a few periods is 30–40 time units, ~2 min a preview
+  and ~8 a verification unless the carriers per area drop (more noise).
+- Scales (`scales.rs`): with a frequency slider, show `ωτ` and the rings' `ωL/R` for the
+  current setting.
 
 The rest of the Transformer's checklist stands (CLAUDE.md): `scripts/designs/` and
 `curriculum.py`; `scripts/reality.py` (headline: a transformer's mutual inductance;

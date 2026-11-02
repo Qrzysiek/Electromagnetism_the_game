@@ -277,6 +277,32 @@ pub struct TubeCircuit {
     pub return_to: Option<usize>,
 }
 
+impl TubeCircuit {
+    /// Its source with the player's power supply applied (`Level::tube_circuits`): the
+    /// supply sets the source's level (`Source::with_level`), or with `supply_offset` a
+    /// sine's offset, and its frequency if it has one (`Element::omega`).
+    #[must_use]
+    pub fn source_with(&self, supply: Option<&Element>) -> crate::Source {
+        let Some(s) = supply else {
+            return self.source;
+        };
+        match self.source {
+            crate::Source::Sine {
+                amplitude,
+                omega,
+                phase,
+                ..
+            } if self.supply_offset => crate::Source::Sine {
+                offset: s.value,
+                amplitude,
+                omega: s.omega.unwrap_or(omega),
+                phase,
+            },
+            source => source.supplied(s),
+        }
+    }
+}
+
 /// What a potential goal measures over its window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

@@ -631,6 +631,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
         supply_voltages,
         coil_rates,
         solenoid_fields,
+        supply_omegas,
         max_free,
         max_cuts,
         free_charges,
@@ -671,6 +672,7 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
             .chain(magnet_strengths)
             .chain(antenna_amplitudes)
             .chain(antenna_omegas)
+            .chain(supply_omegas)
             .all(|v| *v > 0.0 && v.is_finite())
     {
         return fail("limits outside the editor's range");
