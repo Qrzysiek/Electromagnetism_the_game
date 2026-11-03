@@ -261,8 +261,9 @@ interactive speed, still accurate.
 - **What:** a scene the player watches and studies more than plays: precomputed runs, or a
   few parameters to tweak and then compute (minutes, not the levels' ~1 min previews), with
   the views, plots and scales the levels have. First candidate: the Transformer, two nested
-  rings each with its heat, which no accurate version fits in a level's 30 s preview (the
-  owner's limit; measured, docs/HANDOFF.md): thick-walled rings in a light metal (~3–9
+  rings each with its heat, which no accurate version fits in a level's 30 s preliminary
+  answer (the owner's limit, at most twice that for a much better level; measured,
+  docs/HANDOFF.md): thick-walled rings in a light metal (~3–9
   minutes) or a dense metal on a finer self-field grid (`TubeSpec::self_field_cell`,
   DEC-36; V-D11).
 - **Accuracy:** the same engine and the same validation as the levels (PHYSICS.md); a heavier

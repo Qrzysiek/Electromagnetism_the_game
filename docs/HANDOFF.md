@@ -88,10 +88,17 @@ resonator, the metamaterials' element.)
   PHYSICS.md §2.12 *The heat at rest*; the runs: `prototypes/joule/`).
 - Not written: the level's document (`scripts/level_docs.py new self_inductance`; none of the
   metal or AC levels has one yet); `eddy2d.py` would be its `calc.py`.
-- **The 30 s rule (the owner, 2026-11-02; CLAUDE.md):** a level's preview at most 30 s
-  (`generator check --no-cache`). To audit: every tube level's preview time; LEVELS.md
-  already records Eddy currents in silicon (118) at 38 s and Lock-in Hall (127) at 30–70 s.
-  Simplify what is over, or move it to the interludes.
+- **The timing rules (the owner, 2026-11-02, clarified 2026-11-03; CLAUDE.md):** the
+  preliminary answer (the preview to the goal window's end) within 30 s; the animation
+  streamed without stutter at speed 1 (a tube level's run at least one time unit a second
+  of computing), however long; the verification within a few minutes; each bound exceeded
+  by at most 100 % where that makes the level a lot better. To audit: every tube level's
+  preview time and streaming rate; LEVELS.md already records Eddy currents in silicon (118)
+  at 38 s and Lock-in Hall (127) at 30–70 s. Self-inductance (125) streams at 0.44 units a
+  second: it stutters at speed 1. Proposed to the owner, not yet chosen: 35 carriers per
+  area to 28 (~0.54 units a second), a prebuffer in the game (the playback starts once the
+  stream is far enough ahead to stay so), or both. Simplify what is over, or move it to
+  the interludes.
 - **Optics (asked 2026-11-02):** SPEC.md §8 plans wave optics. In place: `physics::fdtd2d`
   (Yee, the TE polarisation: E in the plane, B_z; perfect conductors, the CPML border,
   charges as sources), the Poynting tools; mirrors, apertures and slits as conductors work
