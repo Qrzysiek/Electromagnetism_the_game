@@ -1319,3 +1319,33 @@ Entries are numbered in order and never renumbered.
     builds: release 2.3–2.4 GB (the game and the generator in ~6 min, the heavy tests 30 s
     more), debug 4.4 GB (the fast tier in ~4.5 min, clippy 1 min). 54 scratch entries (29
     citations in 8 tracked files) copied to `prototypes/` (1.1 MB), the citations rewritten.
+
+## DEC-38: The playbook: the rules and process decisions restated for another repository
+
+- **Status:** in use (since 2026-11-03)
+- **Area:** process
+- **Choice:** `playbook/`. It holds `CLAUDE.template.md` (the agent's rules in layers: any
+  repository, numerical code, a Rust workspace, an interactive simulation or educational
+  game, Claude Code on Windows; placeholders for the project's names) and `DECISIONS.md`
+  (P-0 to P-17: each process or tooling decision in general terms, with this project's
+  evidence and what to adapt). Its `README.md` gives the steps to apply it and the tools to
+  copy. A rule or process decision that would carry over is mirrored there in the same
+  commit as its change in CLAUDE.md or here.
+- **Purpose:** the owner (2026-11-03): "extract somewhere the decisions about the design and
+  agent rules, so that they could be easily reapplied in another repo".
+- **Alternatives:**
+  - A user-level `~/.claude/CLAUDE.md`, which would apply to every repository at once. But
+    most layers fit only some projects, and it would be unversioned and separated from the
+    evidence.
+  - A template repository or a Claude Code plugin. The tools would first have to be
+    generalised (`affected.py` is tied to Rust and to this test program), and they evolve
+    per project anyway.
+  - Pointing to CLAUDE.md and this log as they are. Their rules are written in the game's
+    terms (levels, tubes, golden hashes), with the general ones interleaved among
+    game-specific ones.
+- **Where:** `playbook/` (`README.md`, `CLAUDE.template.md`, `DECISIONS.md`), CLAUDE.md
+  (*Workflow*).
+- **History:**
+  - 2026-11-03: written from CLAUDE.md, DEC-8, 12, 15–23, 29, 30, 37, docs/PROGRESS.md,
+    docs/TESTING.md, the audits' and the level documents' practice, and the agent's memory
+    (the coverage refresh's lesson, the environment's pitfalls).
