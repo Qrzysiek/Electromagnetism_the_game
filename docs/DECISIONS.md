@@ -529,6 +529,14 @@ Entries are numbered in order and never renumbered.
     compiles its own sources). A checkout's own records are read once where the shared file
     is missing. One heavy run at a time (two would lose one's writes). `refresh_coverage.py`
     (and `.cmd`) runs `affected.py run` unattended, keeping Windows awake.
+  - 2026-11-03: a `golden::` test's estimate (its order and its hang limit, four times it)
+    is at least half its level's `repeated::` plain time. The overnight refresh of 2026-11-02
+    killed `golden::125_self_inductance` as hung at 600 s: its plain verdict had taken the
+    hash `UPDATE_GOLDEN` recorded (0.2 s, an estimate of 2 s), while the instrumented run
+    computes it (`EM_TEST_FULL`; `golden::124`'s took 30 minutes), and the stop interrupted
+    the five tests still running (up to 80 minutes in). A plain run that took a pass record
+    ("passed before") no longer overwrites the recorded time, and a timeout no longer reports
+    "a result that depends on the build".
 
 ## DEC-17: A pinned toolchain and CI's hygiene checks
 

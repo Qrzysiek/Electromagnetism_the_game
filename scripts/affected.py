@@ -451,7 +451,7 @@ def take_coverage(chosen, exe, records, snap_id, jobs):
     others' by instrumented runs, the longest first. The failed tests' names."""
     direct = [(n, why) for n, why in chosen if source_of(n) is None]
     derived = [n for n, _ in chosen if source_of(n) is not None]
-    direct.sort(key=lambda t: -expected_seconds(t[0], records["tests"].get(t[0])))
+    direct.sort(key=lambda t: -expected_seconds(t[0], records["tests"].get(t[0]), records["tests"]))
     print(f"[affected] coverage of {len(direct)} tests, the longest first"
           + (f" ({len(derived)} more take their source's)" if derived else ""), flush=True)
     # One rayon thread per test, as many tests as threads: the coverage counters are memory
@@ -472,15 +472,23 @@ def stale(records):
                   if r.get("files") is None or r.get("cov_snapshot") != r["snapshot"])
 
 
-def expected_seconds(name, r):
+def expected_seconds(name, r, tests=None):
     """A test's expected time in the instrumented program on one thread, for ordering the
-    longest first: its last such run, else ten times its plain run (four threads, 2.5 times
-    the instrumentation), else a guess by its level's kind and its check."""
+    longest first and its hang limit: its last such run, else ten times its plain run (four
+    threads, 2.5 times the instrumentation), else a guess by its level's kind and its check.
+    A plain `golden::` run may take the hash `UPDATE_GOLDEN` recorded (`TestPasses`) and last
+    0.2 s where the instrumented one, which computes (`EM_TEST_FULL`), lasts half an hour (the
+    refresh of 2026-11-03 killed `golden::125_self_inductance` as hung at its 600 s limit):
+    its plain time is taken as at least half its level's `repeated::` (`tests`: the records),
+    which computes the same hash twice."""
     if r and r.get("seconds_cov"):
         return r["seconds_cov"]
-    if r and r.get("seconds"):
-        return 10 * r["seconds"]
     check, level = name.split("::", 1)
+    plain = (r or {}).get("seconds") or 0.0
+    if check == "golden":
+        plain = max(plain, ((tests or {}).get(f"repeated::{level}") or {}).get("seconds", 0.0) / 2)
+    if plain:
+        return 10 * plain
     try:
         with open(os.path.join(ROOT, "levels", f"{level}.json"), encoding="utf-8") as f:
             lvl = json.load(f)
@@ -513,8 +521,8 @@ def run_tests(chosen, exe, records, snap_id, coverage, jobs, threads):
     items = []
     for name, _ in chosen:
         r = records["tests"].get(name)
-        estimate = ((r or {}).get("seconds_cov") or expected_seconds(name, r)) if coverage \
-            else ((r or {}).get("seconds") or expected_seconds(name, r) / 10)
+        estimate = expected_seconds(name, r, records["tests"]) if coverage \
+            else ((r or {}).get("seconds") or expected_seconds(name, r, records["tests"]) / 10)
         d = os.path.join(PROF, name.replace(":", "_"))
         items.append(runner.Item(
             id=name, estimate=estimate,
@@ -544,14 +552,15 @@ def run_tests(chosen, exe, records, snap_id, coverage, jobs, threads):
         rec.setdefault("files", None)
         if coverage and ok:
             rec.update({"files": files, "cov_snapshot": snap_id, "seconds_cov": round(seconds, 1)})
-        elif not coverage:
+        elif not coverage and "passed before" not in output:
+            # A pass record taken ("passed before") is no measure of the computation's time.
             rec["seconds"] = round(seconds, 1)
         records["tests"][name] = rec
         save_records(records)
         if not ok:
             failed.append(name)
             notes = [l for l in output.splitlines() if "panicked" in l or "assert" in l or "FAILED" in l][:8]
-            if was_ok and coverage:
+            if was_ok and coverage and status != runner.TIMEOUT:
                 notes.insert(0, f"{name} passed in the plain program and failed instrumented: "
                                 "a result that depends on the build")
             print("\n".join("    " + l for l in notes), flush=True)

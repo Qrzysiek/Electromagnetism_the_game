@@ -108,3 +108,18 @@ def test_records_are_shared_by_every_checkout(monkeypatch):
     assert path.endswith(os.path.join("target", "affected", "records.json"))
     main = os.path.dirname(os.path.dirname(os.path.dirname(path)))
     assert os.path.isdir(os.path.join(main, ".git")), main
+
+
+def test_a_golden_estimate_counts_the_hash_it_computes():
+    """An instrumented run computes (`EM_TEST_FULL`), but a plain `golden::` run may take
+    a recorded hash in 0.2 s: its estimate (the hang limit's base) is at least half its
+    level's `repeated::`, which computes that hash twice; a recorded instrumented time
+    wins."""
+    tests = {"golden::125_x": {"seconds": 0.2}, "repeated::125_x": {"seconds": 255.0},
+             "reference::125_x": {"seconds": 125.0}}
+    assert affected.expected_seconds("golden::125_x", tests["golden::125_x"], tests) == 1275.0
+    assert affected.expected_seconds("reference::125_x", tests["reference::125_x"], tests) == 1250.0
+    tests["golden::125_x"]["seconds_cov"] = 2000.0
+    assert affected.expected_seconds("golden::125_x", tests["golden::125_x"], tests) == 2000.0
+    # Without the records (or a `repeated::`), its own plain time.
+    assert affected.expected_seconds("golden::9_y", {"seconds": 3.0}) == 30.0
