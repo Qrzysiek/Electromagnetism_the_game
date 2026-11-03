@@ -472,23 +472,49 @@ def stale(records):
                   if r.get("files") is None or r.get("cov_snapshot") != r["snapshot"])
 
 
-def expected_seconds(name, r, tests=None):
-    """A test's expected time in the instrumented program on one thread, for ordering the
-    longest first and its hang limit: its last such run, else ten times its plain run (four
-    threads, 2.5 times the instrumentation), else a guess by its level's kind and its check.
-    A plain `golden::` run may take the hash `UPDATE_GOLDEN` recorded (`TestPasses`) and last
-    0.2 s where the instrumented one, which computes (`EM_TEST_FULL`), lasts half an hour (the
-    refresh of 2026-11-03 killed `golden::125_self_inductance` as hung at its 600 s limit):
-    its plain time is taken as at least half its level's `repeated::` (`tests`: the records),
-    which computes the same hash twice."""
-    if r and r.get("seconds_cov"):
-        return r["seconds_cov"]
+# The instrumented program on one thread (as many tests at once as the machine has threads)
+# against the plain one on four, measured over the records of 2026-11-03 (66 tests whose
+# plain run took over 2 s): 4 to 32, alike within a level (its `golden::` and `reference::`
+# within 15 %), not by its kind: the metal tubes 17 to 32, the vacuum tubes mostly 5 to 8 but
+# the ion diode 31. A first guess of 10 left Lock-in Hall's tests (27) at two-thirds of
+# their hang limit. The highest measured stands for a level with none yet.
+SLOWDOWN_MAX = 32.0
+
+
+def slowdown(level, tests):
+    """The instrumented program's slowdown on `level`: the highest ratio among its tests'
+    records (`tests`) with both times, the plain run over 2 s (a shorter one, or one that
+    took a pass record, is no measure), else `SLOWDOWN_MAX`."""
+    ratios = [r["seconds_cov"] / r["seconds"] for n, r in (tests or {}).items()
+              if n.split("::", 1)[1] == level and r.get("seconds_cov") and (r.get("seconds") or 0) > 2]
+    return max(ratios, default=SLOWDOWN_MAX)
+
+
+def plain_seconds(name, r, tests=None):
+    """A test's time in the plain program as a computation: its last plain run's (0 without
+    one). A plain `golden::` run may take the hash `UPDATE_GOLDEN` recorded (`TestPasses`)
+    and last 0.2 s where the instrumented one, which computes (`EM_TEST_FULL`), lasts half an
+    hour (the refresh of 2026-11-03 killed `golden::125_self_inductance` as hung at its 600 s
+    limit): its time is taken as at least half its level's `repeated::` (`tests`: the
+    records), which computes the same hash twice."""
     check, level = name.split("::", 1)
     plain = (r or {}).get("seconds") or 0.0
     if check == "golden":
         plain = max(plain, ((tests or {}).get(f"repeated::{level}") or {}).get("seconds", 0.0) / 2)
+    return plain
+
+
+def expected_seconds(name, r, tests=None):
+    """A test's expected time in the instrumented program on one thread, for ordering the
+    longest first and its hang limit (four times it): its last such run, else its plain run
+    (`plain_seconds`) times its level's slowdown (`slowdown`), else a guess by its level's
+    kind and its check."""
+    if r and r.get("seconds_cov"):
+        return r["seconds_cov"]
+    check, level = name.split("::", 1)
+    plain = plain_seconds(name, r, tests)
     if plain:
-        return 10 * plain
+        return slowdown(level, tests) * plain
     try:
         with open(os.path.join(ROOT, "levels", f"{level}.json"), encoding="utf-8") as f:
             lvl = json.load(f)
@@ -521,8 +547,9 @@ def run_tests(chosen, exe, records, snap_id, coverage, jobs, threads):
     items = []
     for name, _ in chosen:
         r = records["tests"].get(name)
+        # Without any record, the plain estimate is a tenth of the guess by kind.
         estimate = expected_seconds(name, r, records["tests"]) if coverage \
-            else ((r or {}).get("seconds") or expected_seconds(name, r, records["tests"]) / 10)
+            else (plain_seconds(name, r, records["tests"]) or expected_seconds(name, r, records["tests"]) / 10)
         d = os.path.join(PROF, name.replace(":", "_"))
         items.append(runner.Item(
             id=name, estimate=estimate,

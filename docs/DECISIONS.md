@@ -537,6 +537,16 @@ Entries are numbered in order and never renumbered.
     the five tests still running (up to 80 minutes in). A plain run that took a pass record
     ("passed before") no longer overwrites the recorded time, and a timeout no longer reports
     "a result that depends on the build".
+  - 2026-11-03: the instrumented estimate is the plain time times the level's measured
+    slowdown (the highest of its tests' records), and 32 for a level with none, instead of a
+    fixed 10. The rerun's Lock-in Hall tests took 27 times their plain runs (9147 s), two
+    thirds of their limit. Over the 66 records with both times (plain over 2 s), the
+    slowdown is 4–32, alike within a level (`golden::` and `reference::` within 15 %) but not
+    by kind: the metal tubes 17–32 (median 27), the vacuum tubes median 5.6, the ion diode 31.
+    A factor per kind was considered and dropped, since the ion diode would have kept a 1.27×
+    margin. Estimated without their own instrumented time, four tests came within 2–22 %
+    (Lock-in Hall 9374 s against 9147, the ion diode 1558 against 1597, the magnetron 371
+    against 304, Self-inductance 2199 against 2157).
 
 ## DEC-17: A pinned toolchain and CI's hygiene checks
 

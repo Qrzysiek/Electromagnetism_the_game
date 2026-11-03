@@ -135,6 +135,10 @@ Entries are numbered in order and never renumbered.
   - A hang limit based on an estimate needs an estimate of the same work. A plain run that
     took a recorded result (0.2 s) set a 600 s limit on an instrumented run that computes
     for 30 minutes, and killed it (2026-11-03).
+  - The instrumentation's slowdown has to be measured, not assumed, and it is a property of
+    the workload: 4–32× here, alike within an item, not by its kind. An assumed 10× left
+    the longest tests at two-thirds of their limit. Use the item's own measured ratio, and
+    the highest seen for a new item.
 - **Alternatives:** static selection from the module graph (trait impls, macros and generics
   make it unsafe to under-approximate in Rust); a hand-written map from features to modules
   (goes stale silently); selection per crate (too coarse); learned selection (needs a

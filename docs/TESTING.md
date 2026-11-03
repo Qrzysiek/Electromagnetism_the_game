@@ -114,9 +114,12 @@ a tube level about 2.5 times slower than the plain one on one thread (14 s again
 with every crate instrumented, glam's and libm's inner loops included, 38 s), and slower
 still on several, the counters being memory the threads share (23 s at 4 threads; the plain
 build 1.6 s at 16). The coverage runs therefore give each test one thread, as many tests
-at once as the machine has threads, the longest first (by their last coverage run, else ten
-times their plain run, a `golden::` one's at least half its `repeated::`'s since its plain
-run may take a recorded hash, else by their level's kind): about 2.5 times the plain tier's CPU time,
+at once as the machine has threads, the longest first (by their last coverage run, else their
+plain run times their level's measured slowdown, a `golden::` one's at least half its
+`repeated::`'s since its plain run may take a recorded hash, else by their level's kind). The
+slowdown, instrumented on one thread against plain on four, was measured at 4 to 32 by
+level (2026-11-03): alike within a level, not by kind (the metal tubes 17–32, the vacuum
+tubes mostly 5–8 but the ion diode 31); a level with none measured takes 32. In all, about 2.5 times the plain tier's CPU time,
 spread over every core. `repeated::` takes `golden::`'s coverage (it runs the same
 computation twice; the two were measured identical, file for file, on two levels) and
 needs only its plain verdict: on one instrumented thread a metal tube's `repeated::` took

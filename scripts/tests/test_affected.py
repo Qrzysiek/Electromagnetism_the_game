@@ -115,11 +115,25 @@ def test_a_golden_estimate_counts_the_hash_it_computes():
     a recorded hash in 0.2 s: its estimate (the hang limit's base) is at least half its
     level's `repeated::`, which computes that hash twice; a recorded instrumented time
     wins."""
+    m = affected.SLOWDOWN_MAX
     tests = {"golden::125_x": {"seconds": 0.2}, "repeated::125_x": {"seconds": 255.0},
              "reference::125_x": {"seconds": 125.0}}
-    assert affected.expected_seconds("golden::125_x", tests["golden::125_x"], tests) == 1275.0
-    assert affected.expected_seconds("reference::125_x", tests["reference::125_x"], tests) == 1250.0
+    assert affected.expected_seconds("golden::125_x", tests["golden::125_x"], tests) == m * 127.5
+    assert affected.expected_seconds("reference::125_x", tests["reference::125_x"], tests) == m * 125.0
     tests["golden::125_x"]["seconds_cov"] = 2000.0
     assert affected.expected_seconds("golden::125_x", tests["golden::125_x"], tests) == 2000.0
     # Without the records (or a `repeated::`), its own plain time.
-    assert affected.expected_seconds("golden::9_y", {"seconds": 3.0}) == 30.0
+    assert affected.expected_seconds("golden::9_y", {"seconds": 3.0}) == m * 3.0
+
+
+def test_the_slowdown_is_the_levels_own():
+    """A test without an instrumented run of its own is estimated at its level's measured
+    slowdown (the highest of its tests'), not the kind's: the vacuum tubes ran 5 to 8 times
+    slower instrumented but the ion diode 31. A plain run of 2 s or less (or one that took
+    a pass record) is no measure; a level with no measure takes the highest seen."""
+    tests = {"reference::104_x": {"seconds": 50.0, "seconds_cov": 1550.0},
+             "radiation::104_x": {"seconds": 20.0, "seconds_cov": 120.0},
+             "golden::107_y": {"seconds": 0.2, "seconds_cov": 400.0}}
+    assert affected.slowdown("104_x", tests) == 31.0
+    assert affected.expected_seconds("golden::104_x", {"seconds": 50.0}, tests) == 31.0 * 50.0
+    assert affected.slowdown("107_y", tests) == affected.SLOWDOWN_MAX
