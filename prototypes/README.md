@@ -14,3 +14,6 @@ copy it back into `target/scratch/` and expect to adapt it.
 - `inductance/`: the exact eddy currents of a square ring (`eddy2d.py`) and of nested rings
   (`transformer2d.py`), the self-field's scans (`NOTES.md`), Self-inductance's designs.
 - `joule/`: the heat at rest's runs (PHYSICS.md §2.12).
+- `timing/`: the tube levels' timing audit (docs/HANDOFF.md, the owner's timing rules):
+  `timing_audit.py` (`generator check` with a fresh run cache: preview and verification
+  times), `field_audit.py` (`generator tube-field`: the field maps' rate).

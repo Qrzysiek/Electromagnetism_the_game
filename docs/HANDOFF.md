@@ -106,8 +106,8 @@ resonator, the metamaterials' element.)
   (DEC-39): the verification now runs beside the rest of the display run's stream, and a
   run whole at the goal's end is marked done first, so the playback loops; `EM_TIMING=1`
   logs the frame rate and the time shown. The audit of the other tube levels (`generator
-  check` with a fresh run cache, `target/scratch/timing_audit.py`; the field maps' rate:
-  `field_audit.py`, not run yet) has 99–112 so far: previews 0.25–17.8 s, all streaming
+  check` with a fresh run cache, `prototypes/timing/timing_audit.py`, results in
+  `target/scratch/timing_audit.jsonl`; the field maps' rate: `field_audit.py`, not run yet) has 99–112 so far: previews 0.25–17.8 s, all streaming
   far above a unit a second; 113–127 still to measure. Simplify what is over, or move it to
   the interludes.
 - **Optics (asked 2026-11-02):** SPEC.md §8 plans wave optics. In place: `physics::fdtd2d`
