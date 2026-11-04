@@ -393,6 +393,25 @@ Entries are numbered in order and never renumbered.
     unscreened heat at dt 0.012 and cells of 0.25, shrinking with either (PHYSICS.md §2.12):
     felt only where the screening leaves under ~10 %, so a level's heat goals stay above
     that; a second-order step (DARWIN.md) would cut it.
+  - 2026-11-04: the solver's iteration 2.3 times cheaper (Self-inductance, 127 × 127 nodes:
+    0.47 → 0.20 ms; PHYSICS.md §2.12), for the owner's streaming rule (CLAUDE.md: the level
+    streamed 0.41 time units a second, 70 % of its step in the two solves, which the
+    carriers' count barely changes). Bit for bit: the columns' transforms without
+    transposes, the operator on a framed copy in two parallel passes, the step's
+    per-carrier loops in parallel. Then the sine transform through a complex FFT of
+    (n + 1)/2 points (Numerical Recipes' `sinft`), a third of the time, its rounding alone
+    changed: the level's golden hash rewritten, its verdict another realisation of its noise
+    (1190 ± 24 against 1195 ± 136; ω solves on 1.22–1.55 against 1.15–1.55), Y26 3.5e-4
+    against 7.4e-4. Tried and dropped: a start extrapolated from the last steps (no
+    iteration saved). The looser tolerance and the uniform β̄ stay rejected (2026-10-27).
+  - 2026-11-04: then (the owner's choice among a prebuffer in the game, a longer step and
+    more solver work: the last) each solve on a thread pool of its own, one thread a
+    physical core (1.6 ms a solve against 2.05 on all 16 logical threads), the vector
+    updates and the dot products inside the parallel passes (the products summed by rows or
+    blocks in order: deterministic whatever the threads, the rounding changed again):
+    0.075 ms an iteration. With the metals' scattering and the frames' middle field in
+    parallel (bit for bit), Self-inductance's step 23 → ~6.5 ms, its preview to t = 10
+    24.2 → 7.4 s (1.35 time units a second). Y26 1.9e-5, a third realisation.
 
 ## DEC-14: Round metals: a polygon of walls with the disc's area, the disc's exact background
 
@@ -1125,6 +1144,15 @@ Entries are numbered in order and never renumbered.
     24.4 s, verification 62 s. With the goal 1000–1400, 1.15–1.4 verified (4 %); with two
     half-swings (to t = 8, 19 s) the answer's bar was ±225. c/ω at the answer ≈ 21, the
     ring's size.
+  - 2026-11-04: the goal's window to t = 20 (seven half-swings at the answer; t_max 20).
+    The self-field solver's speedup (DEC-13) made the preview to t = 10 7.4 s, and its
+    rounding drew another realisation of the noise in which the reference was uncertain
+    (1196 ± 204, the preview 1059). Over the metal's seeds 21–28 at ω 1.3 the previews
+    scattered by 52 (standard deviation) and one in eight failed; to t = 20 by 14, every
+    seed verified, the error bars at most 93 against the goal's ~180 margin. Verified
+    1183 ± 84 (preview 1127); ω solves on 1.2–1.6 verified (6.2 % of the slider; 1.13 and
+    1.15 too, 1.18 uncertain at 1020 ± 120; 1.1 missed, 1.65–1.75 uncertain). Preview
+    13.8 s (1.45 time units a second), verification 46 s.
 
 ## DEC-33: The panel's Joule heat is the field's work on the carriers, not the lattice's tally
 

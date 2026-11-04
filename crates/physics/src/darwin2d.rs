@@ -23,51 +23,115 @@
 //! infinite plane, where an infinitely long solenoid's field vanishes outside it.
 //!
 //! Deterministic: a radix-2 FFT of our own (twiddles from `libm`), fixed orders, no fused
-//! multiply-add; the rows' and the columns' transforms run in parallel, each with the same
-//! arithmetic whatever the thread.
+//! multiply-add; the rows' and the columns' transforms, and the operator's stencils by
+//! blocks of rows, run in parallel on the solver's own threads, each with the same
+//! arithmetic whatever the thread, the dot products summed by rows or blocks in order.
 
 use rayon::prelude::*;
 
-/// A type-I discrete sine transform of `n` points, `n + 1` a power of two, through a
-/// complex FFT of `2(n + 1)` points.
+/// Rows (or columns) per parallel task: each one's work (a transform, a row of stencils) is
+/// a microsecond or less, comparable to handing a task to a thread. On Self-inductance's
+/// grid (127 × 127 nodes, 2026-11-04) an iteration took 0.20 ms at 4 rows a task, 0.23 at
+/// one, 0.26 at 16.
+const ROWS: usize = 4;
+
+/// The solver's own threads, one a physical core (half the logical threads: `std` does not
+/// tell a core's second thread apart): a solve's tasks are a microsecond or two, and the
+/// cores' second threads only add handing out. Self-inductance's solves (8 cores, 16
+/// threads, 2026-11-04): 1.6 ms a solve on 6 to 10 threads, 2.05 ms on 16. Its results do not
+/// depend on the threads. Without a pool (it could not be built) a solve runs where it is
+/// called.
+static POOL: std::sync::LazyLock<Option<rayon::ThreadPool>> = std::sync::LazyLock::new(|| {
+    let threads = std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1));
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .thread_name(|i| format!("self-field-{i}"))
+        .build()
+        .ok()
+});
+
+/// A type-I discrete sine transform of `n` points, `N = n + 1` a power of two (at least 4),
+/// through a complex FFT of `M = N/2` points (Numerical Recipes' `sinft`): the auxiliary
+/// sequence `y_j = sin(πj/N)(x_j + x_{N−j}) + ½(x_j − x_{N−j})` (`x_0 = x_N = 0`), whose real
+/// FFT `Y_k = Σ_j y_j e^{−2πijk/N}` holds the transform's even terms, `X_{2k} = −Im Y_k`, and
+/// its odd ones' differences, `X_{2k+1} = X_{2k−1} + Re Y_k` (`X_1 = Re Y_0/2`). A quarter of
+/// the points of the odd extension's FFT (2N, until 2026-11-04): a third of the time.
 #[derive(Clone, Debug)]
 struct Dst {
     n: usize,
-    /// `e^{−2πik/N}`, `k < N/2`.
+    /// `e^{−2πik/M}`, `k < M/2`: the FFT's.
     twiddles: Vec<(f64, f64)>,
+    /// `e^{−2πik/N}`, `k < M`: the real FFT's from the complex one.
+    halves: Vec<(f64, f64)>,
+    /// `sin(πj/N)`, `j ≤ M`.
+    sines: Vec<f64>,
 }
 
 impl Dst {
+    #[allow(clippy::cast_precision_loss)]
     fn new(n: usize) -> Self {
+        let big = n + 1;
         assert!(
-            (n + 1).is_power_of_two(),
-            "DST size {n}: n + 1 must be a power of two"
+            big.is_power_of_two() && big >= 4,
+            "DST size {n}: n + 1 must be a power of two, at least 4"
         );
-        let big = 2 * (n + 1);
-        #[allow(clippy::cast_precision_loss)]
-        let twiddles = (0..big / 2)
-            .map(|k| {
-                let a = -std::f64::consts::TAU * k as f64 / big as f64;
-                (libm::cos(a), libm::sin(a))
-            })
-            .collect();
-        Self { n, twiddles }
+        let m = big / 2;
+        let root = |k: usize, of: usize| {
+            let a = -std::f64::consts::TAU * k as f64 / of as f64;
+            (libm::cos(a), libm::sin(a))
+        };
+        Self {
+            n,
+            twiddles: (0..m / 2).map(|k| root(k, m)).collect(),
+            halves: (0..m).map(|k| root(k, big)).collect(),
+            sines: (0..=m)
+                .map(|j| libm::sin(std::f64::consts::PI * j as f64 / big as f64))
+                .collect(),
+        }
     }
 
-    /// `X_k = Σ_{j=1..n} x_j sin(π j k/(n+1))`, `k = 1..n` (indices from 0 in the slices).
+    /// `X_k = Σ_{j=1..n} x_j sin(π j k/(n+1))`, `k = 1..n` (indices from 0 in the slices);
+    /// `work` holds at least `(n + 1)/2` points.
     fn apply(&self, x: &[f64], out: &mut [f64], work: &mut [(f64, f64)]) {
-        let n = self.n;
-        let big = 2 * (n + 1);
-        // The odd extension: y_0 = 0, y_j = x_j, y_{n+1} = 0, y_{N−j} = −x_j.
-        work[..big].fill((0.0, 0.0));
-        for j in 1..=n {
-            work[j] = (x[j - 1], 0.0);
-            work[big - j] = (-x[j - 1], 0.0);
+        let big = self.n + 1;
+        let m = big / 2;
+        let at = |j: usize| if j == 0 || j >= big { 0.0 } else { x[j - 1] };
+        // The real sequence y packed as z_i = y_{2i} + i y_{2i+1}.
+        let z = &mut work[..m];
+        let put = |z: &mut [(f64, f64)], j: usize, v: f64| {
+            if j.is_multiple_of(2) {
+                z[j / 2].0 = v;
+            } else {
+                z[j / 2].1 = v;
+            }
+        };
+        put(z, 0, 0.0);
+        for j in 1..=m {
+            let (a, b) = (at(j), at(big - j));
+            let even = self.sines[j] * (a + b);
+            let odd = 0.5 * (a - b);
+            put(z, j, even + odd);
+            if j != m {
+                put(z, big - j, even - odd);
+            }
         }
-        fft(&mut work[..big], &self.twiddles);
-        // FFT_k = −2i X_k.
-        for k in 1..=n {
-            out[k - 1] = -0.5 * work[k].1;
+        fft(z, &self.twiddles);
+        // Y_k = E_k + e^{−2πik/N} O_k, E and O the even and odd samples' transforms.
+        let mut sum = 0.0;
+        for k in 0..m {
+            let (zk, zm) = (z[k], z[(m - k) % m]);
+            let (er, ei) = (0.5 * (zk.0 + zm.0), 0.5 * (zk.1 - zm.1));
+            let (or, oi) = (0.5 * (zk.1 + zm.1), -0.5 * (zk.0 - zm.0));
+            let (c, s) = self.halves[k];
+            let re = er + (c * or - s * oi);
+            let im = ei + (c * oi + s * or);
+            if k == 0 {
+                sum = 0.5 * re;
+            } else {
+                out[2 * k - 1] = -im;
+                sum += re;
+            }
+            out[2 * k] = sum;
         }
     }
 }
@@ -253,102 +317,272 @@ impl Darwin2d {
 
     /// `μ₀ L⁻² f` through sine transforms (the vacuum's inverse: the preconditioner): along x
     /// row by row, along y column by column, each mode times its factor, and back.
-    fn vacuum_inverse(&self, f: &[f64], out: &mut [f64]) {
-        let (nx, ny) = (self.nx, self.ny);
-        let work = || vec![(0.0, 0.0); 2 * (nx.max(ny) + 1)];
-        let mut spec = vec![0.0; nx * ny];
-        spec.par_chunks_mut(nx)
+    /// Each column's two transforms and its modes' factors are one task, read from the rows'
+    /// transforms and written column by column (`scratch.columns`, `j + ny i`), which the
+    /// last pass reads back row by row: no transposes.
+    fn vacuum_inverse(&self, f: &[f64], out: &mut [f64], scratch: &mut Scratch) {
+        let nx = self.nx;
+        let work = self.work_points();
+        scratch
+            .rows
+            .par_chunks_mut(nx)
             .zip(f.par_chunks(nx))
-            .for_each_init(work, |w, (o, row)| self.dst_x.apply(row, o, w));
-        self.along_y(&mut spec);
-        for (s, k) in spec.iter_mut().zip(&self.inverse) {
-            *s *= k;
-        }
-        self.along_y(&mut spec);
-        out.par_chunks_mut(nx)
-            .zip(spec.par_chunks(nx))
-            .for_each_init(work, |w, (o, row)| self.dst_x.apply(row, o, w));
-    }
-
-    /// The sine transform along y of each column of `spec` (`i + nx j`), in place.
-    fn along_y(&self, spec: &mut [f64]) {
-        let (nx, ny) = (self.nx, self.ny);
-        let mut columns = vec![0.0; nx * ny];
-        for j in 0..ny {
-            for i in 0..nx {
-                columns[j + ny * i] = spec[i + nx * j];
-            }
-        }
-        let mut done = vec![0.0; nx * ny];
-        done.par_chunks_mut(ny)
-            .zip(columns.par_chunks(ny))
+            .with_min_len(ROWS)
             .for_each_init(
-                || vec![(0.0, 0.0); 2 * (ny + 1)],
-                |w, (o, column)| self.dst_y.apply(column, o, w),
+                || vec![(0.0, 0.0); work],
+                |w, (o, row)| self.dst_x.apply(row, o, w),
             );
-        for j in 0..ny {
-            for i in 0..nx {
-                spec[i + nx * j] = done[j + ny * i];
-            }
+        self.transform_columns(scratch);
+        self.transform_rows_back(out, &scratch.columns, None);
+    }
+
+    /// The transforms' work points (`Dst::apply`'s `work`).
+    fn work_points(&self) -> usize {
+        2 * (self.nx.max(self.ny) + 1)
+    }
+
+    /// The preconditioner's middle: each column of the rows' transforms (`scratch.rows`)
+    /// transformed along y, times its modes' factors, and back, into `scratch.columns`.
+    fn transform_columns(&self, scratch: &mut Scratch) {
+        let (nx, ny) = (self.nx, self.ny);
+        let work = self.work_points();
+        let rows = &scratch.rows;
+        scratch
+            .columns
+            .par_chunks_mut(ny)
+            .enumerate()
+            .with_min_len(ROWS)
+            .for_each_init(
+                || (vec![(0.0, 0.0); work], vec![0.0; ny], vec![0.0; ny]),
+                |(w, column, spec), (i, out)| {
+                    for (j, c) in column.iter_mut().enumerate() {
+                        *c = rows[i + nx * j];
+                    }
+                    self.dst_y.apply(column, spec, w);
+                    for (j, v) in spec.iter_mut().enumerate() {
+                        *v *= self.inverse[i + nx * j];
+                    }
+                    self.dst_y.apply(spec, out, w);
+                },
+            );
+    }
+
+    /// The preconditioner's end: each row gathered from `columns` and transformed along x
+    /// into `out`; with `dot`, returns `dot · out` summed row by row in order (else 0).
+    fn transform_rows_back(&self, out: &mut [f64], columns: &[f64], dot: Option<&[f64]>) -> f64 {
+        let (nx, ny) = (self.nx, self.ny);
+        let work = self.work_points();
+        let parts: Vec<f64> = out
+            .par_chunks_mut(nx)
+            .enumerate()
+            .with_min_len(ROWS)
+            .map_init(
+                || (vec![(0.0, 0.0); work], vec![0.0; nx]),
+                |(w, row), (j, o)| {
+                    for (i, r) in row.iter_mut().enumerate() {
+                        *r = columns[j + ny * i];
+                    }
+                    self.dst_x.apply(row, o, w);
+                    dot.map_or(0.0, |d| {
+                        d[j * nx..(j + 1) * nx]
+                            .iter()
+                            .zip(o.iter())
+                            .map(|(a, b)| a * b)
+                            .sum()
+                    })
+                },
+            )
+            .collect();
+        parts.iter().sum()
+    }
+
+    /// One iteration's middle: `x += α p`, `r −= α K p` (`kp`) and `z = M r` (the
+    /// preconditioner), each row's update in the pass that transforms it; returns `r · r` and
+    /// `r · z`, summed row by row in order.
+    #[allow(clippy::too_many_arguments)]
+    fn update_and_precondition(
+        &self,
+        alpha: f64,
+        p: &[f64],
+        kp: &[f64],
+        x: &mut [f64],
+        r: &mut [f64],
+        z: &mut [f64],
+        scratch: &mut Scratch,
+    ) -> (f64, f64) {
+        let nx = self.nx;
+        let work = self.work_points();
+        let rr: Vec<f64> = scratch
+            .rows
+            .par_chunks_mut(nx)
+            .zip(r.par_chunks_mut(nx))
+            .zip(x.par_chunks_mut(nx))
+            .zip(p.par_chunks(nx).zip(kp.par_chunks(nx)))
+            .with_min_len(ROWS)
+            .map_init(
+                || vec![(0.0, 0.0); work],
+                |w, (((o, r), x), (p, kp))| {
+                    let mut part = 0.0;
+                    for ((x, r), (p, kp)) in x.iter_mut().zip(r.iter_mut()).zip(p.iter().zip(kp)) {
+                        *x += alpha * p;
+                        *r -= alpha * kp;
+                        part += *r * *r;
+                    }
+                    self.dst_x.apply(r, o, w);
+                    part
+                },
+            )
+            .collect();
+        self.transform_columns(scratch);
+        let rz = self.transform_rows_back(z, &scratch.columns, Some(&*r));
+        (rr.iter().sum(), rz)
+    }
+
+    /// `p = z + β p`, also into the framed grid (`frame`'s) for the next operator.
+    fn next_direction(&self, beta: f64, z: &[f64], p: &mut [f64], scratch: &mut Scratch) {
+        let (nx, w) = (self.nx, self.nx + 2);
+        let (_, framed) = scratch.padded.split_at_mut(w);
+        p.par_chunks_mut(nx)
+            .zip(z.par_chunks(nx))
+            .zip(framed.par_chunks_mut(w))
+            .with_min_len(ROWS)
+            .for_each(|((p, z), f)| {
+                for ((p, z), f) in p.iter_mut().zip(z).zip(&mut f[1..=nx]) {
+                    *p = z + beta * *p;
+                    *f = *p;
+                }
+            });
+    }
+
+    /// `K f = (1/μ₀) L L f + curlᵀ β curl f`: `laplacian`, `curl` and `curl_t`'s arithmetic
+    /// in their order, on `f` copied into the grid with its frame (no bounds tests), in two
+    /// parallel passes by blocks of rows: `L f` and `β curl f`, then `(1/μ₀) L (L f)` and
+    /// `curlᵀ` of the edges.
+    fn operator(&self, f: &[f64], beta: &Edges, out: &mut [f64], scratch: &mut Scratch) {
+        self.frame(f, scratch);
+        self.framed_operator(f, beta, out, scratch);
+    }
+
+    /// `f` into the grid with its frame (`scratch.padded`; the frame stays 0).
+    fn frame(&self, f: &[f64], scratch: &mut Scratch) {
+        let (nx, w) = (self.nx, self.nx + 2);
+        for j in 0..self.ny {
+            scratch.padded[(j + 1) * w + 1..(j + 1) * w + 1 + nx]
+                .copy_from_slice(&f[j * nx..(j + 1) * nx]);
         }
     }
 
-    /// `K f = (1/μ₀) L L f + curlᵀ β curl f`.
-    fn operator(&self, f: &[f64], beta: &Edges, out: &mut [f64], scratch: &mut Scratch) {
-        self.laplacian(f, &mut scratch.lf);
-        self.laplacian(&scratch.lf, out);
+    /// `operator` on `f` already framed; returns `f · K f`, summed by blocks of rows in order.
+    fn framed_operator(
+        &self,
+        f: &[f64],
+        beta: &Edges,
+        out: &mut [f64],
+        scratch: &mut Scratch,
+    ) -> f64 {
+        let (nx, ny, h) = (self.nx, self.ny, self.h);
+        let w = nx + 2;
+        let h2 = h * h;
         let inv = 1.0 / self.mu0;
-        for v in out.iter_mut() {
-            *v *= inv;
+        let fp = &scratch.padded;
+        let e = &mut scratch.edges;
+        // The x edges' row 0 (below the first row of nodes), then the rest by rows.
+        for i in 1..=nx {
+            e.x[i - 1] = ((fp[w + i] - fp[i]) / h) * beta.x[i - 1];
         }
-        self.curl(f, &mut scratch.edges);
-        for (a, b) in scratch.edges.x.iter_mut().zip(&beta.x) {
-            *a *= b;
-        }
-        for (a, b) in scratch.edges.y.iter_mut().zip(&beta.y) {
-            *a *= b;
-        }
-        self.curl_t(&scratch.edges, &mut scratch.lf);
-        for (o, v) in out.iter_mut().zip(&scratch.lf) {
-            *o += v;
-        }
+        let (_, ex) = e.x.split_at_mut(nx);
+        scratch.lap[w..(ny + 1) * w]
+            .par_chunks_mut(ROWS * w)
+            .zip(ex.par_chunks_mut(ROWS * nx))
+            .zip(e.y.par_chunks_mut(ROWS * (nx + 1)))
+            .enumerate()
+            .for_each(|(b, ((lap, ex), ey))| {
+                for r in 0..lap.len() / w {
+                    let j = 1 + b * ROWS + r;
+                    for i in 1..=nx {
+                        let k = j * w + i;
+                        let sum = fp[k - 1] + fp[k + 1] + fp[k - w] + fp[k + w];
+                        lap[r * w + i] = (4.0 * fp[k] - sum) / h2;
+                    }
+                    for i in 1..=nx {
+                        let k = j * w + i;
+                        ex[r * nx + i - 1] = ((fp[k + w] - fp[k]) / h) * beta.x[(i - 1) + nx * j];
+                    }
+                    for i in 0..=nx {
+                        let k = j * w + i;
+                        ey[r * (nx + 1) + i] =
+                            (-(fp[k + 1] - fp[k]) / h) * beta.y[i + (nx + 1) * (j - 1)];
+                    }
+                }
+            });
+        let lap = &scratch.lap;
+        let e = &scratch.edges;
+        let parts: Vec<f64> = out
+            .par_chunks_mut(ROWS * nx)
+            .enumerate()
+            .map(|(b, out)| {
+                let mut part = 0.0;
+                for r in 0..out.len() / nx {
+                    let j = 1 + b * ROWS + r;
+                    for i in 1..=nx {
+                        let k = j * w + i;
+                        let sum = lap[k - 1] + lap[k + 1] + lap[k - w] + lap[k + w];
+                        let ll = ((4.0 * lap[k] - sum) / h2) * inv;
+                        let jx_below = e.x[(i - 1) + nx * (j - 1)];
+                        let jx_above = e.x[(i - 1) + nx * j];
+                        let jy_left = e.y[(i - 1) + (nx + 1) * (j - 1)];
+                        let jy_right = e.y[i + (nx + 1) * (j - 1)];
+                        let v = ll + ((jx_below - jx_above) / h + (jy_right - jy_left) / h);
+                        out[r * nx + i - 1] = v;
+                        part += f[(i - 1) + nx * (j - 1)] * v;
+                    }
+                }
+                part
+            })
+            .collect();
+        parts.iter().sum()
     }
 
     /// Solves for `χ` given the canonical current `j` and the response `beta` on the edges
     /// (both per area), from the last solution, to a relative residual `tol`. Returns the
-    /// iterations taken.
+    /// iterations taken. Runs on the solver's own threads (`POOL`).
     pub fn solve(&mut self, j: &Edges, beta: &Edges, tol: f64) -> usize {
+        match POOL.as_ref() {
+            Some(pool) => pool.install(|| self.solve_here(j, beta, tol)),
+            None => self.solve_here(j, beta, tol),
+        }
+    }
+
+    /// `solve` on the current threads: the preconditioned conjugate gradient, each iteration
+    /// five parallel passes (the operator's two, the preconditioner's three) with the vector
+    /// updates and the dot products inside them, the products summed by rows or blocks of
+    /// rows in order (the same sums whatever the threads; until 2026-11-04 one loop each,
+    /// between the passes).
+    fn solve_here(&mut self, j: &Edges, beta: &Edges, tol: f64) -> usize {
         let n = self.nx * self.ny;
         let mut rhs = vec![0.0; n];
         self.curl_t(j, &mut rhs);
-        let mut scratch = Scratch {
-            lf: vec![0.0; n],
-            edges: Edges::zeros(self),
-        };
+        let mut scratch = Scratch::new(self);
         let mut x = std::mem::take(&mut self.chi);
         let mut ax = vec![0.0; n];
         self.operator(&x, beta, &mut ax, &mut scratch);
         let mut r: Vec<f64> = rhs.iter().zip(&ax).map(|(b, a)| b - a).collect();
         let norm_b = dot(&rhs, &rhs).sqrt();
         let mut z = vec![0.0; n];
-        self.vacuum_inverse(&r, &mut z);
+        self.vacuum_inverse(&r, &mut z, &mut scratch);
         let mut p = z.clone();
         let mut rz = dot(&r, &z);
+        let mut rr = dot(&r, &r);
+        self.frame(&p, &mut scratch);
         let mut it = 0;
-        while dot(&r, &r).sqrt() > tol * norm_b.max(1e-300) && it < 500 {
-            self.operator(&p, beta, &mut ax, &mut scratch);
-            let alpha = rz / dot(&p, &ax);
-            for k in 0..n {
-                x[k] += alpha * p[k];
-                r[k] -= alpha * ax[k];
-            }
-            self.vacuum_inverse(&r, &mut z);
-            let rz_new = dot(&r, &z);
+        while rr.sqrt() > tol * norm_b.max(1e-300) && it < 500 {
+            let alpha = rz / self.framed_operator(&p, beta, &mut ax, &mut scratch);
+            let (rr_new, rz_new) =
+                self.update_and_precondition(alpha, &p, &ax, &mut x, &mut r, &mut z, &mut scratch);
+            rr = rr_new;
             let beta_cg = rz_new / rz;
             rz = rz_new;
-            for k in 0..n {
-                p[k] = z[k] + beta_cg * p[k];
-            }
+            self.next_direction(beta_cg, &z, &mut p, &mut scratch);
             it += 1;
         }
         self.chi = x;
@@ -376,7 +610,7 @@ impl Darwin2d {
         let mut rhs = vec![0.0; n];
         self.curl_t(j, &mut rhs);
         let mut chi = vec![0.0; n];
-        self.vacuum_inverse(&rhs, &mut chi);
+        self.vacuum_inverse(&rhs, &mut chi, &mut Scratch::new(self));
         let mut a = Edges::zeros(self);
         self.curl(&chi, &mut a);
         a
@@ -538,10 +772,28 @@ impl Darwin2d {
     }
 }
 
-/// Work arrays of `Darwin2d::operator`.
+/// Work arrays of `Darwin2d::operator` and `Darwin2d::vacuum_inverse`.
 struct Scratch {
-    lf: Vec<f64>,
+    /// `f` and `L f` on the grid with its frame (`(nx + 2) × (ny + 2)`, the frame 0).
+    padded: Vec<f64>,
+    lap: Vec<f64>,
     edges: Edges,
+    /// The preconditioner's transforms by rows (`i + nx j`), then by columns (`j + ny i`).
+    rows: Vec<f64>,
+    columns: Vec<f64>,
+}
+
+impl Scratch {
+    fn new(grid: &Darwin2d) -> Self {
+        let framed = (grid.nx + 2) * (grid.ny + 2);
+        Self {
+            padded: vec![0.0; framed],
+            lap: vec![0.0; framed],
+            edges: Edges::zeros(grid),
+            rows: vec![0.0; grid.nx * grid.ny],
+            columns: vec![0.0; grid.nx * grid.ny],
+        }
+    }
 }
 
 fn dot(a: &[f64], b: &[f64]) -> f64 {

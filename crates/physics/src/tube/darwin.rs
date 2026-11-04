@@ -45,22 +45,28 @@ impl Tube {
         if let Some(leads) = s.leads.as_mut() {
             leads.update_rest(&d, &a);
         }
-        for k in 0..s.x.len() {
-            let (x, qm) = (s.x[k], s.qm[k]);
-            let (ax, ay) = d.interpolate(&a, x.x, x.y);
-            let v = if s.set[k] == VelocitySet::Free {
-                s.u[k] - DVec3::new(ax, ay, 0.0) * qm
-            } else {
-                s.set[k] = VelocitySet::Free;
-                s.u[k] = s.v[k] + DVec3::new(ax, ay, 0.0) * qm;
-                s.v[k]
-            };
-            let (gx, gy) = d.grad_dot(&a, x.x, x.y, v.x, v.y);
-            let kick = DVec3::new(gx, gy, 0.0) * (qm * self.dt);
-            s.u[k] += kick;
-            s.v[k] = v + kick;
-            s.x[k] = x + s.v[k] * self.dt;
-        }
+        // Each carrier's kick and move, in parallel (its own arithmetic).
+        let dt = self.dt;
+        s.x.par_iter_mut()
+            .zip(&mut s.v)
+            .zip(&mut s.u)
+            .zip(&mut s.set)
+            .zip(&s.qm)
+            .for_each(|((((x, v), u), set), &qm)| {
+                let (ax, ay) = d.interpolate(&a, x.x, x.y);
+                let vel = if *set == VelocitySet::Free {
+                    *u - DVec3::new(ax, ay, 0.0) * qm
+                } else {
+                    *set = VelocitySet::Free;
+                    *u = *v + DVec3::new(ax, ay, 0.0) * qm;
+                    *v
+                };
+                let (gx, gy) = d.grad_dot(&a, x.x, x.y, vel.x, vel.y);
+                let kick = DVec3::new(gx, gy, 0.0) * (qm * dt);
+                *u += kick;
+                *v = vel + kick;
+                *x += *v * dt;
+            });
         s.self_a = Some(a);
         s.darwin = Some(d);
     }

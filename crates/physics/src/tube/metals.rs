@@ -20,29 +20,34 @@ impl Tube {
     /// step's kick): through the cores it entered (`Lattice::advance`: bounces, new
     /// thermal speeds, the lattice taking the energy), then the walls (reflecting, but
     /// where an electrode lies beyond: a contact, which absorbs the carrier below).
-    pub(super) fn scatter(
+    /// Returns where it ends and its velocity, its heat and collisions (when it met cores)
+    /// and its velocity's mark for the self-field (when the jump set one): the state is the
+    /// caller's to change (`Tube::step`, in the carriers' order).
+    pub(super) fn scattered(
         &self,
         k: usize,
-        s: &mut TubeState,
+        s: &TubeState,
         p: usize,
         a: DVec3,
         v0: DVec3,
         step: u64,
-    ) {
+    ) -> Scattered {
         let lattice = &self.lattices[k];
         let v_entry = s.v[p];
-        if let Some(m) = lattice.advance(a, v0, s.v[p], self.dt, s.id[p], step) {
+        let (mut at, mut vel) = (s.x[p], s.v[p]);
+        let (mut heat, mut collisions) = (None, 0);
+        if let Some(m) = lattice.advance(a, v0, vel, self.dt, s.id[p], step) {
             let mass = (s.charge[p] / s.qm[p]).abs();
-            s.joule += mass * m.heat_per_mass;
-            s.collisions += u64::from(m.collisions);
-            s.x[p] = m.x;
-            s.v[p] = m.v;
+            heat = Some(mass * m.heat_per_mass);
+            collisions = u64::from(m.collisions);
+            at = m.x;
+            vel = m.v;
         }
         // Off its sides (out of the rectangle, not into a contact) and off its internal walls
         // (the step's chord from `from` crossing one), until it is inside.
         let mut from = a;
         for _ in 0..8 {
-            let x = s.x[p];
+            let x = at;
             if lattice.contains(x) {
                 let Some((t, w0, w1)) = lattice
                     .walls
@@ -57,9 +62,9 @@ impl Tube {
                 let n = DVec3::new(-e.y, e.x, 0.0) / libm::sqrt(e.x * e.x + e.y * e.y);
                 let hit = from + (x - from) * t;
                 let mirrored = x - n * (2.0 * (x - w0).dot(n));
-                let v = s.v[p];
-                s.v[p] = v - n * (2.0 * v.dot(n));
-                s.x[p] = mirrored;
+                let v = vel;
+                vel = v - n * (2.0 * v.dot(n));
+                at = mirrored;
                 // The next chord starts just off the wall, on the carrier's side.
                 from = hit + (mirrored - hit) * 1e-6;
                 continue;
@@ -73,7 +78,7 @@ impl Tube {
                 break;
             }
             let (lo, hi) = (lattice.lo, lattice.hi);
-            let (mut x, mut v) = (x, s.v[p]);
+            let (mut x, mut v) = (x, vel);
             if x.x < lo.x {
                 x.x = 2.0 * lo.x - x.x;
                 v.x = -v.x;
@@ -88,8 +93,8 @@ impl Tube {
                 x.y = 2.0 * hi.y - x.y;
                 v.y = -v.y;
             }
-            s.x[p] = x;
-            s.v[p] = v;
+            at = x;
+            vel = v;
         }
         // With the self-field, the jump the collisions or the walls made: the next solve
         // fixes the carrier's current at the velocity it would have had without it, plus the
@@ -98,13 +103,31 @@ impl Tube {
         // self-inductance g added, `Δv + q(q/m) g Δv`: the metal's edges, unscreened, make
         // the true one larger, 13 % on average in Y25's disc at c = 3, and each collision
         // lost the difference; before that `Δv` alone, losing `½ q² Δv·gΔv`.)
-        if !s.u.is_empty() && s.v[p] != v_entry {
-            let dv = s.v[p] - v_entry;
-            s.set[p] = match s.set[p] {
+        let set = (!s.u.is_empty() && vel != v_entry).then(|| {
+            let dv = vel - v_entry;
+            match s.set[p] {
                 VelocitySet::Born => VelocitySet::Born,
                 VelocitySet::Jumped(before) => VelocitySet::Jumped(before + dv),
                 VelocitySet::Free => VelocitySet::Jumped(dv),
-            };
+            }
+        });
+        Scattered {
+            x: at,
+            v: vel,
+            heat,
+            collisions,
+            set,
         }
     }
+}
+
+/// A carrier's scattering over a step (`Tube::scattered`).
+pub(super) struct Scattered {
+    pub x: DVec3,
+    pub v: DVec3,
+    /// The heat it gave the lattice (`Some` when it met cores, even 0) and its collisions.
+    pub heat: Option<f64>,
+    pub collisions: u64,
+    /// Its velocity's new mark for the self-field, if the step's jumps changed it.
+    pub set: Option<VelocitySet>,
 }

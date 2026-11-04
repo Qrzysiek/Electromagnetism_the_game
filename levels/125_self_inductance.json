@@ -2,7 +2,7 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Self-inductance",
-  "description": "A metal ring alone in your solenoid, whose field swings with a fixed amplitude, $B = B_0 \\sin \\omega t$: your supply sets only how fast. The changing field drives a current round the ring (Faraday's law), and that current makes a field of its own, against the change (Lenz's law): the ring is a one-turn coil, an inductance $L$ in series with its resistance $R$. While $\\omega L/R$ is small the heat grows as $\\omega^2$; past $\\omega L/R \\approx 1$ the ring's own field cancels the drive's in its hole and the heat levels off. Set $\\omega$ so that the ring takes between 1000 and 1500 of heat per unit time (averaged from $t = 2.5$ to $10$).",
+  "description": "A metal ring alone in your solenoid, whose field swings with a fixed amplitude, $B = B_0 \\sin \\omega t$: your supply sets only how fast. The changing field drives a current round the ring (Faraday's law), and that current makes a field of its own, against the change (Lenz's law): the ring is a one-turn coil, an inductance $L$ in series with its resistance $R$. While $\\omega L/R$ is small the heat grows as $\\omega^2$; past $\\omega L/R \\approx 1$ the ring's own field cancels the drive's in its hole and the heat levels off. Set $\\omega$ so that the ring takes between 1000 and 1500 of heat per unit time (averaged from $t = 2.5$ to $20$).",
   "reality": {
     "represents": "A closed metal ring's self-inductance: a shorted turn in a swinging field",
     "remarks": [
@@ -50,7 +50,7 @@
     "magnet_radius": 0.3,
     "wire_radius": 0.1,
     "antenna_radius": 0.3,
-    "t_max": 10.0,
+    "t_max": 20.0,
     "tolerances": {
       "preview": 1e-10,
       "verify": 1e-12
@@ -112,7 +112,7 @@
         "min": 1000.0,
         "max": 1500.0,
         "start": 2.5,
-        "end": 10.0
+        "end": 20.0
       }
     ],
     "solenoid_drive": {

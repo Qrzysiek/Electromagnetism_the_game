@@ -754,31 +754,42 @@ impl Tube {
         // With the self-field, booked after its part of the step (`book_work`): each
         // carrier's metal, cell, charge, field, induced field and velocity at the start.
         let mut pending: Vec<darwin::PendingWork> = Vec::new();
-        for (p, (((((x, v), qm), e), charge), tag)) in
-            s.x.iter_mut()
-                .zip(&mut s.v)
-                .zip(&s.qm)
-                .zip(&fields)
-                .zip(&s.charge)
-                .zip(&s.tag)
-                .enumerate()
-        {
+        // Each particle's push in parallel (its own arithmetic), with its metal and cell;
+        // what it adds to the sums below, in the particles' order (bit for bit one loop's).
+        let in_metals = !work.is_empty();
+        let pushes: Vec<Push> = (0..s.x.len())
+            .into_par_iter()
+            .map(|p| {
+                let (x, v, qm) = (s.x[p], s.v[p], s.qm[p]);
+                let (e, induced) = self.with_external(fields[p], s.t, x);
+                let h = 0.5 * self.dt * qm;
+                let minus = v + e * h;
+                // Rotation about z by the magnetic field (Boris).
+                let t = DVec3::new(0.0, 0.0, h * b_z);
+                let prime = minus + minus.cross(t);
+                let plus = minus + prime.cross(t * (2.0 / (1.0 + t.z * t.z)));
+                let metal = if in_metals && s.tag[p] < PROJECTILE_TAG {
+                    self.metal_of(x)
+                        .map(|k| (k, self.lattices[k].account_cell(x)))
+                } else {
+                    None
+                };
+                Push {
+                    v: plus + e * h,
+                    field: e,
+                    induced,
+                    metal,
+                }
+            })
+            .collect();
+        for (p, push) in pushes.into_iter().enumerate() {
+            let (x, charge, qm) = (&mut s.x[p], &s.charge[p], s.qm[p]);
+            let v = &mut s.v[p];
             let old = *v;
-            let (e, induced) = self.with_external(*e, s.t, *x);
-            let e = &e;
-            let h = 0.5 * self.dt * qm;
-            let minus = *v + *e * h;
-            // Rotation about z by the magnetic field (Boris).
-            let t = DVec3::new(0.0, 0.0, h * b_z);
-            let prime = minus + minus.cross(t);
-            let plus = minus + prime.cross(t * (2.0 / (1.0 + t.z * t.z)));
-            *v = plus + *e * h;
-            if !work.is_empty()
-                && *tag < PROJECTILE_TAG
-                && let Some(k) = self.metal_of(*x)
-            {
+            *v = push.v;
+            let (e, induced) = (&push.field, push.induced);
+            if let Some((k, c)) = push.metal {
                 // Its cell's share too (the same sums, split by place).
-                let c = self.lattices[k].account_cell(*x);
                 if moves {
                     let w = 0.5 * self.dt * charge * e.dot(old + *v);
                     work[k] += w;
@@ -835,16 +846,33 @@ impl Tube {
         if !self.lattices.is_empty() {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let step = libm::round(s.t / self.dt) as u64;
-            for (p, (a, v0)) in before.iter().enumerate() {
-                if s.tag[p] >= PROJECTILE_TAG {
-                    continue;
+            // Each carrier's collisions and walls in parallel (its own arithmetic); what it
+            // adds to the sums, in the carriers' order (bit for bit one loop's).
+            let state = &*s;
+            let scattered: Vec<Option<(usize, metals::Scattered)>> = before
+                .par_iter()
+                .enumerate()
+                .map(|(p, &(a, v0))| {
+                    if state.tag[p] >= PROJECTILE_TAG {
+                        return None;
+                    }
+                    self.metal_of(a)
+                        .map(|k| (k, self.scattered(k, state, p, a, v0, step)))
+                })
+                .collect();
+            for (p, (scattered, (a, _))) in scattered.into_iter().zip(&before).enumerate() {
+                let Some((k, m)) = scattered else { continue };
+                if let Some(heat) = m.heat {
+                    s.joule += heat;
+                    s.collisions += m.collisions;
                 }
-                if let Some(k) = self.metal_of(*a) {
-                    let l = &self.lattices[k];
-                    self.scatter(k, s, p, *a, *v0, step);
-                    // The charge it carried over the step, along its chord.
-                    l.book_flux(&mut s.cells[k].flux, *a, s.x[p], s.charge[p]);
+                s.x[p] = m.x;
+                s.v[p] = m.v;
+                if let Some(set) = m.set {
+                    s.set[p] = set;
                 }
+                // The charge it carried over the step, along its chord.
+                self.lattices[k].book_flux(&mut s.cells[k].flux, *a, s.x[p], s.charge[p]);
             }
         }
         // Absorption: a particle that crossed an electrode's boundary, came back to its
@@ -933,6 +961,15 @@ impl Tube {
             *i += b;
         }
     }
+}
+
+/// One particle's push (`Tube::step`): its new velocity, the field it felt and its induced
+/// part, and its metal and the metal's accounting cell.
+struct Push {
+    v: DVec3,
+    field: DVec3,
+    induced: Option<DVec3>,
+    metal: Option<(usize, usize)>,
 }
 
 #[cfg(test)]

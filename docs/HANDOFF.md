@@ -75,7 +75,7 @@ resonator, the metamaterials' element.)
   ring's stored energy swings by up to `√(1 + (ωL/R)²)` times the heat per period.
 - The level (redesigned 2026-11-02 for the owner's 30 s preview, DEC-32's history): a ring
   20 × 20 (walls 2), density 41, c = 27.4, dt 0.0088 (`c/ω_p` 1.21, `ω_p dt` 0.2), B₀ 0.45
-  fixed, ω on a log slider 0.05–5, heat 1000–1500 over t = 2.5–10 at the bend (answer ω 1.3;
+  fixed, ω on a log slider 0.05–5, heat 1000–1500 over t = 2.5–10 (to 20 since 2026-11-04) at the bend (answer ω 1.3;
   verified 1195 ± 136, the preview 1105; ω solves on 1.15–1.55 verified, 6.5 %). Preview
   24.4 s, verification 62 s. (The first design: density 60, c 24, the bend at 0.7, ~75 s.)
   Scales:
@@ -94,11 +94,16 @@ resonator, the metamaterials' element.)
   of computing), however long; the verification within a few minutes; each bound exceeded
   by at most 100 % where that makes the level a lot better. To audit: every tube level's
   preview time and streaming rate; LEVELS.md already records Eddy currents in silicon (118)
-  at 38 s and Lock-in Hall (127) at 30–70 s. Self-inductance (125) streams at 0.44 units a
-  second: it stutters at speed 1. Proposed to the owner, not yet chosen: 35 carriers per
-  area to 28 (~0.54 units a second), a prebuffer in the game (the playback starts once the
-  stream is far enough ahead to stay so), or both. Simplify what is over, or move it to
-  the interludes.
+  at 38 s and Lock-in Hall (127) at 30–70 s. Self-inductance (125) streamed at 0.41 units a
+  second. The owner (2026-11-04): fewer carriers are fine if the physics barely suffers.
+  Measured first: they are not the cost (at a tenth of them the preview took 20 s against
+  27); 70 % of a step was the self-field's two solves, 16–17 conjugate-gradient iterations
+  each, whatever the carriers. Not changed: the carriers. Then, the owner's choice of more
+  solver work: the iteration 0.47 → 0.075 ms (DEC-13's history, PHYSICS.md §2.12), the
+  scattering and the frames' middle field in parallel: it streams 1.45 units a second
+  (preview 13.8 s to t = 20, the goal's window lengthened for the verdict's noise, DEC-32).
+  Still to audit: the other tube levels' streaming rates (the step's loops now parallel
+  help every metal level). Simplify what is over, or move it to the interludes.
 - **Optics (asked 2026-11-02):** SPEC.md §8 plans wave optics. In place: `physics::fdtd2d`
   (Yee, the TE polarisation: E in the plane, B_z; perfect conductors, the CPML border,
   charges as sources), the Poynting tools; mirrors, apertures and slits as conductors work

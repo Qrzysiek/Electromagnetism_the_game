@@ -2,6 +2,7 @@
 //! contacts took and gave off, and the fields and forces it shows.
 
 use super::*;
+use rayon::prelude::*;
 
 /// The point a fraction `s` of the way from `a` to `b`.
 #[allow(clippy::cast_possible_truncation)]
@@ -431,15 +432,23 @@ impl TubeRun {
         let (centre, axis, normal, length, width) = m.strip();
         #[allow(clippy::cast_possible_truncation)]
         let lines = libm::floor((0.5 * width - 1.0) / 0.5 + 1e-9).max(0.0) as i32;
+        // Each point's field in parallel (a sum over the frame's every charge: on
+        // Self-inductance's ring, 259 points and 5040 carriers, 1.9 ms a frame on one thread),
+        // added in the points' order.
+        let points: Vec<DVec3> = (-lines..=lines)
+            .flat_map(|l| {
+                (0..7).map(move |i| {
+                    centre
+                        + axis * (0.3 * length * (f64::from(i) / 3.0 - 1.0))
+                        + normal * (0.5 * f64::from(l))
+                })
+            })
+            .collect();
+        let fields: Vec<DVec3> = points.par_iter().map(|&x| self.e_at(frame, x)).collect();
         let (mut sum, mut n) = (DVec3::ZERO, 0.0);
-        for l in -lines..=lines {
-            for i in 0..7 {
-                let x = centre
-                    + axis * (0.3 * length * (f64::from(i) / 3.0 - 1.0))
-                    + normal * (0.5 * f64::from(l));
-                sum += self.e_at(frame, x);
-                n += 1.0;
-            }
+        for e in fields {
+            sum += e;
+            n += 1.0;
         }
         sum / n
     }

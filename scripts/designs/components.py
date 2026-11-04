@@ -1264,13 +1264,18 @@ def self_inductance():
     # B0 0.45: the heat grows as B0^2 and the thermal current's work against the drive (the
     # noise) as B0; the carriers stay linear (their drift a few per cent of the thermal
     # speed at the bend; above it the ring's own field cancels most of the drive).
-    # The goal at the bend: heat 1000-1500 over t = 2.5-10 (three half-swings at the answer,
+    # The goal at the bend: heat 1000-1500 over t = 2.5-10 until 2026-11-04 (three half-swings at the answer,
     # after the ring's settling, L/R ~0.9), the game's curve's omega ~1.13-1.6 (8 % of the
     # slider; with 1000-1400, 1.15-1.4 verified, 4 %), about half what omega^2 from slow swings predicts there (0.45 at 1.3). With a
     # window of two half-swings (t = 3-8, a 19 s preview) the answer's verdict was 1195 +-
     # 225; with three, 1193 +- 101. On the plateau the heat is too flat to pin omega. The
     # slider 0.05-5 (log): the answer 71 % along it. The sine's own omega 0.1, where the
-    # slider starts when the supply is switched on, gives heat ~15.
+    # slider starts when the supply is switched on, gives heat ~15. With the self-field
+    # solver's speedup (2026-11-04) the preview to t = 10 took 7.4 s, but its rounding drew
+    # another realisation of the noise, and the reference came out uncertain (1196 +- 204,
+    # the preview 1059): over metal seeds 21-28 the previews at 1.3 scattered by 52 (sd)
+    # and one in eight failed. The window to t = 20 (seven half-swings): the previews' sd
+    # 14, every seed verified, the error bars at most 93 against the goal's ~180 margin.
     return level(
         "Self-inductance",
         "A metal ring alone in your solenoid, whose field swings with a fixed amplitude, "
@@ -1280,13 +1285,13 @@ def self_inductance():
         "series with its resistance $R$. While $\\omega L/R$ is small the heat grows as "
         "$\\omega^2$; past $\\omega L/R \\approx 1$ the ring's own field cancels the drive's "
         "in its hole and the heat levels off. Set $\\omega$ so that the ring takes between "
-        "1000 and 1500 of heat per unit time (averaged from $t = 2.5$ to $10$).",
-        grid=(24, 24), c=None, t_max=10.0,
+        "1000 and 1500 of heat per unit time (averaged from $t = 2.5$ to $20$).",
+        grid=(24, 24), c=None, t_max=20.0,
         electrodes=[cold_electrode(1, 1)],
         supply_omegas=omega_slider(0.05, 5.0, 1.3),
         tube=tube(0, None, 0, 0, 0, 0, step=SELF_INDUCTANCE_STEP, saturation=0.0,
                   solenoid=(23, 23), solenoid_drive=sine(0.45, 0.1), speed_of_light=27.4,
-                  heat_goals=[heat_goal(0, 1000.0, 1500.0, 2.5, 10.0)],
+                  heat_goals=[heat_goal(0, 1000.0, 1500.0, 2.5, 20.0)],
                   metals=[metal((2, 2), (22, 22), [], seed=21, hole=((4, 4), (20, 20)),
                                 **SELF_INDUCTANCE_METAL)]),
         reference=[supply(23, 23, 0.0, 1.3)])
