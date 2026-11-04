@@ -102,8 +102,14 @@ resonator, the metamaterials' element.)
   solver work: the iteration 0.47 → 0.075 ms (DEC-13's history, PHYSICS.md §2.12), the
   scattering and the frames' middle field in parallel: it streams 1.45 units a second
   (preview 13.8 s to t = 20, the goal's window lengthened for the verdict's noise, DEC-32).
-  Still to audit: the other tube levels' streaming rates (the step's loops now parallel
-  help every metal level). Simplify what is over, or move it to the interludes.
+  The owner (2026-11-04): the animation stood still while the verification ran. Fixed
+  (DEC-39): the verification now runs beside the rest of the display run's stream, and a
+  run whole at the goal's end is marked done first, so the playback loops; `EM_TIMING=1`
+  logs the frame rate and the time shown. The audit of the other tube levels (`generator
+  check` with a fresh run cache, `target/scratch/timing_audit.py`; the field maps' rate:
+  `field_audit.py`, not run yet) has 99–112 so far: previews 0.25–17.8 s, all streaming
+  far above a unit a second; 113–127 still to measure. Simplify what is over, or move it to
+  the interludes.
 - **Optics (asked 2026-11-02):** SPEC.md §8 plans wave optics. In place: `physics::fdtd2d`
   (Yee, the TE polarisation: E in the plane, B_z; perfect conductors, the CPML border,
   charges as sources), the Poynting tools; mirrors, apertures and slits as conductors work

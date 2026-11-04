@@ -301,7 +301,9 @@ Entries are numbered in order and never renumbered.
   screenshots are retaken by one script (WebP, a quarter of PNG's size).
 - **Why:** the owner uses the machine while the agent works, and a screenshot taken by hand
   is not reproducible. The capture mode also carries regression checks: switching views
-  at given frames, minimizing and restoring, abandoning stale computations.
+  at given frames, minimizing and restoring, abandoning stale computations, and a log of
+  the frame rate and the time shown each second (the animation must play on while results
+  are computed: the game's had stood still through a verification, DEC-39).
 - **Adapt:** design the capture mode in from the start; add a variable for each state a
   check needs.
 

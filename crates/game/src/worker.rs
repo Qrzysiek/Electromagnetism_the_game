@@ -277,16 +277,21 @@ fn latest(rx: &Receiver<Request>, mut req: Request) -> Request {
 }
 
 /// Sends responses to the game and records them, so that a finished computation can be
-/// replayed for an identical setup.
+/// replayed for an identical setup. Shared by a tube level's two threads (its
+/// verification beside the display run's stream): the record in the order sent.
 struct Sink<'a> {
     tx: &'a Sender<Response>,
-    record: std::cell::RefCell<Vec<Response>>,
+    record: Mutex<Vec<Response>>,
 }
 
 impl Sink<'_> {
     /// `Err` if the game has gone away.
     fn send(&self, r: Response) -> Result<(), ()> {
-        self.record.borrow_mut().push(r.clone());
+        let mut record = self
+            .record
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        record.push(r.clone());
         self.tx.send(r).map_err(|_| ())
     }
 }
@@ -410,7 +415,7 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
         }
         let sink = Sink {
             tx: out,
-            record: std::cell::RefCell::new(Vec::new()),
+            record: Mutex::new(Vec::new()),
         };
         let tx = &sink;
         let current = |r: u64| newest.load(Ordering::Acquire) == r;
@@ -423,7 +428,12 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
             if tx.send(msg).is_err() {
                 return;
             }
-            cache.put(key, sink.record.into_inner());
+            cache.put(
+                key,
+                sink.record
+                    .into_inner()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
             continue 'requests;
         }
         if req.level.is_tube() {
@@ -438,7 +448,12 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
                 return;
             }
             if current(req.revision) {
-                cache.put(key, sink.record.into_inner());
+                cache.put(
+                    key,
+                    sink.record
+                        .into_inner()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                );
             }
             continue 'requests;
         }
@@ -558,7 +573,12 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
         }
         // Complete (a newer request would have abandoned it): keep for replay.
         if current(req.revision) {
-            cache.put(key, sink.record.into_inner());
+            cache.put(
+                key,
+                sink.record
+                    .into_inner()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
         }
     }
 }
@@ -567,14 +587,25 @@ fn worker_loop(rx: &Receiver<Request>, out: &Sender<Response>, newest: &Arc<Atom
 /// tube's playback rate (1 unit per second at speed 1) one chunk per second of play.
 const TUBE_CHUNK: f64 = 1.0;
 
-/// A tube level: the preview streamed to the goal window's end, the verification run and
-/// the verdict, then the rest of the display run streamed to `tube_display_end`; each
-/// piece abandoned when the setup changes. Returns `false` if the game has gone away.
+/// A tube level: the preview streamed to the goal window's end, then the verification
+/// and its verdict on a thread of its own while the rest of the display run streams to
+/// `tube_display_end`; each piece abandoned when the setup changes. Returns `false` if
+/// the game has gone away.
+///
+/// The playback waits at the stream's last frame until the run is marked done, and
+/// loops only then. Until 2026-11-04 the verification ran between the two streams and the
+/// done mark came after it: on Self-inductance (display and goal both ending at t = 20)
+/// the animation stood at its end for the verification's 46 s, and a level whose display
+/// runs on past its goal stood at the goal's end whenever the preview and verification
+/// took longer than the goal's window plays.
 fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
     let Some(spec) = req.level.tube.clone() else {
         return true;
     };
     let verify_end = req.level.tube_verify_end();
+    let display_end = req.level.tube_display_end();
+    // The preview is the whole display run when both end at the goal's end.
+    let whole = verify_end >= display_end - 1e-9 * display_end.abs().max(1.0);
     let rev = req.revision;
     let mut cost = level::cost::Cost::new(&req.level);
     let send_cost = |cost: &level::cost::Cost| {
@@ -608,7 +639,7 @@ fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
             }
         }
     };
-    match stream(&mut sim, verify_end, false) {
+    match stream(&mut sim, verify_end, whole) {
         None => return true,
         Some(false) => return false,
         Some(true) => {}
@@ -623,40 +654,35 @@ fn tube_request(req: &Request, tx: &Sink<'_>, newest: &Arc<AtomicU64>) -> bool {
         return false;
     }
     let coarse = sim.results();
-    let start = Instant::now();
-    let Some((fine, segments, steps)) = unless_stale(newest, rev, || {
-        let mut fine = req.level.tube_sim(&req.placement, 2);
-        fine.advance_to(verify_end);
-        (fine.results(), fine.segment_count(), fine.steps())
-    }) else {
-        return true;
-    };
-    cost.add_tube_run(start.elapsed().as_secs_f64(), segments, steps, true);
-    if !send_cost(&cost) {
-        return false;
-    }
-    if tx
-        .send(Response::TubeVerified {
-            revision: rev,
-            verdict: level::tube::TubeVerdict::new(&spec, &coarse, &fine),
-        })
-        .is_err()
-    {
-        return false;
-    }
-    // The rest of the display run (the last chunk is marked done even when the goal's
-    // end is the display's end).
-    let end = req.level.tube_display_end();
-    if sim.t() >= end - 1e-9 * end.max(1.0) {
-        return tx
-            .send(Response::TubeChunk {
-                revision: rev,
-                chunk: Arc::new(sim.take_chunk()),
-                done: true,
-            })
-            .is_ok();
-    }
-    !matches!(stream(&mut sim, end, true), Some(false))
+    // The verification beside the rest of the display run: the animation plays on (and
+    // loops once the run is whole) while the verdict is computed. Its time shares the
+    // machine with the stream, as the cost meter's shows.
+    std::thread::scope(|scope| {
+        let verification = scope.spawn(|| {
+            let start = Instant::now();
+            let Some((fine, segments, steps)) = unless_stale(newest, rev, || {
+                let mut fine = req.level.tube_sim(&req.placement, 2);
+                fine.advance_to(verify_end);
+                (fine.results(), fine.segment_count(), fine.steps())
+            }) else {
+                return true;
+            };
+            let mut cost = cost;
+            cost.add_tube_run(start.elapsed().as_secs_f64(), segments, steps, true);
+            send_cost(&cost)
+                && tx
+                    .send(Response::TubeVerified {
+                        revision: rev,
+                        verdict: level::tube::TubeVerdict::new(&spec, &coarse, &fine),
+                    })
+                    .is_ok()
+        });
+        let streamed = whole || !matches!(stream(&mut sim, display_end, true), Some(false));
+        let verified = verification
+            .join()
+            .unwrap_or_else(|e| std::panic::resume_unwind(e));
+        streamed && verified
+    })
 }
 
 /// A beam level: per flight the preview (every particle's path), then the per-particle
@@ -1055,13 +1081,73 @@ mod tests {
     /// preview quasi-static), with the verdict's outcomes, a world line for every particle
     /// and a screening cup's fade for every one that entered its detector.
     #[test]
+    fn tube_animation_runs_on_while_the_verdict_is_computed() {
+        // The playback loops only once the stream is marked done: a run that is whole at
+        // the goal's end is marked done before its verification starts (the owner,
+        // 2026-11-04: Self-inductance stood at its end for the verification's 46 s), and
+        // a display run past the goal's end streams beside the verification, to its end.
+        for t_max in [3.0, 6.0] {
+            let mut level = level::shipped("vacuum_diode");
+            let goal = &mut level.tube.as_mut().expect("a tube level").goals[0];
+            goal.start = 1.0;
+            goal.end = 3.0;
+            level.physics.t_max = t_max;
+            let (tx, rx) = channel();
+            let sink = Sink {
+                tx: &tx,
+                record: Mutex::new(Vec::new()),
+            };
+            let newest = Arc::new(AtomicU64::new(1));
+            let req = Request {
+                revision: 1,
+                placement: level.reference_solution.clone(),
+                level,
+            };
+            assert!(tube_request(&req, &sink, &newest));
+            let responses: Vec<Response> = rx.try_iter().collect();
+            let chunks: Vec<(usize, bool, f64)> = responses
+                .iter()
+                .enumerate()
+                .filter_map(|(i, r)| match r {
+                    Response::TubeChunk { chunk, done, .. } => {
+                        Some((i, *done, chunk.frames.last().map_or(f64::NAN, |f| f.t)))
+                    }
+                    _ => None,
+                })
+                .collect();
+            let verdict = responses
+                .iter()
+                .position(|r| matches!(r, Response::TubeVerified { .. }))
+                .expect("a verdict");
+            let done: Vec<_> = chunks.iter().filter(|c| c.1).collect();
+            assert_eq!(done.len(), 1, "t_max {t_max}: one chunk marked done");
+            assert_eq!(
+                done[0].0,
+                chunks.last().expect("chunks").0,
+                "t_max {t_max}: the last"
+            );
+            assert!(
+                (done[0].2 - t_max).abs() < 0.05,
+                "t_max {t_max}: the stream ends at {}",
+                done[0].2
+            );
+            if t_max <= 3.0 {
+                assert!(
+                    done[0].0 < verdict,
+                    "the whole run marked done before the verdict"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn the_verdicts_exact_flight_is_sent_for_the_views() {
         // By its slug: the curriculum renumbers the files.
         let level = level::shipped("soft_landing_current");
         let (tx, rx) = channel();
         let sink = Sink {
             tx: &tx,
-            record: std::cell::RefCell::new(Vec::new()),
+            record: Mutex::new(Vec::new()),
         };
         let newest = Arc::new(AtomicU64::new(1));
         let req = Request {

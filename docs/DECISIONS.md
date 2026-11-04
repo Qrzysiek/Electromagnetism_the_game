@@ -1387,3 +1387,41 @@ Entries are numbered in order and never renumbered.
   - 2026-11-03: written from CLAUDE.md, DEC-8, 12, 15–23, 29, 30, 37, docs/PROGRESS.md,
     docs/TESTING.md, the audits' and the level documents' practice, and the agent's memory
     (the coverage refresh's lesson, the environment's pitfalls).
+
+## DEC-39: A tube level's verification beside the display run's stream
+
+- **Status:** in use (since 2026-11-04)
+- **Area:** interface
+- **Choice:** the game's worker (`tube_request`) streams the preview to the goal window's
+  end, then runs the verification on a scoped thread of its own while it streams the rest
+  of the display run (to `tube_display_end`) on the worker's thread; each sends its
+  messages when ready (the verdict when the verification ends, the chunks as computed).
+  A preview that is already the whole display run (both ending at the goal's end) is
+  marked done with its last chunk, before the verification starts. The playback loops only
+  over a run marked done, so it plays on, and loops, while the verdict is computed. The
+  response sink (`Sink`) records under a mutex, shared by the two threads.
+- **Purpose:** the owner (2026-11-04): "verifying hangs animation on Self-inductance; the
+  animation should still run when verification runs".
+- **Alternatives:**
+  - The verification between the two streams, the done mark after it (the design until
+    2026-11-04). The playback waited at the stream's last frame for the whole verification:
+    Self-inductance stood at t = 19.985 from 21 s to 69 s (`EM_TIMING`). A level whose
+    display runs past its goal stood at the goal's end whenever the preview and verification
+    took longer than the goal's window plays (Potentiometer: 15.7 + 87.5 s against t = 80).
+  - Only the done mark moved before the verification. That fixes a level whose run ends at
+    its goal, not one whose display runs on past it.
+  - The rest of the display run before the verification. It delays every verdict by the
+    tail's computation (Ohm's law runs to t = 200 against a goal ending at 40).
+  - Lower priority for the computing threads. They were not the cause: the frame rate
+    stayed at 60–180 a second through the hold. It would also need a dependency, since the
+    workspace forbids unsafe code.
+- **Where:** `crates/game/src/worker.rs` (`tube_request`, `Sink`; test
+  `tube_animation_runs_on_while_the_verdict_is_computed`), `crates/game/src/capture.rs`
+  (`EM_TIMING=1`: the frame rate, the longest frame and the time shown, a line a second).
+- **History:**
+  - 2026-11-04: chosen. Measured in capture mode: Self-inductance now loops through its run
+    during the verification (the verdict at ~68 s as before), about 60 frames a second;
+    Potentiometer's playback keeps pace with the clock to its verdict at 79 s, its stream to
+    t = 200 done at ~45 s. The verification shares the machine with the stream, and its cost
+    meter shows that time. Potentiometer draws 31–36 frames a second while both compute
+    against 46–47 after: its drawing, not the verification, holds it under 50.

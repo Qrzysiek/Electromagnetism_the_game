@@ -3,6 +3,61 @@
 
 use super::*;
 
+/// `EM_TIMING=1` (with `EM_CAPTURE`): the frame rate, the longest frame and the time
+/// shown, a line a second on stderr (the animation must keep running while a tube level's
+/// verification computes, DEC-39).
+pub(super) fn dev_timing(game: Res<Game>, time: Res<Time>, mut timing: Local<Option<Timing>>) {
+    if std::env::var_os("EM_CAPTURE").is_none()
+        || !std::env::var("EM_TIMING").is_ok_and(|v| v == "1")
+    {
+        return;
+    }
+    timing
+        .get_or_insert_with(Timing::new)
+        .frame(&game, time.delta_secs_f64());
+}
+
+/// `dev_timing`'s tally over the current second.
+pub(super) struct Timing {
+    since: std::time::Instant,
+    start: std::time::Instant,
+    frames: u32,
+    longest: f64,
+}
+
+impl Timing {
+    fn new() -> Self {
+        let now = std::time::Instant::now();
+        Self {
+            since: now,
+            start: now,
+            frames: 0,
+            longest: 0.0,
+        }
+    }
+
+    fn frame(&mut self, game: &Game, dt: f64) {
+        self.frames += 1;
+        self.longest = self.longest.max(dt);
+        let elapsed = self.since.elapsed().as_secs_f64();
+        if elapsed >= 1.0 {
+            let streaming = game.tube_preview.as_ref().map(|v| !v.done);
+            eprintln!(
+                "[timing] {:7.2} s: {:5.0} frames/s, longest {:6.1} ms, shown t {:8.3}, {:?}, streaming {:?}",
+                self.start.elapsed().as_secs_f64(),
+                f64::from(self.frames) / elapsed,
+                1e3 * self.longest,
+                game.anim_time,
+                game.progress(),
+                streaming
+            );
+            self.since = std::time::Instant::now();
+            self.frames = 0;
+            self.longest = 0.0;
+        }
+    }
+}
+
 /// Developer capture for testing without input: with `EM_CAPTURE=<file.png>` the game
 /// opens level `EM_LEVEL` (1-based) or the level file `EM_LEVEL_FILE`, enters the sandbox if `EM_SANDBOX=1`, shows the
 /// flight of shot `EM_SHOT` under disturbance `EM_DISTURBANCE` (1-based), selects the map

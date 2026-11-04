@@ -45,7 +45,7 @@ mod metal_maps;
 mod physics_sync;
 mod tube_views;
 use camera::{fit_camera, pan_by};
-use capture::dev_capture;
+use capture::{dev_capture, dev_timing};
 use keys::input;
 use maps::{update_field_lines, update_map};
 pub use metal_maps::metal_map_span;
@@ -867,7 +867,7 @@ fn main() {
                 .chain(),
         )
         .add_systems(EguiPrimaryContextPass, ui::panel)
-        .add_systems(Update, dev_capture)
+        .add_systems(Update, (dev_capture, dev_timing))
         .add_systems(Update, radiation::update.after(animate).before(draw::draw))
         .run();
 }
