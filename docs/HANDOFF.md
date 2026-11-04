@@ -27,6 +27,16 @@ self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/D
   hole is refused: its lead would cross the ring; the Corbino disc needs one). In the
   electrostatic model a lead is only drawn, so it could be allowed there with the lead drawn
   across (refused with the self-field, as a lead from a ring is, DEC-27).
+  **Next (the owner, 2026-11-04: "whatever makes the most sense"):** this, then the Corbino
+  disc level. Sketch: `contact_side` also accepts a box flush with the hole's walls from
+  inside (a box filling the hole contacts all four: its emitter emits from every face,
+  `emit_toward` None); `metal_issues` allows an electrode wholly in a hole; the lead drawn
+  across the ring (`leads_cross_no_metal` excepted for it). With both boundaries wholly
+  contacted the Hall term integrates to zero along each contact, so the current goes as
+  σ_xx(B) for any annulus shape: the test against the model's own Boltzmann σ_xx(B), and
+  the quarter turn. The RMS goal (Phase 2 item 1) waits for the owner's decision on its
+  verification (DRUDE.md, the D7 note of 2026-10-20: keep the preview's macroparticles, the
+  goal against the model's `√(kT/C)`).
 - Coverage of the heavy tests not yet recorded since the rings: `python scripts/affected.py
   refresh` (hours; or `scripts\refresh_coverage.cmd`) before the next engine change, else that
   change selects all 521 again.
@@ -100,16 +110,19 @@ resonator, the metamaterials' element.)
   27); 70 % of a step was the self-field's two solves, 16–17 conjugate-gradient iterations
   each, whatever the carriers. Not changed: the carriers. Then, the owner's choice of more
   solver work: the iteration 0.47 → 0.075 ms (DEC-13's history, PHYSICS.md §2.12), the
-  scattering and the frames' middle field in parallel: it streams 1.45 units a second
-  (preview 13.8 s to t = 20, the goal's window lengthened for the verdict's noise, DEC-32).
+  scattering and the frames' middle field in parallel: it streams 1.2 units a second
+  (preview 16.8 s to t = 20, the goal's window lengthened for the verdict's noise, DEC-32;
+  the commit's 13.8 s was not reproduced).
   The owner (2026-11-04): the animation stood still while the verification ran. Fixed
   (DEC-39): the verification now runs beside the rest of the display run's stream, and a
   run whole at the goal's end is marked done first, so the playback loops; `EM_TIMING=1`
   logs the frame rate and the time shown. The audit of the other tube levels (`generator
-  check` with a fresh run cache, `prototypes/timing/timing_audit.py`, results in
-  `target/scratch/timing_audit.jsonl`; the field maps' rate: `field_audit.py`, not run yet) has 99–112 so far: previews 0.25–17.8 s, all streaming
-  far above a unit a second; 113–127 still to measure. Simplify what is over, or move it to
-  the interludes.
+  check` with a fresh run cache and `tube-field`, `prototypes/timing/`) is done: the table
+  in docs/LEVELS.md, *Timing audit*. Every tube level keeps the rules; the closest are
+  Amplifier's preview (33 s, its window one period of a 300-unit signal: within the 100 %
+  allowance, to confirm with the owner) and Self-inductance's stream (1.2 units a second);
+  the slowest field maps Klystron's (2.8) and Wheatstone bridge's (3.5). Not part of the
+  rules but seen: Potentiometer draws ~47 frames a second with nothing computing.
 - **Optics (asked 2026-11-02):** SPEC.md §8 plans wave optics. In place: `physics::fdtd2d`
   (Yee, the TE polarisation: E in the plane, B_z; perfect conductors, the CPML border,
   charges as sources), the Poynting tools; mirrors, apertures and slits as conductors work

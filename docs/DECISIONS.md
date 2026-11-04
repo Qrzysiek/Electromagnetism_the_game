@@ -1153,6 +1153,10 @@ Entries are numbered in order and never renumbered.
     1183 ± 84 (preview 1127); ω solves on 1.2–1.6 verified (6.2 % of the slider; 1.13 and
     1.15 too, 1.18 uncertain at 1020 ± 120; 1.1 missed, 1.65–1.75 uncertain). Preview
     13.8 s (1.45 time units a second), verification 46 s.
+  - 2026-11-04 (the timing audit, docs/LEVELS.md): preview 16.7–17.2 s over five runs
+    (`generator check` with a fresh run cache, the machine idle, the commit's build and an
+    earlier one alike), verification 52–54 s: it streams 1.2 time units a second, the rule's
+    1 with a 16 % margin. The 13.8 s above was not reproduced.
 
 ## DEC-33: The panel's Joule heat is the field's work on the carriers, not the lattice's tally
 
