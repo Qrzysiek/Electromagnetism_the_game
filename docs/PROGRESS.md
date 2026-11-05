@@ -63,6 +63,9 @@ its command and inputs. While it runs, from another terminal:
 
 An item past four times its expected time is hung: the job stops there (the next items may
 hang too; `--on-hang continue` goes on), and the incident log names it with its output's end.
+Items are timed by the machine's awake time (a sleep counts neither toward the limit nor in
+the times recorded), and `progress.py run` and `chain` keep Windows from sleeping when idle
+(`--allow-sleep` lets it).
 Fix it and run the same command again: the item that stopped the job runs first, finished
 items whose inputs are unchanged are not rerun, and those the fix changed are. `state --save
 FILE` keeps a ledger, `--load FILE` restores one. The heavy tests' jobs are

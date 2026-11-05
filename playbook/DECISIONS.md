@@ -164,6 +164,8 @@ Entries are numbered in order and never renumbered.
   - An item past four times its estimate is hung, and the job stops there. After the fix
     the same command continues: the stopping item runs first, and only finished items whose
     inputs changed run again.
+  - Items are timed by the machine's awake time, not the wall clock: a night's sleep once
+    counted as 6.7 h of a test's run, killed it as hung and interrupted its 15 neighbours.
 - **Why:** before this, a run with one hung or failing item had to be killed and redone
   whole, twice in one session. "Hangs on one item for several hours" also went unseen,
   because progress was counted per test binary.

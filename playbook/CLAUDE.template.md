@@ -77,7 +77,8 @@ it works and how it is validated, `README.md` how to run it.
 - A run of many independent items goes through `scripts/runner.py`:
   - each outcome is saved as it comes, keyed by the item's inputs;
   - `runner.py ctl <job> pause|resume|stop|skip ITEM` works while it runs;
-  - a hang stops the job with a record of where;
+  - a hang stops the job with a record of where (items timed by awake time, so a sleep is
+    not a hang);
   - after the fix, the same command continues and redoes only what the fix changed.
 - A hang limit is a multiple of an estimate, so make sure the estimate measures the same
   work (a cached or recorded result is not a computation's time).

@@ -32,7 +32,8 @@ its environment additions and the contents of every input (the job's and its own
 after a change runs again exactly the items whose inputs changed, and the others count as
 done. An item that runs longer than `timeout_factor` times its expected time (its last
 passing run's, else its estimate; at least `min_timeout`) is killed as hung, recorded as a
-timeout, and the job goes on. The ledger (target/progress/<job>.ledger.jsonl) takes each
+timeout, and the job goes on. Items are timed by the machine's awake time (`awake`): a sleep
+in the middle neither counts toward the limit nor into the time recorded. The ledger (target/progress/<job>.ledger.jsonl) takes each
 outcome as it comes, so nothing finished is lost to a crash, a stop or a hang.
 
 The library (`Item`, `Runner`) serves other scripts too (`affected.py`): an `on_done` callback
@@ -65,6 +66,23 @@ class Item:
     estimate: float | None = None
     env: dict = field(default_factory=dict)
     cwd: str = ROOT
+
+
+if sys.platform == "win32":
+    import ctypes
+
+    def awake() -> float:
+        """Seconds of the machine's awake time: Windows' unbiased interrupt time, which stops
+        while the machine sleeps or hibernates. The wall clock counted a night's sleep (6.7 h,
+        2026-11-05) as a coverage run's time and killed it as hung, with its 15 neighbours."""
+        t = ctypes.c_ulonglong()
+        ctypes.windll.kernel32.QueryUnbiasedInterruptTime(ctypes.byref(t))
+        return t.value / 1e7
+else:
+    def awake() -> float:
+        """Seconds of the machine's awake time: the monotonic clock (Linux's stops in a
+        suspend)."""
+        return time.monotonic()
 
 
 def file_hashes(patterns):
@@ -251,7 +269,7 @@ class Runner:
                 self.finish(it, SKIPPED, 0.0, "", count, total)
             # Running items: finished, skipped, hung, or stopped.
             for iid, (it, p, t0, out) in list(running.items()):
-                seconds = time.time() - t0
+                seconds = awake() - t0
                 status = None
                 if p.poll() is not None:
                     status = OK if p.returncode == 0 else FAILED
@@ -297,7 +315,7 @@ class Runner:
                     cmd[0] = sys.executable
                 p = subprocess.Popen(cmd, cwd=it.cwd, env=env, stdout=out, stderr=subprocess.STDOUT,
                                      **kwargs)
-                running[it.id] = (it, p, time.time(), out)
+                running[it.id] = (it, p, awake(), out)
             time.sleep(0.2)
         bad = [i for i, s in self.results.items() if s not in (OK, "done")]
         self.say(f"[runner] {sum(s == OK for s in self.results.values())} ok, "

@@ -761,6 +761,15 @@ Entries are numbered in order and never renumbered.
 - **History:**
   - 2026-10-27: introduced, a hang stopping the job by default (the owner's revision of a first
     design that skipped it and went on).
+  - 2026-11-05: items timed by the machine's awake time (`runner.awake`: Windows' unbiased
+    interrupt time), no longer the wall clock; `progress.py run` and `chain` keep Windows from
+    sleeping when idle unless `--allow-sleep` (until now only `refresh_coverage.py` did). The
+    machine slept from 04:02 to 10:44 ("Application API", the system log) during a coverage
+    refresh launched by `progress.py chain`: on waking, the wall clock put
+    `reference::113_positive_carriers` at 29 031 s against its limit of 20 876 s, and the
+    stop interrupted its 15 neighbours after up to 9.4 h each. A sleep the user asks for
+    still happens; it no longer counts as a hang, nor in the recorded times that set the
+    limits.
 
 ## DEC-24: A carrier's impulses carry its own inductance on the grid
 

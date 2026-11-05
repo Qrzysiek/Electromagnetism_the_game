@@ -2,9 +2,9 @@
 run` (the selected tests' verdicts with the plain program at full speed, then their coverage
 with the instrumented one, longest first), tracked by `progress.py` (`/progress`; the job
 `coverage-refresh`). It takes the whole machine for hours (2026-10-27, all 521 tests stale:
-about 1.5 h of verdicts and 10 h of coverage); on Windows it keeps the machine from sleeping
-while it runs (not the display), unless `--allow-sleep`. Interrupted, start it again: the
-runner keeps what is done and redoes only what changed (DEC-23). The records it writes are the
+about 1.5 h of verdicts and 10 h of coverage); on Windows `progress.py` keeps the machine
+from sleeping when idle while it runs (not the display), unless `--allow-sleep`. Interrupted,
+start it again: the runner keeps what is done and redoes only what changed (DEC-23). The records it writes are the
 main checkout's, shared by every worktree (`affected.py`). Any arguments after `--` go to
 `affected.py run` (e.g. `-- --jobs 2`).
 
@@ -24,17 +24,6 @@ ITEMS = 521 + 353
 SECONDS_EACH = 47
 
 
-def keep_awake():
-    """While this process runs, Windows does not sleep (`SetThreadExecutionState`; released at
-    exit). Elsewhere nothing."""
-    if sys.platform != "win32":
-        return
-    import ctypes
-
-    es_continuous, es_system_required = 0x80000000, 0x00000001
-    ctypes.windll.kernel32.SetThreadExecutionState(es_continuous | es_system_required)
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Bring every heavy test's verdict and coverage up to date, starting at once "
@@ -46,11 +35,10 @@ def main():
                         help="after --: arguments for affected.py run")
     args = parser.parse_args()
     rest = [a for a in args.rest if a != "--"]
-    if not args.allow_sleep:
-        keep_awake()
     command = [
         sys.executable, os.path.join("scripts", "progress.py"), "run", "coverage-refresh",
         "--total", str(ITEMS), "--each", str(SECONDS_EACH), "--match", r"^\[\d+/\d+\] ",
+        *(["--allow-sleep"] if args.allow_sleep else []),
         "--", sys.executable, os.path.join("scripts", "affected.py"), "run", *rest,
     ]
     print("[refresh] " + " ".join(command), flush=True)

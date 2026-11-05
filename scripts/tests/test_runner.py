@@ -88,6 +88,22 @@ def test_a_hang_may_be_passed_over(jobdir):
     assert results == {"hang": "timeout", "quick": "ok"}
 
 
+def test_the_machine_asleep_does_not_count(jobdir, monkeypatch):
+    # Items are timed by `awake`: with a clock a hundred times slow (the machine asleep 99 % of
+    # the time), an item 1.5 s by the wall clock is neither hung (limit 1 s) nor timed at 1.5 s.
+    a = runner.awake()  # the real clock runs with the time while awake
+    time.sleep(0.2)
+    assert 0.15 < runner.awake() - a < 1.0
+    t0 = time.monotonic()
+    monkeypatch.setattr(runner, "awake", lambda: (time.monotonic() - t0) / 100)
+    timed = {}
+    items = [item("slept", "import time; time.sleep(1.5)", estimate=0.1)]
+    r = runner.Runner("j", items, jobs=1, quiet=True, timeout_factor=2.0, min_timeout=1.0,
+                      on_done=lambda it, status, seconds, out: timed.update({it.id: seconds}))
+    assert r.run() == {"slept": "ok"}
+    assert timed["slept"] < 0.1
+
+
 def test_a_failure_may_stop_the_job(jobdir):
     items = [item("bad", "import sys; sys.exit(1)"), item("next", "pass")]
     assert run("j", items, jobs=1) == {"bad": "failed", "next": "ok"}

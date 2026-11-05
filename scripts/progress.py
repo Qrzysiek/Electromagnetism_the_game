@@ -1,10 +1,11 @@
 """Progress of long computations (the /progress skill: .claude/skills/progress/SKILL.md).
 
-    python scripts/progress.py run <job> --total N [--each S] [--match REGEX] [--idle] -- CMD...
+    python scripts/progress.py run <job> --total N [--each S] [--match REGEX] [--idle]
+                                   [--allow-sleep] -- CMD...
         runs CMD, its output (stdout and stderr) into target/progress/<job>.log; every output
         line matching REGEX counts as one finished item of N; --each is the estimated time
         per item, in seconds (before it starts: see `estimate` and the skill's timings)
-    python scripts/progress.py chain <job> --plan PLAN.json [--idle]
+    python scripts/progress.py chain <job> --plan PLAN.json [--idle] [--allow-sleep]
         runs the plan's chunks one after another, each as `run` would (its log
         target/progress/<job>-<k>.log), recording each one that finishes; a failed chunk stops
         the chain; run again, it resumes at the first chunk not finished. The plan:
@@ -19,6 +20,9 @@
 
 The counts are read from the logs whenever the status is asked for, so a status is right
 even if the wrapper stopped.
+
+While `run` or `chain` runs, Windows does not go to sleep when idle (`keep_awake`; the
+display may, and a sleep asked for still happens); `--allow-sleep` lets it.
 """
 import argparse
 import json
@@ -39,6 +43,18 @@ if hasattr(sys.stdout, "reconfigure"):
 # verification 12 800 x 7143 in 124 s; Magnetoresistance 5200 x 2286 in 17 s, 10 400 x 4571
 # in 76 s): 1.4-1.6e-6 s.
 CARRIER_STEP_SECONDS = 1.5e-6
+
+
+def keep_awake():
+    """While this process runs, Windows does not sleep when idle (`SetThreadExecutionState`,
+    released at exit; not the display). Elsewhere nothing. (A chain launched without it slept
+    at 04:02 on 2026-11-05 and lost its coverage refresh's 16 runs in flight.)"""
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    es_continuous, es_system_required = 0x80000000, 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(es_continuous | es_system_required)
 
 
 def job_path(job):
@@ -275,10 +291,14 @@ def main():
     r.add_argument("--each", type=float)
     r.add_argument("--match")
     r.add_argument("--idle", action="store_true")
+    r.add_argument("--allow-sleep", action="store_true",
+                   help="let the machine sleep when idle, as usual, while it runs")
     c = sub.add_parser("chain")
     c.add_argument("job")
     c.add_argument("--plan", required=True)
     c.add_argument("--idle", action="store_true")
+    c.add_argument("--allow-sleep", action="store_true",
+                   help="let the machine sleep when idle, as usual, while it runs")
     w = sub.add_parser("watch")
     w.add_argument("job")
     w.add_argument("--log", required=True)
@@ -299,6 +319,8 @@ def main():
         k = argv.index("--")
         argv, cmd = argv[:k], argv[k + 1:]
     args = ap.parse_args(argv)
+    if args.what in ("run", "chain") and not args.allow_sleep:
+        keep_awake()
     if args.what == "run":
         if not cmd:
             ap.error("run: give the command after --")
