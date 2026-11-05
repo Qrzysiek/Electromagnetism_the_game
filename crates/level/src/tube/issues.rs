@@ -33,10 +33,12 @@ impl Level {
     }
 
     /// What a tube level's metals refuse (PHYSICS.md §2.11, the Drude metal): a
-    /// rectangle off the board or crossing another metal (other than one wholly in a ring's
-    /// hole) or an electrode, a hole that leaves a wall thinner than a cell, contacts that
-    /// do not lie along a side, a medium of cores too dense for the model, a plasma period
-    /// or a mean free path the step does not resolve, too many carriers.
+    /// rectangle off the board or crossing another metal or an electrode (other than one
+    /// wholly in a ring's hole; an electrode there not with the carriers' own field), a hole
+    /// that leaves a wall thinner than a cell, contacts that neither lie along a side nor
+    /// meet the hole's walls as `contact_side` allows, a medium of cores too dense for the
+    /// model, a plasma period or a mean free path the step does not resolve, too many
+    /// carriers.
     #[allow(clippy::too_many_lines)]
     pub(super) fn metal_issues(&self, spec: &TubeSpec, player: &[Element], out: &mut Vec<String>) {
         let n = self.electrodes.len();
@@ -144,7 +146,8 @@ impl Level {
                 } else if self.contact_side(m, e).is_none() {
                     out.push(format!(
                         "{name}: electrode {} is not a contact: a box along one of its sides, \
-                         its face within the side.",
+                         its face within the side, or in its hole, flush with one of the \
+                         hole's walls or filling it.",
                         e + 1
                     ));
                 }
@@ -164,20 +167,26 @@ impl Level {
             if spec.ions.is_some_and(|i| m.contacts.contains(&i.electrode)) {
                 out.push(format!("{name}: the ion source cannot be its contact."));
             }
-            // Nothing inside it: electrodes, other metals, projectiles, free charges.
+            // Nothing inside it: electrodes (but wholly in a ring's hole: a Corbino disc's
+            // inner contact, its lead drawn across the ring), other metals, projectiles,
+            // free charges.
             let overlaps =
                 |a0: DVec3, a1: DVec3| a0.x < hi.x && a1.x > lo.x && a0.y < hi.y && a1.y > lo.y;
             for e in 0..n {
-                let inside = match self.electrode_box(e) {
-                    Some((b0, b1)) => overlaps(b0, b1),
-                    None => {
-                        let c = self.grid.position(self.electrodes[e].center);
-                        let r = 0.5 * (self.electrodes[e].length + self.electrodes[e].thickness);
-                        overlaps(c - DVec3::new(r, r, 0.0), c + DVec3::new(r, r, 0.0))
-                    }
-                };
-                if inside {
+                let (b0, b1) = self.electrode_bounds(e);
+                if !overlaps(b0, b1) {
+                    continue;
+                }
+                if !self.in_metal_hole(m, e) {
                     out.push(format!("{name} overlaps electrode {}.", e + 1));
+                } else if spec.speed_of_light.is_some() {
+                    // Its lead crosses the ring: with the carriers' own field the lead's
+                    // circuit would link the ring's flux (DEC-27: leads from the border only).
+                    out.push(format!(
+                        "{name}: electrode {} in its hole needs a lead across the ring, not \
+                         modelled with the carriers' own field (DEC-27).",
+                        e + 1
+                    ));
                 }
             }
             // A metal may lie wholly in another's hole (a transformer's rings, V-D7).

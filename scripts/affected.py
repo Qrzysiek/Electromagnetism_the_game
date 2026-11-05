@@ -409,10 +409,31 @@ def listed(files):
     return ", ".join(files[:3]) + more
 
 
+def renamed(gone, names):
+    """The listed test a record of `gone` belongs to after the curriculum renumbered its level
+    (`check::NN_slug` → `check::MM_slug`, the one listed test of that check and slug), or None."""
+    check, _, level = gone.partition("::")
+    _, sep, slug = level.partition("_")
+    if not sep:
+        return None
+    matches = [n for n in names
+               if n.partition("::")[0] == check and n.partition("::")[2].partition("_")[2] == slug]
+    return matches[0] if len(matches) == 1 else None
+
+
 def all_tests(records, program):
-    """Every heavy test the program lists (records of tests no longer listed are dropped)."""
+    """Every heavy test the program lists. A record of a test no longer listed moves to its
+    level's new name when the curriculum renumbered the level (`renamed`: its times keep the
+    estimates and hang limits; its inputs' hashes still decide what it selects), else is
+    dropped. (Until 2026-11-04 every one was dropped: a level inserted before twelve others
+    left their tests without times, and a metal level's `repeated::`, guessed at 120 s, was
+    killed as hung at 600 s.)"""
     names = program.tests()
-    for gone in set(records["tests"]) - set(names):
+    listed = set(names)
+    for gone in sorted(set(records["tests"]) - listed):
+        new = renamed(gone, names)
+        if new is not None and new not in records["tests"]:
+            records["tests"][new] = records["tests"][gone]
         del records["tests"][gone]
     return names
 
@@ -496,11 +517,17 @@ def plain_seconds(name, r, tests=None):
     and last 0.2 s where the instrumented one, which computes (`EM_TEST_FULL`), lasts half an
     hour (the refresh of 2026-11-03 killed `golden::125_self_inductance` as hung at its 600 s
     limit): its time is taken as at least half its level's `repeated::` (`tests`: the
-    records), which computes the same hash twice."""
+    records), which computes the same hash twice. And a `repeated::` run without a record of its
+    own takes at least twice its level's `golden::` (2026-11-04: a level's renumbering left
+    Wheatstone bridge's `repeated::` without one, guessed at 120 s, and its 700 s run was
+    killed as hung at 600)."""
     check, level = name.split("::", 1)
     plain = (r or {}).get("seconds") or 0.0
+    sibling = lambda other: ((tests or {}).get(f"{other}::{level}") or {}).get("seconds") or 0.0  # noqa: E731
     if check == "golden":
-        plain = max(plain, ((tests or {}).get(f"repeated::{level}") or {}).get("seconds", 0.0) / 2)
+        plain = max(plain, sibling("repeated") / 2)
+    elif check == "repeated" and not plain:
+        plain = 2.0 * sibling("golden")
     return plain
 
 

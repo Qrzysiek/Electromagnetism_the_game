@@ -2,7 +2,7 @@
 //! `<check>::<level file's stem>` and ignored by default: `cargo test` runs the fast tier
 //! alone, `scripts/affected.py` the ones a change can affect, and
 //! `cargo test --release -p level --test per_level -- --ignored [<filter>]` any by name
-//! (a filter is a part of the name: `golden::`, `reference::109_`, `122_inverter`).
+//! (a filter is a part of the name: `golden::`, `reference::109_`, `123_inverter`).
 //!
 //! - `golden::` (T11, PHYSICS.md §9): the reference solution flown at both tolerances, every
 //!   bit of the result (all samples, margins, outcome, step statistics) hashed and compared

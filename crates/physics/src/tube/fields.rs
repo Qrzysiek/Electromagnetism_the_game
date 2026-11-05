@@ -61,7 +61,16 @@ impl Tube {
     /// to both alike. (Until 2026-10-26 the direct sums included the backgrounds and the push
     /// added them again: below `TREE_MIN` they pulled twice, PHYSICS.md §2.11; test
     /// `trees_and_direct_sums_agree`.)
-    pub(super) fn charges_fields(&self, s: &TubeState, sigma: &[f64], trees: bool) -> Vec<DVec3> {
+    /// Also the potential of the surface charge and every particle at `points` (without
+    /// the backgrounds; by the trees the particles' as points, `−λ ln r²`, by the direct
+    /// sums as rods).
+    pub(super) fn charges_fields(
+        &self,
+        s: &TubeState,
+        sigma: &[f64],
+        trees: bool,
+        points: &[DVec3],
+    ) -> (Vec<DVec3>, Vec<f64>) {
         if trees {
             let segments = &self.electrodes.tree;
             let segment_m = segments.multipoles(sigma);
@@ -70,20 +79,39 @@ impl Tube {
                 self.softening,
             );
             let particle_m = particles.multipoles(&s.charge);
-            (0..s.x.len())
+            let fields = (0..s.x.len())
                 .into_par_iter()
                 .with_min_len(PAR_CHUNK)
                 .map(|k| {
                     segments.field(&segment_m, s.x[k], None)
                         + particles.field(&particle_m, s.x[k], Some(k))
                 })
-                .collect()
+                .collect();
+            let at = points
+                .par_iter()
+                .with_min_len(PAR_CHUNK)
+                .map(|y| segments.potential(&segment_m, *y) + particles.potential(&particle_m, *y))
+                .collect();
+            (fields, at)
         } else {
-            (0..s.x.len())
+            let fields = (0..s.x.len())
                 .into_par_iter()
                 .with_min_len(PAR_CHUNK)
                 .map(|k| self.charges_field(s, sigma, s.x[k], Some(k)))
-                .collect()
+                .collect();
+            let at = points
+                .par_iter()
+                .with_min_len(PAR_CHUNK)
+                .map(|y| {
+                    self.potential(s, sigma, *y, None)
+                        - self
+                            .lattices
+                            .iter()
+                            .map(|l| l.background_at(*y).0)
+                            .sum::<f64>()
+                })
+                .collect();
+            (fields, at)
         }
     }
 

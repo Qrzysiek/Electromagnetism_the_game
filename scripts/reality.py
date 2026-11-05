@@ -1590,6 +1590,32 @@ REALITY["magnetoresistance"] = R(
                 "wide strip, left contact (grounded)", "wide strip, right contact (your supply)"],
     metals=["long strip", "short wide strip"])
 
+REALITY["corbino_disc"] = R(
+    "A Corbino disc: magnetoresistance with no Hall voltage",
+    kept("No Hall field, the largest magnetoresistance",
+         "Both edges are contacts, so no charge can pile up to push the carriers back: they "
+         "drift round the ring, and the current across it falls nearly as the conductivity "
+         "along the field, σ_xx, about 1/(1 + (μB)²): how carriers' mobility is measured in "
+         "semiconductors."),
+    kept("Even in the field",
+         "The current is the same for either direction of the field; only the circling turns "
+         "over."),
+    simpler("A square ring, its corners bare",
+            "A real Corbino disc is round and contacted all round. Contacted wholly, any ring "
+            "would follow σ_xx exactly; here the outer contact's four pieces stop a cell short "
+            "of each corner (electrodes may not touch), where a little Hall field builds up, "
+            "and the contacts' own voltage is a larger share at no field: the current falls "
+            "somewhat more slowly than σ_xx (0.50 of its value at no field where σ_xx gives "
+            "0.41)."),
+    simpler("The inner contact's lead",
+            "Drawn across the ring, it carries the supply's current but takes no part in the "
+            "physics; a real disc's inner lead comes up through the hole."),
+    METAL_CLASSICAL, METAL_SCATTERING,
+    electrodes=["outer contact, top (grounded)", "outer contact, right (grounded)",
+                "outer contact, bottom (grounded)", "outer contact, left (grounded)",
+                "inner contact (the supply)"],
+    metals=["the ring (Corbino disc)"])
+
 REALITY["wheatstone_bridge"] = R(
     "A Wheatstone bridge reading a magnetoresistor: a field sensor",
     kept("A bridge balances on a ratio",

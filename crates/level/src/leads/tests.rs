@@ -113,8 +113,9 @@ fn nodes(wire: &Wire) -> Vec<(i64, i64)> {
 
 /// Every shipped tube level is wired: each electrode due a lead has one (all but an open
 /// level's outermost envelope), every wire runs along x and y but its stubs, keeps clear of
-/// what it does not end on, and no two wires share a node (but beside an electrode both end
-/// on); and the same plan comes out twice.
+/// what it does not end on (but the ring holding its end in its hole, which a lead to it
+/// crosses), and no two wires share a node (but beside an electrode both end on); and the
+/// same plan comes out twice.
 #[test]
 fn every_shipped_tube_level_is_wired() {
     let mut problems = Vec::new();
@@ -158,7 +159,19 @@ fn every_shipped_tube_level_is_wired() {
             wires.push((format!("strap {k}"), w, vec![*a, *b]));
         }
         for (what, w, ends) in &wires {
-            for f in faults(w, &outlines, &metals, ends) {
+            // A wire may cross the ring whose hole holds one of its ends (a Corbino disc's
+            // inner contact, DEC-40), and no other metal.
+            let clear: Vec<(DVec3, DVec3)> = metals
+                .iter()
+                .zip(&spec.metals)
+                .filter(|(_, m)| {
+                    !ends
+                        .iter()
+                        .any(|&e| e < level.electrodes.len() && level.in_metal_hole(m, e))
+                })
+                .map(|(r, _)| *r)
+                .collect();
+            for f in faults(w, &outlines, &clear, ends) {
                 problems.push(format!("{name}: {what}: {f}"));
             }
         }
@@ -206,7 +219,13 @@ fn a_free_electrode_gets_a_straight_lead() {
         ])
     };
     let outlines = [rect(4.0, 1.0, 6.0, 2.0)];
-    let mut router = Router::new(DVec3::ZERO, DVec3::new(10.0, 10.0, 0.0), &outlines, &[]);
+    let mut router = Router::new(
+        DVec3::ZERO,
+        DVec3::new(10.0, 10.0, 0.0),
+        &outlines,
+        &[],
+        vec![None; outlines.len()],
+    );
     let wire = router
         .route(End::Border, End::Electrode(0))
         .expect("a route");
@@ -236,7 +255,13 @@ fn leads_go_round_what_is_in_the_way() {
         rect(3.0, 1.5, 17.0, 2.0),
         rect(9.0, 6.0, 11.0, 7.0),
     ];
-    let mut router = Router::new(DVec3::ZERO, DVec3::new(20.0, 20.0, 0.0), &outlines, &[]);
+    let mut router = Router::new(
+        DVec3::ZERO,
+        DVec3::new(20.0, 20.0, 0.0),
+        &outlines,
+        &[],
+        vec![None; outlines.len()],
+    );
     let a = router
         .route(End::Border, End::Electrode(0))
         .expect("a route");

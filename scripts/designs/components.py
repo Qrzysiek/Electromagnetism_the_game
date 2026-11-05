@@ -841,6 +841,50 @@ def magnetoresistance():
         reference=[supply(21, 15, 7.0), supply(23, 19, 5.0)])
 
 
+def corbino_disc():
+    # The Corbino disc (DEC-40, DRUDE.md Phase 2 item 3): a square ring 12 x 12 with a hole
+    # 4 x 4 (walls 4), contacted all round its hole (a box filling it, on the level's supply)
+    # and all round its outside (four grounded boxes meeting at the corners). With both
+    # boundaries contacted no Hall field can build up: the current goes as sigma_xx, the
+    # largest geometric magnetoresistance (test D12). Magnetoresistance's short wide strip
+    # (L/W = 0.4) falls short of it.
+    # Designed with `generator tube-scan` (preview, t = 10-40, the supply 4): the current into
+    # the inner contact 9.49, 8.99, 8.07, 6.66, 5.75, 4.74, 3.86, 3.27, 2.70, 1.95, 1.49,
+    # 0.82 at B = 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16: I/I0 0.85, 0.50, 0.29 at B = 2, 5,
+    # 8 against the Boltzmann equation's sigma_xx ratio 0.76, 0.41, 0.23 (the model's
+    # `mobility(2, B)`): above it by the bare corners (a Hall field builds up there) and the
+    # contacts' own voltage, at 4 against kT/q = 4 a larger share at B = 0 than in a field.
+    # `generator window` (every 0.24, preview): with the goal 3.3-4.8 B solved on 5.14-6.57
+    # and -6.81 to -5.38 (4.5 % each); widened to 3.3-5.3, on 4.56-6.82 (7.1 % of +-16, clear
+    # of the half's middle, 8, where 2.70 flows). Verified 3.797 +- 0.102 at B = 6.
+    return level(
+        "Corbino disc",
+        "A ring of metal contacted all round its hole and all round its outside: the "
+        "current flows across the ring, from the inner contact to the outer one. In a "
+        "field along the axis the carriers' paths bend, but here no charge can pile up to "
+        "push them back (both edges are contacts), so they circle round the ring instead of "
+        "crossing it, and the current falls fast as the field grows, either way. The inner "
+        "contact is held at 4, the outer one grounded. Set your "
+        "solenoid so that between 3.3 and 5.3 flows into the inner contact (averaged over "
+        "$t = 10$ to $40$); with no field about 9.5 does.",
+        grid=(24, 20), c=None, t_max=60.0,
+        # 0-3: the outer contact's four sides (top, right, bottom, left), grounded; 4: the
+        # inner contact, filling the hole, on the supply.
+        # Each outer side's contact stops a cell short of the corners: electrodes may not
+        # touch (`tube_issues`: touching ones at different potentials would hold an infinite
+        # field), so 2 of each corner's 24 cells of edge stay bare.
+        electrodes=[contact(12, 17, 10, vertical=False), contact(19, 10, 10),
+                    contact(12, 3, 10, vertical=False), contact(5, 10, 10),
+                    plate(12, 10, 4.0, thickness=4.0, height=2.0)],
+        solenoid_fields=slider(16.0, 6.0, 4.0, 5.0, 7.0),
+        tube=tube(0, None, 0, 0, 0, 0, step=METAL_STEP, solenoid=(23, 19),
+                  circuits=[tube_circuit(4, dc(4.0), resistance=0.0)],
+                  goals=[current_goal(4, 3.3, 5.3, 10.0, 40.0, carriers="net")],
+                  metals=[metal((6, 4), (18, 16), [0, 1, 2, 3, 4], seed=13,
+                                hole=((10, 8), (14, 12)), **METAL)]),
+        reference=[supply(23, 19, 6.0)])
+
+
 def wheatstone_bridge():
     # Designed with `generator tube-scan` (prototypes/bridge_*.py): Magnetoresistance's two
     # strips on one fixed supply at their right ends, each left end to ground through an

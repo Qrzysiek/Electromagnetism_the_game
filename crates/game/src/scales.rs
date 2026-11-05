@@ -744,9 +744,21 @@ fn drive_field(
     if spec.solenoid_drive.is_some() {
         return 0.5 * b * omega * 0.5 * length;
     }
-    let faces = level.contact_faces(m);
+    // Each contact's faces (one along a side; four for one filling a ring's hole), two
+    // contacts apart by their nearest faces' middles.
+    let faces: Vec<Vec<[[f64; 2]; 2]>> = m
+        .contacts
+        .iter()
+        .map(|&e| level.contact_segments(m, e))
+        .collect();
     let across = potentials.and_then(|v| {
         let mid = |f: &[[f64; 2]; 2]| [0.5 * (f[0][0] + f[1][0]), 0.5 * (f[0][1] + f[1][1])];
+        let apart = |a: &[[[f64; 2]; 2]], c: &[[[f64; 2]; 2]]| {
+            a.iter()
+                .flat_map(|fa| c.iter().map(move |fc| (mid(fa), mid(fc))))
+                .map(|(pa, pc)| ((pa[0] - pc[0]).powi(2) + (pa[1] - pc[1]).powi(2)).sqrt())
+                .fold(f64::INFINITY, f64::min)
+        };
         let mut best: Option<f64> = None;
         for (i, &a) in m.contacts.iter().enumerate() {
             for (j, &c) in m.contacts.iter().enumerate().skip(i + 1) {
@@ -755,10 +767,8 @@ fn drive_field(
                 else {
                     continue;
                 };
-                let (pa, pc) = (mid(fa), mid(fc));
-                let (dx, dy) = (pa[0] - pc[0], pa[1] - pc[1]);
-                let d = (dx * dx + dy * dy).sqrt();
-                if d > 0.0 {
+                let d = apart(fa, fc);
+                if d > 0.0 && d.is_finite() {
                     let e = (va - vc).abs() / d;
                     best = Some(best.map_or(e, |x| x.max(e)));
                 }

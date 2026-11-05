@@ -522,6 +522,13 @@ the magnetic field first).
   of its length), the supply's `omega`. A frequency set on it runs bit for bit as the same
   frequency written into the level (`crates/level/tests/frequency.rs`: Rectifier, Triode,
   Eddy currents). `generator window --omega` scans it.
+- **2026-11-04, Phase 2 item 3's remainder, contacts on a ring's inner side (DEC-40):** a box
+  in a ring's hole is a contact, flush with one of its walls or filling it (giving off
+  carriers from every face); its lead is drawn across the ring (refused with the carriers'
+  own field, DEC-27); contacts meeting at a corner share their layers there. D12 (the Corbino
+  disc, PHYSICS.md §2.11): the conductance's ratio to B = 0's against the Boltzmann
+  equation's `Re σ̃(ω)/σ̃(0)` within 2.4 % and 0.3 % at ω τ ≈ 0.5 and 1, the Hall ratio within
+  1.2 %; its mirror and quarter turn (Y30). The levels: the Corbino disc next.
 - **Open: the AC mobility through a level** (the plan's test, not committed: its draft in
   `prototypes/ac_mobility_test.rs`). Ohm's law's strip on a sine of
   amplitude 10 (200 macroparticles per area, cores of radius 0.001 so that the medium's own

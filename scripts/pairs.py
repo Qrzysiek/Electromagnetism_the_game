@@ -307,6 +307,30 @@ def make_tube_ring(lv, pl, p, o, w):
                               "core_radius": 0.005, "carriers_per_area": 20.0, "seed": 1}]}
 
 
+def make_tube_corbino(lv, pl, p, o, w):
+    """A Corbino disc (PHYSICS.md 2.11, contacts in a ring's hole; DRUDE.md Phase 2 item 3): a
+    6 x 6 conductor about p with a 2 x 2 hole (walls 2), its inner contact a box filling the
+    hole at 1 V collecting the goal's net current (its lead drawn across the ring), a grounded
+    contact along its left side, in a steady field, so that the other element lands in the
+    hole (on the contact), on the wall or outside. A metal must refuse what lies inside it
+    but its contacts and electrodes wholly in its hole (`metal_issues`)."""
+    lv["shots"] = []
+    es = lv.setdefault("electrodes", [])
+    k = len(es)
+    # Along x (`electrode` defaults to 90°): the side contact 2 wide, the hole's 2 x 2.
+    es.append(electrode((p[0] - 4, p[1]), length=2.0, thickness=6.0, angle_deg=0.0,
+                        bias={"kind": "grounded"}))
+    es.append(electrode(p, length=2.0, thickness=2.0, angle_deg=0.0))
+    lv["tube"] = {"cathode": k, "charge_per_mass": -1.0, "step": 0.05, "b_z": 0.5,
+                  "goals": [{"electrode": k + 1, "min": 0.0, "max": 1.0, "start": 2.0,
+                             "end": 4.0, "carriers": "net"}],
+                  "metals": [{"corners": [node((p[0] - 3, p[1] - 3)), node((p[0] + 3, p[1] + 3))],
+                              "hole": [node((p[0] - 1, p[1] - 1)), node((p[0] + 1, p[1] + 1))],
+                              "contacts": [k, k + 1], "density": 1.0, "charge_per_mass": -1.0,
+                              "thermal_speed": 1.0, "mean_free_path": 0.5,
+                              "core_radius": 0.005, "carriers_per_area": 20.0, "seed": 1}]}
+
+
 def make_player_cut(lv, pl, p, o, w):
     """The player's insulating cut (PHYSICS.md 2.11): from edge to edge across the middle of
     the level's first metal if it has one, so that the cut metal's physics runs beside the
@@ -408,6 +432,7 @@ ELEMENTS = {
     "tube_coax": make_tube_coax,
     "tube_metal": make_tube_metal,
     "tube_ring": make_tube_ring,
+    "tube_corbino": make_tube_corbino,
     "player_charge": player(lambda p, o, w: {"node": node(p), "kind": "charge", "value": -1.0}),
     "player_magnet": player(lambda p, o, w: {"node": node(p), "kind": "magnet", "value": 2.0}),
     "player_antenna": player(lambda p, o, w: {"node": node(p), "kind": "antenna", "value": 1.0,

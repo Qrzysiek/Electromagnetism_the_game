@@ -7,8 +7,9 @@
 //! stepped by the lattice's own collision step (`Lattice::advance`, as `Tube` steps them).
 //! D5 screening: a metal in `Tube`, its carriers' own field screening two plates' within the
 //! Debye length. The self-consistent resistor (Ohm's law with the carriers' own field and
-//! the contacts), D7, its thermal noise against Nyquist's, and D8, eddy currents in a
-//! changing field, are measurements of minutes, run with `--ignored`.
+//! the contacts), D7, its thermal noise against Nyquist's, D8, eddy currents in a changing
+//! field, and D12, the Corbino disc (a contact filling a ring's hole: the conductance as
+//! `σ_xx`), are measurements of minutes, run with `--ignored`.
 
 use physics::DVec3;
 use physics::bem::Bias;
@@ -831,6 +832,7 @@ fn d9_cell_accounts_add_up() {
     check("field's work", &cells.work, s.field_work[0]);
     check("induced work", &cells.induced, s.induced_work[0]);
     check("inductive work", &cells.inductive, s.inductive_work[0]);
+    check("macroscopic heat", &cells.heat, s.macro_heat[0]);
     // Without the self-field the induced fields' work is the drive's, bit for bit.
     assert_eq!(s.inductive_work[0].to_bits(), s.induced_work[0].to_bits());
     // One lattice: nothing passed to it by others.
@@ -1045,4 +1047,392 @@ fn d11_circuit_energy_account() {
         (current.0 - coarse.0).abs() < 3.0 * libm::hypot(coarse.1, current.1),
         "{current:?} {coarse:?}"
     );
+}
+
+/// A Corbino disc (DRUDE.md Phase 2 item 3): a square ring 10 × 10 about the origin with a
+/// hole 4 × 4 (walls 3, six mean free paths), its inner contact a box filling the hole (at
+/// `v`, giving off carriers from every face), its outer one four boxes one cell thick along
+/// its sides (grounded), the cores and carriers of the tests (`A`, `MEAN_FREE_PATH`,
+/// background 1, `q/m = −1`, thermal speed 1), in the field `b_z`.
+fn corbino(v: f64, b_z: f64, carriers: usize, dt: f64, seed: u64) -> Tube {
+    let (outer, inner) = (5.0, 2.0);
+    let rect = |cx: f64, cy: f64, hx: f64, hy: f64, bias: Bias| Electrode {
+        section: Section::Rect {
+            center: DVec3::new(cx, cy, 0.0),
+            angle: 0.0,
+            half_length: hx,
+            half_thickness: hy,
+        },
+        bias,
+    };
+    let electrodes = Electrodes::new(
+        vec![
+            rect(0.0, 0.0, inner, inner, Bias::Potential(v)),
+            rect(0.0, outer + 0.5, outer, 0.5, Bias::Grounded),
+            rect(outer + 0.5, 0.0, 0.5, outer, Bias::Grounded),
+            rect(0.0, -outer - 0.5, outer, 0.5, Bias::Grounded),
+            rect(-outer - 0.5, 0.0, 0.5, outer, Bias::Grounded),
+        ],
+        &[],
+        0.25,
+    );
+    let (lo, hi) = (
+        DVec3::new(-outer, -outer, 0.0),
+        DVec3::new(outer, outer, 0.0),
+    );
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let count = libm::round(4.0 * outer * outer / (2.0 * A * MEAN_FREE_PATH)) as usize;
+    let cores = Lattice::random_cores(lo, hi, count, A, seed);
+    let lattice = Lattice::new(lo, hi, common::metal(A), cores, carriers, seed + 4).with_hole(
+        DVec3::new(-inner, -inner, 0.0),
+        DVec3::new(inner, inner, 0.0),
+    );
+    let weight = lattice.carrier_charge().abs();
+    let emitter = |electrode: usize, toward: Option<DVec3>| Emitter {
+        electrode,
+        charge_per_mass: -1.0,
+        weight,
+        emit_toward: toward,
+        saturation: None,
+        thermal_speed: 1.0,
+        ohmic: Some(OhmicContact {
+            density: 1.0,
+            depth: 0.5 * MEAN_FREE_PATH,
+        }),
+    };
+    let source = |electrode: usize, v: f64| Circuit {
+        electrode,
+        source: Waveform::Dc(v),
+        resistance: 0.0,
+        capacitance: 0.0,
+        inductance: 0.0,
+        to: None,
+    };
+    Tube {
+        emitters: vec![
+            emitter(0, None),
+            emitter(1, Some(-DVec3::Y)),
+            emitter(2, Some(-DVec3::X)),
+            emitter(3, Some(DVec3::Y)),
+            emitter(4, Some(DVec3::X)),
+        ],
+        arena: Some((
+            DVec3::new(-outer - 2.0, -outer - 2.0, 0.0),
+            DVec3::new(outer + 2.0, outer + 2.0, 0.0),
+        )),
+        circuits: (0..5)
+            .map(|e| source(e, if e == 0 { v } else { 0.0 }))
+            .collect(),
+        lattices: vec![lattice],
+        b_z,
+        ..Tube::new(electrodes, 0.05, dt)
+    }
+}
+
+/// What a Corbino run measured over its window (means and standard errors over blocks).
+struct CorbinoRun {
+    /// `κ = 2 a n_ion` of the cores in the conductor.
+    kappa: f64,
+    /// The current outward from the inner contact: `−Σ q Δψ` per time, ψ falling linearly
+    /// from 1 at the hole's walls to 0 at the outer sides (in a steady state the current
+    /// through every loop about the hole).
+    current: (f64, f64),
+    /// The bulk's voltage: `∫ E_r dr` along the four walls' midlines from 0.75 past the
+    /// hole's walls to 0.75 short of the outer sides (beyond the contacts' layers and their
+    /// screening), their mean.
+    voltage: (f64, f64),
+    /// In bands about the four midlines (|t| < 1, r within the walls' middle 2): the
+    /// carriers' charge carried along the wall (counterclockwise) over that carried
+    /// outward.
+    hall: (f64, f64),
+    /// The current through each wall (top, right, bottom, left: `current`'s sum over the
+    /// moves starting in that quarter, between the diagonals). (Not the outer contacts' own
+    /// currents: each a difference of the thermal traffic both ways, some 20 times the net,
+    /// they scatter by ~10 % over the window.)
+    walls: [(f64, f64); 4],
+}
+
+/// The Corbino disc (`corbino`) at `v` and `b_z`, 16 000 carriers (190 per area: emission
+/// pauses at `MAX_PARTICLES`, 20 000, which a first draft's 21 000 hit, the contacts
+/// emitting in turn: never capped, asserted), dt 0.02, measured over t = 6–46 in blocks of 4.
+#[allow(clippy::cast_precision_loss)]
+fn run_corbino(v: f64, b_z: f64, seed: u64) -> CorbinoRun {
+    let dt = 0.02;
+    let tube = corbino(v, b_z, 16_000, dt, seed);
+    let kappa = 2.0 * A * tube.lattices[0].cores.len() as f64 / tube.lattices[0].area();
+    let psi = |x: DVec3| ((5.0 - x.x.abs().max(x.y.abs())) / 3.0).clamp(0.0, 1.0);
+    // A move's radial and counterclockwise parts on the wall whose middle band it starts
+    // in (None: outside every band).
+    let band = |a: DVec3, d: DVec3| -> Option<(f64, f64)> {
+        let (r, t) = if a.x.abs() > a.y.abs() {
+            (a.x.abs(), a.y)
+        } else {
+            (a.y.abs(), a.x)
+        };
+        if !(2.5..=4.5).contains(&r) || t.abs() >= 1.0 {
+            return None;
+        }
+        Some(if a.x >= a.y.abs() {
+            (d.x, d.y)
+        } else if -a.x >= a.y.abs() {
+            (-d.x, -d.y)
+        } else if a.y > 0.0 {
+            (d.y, -d.x)
+        } else {
+            (-d.y, d.x)
+        })
+    };
+    // Simpson's rule along each midline, from 2.75 to 4.25.
+    let (r0, r1, nodes) = (2.75, 4.25, 13);
+    let line_voltage = |s: &physics::tube::TubeState| -> f64 {
+        let h = (r1 - r0) / f64::from(nodes - 1);
+        let mut total = 0.0;
+        for dir in [DVec3::X, -DVec3::X, DVec3::Y, -DVec3::Y] {
+            let mut sum = 0.0;
+            for i in 0..nodes {
+                let r = r0 + h * f64::from(i);
+                let w = if i == 0 || i == nodes - 1 {
+                    1.0
+                } else if i % 2 == 1 {
+                    4.0
+                } else {
+                    2.0
+                };
+                sum += w * tube.field_at(s, dir * r).dot(dir);
+            }
+            total += sum * h / 3.0;
+        }
+        total / 4.0
+    };
+    let mut s = tube.state();
+    let (t0, t1, block) = (6.0, 46.0, 4.0);
+    let (mut bi, mut bv, mut br, mut bt, mut bn, mut bvn) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    let mut blocks: Vec<(f64, f64, f64)> = Vec::new();
+    // The wall a point is in (top, right, bottom, left: the quarters between the diagonals).
+    let wall = |p: DVec3| {
+        if p.y >= p.x.abs() {
+            0
+        } else if p.x >= p.y.abs() {
+            1
+        } else if -p.y >= p.x.abs() {
+            2
+        } else {
+            3
+        }
+    };
+    let mut bw = [0.0; 4];
+    let mut wall_blocks: Vec<[f64; 4]> = Vec::new();
+    let mut step = 0u64;
+    while s.t < t1 - 0.5 * dt {
+        let before: std::collections::HashMap<u32, DVec3> =
+            s.id.iter().zip(&s.x).map(|(id, x)| (*id, *x)).collect();
+        tube.step(&mut s);
+        step += 1;
+        if s.t < t0 - 0.5 * dt {
+            continue;
+        }
+        for ((id, x), q) in s.id.iter().zip(&s.x).zip(&s.charge) {
+            let Some(a) = before.get(id) else {
+                continue;
+            };
+            let carried = q * (psi(*x) - psi(*a));
+            bi -= carried;
+            bw[wall(*a)] -= carried;
+            if let Some((dr, dt_)) = band(*a, *x - *a) {
+                br += q * dr;
+                bt += q * dt_;
+            }
+        }
+        bn += 1.0;
+        if step.is_multiple_of(10) {
+            bv += line_voltage(&s);
+            bvn += 1.0;
+        }
+        if s.t - t0 >= block * (blocks.len() + 1) as f64 - 0.5 * dt {
+            let span = bn * dt;
+            blocks.push((bi / span, bv / bvn, bt / br));
+            wall_blocks.push(std::array::from_fn(|k| bw[k] / span));
+            bw = [0.0; 4];
+            (bi, bv, br, bt, bn, bvn) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        }
+    }
+    assert!(!s.capped, "emission paused at MAX_PARTICLES");
+    let m = blocks.len() as f64;
+    let mean_err = |values: &[f64]| {
+        let mean = values.iter().sum::<f64>() / m;
+        let var = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (m - 1.0);
+        (mean, libm::sqrt(var / m))
+    };
+    let column =
+        |f: &dyn Fn(&(f64, f64, f64)) -> f64| mean_err(&blocks.iter().map(f).collect::<Vec<_>>());
+    CorbinoRun {
+        kappa,
+        current: column(&|b| b.0),
+        voltage: column(&|b| b.1),
+        hall: column(&|b| b.2),
+        walls: std::array::from_fn(|k| {
+            mean_err(&wall_blocks.iter().map(|b| b[k]).collect::<Vec<_>>())
+        }),
+    }
+}
+
+/// D12, the Corbino disc (DRUDE.md Phase 2 item 3, the inner contact filling a ring's hole):
+/// with both boundaries wholly contacted no Hall field can build up (the Hall current
+/// circulates), the bulk's potential solves Laplace's equation whatever the field (`∇·σE =
+/// σ_xx ∇²φ` for a uniform tensor), and the current through every loop about the hole goes
+/// as `σ_xx`: the conductance between two loops, `I/V`, over its value at B = 0 is
+/// `Re σ̃(ω)/σ̃(0)` of the Boltzmann equation (`mobility`, as D4), whatever the annulus's
+/// shape; and in the walls' middles, where the field is radial, the current along the wall
+/// over that across it is `σ_xy/σ_xx = Im σ̃/Re σ̃`. At B = 1.25 and 2.5 (`ω = (q/m)B`,
+/// `ω τ` ≈ 0.5 and 1), the supply 0.6 throughout (the bulk's `qEℓ/kT` ≈ 0.16, as at B = 0:
+/// a larger supply at the larger field warmed the carriers more than at B = 0, lowering
+/// `ω τ`). Four seeds each (the cores and carriers), every quantity's error from their
+/// scatter (the current's share among the walls drifts slowly, beyond one run's blocks);
+/// each seed's conductance over its own B = 0 run's. Required (set before measuring): the
+/// conductance ratio within 5 % of the Boltzmann equation's (as D1 and D4), and the Hall
+/// ratio within 5 % of `|σ̃|/Re σ̃` (D4's measure: 5 % of the drift's size), at B = 0 of
+/// zero. The contacts' own drop is left out by measuring the bulk's voltage on the
+/// midlines.
+///
+/// Its symmetries (PHYSICS.md §9): the mirror (x → −x turns B over, a pseudovector): at
+/// B = −1.25 the same conductance and the Hall ratio turned over, within the same 5 %; the
+/// quarter turn: the four walls carry the same share of the current, each within 5 % of a
+/// quarter or three standard errors, whichever is larger (the cores fall at random: the
+/// setup's symmetry is the ensemble's).
+#[test]
+#[ignore = "a measurement (about 8 minutes in release): run with --ignored (PHYSICS.md §2.11)"]
+#[allow(clippy::too_many_lines, clippy::cast_precision_loss)]
+fn d12_corbino_disc() {
+    let fields = [0.0, 1.25, -1.25, 2.5];
+    let seeds = [11u64, 12, 13, 14];
+    let cases: Vec<(f64, u64)> = fields
+        .iter()
+        .flat_map(|&b| seeds.iter().map(move |&s| (b, s)))
+        .collect();
+    let runs: Vec<CorbinoRun> = cases
+        .par_iter()
+        .map(|&(b, seed)| run_corbino(0.6, b, seed))
+        .collect();
+    let run = |b: usize, s: usize| &runs[b * seeds.len() + s];
+    let n = seeds.len() as f64;
+    let mean_err = |v: &[f64]| {
+        let mean = v.iter().sum::<f64>() / n;
+        let var = v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n - 1.0);
+        (mean, libm::sqrt(var / n))
+    };
+    let g = |r: &CorbinoRun| r.current.0 / r.voltage.0;
+    // Per field: each seed's conductance over its own B = 0 run's, the Hall ratio, and the
+    // walls' shares.
+    let ratios: Vec<(f64, f64)> = (0..fields.len())
+        .map(|b| {
+            mean_err(
+                &(0..seeds.len())
+                    .map(|s| g(run(b, s)) / g(run(0, s)))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    let halls: Vec<(f64, f64)> = (0..fields.len())
+        .map(|b| {
+            mean_err(
+                &(0..seeds.len())
+                    .map(|s| run(b, s).hall.0)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    let kappa = runs.iter().map(|r| r.kappa).sum::<f64>() / runs.len() as f64;
+    let mu0 = mobility(kappa, 0.0);
+    let mut worst_quarter: f64 = 0.0;
+    for (b, &field) in fields.iter().enumerate() {
+        let mu = mobility(kappa, -field);
+        let theory = mu.re / mu0.re;
+        let hall_theory = mu.im / mu.re;
+        let hall_scale = libm::hypot(mu.re, mu.im) / mu.re;
+        let (ratio, ratio_err) = ratios[b];
+        let (hall, hall_err) = halls[b];
+        println!(
+            "D12 B {field}: G/G0 {ratio:.4} ± {ratio_err:.4} against {theory:.4} ({:+.2} %); Hall \
+             ratio {hall:.4} ± {hall_err:.4} against {hall_theory:.4} ({:+.2} % of |σ|/Re σ)",
+            100.0 * (ratio / theory - 1.0),
+            100.0 * (hall - hall_theory) / hall_scale
+        );
+        // The quarter turn: each wall's share of the current.
+        for k in 0..4 {
+            let (share, err) = mean_err(
+                &(0..seeds.len())
+                    .map(|s| {
+                        let r = run(b, s);
+                        r.walls[k].0 / r.walls.iter().map(|c| c.0).sum::<f64>()
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            println!(
+                "D12 B {field}: wall {k} carries {:.4} ± {:.4} of the current",
+                share, err
+            );
+            worst_quarter = worst_quarter.max((4.0 * share - 1.0).abs());
+            assert!(
+                (share - 0.25).abs() < (0.05 * 0.25_f64).max(3.0 * err),
+                "B {field}: wall {k} carries {share} ± {err}"
+            );
+        }
+        let tag = match b {
+            1 => Some("b1"),
+            3 => Some("b2"),
+            _ => None,
+        };
+        if let Some(tag) = tag {
+            common::measured(&format!("D12.{tag}_ratio"), ratio, 4);
+            common::measured(&format!("D12.{tag}_theory"), theory, 4);
+            common::measured(
+                &format!("D12.{tag}_percent"),
+                100.0 * (ratio / theory - 1.0),
+                2,
+            );
+            common::measured(
+                &format!("D12.{tag}_err_percent"),
+                100.0 * ratio_err / theory,
+                2,
+            );
+            common::measured(
+                &format!("D12.{tag}_hall_percent"),
+                100.0 * (hall - hall_theory) / hall_scale,
+                2,
+            );
+        }
+        if b == 0 {
+            common::measured("D12.b0_hall", hall, 2);
+        }
+        assert!(
+            (ratio / theory - 1.0).abs() < 0.05,
+            "B {field}: G/G0 {ratio} ± {ratio_err} against {theory}"
+        );
+        assert!(
+            (hall - hall_theory).abs() < 0.05 * hall_scale,
+            "B {field}: Hall ratio {hall} ± {hall_err} against {hall_theory}"
+        );
+    }
+    common::measured("D12.quarter_percent", 100.0 * worst_quarter, 2);
+    // The mirror: B = 1.25 against −1.25, seed by seed.
+    let mirror = mean_err(
+        &(0..seeds.len())
+            .map(|s| g(run(1, s)) / g(run(2, s)))
+            .collect::<Vec<_>>(),
+    );
+    let flip = mean_err(
+        &(0..seeds.len())
+            .map(|s| run(1, s).hall.0 + run(2, s).hall.0)
+            .collect::<Vec<_>>(),
+    );
+    let mu = mobility(kappa, -1.25);
+    let scale = libm::hypot(mu.re, mu.im) / mu.re;
+    println!(
+        "D12 mirror: G(+1.25)/G(−1.25) {:.4} ± {:.4}; Hall ratios' sum {:.4} ± {:.4}",
+        mirror.0, mirror.1, flip.0, flip.1
+    );
+    common::measured("D12.mirror_percent", 100.0 * (mirror.0 - 1.0), 2);
+    common::measured("D12.hall_mirror_percent", 100.0 * flip.0 / scale, 2);
+    assert!((mirror.0 - 1.0).abs() < 0.05, "G(+B)/G(−B) {mirror:?}");
+    assert!(flip.0.abs() < 0.05 * scale, "the Hall ratios' sum {flip:?}");
 }

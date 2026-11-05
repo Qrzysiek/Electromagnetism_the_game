@@ -1,0 +1,239 @@
+{
+  "format_version": 2,
+  "engine_version": "0.1.0",
+  "name": "Corbino disc",
+  "description": "A ring of metal contacted all round its hole and all round its outside: the current flows across the ring, from the inner contact to the outer one. In a field along the axis the carriers' paths bend, but here no charge can pile up to push them back (both edges are contacts), so they circle round the ring instead of crossing it, and the current falls fast as the field grows, either way. The inner contact is held at 4, the outer one grounded. Set your solenoid so that between 3.3 and 5.3 flows into the inner contact (averaged over $t = 10$ to $40$); with no field about 9.5 does.",
+  "reality": {
+    "represents": "A Corbino disc: magnetoresistance with no Hall voltage",
+    "remarks": [
+      {
+        "kind": "kept",
+        "line": "No Hall field, the largest magnetoresistance",
+        "detail": "Both edges are contacts, so no charge can pile up to push the carriers back: they drift round the ring, and the current across it falls nearly as the conductivity along the field, σ_xx, about 1/(1 + (μB)²): how carriers' mobility is measured in semiconductors."
+      },
+      {
+        "kind": "kept",
+        "line": "Even in the field",
+        "detail": "The current is the same for either direction of the field; only the circling turns over."
+      },
+      {
+        "kind": "simplified",
+        "line": "A square ring, its corners bare",
+        "detail": "A real Corbino disc is round and contacted all round. Contacted wholly, any ring would follow σ_xx exactly; here the outer contact's four pieces stop a cell short of each corner (electrodes may not touch), where a little Hall field builds up, and the contacts' own voltage is a larger share at no field: the current falls somewhat more slowly than σ_xx (0.50 of its value at no field where σ_xx gives 0.41)."
+      },
+      {
+        "kind": "simplified",
+        "line": "The inner contact's lead",
+        "detail": "Drawn across the ring, it carries the supply's current but takes no part in the physics; a real disc's inner lead comes up through the hole."
+      },
+      {
+        "kind": "simplified",
+        "line": "A classical metal, a semiconductor by its ratios",
+        "detail": "The carriers are classical particles at the lattice's temperature bouncing off fixed ion cores (the Drude model). A real metal's electrons are a degenerate quantum gas whose own ratios (plasma oscillations per collision, screening per free path) the model cannot afford; its carriers have a lightly doped semiconductor's ratios (the Scales section names which), which conducts by the same laws."
+      },
+      {
+        "kind": "simplified",
+        "line": "Hard-disc collisions, a fixed-temperature lattice",
+        "detail": "Carriers bounce off randomly placed hard discs and leave with a fresh thermal speed; the lattice takes the heat and never warms. Real carriers scatter off lattice vibrations and impurities at rates that depend on energy and temperature."
+      }
+    ]
+  },
+  "grid": {
+    "nx": 24,
+    "ny": 20,
+    "nz": 0,
+    "subdivision": 1
+  },
+  "physics": {
+    "c": null,
+    "charge_radius": 0.3,
+    "magnet_radius": 0.3,
+    "wire_radius": 0.1,
+    "antenna_radius": 0.3,
+    "t_max": 60.0,
+    "tolerances": {
+      "preview": 1e-10,
+      "verify": 1e-12
+    }
+  },
+  "shots": [],
+  "elements": [],
+  "coils": [],
+  "limits": {
+    "max_charges": 0,
+    "magnitudes": [],
+    "allow_positive": true,
+    "allow_negative": true,
+    "max_magnets": 0,
+    "magnet_strengths": [],
+    "solenoid_fields": [
+      -16.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      16.0
+    ]
+  },
+  "reference_solution": [
+    {
+      "node": [
+        23,
+        19,
+        0
+      ],
+      "kind": "supply",
+      "value": 6.0
+    }
+  ],
+  "electrodes": [
+    {
+      "center": [
+        12,
+        17,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "outer contact, top (grounded)"
+    },
+    {
+      "center": [
+        19,
+        10,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "outer contact, right (grounded)"
+    },
+    {
+      "center": [
+        12,
+        3,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "outer contact, bottom (grounded)"
+    },
+    {
+      "center": [
+        5,
+        10,
+        0
+      ],
+      "length": 10,
+      "thickness": 2.0,
+      "height": 4.0,
+      "angle_deg": 90.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "outer contact, left (grounded)"
+    },
+    {
+      "center": [
+        12,
+        10,
+        0
+      ],
+      "length": 4.0,
+      "thickness": 4.0,
+      "height": 2.0,
+      "angle_deg": 0.0,
+      "bias": {
+        "kind": "grounded"
+      },
+      "label": "inner contact (the supply)"
+    }
+  ],
+  "tube": {
+    "cathode": 0,
+    "charge_per_mass": -1.0,
+    "goals": [
+      {
+        "electrode": 4,
+        "min": 3.3,
+        "max": 5.3,
+        "start": 10.0,
+        "end": 40.0,
+        "carriers": "net"
+      }
+    ],
+    "step": 0.035,
+    "circuits": [
+      {
+        "electrode": 4,
+        "source": {
+          "kind": "dc",
+          "value": 4.0
+        },
+        "resistance": 0.0
+      }
+    ],
+    "solenoid": [
+      23,
+      19,
+      0
+    ],
+    "metals": [
+      {
+        "corners": [
+          [
+            6,
+            4,
+            0
+          ],
+          [
+            18,
+            16,
+            0
+          ]
+        ],
+        "contacts": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "density": 2.0,
+        "charge_per_mass": -1.0,
+        "thermal_speed": 2.0,
+        "mean_free_path": 1.0,
+        "core_radius": 0.01,
+        "carriers_per_area": 50.0,
+        "seed": 13,
+        "hole": [
+          [
+            10,
+            8,
+            0
+          ],
+          [
+            14,
+            12,
+            0
+          ]
+        ],
+        "label": "the ring (Corbino disc)"
+      }
+    ]
+  }
+}

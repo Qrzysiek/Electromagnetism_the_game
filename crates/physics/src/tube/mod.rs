@@ -316,12 +316,18 @@ pub struct Tube {
     /// and the field's EMF along the lead is in the branch's equation (`leads.rs`, DEC-27).
     /// Ignored without the self-field.
     pub leads: Vec<Option<Vec<DVec3>>>,
+    /// Per lattice, whether its cells book the macroscopic Joule heat
+    /// (`TubeState::macro_heat`: the field at four points a cell every step); missing ones
+    /// do. A metal without contacts takes the induced fields' work instead (DEC-34), and
+    /// skips the cost.
+    pub heat_cells: Vec<bool>,
 }
 
 /// A lattice's accounts by cell (`Lattice::account_cell`, row by row), so far: bookkeeping
 /// for the display's maps of the current and the heat inside a metal. Nothing here acts on
 /// the motion (the golden hashes stayed); the cells add up to `TubeState::field_work`,
-/// `induced_work`, `inductive_work` and `mutual_work` (test `d9_cell_accounts_add_up`).
+/// `induced_work`, `inductive_work`, `mutual_work` and `macro_heat` (test
+/// `d9_cell_accounts_add_up`).
 #[derive(Clone, Debug, Default)]
 pub struct CellAccounts {
     /// The charge the carriers carry through the cell, `Σ q Δx` of the pieces of their steps'
@@ -336,6 +342,106 @@ pub struct CellAccounts {
     pub induced: Vec<f64>,
     pub inductive: Vec<f64>,
     pub mutual: Vec<f64>,
+    /// The macroscopic Joule heat in the cell (its share of `TubeState::macro_heat`): each
+    /// step, the cell's mean field `Ē` (the trapezoid's of the step's start and end) dotted
+    /// with the charge it carried over the step (`flux`): `∫ J̄·Ē`. The mean field over the
+    /// cell is the potential's around its edges, `Ē = −(1/A) ∮ φ n dl` (two Gauss points to
+    /// an edge), plus the drive's induced field at its centre (linear: its mean).
+    pub heat: Vec<f64>,
+    /// Where the potential is taken for `heat`: two points on each cell edge, the vertical
+    /// edges' (`(nx + 1) ny`) then the horizontal ones' (`nx (ny + 1)`); none when the
+    /// lattice books no heat (`Tube::heat_cells`). The cells' centres, their number across
+    /// and their sides.
+    points: Vec<DVec3>,
+    centres: Vec<DVec3>,
+    shape: (usize, usize, f64, f64),
+    /// Each cell's mean field at the last step's start, and `flux` then (`book_heat`).
+    last: Vec<DVec3>,
+    mark: Vec<[f64; 2]>,
+}
+
+impl CellAccounts {
+    #[allow(clippy::cast_precision_loss)]
+    fn new(lattice: &Lattice, heat: bool) -> Self {
+        let (nx, ny) = lattice.account_size();
+        let cells = nx * ny;
+        let (sx, sy) = (
+            (lattice.hi.x - lattice.lo.x) / nx as f64,
+            (lattice.hi.y - lattice.lo.y) / ny as f64,
+        );
+        let (mut points, mut centres) = (Vec::new(), Vec::new());
+        if heat {
+            // The Gauss points along an edge, `±1/(2√3)` of it from its middle: a cubic's
+            // mean exactly.
+            let g = 0.5 / libm::sqrt(3.0);
+            let at = |x: f64, y: f64| lattice.lo + DVec3::new(x, y, 0.0);
+            for i in 0..=nx {
+                for j in 0..ny {
+                    for k in [-g, g] {
+                        points.push(at(i as f64 * sx, (j as f64 + 0.5 + k) * sy));
+                    }
+                }
+            }
+            for j in 0..=ny {
+                for i in 0..nx {
+                    for k in [-g, g] {
+                        points.push(at((i as f64 + 0.5 + k) * sx, j as f64 * sy));
+                    }
+                }
+            }
+            centres = (0..cells)
+                .map(|c| at(((c % nx) as f64 + 0.5) * sx, ((c / nx) as f64 + 0.5) * sy))
+                .collect();
+        }
+        Self {
+            flux: vec![[0.0; 2]; cells],
+            work: vec![0.0; cells],
+            induced: vec![0.0; cells],
+            inductive: vec![0.0; cells],
+            mutual: vec![0.0; cells],
+            heat: vec![0.0; cells],
+            points,
+            centres,
+            shape: (nx, ny, sx, sy),
+            last: vec![DVec3::ZERO; cells],
+            mark: vec![[0.0; 2]; cells],
+        }
+    }
+
+    /// Books the last step's macroscopic heat: each cell's mean field at that step's start
+    /// (`last`) and now (from `phi`, the potential at `points`, and `induced`, the drive's
+    /// field at the centres, if any), the trapezoid's, dotted with the charge it carried
+    /// over the step. Returns the cells' sum, in their order.
+    fn book_heat(&mut self, phi: &[f64], induced: Option<&[DVec3]>) -> f64 {
+        let (nx, ny, sx, sy) = self.shape;
+        let vertical = (nx + 1) * ny;
+        // An edge's mean potential: its two points'.
+        let v = |i: usize, j: usize| 0.5 * (phi[2 * (i * ny + j)] + phi[2 * (i * ny + j) + 1]);
+        let h = |i: usize, j: usize| {
+            let k = 2 * (vertical + j * nx + i);
+            0.5 * (phi[k] + phi[k + 1])
+        };
+        let mut total = 0.0;
+        for c in 0..self.heat.len() {
+            let (i, j) = (c % nx, c / nx);
+            let mut now = DVec3::new(
+                (v(i, j) - v(i + 1, j)) / sx,
+                (h(i, j) - h(i, j + 1)) / sy,
+                0.0,
+            );
+            if let Some(f) = induced {
+                now += f[c];
+            }
+            let e = (self.last[c] + now) * 0.5;
+            let (q, m) = (self.flux[c], self.mark[c]);
+            let h = e.x * (q[0] - m[0]) + e.y * (q[1] - m[1]);
+            self.heat[c] += h;
+            total += h;
+            self.last[c] = now;
+            self.mark[c] = q;
+        }
+        total
+    }
 }
 
 /// The particles and the bookkeeping of a running tube.
@@ -414,6 +520,17 @@ pub struct TubeState {
     /// are left out (DEC-34). Exchanged: the lattices' parts add up to the change of their
     /// mutual energy. Zero with one lattice or without the self-field.
     pub mutual_work: Vec<f64>,
+    /// Per lattice: the macroscopic Joule heat `∫ J̄·Ē` (`CellAccounts::heat`): each step,
+    /// each cell's mean field (from the potential around its edges) dotted with the charge
+    /// it carried, a contact's carriers counted from and to its face. A metal with contacts'
+    /// heat (PHYSICS.md §2.11, *The contacts' layers*; DEC-41): in a steady state the
+    /// supplies' `Σ V I`. The field's work carrier by carrier (`field_work`) falls short of
+    /// it by about a constant per contact (Ohm's law's −4.1 per time with no supply, against
+    /// `I V` = 90 at its reference): a contact takes its carriers back at 1.5 δ and gives
+    /// them off at δ, a loop through its layer's steep field that the field's work counts
+    /// and the contact's energy does not. Only the lattices `Tube::heat_cells` names; without
+    /// the self-field's part.
+    pub macro_heat: Vec<f64>,
     /// The macroscopic currents' accounts for `mutual_work` (None until its first step).
     mutual: Option<darwin::MutualAccount>,
     /// Per lattice: the current and those works by cell (`CellAccounts`).
@@ -538,6 +655,44 @@ fn inside(section: &Section, x: DVec3) -> bool {
     }
 }
 
+/// The point of the section nearest `x` (`x` itself inside, and for a frame).
+fn nearest_on(section: &Section, x: DVec3) -> DVec3 {
+    match *section {
+        Section::Rect {
+            center,
+            angle,
+            half_length,
+            half_thickness,
+        } => {
+            let (s, c) = libm::sincos(angle);
+            let d = x - center;
+            let u = (d.x * c + d.y * s).clamp(-half_length, half_length);
+            let w = (-d.x * s + d.y * c).clamp(-half_thickness, half_thickness);
+            center + DVec3::new(u * c - w * s, u * s + w * c, 0.0)
+        }
+        Section::Circle { center, radius } => {
+            let d = x - center;
+            let r = libm::sqrt(d.x * d.x + d.y * d.y);
+            if r > radius {
+                center + d * (radius / r)
+            } else {
+                x
+            }
+        }
+        Section::Ring {
+            center,
+            radius,
+            thickness,
+        } => {
+            let d = x - center;
+            let r = libm::sqrt(d.x * d.x + d.y * d.y);
+            let to = r.clamp(radius - 0.5 * thickness, radius + 0.5 * thickness);
+            if r > 0.0 { center + d * (to / r) } else { x }
+        }
+        Section::Frame { .. } => x,
+    }
+}
+
 /// The distance from `x` to the section (0 inside).
 fn distance_outside(section: &Section, x: DVec3) -> f64 {
     match *section {
@@ -600,6 +755,7 @@ impl Tube {
             lattices: Vec::new(),
             darwin: None,
             leads: Vec::new(),
+            heat_cells: Vec::new(),
         }
     }
 
@@ -652,17 +808,10 @@ impl Tube {
             cells: self
                 .lattices
                 .iter()
-                .map(|l| {
-                    let (nx, ny) = l.account_size();
-                    CellAccounts {
-                        flux: vec![[0.0; 2]; nx * ny],
-                        work: vec![0.0; nx * ny],
-                        induced: vec![0.0; nx * ny],
-                        inductive: vec![0.0; nx * ny],
-                        mutual: vec![0.0; nx * ny],
-                    }
-                })
+                .enumerate()
+                .map(|(k, l)| CellAccounts::new(l, self.heat_cells.get(k).copied().unwrap_or(true)))
                 .collect(),
+            macro_heat: vec![0.0; self.lattices.len()],
             launched: vec![false; self.projectiles.len()],
             fates: vec![None; self.projectiles.len()],
             potentials,
@@ -735,7 +884,37 @@ impl Tube {
             .map(|(a, b)| a + b)
             .collect();
         // In parallel, each particle's field whole by one thread (bit-identical).
-        let fields = self.charges_fields(s, &sigma, s.x.len() >= TREE_MIN);
+        let points: Vec<DVec3> = s
+            .cells
+            .iter()
+            .flat_map(|c| c.points.iter().copied())
+            .collect();
+        let (fields, at_points) = self.charges_fields(s, &sigma, s.x.len() >= TREE_MIN, &points);
+        // The macroscopic heat of the last step (`CellAccounts::book_heat`): the potential
+        // of the charges and the backgrounds on the cells' edges, and the drive's induced
+        // field at their centres, as the push takes them.
+        let mut from = 0;
+        for (cells, heat) in s.cells.iter_mut().zip(&mut s.macro_heat) {
+            let n = cells.points.len();
+            if n > 0 {
+                let phi: Vec<f64> = at_points[from..from + n]
+                    .iter()
+                    .zip(&cells.points)
+                    .map(|(p, y)| {
+                        p + self
+                            .lattices
+                            .iter()
+                            .map(|l| l.background_at(*y).0)
+                            .sum::<f64>()
+                    })
+                    .collect();
+                let induced: Option<Vec<DVec3>> = self
+                    .b_wave
+                    .map(|w| cells.centres.iter().map(|y| w.induced(s.t, *y)).collect());
+                *heat += cells.book_heat(&phi, induced.as_deref());
+            }
+            from += n;
+        }
         let before = if self.lattices.is_empty() {
             Vec::new()
         } else {
@@ -924,6 +1103,16 @@ impl Tube {
                         None => Fate::Lost { t: s.t, x: s.x[k] },
                     });
                 } else if let Some(e) = hit {
+                    // Taken back by its contact short of the face (`RETURN_ABSORB`): in the
+                    // currents' accounts it goes on to the face, where the contact gave it off
+                    // (`emit_ohmic`), so that a contact's own traffic carries no current
+                    // across its layer (it did in the macroscopic heat, DEC-41).
+                    if crossed.is_none()
+                        && let Some(m) = self.metal_of(s.x[k])
+                    {
+                        let face = nearest_on(&self.electrodes.electrodes[e].section, s.x[k]);
+                        self.lattices[m].book_flux(&mut s.cells[m].flux, s.x[k], face, s.charge[k]);
+                    }
                     s.collected[e][tag as usize] += s.charge[k];
                     s.contact_energy[e] +=
                         0.5 * (s.charge[k] / s.qm[k]).abs() * s.v[k].length_squared();
@@ -1025,8 +1214,8 @@ mod tests {
         let mut s = tube.state();
         tube.step(&mut s);
         let sigma = tube.surface_density(&s);
-        let trees = tube.charges_fields(&s, &sigma, true);
-        let direct = tube.charges_fields(&s, &sigma, false);
+        let trees = tube.charges_fields(&s, &sigma, true, &[]).0;
+        let direct = tube.charges_fields(&s, &sigma, false, &[]).0;
         let top = direct.iter().map(|e| e.length()).fold(0.0, f64::max);
         let worst = trees
             .iter()

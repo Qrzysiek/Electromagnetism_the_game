@@ -6,6 +6,23 @@
 use level::tube::{Carriers, CurrentGoal, CurrentVerdict, TubeSpec};
 use level::{ConductorBias, Electrode, Level};
 
+/// A measured value PHYSICS.md quotes (DEC-22, as the physics tests' `common::measured`):
+/// written to `target/measured/<id>` to `digits` significant digits (fixed-point), from
+/// where `python scripts/measured.py update` puts it between the document's markers.
+fn measured(id: &str, value: f64, digits: usize) {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/measured");
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss
+    )]
+    let decimals = (digits as i32 - 1 - libm::floor(libm::log10(value.abs().max(1e-300))) as i32)
+        .max(0) as usize;
+    if std::fs::create_dir_all(&dir).is_ok() {
+        let _ = std::fs::write(dir.join(id), format!("{value:.decimals$}"));
+    }
+}
+
 /// A planar diode on a 24 × 16 board: cathode and anode plates 10 long, 1 thick, their
 /// faces 7 apart, the anode at `v`.
 pub fn diode(v: f64) -> Level {
@@ -776,7 +793,9 @@ fn hall_forces_balance() {
 /// The leads of the field's display (`level::tube_em`, PHYSICS.md §2.11) cross no metal: on
 /// every shipped level with metals, each lead, sampled at 200 points, stays out of every
 /// metal's interior (a wire through a conductor; Positive carriers' inner Hall contacts
-/// were wired through the other strip until the leads' rule took the metals in).
+/// were wired through the other strip until the leads' rule took the metals in), but the
+/// ring whose hole holds its electrode (a Corbino disc's inner contact: its lead crosses
+/// that ring's wall, `hole_contacts`).
 #[test]
 fn leads_cross_no_metal() {
     let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../levels");
@@ -799,7 +818,11 @@ fn leads_cross_no_metal() {
             let Some(wire) = lead else {
                 continue;
             };
-            for m in &run.metals {
+            let specs = &level.tube.as_ref().expect("a tube level").metals;
+            for (m, spec) in run.metals.iter().zip(specs) {
+                if e < level.electrodes.len() && level.in_metal_hole(spec, e) {
+                    continue;
+                }
                 let inside = wire.windows(2).any(|s| {
                     let ((ax, ay), (bx, by)) = (s[0], s[1]);
                     (1..200).any(|k| {
@@ -1072,6 +1095,126 @@ fn ring_setup_rules() {
     assert_eq!(cut(&nested, [6, 10], [8, 10]), Some(0));
     assert_eq!(cut(&nested, [12, 7], [12, 13]), Some(1));
     assert_eq!(cut(&ok, [11, 9], [13, 11]), None);
+}
+
+/// Contacts in a ring's hole (`Level::contact_side`, `metal_issues`, the leads; DRUDE.md
+/// Phase 2 item 3): Eddy currents' plate (12 × 12 from (6, 4), a mean free path of 0.5) with
+/// a hole 4 × 4 from (10, 8) (walls 4). A box filling the hole is a contact all round
+/// (`Around`, its four faces the hole's walls); one flush with the hole's left wall only, a
+/// contact toward it (−x); one in a corner of the hole (flush with two walls) is not, and
+/// listed as one is refused; a free box in the hole (no contact) is accepted, one across the
+/// wall refused, and any electrode in the hole refused with the carriers' own field (its lead
+/// would link the ring's flux, DEC-27). The filling contact's lead comes from the border,
+/// crosses the ring's wall (the ring only) and ends on the electrode.
+#[test]
+fn hole_contacts() {
+    use level::tube::ContactSide;
+    let base = level::shipped("eddy_currents");
+    // A box `length × thickness` about `center`, floating, added to the level; listed as
+    // the ring's contact if `contact`.
+    let with = |boxes: &[([i64; 2], f64, f64, bool)]| {
+        let mut level = base.clone();
+        let t = level.tube.as_mut().expect("a tube level");
+        t.metals[0].hole = Some([[10, 8, 0], [14, 12, 0]]);
+        t.metals[0].mean_free_path = 0.5;
+        t.metals[0].core_radius = 0.004;
+        for &(c, length, thickness, contact) in boxes {
+            let mut e = level.electrodes[0].clone();
+            e.center = [c[0], c[1], 0];
+            e.length = length;
+            e.thickness = thickness;
+            e.label = String::new();
+            level.electrodes.push(e);
+            if contact {
+                let k = level.electrodes.len() - 1;
+                level.tube.as_mut().expect("a tube level").metals[0]
+                    .contacts
+                    .push(k);
+            }
+        }
+        level
+    };
+    let issues = |l: &Level| l.setup_issues(&l.reference_solution);
+    let metal = |l: &Level| l.tube.as_ref().expect("a tube level").metals[0].clone();
+    // Filling the hole.
+    let filled = with(&[([12, 10], 4.0, 4.0, true)]);
+    assert!(issues(&filled).is_empty(), "{:?}", issues(&filled));
+    let m = metal(&filled);
+    assert_eq!(filled.contact_side(&m, 1), Some(ContactSide::Around));
+    let mut faces = filled.contact_segments(&m, 1);
+    faces.sort_by(|a, b| a.partial_cmp(b).expect("finite"));
+    let mut walls = vec![
+        [[10.0, 8.0], [14.0, 8.0]],
+        [[14.0, 8.0], [14.0, 12.0]],
+        [[10.0, 12.0], [14.0, 12.0]],
+        [[10.0, 8.0], [10.0, 12.0]],
+    ];
+    walls.sort_by(|a, b| a.partial_cmp(b).expect("finite"));
+    assert_eq!(faces, walls);
+    // Flush with the left wall only.
+    let left = with(&[([11, 10], 2.0, 2.0, true)]);
+    assert!(issues(&left).is_empty(), "{:?}", issues(&left));
+    assert_eq!(
+        left.contact_side(&metal(&left), 1),
+        Some(ContactSide::Toward(-physics::DVec3::X))
+    );
+    assert_eq!(
+        left.contact_segments(&metal(&left), 1),
+        vec![[[10.0, 9.0], [10.0, 11.0]]]
+    );
+    // In a corner: not a contact.
+    let corner = with(&[([11, 9], 2.0, 2.0, true)]);
+    assert_eq!(corner.contact_side(&metal(&corner), 1), None);
+    assert!(
+        issues(&corner)
+            .iter()
+            .any(|s| s.contains("is not a contact")),
+        "{:?}",
+        issues(&corner)
+    );
+    // Free in the hole, and across the wall.
+    let free = with(&[([12, 10], 2.0, 2.0, false)]);
+    assert!(issues(&free).is_empty(), "{:?}", issues(&free));
+    let across = with(&[([14, 10], 2.0, 2.0, false)]);
+    assert!(
+        issues(&across)
+            .iter()
+            .any(|s| s.contains("overlaps electrode 2")),
+        "{:?}",
+        issues(&across)
+    );
+    // With the carriers' own field.
+    let mut slow = filled.clone();
+    slow.tube.as_mut().expect("a tube level").speed_of_light = Some(27.4);
+    assert!(
+        issues(&slow)
+            .iter()
+            .any(|s| s.contains("needs a lead across the ring")),
+        "{:?}",
+        issues(&slow)
+    );
+    // The lead: from the border, across the wall, onto the electrode.
+    let plan = filled.tube_leads(&[]);
+    let wire = plan.leads[1]
+        .as_ref()
+        .expect("a lead to the hole's contact");
+    let held = |x: f64, y: f64| {
+        filled.metal_holds(&m, physics::DVec3::new(x, y, 0.0))
+            && !(x > 10.0 && x < 14.0 && y > 8.0 && y < 12.0)
+    };
+    let crosses = wire.windows(2).any(|s| {
+        let ((ax, ay), (bx, by)) = (s[0], s[1]);
+        (1..200).any(|k| {
+            let u = f64::from(k) / 200.0;
+            held(ax + (bx - ax) * u, ay + (by - ay) * u)
+        })
+    });
+    assert!(crosses, "the lead {wire:?} crosses the ring's wall");
+    let (ex, ey) = *wire.last().expect("its end");
+    assert!(
+        (10.0..=14.0).contains(&ex) && (8.0..=12.0).contains(&ey),
+        "the lead ends at ({ex}, {ey}), on the contact"
+    );
 }
 
 /// A ring (`MetalSpec::hole`, PHYSICS.md §2.11): Eddy currents' plate 12 × 12 with a hole
@@ -1658,4 +1801,65 @@ fn metal_energy_balance() {
         (rest - idle).abs() < 3.0 * libm::hypot(err, idle_err),
         "{rest} {err} {idle} {idle_err}"
     );
+}
+
+/// The Joule heat the panel and the heat map show in a metal with contacts (PHYSICS.md
+/// §2.11, *The contacts' layers*; DEC-41): the macroscopic `J̄·Ē` (`TubeState::macro_heat`,
+/// the frames' cells) over t = 10–40 against the supplies' power `I V` (a steady state's
+/// heat, by the energy theorem). Ohm's law at its reference within 4 % (three times the
+/// measure's scatter: its four rows of cells spread by ±0.6, ±1.3 % of the total), and with
+/// the supply at 0 within 1 % of that `I V` (the field's work carrier by carrier: −4.6 %);
+/// the Corbino disc at its reference within 5 % (`I V` a sixth of Ohm's law's, its contacts
+/// seven times as long).
+#[test]
+fn metal_heat_is_the_supplies_power() {
+    let heat = |slug: &str, value: Option<f64>| -> (f64, f64) {
+        let level = level::shipped(slug);
+        let mut player = level.reference_solution.clone();
+        if let Some(v) = value {
+            player[0].value = v;
+        }
+        let r = level.tube_run(&player, 1, 41.0);
+        let sum = |f: &level::tube::TubeFrame| -> f64 {
+            f.cells
+                .iter()
+                .flat_map(|c| &c.work)
+                .map(|w| f64::from(*w))
+                .sum()
+        };
+        let k0 = r.frames.partition_point(|f| f.t < 10.0);
+        let k1 = r
+            .frames
+            .partition_point(|f| f.t < 40.0)
+            .min(r.frames.len() - 1);
+        let (f0, f1) = (&r.frames[k0], &r.frames[k1]);
+        // The goal's contact's potential times its current: the supplies' power (the other
+        // contacts are grounded).
+        let goal = level.tube.as_ref().expect("a tube level").goals[0];
+        let volts = f64::from(f1.potentials[goal.electrode]);
+        let current = r.currents[0].expect("the window has passed");
+        ((sum(f1) - sum(f0)) / (f1.t - f0.t), volts * current)
+    };
+    let ((ohm, ohm_iv), (rest, _), (corbino, corbino_iv)) = std::thread::scope(|scope| {
+        let a = scope.spawn(|| heat("ohms_law", None));
+        let b = scope.spawn(|| heat("ohms_law", Some(0.0)));
+        let c = heat("corbino_disc", None);
+        (a.join().expect("a run"), b.join().expect("a run"), c)
+    });
+    let (ohm_off, corbino_off) = (
+        100.0 * (ohm / ohm_iv - 1.0),
+        100.0 * (corbino / corbino_iv - 1.0),
+    );
+    let rest_share = 100.0 * rest / ohm_iv;
+    println!(
+        "metal heat: Ohm's law {ohm:.3} against I V {ohm_iv:.3} ({ohm_off:+.2} %), with the \
+         supply at 0 {rest:+.3} ({rest_share:+.2} % of that I V); the Corbino disc {corbino:.3} \
+         against {corbino_iv:.3} ({corbino_off:+.2} %)"
+    );
+    measured("M-heat.ohm_percent", ohm_off, 2);
+    measured("M-heat.rest_percent", rest_share, 2);
+    measured("M-heat.corbino_percent", corbino_off, 2);
+    assert!(ohm_off.abs() < 4.0, "{ohm} {ohm_iv}");
+    assert!(rest_share.abs() < 1.0, "{rest} {ohm_iv}");
+    assert!(corbino_off.abs() < 5.0, "{corbino} {corbino_iv}");
 }

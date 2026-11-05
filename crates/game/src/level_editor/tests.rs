@@ -28,11 +28,8 @@ fn all_levels_are_reproducible_in_the_sandbox() {
 /// metal pass, a corner on the metal's edge or off the grid does not.
 #[test]
 fn ring_holes_are_editable() {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../levels");
-    let base = Level::from_json(
-        &std::fs::read_to_string(dir.join("117_eddy_currents.json")).expect("Eddy currents"),
-    )
-    .expect("a level");
+    // By its slug: the curriculum renumbers the files.
+    let base = level::shipped("eddy_currents");
     let with = |hole: [level::Node; 2]| {
         let mut l = base.clone();
         l.tube.as_mut().expect("a tube level").metals[0].hole = Some(hole);

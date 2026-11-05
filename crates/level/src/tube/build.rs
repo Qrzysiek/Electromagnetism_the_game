@@ -154,7 +154,7 @@ impl Level {
                 electrode: e,
                 charge_per_mass: m.charge_per_mass,
                 weight: lattices[first].carrier_charge().abs(),
-                emit_toward: self.contact_side(m, e),
+                emit_toward: self.contact_side(m, e).and_then(ContactSide::emit_toward),
                 saturation: None,
                 thermal_speed: m.thermal_speed,
                 ohmic: Some(physics::tube::OhmicContact {
@@ -261,6 +261,10 @@ impl Level {
                 axis: DVec3::new(0.5 * max.x, 0.5 * max.y, 0.0),
             }),
             circuits: self.tube_circuits(player),
+            // The macroscopic Joule heat (DEC-41) in the metals with contacts alone (one
+            // lattice per metal, `lattice_metal`): an isolated one's heat is the induced
+            // fields' work (DEC-34).
+            heat_cells: spec.metals.iter().map(|m| !m.contacts.is_empty()).collect(),
             lattices,
             darwin: spec
                 .speed_of_light

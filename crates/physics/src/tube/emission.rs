@@ -154,6 +154,9 @@ impl Tube {
     ) {
         let sign = em.charge_per_mass.signum();
         let tag = u32::try_from(i).unwrap_or(u32::MAX);
+        // The other ohmic contacts' layers (each emitting segment's: its start, direction,
+        // outward normal, length and depth), to share where they overlap this one's.
+        let others = self.ohmic_layers(i);
         for &j in segs {
             let (a, b) = self.electrodes.segments[j];
             let len = (b - a).length();
@@ -162,6 +165,26 @@ impl Tube {
             if em.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
                 continue;
             }
+            let layer = Layer {
+                a,
+                t,
+                out,
+                len,
+                depth: ohmic.depth,
+            };
+            // The other contacts' layers overlapping this one (two contacts meeting at a
+            // metal's corner): a carrier there is held by the face it is nearest. (Until
+            // 2026-11-04 by both: the contact that emitted first each step filled the shared
+            // corner and the other never did, a current between two grounded contacts; a
+            // Corbino disc's four outer contacts took 17 % apart, D12.)
+            let near: Vec<&Layer> = others.iter().filter(|o| o.overlaps(&layer)).collect();
+            // Its share of its layer: the whole, or where it holds the carriers (a fixed
+            // grid of 16 × 16 points; a corner's square split along its diagonal: half).
+            let share = if near.is_empty() {
+                1.0
+            } else {
+                layer.share(&near)
+            };
             // The carriers of its sign in the layer now.
             let held: f64 =
                 s.x.iter()
@@ -169,13 +192,17 @@ impl Tube {
                     .zip(&s.tag)
                     .filter(|((_, q), tag)| **tag < PROJECTILE_TAG && **q * sign > 0.0)
                     .filter(|((x, _), _)| {
-                        let r = **x - a;
-                        let (u, w) = (r.dot(t), r.dot(out));
-                        (0.0..=len).contains(&u) && w > 0.0 && w <= ohmic.depth
+                        layer.depth_of(**x).is_some_and(|w| {
+                            near.iter().all(|o| o.depth_of(**x).is_none_or(|v| w <= v))
+                        })
                     })
                     .map(|((_, q), _)| q.abs())
                     .sum();
-            let mut lack = ohmic.density * len * ohmic.depth - held;
+            let mut lack = if near.is_empty() {
+                ohmic.density * len * ohmic.depth - held
+            } else {
+                ohmic.density * len * ohmic.depth * share - held
+            };
             while lack >= em.weight {
                 if s.x.len() >= MAX_PARTICLES {
                     s.capped = true;
@@ -189,7 +216,13 @@ impl Tube {
                 // flux-weighted law, 1.5 kT each in the plane, what the carriers the contact
                 // takes in carry on average.
                 let v = crate::lattice::flux_velocity(out, em.thermal_speed, s.emitted);
-                let x = a + t * (len * f) + out * (EMISSION_OFFSET * len);
+                let face = a + t * (len * f);
+                let x = face + out * (EMISSION_OFFSET * len);
+                // In the currents' accounts it comes from the face, as a carrier the contact
+                // takes back short of it goes on to the face (`Tube::step`).
+                if let Some(m) = self.metal_of(x) {
+                    self.lattices[m].book_flux(&mut s.cells[m].flux, face, x, sign * em.weight);
+                }
                 if s.book_potential_steps {
                     let phi = self.potential(s, sigma, x, None);
                     s.potential_steps[em.electrode] +=
@@ -202,5 +235,90 @@ impl Tube {
                     0.5 * (em.weight / em.charge_per_mass).abs() * v.length_squared();
             }
         }
+    }
+
+    /// The layers of every ohmic contact's emitting segments but emitter `skip`'s
+    /// (`emit_ohmic`).
+    fn ohmic_layers(&self, skip: usize) -> Vec<Layer> {
+        let mut layers = Vec::new();
+        for (k, em) in self.emitters.iter().enumerate() {
+            let Some(ohmic) = em.ohmic.filter(|_| k != skip) else {
+                continue;
+            };
+            for j in self.segments_of(em.electrode) {
+                let (a, b) = self.electrodes.segments[j];
+                let len = (b - a).length();
+                let out = self.outward(em.electrode, a, b, (a + b) * 0.5);
+                if em.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
+                    continue;
+                }
+                layers.push(Layer {
+                    a,
+                    t: (b - a) / len,
+                    out,
+                    len,
+                    depth: ohmic.depth,
+                });
+            }
+        }
+        layers
+    }
+}
+
+/// An ohmic contact's layer in front of one emitting segment (`OhmicContact`): the points
+/// `a + u t + w out` with `0 ≤ u ≤ len`, `0 < w ≤ depth`.
+struct Layer {
+    a: DVec3,
+    t: DVec3,
+    out: DVec3,
+    len: f64,
+    depth: f64,
+}
+
+impl Layer {
+    /// How far in front of the face `x` lies, if it is in the layer.
+    fn depth_of(&self, x: DVec3) -> Option<f64> {
+        let r = x - self.a;
+        let (u, w) = (r.dot(self.t), r.dot(self.out));
+        ((0.0..=self.len).contains(&u) && w > 0.0 && w <= self.depth).then_some(w)
+    }
+
+    /// The part of it nearer its own face than any of `near`'s layers that hold the point:
+    /// over a fixed grid of 16 × 16 points (the cells' middles), the fraction it holds.
+    fn share(&self, near: &[&Self]) -> f64 {
+        const N: u32 = 16;
+        let mut held = 0u32;
+        for i in 0..N {
+            for k in 0..N {
+                let u = self.len * (f64::from(i) + 0.5) / f64::from(N);
+                let w = self.depth * (f64::from(k) + 0.5) / f64::from(N);
+                let x = self.a + self.t * u + self.out * w;
+                if near.iter().all(|o| o.depth_of(x).is_none_or(|v| w <= v)) {
+                    held += 1;
+                }
+            }
+        }
+        f64::from(held) / f64::from(N * N)
+    }
+
+    /// Its corners' bounding box.
+    fn bounds(&self) -> (DVec3, DVec3) {
+        let corners = [
+            self.a,
+            self.a + self.t * self.len,
+            self.a + self.out * self.depth,
+            self.a + self.t * self.len + self.out * self.depth,
+        ];
+        corners.iter().fold(
+            (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),
+            |(lo, hi), c| (lo.min(*c), hi.max(*c)),
+        )
+    }
+
+    /// Whether its bounding box and `other`'s overlap with some area (layers of contacts
+    /// that meet at a corner; a shared edge alone is not an overlap).
+    fn overlaps(&self, other: &Self) -> bool {
+        let ((a0, a1), (b0, b1)) = (self.bounds(), other.bounds());
+        a0.x < b1.x && b0.x < a1.x && a0.y < b1.y && b0.y < a1.y
     }
 }

@@ -57,6 +57,18 @@ impl Tube {
                 else {
                     break;
                 };
+                // Across a hole's wall into an electrode there (a contact in a ring's hole:
+                // a Corbino disc's inner one), taken in below, as at the outer sides.
+                if lattice.in_hole(x)
+                    && lattice.is_hole_wall(w0, w1)
+                    && self
+                        .electrodes
+                        .electrodes
+                        .iter()
+                        .any(|e| inside(&e.section, x))
+                {
+                    break;
+                }
                 // Specular: the position and the velocity mirrored in the wall's line.
                 let e = w1 - w0;
                 let n = DVec3::new(-e.y, e.x, 0.0) / libm::sqrt(e.x * e.x + e.y * e.y);

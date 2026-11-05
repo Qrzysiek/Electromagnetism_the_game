@@ -289,7 +289,7 @@ impl TubeSim {
                                     .map(|(w, u)| (w + u) as f32)
                                     .collect()
                             } else {
-                                c.work.iter().map(|w| *w as f32).collect()
+                                c.heat.iter().map(|w| *w as f32).collect()
                             },
                         })
                         .collect(),
@@ -352,8 +352,9 @@ impl TubeSim {
         self.pending.steps = self.steps;
     }
 
-    /// Metal `m`'s heat so far, the sum over its pieces: the field's work on its carriers
-    /// (`TubeState::field_work`), or, in a metal without contacts, the work of the fields
+    /// Metal `m`'s heat so far, the sum over its pieces: the macroscopic Joule heat `∫ J̄·Ē`
+    /// (`TubeState::macro_heat`: the field's work carrier by carrier holds a deficit in the
+    /// contacts' layers, DEC-41), or, in a metal without contacts, the work of the fields
     /// induced by all but itself: the drive's (`TubeState::induced_work`) and, with the
     /// self-field, the other metals' currents' (`mutual_work`, the power their mutual
     /// induction brings it; DEC-34). There the electrostatic field's work is only numerical
@@ -375,7 +376,7 @@ impl TubeSim {
                 if isolated {
                     self.state.induced_work[p] + self.state.mutual_work[p]
                 } else {
-                    self.state.field_work[p]
+                    self.state.macro_heat[p]
                 }
             })
             .sum()

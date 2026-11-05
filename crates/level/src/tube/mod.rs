@@ -165,6 +165,27 @@ pub const MAX_METAL_CARRIERS: f64 = 15_000.0;
 /// Offsets a metal's seed for its carriers' random numbers (its cores use the seed).
 const METAL_SEED: u64 = 0x6d65_7461_6c73;
 
+/// How a contact meets its metal (`Level::contact_side`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ContactSide {
+    /// Along one side, or one wall of a ring's hole: carriers given off this way (a unit
+    /// vector along x or y, from the contact into the metal).
+    Toward(DVec3),
+    /// Filling a ring's hole: flush with all four walls, carriers given off from every face.
+    Around,
+}
+
+impl ContactSide {
+    /// The emitter's direction (`physics::tube::Emitter::emit_toward`): None, every face.
+    #[must_use]
+    pub fn emit_toward(self) -> Option<DVec3> {
+        match self {
+            Self::Toward(d) => Some(d),
+            Self::Around => None,
+        }
+    }
+}
+
 /// A conductor's interior (PHYSICS.md §2.11, the Drude metal; `physics::lattice`):
 /// carriers over the ions' uniform background in an axis-aligned rectangle, scattering off
 /// ion cores placed at random. Its walls reflect the carriers, except where a contact
@@ -181,7 +202,8 @@ pub struct MetalSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hole: Option<[Node; 2]>,
     /// Its contacts (indices into the level's `electrodes`): boxes along its sides, each
-    /// touching one side with its whole face.
+    /// touching one side with its whole face, or in a ring's hole, flush with one of its
+    /// walls or filling it (`Level::contact_side`).
     pub contacts: Vec<usize>,
     /// The carriers' charge density (its magnitude; the background's is opposite) and
     /// charge-to-mass ratio (electrons: negative).
@@ -344,8 +366,8 @@ impl PotentialGoal {
     }
 }
 
-/// A metal's heat, the power the field gives its carriers (`TubeState::field_work`: the
-/// Joule heat in a steady state), averaged over `start..end` (with the carriers' own field
+/// A metal's heat, the power the field gives its carriers (the macroscopic Joule heat,
+/// `TubeState::macro_heat`; an isolated metal's, the induced fields' work), averaged over `start..end` (with the carriers' own field
 /// and a swinging drive, whole half-swings of it: `HeatGoal::window`), must lie in
 /// `min..max`.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -742,9 +764,9 @@ pub struct TubeFrame {
 }
 
 /// A metal's accounts by cell at a frame (`physics::tube::CellAccounts`, `MetalView::cells`,
-/// row by row, so far): the charge carried (x, y) and the heat goal's work (the field's on
-/// the carriers; in an isolated metal the induced fields' but its own, the drive's and the
-/// other metals': `MetalView::isolated`).
+/// row by row, so far): the charge carried (x, y) and the heat goal's work (the macroscopic
+/// Joule heat `∫ J̄·Ē`, `CellAccounts::heat`; in an isolated metal the induced fields' work
+/// but its own, the drive's and the other metals': `MetalView::isolated`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MetalCells {
     pub flux: Vec<[f32; 2]>,
@@ -778,8 +800,9 @@ pub struct MetalView {
     pub cells: (usize, usize),
     pub walls: Vec<[[f64; 2]; 2]>,
     pub isolated: bool,
-    /// Its contacts' faces along its sides (each from one end to the other): where the
-    /// display takes carriers in and gives them off between frames (`TubeRun::frame_between`).
+    /// Its contacts' faces along its sides or its hole's walls (each from one end to the
+    /// other): where the display takes carriers in and gives them off between frames
+    /// (`TubeRun::frame_between`).
     pub contacts: Vec<[[f64; 2]; 2]>,
 }
 

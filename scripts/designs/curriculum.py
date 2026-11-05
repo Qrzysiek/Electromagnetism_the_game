@@ -115,6 +115,7 @@ from designs.jackson import (
 from designs.components import (
     amplifier,
     bipolar_diode,
+    corbino_disc,
     eddy_currents,
     eddy_silicon,
     electron_gun,
@@ -370,6 +371,7 @@ ARCS.append(("Inside the components: metals", [
         ("positive_carriers", positive_carriers),
         ("few_or_many", few_or_many),
         ("magnetoresistance", magnetoresistance),
+        ("corbino_disc", corbino_disc),
         ("wheatstone_bridge", wheatstone_bridge),
         ("eddy_currents", eddy_currents),
         ("eddy_silicon", eddy_silicon),

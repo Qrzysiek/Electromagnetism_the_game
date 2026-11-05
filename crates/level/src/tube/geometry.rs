@@ -143,51 +143,125 @@ impl Level {
         ))
     }
 
-    /// The direction from contact `e` into metal `m`, if `e` is an axis-aligned box whose
-    /// face lies along one side of the metal, within it (it then gives off carriers into
-    /// the metal only).
+    /// How electrode `e` meets metal `m` as a contact, if it does: an axis-aligned box whose
+    /// face lies along one side of the metal, within it, outside (`Toward` the metal: it
+    /// gives off carriers that way only); or one in a ring's hole, flush with one of the
+    /// hole's walls (`Toward` that wall) or filling the hole (`Around`: every face is
+    /// flush with a wall and gives off carriers; a Corbino disc's inner contact). A box in
+    /// the hole touching two or three walls without filling it is none (its other faces
+    /// would give off carriers into the hole's vacuum).
     #[must_use]
-    pub fn contact_side(&self, m: &MetalSpec, e: usize) -> Option<DVec3> {
+    pub fn contact_side(&self, m: &MetalSpec, e: usize) -> Option<ContactSide> {
         let (b0, b1) = self.electrode_box(e)?;
         let (lo, hi) = self.metal_rect(m);
         let tol = 1e-9 * (1.0 + hi.x - lo.x + hi.y - lo.y);
         let within = |a0: f64, a1: f64, s0: f64, s1: f64| a0 >= s0 - tol && a1 <= s1 + tol;
         if (b1.x - lo.x).abs() < tol && within(b0.y, b1.y, lo.y, hi.y) {
-            Some(DVec3::X)
+            return Some(ContactSide::Toward(DVec3::X));
         } else if (b0.x - hi.x).abs() < tol && within(b0.y, b1.y, lo.y, hi.y) {
-            Some(-DVec3::X)
+            return Some(ContactSide::Toward(-DVec3::X));
         } else if (b1.y - lo.y).abs() < tol && within(b0.x, b1.x, lo.x, hi.x) {
-            Some(DVec3::Y)
+            return Some(ContactSide::Toward(DVec3::Y));
         } else if (b0.y - hi.y).abs() < tol && within(b0.x, b1.x, lo.x, hi.x) {
-            Some(-DVec3::Y)
-        } else {
-            None
+            return Some(ContactSide::Toward(-DVec3::Y));
+        }
+        let (h0, h1) = self.metal_hole(m)?;
+        if !(within(b0.x, b1.x, h0.x, h1.x) && within(b0.y, b1.y, h0.y, h1.y)) {
+            return None;
+        }
+        // The walls it is flush with, each with the direction into it.
+        let flush: Vec<DVec3> = [
+            ((b0.x - h0.x).abs() < tol, -DVec3::X),
+            ((b1.x - h1.x).abs() < tol, DVec3::X),
+            ((b0.y - h0.y).abs() < tol, -DVec3::Y),
+            ((b1.y - h1.y).abs() < tol, DVec3::Y),
+        ]
+        .into_iter()
+        .filter_map(|(f, d)| f.then_some(d))
+        .collect();
+        match flush.as_slice() {
+            [d] => Some(ContactSide::Toward(*d)),
+            [_, _, _, _] => Some(ContactSide::Around),
+            _ => None,
         }
     }
 
-    /// Metal `m`'s contacts' faces along its sides (`contact_side`), each a segment from one
-    /// end to the other within the metal's side (`MetalView::contacts`).
+    /// Contact `e`'s faces on metal `m` (`contact_side`), each a segment from one end to the
+    /// other within the metal's side or the hole's wall: one for a contact along a side,
+    /// four for one filling a ring's hole (the hole's walls); none if it is not a contact.
+    #[must_use]
+    pub fn contact_segments(&self, m: &MetalSpec, e: usize) -> Vec<[[f64; 2]; 2]> {
+        let (Some(side), Some((b0, b1))) = (self.contact_side(m, e), self.electrode_box(e)) else {
+            return Vec::new();
+        };
+        let (lo, hi) = self.metal_rect(m);
+        let (y0, y1) = (b0.y.max(lo.y), b1.y.min(hi.y));
+        let (x0, x1) = (b0.x.max(lo.x), b1.x.min(hi.x));
+        // In a hole the box's own face is the wall's piece it covers; outside, the face it
+        // presses against the metal's side.
+        let inner = self.metal_hole(m).is_some_and(|(h0, h1)| {
+            b0.x >= h0.x - 1e-9 && b1.x <= h1.x + 1e-9 && b0.y >= h0.y - 1e-9 && b1.y <= h1.y + 1e-9
+        });
+        let face = |d: DVec3| -> [[f64; 2]; 2] {
+            if inner {
+                if d == DVec3::X {
+                    [[b1.x, b0.y], [b1.x, b1.y]]
+                } else if d == -DVec3::X {
+                    [[b0.x, b0.y], [b0.x, b1.y]]
+                } else if d == DVec3::Y {
+                    [[b0.x, b1.y], [b1.x, b1.y]]
+                } else {
+                    [[b0.x, b0.y], [b1.x, b0.y]]
+                }
+            } else if d == DVec3::X {
+                [[lo.x, y0], [lo.x, y1]]
+            } else if d == -DVec3::X {
+                [[hi.x, y0], [hi.x, y1]]
+            } else if d == DVec3::Y {
+                [[x0, lo.y], [x1, lo.y]]
+            } else {
+                [[x0, hi.y], [x1, hi.y]]
+            }
+        };
+        match side {
+            ContactSide::Toward(d) => vec![face(d)],
+            ContactSide::Around => [-DVec3::Y, DVec3::X, DVec3::Y, -DVec3::X]
+                .into_iter()
+                .map(face)
+                .collect(),
+        }
+    }
+
+    /// Metal `m`'s contacts' faces, all of them (`contact_segments`, in its contacts' order;
+    /// `MetalView::contacts`).
     #[must_use]
     pub fn contact_faces(&self, m: &MetalSpec) -> Vec<[[f64; 2]; 2]> {
-        let (lo, hi) = self.metal_rect(m);
         m.contacts
             .iter()
-            .filter_map(|&e| {
-                let side = self.contact_side(m, e)?;
-                let (b0, b1) = self.electrode_box(e)?;
-                let (y0, y1) = (b0.y.max(lo.y), b1.y.min(hi.y));
-                let (x0, x1) = (b0.x.max(lo.x), b1.x.min(hi.x));
-                Some(if side == DVec3::X {
-                    [[lo.x, y0], [lo.x, y1]]
-                } else if side == -DVec3::X {
-                    [[hi.x, y0], [hi.x, y1]]
-                } else if side == DVec3::Y {
-                    [[x0, lo.y], [x1, lo.y]]
-                } else {
-                    [[x0, hi.y], [x1, hi.y]]
-                })
-            })
+            .flat_map(|&e| self.contact_segments(m, e))
             .collect()
+    }
+
+    /// Whether electrode `e` lies wholly in metal `m`'s hole (its box, or the square about a
+    /// round one's centre: as `metal_issues` bounds it).
+    #[must_use]
+    pub fn in_metal_hole(&self, m: &MetalSpec, e: usize) -> bool {
+        let Some((h0, h1)) = self.metal_hole(m) else {
+            return false;
+        };
+        let (b0, b1) = self.electrode_bounds(e);
+        b0.x >= h0.x - 1e-9 && b1.x <= h1.x + 1e-9 && b0.y >= h0.y - 1e-9 && b1.y <= h1.y + 1e-9
+    }
+
+    /// An electrode's bounding box in the plane: an axis-aligned box's corners, else the
+    /// square about its centre with half the sum of its length and thickness as half its side
+    /// (a turned box's or a round electrode's reach).
+    pub(super) fn electrode_bounds(&self, e: usize) -> (DVec3, DVec3) {
+        self.electrode_box(e).unwrap_or_else(|| {
+            let c = self.grid.position(self.electrodes[e].center);
+            let r = 0.5 * (self.electrodes[e].length + self.electrodes[e].thickness);
+            (c - DVec3::new(r, r, 0.0), c + DVec3::new(r, r, 0.0))
+        })
     }
 
     /// The depth of the layer a metal's contacts keep neutral: half a mean free path, at

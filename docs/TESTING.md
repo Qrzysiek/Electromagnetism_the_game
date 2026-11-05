@@ -28,7 +28,7 @@ CI runs it on Windows and Linux.
 Run any by name: a filter is a part of the name.
 
     cargo test --release -p level --test per_level -- --ignored reference::109_
-    cargo test --release -p level --test per_level -- --ignored 122_inverter
+    cargo test --release -p level --test per_level -- --ignored 123_inverter
     cargo nextest run --release -p level --test per_level --run-ignored only -E 'test(/^golden::/)'
 
 Four run at a time (they share the process's rayon threads; nextest gives each four

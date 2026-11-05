@@ -27,16 +27,27 @@ self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/D
   hole is refused: its lead would cross the ring; the Corbino disc needs one). In the
   electrostatic model a lead is only drawn, so it could be allowed there with the lead drawn
   across (refused with the self-field, as a lead from a ring is, DEC-27).
-  **Next (the owner, 2026-11-04: "whatever makes the most sense"):** this, then the Corbino
-  disc level. Sketch: `contact_side` also accepts a box flush with the hole's walls from
-  inside (a box filling the hole contacts all four: its emitter emits from every face,
-  `emit_toward` None); `metal_issues` allows an electrode wholly in a hole; the lead drawn
-  across the ring (`leads_cross_no_metal` excepted for it). With both boundaries wholly
-  contacted the Hall term integrates to zero along each contact, so the current goes as
-  σ_xx(B) for any annulus shape: the test against the model's own Boltzmann σ_xx(B), and
-  the quarter turn. The RMS goal (Phase 2 item 1) waits for the owner's decision on its
-  verification (DRUDE.md, the D7 note of 2026-10-20: keep the preview's macroparticles, the
-  goal against the model's `√(kT/C)`).
+  **Done 2026-11-04 (the owner: "whatever makes the most sense"; DEC-40):** contacts in a
+  ring's hole (a box flush with one wall, or filling the hole and emitting from every face),
+  the lead drawn across the ring (refused with the self-field), ohmic layers shared where
+  contacts meet at a corner; D12 (the Corbino disc against the Boltzmann equation's σ_xx,
+  four seeds) and Y30 (its mirror and quarter turn); the level **Corbino disc** (116, after
+  Magnetoresistance; levels 116–127 renumbered to 117–128, their golden keys renamed). Its
+  outer contact stops a cell short of each corner (electrodes may not touch), so its current
+  falls somewhat more slowly than σ_xx (LEVELS.md; D12 is the exact test). An idea left: let
+  electrodes touch when both are grounded (the infinite field between touching electrodes
+  needs different potentials), which would close the outer contact.
+  **Found with it, fixed (DEC-41):** the panel's Joule heat (the field's work, DEC-33) fell
+  short of `I V` by about a constant per contact (the Corbino disc's panel −14 per time at
+  its reference against `I V` 15, its heat map negative along every contact): a contact's
+  own loop through its depleted layer (given off at δ, taken back at 1.5 δ). A metal with
+  contacts now shows the macroscopic `J̄·Ē` (PHYSICS.md §2.11, *The contacts' layers*):
+  Ohm's law +1.85 %, the Corbino disc −2.0 %, at rest 0.36 % of `I V`.
+  **Seen, not from this work:** the side panel overflows by ~2 px on the metal levels (the
+  capture's "panel overflow: content 325.2 wider than 323.0", on main's build too).
+  **Next:** the RMS goal (Phase 2 item 1) waits for the owner's decision on its verification
+  (DRUDE.md, the D7 note of 2026-10-20: keep the preview's macroparticles, the goal against
+  the model's `√(kT/C)`); Phase 2 items 4 (a uniform AC field) and 5 (temperatures) do not.
 - Coverage of the heavy tests not yet recorded since the rings: `python scripts/affected.py
   refresh` (hours; or `scripts\refresh_coverage.cmd`) before the next engine change, else that
   change selects all 521 again.

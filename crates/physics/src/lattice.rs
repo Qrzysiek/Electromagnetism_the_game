@@ -311,6 +311,21 @@ impl Lattice {
             .any(|(lo, hi)| x.x > lo.x && x.x < hi.x && x.y > lo.y && x.y < hi.y)
     }
 
+    /// Whether the wall `w0`–`w1` is one of a rectangular hole's edges (`with_hole` puts
+    /// them in `walls` from its corners exactly; a cut is never one).
+    #[must_use]
+    pub fn is_hole_wall(&self, w0: DVec3, w1: DVec3) -> bool {
+        self.holes.iter().any(|&(lo, hi)| {
+            let corners = [
+                lo,
+                DVec3::new(hi.x, lo.y, 0.0),
+                hi,
+                DVec3::new(lo.x, hi.y, 0.0),
+            ];
+            (0..4).any(|k| w0 == corners[k] && w1 == corners[(k + 1) % 4])
+        })
+    }
+
     /// Its conductor's area: the rectangle's (or its disc's) less its holes'.
     #[must_use]
     pub fn area(&self) -> f64 {

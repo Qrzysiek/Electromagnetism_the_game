@@ -566,6 +566,13 @@ Entries are numbered in order and never renumbered.
     margin. Estimated without their own instrumented time, four tests came within 2–22 %
     (Lock-in Hall 9374 s against 9147, the ion diode 1558 against 1597, the magnetron 371
     against 304, Self-inductance 2199 against 2157).
+  - 2026-11-04: records follow a renumbered level by its slug (`all_tests`, `renamed`:
+    `check::NN_slug` to the one listed `check::MM_slug`), where they had been dropped; and a
+    `repeated::` test without a plain time of its own is estimated at twice its level's
+    `golden::` (`plain_seconds`). The Corbino disc, inserted before twelve levels, renamed
+    their tests: the run dropped their records, and Wheatstone bridge's `repeated::`
+    (about 700 s, twice its `golden::`'s 347), guessed at 120 s, was killed as hung at
+    600 s, stopping the job after 115 tests. That run went on with the golden verdicts first.
 
 ## DEC-17: A pinned toolchain and CI's hygiene checks
 
@@ -1000,6 +1007,8 @@ Entries are numbered in order and never renumbered.
     times faster than their drives swing, so neither a cut nor a gap of a unit or two opens a
     turn at a level's frequencies, and a transformer level cannot use a cut to open its
     secondary.
+  - 2026-11-04: contacts on a ring's inner side, the part of DRUDE.md Phase 2 item 3 left
+    out (an electrode in the hole had been refused): DEC-40.
 
 ## DEC-29: The README's screenshots taken by the game's capture mode, stored as WebP
 
@@ -1160,7 +1169,9 @@ Entries are numbered in order and never renumbered.
 
 ## DEC-33: The panel's Joule heat is the field's work on the carriers, not the lattice's tally
 
-- **Status:** in use (since 2026-11-02)
+- **Status:** in use (since 2026-11-02) for metals without contacts (their induced fields'
+  work, DEC-34); replaced for metals with contacts by the macroscopic `J̄·Ē` (DEC-41,
+  2026-11-04)
 - **Area:** interface, physics measures
 - **Choice:** the results panel's "Joule heat" line shows the power the field gives the
   metals' carriers over the last 10 time units, summed over their cells (`MetalCells::work`:
@@ -1190,8 +1201,21 @@ Entries are numbered in order and never renumbered.
   - 2026-11-02: chosen. Measured with the level's reference run and the drive at rest (ω
     0.03), with and without the self-field, and with 70 carriers per area
     (`prototypes/joule/`).
-
-## DEC-34: The induced fields' work per metal, the drive's and the carriers' own
+  - 2026-11-04: found wrong at a low supply in a metal with contacts (status unchanged,
+    the fix to come). The field's work falls short of the electrical power `Σ φ I` (which
+    a static field's work must equal) by about a constant per emitting contact, whatever
+    the supply: Ohm's law 86.1 against `I V` 90.1 at 30, −2.57 against 1.82 at 4; the
+    Corbino disc (40 units of grounded contact) 8.2 against 38 at B = 0 and −14.4 against
+    15.2 at its reference. Its cells' map puts the deficit wholly in the cells along the
+    emitting contacts (`prototypes/joule/low_voltage_work.rs`). Likely the booking
+    `½ dt q E·(v_old + v_new)` across a contact layer's steep field, its bias times the
+    contacts' thermal traffic (some 20 times the net current), which at Ohm's law's 30 is
+    the hover text's "about a tenth of I V". Heat goals (isolated metals) are untouched. To
+    try: the work as `q Δφ` (exact for a static field), or the bias measured and removed.
+  - 2026-11-04: replaced in metals with contacts by the macroscopic `J̄·Ē` (DEC-41; the
+    owner: "let's fix it first"). The deficit is a contact's own loop through its depleted
+    layer (given off at δ, taken back at 1.5 δ), not the booking's: neither `q Δφ` nor a
+    measured bias would leave the heat map right cell by cell.
 
 - **Status:** in use in the engine (since 2026-11-02); not a level's measure yet
 - **Area:** physics measures
@@ -1429,3 +1453,97 @@ Entries are numbered in order and never renumbered.
     t = 200 done at ~45 s. The verification shares the machine with the stream, and its cost
     meter shows that time. Potentiometer draws 31–36 frames a second while both compute
     against 46–47 after: its drawing, not the verification, holds it under 50.
+
+## DEC-40: Contacts in a ring's hole; ohmic layers shared where contacts meet
+
+- **Status:** in use (since 2026-11-04)
+- **Area:** physics, level design
+- **Choice:**
+  - A contact may lie in a ring's hole (`Level::contact_side` → `ContactSide`): a box flush
+    with one of the hole's walls gives off carriers toward it (`Toward`), a box filling the
+    hole from every face (`Around`, `emit_toward` None; a Corbino disc's inner contact). A
+    box flush with two or three walls without filling the hole is not a contact (its other
+    faces would give off carriers into the hole's vacuum). `metal_issues` accepts an
+    electrode wholly in a hole, and refuses one with the carriers' own field: its lead
+    crosses the ring, and DEC-27 models leads from the border only.
+  - A carrier crossing a hole's wall into an electrode there is taken in, as at the outer
+    sides (`Tube::scattered`; `Lattice::is_hole_wall`). Elsewhere a hole's walls reflect, as
+    before.
+  - The lead to an electrode in a hole is routed across that ring's wall (only), each node
+    of the wall costing `THROUGH_METAL` steps (`leads.rs`: the hole open, a ring's wall
+    closed to every other wire).
+  - Two ohmic contacts' layers that overlap (contacts meeting at a metal's corner): a carrier
+    there is held by the face it is nearest, and each face fills its share of its layer
+    (`emit_ohmic`, `Layer::share` on a 16 × 16 grid). No shipped level has such an overlap:
+    their runs are bit for bit unchanged.
+- **Purpose:** DRUDE.md Phase 2 item 3's remainder, for the Corbino disc (the largest
+  geometric magnetoresistance: with both boundaries contacted no Hall field builds up and the
+  current goes as `σ_xx`). The shared layers make identical contacts interchangeable: a
+  setup's result must not depend on the order its emitters are listed in.
+- **Alternatives:**
+  - The inner contact as a ring-shaped or round electrode in a round hole (`with_round_hole`):
+    the level format's metals are rectangles with a rectangular hole (DEC-28), and a square
+    annulus shows the same physics (`σ_xx` whatever the shape, D12).
+  - The outer contact as one frame-shaped electrode (`Section::Frame`): its emitting faces are
+    the frame's inner ones, which one direction cannot select, and its outer faces would give
+    off carriers into the vacuum. Four boxes meeting at the corners instead.
+  - Contacts meeting at a corner left as they were: the contact emitting first each step
+    filled the shared corner. Or refused: then no contact could close a metal's boundary.
+  - The layers' overlap split by the emitters' order, or each held by both (the old rule).
+    Neither is symmetric under exchanging the contacts.
+- **Where:** `crates/level/src/tube/{geometry.rs, issues.rs, mod.rs}` (`ContactSide`,
+  `contact_segments`, `in_metal_hole`), `crates/level/src/leads.rs`,
+  `crates/physics/src/tube/{metals.rs, emission.rs}`, `crates/physics/src/lattice.rs`; tests
+  `hole_contacts`, `leads_cross_no_metal` (`level/tests/tubes.rs`), D12 and Y30
+  (`physics/tests/drude.rs`); `scripts/pairs.py` `tube_corbino`; PHYSICS.md §2.11.
+- **History:**
+  - 2026-11-04: chosen. D12 (four seeds; PHYSICS.md §2.11): the conductance between two loops
+    about the hole over its value at B = 0 within 2.4 % and 0.3 % of the Boltzmann equation's
+    `Re σ̃(ω)/σ̃(0)` at ω τ ≈ 0.5 and 1, the Hall ratio within 1.2 %; the mirror and the quarter
+    turn within 0.8 % and 2.6 % (Y30). Its first draft had 21 000 carriers, above
+    `MAX_PARTICLES`, and emission paused (asserted since). One run per field scattered the
+    walls' currents by ~10 %, so the quarter turn could not show whether the corners' old rule
+    mattered; the order-reversed run favoured the first-listed contact as the original had.
+    The sharing rule stands on the exchange symmetry, not on a measured effect.
+
+## DEC-41: A metal with contacts' heat is the macroscopic J̄·Ē
+
+- **Status:** in use (since 2026-11-04)
+- **Area:** physics measures, interface
+- **Choice:** in a metal with contacts the panel's Joule heat, the heat map and a heat goal
+  take `TubeState::macro_heat`: each step, each account cell's mean field (`Ē = −(1/A) ∮ φ n
+  dl`, the potential of the charges and backgrounds at two Gauss points on each edge, plus
+  the drive's induced field at the centre), the trapezoid's of the step's start and end,
+  dotted with the charge the cell carried over the step (`CellAccounts::heat`). A contact's
+  carriers count in the currents from its face when it gives them off (at δ) and to it when
+  it takes its own back (at 1.5 δ). Only the lattices of metals with contacts sample the
+  field (`Tube::heat_cells`). An isolated metal keeps the induced fields' work (DEC-34).
+- **Purpose:** the field's work carrier by carrier fell short of the supplies' `I V` by a
+  constant per contact (Ohm's law −4.1 per time with the supply off; the Corbino disc's panel
+  −14 against `I V` 15, its heat map negative along every contact). In a steady state
+  `∫ J̄·Ē` is `Σ V I`, and cell by cell it is where the heat is made.
+- **Alternatives:**
+  - The supplies' `Σ V I` for the panel alone (exact in a steady state): leaves the heat map
+    wrong, and is not a metal's own when contacts or gates are shared.
+  - Booking the potential steps at each release and absorption (`q (V − φ)`; the diagnostic
+    `book_potential_steps`): a sum over every particle per event (~40 % more time), and the
+    point potential holds each macroparticle's graininess (36 per time in Ohm's law against
+    the 4 to explain).
+  - The field averaged over a cell's carriers (their mutual forces cancel): +0.25 per
+    column and time at rest from each macroparticle's pull on its neighbours (`∝ q`), and
+    the contact layers' steep field weighted by their carriers.
+  - The field at four Gauss points inside each cell: free of that pull (a carrier's own term
+    is a gradient at fixed points), but it misses the layers' steep fields (Ohm's law +2.2 %,
+    the Corbino disc +20 %, with the contacts' loops counted).
+  - The contacts changed instead (carriers given off at the face, taken back only across
+    it): the depleted layer goes but half the deficit stays, and the Corbino disc's current
+    falls 10 % (every metal level's hashes and windows to redo).
+- **Where:** `crates/physics/src/tube/{mod.rs, fields.rs, emission.rs}` (`CellAccounts`,
+  `book_heat`, `charges_fields`' points, `nearest_on`, `Tube::heat_cells`),
+  `crates/level/src/tube/{build.rs, sim.rs}`, `crates/game/src/ui/results.rs`; test
+  `metal_heat_is_the_supplies_power` (`level/tests/tubes.rs`), `d9_cell_accounts_add_up`;
+  PHYSICS.md §2.11 (*The contacts' layers*); `prototypes/joule/contact_bias.rs`.
+- **History:**
+  - 2026-11-04: chosen. Ohm's law 1.85 % from `I V` (its rows' scatter ±1.3 %), at rest 0.36 %
+    of it, the Corbino disc −2.0 %; the heat map's peak now round the Corbino disc's inner
+    contact. The golden hashes stay (accounts only).

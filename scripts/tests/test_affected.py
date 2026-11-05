@@ -137,3 +137,39 @@ def test_the_slowdown_is_the_levels_own():
     assert affected.slowdown("104_x", tests) == 31.0
     assert affected.expected_seconds("golden::104_x", {"seconds": 50.0}, tests) == 31.0 * 50.0
     assert affected.slowdown("107_y", tests) == affected.SLOWDOWN_MAX
+
+
+def test_renumbered_levels_keep_their_records():
+    """When the curriculum renumbers a level its tests' records follow it by its slug (its
+    times keep the estimates and hang limits); a record with no listed test of its check and
+    slug is dropped, and one never overwrites a record the new name already has."""
+
+    class Program:
+        def tests(self):
+            return ["golden::117_bridge", "repeated::117_bridge", "golden::116_disc",
+                    "golden::02_x", "golden::12_x"]
+
+    records = {"tests": {
+        "golden::116_bridge": {"seconds": 347.0},
+        "repeated::116_bridge": {"seconds": 700.0},
+        "golden::09_gone": {"seconds": 1.0},
+        "golden::01_x": {"seconds": 2.0},
+        "golden::116_disc": {"seconds": 0.2},
+    }}
+    names = affected.all_tests(records, Program())
+    assert names == Program().tests()
+    assert records["tests"]["golden::117_bridge"] == {"seconds": 347.0}
+    assert records["tests"]["repeated::117_bridge"] == {"seconds": 700.0}
+    assert records["tests"]["golden::116_disc"] == {"seconds": 0.2}
+    # Two listed tests of check and slug "x": ambiguous, dropped.
+    assert "golden::02_x" not in records["tests"] and "golden::12_x" not in records["tests"]
+    assert "golden::09_gone" not in records["tests"] and "golden::116_bridge" not in records["tests"]
+
+
+def test_a_repeated_estimate_without_a_record_is_twice_its_golden():
+    """A `repeated::` test without a plain run of its own is estimated at twice its level's
+    `golden::` (it computes that hash twice); with one, at its own."""
+    tests = {"golden::117_x": {"seconds": 347.0}}
+    assert affected.plain_seconds("repeated::117_x", None, tests) == 694.0
+    assert affected.plain_seconds("repeated::117_x", {"seconds": 650.0}, tests) == 650.0
+    assert affected.plain_seconds("repeated::118_y", None, tests) == 0.0

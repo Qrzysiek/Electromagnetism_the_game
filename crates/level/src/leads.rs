@@ -231,16 +231,27 @@ pub(crate) fn topology(outlines: &[Outline], open: bool) -> (Vec<Option<usize>>,
     (parent, envelope)
 }
 
+/// The extra cost of each node of a ring's wall that a lead to an electrode in its hole
+/// crosses, in grid steps: the crossing takes the wall's narrowest way, straight.
+const THROUGH_METAL: u32 = 4;
+
+/// A metal as the router sees it: its rectangle, and its hole if it is a ring.
+type MetalOutline = (DVec3, DVec3, Option<(DVec3, DVec3)>);
+
 /// The routing grid over the board with its obstacles and the nodes wires have taken.
 struct Router<'a> {
     origin: DVec3,
     nx: usize,
     ny: usize,
     outlines: &'a [Outline],
-    /// Per node: inside some material (closed to every wire).
+    /// Per node: inside an electrode (closed to every wire).
     inside: Vec<bool>,
-    /// Per node: a metal within `CLEARANCE` (closed to every wire).
-    metal_near: Vec<bool>,
+    /// Per node: the metal whose conductor lies within `CLEARANCE` (closed to every wire but
+    /// those ending on an electrode in its hole, which cross its wall; a ring's hole itself
+    /// is open).
+    metal_near: Vec<Option<usize>>,
+    /// Per electrode (outline): the metal in whose hole it lies.
+    in_hole: Vec<Option<usize>>,
     /// Per node: the electrodes within `CLEARANCE` (open only to a wire ending on them).
     near: Vec<Vec<usize>>,
     /// Per node: a wire took it.
@@ -253,13 +264,19 @@ impl<'a> Router<'a> {
         clippy::cast_sign_loss,
         clippy::cast_precision_loss
     )]
-    fn new(lo: DVec3, hi: DVec3, outlines: &'a [Outline], metals: &[(DVec3, DVec3)]) -> Self {
+    fn new(
+        lo: DVec3,
+        hi: DVec3,
+        outlines: &'a [Outline],
+        metals: &[MetalOutline],
+        in_hole: Vec<Option<usize>>,
+    ) -> Self {
         // In the plane of the outlines (the board's bounds reach z = ±1).
         let lo = DVec3::new(lo.x, lo.y, 0.0);
         let nx = libm::round((hi.x - lo.x) / ROUTE_SPACING).max(1.0) as usize;
         let ny = libm::round((hi.y - lo.y) / ROUTE_SPACING).max(1.0) as usize;
         let nodes = (nx + 1) * (ny + 1);
-        let (mut inside, mut metal_near) = (vec![false; nodes], vec![false; nodes]);
+        let (mut inside, mut metal_near) = (vec![false; nodes], vec![None; nodes]);
         let mut near = vec![Vec::new(); nodes];
         for k in 0..nodes {
             let p = lo
@@ -276,14 +293,21 @@ impl<'a> Router<'a> {
                     near[k].push(e);
                 }
             }
-            for (a, b) in metals {
-                let dx = (a.x - p.x).max(p.x - b.x).max(0.0);
-                let dy = (a.y - p.y).max(p.y - b.y).max(0.0);
-                let d = libm::hypot(dx, dy);
-                if d <= 0.0 {
-                    inside[k] = true;
-                } else if d < CLEARANCE {
-                    metal_near[k] = true;
+            for (m, (a, b, hole)) in metals.iter().enumerate() {
+                // The distance to its conductor: to the rectangle from outside, to the hole's
+                // walls from inside the hole, none in the conductor.
+                let d = match hole {
+                    Some((h0, h1)) if p.x > h0.x && p.x < h1.x && p.y > h0.y && p.y < h1.y => {
+                        (p.x - h0.x).min(h1.x - p.x).min(p.y - h0.y).min(h1.y - p.y)
+                    }
+                    _ => {
+                        let dx = (a.x - p.x).max(p.x - b.x).max(0.0);
+                        let dy = (a.y - p.y).max(p.y - b.y).max(0.0);
+                        libm::hypot(dx, dy)
+                    }
+                };
+                if d < CLEARANCE && metal_near[k].is_none() {
+                    metal_near[k] = Some(m);
                 }
             }
         }
@@ -294,6 +318,7 @@ impl<'a> Router<'a> {
             outlines,
             inside,
             metal_near,
+            in_hole,
             near,
             taken: vec![false; nodes],
         }
@@ -309,14 +334,23 @@ impl<'a> Router<'a> {
             )
     }
 
-    /// Whether a wire between `a` and `b` may pass node `k`.
+    /// Whether a wire between `a` and `b` may pass node `k`: clear of the electrodes but its
+    /// own ends, and of the metals but the ring holding one of its ends in its hole.
     fn open(&self, k: usize, a: End, b: End) -> bool {
         let own = |e: usize| {
             [a, b]
                 .iter()
                 .any(|x| matches!(*x, End::Electrode(f) | End::Inside(f) if f == e))
         };
-        !self.inside[k] && !self.metal_near[k] && self.near[k].iter().all(|&e| own(e))
+        let crosses = |m: usize| {
+            [a, b].iter().any(|x| {
+                matches!(*x, End::Electrode(f) | End::Inside(f)
+                    if self.in_hole.get(f).copied().flatten() == Some(m))
+            })
+        };
+        !self.inside[k]
+            && self.metal_near[k].is_none_or(crosses)
+            && self.near[k].iter().all(|&e| own(e))
     }
 
     /// Whether node `k` may start or end a wire at `end`: next to its surface (on the right
@@ -450,6 +484,9 @@ impl<'a> Router<'a> {
                 if self.taken[n] {
                     nc += CROSS;
                 }
+                if self.metal_near[n].is_some() {
+                    nc += THROUGH_METAL;
+                }
                 let ns = n * 5 + d;
                 if nc < cost[ns] {
                     cost[ns] = nc;
@@ -505,13 +542,29 @@ impl Level {
         let Some(spec) = self.tube.as_ref() else {
             return LeadPlan::default();
         };
-        let metals: Vec<(DVec3, DVec3)> = spec.metals.iter().map(|m| self.metal_rect(m)).collect();
+        let metals: Vec<MetalOutline> = spec
+            .metals
+            .iter()
+            .map(|m| {
+                let (lo, hi) = self.metal_rect(m);
+                (lo, hi, self.metal_hole(m))
+            })
+            .collect();
         let outlines = self.electrode_outlines(player);
         let n = self.electrodes.len().min(outlines.len());
         let open = spec.output.is_some();
         let (parent, envelope) = topology(&outlines[..n], open);
         let b = self.bounds();
-        let mut router = Router::new(b.min, b.max, &outlines, &metals);
+        // A level electrode in a ring's hole (a Corbino disc's inner contact): its lead
+        // crosses the ring's wall, drawn (only in the electrostatic model, `metal_issues`).
+        let in_hole = (0..outlines.len())
+            .map(|e| {
+                (e < n)
+                    .then(|| spec.metals.iter().position(|m| self.in_metal_hole(m, e)))
+                    .flatten()
+            })
+            .collect();
+        let mut router = Router::new(b.min, b.max, &outlines, &metals, in_hole);
         let straps = spec
             .circuits
             .iter()

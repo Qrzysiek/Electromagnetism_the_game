@@ -360,10 +360,10 @@ pub(super) fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Lev
             .map_or(0, |f| f.x.len());
         ui.label(egui::RichText::new(format!("{shown} particles in flight now")).small());
         // The Joule heat: the power the field gave the metals' carriers over the last 10 time
-        // units, what a heat goal measures (`MetalCells::work`: in a metal without contacts
-        // the drive's work and the other metals' currents' power, DEC-34). Not the lattices'
-        // tally (`TubeFrame::heat`), which also holds the macroparticles' stirring of each
-        // other (DEC-33).
+        // units, what a heat goal measures (`MetalCells::work`: in a metal with contacts the
+        // macroscopic J̄·Ē, DEC-41; without, the drive's work and the other metals' currents'
+        // power, DEC-34). Not the lattices' tally (`TubeFrame::heat`), which also holds the
+        // macroparticles' stirring of each other (DEC-33).
         if !spec.metals.is_empty()
             && let Some(k) = game.tube_frame()
             && let Some(f1) = v.run.frames.get(k)
@@ -391,15 +391,13 @@ pub(super) fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Lev
                         fmt_num((work(f1) - work(f0)) / (f1.t - f0.t))
                     ),
                     "The power the field gives the metals' carriers, per unit length along z, \
-                     over the last 10 time units: what a heat goal measures (in a metal \
-                     without contacts the drive's alone and the power the other metals' \
-                     currents pass it). In a steady state it is \
-                     all heat: the lattice takes it at the collisions, but for the energy \
-                     carriers bring into a contact (about a tenth of the supplies' I V). Not \
-                     the lattice's own tally: that also holds the macroparticles' stirring of \
-                     each other (each stands for many electrons, so their fields jitter far \
-                     more than a real metal's), a heat even with no field, large in a dense \
-                     metal of few macroparticles.",
+                     over the last 10 time units: what a heat goal measures. In a metal with \
+                     contacts the current times the field, cell by cell (each cell's mean \
+                     field): in a steady state the supplies' I V. In one without, the drive's \
+                     work and the power the other metals' currents pass it. Not the field's \
+                     work carrier by carrier, nor the lattice's tally: each macroparticle \
+                     stands for many electrons, so its pull on its neighbours and its own \
+                     image near a contact would count as heat, far more than a real metal's.",
                 );
             }
         }
