@@ -168,7 +168,8 @@ drive's frequency as a control, metal shapes other than rectangles with cuts.
 
 - *An RMS goal* (the plan's "statistical goals"): thermal noise, Johnson–Nyquist's
   4kTRΔf (test D7 has it) and kT/C, a floating contact's voltage noise that does not depend
-  on the resistance feeding it (task 20).
+  on the resistance feeding it (task 20). Decided 2026-11-05: its size as a ratio of two
+  contacts' and its pace (Phase 2 item 1).
 - *A drive's frequency on a slider:* resonance puzzles (tune a tank; find a floating
   plate's plasma resonance); the Drude roll-off at ωτ = 1, where the current lags the
   field by 45°: the carriers' inertia, a kinetic inductance m/(nq²) per square (test D2
@@ -230,7 +231,7 @@ field).
 
 **Order.** Levels the engine can do now come first: they need no new physics, and they
 exercise the pieces the later steps reuse. Then the small extensions in the order of what
-they unlock: the RMS goal stands alone; the frequency control serves the resonances and the
+they unlock: the noise level's measures stand alone; the frequency control serves the resonances and the
 receiver; ring shapes serve the Corbino disc, the generator, the Faraday cage and the
 magnetic stage; the uniform AC field needs both. Temperatures stand alone. Then the three
 stages: the carriers' own magnetic field first (the AC world the owner's list began with:
@@ -318,10 +319,27 @@ Calibrated field. The design decisions: docs/DECISIONS.md.
 
 ### Phase 2: small extensions (about three weeks)
 
-1. **An RMS goal** (`Measure::Rms`, 1–2 days; task 20). Test: equipartition, ⟨Q²⟩/2C =
-   kT/2 on a floating contact, against D7's spectrum. *Heat and noise:* **Thermal noise**
-   (a floating contact's kT/C, whatever the resistance feeding it); **Hot carriers** (a
-   field that warms the carriers raises their noise).
+1. **Thermal noise's size and pace** (the owner, 2026-11-05, in place of an RMS goal; two
+   measures, about as large as the RMS one, the cost confirmed at design). *Heat and
+   noise:* **Thermal noise**, a floating contact fed through a strip, two goals: how far its
+   potential wanders and how fast.
+   - The size as a ratio between two floating contacts: `√(C₂/C₁)` by equipartition, the
+     macroparticles' charge cancelling. Resolution-free, so the verification needs no rule.
+   - The pace as the potential's correlation time, about `RC`: the relaxation time of a
+     charge put on the contact (fluctuation–dissipation), the same in a real metal and at
+     any resolution.
+   - The resistance feeding the contact changes the pace but not the size (the total noise
+     is `kT/C` whatever `R`), the surprise the level is built on. The capacitance sets the
+     size; the two goals pin `C` and `R` separately.
+   - Measured first, since either could sink it. The capacitances' range in the z-invariant
+     world: a lone contact's goes as one over the log of its size, so likely a grounded
+     plate beside it, the gap the control. And `RC` short enough for the preview (≤ 30 s)
+     to hold many `RC` (the correlation time's error is about `√(2RC/T)`).
+   - Tests: equipartition, `⟨Q²⟩/2C = kT/2` on a floating contact with D7's kT; the
+     correlation time against the relaxation of a charge put on the contact.
+   - The display: the contact's potential traced with axes, its spread and its pace
+     marked. The hover text says the trace is about `√N` noisier than a real metal's, `N`
+     electrons to a macroparticle.
 2. **A drive's frequency on a slider** (1–2 days). Test: the AC conductivity through the
    level path against D2. *AC and induction:* **Carriers' inertia** (at ωτ = 1 the current
    lags 45°: a phase goal), **Tuned tank**, **Plasma resonance** (a floating plate driven
@@ -342,8 +360,14 @@ Calibrated field. The design decisions: docs/DECISIONS.md.
    heat flowing to a bath; about a week). Tests: the model's Seebeck coefficient and
    thermal conductivity from its Boltzmann equation (derived first, Wolfram), the Kelvin
    relation Π = ST (Onsager's reciprocity, a symmetry test), the Lorenz number
-   (Wiedemann–Franz). *Heat and noise:* **Seebeck**, **Peltier**, **Thermocouple** (Few or
-   many's two densities), **Self-heating** (the resistance rising with temperature).
+   (Wiedemann–Franz). *Heat and noise:* **Hot carriers** first, the introduction (moved
+   from item 1, 2026-11-05): the carriers' temperature as a mean, their energy in the
+   drift's frame over a region against the lattice's kT (resolution-free), a map hotter
+   where the field is strong (Long and thin's thin strip already warms its carriers). One
+   control scales it, so an introduction; its reality remark says real metals' electrons
+   barely warm outside small constrictions. Then **Seebeck**, **Peltier**,
+   **Thermocouple** (Few or many's two densities), **Self-heating** (the resistance rising
+   with temperature).
 
 ### Phase 3: new stages (about two to three months)
 
@@ -479,6 +503,20 @@ the magnetic field first).
   level could still make it a goal if the verification kept the preview's macroparticles
   (refining the step only) and the goal were stated in the model's own kT (the noise
   against `√(kT/C)`, resolution-free): the owner to decide (task list).
+  - 2026-11-05, decided (the owner, of the options below: "that's good"): no goal on the
+    noise's absolute size. Phase 2 item 1 is a level with two resolution-free goals instead:
+    the size of two floating contacts' noises as a ratio (`√(C₂/C₁)`), and the noise's pace
+    (its correlation time, about `RC`), which a real metal shares. Chosen as the most
+    educational: both are read off the trace, the obvious control (the resistance) changes
+    the pace and not the size, and `kT/C` is the reset noise of every camera pixel and
+    sample-and-hold. Not chosen:
+    - the absolute size against the model's `√(kT/C)` with the verification keeping the
+      preview's macroparticles (a goal at 1 by equipartition: only `C` to tune, and a rule
+      that no other level needs);
+    - the correlation time alone (a number the player cannot see forming);
+    - hot carriers as a noise ratio (moved to item 5 as a temperature, a mean);
+    - shot noise suppressed by space charge in a vacuum diode (the emitters give off their
+      charge deterministically: it needs an emitter at random first).
 - **Owner 2026-10-19: the Hall probe does not show that the field pushes the electrons
   aside.** Each strip in a field now carries the Hall effect's arrows: the carriers'
   drift, the magnetic push on it and the electric push back across the strip

@@ -45,9 +45,12 @@ self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/D
   Ohm's law +1.85 %, the Corbino disc −2.0 %, at rest 0.36 % of `I V`.
   **Seen, not from this work:** the side panel overflows by ~2 px on the metal levels (the
   capture's "panel overflow: content 325.2 wider than 323.0", on main's build too).
-  **Next:** the RMS goal (Phase 2 item 1) waits for the owner's decision on its verification
-  (DRUDE.md, the D7 note of 2026-10-20: keep the preview's macroparticles, the goal against
-  the model's `√(kT/C)`); Phase 2 items 4 (a uniform AC field) and 5 (temperatures) do not.
+  **Next:** Phase 2 item 1, decided by the owner 2026-11-05 in place of the RMS goal
+  (DRUDE.md): a thermal-noise level with two resolution-free goals, two floating contacts'
+  noises as a ratio and the noise's pace (its correlation time, about `RC`). First measure
+  the capacitances' range (a grounded plate beside the contact) and whether many `RC` fit the
+  preview. Phase 2 items 4 (a uniform AC field) and 5 (temperatures, now opening with hot
+  carriers) do not wait on it.
 - Coverage of the heavy tests not yet recorded since the rings: `python scripts/affected.py
   refresh` (hours; or `scripts\refresh_coverage.cmd`) before the next engine change, else that
   change selects all 521 again.
