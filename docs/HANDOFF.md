@@ -44,6 +44,9 @@ list the others here.
   ion along a little"; at every rate that solves it slows the ion, by about a tenth of its
   speed (the work −0.091 of `T0` 0.5 on the reference). Not changed: a wording such as "which
   here slows the ion a little" would match.
+- **Synchrotron light's reality remark** (`docs/levels/synchrotron_light/NOTES.md`): "radiates
+  0.1 % of its energy per turn" is about 20 % of the kinetic energy (2 % of the total) in the
+  first turn, 82 % of `T0` over the reference's twelve turns. Not changed.
 
 ## Next
 
@@ -147,8 +150,12 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
    derivation, the dipole's retarded fields from the Lorenz-gauge potentials, checked against
    Maxwell's equations) and Ramp the coil (40: the loop's vector potential and the induced
    field; the canonical angular momentum as the march's exact check; the rate's solving
-   interval by bisection, the game's verdicts compared on both sides of each edge).
-   Next in order: Synchrotron light. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
+   interval by bisection, the game's verdicts compared on both sides of each edge) and
+   Synchrotron light (41: carries radiation reaction, the Landau–Lifshitz force in a static
+   magnetic field, the energy and torque balances, the radiation-free bound on the orbit;
+   every legal placement compared). The game's radiated energy is Liénard's with the Lorentz
+   force's acceleration alone (`trajectory.rs::radiated_power`), which a document comparing it
+   must use. Next in order: Mains hum. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
    the run at the step h but quoted `|y_h - y_{h/2}|/15`, the h/2 run's error (16 times
    smaller than the h run's); now the partner runs at 2h, as the Foundations state it (the mass
    spectrometer reports its h/2 run instead). `slingshot`'s, the example they followed, keeps
