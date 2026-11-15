@@ -394,7 +394,20 @@ fn contents(ui: &mut egui::Ui, game: &mut Game, radiation: &crate::radiation::Ra
             sum.into_iter().map(|s| s / n).collect::<Vec<f64>>()
         });
     if let Some(sc) = crate::scales::of(&level, &game.editor.placement, potentials.as_deref()) {
-        egui::CollapsingHeader::new(format!("Scales: {}", sc.headline))
+        // A collapsing header lays its title out on one line (egui's `TextWrapMode::Extend`),
+        // and the metal levels' headlines ("ω_c τ = … · qEℓ/kT = … · like germanium") are
+        // wider than the panel: the panel overflowed (egui's stray line). A galley laid out
+        // here, wrapped to the room beside the header's icon, is used as it is; its colour is
+        // the placeholder, so the header still paints it in its hover and click colours.
+        let room = ui.available_width() - ui.spacing().indent - ui.spacing().button_padding.x;
+        let title = egui::text::LayoutJob::simple(
+            format!("Scales: {}", sc.headline),
+            egui::TextStyle::Button.resolve(ui.style()),
+            egui::Color32::PLACEHOLDER,
+            room,
+        );
+        let title = ui.ctx().fonts_mut(|f| f.layout_job(title));
+        egui::CollapsingHeader::new(egui::WidgetText::Galley(title))
             .id_salt("scales")
             // Opened for developer captures with EM_SCALES=1.
             .default_open(std::env::var("EM_SCALES").is_ok_and(|v| v == "1"))

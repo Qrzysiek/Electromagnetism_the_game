@@ -154,8 +154,11 @@ Housekeeping, none urgent:
   ignore or delete.
 - Left from October: the branch `level-docs/glass-screen-draft` (item 2's draft) and a stash
   on `level-docs/metal-15-26`.
-- The side panel overflows by ~2 px on the metal levels (the capture's "panel overflow:
-  content 325.2 wider than 323.0", on main's build too; CLAUDE.md, *egui*).
+- Fixed 2026-11-15: the side panel overflowed on the metal levels (Hall probe by 9.6 px).
+  The cause was the *Scales* header, whose title egui lays out on one line ("ω_c τ = … ·
+  qEℓ/kT = … · like germanium"); it is now a galley wrapped to the panel. A capture sweep of
+  levels 100–128 shows no overflow. A collapsing header's title never wraps: a long one needs
+  the same treatment (`ui/mod.rs`, the Scales header).
 - SPEC.md's status lines now cover the tube world (2026-11-15: §3 *Inside the
   components*, §10 stages 4 and 6).
 
