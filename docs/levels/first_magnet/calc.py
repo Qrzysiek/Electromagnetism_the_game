@@ -3,7 +3,7 @@
 Every number of the document, from the level file, by the document's two methods:
 - the flight by the classical Runge-Kutta method at a fixed step (Foundations eq:rk4) on
   eq:eom-dipole, the entry into the detector by cubic Hermite interpolation and bisection,
-  the error by halving the step;
+  the error by doubling the step;
 - the same flight reduced to quadratures by its two conserved quantities, |p| (the magnetic
   force does no work) and the canonical angular momentum about the magnet (eq:canonical):
   the closest approach from a quadratic (eq:rmin), the angle and the time as integrals over
@@ -288,7 +288,7 @@ def compute(doc):
     doc.value("rLzero", st.p0 / abs(st.q * b0), 4)
 
     # ---- The reference flight by RK4 ---------------------------------------------------------
-    run, half = fly(st, H), fly(st, H / 2)
+    run, half = fly(st, H), fly(st, 2 * H)
     doc.check(run["outcome"] == "Arrived", "the reference flight arrives")
     err = err_of(run, half)
     te, xe, pe = run["t"], run["x"], run["p"]
@@ -304,7 +304,7 @@ def compute(doc):
     doc.value("err", err, 2, sci=True)
     doc.value("pDev", run["pdev"], 2, sci=True)
     doc.value("PDev", run["Pdev"], 2, sci=True)
-    doc.check(err < 1e-10, "the step-halving estimate is below 1e-10")
+    doc.check(err < 1e-9, "the step-halving estimate is below 1e-9")
     tab = fly(st, H_TABLE, record_every=int(round(5 / H_TABLE)))
     doc.value("HTable", H_TABLE, 3)
     doc.table("states", [r"$t$", r"$x$", r"$y$", r"$p_x$", r"$p_y$", r"$P(t) - P$"],
@@ -340,7 +340,7 @@ def compute(doc):
 
     # ---- The empty board ----------------------------------------------------------------------
     bare = Setup(lvl, [])
-    rb, rb2 = fly(bare, H), fly(bare, H / 2)
+    rb, rb2 = fly(bare, H), fly(bare, 2 * H)
     doc.text("bareOut", rb["outcome"])
     doc.text("bareFace", rb["face"])
     doc.value("bareT", rb["t"], 10)

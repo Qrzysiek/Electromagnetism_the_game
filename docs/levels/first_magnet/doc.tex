@@ -78,7 +78,7 @@ touches it and never comes nearer. The dotted rectangle is the region for magnet
     canonical angular momentum about it; for a charge, $\vect{r}\times(\vect{p} + q\vect{A})$
     (\Goldstein{Ch.~2 and 8}, \Jackson{§12.1} for the charge's Lagrangian).
   \item The board's rules (\xsecref{foundations}{sec:board}); the classical Runge--Kutta method,
-    cubic Hermite interpolation and the error estimate by halving the step
+    cubic Hermite interpolation and the error estimate by doubling the step
     (\xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
 \end{principles}
 
@@ -194,7 +194,7 @@ $h$. Along it $p$ and $P$ are the checks: they must stay constant.
   \item\label{st:entry} \emph{The entry.} With $h = \val{H}$, after $\val{steps}$ steps, the
     particle enters the detector through its \val{faceE} face at $t_\mathrm{e} = \val{tE}$, at
     $(\val{xE}, \val{yE})$, with momentum $(\val{pxE}, \val{pyE})$, $\val{angE}$ degrees above
-    $+x$. The step-halving estimate of its error is $\val{err}$.
+    $+x$. The step-doubling estimate of its error is $\val{err}$.
   \item\label{st:checks} \emph{The checks.} Along the march $\abs{\vect{p}}$ drifts by at most
     $\val{pDev}$ and $P$ by $\val{PDev}$. The quadratures of \S\ref{sec:quadrature} give the
     same end state to $\val{quadDiff}$.
