@@ -1,0 +1,170 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot}
+\DocFingerprint{ef7f8d0f0a55d414}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One ion is launched from $(\val{xZero}, \val{yZero})$ along $+x$ with $T_0 = \val{Tzero}$, in
+Newton's mechanics ($c = \infty$). It must enter the detector
+$\val{xDetLo} \le x \le \val{xDetHi}$, $\val{yDetLo} \le y \le \val{yDetHi}$ under both of the
+level's disturbances: ``\val{distOne}'', no outside field, and ``\val{distTwo}'', a uniform field
+$\vect{E} = (0, \val{Ey})$ across the beam line (\physref{2.3}: every shot is flown under every
+disturbance, and the level is solved only if every flight arrives). The player places up to
+three charges from the listed magnitudes. A flight ends when the ion enters the detector,
+touches a charge, or leaves the world (\xsecref{foundations}{sec:board}).
+
+The reference places one positive charge $Q = \val{Q}$ at $(\val{xC}, \val{yC})$, below and
+behind the launch: its repulsion lifts the ion enough that it enters the detector with the field
+off, near the detector's middle, and still enters it, lower, with the field pushing down. With
+the field off this is Level 1's flight about one charge, in closed form
+(\levelref{first_bend}); with it on, a numerical march.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+The ion has charge $q = \val{q}$, mass $m = \val{m}$ and radius $0$; its momentum is
+$p_0 = \sqrt{2mT_0} = \val{pZero}$ and its speed $v_0 = \val{vZero}$. The coupling with the
+reference charge is $\kappa = qQ = \val{kappa}$ (repulsive); the charge's radius is $\val{R}$.
+The field, when on, gives the ion the acceleration $qE_y/m = \val{accel}$. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \addplot[thick, blue!70!black] table {pathoff.dat};
+  \addplot[thick, red!70!black] table {pathon.dat};
+  \fill[red!75!black] (\rawval{xC},\rawval{yC}) circle[radius=\rawval{R}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference charge (red disc) and the two flights: with the field off (blue), a
+Kepler hyperbola about the charge; with it on (red), pushed lower, still into the detector.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item Newton's equation of motion with the force $q(\vect{E}_Q + \vect{E}_\mathrm{out})$, the
+    charge's field \xeqref{foundations}{eq:coulomb} and the uniform outside field (\physref{2.3}).
+  \item The orbit about one charge, \xeqref{first_bend}{eq:general} in its Newtonian limit, with
+    the time \xeqref{first_bend}{eq:dtdth} and the momentum \xeqref{first_bend}{eq:momentum}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation, the
+    error estimate from the step $2h$ and Simpson's rule (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The charge is held in place, the ion is a point, and the outside field is uniform and static
+under each disturbance: an exact solution of Maxwell's equations in vacuum, so it adds no
+approximation (\physref{2.3}).
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The size of the disturbance}\label{sec:size}
+
+Crossing to the detector at about $v_0$ takes $t \approx \val{tCross}$; a uniform push
+$a = \val{accel}$ alone moves the ion by $\tfrac12 a t^2 = \val{dropEst}$ in that time, comparable
+to the detector's height: the setup must work at two heights. On the empty board the field-on
+flight is exactly such a parabola, $y = y_0 + \tfrac12 a (x/v_0)^2$, which leaves the world's right
+edge at $y = \val{bareYOn}$ (as the table's empty-board row says).
+
+\subsection{The field off: Level 1's closed form}\label{sec:kepler}
+
+With one charge and no outside field, \xeqref{first_bend}{eq:orbit} in Newton's limit
+($\Gamma = 1$, $W/c^2 \to m$) is Binet's equation $u'' + u = -\kappa m/L^2$, $u = 1/r$, with the
+angular momentum $L = \val{L}$ about the charge; its solution from the launch values is
+\xeqref{first_bend}{eq:general}: $u(\theta) = B + (u_0 - B)\cos\theta + u'_0\sin\theta$ with
+$B = -\kappa m/L^2 = \val{Bk}$. Stepping $\theta$ and bisecting, the orbit enters the detector after
+$\theta = \val{thK}$ degrees, at $y = \val{yK}$; Simpson's rule on
+$\dd t/\dd\theta = m/(L u^2)$ gives $t = \val{tK}$ (its error $\val{tKerr}$).
+
+\subsection{The field on: the march}\label{sec:march}
+
+With the field on, the energy
+\begin{equation}\label{eq:energy-stray}
+  W = \frac{p^2}{2m} + \frac{\kappa}{\abs{\vect{x} - \vect{r}_Q}} - qE_y\,y
+\end{equation}
+is conserved, but the angular momentum about the charge is not, and the orbit has no form as
+simple as Binet's. Both flights are marched by \xeqref{foundations}{eq:rk4} at $h = \val{H}$,
+the entry located on the cubic Hermite interpolant; the error is estimated against the step
+$2h$. With the field off the march agrees with the closed form to $\val{kDiff}$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:off} \emph{Field off.} The ion enters the detector through its \val{faceOff}
+    face at $(\val{xOff}, \val{yOff})$ at $t = \val{tOff}$ (step estimate $\val{errOff}$; the
+    energy drifts by $\val{wDevOff}$), as the closed form says.
+  \item\label{st:on} \emph{Field on.} The ion enters through the \val{faceOn} face at
+    $(\val{xOn}, \val{yOn})$ at $t = \val{tOn}$ (step estimate $\val{errOn}$; the energy
+    \eqref{eq:energy-stray} drifts by $\val{wDevOn}$): lower, inside the detector still.
+\end{procedure}
+
+\begin{result}[The reference flights]
+Under both disturbances the ion enters the detector: at $(\val{xOff}, \val{yOff})$ with the field
+off and at $(\val{xOn}, \val{yOn})$ with it on. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All differences are below $10^{-10}$, the game's verified accuracy (Foundations §6); our
+estimates are a few $10^{-13}$. The tolerance, $10^{-9}$, is ten times the larger of the two
+computations' estimates, fixed before comparing. The largest difference, $\val{largest}$, is the
+game's: its verification controls each step's error to
+$10^{-12}$ (the level's \code{tolerances.verify}), and over the flight's few dozen steps and the
+location of the entry those errors add up to some $10^{-11}$, while our march's estimate is a
+hundred times smaller.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board the ion flies straight with the field off, leaving the right edge at
+$y = \val{bareYOff}$, and falls on the parabola of \S\ref{sec:size} with it on: neither enters the
+detector. A solution must lift the ion by about the detector's height above the launch line, so
+that the field-off flight enters in the detector's upper part and the field-on one, about
+$\val{dropEst}$ lower by \S\ref{sec:size}, still above its lower edge. One charge does it in two
+ways, by the same march, checked against the game in the comparison table:
+\begin{itemize}
+  \item a positive charge below the line pushes the ion up: the reference, or a small one,
+    $Q = \val{QPush}$ at $(\val{xPush}, \val{yPush})$ just below the launch, which enters at
+    $y = \val{yPushOff}$ with the field off and $\val{yPushOn}$ with it on;
+  \item a negative charge above the line pulls it up: $Q = \val{QPull}$ at
+    $(\val{xPull}, \val{yPull})$ enters at $y = \val{yPullOff}$ and $\val{yPullOn}$.
+\end{itemize}
+In both, a weaker charge nearer the line does what a stronger one farther away does: a charge
+at distance $b$ from the line, level with the launch, gives the ion flying past it at $v_0$ the
+sideways impulse (the transverse Coulomb force integrated along the undeflected line)
+\begin{equation}\label{eq:impulse}
+  \Delta p_\perp = \int_0^\infty \frac{\kappa b\,\dd t}{(b^2 + v_0^2 t^2)^{3/2}} = \frac{\kappa}{b v_0},
+\end{equation}
+so the lift asks for about the same $Q/b$. A map of all solutions
+would take the game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game adds the disturbance's uniform field to the level's sources (\physref{2.3}) and
+integrates Newton's equations with its adaptive eighth-order Runge--Kutta method (\physref{5},
+\physref{6}, \physref{7}), each disturbance's flight verified on its own.
+
+\section{Further reading}\label{sec:reading}
+
+The Kepler problem and Binet's equation: \Goldstein{§3.5}, \levelref{first_bend}.
+
+\levelfileappendix
+
+\end{document}
