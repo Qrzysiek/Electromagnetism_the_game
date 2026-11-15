@@ -1,0 +1,268 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,stray_field}
+\DocFingerprint{2f8b360ead11c8ec}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One ion is launched from $(\val{xZero}, \val{yZero})$ along $+x$ with $T_0 = \val{Tzero}$, in
+Newton's mechanics ($c = \infty$), and must enter the detector
+$\val{xDetLo} \le x \le \val{xDetHi}$, $\val{yDetLo} \le y \le \val{yDetHi}$ under each of the
+level's four disturbances: a plane wave of amplitude $E_0 = \val{Ezero}$ and frequency
+$\omega = \val{omega}$ travelling along $+x$, launched at the phases $0^\circ$, $90^\circ$,
+$180^\circ$ and $270^\circ$ of its cycle (\physref{2.3}; every shot is flown under every
+disturbance, and the level is solved only if every flight arrives). The player places up to four
+charges from the listed magnitudes, either sign, at nodes with
+$\val{xRegLo} \le x \le \val{xRegHi}$, $\val{yRegLo} \le y \le \val{yRegHi}$. A flight ends when
+the ion enters the detector, touches a charge (radius $\val{R}$), or leaves the world
+(\xsecref{foundations}{sec:board}).
+
+The reference places $Q = \val{QOne}$ at $(\val{xOne}, \val{yOne})$ and $Q = \val{QTwo}$ at
+$(\val{xTwo}, \val{yTwo})$, above the beam line near the launch and below it near the detector.
+The document shows that the hum is exactly a random start height and angle plus a small quiver;
+that the reference does not cancel the angle as an imaging lens would, but makes the start's
+height irrelevant and folds the downward angles back with its lower charge; and it marches the
+four flights numerically.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+The ion has charge $q = \val{q}$, mass $m = \val{m}$ and speed $v_0 = \val{vZero}$. The hum
+accelerates it by up to $qE_0/m = \val{accel}$; its period is $2\pi/\omega = \val{period}$, and the
+crossing to the detector, $t \approx \val{tCross}$, lasts $\val{periods}$ periods. The quiver it
+causes has the velocity amplitude $qE_0/(m\omega) = \val{quiverV}$ and the displacement amplitude
+$qE_0/(m\omega^2) = \val{quiverX}$. A drift at $\val{quiverV}$ across the beam carries the ion
+$\val{driftAt}$ off course by the detector, whose half-height is $\val{halfHeight}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \addplot[thick, blue!70!black] table {patha.dat};
+  \addplot[thick, red!70!black] table {pathb.dat};
+  \addplot[thick, teal] table {pathc.dat};
+  \addplot[thick, orange!80!black] table {pathd.dat};
+  \fill[red!75!black] (\rawval{xOne},\rawval{yOne}) circle[radius=\rawval{R}];
+  \fill[red!75!black] (\rawval{xTwo},\rawval{yTwo}) circle[radius=\rawval{R}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference charges (red), the placement region (dotted) and the four flights: the
+phases $0^\circ$ (blue), $90^\circ$ (red: it drifts down, passes close to the lower charge and is
+thrown back up), $180^\circ$ (teal) and $270^\circ$ (orange).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item Newton's equation of motion \xeqref{foundations}{eq:eom} ($c = \infty$) with the charges'
+    Coulomb fields \xeqref{foundations}{eq:coulomb} and the disturbance's wave.
+  \item A plane wave, $\vect{E} = E_0\,\uvec{e}\cos(\omega(t - \uvec{k}\cdot\vect{x}/c) + \varphi)$,
+    $\vect{B} = \uvec{k}\times\vect{E}/c$, $\uvec{e} = \uvec{z}\times\uvec{k}$, an exact solution
+    of Maxwell's equations in vacuum (\physref{2.3}, \Jackson{§7.1}).
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate from the step $2h$; bisection (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method} and
+    \xsecref{stray_field}{sec:march}.
+\end{principles}
+
+With $c = \infty$ the wave's $\uvec{k}\cdot\vect{x}/c$ vanishes and so does $\vect{B}$: the hum is a
+field uniform over the board, oscillating in time. Here $\uvec{k} = \uvec{x}$, so
+$\uvec{e} = \uvec{y}$ and
+\begin{equation}\label{eq:hum}
+  \vect{E}_\mathrm{hum}(t) = E_0\cos(\omega t + \varphi)\,\uvec{y}.
+\end{equation}
+The ion starts at $(\val{xZero}, \val{yZero})$ with $\vect{v} = (v_0, 0)$ at $t = 0$, the wave at
+phase $\varphi$, and moves by $m\ddot{\vect{x}} = \vect{F}_Q(\vect{x}) + q\vect{E}_\mathrm{hum}(t)$,
+$\vect{F}_Q$ the charges' Coulomb force, until the first of the board's events.
+
+\begin{assumption}{The hum is the same everywhere at once}\label{as:uniform}
+The game's world has $c = \infty$, where the wave is exactly \eqref{eq:hum}; nothing is neglected
+within the model. A real mains field has a wavelength of thousands of kilometres, so over a lab it
+is uniform too; that it oscillates during the flight is the level's simplification (its reality
+remarks).
+\end{assumption}
+
+\begin{assumption}{Fixed charges, a point ion, no radiation}\label{as:fixed}
+The charges stay put and the ion is a point; with $c = \infty$ Liénard's power
+\xeqref{foundations}{eq:larmor} vanishes. These are the game's model.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The empty board}\label{sec:free}
+
+Without charges the motion separates: $x = x_0 + v_0t$ and $\ddot y = (qE_0/m)\cos(\omega t + \varphi)$
+with $y(0) = y_0$, $\dot y(0) = 0$, so
+\begin{equation}\label{eq:free}
+  y(t) = y_0 + \frac{qE_0}{m\omega^2}\big(\cos\varphi - \cos(\omega t + \varphi)\big)
+       - \frac{qE_0}{m\omega}\,\sin\varphi\;t:
+\end{equation}
+a quiver about a line that starts $\delta y_0 = (qE_0/m\omega^2)\cos\varphi$ off the launch and
+drifts with $\delta v_y = -(qE_0/m\omega)\sin\varphi$. Where the line meets the detector or the
+world's edge (by bisection on \eqref{eq:free}):
+\begin{center}\small\val{free}\end{center}
+At $0^\circ$ and $180^\circ$ the hum only shifts the ion, which still arrives; at $90^\circ$ and
+$270^\circ$ it tilts its course by $\abs{\delta v_y}/v_0 = \val{quiverV}$ and the ion misses.
+
+\subsection{The quiver and the guiding motion}\label{sec:split}
+
+With the charges the same idea holds exactly. Let $\vect{\xi}(t) = -(qE_0/m\omega^2)\cos(\omega t + \varphi)\,\uvec{y}$,
+the quiver of a free ion, which satisfies $m\ddot{\vect{\xi}} = q\vect{E}_\mathrm{hum}$, and write
+\begin{equation}\label{eq:split}
+  \vect{x}(t) = \vect{x}'(t) + \vect{\xi}(t), \qquad m\ddot{\vect{x}}' = \vect{F}_Q\big(\vect{x}' + \vect{\xi}(t)\big).
+\end{equation}
+The guiding position $\vect{x}'$ feels only the charges, sampled at the quivering position, and
+starts at
+\begin{equation}\label{eq:effective}
+  y'(0) = y_0 + \frac{qE_0}{m\omega^2}\cos\varphi, \qquad \dot y'(0) = -\frac{qE_0}{m\omega}\sin\varphi,
+  \qquad x'(0) = x_0, \quad \dot x'(0) = v_0.
+\end{equation}
+So the hum is exactly a random start height ($\pm\val{quiverX}$) and angle ($\pm\val{quiverV}$) for
+the guiding motion, plus the quiver, at most $\val{quiverX}$, wherever the ion is at the end.
+Replacing $\vect{F}_Q(\vect{x}' + \vect{\xi})$ by $\vect{F}_Q(\vect{x}')$ makes the guiding motion a
+flight in the charges' static field:
+\begin{equation}\label{eq:guiding}
+  m\ddot{\vect{x}}' \approx \vect{F}_Q(\vect{x}'), \qquad y_\mathrm{e} \approx y'(t^*) + \xi_y(t^*),
+\end{equation}
+$t^*$ when $x'$ reaches the entry's $x$. Its error is of first order in $\vect{\xi}\cdot\nabla\vect{F}_Q$
+and grows quickly near a charge. The reference's four flights ($d_2$ is the closest approach to
+the lower charge; \S\ref{sec:march} for the march):
+\begin{center}\small\val{ref}\end{center}
+At three phases \eqref{eq:guiding} is good to a few hundredths; at $90^\circ$ the ion passes
+$\val{closestB}$ from the lower charge, where a quiver of $\val{quiverX}$ changes the force
+substantially, and it is off by $\val{guideWorst}$. The flights must be marched in full.
+
+\subsection{What the two charges do}\label{sec:lens}
+
+Without the hum, the charges map a start $(y_0 + \delta y_0, \dot y = \delta v_y)$ to a height on
+the line $x = \val{xDetLo}$. Its derivatives at the plain launch, by central differences of
+marched flights,
+\begin{equation}\label{eq:lens}
+  \pderiv{y_\mathrm{e}}{\,\delta y_0} = \val{dydy}, \qquad \pderiv{y_\mathrm{e}}{\,\delta v_y} = \val{dydv},
+\end{equation}
+against $1$ and $\val{freeDydv}$ on the empty board. The first is nearly zero: the detector sits
+at the focus of the charges for rays that start parallel, so the hum's shift of the start
+($0^\circ$, $180^\circ$) hardly matters. The second is not: an imaging lens, which brings every
+ray from the source to one point, would make it zero; the reference only halves it. What keeps the
+tilted flights on target is the lower charge: a flight aimed down passes nearer to it and is
+thrown back up, so the arrival height is lowest, $\val{foldY}$, for $\delta v_y = \val{foldV}$ and
+rises on both sides (Figure~\ref{fig:fold}): $\val{yAtMinus}$ at $\delta v_y = -\val{quiverV}$
+(passing $\val{closestMinus}$ from the charge), $\val{yAtPlus}$ at $+\val{quiverV}$, and
+$\val{yAtSteep}$ already at $-0.12$ (passing $\val{closestSteep}$ from it). Over the hum's range of
+angles the heights stay within about two cells, and those slightly below the detector's lower
+edge are still climbing and enter through its bottom face.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.7\linewidth, height=5.2cm, xmin=-0.125, xmax=0.125, ymin=8, ymax=14,
+  xlabel={start's transverse velocity $\delta v_y$}, ylabel={height at $x = \val{xDetLo}$},
+  tick label style={font=\small}, label style={font=\small},
+  xtick={-0.1,-0.05,0,0.05,0.1}, scaled x ticks=false,
+  xticklabel style={/pgf/number format/fixed}]
+  \fill[green!50!black, fill opacity=0.15] (-0.125,\rawval{yDetLo}) rectangle (0.125,\rawval{yDetHi});
+  \addplot[thick, blue!70!black] table {curve.dat};
+\end{axis}
+\end{tikzpicture}
+\caption{The charges' static map: where a flight from the launch reaches the line
+$x = \val{xDetLo}$, against its start's transverse velocity. Shaded: the detector's span.}
+\label{fig:fold}
+\end{figure}
+
+\subsection{The march}\label{sec:march}
+
+The full equations, $m\ddot{\vect{x}} = \vect{F}_Q(\vect{x}) + q\vect{E}_\mathrm{hum}(t)$, are marched
+by \xeqref{foundations}{eq:rk4} at $h = \val{H}$ for each phase; the events are located on the
+cubic Hermite interpolant by bisection and the error estimated against the step $2h$, as in
+\xsecref{stray_field}{sec:march}. The field depends on time, so no energy is conserved; the checks
+are the step estimate and, on the empty board, the closed form \eqref{eq:free}, which the march
+reproduces to $10^{-9}$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:start} \emph{The phases.} For each $\varphi$, the guiding start \eqref{eq:effective},
+    the columns $\delta y_0$ and $\delta v_y$ of the table in \S\ref{sec:split}.
+  \item\label{st:march} \emph{The march.} \S\ref{sec:march} for each phase. At every phase the
+    ion enters the detector through its \val{faceAll} face, at $t = \val{tA}$, $\val{tB}$,
+    $\val{tC}$, $\val{tD}$ and $y = \val{yA}$, $\val{yB}$, $\val{yC}$, $\val{yD}$ for $0^\circ$ to
+    $270^\circ$ (step estimates $\val{errA}$, $\val{errB}$, $\val{errC}$, $\val{errD}$).
+\end{procedure}
+
+\begin{result}[The reference flights]
+At all four phases the ion enters the detector, the closest to an edge $\val{margin}$ inside it.
+The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All differences are at most $\val{largest}$, the game's verified accuracy (Foundations §6); our step
+estimates are below $10^{-12}$. The tolerances are ten times the larger of the two computations'
+estimates, set before comparing; the empty board's values come from the closed form
+\eqref{eq:free}, exact but for rounding.
+
+\section{Other solutions}\label{sec:others}
+
+The level lists four phases; the hum's phase at launch could be any. Marched at
+$\val{nSweep}$ phases (every $5^\circ$, $h = 0.01$), the reference arrives at
+$\val{nSweepOk}$ of them, at heights from $\val{sweepMin}$ to $\val{sweepMax}$
+(Figure~\ref{fig:sweep}); phases that miss: \val{missedPhases}. Its margin is small, though: the
+closest of the listed phases arrives $\val{margin}$ inside an edge, and the lowest arrivals of the
+sweep enter through the bottom face. The sweep's flights are this document's own; the game
+verifies only the four listed phases.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.7\linewidth, height=4.6cm, xmin=0, xmax=360, ymin=8.5, ymax=11.5,
+  xlabel={phase at launch $\varphi$ (degrees)}, ylabel={$y_\mathrm{e}$},
+  tick label style={font=\small}, label style={font=\small}, xtick={0,90,180,270,360}]
+  \fill[green!50!black, fill opacity=0.15] (0,\rawval{yDetLo}) rectangle (360,\rawval{yDetHi});
+  \addplot[only marks, mark size=1.2pt, blue!70!black] table {sweep.dat};
+\end{axis}
+\end{tikzpicture}
+\caption{The reference's entry height against the hum's phase at launch, every $5^\circ$. Shaded:
+the detector's span.}
+\label{fig:sweep}
+\end{figure}
+
+The empty board fails at $90^\circ$ and $270^\circ$ (\S\ref{sec:free}). A setup that cancels the
+angle's first-order effect, $\partial y_\mathrm{e}/\partial\,\delta v_y = 0$ (an image of the source
+on the detector), would tolerate the hum without relying on a fold; this document does not
+search the placements for one.
+
+\section{What the game computes}\label{sec:engine}
+
+The game adds each disturbance's wave to the charges' fields; for $c = \infty$ it is \eqref{eq:hum}
+exactly (\physref{2.3}). It integrates Newton's equations with its adaptive eighth-order
+Runge--Kutta method (\physref{5}, \physref{6}, \physref{7}), each disturbance's flight verified on
+its own. The problem is the same as here, and the differences in the comparison are the two
+integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+Plane waves: \Jackson{§7.1}. Splitting a motion in an oscillating field into a quiver and a
+guiding motion is the starting point of Landau and Lifshitz's \emph{Mechanics}, §30 (there for a
+rapidly oscillating field, where the guiding motion's force can be averaged; here the field is
+slow and the split is used exactly). Flights under disturbances: \levelref{stray_field}.
+
+\levelfileappendix
+
+\end{document}
