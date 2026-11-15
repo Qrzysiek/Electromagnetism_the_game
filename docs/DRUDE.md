@@ -622,3 +622,15 @@ the magnetic field first).
   lag; it would fall with the macroparticles' weight, `carriers_per_area`). Until settled,
   levels whose answer is a phase at ωτ ≈ 1 (Carriers' inertia) wait; the Transformer's
   goals on heat do not depend on it.
+  *2026-11-15, at ω/κs = 1.2, four seeds each (`prototypes/ac_mobility_probe.rs`, the draft
+  with its macroparticles, step and frame spacing set from the environment; the outputs in
+  `prototypes/ac_mobility_scans.out`):* the macroparticles' mutual scattering is **not** the
+  cause: the shortfall grows as they get lighter, −27.2°, −27.5°, −25.7°, −22.2° at 50, 100,
+  200, 400 carriers per area (Boltzmann −30.4°). Nor is the frame spacing (which grows with
+  their number): the same runs read from every 2nd, 4th, 8th frame give the same phase
+  (−27.2°, −26.7°, −26.8°, −27.1°; only the magnitude rises with the spacing). The step
+  matters as well: at half the step 50 per area reach −28.9° (2.9 % of the size: within the
+  5 %), 400 per area −25.1° (10.3 %). So the error grows with the carriers' number and with
+  the step together, which suggests a step error in how the carriers' own field acts on
+  them (the space-charge response) rather than in the collisions. Next: the step at 400 per
+  area down to a quarter, and the same scan in D2's box with the carriers' field switched on.

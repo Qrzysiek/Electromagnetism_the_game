@@ -115,7 +115,9 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
    corrected; physics and golden hash unchanged. The level's document is written
    (`docs/levels/glass_screen/`: eight comparisons, the largest difference 7e-4 against a
    tolerance of 0.55; the infinite slab as the analytic limit).
-3. **The two open numerical questions that block levels** (*State* and *The Transformer*
+3. **The two open numerical questions that block levels** (the AC mobility: new scans
+   2026-11-15 in DRUDE.md Progress, *Open*: not the macroparticles' mutual scattering, not the
+   frame spacing; the error grows with the carriers' number and the step together) (*State* and *The Transformer*
    below): the AC mobility's phase through a level (Carriers' inertia and every phase goal
    at ωτ ≈ 1 wait on it), and the dense coupled rings' dynamics (V-D10: an accurate
    Transformer in Self-inductance's metal waits on it).

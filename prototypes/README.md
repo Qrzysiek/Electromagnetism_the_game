@@ -39,3 +39,6 @@ copy it back into `target/scratch/` and expect to adapt it.
 - `timing/`: the tube levels' timing audit (docs/HANDOFF.md, the owner's timing rules):
   `timing_audit.py` (`generator check` with a fresh run cache: preview and verification
   times), `field_audit.py` (`generator tube-field`: the field maps' rate).
+- `ac_mobility_probe.rs`, `ac_mobility_scans.out` (2026-11-15): the AC mobility draft with its
+  macroparticles (`AC_CPA`), step (`AC_STEP`), seeds and frame spacing (`AC_SKIP`) from the
+  environment (copy into `crates/level/tests/` to run), and its scans (DRUDE.md Progress, *Open*).
