@@ -1,0 +1,170 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,rf_kick,rf_separator}
+\DocFingerprint{c1636cc3dacca8c1}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Two identical ions ($q = \val{q}$, $m = \val{m}$, $T_0 = \val{Tzero}$) leave
+$(\val{xZero}, \val{yZero})$ along $+x$ in a world with $c = \val{c}$, the second $\Delta t = \val{dt}$
+after the first. The first must enter the detector $\val{xLoOne} \le x \le \val{xHiOne}$,
+$\val{yLoOne} \le y \le \val{yHiOne}$ above the beam line, the second
+$\val{xLoTwo} \le x \le \val{xHiTwo}$, $\val{yLoTwo} \le y \le \val{yHiTwo}$ below it. The player
+places up to two antennas, as in \levelref{rf_kick}, now choosing each one's frequency from
+$\omega \in \{\val{omegas}\}$, and one charge, at nodes with $\val{xRegLo} \le x \le \val{xRegHi}$,
+$\val{yRegLo} \le y \le \val{yRegHi}$. A flight ends when the ion enters its detector, touches an
+antenna's body (radius $\val{Ra}$), leaves the world, or reaches $t = \val{tMax}$
+(\xsecref{foundations}{sec:board}).
+
+The reference places one antenna, $p_0 = \val{pA}$ at $(\val{xA}, \val{yA})$, oriented at
+$\val{angleA}^\circ$, at $\omega = \val{omegaA}$. The document writes each ion's first-order kick as the
+real part of one complex response, which shows why this frequency separates the ions best though
+the phase difference it gives is far from half a cycle; it then marches both flights.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+By \xeqref{foundations}{eq:launch} each ion starts with $\gamma_0 = \val{gammaZero}$, momentum
+$\val{pZero}$ and speed $v_0 = \val{vZero}$. At the reference's frequency the period is
+$\val{periodA}$ and the ions meet the antenna $\omega\Delta t = \val{phaseDiff}$ radians apart in its
+cycle; half a cycle apart would need $\omega = \pi/\Delta t = \val{omegaPi}$, not on the list.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xLoOne},\rawval{yLoOne}) rectangle (\rawval{xHiOne},\rawval{yHiOne});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xLoTwo},\rawval{yLoTwo}) rectangle (\rawval{xHiTwo},\rawval{yHiTwo});
+  \addplot[thick, blue!70!black] table {pathone.dat};
+  \addplot[thick, red!70!black] table {pathtwo.dat};
+  \fill[red!75!black] (\rawval{xA},\rawval{yA}) circle[radius=\rawval{Ra}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference antenna (red disc), the placement region (dotted), the detectors and the
+two flights: the first ion (blue) and the second, $\Delta t$ later (red).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The antenna's exact retarded fields, \xeqref{rf_kick}{eq:fields}; a flight launched at $t_0$
+    in the fields of the lab time $t_0 + t$, \xeqref{rf_separator}{eq:offset}.
+  \item The relativistic equations of motion \xeqref{foundations}{eq:eom} with the launch
+    \xeqref{foundations}{eq:launch}; Liénard's power \xeqref{foundations}{eq:larmor}.
+  \item The kick to first order in the field, \xeqref{rf_kick}{eq:first-order}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate from the step $2h$ (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+\begin{assumption}{The ions' radiation, and the antenna as a fixed source}\label{as:rf}
+As in \levelref{rf_kick}, whose assumptions \xref{rf_kick}{as:radiation} and
+\xref{rf_kick}{as:driven} these are: the ions' radiation is neglected, $\val{radOne}$ and $\val{radTwo}$
+here, and the antenna oscillates at a fixed amplitude. The ions fly separately. These are the
+game's model.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{One response for every launch time}\label{sec:phasor}
+
+The antenna's fields are linear in $\vect{p}(t) = \vect{p}_0\cos\omega t = \mathrm{Re}\,\vect{p}_0e^{i\omega t}$
+and its derivatives, so the first-order lift \xeqref{rf_kick}{eq:first-order} of an ion launched at
+$t_0$, which is linear in the fields at $t_0 + t$, is
+\begin{equation}\label{eq:phasor}
+  L(t_0) = \mathrm{Re}\big[K\,e^{i\omega t_0}\big], \qquad K = L(0) + i\,L\big({-\tfrac{\pi}{2\omega}}\big),
+\end{equation}
+with one complex response $K$ that depends on the antenna's place, orientation, amplitude and
+frequency but not on the launch time; the second form follows from $e^{-i\pi/2} = -i$. Two
+first-order integrals give $K$. For the two ions, $L_1 = \mathrm{Re}\,K$ and
+$L_2 = \mathrm{Re}\,K e^{i\omega\Delta t}$; writing $K = \abs{K}e^{i\alpha}$, they are equal and
+opposite when $\alpha = \pi/2 - \omega\Delta t/2$ (modulo $\pi$), and then
+\begin{equation}\label{eq:separation}
+  L_1 = -L_2 = \abs{K}\sin\frac{\omega\Delta t}{2}.
+\end{equation}
+The phase difference wants $\omega\Delta t = \pi$, but $\abs{K}$ shrinks as $\omega$ grows: the ion
+spends several time units near the antenna, during which a fast field reverses and its kick
+averages away. For the reference antenna at each listed frequency (first-order lifts at the
+detectors' face, \S\ref{sec:march} for the step):
+\begin{center}\small\val{phasors}\end{center}
+The best separation \eqref{eq:separation} is at $\omega = \val{omegaA}$, where the reference's
+$K = \val{Kabs}\,e^{i\,\val{Karg}^\circ}$ gives $L_1 = \val{LOne}$ and $L_2 = \val{LTwo}$; at
+$\omega = 0.8$ the phase difference is nearly half a cycle but $\abs{K}$ has fallen fourfold.
+\eqref{eq:phasor} reproduces the second ion's directly integrated first-order lift to $10^{-10}$.
+
+\subsection{The march}\label{sec:march}
+
+Each flight is marched by \xeqref{foundations}{eq:rk4} at $h = \val{H}$ with Liénard's energy as one
+more state; the entry is located on the cubic Hermite interpolant by bisection and the error
+estimated against the step $2h$, as in \xsecref{rf_kick}{sec:flight}. On the detectors' face
+$x = \val{xLoOne}$ the marched lifts are $\val{yLineOne}$ and $\val{yLineTwo}$, against the first-order
+$\val{LOne}$ and $\val{LTwo}$: the second ion, pushed down nearer to the antenna, feels a stronger field
+than first order assumes.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:phasor} \emph{The frequency.} The table of \S\ref{sec:phasor}: $\omega = \val{omegaA}$
+    separates the ions best.
+  \item\label{st:one} \emph{The first ion.} The march: at $x = \val{xLoOne}$ it is $\val{yLineOne}$ above the
+    beam line, below its detector; it keeps climbing and enters through the \val{faceOne} face at
+    $(\val{xOne}, \val{yOne})$ at $t = \val{tOne}$, with $\vect{p} = (\val{pxOne}, \val{pyOne})$ (step
+    estimate $\val{errOne}$).
+  \item\label{st:two} \emph{The second ion.} Launched $\Delta t$ later: through the \val{faceTwo} face at
+    $(\val{xTwo}, \val{yTwo})$ at $t = \val{tTwo}$ after its launch, with
+    $\vect{p} = (\val{pxTwo}, \val{pyTwo})$ (step estimate $\val{errTwo}$).
+\end{procedure}
+
+\begin{result}[The reference flights]
+Each ion enters its own detector, the first close to the detector's far bottom corner. The level
+is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All trajectory differences are at most $\val{largest}$, the game's verified accuracy (Foundations
+§6). The tolerances are ten times the larger of the two computations' estimates, or the game's own
+preview--verification gap where that is larger (the first ion's, which enters through the bottom
+face at a shallow slope); the radiated energies agree to a few $10^{-9}$ relative. On the empty
+board both ions fly straight to the world's right edge at $t = \val{bareT}$.
+
+\section{Other solutions}\label{sec:others}
+
+The table of \S\ref{sec:phasor} holds for the reference's place and orientation only: elsewhere $K$
+differs in size and phase, and the condition on $\alpha$ is met by choosing the place (which sets
+when the ion passes) and the sign of the amplitude (which adds $\pi$). The trade-off it shows is
+general, though: a slow drive kicks hard but sees the two ions at nearly the same phase, a fast one
+sees them half a cycle apart but kicks weakly. The reference's margin is narrow: the first ion
+enters its detector $\val{marginOne}$ from its far edge. A map of the solutions would take the
+game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game evaluates each antenna's fields at its own frequency (\physref{2.4}), at the lab time
+$t_0 + t$, and integrates the motion with its adaptive eighth-order Runge--Kutta method
+(\physref{3}, \physref{5}, \physref{6}, \physref{7}), each shot verified on its own. The problem is
+the same as here, and the differences in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+One ion's kick: \levelref{rf_kick}; two ions half a period apart: \levelref{rf_separator}. Phasors
+for time-harmonic fields: \Jackson{§9.1}.
+
+\levelfileappendix
+
+\end{document}
