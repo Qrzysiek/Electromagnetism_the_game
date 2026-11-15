@@ -73,7 +73,7 @@ detectors (green), and the three flights: mass 1 (blue) bent most, into the top 
     \xeqref{foundations}{eq:eom}; it does no work (\xsecref{first_coil}{sec:nowork}).
   \item The magnets' fields in the plane, \xeqref{first_magnet}{eq:dipole-plane}, summed.
   \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation, the
-    error estimate by halving the step and Simpson's rule (\xsecref{foundations}{sec:board},
+    error estimate by doubling the step and Simpson's rule (\xsecref{foundations}{sec:board},
     \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
 \end{principles}
 
@@ -120,7 +120,7 @@ carries.
     $(\val{xTwo}, \val{yTwo})$ at $t = \val{tTwo}$; mass 4 at $(\val{xFour}, \val{yFour})$ at
     $t = \val{tFour}$.
   \item\label{st:checks} \emph{The checks.} The two exit angles agree to $\val{bendAgree}$
-    degrees; $\abs{\vect{p}}$ drifts by at most $\val{pDevOne}$; the step-halving estimates are at
+    degrees; $\abs{\vect{p}}$ drifts by at most $\val{pDevOne}$; the step-doubling estimates are at
     most $\val{errMax}$.
 \end{procedure}
 

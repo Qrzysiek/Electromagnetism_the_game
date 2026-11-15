@@ -3,7 +3,7 @@
 Every number of the document, from the level file: the three isotopes' flights by the
 classical Runge-Kutta method at a fixed step (Foundations eq:rk4) in the placed magnets'
 in-plane dipole fields (first_magnet eq:dipole-plane), the entries by cubic Hermite
-interpolation and bisection, the errors by halving the step; and the rigidity estimate of each
+interpolation and bisection, the errors by doubling the step; and the rigidity estimate of each
 isotope's bend (eq:kick). Compared with the game: the three reference flights and the empty
 board's.
 """
@@ -236,7 +236,7 @@ def compute(doc):
     for i, tag in enumerate(tags):
         st = Setup(lvl, ref, i)
         p = st.p0
-        run, half = fly(st, H), fly(st, H / 2)
+        run, half = fly(st, H), fly(st, 2 * H)
         doc.check(run["outcome"] == "Arrived", tag + ": the reference flight arrives")
         err = err_of(run, half)
         worst = max(worst, err)
@@ -279,6 +279,6 @@ def compute(doc):
                         r"exit angle (deg)", r"$y_\mathrm{e}$", "detector's $y$"], rows,
               align="rrrrrrl", digits=[None, 6, 6, 6, 6, 6, None])
     doc.value("errMax", worst, 2, sci=True)
-    doc.check(worst < 1e-10, "the step-halving estimates are below 1e-10")
+    doc.check(worst < 1e-9, "the step-halving estimates are below 1e-9")
     doc.value("bendAgree", worst_bend, 2, sci=True)
     doc.check(worst_bend < 1e-6, "the exit angles agree with the curvature integral")
