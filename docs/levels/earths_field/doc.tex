@@ -1,0 +1,219 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil,stray_field,mains_hum}
+\DocFingerprint{97778a70206f254e}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+An electron, charge $q = \val{q}$ and mass $m = \val{m}$, is launched from
+$(\val{xZero}, \val{yZero})$ along $+x$ with $T_0 = \val{Tzero}$, in Newton's mechanics
+($c = \infty$), and must enter the detector $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$ under each of the level's three disturbances: no field, and a
+uniform stray field $B_z = \pm\val{B}$ perpendicular to the board, ``\val{distNorth}'' and
+``\val{distSouth}'' (\physref{2.3}; every shot is flown under every disturbance, and the level is
+solved only if every flight arrives). The player places up to four charges from the listed
+magnitudes, either sign, at nodes with $\val{xRegLo} \le x \le \val{xRegHi}$,
+$\val{yRegLo} \le y \le \val{yRegHi}$. A flight ends when the electron enters the detector, touches
+a charge (radius $\val{R}$), or leaves the world (\xsecref{foundations}{sec:board}).
+
+The reference places two negative charges, which repel the electron: $Q = \val{QOne}$ at
+$(\val{xOne}, \val{yOne})$, below the beam line near the launch, and $Q = \val{QTwo}$ at
+$(\val{xTwo}, \val{yTwo})$, above it further on. The document solves the empty board in closed
+form, marches the reference's three flights with the energy as the check, and measures how the
+charges make the arrival nearly independent of the stray field: not by cancelling it, but by
+folding the flights it bends upward back down.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+The electron's speed is $v_0 = \val{vZero}$ and its momentum $p_\mathrm{i} = mv_0$. In the stray
+field it circles with the radius $R_B = p_\mathrm{i}/(\abs{q}B) = \val{Rlarmor}$; the magnetic force
+on it, $\abs{q}v_0B = \val{forceB}$, is a few hundredths of the reference charges' forces near them
+($\abs{qQ}/r^2$ with $qQ = \val{kOne}$ and $\val{kTwo}$). Over the $L = \val{L}$ cells to the
+detector a circle of radius $R_B$ departs from its tangent by $R_B - \sqrt{R_B^2 - L^2} = \val{sag}$
+($\approx L^2/2R_B = \val{sagApprox}$), against the detector's half-height $\val{halfHeight}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \addplot[thick, black!70] table {pathoff.dat};
+  \addplot[thick, blue!70!black] table {pathnorth.dat};
+  \addplot[thick, red!70!black] table {pathsouth.dat};
+  \fill[blue!60!black] (\rawval{xOne},\rawval{yOne}) circle[radius=\rawval{R}];
+  \fill[blue!60!black] (\rawval{xTwo},\rawval{yTwo}) circle[radius=\rawval{R}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference's negative charges (blue discs), the placement region (dotted) and the
+three flights: no field (black), facing north (blue) and facing south (red).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item Newton's equation with the Lorentz force \xeqref{foundations}{eq:eom} ($c = \infty$),
+    the charges' Coulomb fields \xeqref{foundations}{eq:coulomb} and the uniform $B_z$
+    (\physref{2.3}).
+  \item In a static field the energy $p^2/2m + q\phi$ is conserved, the magnetic force doing no
+    work (\xsecref{foundations}{sec:energy}); a charge in a uniform $B$ alone moves on a circle,
+    \xeqref{first_coil}{eq:larmor-radius}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate from the step $2h$; bisection and golden-section search
+    (\xsecref{foundations}{sec:board}, \xsecref{foundations}{sec:numerics}), as in
+    \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The electron starts at $(\val{xZero}, \val{yZero})$ with $\vect{p} = (p_\mathrm{i}, 0)$ and moves by
+\begin{equation}\label{eq:eom-b}
+  \dot{\vect{p}} = q\big(\vect{E}_Q(\vect{x}) + \vect{v}\times B_z\uvec{z}\big), \qquad
+  \text{in the plane}\quad \dot p_x = q(E_{Q,x} + v_yB_z), \quad \dot p_y = q(E_{Q,y} - v_xB_z),
+\end{equation}
+until the first of the board's events; the energy
+\begin{equation}\label{eq:energy-b}
+  W = \frac{p^2}{2m} + \sum_Q \frac{qQ}{\abs{\vect{x} - \vect{r}_Q}}
+\end{equation}
+is conserved in each of the three fields.
+
+\begin{assumption}{A uniform stray field}\label{as:uniform}
+The stray field is uniform and static, an exact solution of Maxwell's equations (\physref{2.3}),
+so nothing is neglected within the game's model. The Earth's field is uniform over a lab and is
+about $50\,\mu$T; the level's $B$ is chosen to bend the beam by a few cells over the board.
+\end{assumption}
+
+\begin{assumption}{Fixed charges, a point electron, no radiation}\label{as:fixed}
+The charges stay put and the electron is a point; with $c = \infty$ Liénard's power
+\xeqref{foundations}{eq:larmor} vanishes. These are the game's model.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The empty board}\label{sec:circle}
+
+Without charges and without field the electron flies straight along $y = \val{yZero}$ into the
+detector's left face at $t = \val{freeTOff}$. With $B_z \ne 0$ it moves on the circle of radius
+$R_B$ tangent to the launch line; the force $-qv_xB_z$ along $y$ is upward for $-qB_z > 0$, so the
+circle curves up facing north ($B_z > 0$, $q < 0$) and down facing south:
+\begin{equation}\label{eq:circle}
+  y(x) = y_0 \pm \Big(R_B - \sqrt{R_B^2 - (x - x_0)^2}\Big), \qquad
+  t(x) = \frac{R_B}{v_0}\arcsin\frac{x - x_0}{R_B}, \qquad
+  p_y = \pm p_\mathrm{i}\frac{x - x_0}{R_B}.
+\end{equation}
+At the detector's face it is $\val{sag}$ off the line, outside the detector; it leaves the world's
+right edge at $y = \val{freeYNorth}$ and $\val{freeYSouth}$, at $t = \val{freeTNorth}$. To first
+order in $B$ the height at the detector moves by
+\begin{equation}\label{eq:sag}
+  \deriv{y}{B_z} = \frac{\abs{q}L^2}{2p_\mathrm{i}} = \val{slopeFree}
+\end{equation}
+per unit of field, and the flights facing north and south end $\val{spreadFree}$ apart.
+
+\subsection{The march}\label{sec:march}
+
+With the charges there is no closed form. \eqref{eq:eom-b} is marched by
+\xeqref{foundations}{eq:rk4} at $h = \val{H}$ in each field; the events are located on the cubic
+Hermite interpolant by bisection, the error is estimated against the step $2h$, and
+\eqref{eq:energy-b} checks every step (\xsecref{stray_field}{sec:march}).
+
+\subsection{How the charges handle the stray field}\label{sec:fold}
+
+Marching flights with the reference's charges in fields between $-1.5B$ and $1.5B$ and recording
+where they cross the line $x = \val{xDetLo}$ gives Figure~\ref{fig:curve}. Its slope at
+$B_z = 0$, by central differences, is $\val{slopeRef}$, a factor $\val{slopeRatio}$ smaller than the
+empty board's \eqref{eq:sag}; but the curve is far from straight. Without field the electron
+crosses the line at $\val{yLineZero}$, above the detector: the lower charge, which it passes first,
+has lifted it, and it comes down into the detector's top face further on. Facing north the field
+bends it up, towards the upper charge (it passes $\val{nearNorth}$ from it, against $\val{nearOff}$
+without field), whose repulsion grows faster than the lift: the crossing height is highest,
+$\val{foldY}$, at $B_z \approx \val{foldB}$ and falls beyond, to $\val{yLineNorth}$ at $B_z = \val{B}$.
+Facing south the field bends the electron down and away from that charge (to $\val{nearSouth}$),
+and it crosses at $\val{yLineSouth}$. The three flights cross within $\val{spreadRef}$ of each other
+in height instead of $\val{spreadFree}$: the upper charge folds the upward bend back, as the lower
+charge of \levelref{mains_hum} folds its downward tilts.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.72\linewidth, height=5.4cm, xmin=-11600, xmax=11600, ymin=4, ymax=16,
+  xlabel={stray field $B_z$}, ylabel={height at $x = \val{xDetLo}$},
+  tick label style={font=\small}, label style={font=\small},
+  xtick={-10000,-5000,0,5000,10000}, scaled x ticks=false,
+  xticklabel style={/pgf/number format/fixed}]
+  \fill[green!50!black, fill opacity=0.15] (-11600,\rawval{yDetLo}) rectangle (11600,\rawval{yDetHi});
+  \addplot[thick, blue!70!black] table {curve.dat};
+  \addplot[thin, dashed, black!60] table {curvefree.dat};
+\end{axis}
+\end{tikzpicture}
+\caption{Where a flight crosses the line $x = \val{xDetLo}$, against the stray field: with the
+reference's charges (solid) and on the empty board (dashed, \eqref{eq:circle}). Shaded: the
+detector's span; the level's fields are $0$ and $\pm\val{B}$.}
+\label{fig:curve}
+\end{figure}
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:off} \emph{No field.} The march of \S\ref{sec:march} with $B_z = 0$: the electron
+    enters the detector through its \val{faceOff} face at $(\val{xOff}, \val{yOff})$ at
+    $t = \val{tOff}$, with $\vect{p} = (\val{pxOff}, \val{pyOff})$ (step estimate $\val{errOff}$; the
+    energy drifts by $\val{wDevOff}$).
+  \item\label{st:north} \emph{Facing north}, $B_z = \val{B}$: through its \val{faceNorth} face at
+    $(\val{xNorth}, \val{yNorth})$ at $t = \val{tNorth}$, $\vect{p} = (\val{pxNorth}, \val{pyNorth})$
+    (step estimate $\val{errNorth}$; energy drift $\val{wDevNorth}$).
+  \item\label{st:south} \emph{Facing south}, $B_z = -\val{B}$: through its \val{faceSouth} face at
+    $(\val{xSouth}, \val{ySouth})$ at $t = \val{tSouth}$, $\vect{p} = (\val{pxSouth}, \val{pySouth})$
+    (step estimate $\val{errSouth}$; energy drift $\val{wDevSouth}$).
+\end{procedure}
+
+\begin{result}[The reference flights]
+In all three fields the electron enters the detector. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All differences are at most $\val{largest}$, the game's verified accuracy (Foundations §6). The
+tolerances are ten times the larger of the two computations' estimates, or the game's own
+preview--verification gap where that is larger (the field-free flight, which enters through the
+top face, where its point of entry moves along the face by the height's error divided by its
+shallow slope); the empty board's values come from the closed form \eqref{eq:circle}.
+
+\section{Other solutions}\label{sec:others}
+
+The empty board fails facing north and south (\S\ref{sec:circle}). A setup must keep the three
+crossings within the detector's span, or bring the outliers in through its top or bottom face.
+Figure~\ref{fig:curve} shows the reference's crossing height over a wider range of fields than the
+level's three; where it lies above the detector's span, as without field, the flight may still
+come down into the top face, so the figure alone does not decide which fields the reference
+tolerates. A map of the fields or placements that solve would take full flights or the game's
+verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game adds the disturbance's uniform $B_z$ to the charges' fields (\physref{2.3}) and integrates
+\eqref{eq:eom-b} with its adaptive eighth-order Runge--Kutta method (\physref{5}, \physref{6},
+\physref{7}), each disturbance's flight verified on its own. The problem is the same as here, and
+the differences in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+Motion in a uniform magnetic field: \Jackson{§12.2}, \levelref{first_coil}. Flights under
+disturbances: \levelref{stray_field}, \levelref{mains_hum}.
+
+\levelfileappendix
+
+\end{document}
