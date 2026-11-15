@@ -1,0 +1,199 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil}
+\DocFingerprint{ace70898a15db445}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Three positive ions start together at $(\val{xZero}, \val{yZero})$ along $+x$ with the kinetic
+energies $\val{TSlow}$, $\val{TMid}$ and $\val{TFast}$. A rectangular coil around the board,
+from $(\val{cx0}, \val{cy0})$ to $(\val{cx1}, \val{cy1})$, fills it with a magnetic field
+perpendicular to the board, which alone would bend every ion down into the coil's lower side.
+The player places up to four charges from the listed magnitudes in the region
+$\val{regX0} \le x \le \val{regX1}$, $\val{regY0} \le y \le \val{regY1}$, to supply an electric
+field. The middle ion must enter its detector, $\val{xDetLoMid} \le x \le \val{xDetHiMid}$,
+$\val{yDetLoMid} \le y \le \val{yDetHiMid}$, moving within $\pm\val{coneHalf}$ degrees of $+x$;
+the slow ion the detector above it, $\val{yDetLoSlow} \le y \le \val{yDetHiSlow}$, and the fast
+ion the one below, $\val{yDetLoFast} \le y \le \val{yDetHiFast}$ (both at the same $x$, without
+a direction window). A flight ends when the ion touches a charge or the coil's wire, leaves the
+world, or enters its detector, which a direction outside the window turns from an arrival into
+a rejection (\xsecref{foundations}{sec:board}, \physref{6.1}).
+
+The reference places a negative charge above the path near its start and a positive one below
+it further on: both push the ions upwards, against the magnetic force. The electric force on an
+ion does not depend on its speed; the magnetic force grows with it. Where they balance for the
+middle ion, $qE = qvB$, it goes straight; the slow ion is lifted, the fast one pushed down. This
+document derives the rectangular coil's field from the Biot--Savart law and integrates the three
+flights numerically.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: each ion has charge $q = \val{q}$, mass $m = \val{m}$ and radius $0$; $c = \val{c}$.
+Their speeds are $v = \val{vSlow}$, $\val{vMid}$ and $\val{vFast}$ (\xeqref{foundations}{eq:launch}).
+The coil is the rectangle's four straight sides, carrying the strength $\kappa = \val{kappa}$
+(\physref{2.2}) counter-clockwise; its wire has radius $\val{wire}$. The reference charges are
+$Q_1 = \val{QOne}$ at $(\val{xOne}, \val{yOne})$ and $Q_2 = \val{QTwo}$ at $(\val{xTwo}, \val{yTwo})$,
+radius $R = \val{R}$. The world is $-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!70, thick] (\rawval{cx0},\rawval{cy0}) rectangle (\rawval{cx1},\rawval{cy1});
+  \draw[black!30, dotted] (\rawval{regX0},\rawval{regY0}) rectangle (\rawval{regX1},\rawval{regY1});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoSlow},\rawval{yDetLoSlow}) rectangle (\rawval{xDetHiSlow},\rawval{yDetHiSlow});
+  \draw[green!40!black] (\rawval{xDetLoSlow},\rawval{yDetLoSlow}) rectangle (\rawval{xDetHiSlow},\rawval{yDetHiSlow});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoMid},\rawval{yDetLoMid}) rectangle (\rawval{xDetHiMid},\rawval{yDetHiMid});
+  \draw[green!40!black] (\rawval{xDetLoMid},\rawval{yDetLoMid}) rectangle (\rawval{xDetHiMid},\rawval{yDetHiMid});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoFast},\rawval{yDetLoFast}) rectangle (\rawval{xDetHiFast},\rawval{yDetHiFast});
+  \draw[green!40!black] (\rawval{xDetLoFast},\rawval{yDetLoFast}) rectangle (\rawval{xDetHiFast},\rawval{yDetHiFast});
+  \addplot[thick, blue!70!black] table {pathslow.dat};
+  \addplot[thick, green!40!black] table {pathmid.dat};
+  \addplot[thick, red!70!black] table {pathfast.dat};
+  \fill[blue!75!black] (\rawval{xOne},\rawval{yOne}) circle[radius=\rawval{R}];
+  \fill[red!75!black] (\rawval{xTwo},\rawval{yTwo}) circle[radius=\rawval{R}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The rectangular coil (black), the reference's negative charge above the path (blue)
+and positive charge below it (red), and the three flights: slow (blue) lifted into the upper
+detector, middle (green) straight into the middle one, fast (red) pushed into the lower one.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The Lorentz force $q(\vect{E} + \vect{v}\times\vect{B})$ in the relativistic equation of
+    motion \xeqref{foundations}{eq:eom}; the point charges' field \xeqref{foundations}{eq:coulomb};
+    the energy \xeqref{foundations}{eq:energy}.
+  \item The Biot--Savart law for a closed circuit (\Jackson{§5.2}) in the game's units
+    (\physref{2.2}).
+  \item The board's rules and the detector's direction window (\xsecref{foundations}{sec:board},
+    \physref{6.1}); the classical Runge--Kutta method, cubic Hermite interpolation and the error
+    estimate by halving the step (\xsecref{foundations}{sec:numerics}), as in
+    \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The assumptions are First coil's (\xsecref{first_coil}{sec:model}): the coil and the charges are
+held in place, the wires are thin lines, the ions are points, and their radiation is not taken
+from them.
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{A straight side's field}\label{sec:segment}
+
+Let a side run from $\vect{a}$ to $\vect{b}$ along the unit vector $\uvec{t}$, and let the field
+point $\vect{x}$ lie in the plane at the distance $d$ from the side's line, its foot at the
+origin of the arc length $s$ along $\uvec{t}$; the side spans $s_a \le s \le s_b$. An element
+$\dd\vect{l} = \uvec{t}\,\dd s$ at $s$ contributes, by the Biot--Savart law,
+$\kappa\,\dd\vect{l}\times(\vect{x} - \vect{l})/\abs{\vect{x} - \vect{l}}^3$, whose size is
+$\kappa\,d\,\dd s/(d^2 + s^2)^{3/2}$ and whose direction is $\pm\uvec{z}$, the sign of
+$(\uvec{t}\times(\vect{x} - \vect{a}))_z$. With
+$\int \dd s/(d^2 + s^2)^{3/2} = s/(d^2\sqrt{d^2 + s^2})$,
+\begin{equation}\label{eq:segment}
+  B_z = \pm\frac{\kappa}{d}\left(\frac{s_b}{\sqrt{d^2 + s_b^2}} - \frac{s_a}{\sqrt{d^2 + s_a^2}}\right).
+\end{equation}
+The coil's field is the sum over its four sides. A direct Simpson quadrature of the Biot--Savart
+integral along each side agrees with \eqref{eq:segment} to a relative $\val{segAgree}$. For an
+infinitely long side $s_a \to -\infty$, $s_b \to \infty$, and \eqref{eq:segment} becomes
+$2\kappa/d$, the long straight wire's field: at the rectangle's centre the two long sides,
+$\val{dSide}$ away, would give $\val{Bstrip}$; with the short sides the field there is
+$\val{Bmid}$.
+
+\subsection{The balance}\label{sec:balance}
+
+For an ion moving along $+x$ in $B_z > 0$ the magnetic force $q\vect{v}\times\vect{B} =
+qB_z(v_y, -v_x)$ points down, $-qvB_z$; an electric field $E_y$ adds $qE_y$. They cancel where
+\begin{equation}\label{eq:balance}
+  v = \frac{E_y}{B_z},
+\end{equation}
+independently of the mass and the charge: a Wien filter selects a speed. A slower ion feels the
+electric force more and rises, a faster one sinks. With point charges $E_y/B_z$ is not constant
+along the path (the table, on the launch line, with the reference charges); the middle ion goes
+straight on average, not everywhere, and the detector's window of $\pm\val{coneHalf}^\circ$ asks
+for the net bend to cancel:
+\begin{center}\small\val{axis}\end{center}
+Here $\vect{E}$ comes from the charges alone; the coil's current is static and makes none.
+
+\subsection{The method}\label{sec:method}
+
+The three flights are integrated by \xeqref{foundations}{eq:rk4} at $h = \val{H}$, $B_z$ from
+\eqref{eq:segment} at every evaluation, with the events located on the cubic Hermite
+interpolant: a charge's disc, the coil's wire (within $\val{wire}$ of a side), the world's edge,
+the detector, where the arrival direction is tested against the window. The energy
+\xeqref{foundations}{eq:energy} is the check; the largest step-halving estimate of an end state
+is $\val{errMax}$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:fields} \emph{The fields.} $B_z$ by \eqref{eq:segment} summed over the four
+    sides; $\vect{E}$ from the two charges.
+  \item\label{st:slow} \emph{The slow ion} ($v = \val{vSlow}$, below the balance) is lifted and
+    enters its detector through the \val{faceSlow} face at $(\val{xSlow}, \val{ySlow})$ at
+    $t = \val{tSlow}$, moving $\val{angSlow}$ degrees above $+x$.
+  \item\label{st:mid} \emph{The middle ion} ($v = \val{vMid}$) enters its detector through the
+    \val{faceMid} face at $(\val{xMid}, \val{yMid})$ at $t = \val{tMid}$, moving $\val{angMid}$
+    degrees from $+x$: inside the window, so it arrives.
+  \item\label{st:fast} \emph{The fast ion} ($v = \val{vFast}$) is pushed down and enters its
+    detector through the \val{faceFast} face at $(\val{xFast}, \val{yFast})$ at $t = \val{tFast}$,
+    moving $\val{angFast}$ degrees from $+x$.
+  \item\label{st:checks} \emph{The checks.} The energy drifts by at most $\val{wDevFast}$; the
+    step estimates are at most $\val{errMax}$.
+\end{procedure}
+
+\begin{result}[The reference flights]
+The three ions enter their detectors at $(\val{xSlow}, \val{ySlow})$, $(\val{xMid}, \val{yMid})$
+and $(\val{xFast}, \val{yFast})$, the middle one within its window. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All differences are a few $10^{-11}$ or less, the game's verified accuracy (Foundations §6);
+our step estimates are below $10^{-12}$. The tolerance, $10^{-9}$, is ten times the larger of the
+two computations' estimates (or the game's own preview--verification gap where larger), fixed
+before comparing. The middle ion's direction, $\val{angMid}$ degrees, is far inside the window,
+so its outcome is not marginal.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board, the second placement in \code{placements.json}, the magnetic force bends all
+three ions down into the coil's lower side: the middle one strikes the wire at
+$(\val{bareXMid}, \val{bareYMid})$ (\val{bareOutMid}; the table has all three). A solution must
+supply an upward electric field that balances the middle ion's magnetic force over the whole
+path: one charge's field, strong near it and weak elsewhere, can sort three speeds but rarely
+lets the middle one leave straight, which is why the level asks for the direction. Charges of
+either sign above and below the path can share the work; a map of solutions would take the
+game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game evaluates a polygonal coil's field as the sum of its straight segments' exact fields
+(\physref{2.2}), of which \eqref{eq:segment} is the in-plane case, and integrates the equations of
+motion with its adaptive eighth-order Runge--Kutta method (\physref{5}, \physref{6},
+\physref{7}), testing the arrival direction against the window (\physref{6.1}); the differences
+in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+The Biot--Savart law and a straight wire's field: \Jackson{§5.2, §5.3}; motion in crossed
+uniform fields and the drift $\vect{E}\times\vect{B}/B^2$: \Jackson{§12.3}. Magnetic fields and
+cyclotron motion: \levelref{first_coil}.
+
+\levelfileappendix
+
+\end{document}
