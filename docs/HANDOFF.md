@@ -138,11 +138,11 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
    carries the magnetic arc's derivations, first magnet and Stern–Gerlach check their
    marches against quadratures of their conserved quantities); no tube, metal or AC level
    does (`eddy2d.py` would be Self-inductance's `calc.py`). The mass spectrometer (37) too.
-   Next in order: Stray field. **A convention to fix in the documents of 2026-11-15** (and
-   in `slingshot`'s, which they follow): they compare the run at the step h but quote
-   `|y_h - y_{h/2}|/15`, the error of the h/2 run; the h run's is 16 times that. Harmless
-   where the estimate is ~1e-12, wrong at a close pass (the mass spectrometer, which now
-   reports the h/2 run). Seen while building them:
+   Next in order: Stray field. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
+   the run at the step h but quoted `|y_h - y_{h/2}|/15`, the h/2 run's error (16 times
+   smaller than the h run's); now the partner runs at 2h, as the Foundations state it (the mass
+   spectrometer reports its h/2 run instead). `slingshot`'s, the example they followed, keeps
+   the old pairing (its estimates ~1e-11, far below its tolerance). Seen while building them:
    `deflection_plates`' `calc.py` exceeds the 120 s limit when every core is busy (135–138 s
    during the coverage pass), and every later document that cites it rebuilds it.
    `scripts/level_docs.py` needs `py -3.14` here: the documents' `calc.py` import numpy and
