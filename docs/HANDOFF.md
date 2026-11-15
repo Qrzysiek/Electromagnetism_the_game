@@ -163,7 +163,10 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
    every legal placement compared). The game's radiated energy is Liénard's with the Lorentz
    force's acceleration alone (`trajectory.rs::radiated_power`), which a document comparing it
    must use. Mains hum (42: the hum as a random start plus the free quiver, an exact split;
-   the reference's focus and fold measured). Next in order: Earth's field. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
+   the reference's focus and fold measured), Earth's field (43: the stray field's effect on
+   the crossing height measured, again a fold, by the upper charge) and CRT in the Earth's field
+   (44: the field's shift against the added charge's, 1/p against 1/(pv)). Next in order: RF
+   separator. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
    the run at the step h but quoted `|y_h - y_{h/2}|/15`, the h/2 run's error (16 times
    smaller than the h run's); now the partner runs at 2h, as the Foundations state it (the mass
    spectrometer reports its h/2 run instead). `slingshot`'s, the example they followed, keeps
