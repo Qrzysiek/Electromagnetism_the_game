@@ -83,7 +83,7 @@ mechanics at the same launch speed (\S\ref{sec:newton}), out through the top as 
     \xeqref{foundations}{eq:launch}; the conservation of energy \xeqref{foundations}{eq:energy}.
   \item The board's rules (\xsecref{foundations}{sec:board}).
   \item The classical Runge--Kutta method, cubic Hermite interpolation and the error estimate
-    by halving the step (\xsecref{foundations}{sec:numerics}), as in
+    by doubling the step (\xsecref{foundations}{sec:numerics}), as in
     \xsecref{slingshot}{sec:method}.
   \item The radiated power \xeqref{foundations}{eq:larmor}, summed by Simpson's rule
     \xeqref{foundations}{eq:simpson}; it is not put back into the force.
@@ -167,7 +167,7 @@ $(x, y, p_x, p_y)$ is advanced by \eqref{eq:eom-plane} with the classical Runge-
 interpolant of the positions (\xeqref{slingshot}{eq:hermite}) is sampled at 64 points, and the
 first sample inside the detector, a charge's disc of radius $R$, or outside the world is refined
 by bisection; the state at that instant comes from one more step of the method. The error is
-of order $h^4$: halving $h$ estimates it as a fifteenth of the change
+of order $h^4$: doubling $h$ estimates it as a fifteenth of the change
 (\xsecref{foundations}{sec:numerics}). The energy \eqref{eq:energy-plane} and $\abs{\vect{p}}$ at
 the entry, from $W$ alone, are independent checks.
 
@@ -199,14 +199,14 @@ compared with the game.
   \item\label{st:entry} \emph{The entry.} With $h = \val{H}$ the particle enters the detector
     through its \val{faceE} face at $(\val{xE}, \val{yE})$ at $t_\mathrm{e} = \val{tE}$ after
     $\val{steps}$ steps, with $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$, at
-    $\val{angE}$ degrees above $+x$. Halving the step moves the end state by
+    $\val{angE}$ degrees above $+x$. Doubling the step moves the end state by
     $15 \times \val{err}$: the estimate of its error is $\val{err}$.
   \item\label{st:checks} \emph{The checks.} $W$ drifts by at most $\val{wDev}$ along the flight.
     From $W$ alone, at the entry $\gamma_\mathrm{e} = \val{gammaE}$ and
     $\abs{\vect{p}_\mathrm{e}} = mc\sqrt{\gamma_\mathrm{e}^2 - 1} = \val{pEnergy}$, which the
     march's momentum matches to $\val{pDiff}$.
   \item\label{st:rad} \emph{The radiation.} Simpson's rule on the march's steps gives the
-    radiated energy $\val{Erad}$; halving the step changes it by the relative amount
+    radiated energy $\val{Erad}$; doubling the step changes it by the relative amount
     $15 \times \val{EradErr}$.
 \end{procedure}
 

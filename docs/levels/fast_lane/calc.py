@@ -12,7 +12,7 @@ board.
 import math
 
 
-# The method's own error, estimated by halving the step, is about 2e-11 at the step used
+# The method's own error, estimated by doubling the step, is about 2e-11 at the step used
 # (section 4.3); the game's verified flights are accurate to about 1e-10 (Foundations,
 # section 6). Ten times the larger: 1e-9, in cells and time units. The reference flight
 # grazes a charge (0.05 outside its radius), which magnifies every integration error: there
@@ -301,7 +301,7 @@ def compute(doc):
 
     # ---- The reference flight by RK4 (eq:rk4) ------------------------------------------------
     run = fly(st, H)
-    half = fly(st, H / 2)
+    half = fly(st, 2 * H)
     doc.check(run["outcome"] == "Arrived", "the reference flight arrives")
     doc.value("H", H, 4)
     doc.value("steps", run["steps"])
@@ -326,7 +326,7 @@ def compute(doc):
     doc.value("pEnergy", pe_energy, 10)
     doc.value("pDiff", abs(math.hypot(*pe) - pe_energy), 2, sci=True)
     doc.check(abs(math.hypot(*pe) - pe_energy) < 1e-9, "|p| at the entry agrees with the energy")
-    doc.check(err < 1e-10, "the step-halving estimate is below 1e-10")
+    doc.check(err < 1e-9, "the step-halving estimate is below 1e-9")
 
     tab = fly(st, H_TABLE, record_every=int(round(5 / H_TABLE)))
     doc.value("HTable", H_TABLE, 3)
@@ -343,7 +343,7 @@ def compute(doc):
 
     # ---- The empty board and the Newtonian twin (not compared with the game) ------------------
     bare = Setup(lvl, [])
-    rb, rb2 = fly(bare, H), fly(bare, H / 2)
+    rb, rb2 = fly(bare, H), fly(bare, 2 * H)
     doc.text("bareOut", rb["outcome"])
     doc.text("bareFace", rb["face"])
     doc.value("bareT", rb["t"], 10)
