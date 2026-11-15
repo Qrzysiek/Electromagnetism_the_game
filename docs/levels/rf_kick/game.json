@@ -1,0 +1,308 @@
+{
+ "level_file": "levels/39_rf_kick.json",
+ "level_sha256": "971577a791eee5de",
+ "golden_hash": "953eec371b10e000",
+ "recorded": "2026-11-15",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.9805775065276483,
+        0.15865779688543338,
+        0.0
+       ],
+       "t": 27.870972704898968,
+       "x": [
+        27.0,
+        14.352069140429398,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 1.6576996448270746e-16,
+      "steps": 27
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.9805775065318671,
+        0.15865779690879078,
+        0.0
+       ],
+       "t": 27.870972704820243,
+       "x": [
+        27.0,
+        14.352069140959832,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 1.657699670405774e-16,
+      "steps": 43
+     }
+    }
+   ],
+   "placement": [
+    {
+     "angle_deg": 90.0,
+     "kind": "antenna",
+     "node": [
+      0,
+      5,
+      0
+     ],
+     "value": 8000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 31.46307595443989,
+       "x": [
+        31.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 5
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 31.463075954439894,
+       "x": [
+        31.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 7
+     }
+    }
+   ],
+   "placement": []
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        1.1652048894721239,
+        0.3182468287796691,
+        0.0
+       ],
+       "t": 24.359241512686697,
+       "x": [
+        27.0,
+        16.15233778637044,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 2.9868127106320003e-16,
+      "steps": 38
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.1652048894687062,
+        0.3182468288078645,
+        0.0
+       ],
+       "t": 24.35924151266318,
+       "x": [
+        27.0,
+        16.15233778686621,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 2.986812799452183e-16,
+      "steps": 63
+     }
+    }
+   ],
+   "placement": [
+    {
+     "angle_deg": 90.0,
+     "kind": "antenna",
+     "node": [
+      4,
+      8,
+      0
+     ],
+     "value": -1000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        1.3753872241987737,
+        0.4372458285661841,
+        0.0
+       ],
+       "t": 22.61055314249966,
+       "x": [
+        27.000000000000004,
+        15.60935822851996,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 7.09982138691314e-16,
+      "steps": 43
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.3753872242746599,
+        0.437245828583314,
+        0.0
+       ],
+       "t": 22.61055314189692,
+       "x": [
+        27.0,
+        15.609358228676323,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 7.099821536047817e-16,
+      "steps": 70
+     }
+    }
+   ],
+   "placement": [
+    {
+     "angle_deg": 90.0,
+     "kind": "antenna",
+     "node": [
+      9,
+      8,
+      0
+     ],
+     "value": 2000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        0.6848228895509619,
+        -0.4470224549731307,
+        0.0
+       ],
+       "t": 29.76242324124228,
+       "x": [
+        21.70713525501095,
+        -0.9999999999999993,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 6.84260437367566e-16,
+      "steps": 43
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.68482288962342,
+        -0.4470224549119616,
+        0.0
+       ],
+       "t": 29.76242324450366,
+       "x": [
+        21.70713525876387,
+        -1.0000000000000002,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 6.842604599525258e-16,
+      "steps": 64
+     }
+    }
+   ],
+   "placement": [
+    {
+     "angle_deg": 90.0,
+     "kind": "antenna",
+     "node": [
+      4,
+      8,
+      0
+     ],
+     "value": 1000000.0
+    }
+   ]
+  }
+ ]
+}

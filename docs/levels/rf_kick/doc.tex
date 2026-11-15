@@ -1,0 +1,286 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot,stray_field}
+\DocFingerprint{971577a791eee5de}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One ion is launched from $(\val{xZero}, \val{yZero})$ along $+x$ with $T_0 = \val{Tzero}$ in a
+world with $c = \val{c}$, and must enter the detector
+$\val{xDetLo} \le x \le \val{xDetHi}$, $\val{yDetLo} \le y \le \val{yDetHi}$. The player places up
+to three antennas: oscillating electric dipoles $\vect{p}(t) = \vect{p}_0\cos\omega t$, all driven
+by the level's generator at $\omega = \val{omega}$ and in phase, each with an amplitude from the
+listed magnitudes, either sign (a negative one is the opposite phase), and one of the
+orientations $0^\circ$, $45^\circ$, $90^\circ$, $135^\circ$ (\physref{2.4}). A flight ends when the
+ion enters the detector, touches an antenna's body (a sphere of radius $\val{Ra}$), leaves the
+world, or reaches $t = \val{tMax}$ (\xsecref{foundations}{sec:board}).
+
+The reference places one antenna of amplitude $p_0 = \val{pA}$ at $(\val{xA}, \val{yA})$, oriented
+at $\val{angleA}^\circ$ (along $+y$), directly below the launch. At $t = 0$ its dipole points up,
+and the field above a dipole along its axis points along it: the ion is pushed up while it is
+near, before the field reverses, and coasts into the detector. The document derives the
+antenna's field from Maxwell's equations, marches the flight numerically, and explains the kick
+to first order in the field.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+The ion has charge $q = \val{q}$ and mass $m = \val{m}$. By \xeqref{foundations}{eq:launch} it
+starts with $\gamma_0 = \val{gammaZero}$, momentum $p_\mathrm{i} = \val{pZero}$ and speed
+$v_0 = \val{vZero}$. The drive's period is $2\pi/\omega = \val{period}$ and its wavelength
+$2\pi c/\omega = \val{wavelength}$, longer than the board: the ion flies in the antenna's near
+and induction zones ($kr = \omega r/c = \val{kr}$ at the launch, $\val{rLaunch}$ from the
+antenna). The world is $-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \addplot[thick, blue!70!black] table {pathref.dat};
+  \addplot[thick, orange!80!black] table {pathanti.dat};
+  \addplot[thick, teal] table {pathlate.dat};
+  \addplot[thick, black!50, dashed] table {pathsame.dat};
+  \fill[red!75!black] (\rawval{xA},\rawval{yA}) circle[radius=\rawval{Ra}];
+  \draw[->, thick, red!75!black] (\rawval{xA},\rawval{yA}) -- ++(axis direction cs:0,1.8);
+  \fill[orange!80!black] (\rawval{xAnti},\rawval{yAnti}) circle[radius=\rawval{Ra}];
+  \fill[teal] (\rawval{xLate},\rawval{yLate}) circle[radius=\rawval{Ra}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference antenna (red, its dipole at $t = 0$ drawn) and its flight (blue). The other
+flights of \S\ref{sec:others}: an antenna at $(\val{xAnti}, \val{yAnti})$ in the opposite phase
+(orange) and in phase (grey, dashed: it leaves the world), and one at $(\val{xLate}, \val{yLate})$
+in phase (teal).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item Maxwell's equations \xeqref{foundations}{eq:maxwell} and their retarded solution in the
+    Lorenz gauge: the potentials
+    $\phi(\vect{x},t) = \int \rho(\vect{x}', t_\mathrm{r})\,\dd^3x'/R$ and
+    $\vect{A}(\vect{x},t) = c^{-2}\int \vect{J}(\vect{x}', t_\mathrm{r})\,\dd^3x'/R$ with
+    $R = \abs{\vect{x}-\vect{x}'}$ and $t_\mathrm{r} = t - R/c$ (\Griffiths{Ch.~10},
+    \Jackson{Ch.~6}, in the units of \xsecref{foundations}{sec:units}), and the fields
+    $\vect{E} = -\nabla\phi - \partial\vect{A}/\partial t$, $\vect{B} = \nabla\times\vect{A}$.
+  \item The fields of an oscillating electric dipole (\Jackson{§9.2}, \Griffiths{Ch.~11}),
+    derived below in the time domain.
+  \item The relativistic equations of motion \xeqref{foundations}{eq:eom} with the launch
+    \xeqref{foundations}{eq:launch}, and Liénard's radiated power \xeqref{foundations}{eq:larmor}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and
+    the error estimate from the step $2h$ (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The antenna is a point dipole at $\vect{r}_\mathrm{a}$ with
+$\vect{p}(t) = \vect{p}_0\cos\omega t$ for all $t$, past and future: the generator has been
+running long before the launch, so the field at the launch is already the steady oscillation.
+The ion moves by \xeqref{foundations}{eq:eom} in this field, from
+$\vect{x}(0) = (\val{xZero}, \val{yZero})$, $\vect{p}(0) = (p_\mathrm{i}, 0)$, until the first of
+the board's events.
+
+\begin{assumption}{The ion's own radiation}\label{as:radiation}
+The ion is accelerated and radiates the power \xeqref{foundations}{eq:larmor}; the game neglects
+the energy this carries away (the level has no radiation reaction), and so does this document.
+Along the reference flight it is $\val{radRef}$, a fraction $\val{radFrac}$ of $T_0$
+(\S\ref{sec:work}).
+\end{assumption}
+
+\begin{assumption}{The antenna is driven}\label{as:driven}
+The dipole oscillates with a fixed amplitude whatever the ion does: the generator supplies the
+power it radiates, $p_0^2\omega^4/(3c^3)$ (\physref{2.4}), and the ion's field does not act back
+on it. This is the game's model; a real antenna's current is set by its generator and its
+impedance, and a passing ion's influence on it is negligible.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The antenna's field}\label{sec:field}
+
+Put the dipole at the origin, $r = \abs{\vect{x}}$, $\uvec{n} = \vect{x}/r$, and write $[f]$ for
+a quantity evaluated at the retarded time $t - r/c$. A point dipole is the charge density
+$\rho = -\vect{p}(t)\cdot\nabla\delta^3(\vect{x})$ and the current density
+$\vect{J} = \dot{\vect{p}}(t)\,\delta^3(\vect{x})$; they conserve charge,
+$\partial_t\rho + \nabla\cdot\vect{J} = -\dot{\vect{p}}\cdot\nabla\delta^3 + \dot{\vect{p}}\cdot\nabla\delta^3 = 0$.
+In the retarded potential, integrating by parts moves the gradient onto
+$\vect{p}(t - \abs{\vect{x}-\vect{x}'}/c)/\abs{\vect{x}-\vect{x}'}$, whose gradient in
+$\vect{x}'$ is minus its gradient in $\vect{x}$; so $\phi = -\nabla\cdot([\vect{p}]/r)$. With
+$\nabla(1/r) = -\uvec{n}/r^2$ and, for any retarded quantity, $\partial_i[f] = -n_i[\dot f]/c$:
+\begin{equation}\label{eq:potentials}
+  \phi = \frac{\uvec{n}\cdot[\vect{p}]}{r^2} + \frac{\uvec{n}\cdot[\dot{\vect{p}}]}{c\,r},
+  \qquad
+  \vect{A} = \frac{[\dot{\vect{p}}]}{c^2 r}.
+\end{equation}
+Differentiating the same way ($\nabla\times[\vect{f}] = -\uvec{n}\times[\dot{\vect{f}}]/c$,
+$\partial_i n_j = (\delta_{ij} - n_in_j)/r$) gives the fields
+\begin{align}
+  \vect{E} &= \frac{3\uvec{n}(\uvec{n}\cdot[\vect{p}]) - [\vect{p}]}{r^3}
+    + \frac{3\uvec{n}(\uvec{n}\cdot[\dot{\vect{p}}]) - [\dot{\vect{p}}]}{c\,r^2}
+    + \frac{\uvec{n}\times(\uvec{n}\times[\ddot{\vect{p}}])}{c^2 r}, \label{eq:fields}\\
+  \vect{B} &= \frac{1}{c^2}\left(\frac{[\dot{\vect{p}}]\times\uvec{n}}{r^2}
+    + \frac{[\ddot{\vect{p}}]\times\uvec{n}}{c\,r}\right), \nonumber
+\end{align}
+with $\dot{\vect{p}} = -\omega\vect{p}_0\sin\omega t$ and
+$\ddot{\vect{p}} = -\omega^2\vect{p}_0\cos\omega t$: the near (static-dipole) term, the
+induction term and the radiation term. They are \Jackson{§9.2}'s fields in the time domain and in
+the units of \xsecref{foundations}{sec:units}; as $c\to\infty$ only the first remains, the
+static dipole field of the instantaneous $\vect{p}(t)$. With $\vect{p}_0$ in the plane $z = 0$,
+$\vect{E}$ lies in that plane and $\vect{B}$ along $\uvec{z}$ there, so the ion stays in the
+plane.
+
+Two checks of \eqref{eq:fields}, by central differences of step $10^{-4}$ at three points and
+times: the fields satisfy Maxwell's equations \xeqref{foundations}{eq:maxwell} in vacuum (all four,
+the largest residual $\val{maxwellRes}$ of the largest derivative entering it), and they are the
+derivatives of the potentials \eqref{eq:potentials} (to $\val{potentialRes}$), as the
+differences' error of about $(10^{-4}/r)^2$ predicts.
+
+\subsection{The flight}\label{sec:flight}
+
+The ion moves by \xeqref{foundations}{eq:eom} with the force
+$q(\vect{E} + \vect{v}\times\vect{B})$ of \eqref{eq:fields} at its position and time; in the
+plane, $F_x = q(E_x + v_yB_z)$ and $F_y = q(E_y - v_xB_z)$. The field depends on time, so the
+energy is not conserved: the field's work changes it,
+\begin{equation}\label{eq:work}
+  \deriv{}{t}\left(\gamma mc^2\right) = q\,\vect{E}\cdot\vect{v},
+  \qquad
+  T(t) - T_0 = \int_0^t q\,\vect{E}\cdot\vect{v}\,\dd t',
+\end{equation}
+(\xsecref{foundations}{sec:energy}: the magnetic force does no work), which the march carries as
+a check. The equations have no closed form; they are marched by
+\xeqref{foundations}{eq:rk4} at $h = \val{H}$ with two more states, the work \eqref{eq:work} and
+the radiated energy $\int P\,\dd t$ of \xeqref{foundations}{eq:larmor} (with
+$\vect{a} = (\vect{F} - \vect{v}(\vect{v}\cdot\vect{F})/c^2)/(\gamma m)$). The entry is located on
+the cubic Hermite interpolant by bisection and the error estimated against the step $2h$, as in
+\xsecref{stray_field}{sec:march}.
+
+\subsection{The kick to first order}\label{sec:kick}
+
+The deflection is small, so the force can be taken along the undeflected line
+$x = x_0 + v_0t$, $y = y_0$; to first order in the field the ion gains the transverse momentum
+and height
+\begin{equation}\label{eq:first-order}
+  p_y^{(1)}(t) = \int_0^t q\left(E_y - v_0B_z\right)\!\big(x_0 + v_0t', y_0, t'\big)\,\dd t',
+  \qquad
+  y^{(1)}(t) = y_0 + \frac{1}{\gamma_0 m}\int_0^t p_y^{(1)}(t')\,\dd t'
+\end{equation}
+($F_y \perp \vect{v}$, so $\dd v_y/\dd t = F_y/(\gamma m)$ to this order). The field at a point
+at distance $b$ from the antenna oscillates as the dipole did a time $b/c$ earlier, and the ion
+spends about $b/v_0$ near it. If $b/v_0$ were short against $1/\omega$, the antenna would act as
+a static dipole of the moment it has as the ion passes: the kick's sign and size follow
+$\cos\omega(t_\mathrm{pass} - b/c)$, and that is the level's point. Here $b/v_0$ is a few
+times $1/\omega$, so the oscillation also averages part of the kick away;
+\eqref{eq:first-order} includes that. Its error is of second order: the field sampled on the
+deflected path instead of the line.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The field at the launch.} The ion starts $\val{rLaunch}$ above the
+    antenna, on its axis ($\uvec{n} = \uvec{y} \parallel \vect{p}_0$). The retarded time is
+    $t_\mathrm{r} = -r/c = \val{tRet}$, the phase $\omega t_\mathrm{r} = \val{phaseRet}$, so
+    $[p_y] = p_0\cos\omega t_\mathrm{r} = \val{pRet}$ and $[\dot p_y] = \val{pdRet}$. On the axis
+    $3\uvec{n}(\uvec{n}\cdot\vect{a}) - \vect{a} = 2\vect{a}$ and
+    $\uvec{n}\times(\uvec{n}\times\vect{a}) = 0$: the near term of \eqref{eq:fields} is
+    $2[p_y]/r^3 = \val{eNear}$, the induction term $2[\dot p_y]/(cr^2) = \val{eInd}$, the
+    radiation term $\val{eRad}$, so $E_y = \val{eYLaunch}$; $\vect{B}$ vanishes on the axis
+    ($[\dot{\vect{p}}]\times\uvec{n} = 0$; the orientation's $\cos 90^\circ$, rounded, leaves
+    $p_{0x} = \val{ampCross}$). The ion is pushed up with $qE_y = \val{fLaunch}$, accelerating at
+    $qE_y/(\gamma_0m) = \val{accLaunch}$.
+  \item\label{st:march} \emph{The march.} \S\ref{sec:flight} from the launch, at
+    $h = \val{H}$; every 4 time units:
+
+    \smallskip
+    \centerline{\val{march}}
+    \smallskip
+
+    The ion enters the detector through its \val{faceRef} face at $(\val{xRef}, \val{yRef})$ at
+    $t = \val{tRef}$, with $\vect{p} = (\val{pxRef}, \val{pyRef})$ (step estimate
+    $\val{errRef}$).
+  \item\label{st:work} \emph{The energy.} The field did the work $\val{workRef}$ on the ion
+    \eqref{eq:work}, equal to the change of its kinetic energy to $\val{wDevRef}$ along the march.
+    The ion radiated $\val{radRef}$ (\ref{as:radiation}).
+  \item\label{st:first} \emph{The first-order kick.} \eqref{eq:first-order} by the same
+    integrator along the line, to $t^* = (x_\mathrm{det} - x_0)/v_0 = \val{tStar}$ when the line
+    reaches the detector's face: $p_y^{(1)} = \val{pyFirst}$ and $y^{(1)} = \val{yFirst}$, which
+    differs from the march's $\val{yRef}$ by $\val{firstDiff}$, $\val{firstRel}$ of the lift
+    $\val{liftRef}$: the second-order size.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The ion enters the detector at $(\val{xRef}, \val{yRef})$ at $t = \val{tRef}$, lifted by
+$\val{liftRef}$ by the antenna's push near the launch. The level is solved.
+\end{result}
+
+\subsection{The energy and the radiation}\label{sec:work}
+
+The field's work is not a one-way transfer: it rises while the antenna pushes the ion near the
+launch, falls as the field reverses, and far from the antenna swings with the drive about a small
+negative value; at the entry it is $\val{workRef}$ (step~\ref{st:work}).
+The radiated energy, $\val{radRef}$, is a fraction $\val{radFrac}$ of $T_0$, far below the
+$10^{-10}$ the game allows to neglect (\xsecref{foundations}{sec:radiation}).
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The trajectories' differences are a few $10^{-12}$ to $\val{largest}$, the game's verified
+accuracy (Foundations §6); our step estimates are below $10^{-12}$. The tolerance, $10^{-9}$, is
+ten times the larger of the two computations' estimates, or the game's own preview--verification
+gap where that is larger: for the flight that leaves the world through the bottom edge, the
+game's two runs differ by $\val{gapSame}$ in $x_\mathrm{e}$. The radiated energy agrees to below
+$10^{-9}$ relative:
+the game integrates the power with three-point Gauss--Legendre on each of its steps (sixth
+order), we as a state of the march.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board the ion flies straight along $y = \val{yZero}$ and leaves the world's right
+edge at $t = (x_\mathrm{max} - x_0)/v_0 = \val{bareT}$. A solution must give it an upward kick of
+about the reference's, and what decides the kick's sign is the antenna's phase when the ion
+passes it (\S\ref{sec:kick}). The table's other placements show it with an antenna along $+y$
+two cells below the line:
+\begin{itemize}
+  \item At $(\val{xAnti}, \val{yAnti})$ the line passes the antenna at $t \approx \val{tPassAnti}$,
+    when $\cos\omega(t - b/c) = \val{cosPassAnti}$: in phase ($p_0 = \val{pSame}$) the dipole points
+    down then and the ion is pushed down (\val{outSame} at $(\val{xEndSame}, \val{yEndSame})$); in
+    the opposite phase ($p_0 = \val{pAnti}$) it is pushed up into the detector, at
+    $y = \val{yEndAnti}$.
+  \item At $(\val{xLate}, \val{yLate})$ it passes at $t \approx \val{tPassLate}$, with
+    $\cos\omega(t - b/c) = \val{cosPassLate}$: in phase ($p_0 = \val{pLate}$) the push is up again, to
+    $y = \val{yEndLate}$.
+\end{itemize}
+Other positions, orientations and amplitudes solve it too, each with the phase that pushes the
+ion up as it passes; a map of all solutions would take the game's verdicts, which this document
+does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game evaluates \eqref{eq:fields} for each antenna, exactly, at the retarded time
+(\physref{2.4}), and integrates \xeqref{foundations}{eq:eom} with its adaptive eighth-order
+Runge--Kutta method (\physref{3}, \physref{5}, \physref{6}, \physref{7}); the flight is the same
+mathematical problem as here, and the differences in the comparison are the two integrations'
+errors. It integrates the radiated power as a check and neglects it (\ref{as:radiation}).
+
+\section{Further reading}\label{sec:reading}
+
+The retarded potentials: \Griffiths{Ch.~10}. The oscillating dipole's near, induction and
+radiation zones: \Jackson{§9.2}, \Griffiths{Ch.~11}. The flights before this one:
+\levelref{stray_field} (a uniform field switched on and off), \levelref{first_bend} (one static
+charge).
+
+\levelfileappendix
+
+\end{document}
