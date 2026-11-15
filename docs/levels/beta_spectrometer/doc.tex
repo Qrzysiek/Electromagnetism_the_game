@@ -1,0 +1,205 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot}
+\DocFingerprint{7eb591287c464a50}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Two electrons ($q = \val{q}$) start together at $(\val{xZero}, \val{yZero})$, both moving along
+$+x$, at two energies: $T_1 = \val{TOne}$ ($v = \val{betaOne}\,c$) and $T_2 = \val{TTwo}$
+($v = \val{betaTwo}\,c$). Each must reach its own detector on the left of the board: electron 1
+the rectangle $\val{xDetLoOne} \le x \le \val{xDetHiOne}$,
+$\val{yDetLoOne} \le y \le \val{yDetHiOne}$, electron 2 the rectangle
+$\val{xDetLoTwo} \le x \le \val{xDetHiTwo}$, $\val{yDetLoTwo} \le y \le \val{yDetHiTwo}$ (no
+acceptance windows, no kinetic windows, no gates). The player places up to three charges from
+the level's magnitudes in the region $\val{regX0} \le x \le \val{regX1}$,
+$\val{regY0} \le y \le \val{regY1}$. A flight ends when the electron enters its detector,
+touches a charge, or leaves the world (\xsecref{foundations}{sec:board}).
+
+The reference places one positive charge $Q = \val{Q}$ at $(\val{xC}, \val{yC})$, straight below
+the launch. Its attraction bends both electrons round it: electron 1 exactly on a circle, which
+meets its detector after a little more than half a turn; electron 2, too slow for a circle,
+spirals in and meets its own detector on the way. The radius of a circular orbit is set by the
+relativistic $pv$, not by Newton's $2T$: the level's lesson. With one charge the flights are
+Level 1's closed form (\levelref{first_bend}); this document applies it, and checks it against a
+numerical march.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: both electrons have charge $q = \val{q}$, mass $m = \val{m}$ and radius $0$; the
+speed of light is $c = \val{c}$. The coupling with the reference charge is
+$\kappa = qQ = \val{kappa}$: attractive. The launch is $r_0 = \val{rZero}$ above the charge,
+moving perpendicular to the radius, so it is an apsis of both orbits. By
+\xeqref{foundations}{eq:launch}, electron 1 has $\gamma = \val{gammaOne}$ and
+$p = \val{pOne}$, electron 2 $\gamma = \val{gammaTwo}$ and $p = \val{pTwo}$. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{regX0},\rawval{regY0}) rectangle (\rawval{regX1},\rawval{regY1});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoOne},\rawval{yDetLoOne}) rectangle (\rawval{xDetHiOne},\rawval{yDetHiOne});
+  \draw[green!40!black] (\rawval{xDetLoOne},\rawval{yDetLoOne}) rectangle (\rawval{xDetHiOne},\rawval{yDetHiOne});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoTwo},\rawval{yDetLoTwo}) rectangle (\rawval{xDetHiTwo},\rawval{yDetHiTwo});
+  \draw[green!40!black] (\rawval{xDetLoTwo},\rawval{yDetLoTwo}) rectangle (\rawval{xDetHiTwo},\rawval{yDetHiTwo});
+  \addplot[very thick, blue!70!black] table {pathone.dat};
+  \addplot[very thick, red!70!black] table {pathtwo.dat};
+  \fill[red!75!black] (\rawval{xC},\rawval{yC}) circle[radius=\rawval{R}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference charge (red disc) and the two electrons' flights: electron 1 (blue) on a
+circle of radius $r_0$, entering its detector (lower green box) through its right face; electron
+2 (red) spiralling in and entering its detector (upper green box) through its bottom face.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a point charge and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}; the relativistic
+    equation of motion \xeqref{foundations}{eq:eom}, the launch \xeqref{foundations}{eq:launch},
+    the energy \xeqref{foundations}{eq:energy} and the angular momentum
+    \xeqref{foundations}{eq:angmom}.
+  \item The relativistic orbit about one charge, \xeqref{first_bend}{eq:orbit} and its solution
+    \xeqref{first_bend}{eq:general}, with the time \xeqref{first_bend}{eq:dtdth} and the momentum
+    \xeqref{first_bend}{eq:momentum}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation, the
+    error estimate by halving the step, Simpson's rule (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The assumptions are Level 1's: the charge is held in place, the electron is a point, and its
+radiation is not taken from it (\xsecref{first_bend}{sec:model}; the game computes the
+radiated energy and checks it below $10^{-10}$ of the launch energy).
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The circular orbit}\label{sec:circle}
+
+A circle of radius $r$ about the charge needs the attraction to supply the centripetal force:
+$\abs{\kappa}/r^2 = \abs{\dot{\vect{p}}} = p\,\dot\varphi = pv/r$, because on a circle
+$\abs{\vect{p}}$ is constant and turns at the rate $v/r$. So
+\begin{equation}\label{eq:circle}
+  \abs{\kappa} = p\,v\,r = \gamma m v^2 r .
+\end{equation}
+Newton's mechanics would ask $\abs{\kappa} = mv^2r = 2Tr$. For electron 1, $pv\,r_0 = \val{pvrOne}$
+equals $\abs{\kappa}$: its launch is exactly circular, while Newton's condition would need
+$2T_1r_0 = \val{newtonOne}$. For electron 2, $pv\,r_0 = \val{pvrTwo}$, less than $\abs{\kappa}$:
+the attraction wins, and it falls inwards.
+
+\subsection{The orbits from Level 1's closed form}\label{sec:orbits}
+
+With $\theta$ the angle swept since the launch and $u = 1/r$, the orbit obeys
+\xeqref{first_bend}{eq:orbit}, $u'' + \Gamma^2u = -\kappa W/(c^2L^2)$ with
+$\Gamma^2 = 1 - \kappa^2/(c^2L^2)$, $W$ the energy and $L = r_0p$ the angular momentum. The
+launch is an apsis, $u'_0 = 0$, so \xeqref{first_bend}{eq:general} gives
+\begin{equation}\label{eq:spiral}
+  u(\theta) = B + (u_0 - B)\,C(\theta), \qquad B = -\frac{\kappa W}{c^2L^2\Gamma^2},
+  \qquad C(\theta) = \begin{cases} \cos\Gamma\theta, & \Gamma^2 > 0,\\
+    \cosh\abs{\Gamma}\theta, & \Gamma^2 < 0. \end{cases}
+\end{equation}
+Electron 1: $W = \val{WOne}$, $L = \val{LOne}$, $\Gamma^2 = \val{GammaSqOne}$, so
+$\Gamma = \val{GammaOne}$, and $B = \val{BOne}$, equal to $u_0 = 1/r_0$: the amplitude
+$u_0 - B = \val{AOne}$ vanishes to rounding and the orbit is the circle $r = r_0$. On a circle
+\eqref{eq:circle} gives $\kappa^2 = (pvr)^2 = c^2L^2v^2/c^2$, so $\Gamma^2 = 1 - v^2/c^2$ and
+$\Gamma = 1/\gamma$, as found.
+
+Electron 2: $W = \gamma_0mc^2 + \kappa/r_0 = \val{WTwo}$ exactly ($\gamma_0 mc^2 = \abs{\kappa}/r_0$
+here), so $B = 0$; $L = \val{LTwo}$ and $\Gamma^2 = \val{GammaSqTwo}$, negative: the
+hyperbolic case,
+\[
+  r(\theta) = \frac{r_0}{\cosh\abs{\Gamma}\theta}, \qquad \abs{\Gamma} = \val{GammaTwo},
+\]
+a spiral that reaches the charge after infinitely many turns in $\theta$ (in a finite time).
+It passes the detector long before.
+
+\subsection{The entry, the time and the momentum}\label{sec:entry}
+
+The position is $\vect{r}_\mathrm{c} + r(\theta)(\cos\varphi, \sin\varphi)$ with
+$\varphi = \varphi_0 - \theta$ (both turn clockwise). The entry is the first $\theta$ at which
+it lies in the detector, found by steps of $10^{-3}$ in $\theta$ and bisection; the charge's
+disc and the world's edge are checked on the same steps and are not reached first. The time is
+\xeqref{first_bend}{eq:dtdth} integrated by Simpson's rule with $\val{nSimpson}$ panels (its
+error estimated by halving them); on the circle the integrand is constant and Simpson's rule
+exact. The momentum is \xeqref{first_bend}{eq:momentum}.
+
+\subsection{An independent check}\label{sec:march}
+
+The equations of motion are also marched by the classical Runge--Kutta method
+\xeqref{foundations}{eq:rk4} at $h = \val{H}$, the entry located on the cubic Hermite
+interpolant (\xsecref{slingshot}{sec:method}). Its end states agree with the closed form to
+$\val{marchOne}$ (electron 1) and $\val{marchTwo}$ (electron 2); its own step-halving estimates
+are $\val{mErrOne}$ and $\val{mErrTwo}$, and the energy drifts by at most $\val{wDevTwo}$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launches.} Electron 1: $\gamma = \val{gammaOne}$,
+    $p = \val{pOne}$; electron 2: $\gamma = \val{gammaTwo}$, $p = \val{pTwo}$; both at
+    $r_0 = \val{rZero}$, an apsis.
+  \item\label{st:circle} \emph{Electron 1, the circle.} $pv\,r_0 = \val{pvrOne} = \abs{\kappa}$:
+    $r = r_0$ throughout. It reaches its detector's right face, $x = \val{xDetHiOne}$, after
+    $\theta = \val{thEdegOne}$ degrees, at $(\val{xEOne}, \val{yEOne})$, at
+    $t = \val{tEOne}$ (Simpson's error estimate $\val{tErrOne}$), with momentum
+    $(\val{pxEOne}, \val{pyEOne})$.
+  \item\label{st:spiral} \emph{Electron 2, the spiral.} $r = r_0/\cosh(\val{GammaTwo}\,\theta)$.
+    It reaches its detector's \val{faceTwo} face, $y = \val{yDetLoTwo}$, after
+    $\theta = \val{thEdegTwo}$ degrees, at $(\val{xETwo}, \val{yETwo})$, at $t = \val{tETwo}$
+    (Simpson's error estimate $\val{tErrTwo}$), with momentum $(\val{pxETwo}, \val{pyETwo})$:
+    much faster than at the launch, having fallen towards the charge.
+\end{procedure}
+
+\begin{result}[The reference flights]
+Electron 1 enters its detector at $(\val{xEOne}, \val{yEOne})$ at $t = \val{tEOne}$; electron 2
+enters its detector at $(\val{xETwo}, \val{yETwo})$ at $t = \val{tETwo}$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All differences are a few $10^{-11}$ or less: the game's verified accuracy (about $10^{-10}$,
+Foundations §6), against our estimates of a few $10^{-13}$. The tolerance is $10^{-9}$, ten
+times the larger of the two computations' estimates, or the game's own gap between its preview
+and its verification where that is larger (electron 2, which falls into a strong field:
+$\val{gapTwo}$), fixed before comparing.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board, the second placement in \code{placements.json}, both electrons fly straight
+through the \val{bareFace} edge at $(\val{bareX}, \val{bareY})$. One charge straight below the
+launch, at the distance that makes electron 1's orbit circular by \eqref{eq:circle}, is the
+reference's idea; the detectors are placed round its flights. Other placements bend the two
+electrons differently; whether a single charge elsewhere serves both is a question for the
+game's verdicts, which this document does not map.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates the same equations of motion with its adaptive eighth-order Runge--Kutta
+method (\physref{5}), locating the events by its dense output (\physref{6}) and verifying the
+outcome at a tighter tolerance (\physref{7}). It uses no closed form; the agreement in the
+comparison is that of the integration with Level 1's exact orbit.
+
+\section{Further reading}\label{sec:reading}
+
+The relativistic Kepler problem and its precession (the factor $\Gamma$), and the capture of a
+particle whose angular momentum falls below $\abs{\kappa}/c$: \LandauII{§39}; relativistic
+mechanics: \Goldstein{Ch.~7}. The closed form used here: \levelref{first_bend}.
+
+\levelfileappendix
+
+\end{document}
