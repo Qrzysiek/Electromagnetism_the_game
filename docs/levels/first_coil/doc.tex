@@ -81,7 +81,7 @@ Orange: the empty board, circling and precessing inside the coil until $t_{\max}
   \item Complete elliptic integrals $K(m)$, $E(m)$, their derivatives and the
     arithmetic--geometric mean (DLMF §19.4, §19.8).
   \item The board's rules (\xsecref{foundations}{sec:board}); the classical Runge--Kutta method,
-    cubic Hermite interpolation and the error estimate by halving the step
+    cubic Hermite interpolation and the error estimate by doubling the step
     (\xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
 \end{principles}
 
@@ -218,7 +218,7 @@ at every evaluation. After each step the cubic Hermite interpolant of the positi
 the charge's disc of radius $R$, within $\val{wire}$ of the coil's circle, or outside the world
 is refined by bisection, and the state there comes from one more step. A flight still going at
 $t_{\max}$ stops there, its last step shortened to end on $t_{\max}$. The error is of order
-$h^4$, estimated by halving $h$ (\xsecref{foundations}{sec:numerics}); the energy
+$h^4$, estimated by doubling $h$ (\xsecref{foundations}{sec:numerics}); the energy
 \eqref{eq:energy-b} checks every step.
 
 \section{The reference solution by hand}\label{sec:hand}
@@ -237,7 +237,7 @@ $h^4$, estimated by halving $h$ (\xsecref{foundations}{sec:numerics}); the energ
   \item\label{st:entry} \emph{The entry.} With $h = \val{H}$, after $\val{steps}$ steps, the
     particle enters the detector through its \val{faceE} face at $t_\mathrm{e} = \val{tE}$, at
     the point $(\val{xE}, \val{yE})$ and with the momentum
-    $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$. Halving the step estimates the error of
+    $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$. Doubling the step estimates the error of
     that end state as $\val{err}$.
   \item\label{st:checks} \emph{The checks.} $W$ drifts by at most $\val{wDev}$. From $W$ alone,
     $\abs{\vect{p}_\mathrm{e}} = \val{pEnergy}$, which the march matches to $\val{pDiff}$.

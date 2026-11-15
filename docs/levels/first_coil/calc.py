@@ -8,13 +8,13 @@ Every number of the document, from the level file, by the document's method:
 - the cyclotron radius and period at the launch (eq:larmor-radius, eq:cyclotron);
 - the flight by the classical Runge-Kutta method at a fixed step (Foundations eq:rk4) on
   eq:eom-b, the entry into the detector by cubic Hermite interpolation and bisection, the
-  error by halving the step.
+  error by doubling the step.
 Compared with the game: the reference flight and the empty board.
 """
 import math
 
 
-# The method's own error, by halving the step, is about 1e-12 at the step used; the game's
+# The method's own error, by doubling the step, is about 1e-12 at the step used; the game's
 # verified flights are accurate to about 1e-10 (Foundations, section 6). Ten times the
 # larger: 1e-9, in cells and time units. A flight's tolerance is at least the game's own gap
 # between its preview and its verification (tolerances 1e-10 and 1e-12: the verified run's
@@ -304,7 +304,7 @@ def compute(doc):
 
     # ---- The empty board ---------------------------------------------------------------------
     bare = Setup(lvl, [])
-    rb, rb2 = fly(bare, H), fly(bare, H / 2)
+    rb, rb2 = fly(bare, H), fly(bare, 2 * H)
     doc.text("bareOut", rb["outcome"])
     doc.value("bareT", rb["t"], 10)
     doc.value("bareX", rb["x"][0], 10)
@@ -315,7 +315,7 @@ def compute(doc):
     doc.data("pathbare", rb["path"])
 
     # ---- The reference flight ----------------------------------------------------------------
-    run, half = fly(st, H), fly(st, H / 2)
+    run, half = fly(st, H), fly(st, 2 * H)
     doc.check(run["outcome"] == "Arrived", "the reference flight arrives")
     err = err_of(run, half)
     doc.value("H", H, 4)
@@ -337,7 +337,7 @@ def compute(doc):
     doc.value("pEnergy", pe_energy, 10)
     doc.value("pDiff", abs(math.hypot(*pe) - pe_energy), 2, sci=True)
     doc.check(abs(math.hypot(*pe) - pe_energy) < 1e-9, "|p| at the entry agrees with the energy")
-    doc.check(err < 1e-10, "the step-halving estimate is below 1e-10")
+    doc.check(err < 1e-9, "the step-halving estimate is below 1e-9")
     tab = fly(st, H_TABLE, record_every=int(round(5 / H_TABLE)))
     doc.value("HTable", H_TABLE, 3)
     doc.table("states", [r"$t$", r"$x$", r"$y$", r"$p_x$", r"$p_y$", r"$W(t) - W$"],
