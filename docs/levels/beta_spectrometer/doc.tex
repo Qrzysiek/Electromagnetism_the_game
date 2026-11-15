@@ -78,7 +78,7 @@ circle of radius $r_0$, entering its detector (lower green box) through its righ
     \xeqref{first_bend}{eq:general}, with the time \xeqref{first_bend}{eq:dtdth} and the momentum
     \xeqref{first_bend}{eq:momentum}.
   \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation, the
-    error estimate by halving the step, Simpson's rule (\xsecref{foundations}{sec:board},
+    error estimate by doubling the step, Simpson's rule (\xsecref{foundations}{sec:board},
     \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
 \end{principles}
 
@@ -142,7 +142,7 @@ exact. The momentum is \xeqref{first_bend}{eq:momentum}.
 The equations of motion are also marched by the classical Runge--Kutta method
 \xeqref{foundations}{eq:rk4} at $h = \val{H}$, the entry located on the cubic Hermite
 interpolant (\xsecref{slingshot}{sec:method}). Its end states agree with the closed form to
-$\val{marchOne}$ (electron 1) and $\val{marchTwo}$ (electron 2); its own step-halving estimates
+$\val{marchOne}$ (electron 1) and $\val{marchTwo}$ (electron 2); its own step-doubling estimates
 are $\val{mErrOne}$ and $\val{mErrTwo}$, and the energy drifts by at most $\val{wDevTwo}$.
 
 \section{The reference solution by hand}\label{sec:hand}

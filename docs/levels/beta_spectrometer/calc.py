@@ -3,7 +3,7 @@
 Every number of the document, from the level file. Each electron's flight about the one
 attracting charge is Level 1's closed form (first_bend eq:orbit, eq:general): the orbit
 u(theta) = A cos(Gamma theta) + B from an apsis, the entry into the detector by stepping theta
-and bisecting, the time by Simpson's rule on eq:dtdth (its error by halving the step), the
+and bisecting, the time by Simpson's rule on eq:dtdth (its error by doubling the step), the
 momentum by first_bend eq:momentum. Independently, the classical Runge-Kutta method at a
 fixed step on the equations of motion (Foundations eq:rk4) checks every end state. Compared
 with the game: both shots of the reference and of the empty board.
@@ -285,7 +285,7 @@ def compute(doc):
         face = face_of(pe, sh.dmin, sh.dmax)
         doc.text(f"face{tag}", face)
         # The march, an independent check.
-        run, half = fly(sh, H), fly(sh, H / 2)
+        run, half = fly(sh, H), fly(sh, 2 * H)
         doc.check(run["outcome"] == "Arrived", tag + ": the march arrives")
         merr = max(abs(run["t"] - half["t"]), abs(run["x"][0] - half["x"][0]), abs(run["x"][1] - half["x"][1])) / 15
         dmarch = max(abs(run["t"] - t1), abs(run["x"][0] - pe[0]), abs(run["x"][1] - pe[1]),
