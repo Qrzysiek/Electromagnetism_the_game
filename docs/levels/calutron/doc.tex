@@ -1,0 +1,164 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil,first_magnet}
+\DocFingerprint{60121b6799d04e86}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Three positive ions of masses $\val{mOne}$, $\val{mTwo}$ and $\val{mFour}$ leave the source at
+$(\val{xZero}, \val{yZero})$ together, along $+x$, with the same kinetic energy
+$T_0 = \val{Tzero}$. Each must enter its own detector at the right of the board, the lightest
+the highest: mass 1 the box at $\val{yDetLoOne} \le y \le \val{yDetHiOne}$, mass 2 at
+$\val{yDetLoTwo} \le y \le \val{yDetHiTwo}$, mass 4 at $\val{yDetLoFour} \le y \le \val{yDetHiFour}$,
+all from $x = \val{xOne}$ to the board's edge (no acceptance windows, kinetic windows or gates).
+The player places up to four magnets of the listed strengths in the region
+$\val{regX0} \le x \le \val{regX1}$, $\val{regY0} \le y \le \val{regY1}$. A flight ends when the
+ion enters its detector, touches a magnet, or leaves the world (\xsecref{foundations}{sec:board}).
+
+The reference places two magnets below the path, one of each orientation; together their fields
+bend the ions upwards, the light ones most. That is the calutron's principle: in a given magnetic
+field the curvature of a path is $qB/p$, and at equal energy the momentum grows as $\sqrt{m}$.
+This document derives that relation exactly, as an integral along each path, and integrates the
+three flights numerically.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: every ion has charge $q = \val{q}$ and radius $0$; $c = \val{c}$. With $T_0$ the same,
+the momenta are $p = \val{pOne}$, $\val{pTwo}$ and $\val{pFour}$ (\xeqref{foundations}{eq:launch}),
+nearly in the ratio $1 : \sqrt2 : 2$. The reference magnets are $\mu_1 = \val{muOne}$ at
+$(\val{xMagOne}, \val{yMagOne})$ and $\mu_2 = \val{muTwo}$ at $(\val{xMagTwo}, \val{yMagTwo})$,
+radius $\val{Rm}$ (field units, \physref{2.2}). The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{regX0},\rawval{regY0}) rectangle (\rawval{regX1},\rawval{regY1});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xOne},\rawval{yDetLoOne}) rectangle (30,\rawval{yDetHiOne});
+  \draw[green!40!black] (\rawval{xOne},\rawval{yDetLoOne}) rectangle (30,\rawval{yDetHiOne});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xOne},\rawval{yDetLoTwo}) rectangle (30,\rawval{yDetHiTwo});
+  \draw[green!40!black] (\rawval{xOne},\rawval{yDetLoTwo}) rectangle (30,\rawval{yDetHiTwo});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xOne},\rawval{yDetLoFour}) rectangle (30,\rawval{yDetHiFour});
+  \draw[green!40!black] (\rawval{xOne},\rawval{yDetLoFour}) rectangle (30,\rawval{yDetHiFour});
+  \addplot[thick, blue!70!black] table {pathone.dat};
+  \addplot[thick, red!70!black] table {pathtwo.dat};
+  \addplot[thick, orange!80!black] table {pathfour.dat};
+  \fill[black!70] (\rawval{xMagOne},\rawval{yMagOne}) circle[radius=\rawval{Rm}];
+  \fill[black!40] (\rawval{xMagTwo},\rawval{yMagTwo}) circle[radius=\rawval{Rm}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The two reference magnets below the path ($\otimes$ dark, $\odot$ light), the three
+detectors (green), and the three flights: mass 1 (blue) bent most, into the top detector; mass 2
+(red) into the middle one; mass 4 (orange) least, into the bottom one.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The magnetic force $q\vect{v}\times\vect{B}$ in the relativistic equation of motion
+    \xeqref{foundations}{eq:eom}; it does no work (\xsecref{first_coil}{sec:nowork}).
+  \item The magnets' fields in the plane, \xeqref{first_magnet}{eq:dipole-plane}, summed.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation, the
+    error estimate by halving the step and Simpson's rule (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The assumptions are First magnet's (\xsecref{first_magnet}{sec:model}): the magnets are held in
+place, the ions are points without moments, and their radiation is not taken from them.
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{Curvature and rigidity}\label{sec:rigidity}
+
+With only a magnetic field $B_z\uvec{z}$, $\abs{\vect{p}} = p$ is constant and
+$\dot{\vect{p}} = qB_z(v_y, -v_x)$ turns $\vect{p}$ without changing its size. Write the direction
+of motion as the angle $\theta$, $\vect{p} = p(\cos\theta, \sin\theta)$; then
+$p\,\dot\theta = \hat{\vect{z}}\cdot(\vect{p}\times\dot{\vect{p}})/p = -qB_z v$, and with the arc
+length $\dd s = v\,\dd t$,
+\begin{equation}\label{eq:curvature}
+  \deriv{\theta}{s} = -\frac{qB_z}{p}, \qquad
+  \theta_\mathrm{e} = \theta_0 - \frac{q}{p}\int_\mathrm{path} B_z\,\dd s .
+\end{equation}
+The curvature is $qB_z/p$: the magnetic rigidity $p/q$ measures how hard an ion is to bend. In
+the same field a lighter ion, of smaller $p$ at equal energy, turns more: by the factor
+$\sqrt{m_2/m_1}$ if the paths sampled the same field. They do not, here: the paths part, and
+each picks up its own $\int B_z\,\dd s$, so the angles differ by more than the momenta. The
+relation \eqref{eq:curvature} itself is exact, and it is a check on each flight below.
+
+\subsection{The method}\label{sec:method}
+
+The three flights are integrated by \xeqref{foundations}{eq:rk4} at $h = \val{H}$ in the summed
+field \xeqref{first_magnet}{eq:dipole-plane}, the events located on the cubic Hermite
+interpolant. Along each, $\int B_z\,\dd s$ is summed by Simpson's rule on the steps to the exit
+time, and \eqref{eq:curvature} gives the exit angle independently of the momentum the march
+carries.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launches.} The three momenta $\val{pOne}$, $\val{pTwo}$,
+    $\val{pFour}$ along $+x$.
+  \item\label{st:march} \emph{The march} and \emph{the bends.} Each flight, its
+    $\int B_z\,\dd s$, the exit angle by \eqref{eq:curvature} and by the march, and the entry:
+    \begin{center}\small\val{bends}\end{center}
+  \item\label{st:entries} \emph{The entries.} Mass 1 enters its detector through the
+    \val{faceOne} face at $(\val{xOne}, \val{yOne})$ at $t = \val{tOne}$; mass 2 at
+    $(\val{xTwo}, \val{yTwo})$ at $t = \val{tTwo}$; mass 4 at $(\val{xFour}, \val{yFour})$ at
+    $t = \val{tFour}$.
+  \item\label{st:checks} \emph{The checks.} The two exit angles agree to $\val{bendAgree}$
+    degrees; $\abs{\vect{p}}$ drifts by at most $\val{pDevOne}$; the step-halving estimates are at
+    most $\val{errMax}$.
+\end{procedure}
+
+\begin{result}[The reference flights]
+The three isotopes enter their detectors at $(\val{xOne}, \val{yOne})$, $(\val{xTwo}, \val{yTwo})$
+and $(\val{xFour}, \val{yFour})$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All differences are a few $10^{-11}$ or less, the game's verified accuracy (Foundations §6); our
+estimates are below $10^{-12}$. The tolerance, $10^{-9}$, is ten times the larger of the two
+computations' estimates, or the game's own preview--verification gap where that is larger
+(mass 1), fixed before comparing.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board, the second placement in \code{placements.json}, the ions fly straight along
+$y = \val{yZero}$: mass 1 leaves the world (\val{bareOutOne}), while masses 2 and 4 touch their
+detectors' edges, which both lie on $y = \val{yZero}$ (\val{bareOutTwo}, \val{bareOutFour}). A
+solution must lift mass 1 most and mass 4 least, which any field that curves the paths does by
+\eqref{eq:curvature}; the art is in sending each into its own band. A map of solutions would take
+the game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game takes each magnet's in-plane field as the dipole's (\physref{2.2}) and integrates the
+equations of motion with its adaptive eighth-order Runge--Kutta method (\physref{5},
+\physref{6}, \physref{7}); the differences in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+Motion in a magnetic field and the radius $p/(qB)$: \Jackson{§12.2}. The magnets' field:
+\levelref{first_magnet}. The calutron separated uranium isotopes at Oak Ridge by this principle,
+with a nearly uniform field over a half-turn.
+
+\levelfileappendix
+
+\end{document}
