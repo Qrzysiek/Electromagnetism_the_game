@@ -2,14 +2,14 @@
   "format_version": 2,
   "engine_version": "0.1.0",
   "name": "Glass screen",
-  "description": "Shielding with glass instead of metal. A dielectric is an insulator: its charges cannot flow, but its molecules polarize, and the bound charge on its surfaces weakens the field that crosses it, here by roughly the permittivity ε = 4, never to zero as metal does. The strong charge behind the glass still pushes the beam off; place charges to bring it into the detector.",
+  "description": "Glass instead of metal. A dielectric is an insulator: its charges cannot flow, but its molecules polarize, and bound charge gathers on its surfaces, negative facing the charge, positive on the far side. Inside the glass the field falls (to about 0.4 here), but a slab this thin is no screen: its far side's charge, nearer the beam, pushes along, and the beam is thrown off harder than without the glass. Place charges to bring it into the detector.",
   "reality": {
-    "represents": "Partial screening by a dielectric (glass)",
+    "represents": "A dielectric's polarization (glass)",
     "remarks": [
       {
         "kind": "kept",
-        "line": "Bound charge weakens the field",
-        "detail": "The glass's molecules polarize, and the bound charge on its surfaces weakens the field that crosses it, by roughly its permittivity, never to zero as metal does."
+        "line": "Bound charge reshapes the field",
+        "detail": "The glass's molecules polarize: bound charge gathers on its surfaces, negative facing the charge, positive on the far side. Inside the glass the field falls (to about 0.4 here); beyond a slab this thin it grows, most under its ends, so unlike metal the glass is no screen. Even an endless slab would leave about three quarters of the field beyond it."
       },
       {
         "kind": "simplified",

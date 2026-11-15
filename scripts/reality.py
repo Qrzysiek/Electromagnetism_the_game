@@ -618,10 +618,13 @@ REALITY["ferrite_shield"] = R(
     SPHERE_MAGNETS, PLANE)
 
 REALITY["glass_screen"] = R(
-    "Partial screening by a dielectric (glass)",
-    kept("Bound charge weakens the field",
-         "The glass's molecules polarize, and the bound charge on its surfaces weakens the "
-         "field that crosses it, by roughly its permittivity, never to zero as metal does."),
+    "A dielectric's polarization (glass)",
+    kept("Bound charge reshapes the field",
+         "The glass's molecules polarize: bound charge gathers on its surfaces, negative "
+         "facing the charge, positive on the far side. Inside the glass the field falls "
+         "(to about 0.4 here); beyond a slab this thin it grows, most under its ends, so "
+         "unlike metal the glass is no screen. Even an endless slab would leave about "
+         "three quarters of the field beyond it."),
     simpler("Static, linear glass",
             "ε = 4 at every field and frequency, with no breakdown and no losses."),
     omitted("Charging up",

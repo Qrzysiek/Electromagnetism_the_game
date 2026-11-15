@@ -1,8 +1,8 @@
 {
  "level_file": "levels/22_glass_screen.json",
- "level_sha256": "8b46ad9de96b8f62",
+ "level_sha256": "bf08ca5fa8915aaf",
  "golden_hash": "4d4b216f748e583d",
- "recorded": "2026-10-26",
+ "recorded": "2026-11-15",
  "command": "generator scan <level file> <the reference, then placements.json>",
  "results": [
   {
@@ -65,6 +65,57 @@
      "value": -1000000.0
     }
    ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        0.6601737254962698,
+        -0.7696811622715641,
+        0.0
+       ],
+       "t": 30.650868656243563,
+       "x": [
+        22.48176707791047,
+        -1.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 4.4619974381987504e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 2.298601591129693e-16,
+      "steps": 30
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.6601627708176717,
+        -0.7697096175372096,
+        0.0
+       ],
+       "t": 30.644231668083965,
+       "x": [
+        22.47599427135889,
+        -1.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 5.118128143521972e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 2.2987391942819867e-16,
+      "steps": 47
+     }
+    }
+   ],
+   "placement": []
   }
  ]
 }

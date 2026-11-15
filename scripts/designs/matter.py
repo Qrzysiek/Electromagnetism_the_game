@@ -432,20 +432,28 @@ def ferrite_shield():
 
 def glass_screen():
     # Shielding's charge (2M at (15, 14)) behind a glass slab (eps = 4, 1.5 cells thick,
-    # 2 high, from x = 10 to 20) instead of a metal plate. The glass's bound charge
-    # weakens the field beyond it but does not cancel it, as metal does: the beam is still
-    # thrown off, less, and the player's charges must make up the rest. The build checks
-    # that the reference fails without the glass (NEEDS_BODY): the glass matters
-    # (measured: the solver's one charge, -1M at (22, 2), brings the beam in with it; the
-    # beam crashes into that charge without it). Small and low (setup 0.8 s; a 12 x 2 x 4
-    # slab took 3.7 s).
+    # 2 high, from x = 10 to 20) instead of a metal plate. The build checks that the
+    # reference fails without the glass (NEEDS_BODY): the glass matters (measured: the
+    # solver's one charge, -1M at (22, 2), brings the beam in with it; the beam crashes
+    # into that charge without it). Small and low (setup 0.8 s; a 12 x 2 x 4 slab took
+    # 3.7 s).
+    # The glass does not screen (measured 2026-11-15, the game's field against the level
+    # document's independent one, docs/levels/glass_screen/NOTES.md): inside it the
+    # charge's field falls to 0.39, but on the beam's line it grows, by 8 % under the
+    # charge and 43 % under the glass's ends (its far face's positive bound charge is
+    # nearer the beam than the near face's negative one); with no charges placed the beam
+    # leaves the bottom at x = 22.5 with the glass, 23.7 without. Even an infinite slab
+    # would only weaken it to 0.73 (the images' series, 1 - beta^2 = 0.64 first). The text
+    # first said the glass weakened the field beyond it by about eps (the design's
+    # assumption, never measured): corrected 2026-11-15, the physics unchanged.
     return level(
         "Glass screen",
-        "Shielding with glass instead of metal. A dielectric is an insulator: its charges "
-        "cannot flow, but its molecules polarize, and the bound charge on its surfaces "
-        "weakens the field that crosses it, here by roughly the permittivity ε = 4, never "
-        "to zero as metal does. The strong charge behind the glass still pushes the beam "
-        "off; place charges to bring it into the detector.",
+        "Glass instead of metal. A dielectric is an insulator: its charges cannot flow, "
+        "but its molecules polarize, and bound charge gathers on its surfaces, negative "
+        "facing the charge, positive on the far side. Inside the glass the field falls "
+        "(to about 0.4 here), but a slab this thin is no screen: its far side's charge, "
+        "nearer the beam, pushes along, and the beam is thrown off harder than without "
+        "the glass. Place charges to bring it into the detector.",
         shots=[shot(1e-6, 1.0, (0, 10), 0.0, 0.5, box((27, 8, 30, 12)))],
         elements=[charge(15, 14, 2 * M)],
         dielectrics=[glass(15, 12, 10, 1.5, 4.0, height=2.0)],

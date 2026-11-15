@@ -44,7 +44,7 @@ verified reference solution for every shot and negligible radiation
 | 19 | Power supply | 2 Introduction | power supplies: set an electrode's potential instead of placing charges | 1 supply | 1 |
 | 20 | Build a deflector | 2 Introduction | placing your own plates (electrodes) | ≤ 3 plates | 1 |
 | 21 | Shielding | 2 Introduction | a grounded plate screens a charge's field | ≤ 3 plates | 1 |
-| 22 | Glass screen | 2 Introduction | a dielectric (ε = 4) between a strong charge and the beam weakens its field but, unlike metal, does not cancel it; charges make up the rest (the reference fails without the glass) | ≤ 3 charges | 1 |
+| 22 | Glass screen | 2 Introduction | a dielectric (ε = 4) between a strong charge and the beam polarizes: the field inside falls to 0.39, but a slab 2 high is no screen, and on the beam's line the field grows (+8 % under the charge, +43 % under the glass's ends); charges bring the beam in (the reference fails without the glass). Until 2026-11-15 the text said the glass weakened the field beyond it, never measured (docs/levels/glass_screen/NOTES.md) | ≤ 3 charges | 1 |
 | 23 | Tune the lens | 2 Intermediate | focus a real Einzel lens with its voltage | 2 supplies | 2 |
 | 24 | Real Einzel lens | 2 Intermediate | three apertures at high voltage focus three rays | ≤ 4 charges | 2 |
 | 25 | Beam pipe | 2 Intermediate | the injection (6) built in; a grounded pipe wall between the beam and the steering charge screens it | ≤ 3 charges | 1 |

@@ -314,7 +314,10 @@ class Plates:
                 row = np.zeros(n)
                 for pack, j0, j1 in spans:
                     _pot, px, py, pz = _panel_contrib(x, y, z, pack)
-                    row[j0:j1] = self._en(px, py, pz, pack)
+                    # Projected on the receiving panel's outward normal (this panel's,
+                    # `kind` and `sign` above), not on the sources': the draft of
+                    # 2026-10-16 used the sources' and disagreed with the game.
+                    row[j0:j1] = sign * (px if kind == 0 else (py if kind == 1 else pz))
                 mx, my, mz = self._mirror_field(x, y, z, one)
                 row[i] = float(self._en(mx, my, mz, one)[0])
                 krow += row

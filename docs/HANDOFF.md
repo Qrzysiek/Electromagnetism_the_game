@@ -8,6 +8,26 @@ Levels are named here, not numbered: the numbers move when a level is added (the
 disc moved every later level up by one: Self-inductance from 125 to 126). The task numbers
 quoted (#34, #61) are a past session's list, kept as labels only.
 
+## Waiting on the owner (the session of 2026-11-15, 04:20–12:00)
+
+The owner's instructions for that session: make progress on this plan until noon, run no
+new test suites (the next night runs them), take the recommended choice where confident and
+list the others here.
+
+- **Tests owed by the night run.** The commits after `1d483cc` were made without the fast
+  tier, pytest or the affected heavy tests (each commit message says what it skipped). Before
+  pushing: `cargo test --workspace`, `py -3.14 -m pytest`, `python scripts/affected.py run`
+  on the last commit.
+- **Nothing pushed.** `1d483cc` (the thermal-wall contacts, its 529 heavy verdicts passed)
+  and the later commits are on `worktree-tubes-next` only; pushing, fast-forwarding main
+  and rebuilding the game there wait for the owner (as the session of 2026-11-14 left it).
+- **Glass screen's message changed** (Next, item 2): the level was the dielectrics'
+  introduction as "a glass screen"; it now says the glass polarizes and does not screen,
+  which is what it does. Chosen without asking, as the only text the physics allows. The
+  alternative, a level where a dielectric visibly weakens a field, needs another design (a
+  slab tall enough to approach the infinite one is too slow to solve, and even that leaves
+  0.73 of the field beyond it); say if you want one.
+
 ## Next
 
 Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order:
@@ -68,12 +88,15 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
      the level's design, reality entry, scales and document follow. A grand-canonical layer
      (equilibrium without the contact resistance) stays untried: the way to bring every
      contact into equilibrium, should the owner want it.
-2. **Glass screen's document is blocked on a disagreement with the game**
-   (`docs/levels/glass_screen/NOTES.md`, since 2026-10-16): its independent flight, converged
-   in its panels, leaves the board where the game's reference arrives on the detector. The
-   note lists what the calculation leaves out (the ion's own image). Either the document's
-   calculation or the engine's dielectric boxes (PHYSICS.md §2.7) is off on a shipped level,
-   and nothing else tracks it. Find which; if neither yields, `docs/OPEN_PROBLEMS.md`.
+2. **Glass screen: resolved 2026-11-15** (`docs/levels/glass_screen/NOTES.md`). The
+   disagreement was the document draft's bug (each panel's field projected on the source
+   panel's normal, not the receiving one's); fixed, the draft's field and flights match the
+   game's (the field to ~0.3 %, the reference's end 0.056 apart, the empty board's 0.002).
+   It showed that **the level's text was wrong**: the glass does not screen the beam's line,
+   it strengthens the push there (+8 % under the charge, +43 % under its ends; inside the
+   glass the field falls to 0.39). Text, reality entry, LEVELS.md and CURRICULUM.md
+   corrected; physics and golden hash unchanged. Left: the document itself (`calc.py` under
+   120 s with a meaningful mesh estimate, `doc.tex`; NOTES.md, *Left for the document*).
 3. **The two open numerical questions that block levels** (*State* and *The Transformer*
    below): the AC mobility's phase through a level (Carriers' inertia and every phase goal
    at ωτ ≈ 1 wait on it), and the dense coupled rings' dynamics (V-D10: an accurate
