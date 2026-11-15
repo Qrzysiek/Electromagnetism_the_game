@@ -1,0 +1,169 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,rf_kick}
+\DocFingerprint{e1c3eb0ab54cb949}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Two identical ions ($q = \val{q}$, $m = \val{m}$, $T_0 = \val{Tzero}$) are launched from
+$(\val{xZero}, \val{yZero})$ along $+x$ in a world with $c = \val{c}$: the first at $t = 0$, the second
+at $t_0 = \val{tLaunch}$, which is $\val{halfRatio}$ of the generator's period $2\pi/\omega$
+($\omega = \val{omega}$). The first must enter the detector $\val{xLoOne} \le x \le \val{xHiOne}$,
+$\val{yLoOne} \le y \le \val{yHiOne}$ above the beam line, the second
+$\val{xLoTwo} \le x \le \val{xHiTwo}$, $\val{yLoTwo} \le y \le \val{yHiTwo}$ below it. The player
+places up to two antennas, as in \levelref{rf_kick} (amplitudes from the list, either sign, four
+orientations), and one charge, at nodes with $\val{xRegLo} \le x \le \val{xRegHi}$,
+$\val{yRegLo} \le y \le \val{yRegHi}$. A flight ends when the ion enters its detector, touches an
+antenna's body (radius $\val{Ra}$), leaves the world, or reaches $t = \val{tMax}$
+(\xsecref{foundations}{sec:board}).
+
+The reference places one antenna, $p_0 = \val{pA}$ at $(\val{xA}, \val{yA})$, oriented at
+$\val{angleA}^\circ$. The document shows that the late ion is exactly the early one with its charge
+reversed, so the antenna kicks the two oppositely to first order, marches both flights, and
+measures the second-order difference.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+By \xeqref{foundations}{eq:launch} each ion starts with $\gamma_0 = \val{gammaZero}$, momentum
+$\val{pZero}$ and speed $v_0 = \val{vZero}$. The drive's period is $\val{period}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xLoOne},\rawval{yLoOne}) rectangle (\rawval{xHiOne},\rawval{yHiOne});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xLoTwo},\rawval{yLoTwo}) rectangle (\rawval{xHiTwo},\rawval{yHiTwo});
+  \addplot[thick, blue!70!black] table {pathone.dat};
+  \addplot[thick, red!70!black] table {pathtwo.dat};
+  \fill[red!75!black] (\rawval{xA},\rawval{yA}) circle[radius=\rawval{Ra}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference antenna (red disc), the placement region (dotted), the detectors and the
+two flights: launched at $t = 0$ (blue) and half a period later (red).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The antenna's exact retarded fields, \xeqref{rf_kick}{eq:fields}, derived in
+    \levelref{rf_kick} from Maxwell's equations.
+  \item The relativistic equations of motion \xeqref{foundations}{eq:eom} with the launch
+    \xeqref{foundations}{eq:launch}; Liénard's power \xeqref{foundations}{eq:larmor}.
+  \item The kick to first order in the field, \xeqref{rf_kick}{eq:first-order}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate from the step $2h$ (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+An ion launched at $t_0$ moves in the fields of the lab time $t_0 + t$, $t$ counted from its own
+launch (\physref{2.4}):
+\begin{equation}\label{eq:offset}
+  \dot{\vect{p}} = q\big(\vect{E}(\vect{x}, t_0 + t) + \vect{v}\times\vect{B}(\vect{x}, t_0 + t)\big),
+  \qquad \vect{x}(0) = (\val{xZero}, \val{yZero}), \quad \vect{p}(0) = (p_\mathrm{i}, 0).
+\end{equation}
+
+\begin{assumption}{The ions' radiation, and the antenna as a fixed source}\label{as:rf}
+As in \levelref{rf_kick}, whose assumptions \xref{rf_kick}{as:radiation} and
+\xref{rf_kick}{as:driven} these are: the ions' radiation is neglected, $\val{radOne}$ and $\val{radTwo}$ here,
+and the antenna oscillates at a fixed amplitude. The two ions fly separately and do not act on
+each other. These are the game's model.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{Half a period late is the opposite charge}\label{sec:conjugate}
+
+The dipole $\vect{p}(t) = \vect{p}_0\cos\omega t$ satisfies $\vect{p}(t + \pi/\omega) = -\vect{p}(t)$,
+and so do its derivatives; the fields \xeqref{rf_kick}{eq:fields} are linear in them, at the
+retarded time $t - r/c$, so $\vect{E}(\vect{x}, t + \pi/\omega) = -\vect{E}(\vect{x}, t)$ and the same for
+$\vect{B}$. With $t_0 = \pi/\omega$, \eqref{eq:offset} for the second ion reads
+\begin{equation}\label{eq:conjugate}
+  \dot{\vect{p}} = (-q)\big(\vect{E}(\vect{x}, t) + \vect{v}\times\vect{B}(\vect{x}, t)\big):
+\end{equation}
+the second ion moves exactly as the first would with its charge reversed. Marching both confirms it
+to $\val{conjDiff}$ in the end state. The antenna cannot tell the two apart by anything but this
+sign, which is what an RF separator uses: no static field reverses with the launch time.
+
+\subsection{The kicks}\label{sec:kicks}
+
+To first order in the field \xeqref{rf_kick}{eq:first-order} is linear in $q$, so by
+\eqref{eq:conjugate} the two ions are lifted by equal and opposite amounts: integrated along the
+undeflected line to $t^* = \val{tStar}$, when it reaches the detectors' face, $\pm\val{liftFirst}$.
+The full flights differ from this at second order, where the field is sampled along the deflected
+paths, and that part is even in $q$: it moves both ions the same way, so one is lifted by more
+than the other is lowered, by twice that part.
+
+\subsection{The march}\label{sec:march}
+
+Each flight \eqref{eq:offset} is marched by \xeqref{foundations}{eq:rk4} at $h = \val{H}$ with
+Liénard's energy as one more state; the entry is located on the cubic Hermite interpolant by
+bisection and the error estimated against the step $2h$, as in \xsecref{rf_kick}{sec:flight}.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:one} \emph{The first ion.} The march of \S\ref{sec:march} with $t_0 = 0$: it enters
+    its detector through the \val{faceOne} face at $(\val{xOne}, \val{yOne})$ at $t = \val{tOne}$, with
+    $\vect{p} = (\val{pxOne}, \val{pyOne})$ (step estimate $\val{errOne}$).
+  \item\label{st:two} \emph{The second ion.} With $t_0 = \val{tLaunch}$, or equally with its charge
+    reversed and $t_0 = 0$ \eqref{eq:conjugate}: through the \val{faceTwo} face at
+    $(\val{xTwo}, \val{yTwo})$ at $t = \val{tTwo}$ after its launch, with
+    $\vect{p} = (\val{pxTwo}, \val{pyTwo})$ (step estimate $\val{errTwo}$).
+  \item\label{st:asym} \emph{The asymmetry.} The first ion is lifted by $\val{liftUp}$, the second
+    lowered by $\val{liftDown}$, against $\val{liftFirst}$ each to first order: the second-order part
+    is $\val{asym}$, $\val{asymRel}$ of the lift.
+\end{procedure}
+
+\begin{result}[The reference flights]
+Each ion enters its own detector: the first above the beam line, the second below. The level is
+solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All trajectory differences are at most $\val{largest}$, the game's verified accuracy (Foundations
+§6). The tolerances are ten times the larger of the two computations' estimates, or the game's own
+preview--verification gap where that is larger; the radiated energies agree to a few $10^{-9}$
+relative. On the empty board both ions fly straight to the world's right edge at
+$t = \val{bareT}$.
+
+\section{Other solutions}\label{sec:others}
+
+Any setup that solves \levelref{rf_kick}'s problem for one ion, lifting it into the upper
+detector, sends the other ion down by about as much, by \eqref{eq:conjugate}; the detectors are
+placed symmetrically about the beam line and three cells tall, so the second-order asymmetry
+($\val{asymRel}$ of the lift here) must stay within their margins. The level's charge cannot help
+by itself: its static field kicks both ions alike. A map of all solutions would take the game's
+verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game evaluates the antenna's fields at the lab time $t_0 + t$ for a shot launched at $t_0$
+(\physref{2.4}, exact) and integrates the motion with its adaptive eighth-order Runge--Kutta method
+(\physref{3}, \physref{5}, \physref{6}, \physref{7}), each shot verified on its own. The problem is
+the same as here, and the differences in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+The antenna's fields and one ion's kick: \levelref{rf_kick}. The oscillating dipole:
+\Jackson{§9.2}.
+
+\levelfileappendix
+
+\end{document}
