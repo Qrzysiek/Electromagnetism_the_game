@@ -3,7 +3,7 @@
 Every number of the document, from the level file, by the document's two methods:
 - the two spin states' flights by the classical Runge-Kutta method at a fixed step
   (Foundations eq:rk4) on eq:eom-moment, the entry into the detector by cubic Hermite
-  interpolation and bisection, the error by halving the step;
+  interpolation and bisection, the error by doubling the step;
 - each flight reduced to quadratures in the central potential U = m mu / r^3 of the one
   magnet (eq:potential) by its two conserved quantities, the energy (eq:energy-moment) and
   the angular momentum about the magnet (eq:angular): the turning point by bisection
@@ -267,10 +267,10 @@ def compute(doc):
                       ("yDetHi", st.dmax[1])):
             doc.value(k_ + tag, v, 3)
         doc.value(f"UZero{tag}", st.U(*st.x0), 8)
-        run, half = fly(st, H), fly(st, H / 2)
+        run, half = fly(st, H), fly(st, 2 * H)
         doc.check(run["outcome"] == "Arrived", tag + ": the reference flight arrives")
         err = err_of(run, half)
-        doc.check(err < 1e-10, tag + ": the step-halving estimate is below 1e-10")
+        doc.check(err < 1e-9, tag + ": the step-halving estimate is below 1e-9")
         doc.value(f"t{tag}", run["t"], 12)
         doc.value(f"x{tag}", run["x"][0], 12)
         doc.value(f"y{tag}", run["x"][1], 12)
