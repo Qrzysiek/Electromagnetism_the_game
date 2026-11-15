@@ -125,8 +125,14 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
 5. **Phase 2's two extensions not started**, neither waiting on the above: a uniform AC
    field (item 4: Polarization, Faraday cage, Receiving antenna) and temperatures (item 5,
    opening with Hot carriers).
-6. **Level documents:** 25 of the 128 levels have one, all among the first 26; no tube,
-   metal or AC level does (`eddy2d.py` would be Self-inductance's `calc.py`).
+6. **Level documents:** the first 32 levels in curriculum order have one (2026-11-15 added
+   Glass screen, Fast lane, First coil, First magnet, Ferrite shield, Stern–Gerlach and the
+   beta-ray spectrometer: the first coil carries the magnetic arc's derivations, first
+   magnet and Stern–Gerlach check their marches against quadratures of their conserved
+   quantities); no tube, metal or AC level does (`eddy2d.py` would be Self-inductance's
+   `calc.py`). Next in order: Dempster, Wien filter, Calutron. Seen while building them:
+   `deflection_plates`' `calc.py` exceeds the 120 s limit when every core is busy (135–138 s
+   during the coverage pass), and every later document that cites it rebuilds it.
    `scripts/level_docs.py` needs `py -3.14` here: the documents' `calc.py` import numpy and
    mpmath, which this machine's `python` (3.15) lacks, and under it `status` shows 14
    documents failing on the import alone. Under 3.14 all 25 pass their checks (2026-11-14;
