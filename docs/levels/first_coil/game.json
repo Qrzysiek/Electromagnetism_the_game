@@ -1,0 +1,121 @@
+{
+ "level_file": "levels/28_first_coil.json",
+ "level_sha256": "f58964bda6e3bdd4",
+ "golden_hash": "66e596b9bddea441",
+ "recorded": "2026-11-15",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        -0.6531347774241899,
+        -0.8201232746092161,
+        0.0
+       ],
+       "t": 251.91987113335892,
+       "x": [
+        17.0,
+        8.111466873138326,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 6.011258157911925e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 6.05332588154533e-14,
+      "steps": 284
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.6531347771582653,
+        -0.8201232748978314,
+        0.0
+       ],
+       "t": 251.91987111954614,
+       "x": [
+        16.999999999999982,
+        8.111466875765645,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.7713387140693158e-12,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 6.053325881963976e-14,
+      "steps": 438
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      7,
+      0,
+      0
+     ],
+     "value": 2000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Timeout",
+     "preview": {
+      "end": {
+       "p": [
+        0.8865659260692363,
+        -0.47328728985467555,
+        0.0
+       ],
+       "t": 400.0,
+       "x": [
+        16.56356090239429,
+        13.807399125049473,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 3.378219926020165e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Timeout",
+      "radiated_energy": 7.288931760733305e-14,
+      "steps": 342
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.8865659238190904,
+        -0.473287294064878,
+        0.0
+       ],
+       "t": 400.0,
+       "x": [
+        16.56356092819703,
+        13.807399104211903,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 4.839462164341057e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Timeout",
+      "radiated_energy": 7.288931754492024e-14,
+      "steps": 535
+     }
+    }
+   ],
+   "placement": []
+  }
+ ]
+}

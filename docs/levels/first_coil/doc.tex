@@ -1,0 +1,295 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot}
+\DocFingerprint{f58964bda6e3bdd4}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+A positive particle starts inside a large circular coil, at $(\val{xZero}, \val{yZero})$,
+moving straight up ($+y$). The coil lies in the plane of the board, centred at
+$(\val{xCoil}, \val{yCoil})$ with radius $\val{aCoil}$; its current makes a magnetic field
+perpendicular to the board, which bends the particle into a circle. The particle must enter
+the detector, the rectangle $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$, with no acceptance window, no kinetic window and no
+gate. The player places up to three charges, of either sign, from the level's magnitudes. A
+flight ends when the particle enters the detector, touches a charge or the coil's wire, leaves
+the world, or reaches $t_{\max}$ (\xsecref{foundations}{sec:board}).
+
+With nothing placed the particle circles inside the coil, the circle precessing slowly, and
+never meets the detector before $t_{\max}$. The reference places one positive charge below the
+coil's centre line: its push walks the circling particle across the board, turn by turn, until
+it enters the detector. This level opens the magnetic arc, so this document derives the
+magnetic force's main facts (it does no work; it bends a charge into a circle of radius
+$p/(qB)$) and the field of a circular coil in its own plane, from the Biot--Savart law to a
+closed form, and integrates the flight numerically as \levelref{slingshot} does.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: the particle has charge $q = \val{q}$, mass $m = \val{m}$, radius $a_\mathrm{p} =
+0$; the speed of light is $c = \val{c}$. It starts at $\vect{x}_0 = (\val{xZero}, \val{yZero})$
+with kinetic energy $T_0 = \val{Tzero}$ along the level file's direction, the computed
+$(\cos 90^\circ, \sin 90^\circ)$, whose first component $\val{dirX}$ is a rounding error. The
+coil is a circle of radius $a = \val{aCoil}$ about $\vect{r}_\mathrm{c} = (\val{xCoil},
+\val{yCoil})$, carrying the current given by its strength $\kappa = \mu_0 I/4\pi =
+\val{kappa}$ (field units, \physref{2.2}); its wire has radius $\val{wire}$. The reference
+charge is $Q = \val{QOne}$ at $(\val{xOne}, \val{yOne})$, radius $R = \val{R}$, coupling
+$\kappa_Q = qQ = \val{kOne}$ (repulsive). The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!70, thick] (\rawval{xCoil},\rawval{yCoil}) circle[radius=\rawval{aCoil}];
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \addplot[orange!70!black, very thin] table {pathbare.dat};
+  \addplot[blue!70!black] table {path.dat};
+  \fill[red!75!black] (\rawval{xOne},\rawval{yOne}) circle[radius=\rawval{R}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The coil (black circle) and the two flights. Blue: the reference, whose circles walk
+across the board under the push of the charge below (red) until they enter the detector (green).
+Orange: the empty board, circling and precessing inside the coil until $t_{\max}$.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The Lorentz force $\vect{F} = q(\vect{E} + \vect{v}\times\vect{B})$ in the
+    relativistic equation of motion \xeqref{foundations}{eq:eom}, with the launch
+    \xeqref{foundations}{eq:launch}.
+  \item The field of a point charge \xeqref{foundations}{eq:coulomb}; the conservation of energy
+    \xeqref{foundations}{eq:energy}, which a static magnetic field leaves unchanged.
+  \item The Biot--Savart law for a closed current, $\vect{B}(\vect{x}) =
+    \kappa\oint \dd\vect{l}\times(\vect{x} - \vect{x}')/\abs{\vect{x} - \vect{x}'}^3$ with
+    $\kappa = \mu_0 I/4\pi$ (\Jackson{§5.2}), and the game's units, $\mu_0/4\pi = 1/c^2$
+    (\physref{2.2}).
+  \item Complete elliptic integrals $K(m)$, $E(m)$, their derivatives and the
+    arithmetic--geometric mean (DLMF §19.4, §19.8).
+  \item The board's rules (\xsecref{foundations}{sec:board}); the classical Runge--Kutta method,
+    cubic Hermite interpolation and the error estimate by halving the step
+    (\xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+In the plane of the coil its field is perpendicular to the plane, $\vect{B} = B_z\uvec{z}$
+(\S\ref{sec:loop}), so with $\vect{v} = (v_x, v_y, 0)$ the magnetic force
+$q\vect{v}\times\vect{B} = qB_z(v_y, -v_x, 0)$ stays in the plane, and the motion with it. The
+state $(\vect{x}, \vect{p})$ obeys
+\begin{equation}\label{eq:eom-b}
+  \deriv{\vect{x}}{t} = \vect{v} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t} = \kappa_Q\frac{\vect{x} - \vect{r}_Q}{\abs{\vect{x} - \vect{r}_Q}^3}
+    + qB_z(\vect{x})\,(v_y, -v_x), \qquad
+  \gamma = \sqrt{1 + \frac{\abs{\vect{p}}^2}{m^2c^2}},
+\end{equation}
+from $\vect{x}_0$ and $\vect{p}_0 = \abs{\vect{p}_0}(\val{dirX}, 1)$ until the first event.
+
+\begin{assumption}{The coil and the charge are held in place}\label{as:fixed}
+Neither recoils, and the coil's current is fixed (rules of the game).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the particle. Along the
+reference flight it is $\val{Erad}$, a fraction $\val{EradFrac}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{A thin coil in the plane}\label{as:wire}
+The current runs along the circle of radius $a$ itself; the wire's radius $\val{wire}$ only
+makes it an obstacle. The game does the same (\physref{2.2}).
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The magnetic force does no work}\label{sec:nowork}
+
+With $\vect{E} = 0$, $\dd\abs{\vect{p}}^2/\dd t = 2\vect{p}\cdot q(\vect{v}\times\vect{B}) = 0$,
+since $\vect{p} \parallel \vect{v}$. So $\abs{\vect{p}}$, $\gamma$ and the speed are constant:
+the field turns the velocity and never changes its size. With the charge's field as well, the
+energy \xeqref{foundations}{eq:energy},
+\begin{equation}\label{eq:energy-b}
+  W = \gamma mc^2 + \frac{\kappa_Q}{\abs{\vect{x} - \vect{r}_Q}},
+\end{equation}
+is conserved: $\vect{B}$ adds nothing to it. At the launch $V(\vect{x}_0) = \val{VZero}$ and
+$W = \val{W}$.
+
+\subsection{Circles}\label{sec:circle}
+
+In a uniform field $B_z$ and with $\vect{E} = 0$, $\abs{\vect{p}}$ is constant and
+\eqref{eq:eom-b} turns $\vect{p}$ at the constant rate
+\begin{equation}\label{eq:cyclotron}
+  \omega_\mathrm{c} = \frac{\abs{q B_z}}{\gamma m}, \qquad
+  T_\mathrm{c} = \frac{2\pi}{\omega_\mathrm{c}} = \frac{2\pi\gamma m}{\abs{qB_z}} ,
+\end{equation}
+($\dot p_x = \omega_\mathrm{c}\,p_y$, $\dot p_y = -\omega_\mathrm{c}\,p_x$ for $qB_z > 0$: a
+clockwise rotation). The position follows a circle of radius
+\begin{equation}\label{eq:larmor-radius}
+  r_\mathrm{L} = \frac{v}{\omega_\mathrm{c}} = \frac{\abs{\vect{p}}}{\abs{q B_z}} .
+\end{equation}
+The relativistic momentum enters through $\gamma$ in the period; the radius depends on the
+momentum alone.
+
+\subsection{The field of a circular coil in its plane}\label{sec:loop}
+
+Put the coil's centre at the origin and the field point on the $x$ axis at the distance $\rho$.
+The wire element at the angle $\phi$ is $\dd\vect{l} = a(-\sin\phi, \cos\phi, 0)\,\dd\phi$ at
+$\vect{x}' = a(\cos\phi, \sin\phi, 0)$, so $\vect{x} - \vect{x}' = (\rho - a\cos\phi,
+-a\sin\phi, 0)$ and $(\dd\vect{l}\times(\vect{x} - \vect{x}'))_z = a(a - \rho\cos\phi)\,\dd\phi$;
+the other components vanish in the plane. The Biot--Savart law gives
+\begin{equation}\label{eq:biot-savart}
+  B_z(\rho) = \kappa\int_0^{2\pi} \frac{a(a - \rho\cos\phi)}{(a^2 + \rho^2 - 2a\rho\cos\phi)^{3/2}}\,\dd\phi ,
+\end{equation}
+and at the centre $B_z(0) = 2\pi\kappa/a = \val{Bcentre}$. To bring \eqref{eq:biot-savart}
+to a closed form, substitute $\phi = \pi - 2\theta$: then
+$a^2 + \rho^2 - 2a\rho\cos\phi = \beta^2(1 - m\sin^2\theta)$ and
+$a - \rho\cos\phi = a + \rho - 2\rho\sin^2\theta$, with
+\[
+  \beta = a + \rho, \qquad \alpha^2 = (a - \rho)^2, \qquad m = \frac{4a\rho}{\beta^2},
+  \qquad 1 - m = \frac{\alpha^2}{\beta^2}.
+\]
+The integrand is even in $\theta$, and $\phi \in [0, 2\pi]$ covers $\theta \in [-\pi/2, \pi/2]$
+with $\dd\phi = -2\,\dd\theta$, so
+\[
+  B_z = \frac{4\kappa a}{\beta^3}\int_0^{\pi/2}
+    \frac{a + \rho - 2\rho\sin^2\theta}{(1 - m\sin^2\theta)^{3/2}}\,\dd\theta .
+\]
+Two integrals reduce to $K(m) = \int_0^{\pi/2}(1 - m\sin^2\theta)^{-1/2}\dd\theta$ and
+$E(m) = \int_0^{\pi/2}(1 - m\sin^2\theta)^{1/2}\dd\theta$. Differentiating $K$ under the
+integral, $2\,\dd K/\dd m = \int_0^{\pi/2}\sin^2\theta\,(1 - m\sin^2\theta)^{-3/2}\dd\theta$, and
+$\dd K/\dd m = (E - (1 - m)K)/(2m(1 - m))$ (DLMF §19.4), so
+\[
+  \int_0^{\pi/2}\frac{\sin^2\theta\,\dd\theta}{(1 - m\sin^2\theta)^{3/2}}
+    = \frac{1}{m}\Big(\frac{E}{1 - m} - K\Big), \qquad
+  \int_0^{\pi/2}\frac{\dd\theta}{(1 - m\sin^2\theta)^{3/2}} = \frac{E}{1 - m},
+\]
+the second from the first by writing $1 = (1 - m\sin^2\theta) + m\sin^2\theta$ in the numerator.
+Inserting both, with $2\rho/m = \beta^2/(2a)$ and $1/(1 - m) = \beta^2/\alpha^2$,
+\begin{align*}
+  B_z &= \frac{4\kappa a}{\beta}\Big[\frac{(a + \rho)E}{\alpha^2}
+    - \frac{1}{2a}\Big(\frac{\beta^2 E}{\alpha^2} - K\Big)\Big] \\
+    &= \frac{2\kappa}{\alpha^2\beta}\big[(2a^2 + 2a\rho - \beta^2)E + \alpha^2 K\big],
+\end{align*}
+and since $2a^2 + 2a\rho - \beta^2 = a^2 - \rho^2$,
+\begin{equation}\label{eq:loop-field}
+  B_z(\rho) = \frac{2\kappa}{\alpha^2\beta}\Big[(a^2 - \rho^2)\,E(m) + \alpha^2 K(m)\Big],
+\end{equation}
+the in-plane case of the closed form the game uses (\physref{2.2}). As $\rho \to 0$,
+$K, E \to \pi/2$ and \eqref{eq:loop-field} returns $2\pi\kappa/a$. $K$ and $E$ are computed by
+the arithmetic--geometric mean (DLMF §19.8): from $a_0 = 1$, $b_0 = \sqrt{1 - m}$,
+$c_0^2 = m$, iterate $a_{n+1} = (a_n + b_n)/2$, $b_{n+1} = \sqrt{a_nb_n}$,
+$c_{n+1} = (a_n - b_n)/2$ to convergence (quadratic), then
+\begin{equation}\label{eq:agm}
+  K = \frac{\pi}{2a_\infty}, \qquad E = K\Big(1 - \sum_{n\ge 0} 2^{n-1}c_n^2\Big).
+\end{equation}
+Independently, \eqref{eq:biot-savart} is the integral of a smooth periodic function, for which
+the trapezoidal rule converges faster than any power of the step; with $\val{nTrap}$ nodes
+the two agree to a relative $\val{fieldAgree}$:
+\begin{center}\small\val{fieldtab}\end{center}
+The field grows from the centre towards the wire and diverges at it ($\alpha \to 0$).
+
+\subsection{The launch}\label{sec:launch}
+
+$\gamma_0 = 1 + T_0/(mc^2) = \val{gammaZero}$, $\abs{\vect{p}_0} = \val{pZero}$,
+$v_0 = \val{vZero}$. The launch is $\rho_0 = \val{rhoZero}$ from the coil's centre, where
+$B_z = \val{Bzero}$. By \eqref{eq:larmor-radius} and \eqref{eq:cyclotron} the particle would
+circle there with $r_\mathrm{L} = \val{rL}$ and $T_\mathrm{c} = \val{Tc}$
+($\omega_\mathrm{c} = \val{omegaC}$), \val{sense}, about $(\val{xGuide}, \val{yGuide})$. That
+circle reaches the far side of the coil's centre, where the field is about half as strong
+(the table): the orbit does not close, and the motion needs \eqref{eq:eom-b} itself.
+
+\subsection{The method}\label{sec:method}
+
+The state is advanced by \eqref{eq:eom-b} with the classical Runge--Kutta method
+\xeqref{foundations}{eq:rk4} at the fixed step $h = \val{H}$, $B_z$ from \eqref{eq:loop-field}
+at every evaluation. After each step the cubic Hermite interpolant of the positions
+(\xeqref{slingshot}{eq:hermite}) is sampled at 64 points; the first sample inside the detector,
+the charge's disc of radius $R$, within $\val{wire}$ of the coil's circle, or outside the world
+is refined by bisection, and the state there comes from one more step. A flight still going at
+$t_{\max}$ stops there, its last step shortened to end on $t_{\max}$. The error is of order
+$h^4$, estimated by halving $h$ (\xsecref{foundations}{sec:numerics}); the energy
+\eqref{eq:energy-b} checks every step.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch.} $\gamma_0 = \val{gammaZero}$,
+    $\abs{\vect{p}_0} = \val{pZero}$, $\vect{p}_0 = \abs{\vect{p}_0}(\val{dirX}, 1)$;
+    $W = \val{W}$.
+  \item\label{st:field} \emph{The field.} At each evaluation, $\rho = \abs{\vect{x} -
+    \vect{r}_\mathrm{c}}$, $m = 4a\rho/(a + \rho)^2$, $K$ and $E$ by \eqref{eq:agm}, $B_z$ by
+    \eqref{eq:loop-field}.
+  \item\label{st:march} \emph{The march.} Advance \eqref{eq:eom-b} by
+    \xeqref{foundations}{eq:rk4}. The state every five time units (step $\val{HTable}$; the
+    last column the energy's drift):
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:entry} \emph{The entry.} With $h = \val{H}$, after $\val{steps}$ steps, the
+    particle enters the detector through its \val{faceE} face at $t_\mathrm{e} = \val{tE}$, at
+    the point $(\val{xE}, \val{yE})$ and with the momentum
+    $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$. Halving the step estimates the error of
+    that end state as $\val{err}$.
+  \item\label{st:checks} \emph{The checks.} $W$ drifts by at most $\val{wDev}$. From $W$ alone,
+    $\abs{\vect{p}_\mathrm{e}} = \val{pEnergy}$, which the march matches to $\val{pDiff}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on the steps gives $\val{Erad}$;
+    against the step $2h$ its error is estimated as a relative $\val{EradErr}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The particle enters the detector through its \val{faceE} face at $(\val{xE}, \val{yE})$ at
+$t_\mathrm{e} = \val{tE}$, with momentum $(\val{pxE}, \val{pyE})$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+Both flights agree to a few $10^{-10}$ after many turns: the reference's time by
+$\val{cmpTDiff}$, the empty board's position at $t_{\max}$ by $\val{cmpBareXDiff}$, the size of
+the game's verified accuracy (Foundations §6) accumulated over $\val{bareTurns}$ turns. Our own
+step estimates are smaller ($\val{err}$ and $\val{bareErr}$). Each flight's tolerance is the
+larger of $10^{-9}$, ten times our estimate, and the game's own gap between its preview and its
+verification ($\val{gapRef}$ and $\val{gapBare}$), fixed before comparing. The radiated energies
+agree to $\val{cmpRadDiff}$ (relative).
+
+\section{Other solutions}\label{sec:others}
+
+The empty board, the second placement in \code{placements.json}, does not solve the level: the
+particle circles inside the coil for $\val{bareTurns}$ cyclotron periods and is still flying at
+$t_{\max}$, at $(\val{bareX}, \val{bareY})$; its energy drifts by $\val{bareWdev}$. Its circle
+precesses because the field varies across it (\S\ref{sec:launch}). A charge works by pushing the
+circle's centre: the reference's repulsion from below moves it step by step until the particle
+enters the detector, after many turns. Charges of either sign and other positions do the same
+in other ways; a map of them would take the game's verdicts, which this document does not
+reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game evaluates the coil's field by the closed form of Simpson et al.\ with $K$ and $E$ from
+the arithmetic--geometric mean (\physref{2.2}), of which \eqref{eq:loop-field} is the case
+$z = 0$, and integrates \eqref{eq:eom-b} with the adaptive eighth-order Runge--Kutta method of
+Dormand and Prince (\physref{5}), with its event location (\physref{6}) and verification
+(\physref{7}). In the plane its in-plane $\vect{B}$ components are exactly zero, so the
+particle stays in the plane, as here. The differences in the comparison are the two
+integrations' errors. Radiation is integrated, not applied (\physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+The Biot--Savart law and the circular loop's field off its axis, through its vector potential
+and elliptic integrals: \Jackson{§5.2, §5.5}. Motion in a magnetic field, the cyclotron
+frequency and drifts in a slowly varying field: \Jackson{§12.2, §12.4}. Elliptic integrals and the
+arithmetic--geometric mean: DLMF Ch.~19. The numerical method: \levelref{slingshot}.
+
+\levelfileappendix
+
+\end{document}
