@@ -1,0 +1,264 @@
+\documentclass{leveldoc}
+\DocUses{foundations,first_bend,slingshot}
+\DocFingerprint{58267da15ceb6159}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+A particle is launched from the left edge at $0.85\,c$, slightly upwards, among three fixed
+charges: two attracting it, one repelling it. It must reach the detector at the upper right,
+the rectangle $\val{xDetLo} \le x \le \val{xDetHi}$, $\val{yDetLo} \le y \le \val{yDetHi}$,
+with no acceptance window, no kinetic window and no gate. The player places up to three
+charges, of either sign, from the level's magnitudes, anywhere on the board's nodes. A flight
+ends when the particle enters the detector, touches a charge, or leaves the world
+(\xsecref{foundations}{sec:board}).
+
+With nothing placed, the particle threads the three charges and leaves through the top edge.
+The reference places one strong repelling charge low on the left, below the launch line: it
+lifts the particle into a wide arc that grazes the third charge and swings it up into the
+detector's left face. This document integrates the relativistic equations of motion
+numerically, as \levelref{slingshot} does, and derives why a fast particle is hard to bend:
+the impulse of a passing charge, the factor $\gamma$ in the momentum it must turn, and the same
+flight in Newton's mechanics, which misses.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: the particle has charge $q = \val{q}$, mass $m = \val{m}$ and radius $a = 0$; the
+speed of light is $c = \val{c}$. It starts at $\vect{x}_0 = (\val{xZero}, \val{yZero})$ with
+kinetic energy $T_0 = \val{Tzero}$ along the unit vector $(\val{dirX}, \val{dirY})$, an angle of
+$\val{launchAngle}$ degrees above $+x$. The level's charges are $Q_1 = \val{QOne}$ at
+$(\val{xOne}, \val{yOne})$, $Q_2 = \val{QTwo}$ at $(\val{xTwo}, \val{yTwo})$ and
+$Q_3 = \val{QThree}$ at $(\val{xThree}, \val{yThree})$; the reference adds
+$Q_4 = \val{QFour}$ at $(\val{xFour}, \val{yFour})$. Each has radius $R = \val{R}$, and the
+couplings $\kappa_i = qQ_i$ are $\val{kOne}$, $\val{kTwo}$, $\val{kThree}$ and $\val{kFour}$
+(negative: attracting). The world is $-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+The particle's charge is small and the fixed charges large, so that the product $\kappa_i$
+steers it while its own radiation, which goes as $q^2$, stays negligible
+(assumption~\ref{as:radiation}).
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \addplot[orange!80!black] table {pathbare.dat};
+  \addplot[dashed, red!70!black] table {pathtwin.dat};
+  \addplot[very thick, blue!70!black] table {path.dat};
+  \fill[blue!75!black] (\rawval{xOne},\rawval{yOne}) circle[radius=\rawval{R}];
+  \node[font=\small, anchor=north] at (\rawval{xOne},\rawval{yOne}-0.4) {$Q_1$};
+  \fill[red!75!black] (\rawval{xTwo},\rawval{yTwo}) circle[radius=\rawval{R}];
+  \node[font=\small, anchor=south] at (\rawval{xTwo},\rawval{yTwo}+0.4) {$Q_2$};
+  \fill[blue!75!black] (\rawval{xThree},\rawval{yThree}) circle[radius=\rawval{R}];
+  \node[font=\small, anchor=north] at (\rawval{xThree},\rawval{yThree}-0.4) {$Q_3$};
+  \fill[red!75!black] (\rawval{xFour},\rawval{yFour}) circle[radius=\rawval{R}];
+  \node[font=\small, anchor=north] at (\rawval{xFour},\rawval{yFour}-0.4) {$Q_4$};
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The board. Red discs repel the particle, blue ones attract it; $Q_4$ is the
+reference's. Blue: the reference flight, which grazes $Q_3$ and swings up into the detector.
+Orange: the empty board, out through the top. Dashed red: the reference placement in Newton's
+mechanics at the same launch speed (\S\ref{sec:newton}), out through the top as well.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The fields of charged spheres, superposed, and the force on a non-polarizable particle,
+    \xeqref{foundations}{eq:coulomb} and \xeqref{foundations}{eq:sphereforce}.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom} and the launch
+    \xeqref{foundations}{eq:launch}; the conservation of energy \xeqref{foundations}{eq:energy}.
+  \item The board's rules (\xsecref{foundations}{sec:board}).
+  \item The classical Runge--Kutta method, cubic Hermite interpolation and the error estimate
+    by halving the step (\xsecref{foundations}{sec:numerics}), as in
+    \xsecref{slingshot}{sec:method}.
+  \item The radiated power \xeqref{foundations}{eq:larmor}, summed by Simpson's rule
+    \xeqref{foundations}{eq:simpson}; it is not put back into the force.
+\end{principles}
+
+With the charges $Q_i$ at $\vect{r}_i$, the state $(\vect{x}, \vect{p})$ obeys
+\begin{equation}\label{eq:eom-plane}
+  \deriv{\vect{x}}{t} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t} = \sum_{i} \kappa_i\,\frac{\vect{x}-\vect{r}_i}{\abs{\vect{x}-\vect{r}_i}^3},
+  \qquad \gamma = \sqrt{1 + \frac{\abs{\vect{p}}^2}{m^2c^2}},
+\end{equation}
+from $\vect{x}_0$ and $\vect{p}_0 = \abs{\vect{p}_0}(\val{dirX}, \val{dirY})$ until the first
+event; the motion stays in the plane (\xsecref{foundations}{sec:plane}). The energy
+\begin{equation}\label{eq:energy-plane}
+  W = \gamma mc^2 + \sum_i \frac{\kappa_i}{\abs{\vect{x} - \vect{r}_i}}
+\end{equation}
+is conserved \xeqref{foundations}{eq:energy}.
+
+\begin{assumption}{The charges are held in place}\label{as:fixed}
+None recoils (a rule of the game).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the particle. Along the
+reference flight it is $\val{Erad}$, a fraction $\val{EradFrac}$ of the launch energy: its effect
+on the flight is of that relative order, far below either computation's accuracy.
+\end{assumption}
+
+\begin{assumption}{A point particle}\label{as:point}
+$a = 0$, and the particle does not polarize: \xeqref{foundations}{eq:sphereforce} is exact.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The launch}
+
+By \xeqref{foundations}{eq:launch}, $\gamma_0 = 1 + T_0/(mc^2) = \val{gammaZero}$,
+$\abs{\vect{p}_0} = \sqrt{T_0^2/c^2 + 2mT_0} = \val{pZero}$, and the speed
+$v_0 = \abs{\vect{p}_0}/(\gamma_0 m) = \val{vZero} = \val{betaZero}\,c$. A Newtonian particle at
+that speed would carry the momentum $mv_0 = \val{pNewton}$ and the kinetic energy
+$mv_0^2/2 = \val{TNewton}$: the fast particle has $\gamma_0$ times the momentum.
+
+\subsection{Why a fast particle is hard to bend}\label{sec:impulse}
+
+Let the particle pass a charge at the impact parameter $b$, fast enough that its path is nearly
+straight and its speed nearly constant: $\vect{x}(t) = (vt, b)$ with the charge at the origin.
+The force's component across the path is $\kappa b/(b^2 + v^2t^2)^{3/2}$, and over the whole
+pass it gives the impulse
+\begin{equation}\label{eq:impulse-p}
+  \Delta p_\perp = \int_{-\infty}^{\infty} \frac{\kappa b\,\dd t}{(b^2 + v^2 t^2)^{3/2}}
+    = \frac{\kappa}{b v}\int_{-\infty}^{\infty} \frac{\dd s}{(1 + s^2)^{3/2}}
+    = \frac{2\kappa}{b v},
+\end{equation}
+with $s = vt/b$ and $\int (1 + s^2)^{-3/2}\dd s = s/\sqrt{1 + s^2}$. The field is static, so
+\eqref{eq:impulse-p} holds in relativistic mechanics too: only the time spent near the charge,
+$\sim b/v$, enters. The path turns by the angle
+\begin{equation}\label{eq:impulse}
+  \theta \approx \frac{\Delta p_\perp}{p} = \frac{2\kappa}{b\,p v}, \qquad p v = \gamma m v^2 .
+\end{equation}
+At a given speed the impulse is the same, but the momentum it has to turn is $\gamma$ times
+Newton's: the deflection is smaller by $\gamma_0 = \val{gammaRatio}$. That is the level's
+point: the product $pv$, not the speed, measures stiffness, and as $v \to c$ it grows without
+bound. In terms of the kinetic energy,
+\begin{equation}\label{eq:pv}
+  pv = \frac{p^2c^2}{\gamma mc^2} = \frac{T(T + 2mc^2)}{T + mc^2},
+\end{equation}
+here $\val{pvZero}$, against $2T_0 = \val{twoT}$ for Newton's particle of the same kinetic
+energy: at a given energy relativity bends a little more (by $2T_0/(pv) = \val{pvRatio}$), at a
+given speed much less. Against the three level charges, seen from the launch line:
+\begin{center}\small\val{impulse}\end{center}
+$\theta_\mathrm{N}$ is Newton's at the same speed. The first charge's angles are not small
+($b = \val{bOne}$), so \eqref{eq:impulse} is only an estimate there; their ratio is $\gamma_0$
+whatever the angle's size, and the flight itself needs the equations of motion.
+
+\subsection{The method}\label{sec:method}
+
+There is no closed form: the force is not central, and with three or four centres even Newton's
+problem does not separate (\xsecref{slingshot}{sec:derivation} for two). The state
+$(x, y, p_x, p_y)$ is advanced by \eqref{eq:eom-plane} with the classical Runge--Kutta method
+\xeqref{foundations}{eq:rk4} at the fixed step $h = \val{H}$; after each step the cubic Hermite
+interpolant of the positions (\xeqref{slingshot}{eq:hermite}) is sampled at 64 points, and the
+first sample inside the detector, a charge's disc of radius $R$, or outside the world is refined
+by bisection; the state at that instant comes from one more step of the method. The error is
+of order $h^4$: halving $h$ estimates it as a fifteenth of the change
+(\xsecref{foundations}{sec:numerics}). The energy \eqref{eq:energy-plane} and $\abs{\vect{p}}$ at
+the entry, from $W$ alone, are independent checks.
+
+\subsection{Newton's mechanics at the same speed}\label{sec:newton}
+
+The same launch at the same speed $v_0$, with the reference charge, in Newton's mechanics
+($\gamma = 1$ in \eqref{eq:eom-plane}, the momentum $mv_0$, the energy
+$p^2/2m + V$; the same method and step) leaves through the \val{twinFace} edge at
+$(\val{twinX}, \val{twinY})$ at $t = \val{twinT}$: bent too hard by the charges, it never reaches
+the detector. The reference solution works only because the particle's momentum is $\gamma m v$.
+(With nothing placed, Newton's particle leaves through the top at $x = \val{twinBareX}$, the
+relativistic one at $x = \val{bareX}$.) These runs are this document's illustration and are not
+compared with the game.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch.} $\gamma_0 = \val{gammaZero}$,
+    $\abs{\vect{p}_0} = \val{pZero}$, $\vect{p}_0 = \abs{\vect{p}_0}(\val{dirX}, \val{dirY})$.
+    The energy \eqref{eq:energy-plane}: $V(\vect{x}_0) = \val{VZero}$ and $W = \val{W}$.
+  \item\label{st:march} \emph{The march.} Advance \eqref{eq:eom-plane} by
+    \xeqref{foundations}{eq:rk4}. The state every five time units (computed with the step
+    $\val{HTable}$; the last column is the energy's drift):
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:graze} \emph{The close pass.} The flight comes within $\val{rMin}$ of the
+    centre of charge $Q_{\val{rMinWhich}}$, $\val{rMinClear}$ outside its radius: the
+    attraction there turns the particle up towards the detector, and any error in the state
+    before it is magnified after it (\S\ref{sec:comparison}).
+  \item\label{st:entry} \emph{The entry.} With $h = \val{H}$ the particle enters the detector
+    through its \val{faceE} face at $(\val{xE}, \val{yE})$ at $t_\mathrm{e} = \val{tE}$ after
+    $\val{steps}$ steps, with $\vect{p}_\mathrm{e} = (\val{pxE}, \val{pyE})$, at
+    $\val{angE}$ degrees above $+x$. Halving the step moves the end state by
+    $15 \times \val{err}$: the estimate of its error is $\val{err}$.
+  \item\label{st:checks} \emph{The checks.} $W$ drifts by at most $\val{wDev}$ along the flight.
+    From $W$ alone, at the entry $\gamma_\mathrm{e} = \val{gammaE}$ and
+    $\abs{\vect{p}_\mathrm{e}} = mc\sqrt{\gamma_\mathrm{e}^2 - 1} = \val{pEnergy}$, which the
+    march's momentum matches to $\val{pDiff}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on the march's steps gives the
+    radiated energy $\val{Erad}$; halving the step changes it by the relative amount
+    $15 \times \val{EradErr}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The particle enters the detector through its \val{faceE} face at $(\val{xE}, \val{yE})$ at
+$t_\mathrm{e} = \val{tE}$, with momentum $(\val{pxE}, \val{pyE})$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The empty board agrees to about $10^{-12}$, the size of both computations' errors (ours
+$\val{bareErr}$; the game's verified flights about $10^{-10}$, Foundations §6). The reference
+flight agrees to $\val{cmpYDiff}$ in $y_\mathrm{e}$ and $\val{cmpTDiff}$ in $t_\mathrm{e}$: more,
+because of its close pass (step~\ref{st:graze}). Our own estimate there stays small
+($\val{err}$, the step $\val{H}$), but the game's adaptive integration, verified at a tolerance a
+hundred times tighter than its preview's, moves the end state by $\val{gapRef}$ between the
+two; its verified flight is then good to about a tenth of that or better, a few times
+$10^{-9}$, which is the difference found. Each flight's tolerance is therefore the larger of
+$10^{-9}$, ten times our estimate, and the game's own preview--verification gap ($\val{gapRef}$
+for the reference, $\val{gapBare}$ for the empty board), fixed before comparing. The radiated
+energies agree to $\val{cmpRadDiff}$ (relative).
+
+\section{Other solutions}\label{sec:others}
+
+The empty board, the second placement in \code{placements.json}, does not solve the level: the
+particle leaves through the \val{bareFace} edge at $(\val{bareX}, \val{bareY})$ at
+$t = \val{bareT}$. A solution must lift the particle and then turn it right towards the
+detector; the reference does both with one charge, using $Q_3$'s attraction for the turn.
+Because the particle is stiff (\S\ref{sec:impulse}), only the largest magnitudes, placed close to
+the path, bend it enough. A map of every single-charge placement would take the game's
+verdicts; this document does not reproduce one.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates the same equations \eqref{eq:eom-plane} with the adaptive eighth-order
+Runge--Kutta method of Dormand and Prince (\physref{5}), locates the events by its dense output
+(\physref{6}) and verifies the outcome by repeating the flight at a hundredfold tighter
+tolerance (\physref{7}). Its Coulomb field and its relativistic momentum are those of this
+document, exactly; the differences in the comparison are the two integrations' errors, magnified
+by the close pass on the reference flight. Radiation is integrated, not applied
+(\xsecref{foundations}{sec:radiation}, \physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+The impulse of a fast passing charge, the classical side of energy loss in Coulomb
+collisions: \Jackson{Ch.~13}. Relativistic momentum and energy: \Jackson{Ch.~11},
+\Griffiths{Ch.~12}. The
+numerical method and the one- and two-charge flights: \levelref{first_bend},
+\levelref{slingshot}.
+
+\levelfileappendix
+
+\end{document}

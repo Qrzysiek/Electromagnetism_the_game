@@ -1,0 +1,121 @@
+{
+ "level_file": "levels/27_fast_lane.json",
+ "level_sha256": "58267da15ceb6159",
+ "golden_hash": "c6f252efc5f68bf7",
+ "recorded": "2026-11-15",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        1.6252691600025548,
+        2.230277511306104,
+        0.0
+       ],
+       "t": 29.626598743736295,
+       "x": [
+        27.0,
+        14.177902474407418,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.320159093154416e-09,
+      "kinetic_initial": 2.0000000000000004,
+      "outcome": "Arrived",
+      "radiated_energy": 4.75157681522208e-12,
+      "steps": 121
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.6252691499762677,
+        2.2302775193269313,
+        0.0
+       ],
+       "t": 29.62659881139168,
+       "x": [
+        27.0,
+        14.177902587350099,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 8.592238032179011e-12,
+      "kinetic_initial": 2.0000000000000004,
+      "outcome": "Arrived",
+      "radiated_energy": 4.751576980291773e-12,
+      "steps": 173
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      7,
+      1,
+      0
+     ],
+     "value": 60000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        -0.07585117803910763,
+        2.320675347302884,
+        0.0
+       ],
+       "t": 21.660390393297767,
+       "x": [
+        15.773031851249419,
+        21.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.550211153362625e-10,
+      "kinetic_initial": 2.0000000000000004,
+      "outcome": "LeftBounds",
+      "radiated_energy": 4.018596600497788e-14,
+      "steps": 55
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.0758511778653993,
+        2.320675347434944,
+        0.0
+       ],
+       "t": 21.660390393084224,
+       "x": [
+        15.773031851902338,
+        21.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.1584956044762293e-12,
+      "kinetic_initial": 2.0000000000000004,
+      "outcome": "LeftBounds",
+      "radiated_energy": 4.0185967531564995e-14,
+      "steps": 87
+     }
+    }
+   ],
+   "placement": []
+  }
+ ]
+}
