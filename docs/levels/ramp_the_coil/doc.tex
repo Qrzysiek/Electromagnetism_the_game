@@ -1,0 +1,277 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil,rf_kick}
+\DocFingerprint{4ac8a9e86ec2cbe8}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One ion is launched from $(\val{xZero}, \val{yZero})$ along $+x$ with $T_0 = \val{Tzero}$, in
+Newton's mechanics ($c = \infty$), and must enter the detector
+$\val{xDetLo} \le x \le \val{xDetHi}$, $\val{yDetLo} \le y \le \val{yDetHi}$. A circular coil of
+radius $a = \val{a}$ about $(\val{xC}, \val{yC})$ lies in the board's plane, without current
+until the player sets its power supply, placed on the coil's terminal $(\val{xS}, \val{yS})$. The
+supply does not set a current but its rate of rise: the coil's strength (\physref{2.2}:
+$\kappa = \mu_0I/4\pi$, in field units) is
+\begin{equation}\label{eq:ramp}
+  \kappa(t) = \dot\kappa\,t,
+\end{equation}
+with the rate $\dot\kappa$ on a slider from $\val{rateMin}$ to $\val{rateMax}$. A flight ends when
+the ion enters the detector, touches the coil's wire (within $\val{wire}$ of its circle), leaves
+the world, or reaches $t = \val{tMax}$ (\xsecref{foundations}{sec:board}).
+
+The reference sets $\dot\kappa = \val{rate}$. The ion passes the coil above it, where the rising
+current's field, by then strong, bends it down into the detector. The document derives the
+rising coil's fields, the induced electric field among them, marches the flight numerically
+with an exact conserved quantity as its check, and finds the interval of rates that solve.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+The ion has charge $q = \val{q}$, mass $m = \val{m}$, momentum $p_\mathrm{i} = \val{pZero}$ and
+speed $v_0 = \val{vZero}$; it starts $\rho_0 = \val{rhoZero}$ from the coil's centre, and its
+launch line passes $\val{rhoLine}$ above the centre, outside the coil. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[black!70, thick] (\rawval{xC},\rawval{yC}) circle[radius=\rawval{a}];
+  \fill[yellow!70!black] (\rawval{xS},\rawval{yS}) circle[radius=0.3];
+  \addplot[thin, black!50] table {pathlo.dat};
+  \addplot[thin, black!50] table {pathhi.dat};
+  \addplot[thick, blue!70!black] table {pathref.dat};
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The coil (black circle), its supply on the terminal (yellow) and the reference flight
+(blue). Grey: the flights at the two edges of the solving interval of \S\ref{sec:others}, grazing
+the detector's corners.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a circular loop in its plane, \xeqref{first_coil}{eq:loop-field}, with $K$
+    and $E$ by \xeqref{first_coil}{eq:agm}; the vector potential of a steady current,
+    $\vect{A} = \kappa\oint \dd\vect{l}'/R$ in field units, with $\vect{B} = \nabla\times\vect{A}$
+    (\Jackson{§5.2, §5.5}); the complete elliptic integrals' power series (DLMF 19.5.1--2).
+  \item Faraday's law, the third of \xeqref{foundations}{eq:maxwell}: a changing $\vect{B}$
+    comes with the electric field $\vect{E} = -\partial\vect{A}/\partial t$.
+  \item Newton's equation with the Lorentz force \xeqref{foundations}{eq:eom} ($c = \infty$), and
+    the canonical momentum of a charge in a field, $\vect{p} + q\vect{A}$ (\Jackson{§12.1}),
+    whose component along a symmetry of the Lagrangian is conserved (\Goldstein{Ch.~2 and 8}).
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and
+    the error estimate from the step $2h$ (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method} and
+    \xsecref{first_coil}{sec:method}.
+\end{principles}
+
+The coil's field at each moment is that of its present current \eqref{eq:ramp}, and the rising
+current adds the induced electric field $-\dot\kappa\,\vect{A}/\kappa$; there is no other field.
+The ion starts at $\vect{x}(0) = (\val{xZero}, \val{yZero})$ with $\vect{p}(0) = (p_\mathrm{i}, 0)$,
+when the coil carries no current, and moves until the first of the board's events.
+
+\begin{assumption}{Quasi-static fields}\label{as:quasistatic}
+The coil's field follows its current at once, everywhere: the field of a steady current scaled by
+$\kappa(t)$, and the induced field $-\partial\vect{A}/\partial t$. This leaves out the coil's
+retardation and radiation, an error of the order of the light time across the setup against the
+time over which the current changes, $\kappa/\dot\kappa$. In this level's world $c$ is infinite and
+the light time is zero, so within the game's model (\physref{2.2}) nothing is neglected. The
+supply's own electrostatic field and the wire's charges are not modelled.
+\end{assumption}
+
+\begin{assumption}{The coil is a thin loop}\label{as:wire}
+The current flows on a circle of zero thickness; the wire's radius $\val{wire}$ only ends a
+flight, as in \levelref{first_coil} (its assumption \xref{first_coil}{as:wire}). The reference
+flight passes no nearer than $\val{wireGap}$ to the wire.
+\end{assumption}
+
+The ion's own radiation needs no assumption: with $c = \infty$, Liénard's power
+\xeqref{foundations}{eq:larmor} vanishes.
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The loop's vector potential}\label{sec:potential}
+
+Put the loop's centre at the origin and take a point in its plane at distance $\rho$. By symmetry
+$\vect{A}$ there points along $\uvec{\phi}$; the wire element at angle $t$ from the point's
+direction, $\dd\vect{l}' = a\,\dd t\,(-\sin t, \cos t)$, contributes along $\uvec{\phi}$ its
+component $a\cos t\,\dd t$, at distance $R = \sqrt{\rho^2 + a^2 - 2a\rho\cos t}$:
+\begin{equation}\label{eq:a-integral}
+  A_\phi(\rho) = \kappa a \int_0^{2\pi} \frac{\cos t\,\dd t}{\sqrt{\rho^2 + a^2 - 2a\rho\cos t}}.
+\end{equation}
+With $t = \pi - 2\theta$, $\cos t = 2\sin^2\theta - 1$ and
+$\rho^2 + a^2 - 2a\rho\cos t = \beta^2(1 - m\sin^2\theta)$, where $\beta = a + \rho$ and
+$m = 4a\rho/\beta^2$ as in \xeqref{first_coil}{eq:loop-field}; the integrand is even in $\theta$,
+so $A_\phi = (4\kappa a/\beta)\int_0^{\pi/2}(2\sin^2\theta - 1)\,\dd\theta/\sqrt{1 - m\sin^2\theta}$.
+Writing $2\sin^2\theta - 1 = (2/m - 1) - (2/m)(1 - m\sin^2\theta)$ turns the integral into
+$(2/m - 1)K - (2/m)E = (2/m)\,h(m)$, so
+\begin{equation}\label{eq:vector-potential}
+  A_\phi(\rho) = \frac{2\kappa\beta\,h(m)}{\rho},
+  \qquad h(m) = \left(1 - \frac{m}{2}\right)K(m) - E(m),
+\end{equation}
+\Jackson{§5.5}'s result in the plane of the loop. For small $m$ (near the centre or far away),
+$h$ is a difference of nearly equal terms; with the series
+$K = \frac{\pi}{2}\sum c_nm^n$, $E = \frac{\pi}{2}\sum c_nm^n/(1 - 2n)$,
+$c_n = \big((2n)!/(4^nn!^2)\big)^2$, the terms in $m^0$ and $m^1$ cancel exactly and
+\begin{equation}\label{eq:h-series}
+  h(m) = \frac{\pi}{2}\sum_{n\ge2} m^n\left(\frac{2n\,c_n}{2n-1} - \frac{c_{n-1}}{2}\right)
+       = \frac{\pi m^2}{32} + \frac{3\pi m^3}{128} + \dots,
+\end{equation}
+used for $m < 0.05$ (where it and the direct form agree to $\val{seriesDiff}$). Two checks: the
+trapezoidal rule with 400 nodes on \eqref{eq:a-integral} (spectrally accurate for a smooth
+periodic integrand) agrees with \eqref{eq:vector-potential} to $\val{aIntegral}$ relative, and
+$B_z = \rho^{-1}\,\dd(\rho A_\phi)/\dd\rho$ by central differences returns
+\xeqref{first_coil}{eq:loop-field} to $\val{aCurl}$. Per unit $\kappa$:
+\begin{center}\small\val{atab}\end{center}
+Outside the loop $B_z$ has the opposite sign to inside and grows in size towards the wire.
+
+\subsection{The rising coil's fields}\label{sec:fields}
+
+With \eqref{eq:ramp}, writing $b(\rho)$ and $a_\phi(\rho)$ for \xeqref{first_coil}{eq:loop-field}
+and \eqref{eq:vector-potential} per unit $\kappa$,
+\begin{equation}\label{eq:fields}
+  B_z = \dot\kappa\,t\;b(\rho), \qquad
+  \vect{E} = -\pderiv{\vect{A}}{t} = -\dot\kappa\,a_\phi(\rho)\,\uvec{\phi},
+  \quad\text{i.e.}\quad
+  E_x = \dot\kappa\,a_\phi\,\frac{y - y_\mathrm{c}}{\rho}, \quad
+  E_y = -\dot\kappa\,a_\phi\,\frac{x - x_\mathrm{c}}{\rho}.
+\end{equation}
+They satisfy Faraday's law: $\nabla\times\vect{E} = -\dot\kappa\,\nabla\times(a_\phi\uvec{\phi})
+= -\dot\kappa\,b\,\uvec{z} = -\partial\vect{B}/\partial t$, by the second check above. The
+induced field is constant in time and circles the coil's axis; the magnetic field grows in
+proportion to $t$.
+
+\subsection{The motion and its conserved quantity}\label{sec:motion}
+
+The ion moves by Newton's equation with $\vect{F} = q(\vect{E} + \vect{v}\times\vect{B})$, in the
+plane $F_x = q(E_x + v_yB_z)$, $F_y = q(E_y - v_xB_z)$. Its energy is not conserved: the induced
+field does the work $\int q\,\vect{E}\cdot\vect{v}\,\dd t$ (the magnetic force none), carried by
+the march as in \xeqref{rf_kick}{eq:work}. The Lagrangian
+$L = \tfrac12 m v^2 + q\,\vect{v}\cdot\vect{A}(\vect{x}, t)$ (with no scalar potential: the fields
+\eqref{eq:fields} are $-\partial\vect{A}/\partial t$ and $\nabla\times\vect{A}$) is unchanged by a
+rotation about the coil's axis, because $\vect{A}$ is $A_\phi(\rho)\,\uvec{\phi}$ at every
+moment. So the canonical angular momentum about the axis is conserved:
+\begin{equation}\label{eq:canonical}
+  J = (x - x_\mathrm{c})\,p_y - (y - y_\mathrm{c})\,p_x + q\,\rho\,\kappa(t)\,a_\phi(\rho)
+  = \text{const} = \val{jZero},
+\end{equation}
+its value at the launch, when $\kappa = 0$. It is exact, so it checks the march at every step.
+
+\subsection{The march}\label{sec:march}
+
+There is no closed form. Newton's equation, with the work as one more state, is marched by
+\xeqref{foundations}{eq:rk4} at $h = \val{H}$, the fields \eqref{eq:fields} evaluated at every
+stage. The events (the detector, the wire, the world's edge) are located on the cubic Hermite
+interpolant by bisection and the error estimated against the step $2h$, as in
+\xsecref{first_coil}{sec:method}.
+
+\subsection{The bend to first order in the rate}\label{sec:first}
+
+Along the undeflected line $x = x_0 + v_0t$, $y = y_0$ the transverse force is proportional to
+the rate:
+\begin{equation}\label{eq:first-order}
+  F_y = q\dot\kappa\left(-a_\phi(\rho)\,\frac{x - x_\mathrm{c}}{\rho} - v_0\,t\,b(\rho)\right),
+  \qquad
+  y^{(1)}(t) = y_0 + \frac{1}{m}\int_0^t\!\!\int_0^{t'} F_y\,\dd t''\,\dd t',
+\end{equation}
+so to first order the ion's height at the detector's face is $y_0 + \dot\kappa\,S$ with a
+sensitivity $S$ that does not depend on the rate: the faster the ramp, the larger the bend, and
+the sign of the rate sets its direction. Integrating \eqref{eq:first-order} (the same
+Runge--Kutta method) to $t^* = (x_\mathrm{det} - x_0)/v_0 = \val{tStar}$ gives
+$S = \val{dydr}$; the detector's middle, $y = \val{yMid}$, then asks for
+$\dot\kappa \approx \val{rateFirst}$. That is a scale, not the answer: the bent ion passes nearer
+the coil, where $\abs{b}$ is larger (the table above), so the true bend is stronger and a slower
+ramp suffices (\S\ref{sec:others}).
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:fields} \emph{The fields.} At each point, $\rho$ from the coil's centre,
+    $m = 4a\rho/(a + \rho)^2$, $K$ and $E$ by \xeqref{first_coil}{eq:agm}, $b$ by
+    \xeqref{first_coil}{eq:loop-field} and $a_\phi$ by \eqref{eq:vector-potential}; the fields by
+    \eqref{eq:fields} with $\dot\kappa = \val{rate}$.
+  \item\label{st:march} \emph{The march.} \S\ref{sec:march} from the launch; every 4 time units:
+
+    \smallskip
+    \centerline{\val{march}}
+    \smallskip
+
+    The ion enters the detector through its \val{faceRef} face at $(\val{xRef}, \val{yRef})$ at
+    $t = \val{tRef}$, with $\vect{p} = (\val{pxRef}, \val{pyRef})$ (step estimate $\val{errRef}$).
+    The coil's strength is then $\kappa = \val{kappaEnd}$.
+  \item\label{st:checks} \emph{The checks.} $J$ \eqref{eq:canonical} stays at $\val{jZero}$ to
+    $\val{jDev}$ along the march; at the entry it is the mechanical part $\val{jMech}$ plus the
+    field's $\val{jField}$. The induced field did the work $\val{workRef}$, equal to the change
+    of the kinetic energy to $\val{wDev}$: above the coil it points against the ion's motion
+    for this sign of the rate, and the ion arrives at speed $\val{speedEnd}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+With $\dot\kappa = \val{rate}$ the ion enters the detector at $(\val{xRef}, \val{yRef})$ at
+$t = \val{tRef}$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All trajectory differences are at most $\val{largest}$, the game's verified accuracy (Foundations
+§6); our step estimates are below $10^{-12}$. The tolerances are ten times the larger of the two
+computations' estimates, or the game's own preview--verification gap where that is larger, set
+before comparing. The largest difference is in $x_\mathrm{e}$ for the flight that enters through
+the detector's top face: there the entry point moves along the face by the error in height
+divided by the path's slope, here a few times the height's.
+
+\section{Other solutions}\label{sec:others}
+
+With no supply placed (the table's rows ``no supply'') the coil carries no current and the ion flies
+straight, leaving the world's right edge at $t = \val{offT}$. To first order the bend is odd in
+the rate (\S\ref{sec:first}): a positive rate bends the ion up, away from the detector below the
+launch line, so only negative rates can solve.
+
+The rates that solve form one interval, found by bisection on the rate (the flight marched at
+$h = 0.02$, whose error in the path is about $10^{-9}$, far below the change of a unit of rate,
+about $10^{-3}$ in height):
+\begin{equation}\label{eq:window}
+  \val{edgeLo} \;<\; \dot\kappa \;<\; \val{edgeHi},
+\end{equation}
+$\val{width}$ wide, $\val{widthFrac}$\,\% of the slider's range. At the faster edge the path
+grazes the detector's lower left corner (it enters through the \val{faceLo} face at
+$y = \val{yEdgeLo}$); at the slower edge it grazes the upper right corner (through the
+\val{faceHi} face at $x = \val{xEdgeHi}$). The game's verdicts on rates about 10 inside and
+outside each edge, the table's rows labelled by their rates, agree with \eqref{eq:window}.
+
+\section{What the game computes}\label{sec:engine}
+
+The game takes the coil's field from the closed form \xeqref{first_coil}{eq:loop-field} and its
+vector potential from \eqref{eq:vector-potential}, with the series for small $m$, both scaled by
+the ramp (\physref{2.2}, \emph{Ramped coils and induction}: the quasi-static model,
+\ref{as:quasistatic}); its test M10 is the conservation of \eqref{eq:canonical}. It integrates
+the equations of motion with its adaptive eighth-order Runge--Kutta method (\physref{3},
+\physref{5}, \physref{6}, \physref{7}). The problem is the same as here, and the differences in
+the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+The loop's vector potential: \Jackson{§5.5}. The canonical momentum of a charge in a field:
+\Jackson{§12.1}. The steady coil and its field: \levelref{first_coil}; a time-dependent source
+before this one: \levelref{rf_kick}.
+
+\levelfileappendix
+
+\end{document}

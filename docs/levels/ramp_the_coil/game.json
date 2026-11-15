@@ -1,0 +1,365 @@
+{
+ "level_file": "levels/40_ramp_the_coil.json",
+ "level_sha256": "4ac8a9e86ec2cbe8",
+ "golden_hash": "574d9b41d7dffd5b",
+ "recorded": "2026-11-15",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.8646755253706626,
+        -0.2657572076071524,
+        0.0
+       ],
+       "t": 29.71476723999582,
+       "x": [
+        28.0,
+        8.394601662835157,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 25
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.8646755252841273,
+        -0.2657572077308466,
+        0.0
+       ],
+       "t": 29.71476723988252,
+       "x": [
+        28.0,
+        8.394601661354827,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 35
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "supply",
+     "node": [
+      19,
+      5,
+      0
+     ],
+     "value": -5300.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.0,
+        0.0,
+        0.0
+       ],
+       "t": 31.00000000000003,
+       "x": [
+        31.0,
+        12.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.5,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 5
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.0,
+        0.0,
+        0.0
+       ],
+       "t": 31.000000000000004,
+       "x": [
+        31.0,
+        12.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.5,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 7
+     }
+    }
+   ],
+   "placement": []
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        0.7910373068438254,
+        -0.36163360961728386,
+        0.0
+       ],
+       "t": 34.37802562825682,
+       "x": [
+        31.0,
+        5.6276822576730705,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 26
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.7910373067751676,
+        -0.361633609695904,
+        0.0
+       ],
+       "t": 34.378025629694555,
+       "x": [
+        31.000000000000004,
+        5.627682255290767,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 37
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "supply",
+     "node": [
+      19,
+      5,
+      0
+     ],
+     "value": -6489.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.7981831868423024,
+        -0.3545476949771497,
+        0.0
+       ],
+       "t": 30.579047515613116,
+       "x": [
+        28.0,
+        7.013562979148335,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 25
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.7981831867467107,
+        -0.35454769506008915,
+        0.0
+       ],
+       "t": 30.57904751689728,
+       "x": [
+        28.0,
+        7.013562977928479,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 35
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "supply",
+     "node": [
+      19,
+      5,
+      0
+     ],
+     "value": -6469.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.9077060864078669,
+        -0.19623798340254772,
+        0.0
+       ],
+       "t": 31.30430262625339,
+       "x": [
+        29.954519417488232,
+        9.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 22
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.9077060863576403,
+        -0.19623798350415944,
+        0.0
+       ],
+       "t": 31.3043026180111,
+       "x": [
+        29.954519409310112,
+        9.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 38
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "supply",
+     "node": [
+      19,
+      5,
+      0
+     ],
+     "value": -4166.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        0.9077547583867649,
+        -0.19596051092155728,
+        0.0
+       ],
+       "t": 32.44567323343864,
+       "x": [
+        31.0,
+        8.7939215413425,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 23
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.9077547583322275,
+        -0.1959605110288304,
+        0.0
+       ],
+       "t": 32.44567323424545,
+       "x": [
+        31.0,
+        8.79392153955676,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.5,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 39
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "supply",
+     "node": [
+      19,
+      5,
+      0
+     ],
+     "value": -4146.0
+    }
+   ]
+  }
+ ]
+}
