@@ -47,6 +47,13 @@ list the others here.
 - **Synchrotron light's reality remark** (`docs/levels/synchrotron_light/NOTES.md`): "radiates
   0.1 % of its energy per turn" is about 20 % of the kinetic energy (2 % of the total) in the
   first turn, 82 % of `T0` over the reference's twelve turns. Not changed.
+- **Mains hum's "imaging lens"** (`docs/levels/mains_hum/NOTES.md`): the reality entry (and
+  LEVELS.md's row) call the reference an imaging lens that cancels the launch angle. Measured,
+  it is not one: the arrival height's sensitivity to the start's angle is only halved (12.5
+  against 28 on the empty board); the detector sits at the charges' focus for parallel starts
+  (−0.006 to the start's height), and downward angles are folded back by the lower charge. It
+  solves all four phases (and all 72 of a 5° sweep), the closest 0.02 inside an edge. Either the
+  remark describes that, or the level gets a reference that images, if one exists. Not changed.
 
 ## Next
 
@@ -155,7 +162,8 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
    magnetic field, the energy and torque balances, the radiation-free bound on the orbit;
    every legal placement compared). The game's radiated energy is Liénard's with the Lorentz
    force's acceleration alone (`trajectory.rs::radiated_power`), which a document comparing it
-   must use. Next in order: Mains hum. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
+   must use. Mains hum (42: the hum as a random start plus the free quiver, an exact split;
+   the reference's focus and fold measured). Next in order: Earth's field. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
    the run at the step h but quoted `|y_h - y_{h/2}|/15`, the h/2 run's error (16 times
    smaller than the h run's); now the partner runs at 2h, as the Foundations state it (the mass
    spectrometer reports its h/2 run instead). `slingshot`'s, the example they followed, keeps
