@@ -33,6 +33,9 @@ copy it back into `target/scratch/` and expect to adapt it.
   (the reservoirs it tried, regular, Poisson and Poisson with the release's Boltzmann
   factor, exact or to first order: an experiment on `emission.rs` from before
   `emit_thermal`, which `git apply` puts back on the commit that precedes it).
+  `LEVEL_CHECKS.md` (2026-11-15): the level's two checks with the thermal-wall contacts
+  (`proto2.py --thermal`; `runs.out` `t2_r1`, `t2_r2`, `cscan_r1`; `cscan.json` the plate
+  placements): `RC` short enough, the plate too weak a capacitance control.
 - `timing/`: the tube levels' timing audit (docs/HANDOFF.md, the owner's timing rules):
   `timing_audit.py` (`generator check` with a fresh run cache: preview and verification
   times), `field_audit.py` (`generator tube-field`: the field maps' rate).

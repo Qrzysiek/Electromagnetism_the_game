@@ -324,7 +324,8 @@ docs/DECISIONS.md.
 done (DEC-30), its levels not built (Carriers' inertia waits on the AC mobility's phase).
 Item 3 done (DEC-28, DEC-40) with the Corbino disc; the Generator not designed. Item 1 in
 progress: its measures (DEC-42) and the thermal-wall contacts it needs (DEC-43, 2026-11-15)
-in, tested (D13, D14); the level not designed. Items 4 and 5 not started.
+in, tested (D13, D14); the level not designed: its capacitance control failed its check
+(2026-11-15, below), waiting on the owner. Items 4 and 5 not started.
 
 1. **Thermal noise's size and pace** (the owner, 2026-11-05, in place of an RMS goal; two
    measures, about as large as the RMS one, the cost confirmed at design). *Heat and
@@ -342,6 +343,17 @@ in, tested (D13, D14); the level not designed. Items 4 and 5 not started.
      world: a lone contact's goes as one over the log of its size, so likely a grounded
      plate beside it, the gap the control. And `RC` short enough for the preview (≤ 30 s)
      to hold many `RC` (the correlation time's error is about `√(2RC/T)`).
+     *Measured 2026-11-15 (prototypes/noise/LEVEL_CHECKS.md), with the thermal-wall
+     contacts:* `RC` is short (the pace about 2 time units, 200 of them in a window of 400;
+     the pace over a kick's decay 0.81, one kick's decay scattering by about 15 %), and the
+     ratio is resolution-free within its statistical error (0.842 and 0.746, about 10 %
+     each). **The plate fails as the capacitance control:** at the nearest gap the plates'
+     clearance allows it raises `C_B` by 5–15 %, moving the ratio by at most 7 %, less than
+     its error; `C_B` is dominated by the strip and the kicker. The way recommended: a
+     capacitor as the player's control (a lumped capacitance on the floating contact, a
+     list or a log slider; the engine has `circuits[].capacitance`), a new control kind,
+     for the owner to decide (HANDOFF.md, *Waiting on the owner*). The preview's time is
+     not measured yet (the machine was busy).
    - Tests: equipartition, `⟨Q²⟩/2C = kT/2` on a floating contact with D7's kT; the
      correlation time against the relaxation of a charge put on the contact. *Done
      2026-11-15 (D13, D14), after the first measurement found D7's refill contacts out of

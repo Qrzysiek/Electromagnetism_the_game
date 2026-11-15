@@ -4,7 +4,7 @@ above its contact that steps at `kick_at`. The player may place a grounded plate
 cut. Goals: B's noise's spread over A's over `10..kick_at`, B's decay over `kick_at..end`.
 
     python proto2.py NAME [--length L] [--width W] [--cap C] [--kick V] [--at T] [--end T]
-                          [--cpa N] [--sub S] [--seed S]
+                          [--cpa N] [--sub S] [--seed S] [--square P] [--thermal]
 """
 import argparse
 import copy
@@ -16,7 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 
 
 def build(length=4, width=4, cap=0.0, kick=40.0, at=400.0, end=420.0, cpa=25.0, sub=1, seed=1,
-          ratio=(0.5, 0.7), decay=(2.0, 3.0), square=None):
+          ratio=(0.5, 0.7), decay=(2.0, 3.0), square=None, thermal=False):
     base = json.load(open(os.path.join(ROOT, "levels", "112_hall_probe.json"), encoding="utf-8"))
     lvl = copy.deepcopy(base)
     lvl["name"] = "noise prototype 2"
@@ -36,6 +36,8 @@ def build(length=4, width=4, cap=0.0, kick=40.0, at=400.0, end=420.0, cpa=25.0, 
         metal = dict(base["tube"]["metals"][0], corners=[[x0, y0, 0], [x1, y0 + width, 0]],
                      contacts=[2 * k, 2 * k + 1], seed=seed + k, carriers_per_area=cpa,
                      label=f"strip {name}")
+        if thermal:
+            metal["thermal_contacts"] = True  # DEC-43: in equilibrium with a floating contact
         metals.append(metal)
     electrodes.append(dict(box, center=[x1 + 1, yb + width + 1, 0], length=2.0, thickness=1.0,
                            angle_deg=0.0, label="kicker"))
@@ -80,8 +82,10 @@ if __name__ == "__main__":
     ap.add_argument("--sub", type=int, default=1)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--square", type=float, help="a square wave of this period, +-kick")
+    ap.add_argument("--thermal", action="store_true", help="thermal-wall contacts (DEC-43)")
     a = ap.parse_args()
-    lvl = build(a.length, a.width, a.cap, a.kick, a.at, a.end, a.cpa, a.sub, a.seed, square=a.square)
+    lvl = build(a.length, a.width, a.cap, a.kick, a.at, a.end, a.cpa, a.sub, a.seed, square=a.square,
+                thermal=a.thermal)
     path = os.path.join(HERE, a.name + ".json")
     json.dump(lvl, open(path, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
     print(path)

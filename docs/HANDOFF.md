@@ -21,6 +21,15 @@ list the others here.
 - **Nothing pushed.** `1d483cc` (the thermal-wall contacts, its 529 heavy verdicts passed)
   and the later commits are on `worktree-tubes-next` only; pushing, fast-forwarding main
   and rebuilding the game there wait for the owner (as the session of 2026-11-14 left it).
+- **The thermal-noise level's capacitance control** (Next, item 1;
+  `prototypes/noise/LEVEL_CHECKS.md`): the plan's control, a grounded plate beside the
+  player's floating contact, moves its capacitance by at most 15 % (the ratio by at most 7 %,
+  less than its ~10 % statistical error), so the two goals could not pin `C`. Options: (1) a
+  capacitor as the player's control, a lumped capacitance on the contact chosen from a list
+  or a log slider (the engine has `circuits[].capacitance`; a new control kind:
+  recommended); (2) a geometry where a plate dominates (a small contact, a long plate, plates
+  allowed nearer); (3) longer windows; (4) the pace alone, an introduction only. Not chosen
+  here: a new control kind is a design choice.
 - **Glass screen's message changed** (Next, item 2): the level was the dielectrics'
   introduction as "a glass screen"; it now says the glass polarizes and does not screen,
   which is what it does. Chosen without asking, as the only text the physics allows. The
@@ -82,10 +91,13 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
      tests D13 (equipartition, two lengths and a lumped capacitance), D14 (a kick's decay
      against the noise's pace), Y31 (charge conjugation, bit for bit), D10 (c) (the energy
      account); PHYSICS.md §2.11 *Thermal noise*; DEC-42 written for the measures; `pairs.py`
-     `tube_noise`. **Next for the level:** rerun the prototype (`proto2.py`) with
-     `thermal_contacts` on both strips (the contacts' resistance now in its R), then measure
-     the capacitances' range and how many `RC` the 30 s preview holds, as the plan asks;
-     the level's design, reality entry, scales and document follow. A grand-canonical layer
+     `tube_noise`. **Done 2026-11-15:** the prototype rerun with `thermal_contacts`
+     (`proto2.py --thermal`) and the two checks (`prototypes/noise/LEVEL_CHECKS.md`): `RC`
+     is about 2 time units, 200 in the window (fine); the grounded plate beside the
+     player's contact changes its capacitance by at most 15 %, less than the measures'
+     statistical error: **the plan's capacitance control fails**. Waiting on the owner (the
+     options in LEVEL_CHECKS.md; recommended: a capacitor as the player's control). The
+     preview's time is still to measure on an idle machine. A grand-canonical layer
      (equilibrium without the contact resistance) stays untried: the way to bring every
      contact into equilibrium, should the owner want it.
 2. **Glass screen: resolved 2026-11-15** (`docs/levels/glass_screen/NOTES.md`). The
