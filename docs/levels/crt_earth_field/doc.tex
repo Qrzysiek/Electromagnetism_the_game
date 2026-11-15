@@ -1,0 +1,181 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,thomson_crt,first_coil,stray_field,earths_field}
+\DocFingerprint{2da053221ec72703}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+This is the cathode-ray tube of \levelref{thomson_crt}, with its reference charge
+$Q = \val{QB}$ at $(\val{xB}, \val{yB})$ now built in, in a world with $c = \val{c}$. Two electrons
+($q = \val{q}$, $m = \val{m}$) are launched from $(\val{xZero}, \val{yZero})$ along $+x$: the slow
+one, $T = \val{TSlow}$, must enter the one-cell spot $\val{xSSlow} \le x \le \val{xSHiSlow}$,
+$\val{ySLoSlow} \le y \le \val{ySHiSlow}$; the fast one, $T = \val{TFast}$, the spot
+$\val{xSFast} \le x \le \val{xSHiFast}$, $\val{ySLoFast} \le y \le \val{ySHiFast}$. The tube stands
+in a uniform stray field $B_z = \val{B}$ (``\val{distName}'', \physref{2.3}). The player adds up to
+three charges from the listed magnitudes, either sign, at nodes with
+$\val{xRegLo} \le x \le \val{xRegHi}$, $\val{yRegLo} \le y \le \val{yRegHi}$. A flight ends when the
+electron enters its spot, touches a charge (radius $\val{R}$), leaves the world, or reaches
+$t = \val{tMax}$ (\xsecref{foundations}{sec:board}).
+
+The field bends both electrons up, past their spots; the reference adds $Q = \val{QR}$ at
+$(\val{xQ}, \val{yQ})$, which attracts them back down by about as much. The document marches the
+four flights (with and without the added charge) and measures the field's shift and the
+correction beam by beam, explaining why one charge can cancel the field for both energies only
+approximately.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+By \xeqref{foundations}{eq:launch} the slow electron has $\gamma_0 = \val{gammaSlow}$, momentum
+$p = \val{pSlow}$ and speed $\val{vSlow}$; the fast one $\gamma_0 = \val{gammaFast}$,
+$p = \val{pFast}$, speed $\val{vFast}$. In the stray field alone they would circle with the radii
+$R_B = p/(\abs{q}B) = \val{RBSlow}$ and $\val{RBFast}$, by
+\xeqref{first_coil}{eq:larmor-radius}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \fill[green!50!black, fill opacity=0.25] (\rawval{xSSlow},\rawval{ySLoSlow}) rectangle (\rawval{xSHiSlow},\rawval{ySHiSlow});
+  \fill[green!50!black, fill opacity=0.25] (\rawval{xSFast},\rawval{ySLoFast}) rectangle (\rawval{xSHiFast},\rawval{ySHiFast});
+  \addplot[thin, dashed, red!70!black] table {builtslow.dat};
+  \addplot[thin, dashed, blue!70!black] table {builtfast.dat};
+  \addplot[thick, red!70!black] table {pathslow.dat};
+  \addplot[thick, blue!70!black] table {pathfast.dat};
+  \fill[blue!60!black] (\rawval{xB},\rawval{yB}) circle[radius=\rawval{R}];
+  \fill[red!75!black] (\rawval{xQ},\rawval{yQ}) circle[radius=\rawval{R}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The built-in charge (blue), the reference's added charge (red), the spots (green) and
+the flights in the field: slow (red) and fast (blue), with the added charge (solid) and without it
+(dashed, both leaving the world).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom} with the charges'
+    Coulomb fields \xeqref{foundations}{eq:coulomb} and the uniform $B_z$ (\physref{2.3}).
+  \item The energy in a static field, \xeqref{foundations}{eq:energy}; Liénard's power
+    \xeqref{foundations}{eq:larmor}.
+  \item The small-kick angle of a passing charge, \xeqref{thomson_crt}{eq:impulse}, and the circle
+    in a uniform field, \xeqref{first_coil}{eq:larmor-radius}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate from the step $2h$ (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+Each electron starts at $(\val{xZero}, \val{yZero})$ with $\vect{p} = (p, 0)$ and moves by
+\xeqref{foundations}{eq:eom} with $\vect{F} = q(\vect{E}_Q + \vect{v}\times B_z\uvec{z})$ until the
+first of the board's events. The field is static, so
+\begin{equation}\label{eq:energy-crt}
+  W = \gamma mc^2 + \sum_Q \frac{qQ}{\abs{\vect{x} - \vect{r}_Q}}
+\end{equation}
+is conserved (the magnetic force does no work).
+
+\begin{assumption}{The electrons' radiation}\label{as:radiation}
+The electrons radiate the power \xeqref{foundations}{eq:larmor}, which the game, like this
+document, neglects; along the reference flights it is $\val{radSlow}$ and $\val{radFast}$, fractions
+$\val{radFracSlow}$ and $\val{radFracFast}$ of their kinetic energies.
+\end{assumption}
+
+\begin{assumption}{Fixed charges, point electrons, a uniform stray field}\label{as:fixed}
+The charges stay put, the electrons are points and do not act on each other (each is flown
+alone), and the stray field is uniform and static, an exact solution of Maxwell's equations
+(\physref{2.3}). These are the game's model.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The march}\label{sec:march}
+
+There is no closed form. Each flight is marched by \xeqref{foundations}{eq:rk4} at $h = \val{H}$
+with Liénard's energy as one more state; the events are located on the cubic Hermite interpolant
+by bisection, the error is estimated against the step $2h$, and \eqref{eq:energy-crt} checks
+every step (\xsecref{stray_field}{sec:march}).
+
+\subsection{The field's shift and the correction}\label{sec:shifts}
+
+How far the stray field moves each beam, and how far the added charge moves it back, show on the
+spots' line $x = \val{xSSlow}$. Marching each electron with the built-in charge only (without and
+with the field), with the added charge without the field, and with both:
+\begin{center}\small\val{lines}\end{center}
+The columns: the crossing height without field (the tube of \levelref{thomson_crt}, on target);
+in the field; the field's shift; the added charge's shift without the field; and the crossing with
+both. A circle of radius $R_B$ departs from its tangent by about $L^2/2R_B$ over $L$ cells: here
+$\val{sagSlow}$ and $\val{sagFast}$, close to the field's measured shifts $\val{shiftBSlow}$ and
+$\val{shiftBFast}$ (the built-in charge has already bent the rays, which changes the path the
+field acts along).
+
+The two shifts scale differently with the energy. The magnetic bend goes as $1/p$, the inverse
+radius $\abs{q}B/p$; the added charge's kick turns a ray by $\kappa/(Tb)$,
+\xeqref{thomson_crt}{eq:impulse}, as $1/T \approx 2/(pv)$. From the slow beam to the fast one $p$
+grows by the factor $\val{pRatio}$ but $pv$ by $\val{pvRatio}$ (nearly $T$'s $\val{TRatio}$), so a charge that
+cancels the field for one energy over- or under-corrects the other. The reference balances the
+two: it leaves the slow beam $\val{sumSlow}$ off its no-field crossing and the fast one
+$\val{sumFast}$, within the one-cell spots' tolerance (the slow beam crosses the line just below its
+spot and enters it through the bottom face as it climbs).
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:slow} \emph{The slow electron.} The march of \S\ref{sec:march}: it enters its spot
+    through the \val{faceSlow} face at $(\val{xSlow}, \val{ySlow})$ at $t = \val{tSlow}$, with
+    $\vect{p} = (\val{pxSlow}, \val{pySlow})$ (step estimate $\val{errSlow}$; the energy drifts by
+    $\val{wDevSlow}$).
+  \item\label{st:fast} \emph{The fast electron.} Through the \val{faceFast} face at
+    $(\val{xFast}, \val{yFast})$ at $t = \val{tFast}$, with $\vect{p} = (\val{pxFast}, \val{pyFast})$
+    (step estimate $\val{errFast}$; energy drift $\val{wDevFast}$).
+\end{procedure}
+
+\begin{result}[The reference flights]
+Both electrons enter their spots in the stray field. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All trajectory differences are at most $\val{largest}$, the game's verified accuracy
+(Foundations §6), against tolerances of ten times the larger of the two computations' estimates.
+The radiated energies agree to about $10^{-9}$ relative; the game integrates Liénard's power by
+three-point Gauss--Legendre on each step, we as a state of the march.
+
+\section{Other solutions}\label{sec:others}
+
+The tube as built fails in the field (the rows ``as built''): the slow electron leaves the world
+through its \val{builtFaceSlow} edge at $x = \val{builtXSlow}$, the fast one through the
+\val{builtFaceFast} edge at $y = \val{builtYFast}$. A correction must pull both beams down by about
+the field's shifts, more for the slow beam than for the fast one; a positive charge below the rays
+near the gun does so, as \S\ref{sec:shifts} shows, and the $1/T$ scaling of its kick against the
+field's $1/p$ sets how well one charge can serve both. A map of all solutions would take the
+game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game adds the stray field to the charges' fields (\physref{2.3}) and integrates the equations
+of motion with its adaptive eighth-order Runge--Kutta method (\physref{3}, \physref{5},
+\physref{6}, \physref{7}), each shot verified on its own. The problem is the same as here, and the
+differences in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+The tube itself: \levelref{thomson_crt}. Motion in a uniform magnetic field: \Jackson{§12.2}. A
+stray field handled by a fold instead: \levelref{earths_field}.
+
+\levelfileappendix
+
+\end{document}
