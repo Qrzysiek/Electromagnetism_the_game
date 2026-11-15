@@ -133,8 +133,8 @@ Housekeeping, none urgent:
   on `level-docs/metal-15-26`.
 - The side panel overflows by ~2 px on the metal levels (the capture's "panel overflow:
   content 325.2 wider than 323.0", on main's build too; CLAUDE.md, *egui*).
-- SPEC.md §10's stages do not mention the tube world (the tubes, the metals, the
-  transistors, the self-field): its status lines stop at 2026-10-07.
+- SPEC.md's status lines now cover the tube world (2026-11-15: §3 *Inside the
+  components*, §10 stages 4 and 6).
 
 ## Waiting on the owner
 
