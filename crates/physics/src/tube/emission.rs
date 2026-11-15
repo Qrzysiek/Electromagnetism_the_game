@@ -152,6 +152,10 @@ impl Tube {
         segs: &[usize],
         emitted: &mut [f64],
     ) {
+        if let Some(seed) = ohmic.thermal {
+            self.emit_thermal(s, sigma, i, em, ohmic, seed, segs, emitted);
+            return;
+        }
         let sign = em.charge_per_mass.signum();
         let tag = u32::try_from(i).unwrap_or(u32::MAX);
         // The other ohmic contacts' layers (each emitting segment's: its start, direction,
@@ -237,12 +241,92 @@ impl Tube {
         }
     }
 
-    /// The layers of every ohmic contact's emitting segments but emitter `skip`'s
-    /// (`emit_ohmic`).
+    /// A thermal contact's emission (`OhmicContact::thermal`, DEC-43), a wall in equilibrium
+    /// with its electrode: per emitting segment of emitter `i`, a Poisson number of carriers
+    /// whose mean is what a half-space of carriers at the contact's `density` carries out
+    /// through the segment over the step (`ρ σ_v/√(2π)` per length, in macroparticles), times
+    /// the Boltzmann factor of the release's potential step. A carrier is given off δ out from
+    /// the face (`EMISSION_OFFSET`), where the potential is `V − 4πσδ` to first order (σ the
+    /// segment's surface density now, the field at the face `4πσ`); the factor
+    /// `exp(−βq (φ(δ) − V)) = exp(βq 4πσδ)`, β a macroparticle's `1/kT`, puts the wall's
+    /// electrochemical potential back at its electrode's. Without it the release at δ ties
+    /// the contact to its face's field: a floating contact's noise 21 % above `kT/C` on a
+    /// short strip, falling linearly with δ; with it 1 within 2 % (D13). The random numbers
+    /// hash `seed`, the step, the emitter and the segment (deterministic, as the lattice's).
+    #[allow(clippy::too_many_arguments)]
+    fn emit_thermal(
+        &self,
+        s: &mut TubeState,
+        sigma: &[f64],
+        i: usize,
+        em: &Emitter,
+        ohmic: OhmicContact,
+        seed: u64,
+        segs: &[usize],
+        emitted: &mut [f64],
+    ) {
+        use crate::lattice::{mix, unit};
+        let sign = em.charge_per_mass.signum();
+        let tag = u32::try_from(i).unwrap_or(u32::MAX);
+        // A macroparticle's βq: q = sign w, kT = w σ_v²/|q/m|.
+        let beta_q = sign * em.charge_per_mass.abs() / (em.thermal_speed * em.thermal_speed);
+        let flux = ohmic.density * em.thermal_speed / libm::sqrt(2.0 * std::f64::consts::PI);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let step = libm::round(s.t / self.dt) as u64;
+        for &j in segs {
+            let (a, b) = self.electrodes.segments[j];
+            let len = (b - a).length();
+            let t = (b - a) / len;
+            let out = self.outward(em.electrode, a, b, (a + b) * 0.5);
+            if em.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
+                continue;
+            }
+            let delta = EMISSION_OFFSET * len;
+            let mean = flux * len * self.dt / em.weight
+                * libm::exp(beta_q * 4.0 * std::f64::consts::PI * sigma[j] * delta);
+            // Poisson by inversion: uniforms until their product falls below e^(−mean).
+            // Its own stream, apart from the collisions' (`Lattice::speed`) of the same seed.
+            let mut h = mix(seed ^ 0x7a11_c0de ^ mix(step ^ mix(((i as u64) << 32) ^ j as u64)));
+            let (limit, mut p, mut count) = (libm::exp(-mean), unit(h), 0_u32);
+            while p > limit {
+                count += 1;
+                h = mix(h);
+                p *= unit(h);
+            }
+            for _ in 0..count {
+                if s.x.len() >= MAX_PARTICLES {
+                    s.capped = true;
+                    return;
+                }
+                s.emitted += 1;
+                #[allow(clippy::cast_precision_loss)]
+                let f = (s.emitted as f64 * 0.618_033_988_749_894_9).fract();
+                let v = crate::lattice::flux_velocity(out, em.thermal_speed, s.emitted);
+                let face = a + t * (len * f);
+                let x = face + out * delta;
+                if let Some(m) = self.metal_of(x) {
+                    self.lattices[m].book_flux(&mut s.cells[m].flux, face, x, sign * em.weight);
+                }
+                if s.book_potential_steps {
+                    let phi = self.potential(s, sigma, x, None);
+                    s.potential_steps[em.electrode] +=
+                        sign * em.weight * (s.potentials[em.electrode] - phi);
+                }
+                self.add(s, x, v, sign * em.weight, em.charge_per_mass, tag);
+                emitted[em.electrode] += sign * em.weight;
+                s.released[i] += sign * em.weight;
+                s.contact_energy[em.electrode] -=
+                    0.5 * (em.weight / em.charge_per_mass).abs() * v.length_squared();
+            }
+        }
+    }
+
+    /// The layers of every refilling ohmic contact's emitting segments but emitter `skip`'s
+    /// (`emit_ohmic`; a thermal wall holds no layer).
     fn ohmic_layers(&self, skip: usize) -> Vec<Layer> {
         let mut layers = Vec::new();
         for (k, em) in self.emitters.iter().enumerate() {
-            let Some(ohmic) = em.ohmic.filter(|_| k != skip) else {
+            let Some(ohmic) = em.ohmic.filter(|o| k != skip && o.thermal.is_none()) else {
                 continue;
             };
             for j in self.segments_of(em.electrode) {

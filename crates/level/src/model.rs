@@ -485,14 +485,29 @@ fn tube_notes(spec: &crate::tube::TubeSpec) -> Vec<ModelNote> {
              of the Boltzmann equation holds within 3 % for the dilute cores allowed \
              (PHYSICS.md §2.11; the carriers warm a little in strong fields, lowering it).",
         ));
-        out.push(note(
-            false,
-            "Contacts (ohmic): a contact takes in the carriers that reach it and gives off \
-             from its face, as a gas at the lattice's temperature crosses a wall, as many \
-             as keep the layer in front of it neutral (half a mean free path deep). A \
-             current goal on a contact counts what it takes in less what it gives off (its \
-             lead's current).",
-        ));
+        if spec.metals.iter().any(|m| !m.thermal_contacts) {
+            out.push(note(
+                false,
+                "Contacts (ohmic): a contact takes in the carriers that reach it and gives off \
+                 from its face, as a gas at the lattice's temperature crosses a wall, as many \
+                 as keep the layer in front of it neutral (half a mean free path deep). A \
+                 current goal on a contact counts what it takes in less what it gives off (its \
+                 lead's current). This refill is not in equilibrium with a floating contact, \
+                 whose noise runs 18–43 % above the kT/C of equilibrium (PHYSICS.md §2.11).",
+            ));
+        }
+        if spec.metals.iter().any(|m| m.thermal_contacts) {
+            out.push(note(
+                false,
+                "Contacts (thermal walls): a contact takes in the carriers that reach it and \
+                 gives off, at random times, the flux a gas at the lattice's temperature sends \
+                 through a wall, each carrier weighted by the energy its first step into the \
+                 metal costs. It is in equilibrium with its electrode: a floating contact's \
+                 noise is kT/C, whatever feeds it. The price, a contact resistance (Sharvin's, \
+                 the most a half-space of carriers carries through a face), is part of the \
+                 resistance a contact is fed through.",
+            ));
+        }
         out.push(note(
             false,
             "The carriers' current fluctuates (the thermal, Johnson noise of a resistor): \

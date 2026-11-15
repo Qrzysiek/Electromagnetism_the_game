@@ -18,6 +18,21 @@ copy it back into `target/scratch/` and expect to adapt it.
   `contact_bias.rs`, the contacts' layers: the field's work at rest against the resolution's
   parts, its profile by columns (with `Lattice::account_size` temporarily ten cells a unit),
   and the macroscopic heat against `I V` (DEC-41, PHYSICS.md §2.11).
+- `noise/`: the thermal-noise level's prototypes (docs/HANDOFF.md, *Next*; DRUDE.md Phase 2
+  item 1): `runs.out` (each run's `generator tube-scan` result line, its trace left out:
+  `n2_r1` and `n2_r2` the two-goal prototype at the preview's and the verification's
+  resolution, `sq*` a square-wave kick), `proto.py` (one strip, a floating contact with a
+  lumped capacitance, optionally a grounded plate beside it), `proto2.py` (two strips, a
+  reference contact and the player's with a kicker: the spread-ratio and decay goals; it
+  needs the measures of the same date, not yet committed), `drive.py` (the strip's
+  resistance from a driven contact), `acf.py` and `fold.py` (a `tube-scan --trace`'s spread,
+  correlation time and folded response to a square-wave kick). `EQUIPARTITION.md`
+  (2026-11-15): a floating contact's noise against `kT/C`, 18–43 % high with the refill
+  contacts, its two causes, and the thermal wall that fixed it (DEC-43); `equipartition.rs`
+  (its runs, a test to copy into `crates/physics/tests/`) and `reservoir_contacts.patch`
+  (the reservoirs it tried, regular, Poisson and Poisson with the release's Boltzmann
+  factor, exact or to first order: an experiment on `emission.rs` from before
+  `emit_thermal`, which `git apply` puts back on the commit that precedes it).
 - `timing/`: the tube levels' timing audit (docs/HANDOFF.md, the owner's timing rules):
   `timing_audit.py` (`generator check` with a fresh run cache: preview and verification
   times), `field_audit.py` (`generator tube-field`: the field maps' rate).

@@ -410,6 +410,7 @@ fn resistor(l: f64, w: f64, v: f64, carriers: usize, dt: f64, seed: u64) -> Tube
         ohmic: Some(OhmicContact {
             density: 1.0,
             depth: 0.5 * MEAN_FREE_PATH,
+            thermal: None,
         }),
     };
     let source = |electrode: usize, v: f64| Circuit {
@@ -925,6 +926,29 @@ fn d10_carriers_energy_account() {
     );
     assert_eq!(s.collisions, 0);
     assert!(residual.abs() < 1e-10 * scale, "(a) {residual}");
+    // (c) The same with thermal-wall contacts (DEC-43): their releases book their energy
+    // as the refill's do.
+    for em in &mut tube.emitters {
+        if let Some(o) = em.ohmic.as_mut() {
+            o.thermal = Some(23);
+        }
+    }
+    let mut s = tube.state();
+    let start = account(&s);
+    for _ in 0..500 {
+        tube.step(&mut s);
+    }
+    let end = account(&s);
+    let residual = unbooked(&s, start);
+    let scale = [end.0, end.1 - start.1, end.3 - start.3]
+        .into_iter()
+        .fold(0.0_f64, |m, x| m.max(x.abs()));
+    println!(
+        "D10 (c) thermal walls: the contacts' net take {:.6}: unbooked {:.2e} of {scale:.3}",
+        end.3 - start.3,
+        residual.abs() / scale
+    );
+    assert!(residual.abs() < 1e-10 * scale, "(c) {residual}");
     // (b) With cores, at two steps.
     let blocks = |dt: f64| {
         let tube = resistor(16.0, 4.0, 3.2, 4000, dt, 7);
@@ -1098,6 +1122,7 @@ fn corbino(v: f64, b_z: f64, carriers: usize, dt: f64, seed: u64) -> Tube {
         ohmic: Some(OhmicContact {
             density: 1.0,
             depth: 0.5 * MEAN_FREE_PATH,
+            thermal: None,
         }),
     };
     let source = |electrode: usize, v: f64| Circuit {
@@ -1435,4 +1460,371 @@ fn d12_corbino_disc() {
     common::measured("D12.hall_mirror_percent", 100.0 * flip.0 / scale, 2);
     assert!((mirror.0 - 1.0).abs() < 0.05, "G(+B)/G(−B) {mirror:?}");
     assert!(flip.0.abs() < 0.05 * scale, "the Hall ratios' sum {flip:?}");
+}
+
+/// D13 and D14's floating contact (DRUDE.md Phase 2 item 1, DEC-43): a strip `l × 4` of the
+/// tests' metal (`A`, `MEAN_FREE_PATH`) between a grounded contact (an ideal source) and a
+/// floating one, a circuit node of capacitance `c_l` to ground besides its own (no source:
+/// floating), or with `kick` charged through `kick.1` from the source `kick.0`; a grounded
+/// frame 3 out from the contacts closes the electrostatics. The contacts are thermal walls
+/// (`OhmicContact::thermal`) with `thermal`, else D7's refill. `conjugate`: every charge
+/// reversed, the carriers positive over a negative background (Y31).
+#[derive(Clone, Copy)]
+struct Floating {
+    l: f64,
+    c_l: f64,
+    thermal: bool,
+    kick: Option<(Waveform, f64)>,
+    carriers: usize,
+    dt: f64,
+    conjugate: bool,
+}
+
+impl Floating {
+    fn strip(l: f64, c_l: f64) -> Self {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let carriers = libm::round(31.25 * 4.0 * l) as usize;
+        Floating {
+            l,
+            c_l,
+            thermal: true,
+            kick: None,
+            carriers,
+            dt: 0.02,
+            conjugate: false,
+        }
+    }
+
+    fn tube(self, seed: u64) -> Tube {
+        let (l, w) = (self.l, 4.0);
+        let contact = |x: f64| Electrode {
+            section: Section::Rect {
+                center: DVec3::new(x, 0.5 * w, 0.0),
+                angle: 0.0,
+                half_length: 0.5,
+                half_thickness: 0.5 * w,
+            },
+            bias: Bias::Grounded,
+        };
+        let frame = Electrode {
+            section: Section::Frame {
+                center: DVec3::new(0.5 * l, 0.5 * w, 0.0),
+                half_width: 0.5 * l + 4.0,
+                half_height: 0.5 * w + 3.0,
+                segment: 0.25,
+            },
+            bias: Bias::Grounded,
+        };
+        let electrodes = Electrodes::new(vec![contact(-0.5), contact(l + 0.5), frame], &[], 0.25);
+        let (lo, hi) = (DVec3::ZERO, DVec3::new(l, w, 0.0));
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let count = libm::round(l * w / (2.0 * A * MEAN_FREE_PATH)) as usize;
+        let cores = Lattice::random_cores(lo, hi, count, A, seed);
+        let mut material = common::metal(A);
+        if self.conjugate {
+            material.background = -material.background;
+            material.charge_per_mass = -material.charge_per_mass;
+        }
+        let lattice = Lattice::new(lo, hi, material, cores, self.carriers, seed + 4);
+        let weight = lattice.carrier_charge().abs();
+        let emitter = |electrode: usize, toward: f64| Emitter {
+            electrode,
+            charge_per_mass: material.charge_per_mass,
+            weight,
+            emit_toward: Some(DVec3::new(toward, 0.0, 0.0)),
+            saturation: None,
+            thermal_speed: 1.0,
+            ohmic: Some(OhmicContact {
+                density: 1.0,
+                depth: 0.5 * MEAN_FREE_PATH,
+                thermal: self.thermal.then_some(seed ^ 0x5eed),
+            }),
+        };
+        let ground = Circuit {
+            electrode: 0,
+            source: Waveform::Dc(0.0),
+            resistance: 0.0,
+            capacitance: 0.0,
+            inductance: 0.0,
+            to: None,
+        };
+        let (source, resistance) = self.kick.unwrap_or((Waveform::Dc(0.0), f64::INFINITY));
+        let node = Circuit {
+            electrode: 1,
+            source,
+            resistance,
+            capacitance: self.c_l,
+            inductance: 0.0,
+            to: None,
+        };
+        Tube {
+            emitters: vec![emitter(0, 1.0), emitter(1, -1.0)],
+            arena: Some((
+                DVec3::new(-2.0, -2.0, 0.0),
+                DVec3::new(l + 2.0, w + 2.0, 0.0),
+            )),
+            circuits: vec![ground, node],
+            lattices: vec![lattice],
+            ..Tube::new(electrodes, 0.05, self.dt)
+        }
+    }
+}
+
+/// The floating contact's potential after each step from `t0` to `t1`.
+fn floating_trace(tube: &Tube, t0: f64, t1: f64) -> Vec<f64> {
+    let mut s = tube.state();
+    let mut out = Vec::new();
+    while s.t < t1 - 0.5 * tube.dt {
+        tube.step(&mut s);
+        if s.t >= t0 - 0.5 * tube.dt {
+            out.push(s.potentials[1]);
+        }
+    }
+    out
+}
+
+/// Mean and standard error of values.
+#[allow(clippy::cast_precision_loss)]
+fn mean_and_error(values: &[f64]) -> (f64, f64) {
+    let n = values.len() as f64;
+    let mean = values.iter().sum::<f64>() / n;
+    let var = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n - 1.0);
+    (mean, libm::sqrt(var / n))
+}
+
+/// The autocorrelation of `xs` about their mean at lags 0 to `lags − 1` (each over the
+/// overlapping pairs), over its value at 0.
+#[allow(clippy::cast_precision_loss)]
+fn autocorrelation(xs: &[f64], lags: usize) -> Vec<f64> {
+    let n = xs.len();
+    let mean = xs.iter().sum::<f64>() / n as f64;
+    let d: Vec<f64> = xs.iter().map(|x| x - mean).collect();
+    let c0 = d.iter().map(|x| x * x).sum::<f64>() / n as f64;
+    (0..lags)
+        .map(|k| {
+            d[..n - k]
+                .iter()
+                .zip(&d[k..])
+                .map(|(a, b)| a * b)
+                .sum::<f64>()
+                / ((n - k) as f64 * c0)
+        })
+        .collect()
+}
+
+/// The lag (in samples `dt` apart) at which a curve that starts at 1 first falls below 1/e,
+/// linearly interpolated (the level's measures: `Measure::Decay`, `TubeRun::noise_pace`).
+#[allow(clippy::cast_precision_loss)]
+fn one_over_e(curve: &[f64], dt: f64) -> f64 {
+    let level = 1.0 / std::f64::consts::E;
+    for k in 1..curve.len() {
+        if curve[k] < level {
+            let (a, b) = (curve[k - 1], curve[k]);
+            return ((k - 1) as f64 + (a - level) / (a - b)) * dt;
+        }
+    }
+    f64::NAN
+}
+
+/// D13, equipartition on a floating contact (DRUDE.md Phase 2 item 1, DEC-43). The node's
+/// potential is `V = (Q − ind)/C_node` (`circuits.rs`: its charge less the carriers' induced
+/// charge, over its coefficient of capacitance, the boundary elements' `C₁₁` plus `c_l`), so
+/// in any equilibrium in which its charge exchanges with a reservoir, `Q − ind` is Gaussian
+/// of variance `kT C_node` at every configuration of the carriers: `⟨V²⟩ C_node/kT = 1`
+/// exactly, with a macroparticle's kT (D7's), whatever feeds the node. With thermal-wall
+/// contacts: the strip 2 and 4 long (`c_l` 0; the resistance 3.5 and about 6), and 2 long
+/// with `c_l` = 2 (the node five times its own capacitance, the time constant five times
+/// longer, run twice as long); sampled every step over t = 10 on. Required within 5 % of 1
+/// each (as D7; the statistics, from the seeds' scatter, 1.4–2.4 %, and a variance about each
+/// run's own mean reads low by about `2τ/T`, ~1 % for the lumped capacitance's τ): the size
+/// does not depend on the resistance. D7's refill contacts give 1.18 (4 long) and 1.43 (2 long), their
+/// release at δ and their refill out of equilibrium (prototypes/noise/EQUIPARTITION.md).
+#[test]
+#[ignore = "a measurement (about 9 minutes in release): run with --ignored (PHYSICS.md §2.11)"]
+fn d13_equipartition_on_a_floating_contact() {
+    let started = std::time::Instant::now();
+    for (tag, l, c_l, seeds, t1) in [
+        ("l2", 2.0, 0.0, 16_u64, 510.0),
+        ("l4", 4.0, 0.0, 16, 510.0),
+        ("cl2", 2.0, 2.0, 32, 1010.0),
+    ] {
+        let config = Floating::strip(l, c_l);
+        let runs: Vec<f64> = (0..seeds)
+            .into_par_iter()
+            .map(|k| {
+                let tube = config.tube(101 + 17 * k);
+                let kt = tube.lattices[0].carrier_charge().abs();
+                let c_node = tube.electrodes.capacitance[1][1] + c_l;
+                let v = floating_trace(&tube, 10.0, t1);
+                #[allow(clippy::cast_precision_loss)]
+                let n = v.len() as f64;
+                let mean = v.iter().sum::<f64>() / n;
+                v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n * c_node / kt
+            })
+            .collect();
+        let (mean, error) = mean_and_error(&runs);
+        println!(
+            "D13 {tag} (length {l}, c_l {c_l}): <V²> C/kT {mean:.4} ± {error:.4} over {seeds} \
+             seeds; {:.0} s so far",
+            started.elapsed().as_secs_f64()
+        );
+        common::measured(&format!("D13.{tag}"), mean, 3);
+        common::measured(&format!("D13.{tag}_err"), error, 1);
+        assert!((mean - 1.0).abs() < 0.05, "D13 {tag}: {mean} ± {error}");
+    }
+}
+
+/// D14, fluctuation–dissipation on a floating contact (DEC-42, DEC-43). A charge `δQ` put on
+/// the node enters the energy as `δQ V`, so in equilibrium the potential's mean response is
+/// `⟨ΔV(t)⟩ = δQ β ⟨V(0) V(t)⟩` (classical linear response): over its value at the kick,
+/// `δQ/C_node` (exact: no carrier has moved), it is the noise's autocorrelation `ρ(t)`. A
+/// kicked contact relaxes at the pace its noise wanders: the thermal-noise level's decay and
+/// pace are one time. D13's short strip (thermal walls, `c_l` 0): 16 seeds over t = 10–1010
+/// unkicked for `ρ`; 16 more over t = 10–5010 kicked every 10 time units (about 7 time
+/// constants) with a charge put on the node within one step (a pulse through 10⁴, some 3000
+/// times the strip's resistance), `δQ` two noise widths `2√(kT C_node)`, half the seeds
+/// positive and half negative (their difference cancels the response's even orders). The
+/// response folded at the period, seed by seed: its 1/e time against `ρ`'s required within
+/// 5 % (the statistics, from the seeds' scatter, ~2 %); the curves' largest difference over
+/// the first three time constants recorded.
+#[test]
+#[ignore = "a measurement (about 15 minutes in release): run with --ignored (PHYSICS.md §2.11)"]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn d14_fluctuation_dissipation_on_a_floating_contact() {
+    let started = std::time::Instant::now();
+    let base = Floating::strip(2.0, 0.0);
+    let dt = base.dt;
+    let (period, r_s, t0, t1) = (10.0, 1.0e4, 10.0, 5010.0);
+    let per = libm::round(period / dt) as usize;
+    let lags = libm::round(4.5 / dt) as usize;
+    // The noise's autocorrelation, unkicked.
+    let quiet: Vec<(f64, Vec<f64>)> = (0..16_u64)
+        .into_par_iter()
+        .map(|k| {
+            let tube = base.tube(101 + 17 * k);
+            let rho = autocorrelation(&floating_trace(&tube, t0, 1010.0), lags);
+            (one_over_e(&rho, dt), rho)
+        })
+        .collect();
+    // The kicked runs: the first kick at the step ending at t = 20, the pulse a quarter step
+    // either side of it.
+    let kicked: Vec<(f64, Vec<f64>)> = (0..16_u64)
+        .into_par_iter()
+        .map(|k| {
+            let probe = base.tube(1001 + 17 * k);
+            let (kt, c_node) = (
+                probe.lattices[0].carrier_charge().abs(),
+                probe.electrodes.capacitance[1][1],
+            );
+            let dq = 2.0 * libm::sqrt(kt * c_node);
+            let sign = if k % 2 == 0 { 1.0 } else { -1.0 };
+            let high = sign * dq * r_s / dt;
+            let kick = Waveform::Pulse {
+                low: 0.0,
+                high,
+                delay: 20.0 - 0.25 * dt,
+                rise: 0.0,
+                width: 0.5 * dt,
+                fall: 0.0,
+                period,
+            };
+            let tube = Floating {
+                kick: Some((kick, r_s)),
+                ..base
+            }
+            .tube(1001 + 17 * k);
+            let v = floating_trace(&tube, 20.0, t1);
+            let mut fold = vec![0.0; per];
+            let mut count = vec![0.0; per];
+            for (i, x) in v.iter().enumerate() {
+                fold[i % per] += x;
+                count[i % per] += 1.0;
+            }
+            let r: Vec<f64> = fold
+                .iter()
+                .zip(&count)
+                .map(|(f, c)| f / c * c_node / (sign * dq))
+                .collect();
+            (one_over_e(&r, dt), r)
+        })
+        .collect();
+    let pace = mean_and_error(&quiet.iter().map(|q| q.0).collect::<Vec<_>>());
+    let decay = mean_and_error(&kicked.iter().map(|q| q.0).collect::<Vec<_>>());
+    // The mean curves' largest difference over the first three time constants.
+    let reach = (libm::round(3.0 * pace.0 / dt) as usize).min(lags);
+    let mean_curve = |runs: &[(f64, Vec<f64>)], i: usize| {
+        runs.iter().map(|r| r.1[i]).sum::<f64>() / runs.len() as f64
+    };
+    let gap = (0..reach)
+        .map(|i| (mean_curve(&kicked, i) - mean_curve(&quiet, i)).abs())
+        .fold(0.0_f64, f64::max);
+    let ratio = decay.0 / pace.0;
+    let ratio_err = ratio * libm::hypot(decay.1 / decay.0, pace.1 / pace.0);
+    println!(
+        "D14: decay {:.4} ± {:.4}, pace {:.4} ± {:.4}: ratio {ratio:.4} ± {ratio_err:.4}; the \
+         response at the kick {:.4}; the curves' largest difference to 3 time constants \
+         {gap:.4}; {:.0} s",
+        decay.0,
+        decay.1,
+        pace.0,
+        pace.1,
+        mean_curve(&kicked, 0),
+        started.elapsed().as_secs_f64()
+    );
+    common::measured("D14.decay", decay.0, 3);
+    common::measured("D14.pace", pace.0, 3);
+    common::measured("D14.ratio_percent", 100.0 * (ratio - 1.0), 2);
+    common::measured("D14.ratio_err_percent", 100.0 * ratio_err, 1);
+    common::measured("D14.gap", gap, 1);
+    assert!((ratio - 1.0).abs() < 0.05, "D14 {ratio} ± {ratio_err}");
+}
+
+/// Y31, charge conjugation of the thermal wall (`OhmicContact::thermal`, DEC-43): D13's short
+/// strip with its floating contact, every charge reversed (carriers positive over a negative
+/// background). Each release's Boltzmann factor `exp(βq 4πσδ)` keeps its argument (q and the
+/// face's density both turn over), so the releases, the paths and the collisions are the
+/// same and every potential turned over, bit for bit, over 300 steps.
+#[test]
+#[allow(clippy::float_cmp)] // bit for bit, on purpose
+fn y31_thermal_wall_charge_conjugation() {
+    let config = Floating::strip(2.0, 0.0);
+    let conjugate = Floating {
+        conjugate: true,
+        ..config
+    };
+    let (ta, tb) = (config.tube(7), conjugate.tube(7));
+    let (mut a, mut b) = (ta.state(), tb.state());
+    for _ in 0..300 {
+        ta.step(&mut a);
+        tb.step(&mut b);
+    }
+    println!(
+        "Y31: {} carriers, {} released, {} collisions; the floating contact at {:+.6} and {:+.6}",
+        a.x.len(),
+        a.released.iter().sum::<f64>(),
+        a.collisions,
+        a.potentials[1],
+        b.potentials[1]
+    );
+    assert!(
+        a.released[1].abs() > 0.0,
+        "the floating contact gave off carriers"
+    );
+    assert_eq!(a.x, b.x);
+    assert_eq!(a.v, b.v);
+    assert_eq!(a.collisions, b.collisions);
+    assert!(
+        a.potentials
+            .iter()
+            .zip(&b.potentials)
+            // Equal as numbers: exact, and 0 against −0 for the grounded ones.
+            .all(|(p, q)| *p == -*q),
+        "{:?} {:?}",
+        a.potentials,
+        b.potentials
+    );
 }

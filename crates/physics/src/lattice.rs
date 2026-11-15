@@ -115,7 +115,7 @@ pub fn disc_integrals(center: DVec3, radius: f64, x: DVec3) -> (f64, DVec3) {
 }
 
 /// splitmix64: a well-mixed 64-bit hash.
-fn mix(mut z: u64) -> u64 {
+pub(crate) fn mix(mut z: u64) -> u64 {
     z = z.wrapping_add(0x9e37_79b9_7f4a_7c15);
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
@@ -124,7 +124,7 @@ fn mix(mut z: u64) -> u64 {
 
 /// A uniform number in (0, 1] from a hash.
 #[allow(clippy::cast_precision_loss)]
-fn unit(h: u64) -> f64 {
+pub(crate) fn unit(h: u64) -> f64 {
     ((h >> 11) as f64 + 1.0) / (1u64 << 53) as f64
 }
 

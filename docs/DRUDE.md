@@ -273,11 +273,12 @@ design runs, repeated today across `tube-scan`, `check`, `window` and captures.
 
 ### Phase 1: levels with the engine as it is (about 10 levels, a week of sessions)
 
-*Status (2026-10-26):* done: Gate (121), Inverter (122), Amplifier (123); Wheatstone bridge
-(116: a half bridge, two strips and two resistors, DEC-6); Ringing tank (124, the "RLC with
-a strip"), Field-tuned damping (125), Lock-in Hall (126). Deferred: Flip-flop (DEC-4). Left:
-Relaxation; Resistive anode (prototyped, DEC-11: the steering too weak so far) and
-Calibrated field. The design decisions: docs/DECISIONS.md.
+*Status (2026-10-26; unchanged 2026-11-14, the levels' numbers dropped: they have moved
+twice since):* done: Gate, Inverter, Amplifier; Wheatstone bridge (a half bridge, two strips
+and two resistors, DEC-6); Ringing tank (the "RLC with a strip"), Field-tuned damping,
+Lock-in Hall. Deferred: Flip-flop (DEC-4). Left: Relaxation; Resistive anode (prototyped,
+DEC-11: the steering too weak so far) and Calibrated field. The design decisions:
+docs/DECISIONS.md.
 
 1. *Transistors, introduction:* **Gate.** One strip, a drain supply, a gate slider from
    accumulation (more carriers, more current) to pinch-off. Scales: the gate's potential
@@ -319,6 +320,12 @@ Calibrated field. The design decisions: docs/DECISIONS.md.
 
 ### Phase 2: small extensions (about three weeks)
 
+*Status (2026-11-14; the details under Progress and in docs/HANDOFF.md):* item 2's slider
+done (DEC-30), its levels not built (Carriers' inertia waits on the AC mobility's phase).
+Item 3 done (DEC-28, DEC-40) with the Corbino disc; the Generator not designed. Item 1 in
+progress: its measures (DEC-42) and the thermal-wall contacts it needs (DEC-43, 2026-11-15)
+in, tested (D13, D14); the level not designed. Items 4 and 5 not started.
+
 1. **Thermal noise's size and pace** (the owner, 2026-11-05, in place of an RMS goal; two
    measures, about as large as the RMS one, the cost confirmed at design). *Heat and
    noise:* **Thermal noise**, a floating contact fed through a strip, two goals: how far its
@@ -336,7 +343,12 @@ Calibrated field. The design decisions: docs/DECISIONS.md.
      plate beside it, the gap the control. And `RC` short enough for the preview (≤ 30 s)
      to hold many `RC` (the correlation time's error is about `√(2RC/T)`).
    - Tests: equipartition, `⟨Q²⟩/2C = kT/2` on a floating contact with D7's kT; the
-     correlation time against the relaxation of a charge put on the contact.
+     correlation time against the relaxation of a charge put on the contact. *Done
+     2026-11-15 (D13, D14), after the first measurement found D7's refill contacts out of
+     equilibrium with a floating electrode (its noise 18–43 % above `kT/C`, depending on the
+     feeding strip: the size would depend on R): the level's metals take thermal-wall
+     contacts (`thermal_contacts`, DEC-43; PHYSICS.md §2.11, Thermal noise), at the price of
+     Sharvin's contact resistance, part of the R that sets the pace.*
    - The display: the contact's potential traced with axes, its spread and its pace
      marked. The hover text says the trace is about `√N` noisier than a real metal's, `N`
      electrons to a macroparticle.
@@ -370,6 +382,11 @@ Calibrated field. The design decisions: docs/DECISIONS.md.
    with temperature).
 
 ### Phase 3: new stages (about two to three months)
+
+*Status (2026-11-14):* item 1's engine and validation are in (docs/DARWIN.md §5, DEC-13;
+PHYSICS.md §2.12) with one level, Self-inductance (DEC-32). The Transformer is an interlude,
+not a level (SPEC.md §14; docs/HANDOFF.md); Skin effect, Shielding and Induction heating are
+not designed. Items 2–4 not started.
 
 1. **The carriers' own magnetic field** (the Darwin limit in the z-invariant world, a
    finite c; about two weeks). The field along z from the current in the plane (the

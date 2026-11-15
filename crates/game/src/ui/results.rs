@@ -161,9 +161,15 @@ pub(super) fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Lev
                 "oscillation phase (degrees) at ω = {} relative to the drive",
                 fmt_num(g.omega)
             ),
+            level::tube::Measure::SpreadRatio => "noise's spread (standard deviation)".to_string(),
+            level::tube::Measure::Decay => "decay time (from its peak to 1/e of it)".to_string(),
         };
         let against = g.reference.map_or(String::new(), |r| {
-            format!(" against {}", level.electrode_ref(r))
+            if g.measure == level::tube::Measure::SpreadRatio {
+                format!(" over {}'s", level.electrode_ref(r))
+            } else {
+                format!(" against {}", level.electrode_ref(r))
+            }
         });
         ui.label(format!(
             "Goal: the {what} of {}{against} between {} and {}, over t = {} to {}",
@@ -178,6 +184,21 @@ pub(super) fn tube_result(ui: &mut egui::Ui, game: &mut Game, level: &level::Lev
                 Some(p) => format!("Preview: {}", fmt_num(p)),
                 None => "Preview: computing…".into(),
             });
+            if let Some(pace) = v.run.noise_pace.get(k).copied().flatten() {
+                explain(
+                    ui,
+                    &format!("Its noise's pace: {} (correlation time)", fmt_num(pace)),
+                    "How long the contact's wandering takes to forget itself: the lag at which \
+                     its potential's correlation with its own past falls to 1/e. The thermal \
+                     motion that makes the noise is the friction that makes a kick relax \
+                     (fluctuation–dissipation), so in equilibrium (a metal with thermal \
+                     contacts) the wandering keeps the pace of a kicked contact's decay, about \
+                     the feeding resistance times the capacitance (RC). Its size alone, \
+                     √(kT/C), does not depend on the resistance. Measured over this goal's \
+                     window from the preview's steps: uncertain by about √(2 pace/window) of \
+                     itself, a few per cent only over hundreds of paces.",
+                );
+            }
         }
         match verdict.and_then(|v| v.potential.get(k).copied()) {
             Some(c) => {

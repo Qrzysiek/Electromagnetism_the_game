@@ -401,11 +401,12 @@ fn tube_scan_line(
             })
             .collect();
         format!(
-            "{} lost {:.4} goals {:?} potential {:?} arrivals {:?} fates {} in flight {} weights {:?} heat {:?}",
+            "{} lost {:.4} goals {:?} potential {:?} pace {:?} arrivals {:?} fates {} in flight {} weights {:?} heat {:?}",
             currents.join(" "),
             (sim.lost() - lost0) / dt,
             sim.currents(),
             sim.results().potential,
+            sim.noise_pace(),
             sim.arrivals(),
             fates.join("; "),
             sim.in_flight(),

@@ -427,6 +427,14 @@ impl Level {
                     k + 1
                 ));
             }
+            // Either spread alone depends on the macroparticles' weight (DEC-42).
+            if g.measure == Measure::SpreadRatio && g.reference.is_none() {
+                out.push(format!(
+                    "Tube: potential goal {} measures a spread ratio: it needs a reference \
+                     electrode (the spread it is compared with).",
+                    k + 1
+                ));
+            }
         }
         for (k, g) in spec.heat_goals.iter().enumerate() {
             if !(g.metal < spec.metals.len() && g.min < g.max && 0.0 <= g.start && g.start < g.end)

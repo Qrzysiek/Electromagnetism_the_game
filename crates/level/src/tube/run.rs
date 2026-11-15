@@ -95,6 +95,12 @@ impl TubeRun {
         for (a, c) in self.potential.iter_mut().zip(chunk.potential) {
             *a = a.or(c);
         }
+        if self.noise_pace.len() < chunk.noise_pace.len() {
+            self.noise_pace.resize(chunk.noise_pace.len(), None);
+        }
+        for (a, c) in self.noise_pace.iter_mut().zip(chunk.noise_pace) {
+            *a = a.or(c);
+        }
         if self.heat.len() < chunk.heat.len() {
             self.heat.resize(chunk.heat.len(), None);
         }

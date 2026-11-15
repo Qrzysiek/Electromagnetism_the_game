@@ -1,4 +1,4 @@
-use super::sim::fourier_at;
+use super::sim::{correlation_time, decay_time, fourier_at, spread_ratio};
 use super::*;
 
 /// The picture between two frames: a particle in both moves linearly, one absorbed
@@ -195,6 +195,98 @@ fn amplitude_and_phase() {
         ..goal
     };
     assert!((mean.compared(-170.0) + 170.0).abs() < 1e-12);
+}
+
+/// The noise measures (DEC-42). A kick's decay: an exponential of time constant 3 from its
+/// peak (a rise before it, a negative one, an undershoot after it) gives 3 to the linear
+/// interpolation's error (`dt²/8τ` of a step's span, ~1e-6); one that never falls to 1/e
+/// gives the time from its peak to the window's end. A spread ratio: two signals one an
+/// offset multiple of the other give the multiple to rounding.
+#[test]
+fn decay_and_spread_measures() {
+    let kicked = |sign: f64| -> Vec<(f64, f64)> {
+        (0..2000)
+            .map(|k| {
+                let t = f64::from(k) * 0.01;
+                let v = if t < 1.0 {
+                    28.0 * t
+                } else {
+                    30.0 * libm::exp(-(t - 1.0) / 3.0) - 2.0 * libm::exp(-(t - 1.0) / 0.5)
+                        + 2.0 * (1.0 - libm::exp(-(t - 1.0) / 0.5)) * libm::exp(-(t - 1.0) / 30.0)
+                };
+                (t, sign * v)
+            })
+            .collect()
+    };
+    // The exact crossing of 30 e^(-s/3) - 2 e^(-2s) + 2 (1 - e^(-2s)) e^(-s/30) = 28/e
+    // (Newton's method on the closed form).
+    let f = |s: f64| {
+        30.0 * libm::exp(-s / 3.0) - 2.0 * libm::exp(-2.0 * s)
+            + 2.0 * (1.0 - libm::exp(-2.0 * s)) * libm::exp(-s / 30.0)
+            - 28.0 / std::f64::consts::E
+    };
+    let mut s = 3.0;
+    for _ in 0..50 {
+        s -= f(s) / ((f(s + 1e-7) - f(s - 1e-7)) / 2e-7);
+    }
+    for sign in [1.0, -1.0] {
+        let d = decay_time(&kicked(sign));
+        assert!((d - s).abs() < 1e-4, "decay {d} against {s} (sign {sign})");
+    }
+    let slow: Vec<(f64, f64)> = (0..100)
+        .map(|k| (f64::from(k), 10.0 - 0.01 * f64::from(k)))
+        .collect();
+    assert!((decay_time(&slow) - 99.0).abs() < 1e-12);
+    assert!(decay_time(&[]).abs() < 1e-12 && decay_time(&[(1.0, 0.0), (2.0, 0.0)]).abs() < 1e-12);
+    let pairs: Vec<(f64, f64)> = (0..5000)
+        .map(|k| {
+            let b = libm::sin(0.37 * f64::from(k)) + 0.3 * libm::cos(1.1 * f64::from(k)) - 2.0;
+            (-2.5 * b + 11.0, b)
+        })
+        .collect();
+    assert!(
+        (spread_ratio(&pairs) - 2.5).abs() < 1e-12,
+        "{}",
+        spread_ratio(&pairs)
+    );
+    assert!(spread_ratio(&[(1.0, 4.0), (3.0, 4.0)]).abs() < 1e-12);
+}
+
+/// A noise's correlation time (`correlation_time`, DEC-42): an AR(1) sequence, `x_(k+1) =
+/// φ x_k + √(1 − φ²) ξ_k` with `φ = e^(−1/20)` (the discrete Ornstein–Uhlenbeck process: its
+/// autocorrelation exactly `φ^k`), gives 20 steps, 0.5 at a step of 0.025. Over 400 000 steps
+/// (20 000 correlation times) the estimate scatters by about `√(2τ/T)` = 1 %: within 5 %. A
+/// constant has none.
+#[test]
+fn correlation_time_of_an_ar1_noise() {
+    // splitmix64 and Box–Muller: a deterministic normal sequence.
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut uniform = move || {
+        state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^= z >> 31;
+        #[allow(clippy::cast_precision_loss)]
+        let u = ((z >> 11) as f64 + 0.5) / (1_u64 << 53) as f64;
+        u
+    };
+    let phi = libm::exp(-1.0 / 20.0);
+    let mut x = 0.0;
+    let xs: Vec<f64> = (0..400_000)
+        .map(|_| {
+            let normal = libm::sqrt(-2.0 * libm::log(uniform()))
+                * libm::cos(2.0 * std::f64::consts::PI * uniform());
+            x = phi * x + libm::sqrt(1.0 - phi * phi) * normal;
+            x
+        })
+        .collect();
+    let tau = correlation_time(&xs, 0.025).expect("a correlation time");
+    assert!(
+        (tau / 0.5 - 1.0).abs() < 0.05,
+        "correlation time {tau} against 0.5"
+    );
+    assert!(correlation_time(&[2.0; 100], 0.1).is_none());
 }
 
 /// The self-field's grid (`self_field_grid`): it covers the board and `SELF_FIELD_MARGIN` round

@@ -284,6 +284,33 @@ def make_tube_metal(lv, pl, p, o, w):
                               "core_radius": 0.005, "carriers_per_area": 20.0, "seed": 1}]}
 
 
+def make_tube_noise(lv, pl, p, o, w):
+    """A thermal-noise tube level (DRUDE.md Phase 2 item 1; DEC-42, DEC-43): the metal of
+    `make_tube_metal` with thermal-wall contacts, its right contact floating (a circuit node
+    of capacitance 1) and a third contact along its top floating too (0.5), the reference of
+    a spread-ratio goal, with a decay goal on the right contact, so that the other element
+    lands beside, on or inside it."""
+    make_tube_metal(lv, pl, p, o, w)
+    t = lv["tube"]
+    k = t["cathode"]
+    lv["electrodes"].append(electrode((p[0] - 4, p[1] + 3), length=2.0, thickness=2.0,
+                                      angle_deg=0.0))
+    metal = t["metals"][0]
+    metal["thermal_contacts"] = True
+    metal["contacts"].append(k + 2)
+    t["circuits"] = [
+        {"electrode": k + 1, "source": {"kind": "dc", "value": 0.0}, "capacitance": 1.0},
+        {"electrode": k + 2, "source": {"kind": "dc", "value": 0.0}, "capacitance": 0.5},
+    ]
+    t["goals"] = []
+    t["potential_goals"] = [
+        {"electrode": k + 1, "reference": k + 2, "measure": "spread_ratio", "min": 0.0,
+         "max": 10.0, "start": 1.0, "end": 4.0},
+        {"electrode": k + 1, "measure": "decay", "min": 0.0, "max": 10.0, "start": 1.0,
+         "end": 4.0},
+    ]
+
+
 def make_tube_ring(lv, pl, p, o, w):
     """A tube level with a ring (PHYSICS.md 2.11, the Drude metal's rings: `hole`): an
     isolated 6 x 6 conductor about p with a 2 x 2 hole (walls 2) in the solenoid's swinging
@@ -431,6 +458,7 @@ ELEMENTS = {
     "tube_tank": make_tube_tank,
     "tube_coax": make_tube_coax,
     "tube_metal": make_tube_metal,
+    "tube_noise": make_tube_noise,
     "tube_ring": make_tube_ring,
     "tube_corbino": make_tube_corbino,
     "player_charge": player(lambda p, o, w: {"node": node(p), "kind": "charge", "value": -1.0}),

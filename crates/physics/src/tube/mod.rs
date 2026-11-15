@@ -142,10 +142,19 @@ pub struct Emitter {
 /// carriers in front of an injecting contact: a layer with its own voltage; carriers
 /// placed in the layer with a Maxwellian's velocities (kT each, where those reaching the
 /// face bring 1.5 kT) made every contact a heat sink (PHYSICS.md §2.11).
+///
+/// That refill is no reservoir in equilibrium: a floating contact fed through a metal
+/// fluctuates 18–43 % above `kT/C` (PHYSICS.md §2.11, *Thermal noise*). With `thermal` the
+/// contact is a thermal wall instead (`Tube::emit_thermal`, DEC-43): no layer, the flux a
+/// half-space at `density` carries out through its face given off at random times, each
+/// release weighted by the Boltzmann factor of its potential step, so that it is in
+/// equilibrium with its electrode (test D13), at the price of Sharvin's contact resistance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OhmicContact {
     pub density: f64,
     pub depth: f64,
+    /// A thermal wall's random numbers' seed (`emit_thermal`). None: the layer's refill.
+    pub thermal: Option<u64>,
 }
 
 /// A projectile: one line charge (not a macroparticle) launched at a time, with its own

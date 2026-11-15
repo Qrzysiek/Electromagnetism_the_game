@@ -160,6 +160,7 @@ impl Level {
                 ohmic: Some(physics::tube::OhmicContact {
                     density: m.density,
                     depth: self.contact_depth(m),
+                    thermal: m.thermal_contacts.then_some(m.seed),
                 }),
             })
         };
@@ -420,6 +421,7 @@ impl Level {
             currents: vec![None; n_currents],
             windows: vec![(0.0, 0.0, f64::INFINITY, f64::NEG_INFINITY); n_goals],
             series: vec![Vec::new(); n_goals],
+            spread: vec![Vec::new(); n_goals],
             potential: vec![None; n_goals],
             heat_start: vec![None; n_heat],
             heat: vec![None; n_heat],

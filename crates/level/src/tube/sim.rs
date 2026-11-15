@@ -53,6 +53,87 @@ pub(super) fn fourier_at(samples: &[(f64, f64)], omega: f64) -> (f64, f64) {
     (libm::sqrt(c * c + d * d), libm::atan2(c, d).to_degrees())
 }
 
+/// `Measure::SpreadRatio`: the standard deviation of the pairs' first values about their
+/// mean over their second values' (0 where the second do not vary).
+#[allow(clippy::cast_precision_loss)]
+pub(super) fn spread_ratio(pairs: &[(f64, f64)]) -> f64 {
+    if pairs.len() < 2 {
+        return 0.0;
+    }
+    let n = pairs.len() as f64;
+    let (sa, sb) = pairs
+        .iter()
+        .fold((0.0, 0.0), |(a, b), p| (a + p.0, b + p.1));
+    let (ma, mb) = (sa / n, sb / n);
+    let (va, vb) = pairs.iter().fold((0.0, 0.0), |(a, b), p| {
+        (a + (p.0 - ma) * (p.0 - ma), b + (p.1 - mb) * (p.1 - mb))
+    });
+    if vb == 0.0 {
+        return 0.0;
+    }
+    libm::sqrt(va / vb)
+}
+
+/// `Measure::Decay`: the time from the samples' largest `|v|` (the first, if several) until
+/// `|v|` first falls to 1/e of it, linearly interpolated between samples; from the peak to
+/// the last sample if it never does, 0 if every sample is 0.
+pub(super) fn decay_time(samples: &[(f64, f64)]) -> f64 {
+    let mut p = 0;
+    for (i, s) in samples.iter().enumerate() {
+        if s.1.abs() > samples[p].1.abs() {
+            p = i;
+        }
+    }
+    let Some(&(t_peak, v_peak)) = samples.get(p) else {
+        return 0.0;
+    };
+    if v_peak == 0.0 {
+        return 0.0;
+    }
+    let level = v_peak.abs() / std::f64::consts::E;
+    for w in samples[p..].windows(2) {
+        let (a, b) = (w[0].1.abs(), w[1].1.abs());
+        if b <= level {
+            // `a` is above the level (the peak, or a sample the loop passed).
+            return w[0].0 + (a - level) / (a - b) * (w[1].0 - w[0].0) - t_peak;
+        }
+    }
+    samples.last().map_or(0.0, |s| s.0) - t_peak
+}
+
+/// The correlation time of `xs`, samples `dt` apart: the lag at which their autocorrelation
+/// about their mean first falls below 1/e, linearly interpolated between lags (an
+/// exponential's time constant). None if it does not within a quarter of the samples.
+#[allow(clippy::cast_precision_loss)]
+pub(super) fn correlation_time(xs: &[f64], dt: f64) -> Option<f64> {
+    let n = xs.len();
+    if n < 8 {
+        return None;
+    }
+    let mean = xs.iter().sum::<f64>() / n as f64;
+    let d: Vec<f64> = xs.iter().map(|x| x - mean).collect();
+    let c0 = d.iter().map(|x| x * x).sum::<f64>() / n as f64;
+    if c0 == 0.0 {
+        return None;
+    }
+    let level = 1.0 / std::f64::consts::E;
+    let mut previous = 1.0;
+    for k in 1..n / 4 {
+        let c = d[..n - k]
+            .iter()
+            .zip(&d[k..])
+            .map(|(a, b)| a * b)
+            .sum::<f64>()
+            / (n - k) as f64;
+        let rho = c / c0;
+        if rho < level {
+            return Some(((k - 1) as f64 + (previous - level) / (previous - rho)) * dt);
+        }
+        previous = rho;
+    }
+    None
+}
+
 /// Distance from `x` to the box `(lo, hi)` (0 inside).
 pub(super) fn box_distance(x: DVec3, (lo, hi): (DVec3, DVec3)) -> f64 {
     let dx = (lo.x - x.x).max(x.x - hi.x).max(0.0);
@@ -323,6 +404,9 @@ impl TubeSim {
             if self.pending.potential.len() < self.potential.len() {
                 self.pending.potential.resize(self.potential.len(), None);
             }
+            if self.pending.noise_pace.len() < self.potential.len() {
+                self.pending.noise_pace.resize(self.potential.len(), None);
+            }
             for (k, g) in self.spec.potential_goals.iter().enumerate() {
                 if s.t < g.start - 0.5 * self.tube.dt || self.potential[k].is_some() {
                     continue;
@@ -333,8 +417,15 @@ impl TubeSim {
                 w.1 += 1.0;
                 w.2 = w.2.min(v);
                 w.3 = w.3.max(v);
-                if matches!(g.measure, Measure::Amplitude | Measure::Phase) {
+                if matches!(
+                    g.measure,
+                    Measure::Amplitude | Measure::Phase | Measure::Decay
+                ) {
                     self.series[k].push((s.t, v));
+                }
+                if g.measure == Measure::SpreadRatio {
+                    let r = g.reference.map_or(0.0, |r| s.potentials[r]);
+                    self.spread[k].push((s.potentials[g.electrode], r));
                 }
                 if s.t >= g.end - 0.5 * self.tube.dt {
                     let m = match g.measure {
@@ -342,7 +433,12 @@ impl TubeSim {
                         Measure::Swing => 0.5 * (w.3 - w.2),
                         Measure::Amplitude => fourier_at(&self.series[k], g.omega).0,
                         Measure::Phase => fourier_at(&self.series[k], g.omega).1,
+                        Measure::SpreadRatio => spread_ratio(&self.spread[k]),
+                        Measure::Decay => decay_time(&self.series[k]),
                     };
+                    if g.measure == Measure::SpreadRatio {
+                        self.pending.noise_pace[k] = self.pace_of(k);
+                    }
                     self.potential[k] = Some(m);
                     self.pending.potential[k] = Some(m);
                 }
@@ -422,6 +518,27 @@ impl TubeSim {
 
 impl TubeSim {
     /// The run's results so far.
+    /// Each potential goal's noise pace (`TubeRun::noise_pace`), once past its window.
+    pub fn noise_pace(&self) -> Vec<Option<f64>> {
+        (0..self.spec.potential_goals.len())
+            .map(|k| {
+                if self.spec.potential_goals[k].measure == Measure::SpreadRatio
+                    && self.potential[k].is_some()
+                {
+                    self.pace_of(k)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Spread goal `k`'s electrode's noise's correlation time over its window so far.
+    fn pace_of(&self, k: usize) -> Option<f64> {
+        let own: Vec<f64> = self.spread[k].iter().map(|p| p.0).collect();
+        correlation_time(&own, self.tube.dt)
+    }
+
     pub fn results(&self) -> TubeResults {
         TubeResults {
             currents: self.currents.clone(),

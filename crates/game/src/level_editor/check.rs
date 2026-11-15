@@ -183,6 +183,8 @@ pub fn check_editable(level: &Level) -> Result<(), String> {
                     core_radius,
                     carriers_per_area,
                     seed: _,
+                    // A checkbox: either value is editable.
+                    thermal_contacts: _,
                     // Free text.
                     label: _,
                 } = m;

@@ -1,0 +1,87 @@
+diff --git a/crates/physics/src/tube/emission.rs b/crates/physics/src/tube/emission.rs
+index 0621fe3..3da473e 100644
+--- a/crates/physics/src/tube/emission.rs
++++ b/crates/physics/src/tube/emission.rs
+@@ -154,6 +154,82 @@ impl Tube {
+     ) {
+         let sign = em.charge_per_mass.signum();
+         let tag = u32::try_from(i).unwrap_or(u32::MAX);
++        // SCRATCH (not to commit): a negative depth makes the contact a thermal reservoir,
++        // the half-Maxwellian flux of `density` from every coated face, whatever it holds.
++        if ohmic.depth < 0.0 {
++            for (k, &j) in segs.iter().enumerate() {
++                let (a, b) = self.electrodes.segments[j];
++                let len = (b - a).length();
++                let t = (b - a) / len;
++                let out = self.outward(em.electrode, a, b, (a + b) * 0.5);
++                if em.emit_toward.is_some_and(|d| out.dot(d) < 0.5) {
++                    continue;
++                }
++                let mut mean = ohmic.density * len * self.dt * em.thermal_speed
++                    / libm::sqrt(2.0 * std::f64::consts::PI)
++                    / em.weight;
++                // Depth −3: Poisson with the release's Boltzmann factor, exp(−βq(φ(x) − V)).
++                if ohmic.depth < -2.5 {
++                    let x = (a + b) * 0.5 + out * (EMISSION_OFFSET * len);
++                    // Depth −4: the step to first order, the face's field over δ.
++                    let step = if ohmic.depth < -3.5 {
++                        -4.0 * std::f64::consts::PI * sigma[j] * EMISSION_OFFSET * len
++                    } else {
++                        self.potential(s, sigma, x, None) - s.potentials[em.electrode]
++                    };
++                    let beta_q = sign * em.charge_per_mass.abs()
++                        / (em.thermal_speed * em.thermal_speed);
++                    mean *= libm::exp(-beta_q * step);
++                }
++                // A Poisson number of carriers (depth −1) or a regular train (−2).
++                let count = if ohmic.depth > -1.5 || ohmic.depth < -2.5 {
++                    let mut z = (s.t.to_bits() ^ (j as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15))
++                        .wrapping_add(0x632b_e59b_d9b4_e019 * (i as u64 + 1))
++                        ^ ((s.x.len() as u64) << 40)
++                        ^ (s.x.first().map_or(0, |x| x.x.to_bits()) >> 3);
++                    let mut uniform = move || {
++                        z = z.wrapping_add(0x9e37_79b9_7f4a_7c15);
++                        let mut y = z;
++                        y = (y ^ (y >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
++                        y = (y ^ (y >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
++                        y ^= y >> 31;
++                        #[allow(clippy::cast_precision_loss)]
++                        let u = ((y >> 11) as f64 + 0.5) / (1_u64 << 53) as f64;
++                        u
++                    };
++                    let (mut n, mut p, limit) = (0_u32, uniform(), libm::exp(-mean));
++                    while p > limit {
++                        n += 1;
++                        p *= uniform();
++                    }
++                    n
++                } else {
++                    s.pending[i][k] += mean * em.weight;
++                    let mut n = 0;
++                    while s.pending[i][k] >= em.weight {
++                        s.pending[i][k] -= em.weight;
++                        n += 1;
++                    }
++                    n
++                };
++                for _ in 0..count {
++                    s.emitted += 1;
++                    #[allow(clippy::cast_precision_loss)]
++                    let f = (s.emitted as f64 * 0.618_033_988_749_894_9).fract();
++                    let v = crate::lattice::flux_velocity(out, em.thermal_speed, s.emitted);
++                    let face = a + t * (len * f);
++                    let x = face + out * (EMISSION_OFFSET * len);
++                    if let Some(m) = self.metal_of(x) {
++                        self.lattices[m].book_flux(&mut s.cells[m].flux, face, x, sign * em.weight);
++                    }
++                    self.add(s, x, v, sign * em.weight, em.charge_per_mass, tag);
++                    emitted[em.electrode] += sign * em.weight;
++                    s.released[i] += sign * em.weight;
++                }
++            }
++            let _ = sigma;
++            return;
++        }
+         // The other ohmic contacts' layers (each emitting segment's: its start, direction,
+         // outward normal, length and depth), to share where they overlap this one's.
+         let others = self.ohmic_layers(i);

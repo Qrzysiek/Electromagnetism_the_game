@@ -1,16 +1,143 @@
-# Handoff (2026-11-02): where the work stands and what comes next
+# Handoff (2026-11-14): where the work stands and what comes next
 
 Read this instead of the previous sessions' transcripts. Project rules: `CLAUDE.md`; the
 self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/DRUDE.md`
-"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-28 to DEC-35 the latest).
+"Implementation plan"; decisions: `docs/DECISIONS.md` (DEC-43 the latest).
+
+Levels are named here, not numbered: the numbers move when a level is added (the Corbino
+disc moved every later level up by one: Self-inductance from 125 to 126). The task numbers
+quoted (#34, #61) are a past session's list, kept as labels only.
+
+## Next
+
+Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order:
+
+1. **The thermal-noise level's measures are written and not committed** (DRUDE.md Phase 2
+   item 1). The worktree has held them since 2026-11-05, in nine files under `crates/`:
+   `Measure::SpreadRatio` (a contact's noise's spread over a reference contact's),
+   `Measure::Decay` (a kicked contact's time to 1/e), `TubeRun::noise_pace` (the noise's
+   correlation time, shown beside the goal), the setup issue for a spread without a
+   reference, the editor's two controls, the panel's text, `tube-scan`'s `pace`. Their unit
+   tests pass (`decay_and_spread_measures`, `correlation_time_of_an_ar1_noise`; run
+   2026-11-14).
+   - Owed before a commit (CLAUDE.md): DEC-42 in `docs/DECISIONS.md` (the code cites it);
+     PHYSICS.md (the measures, the tests' results); the plan's physics tests (equipartition
+     on a floating contact against D7's kT; the correlation time against a kicked contact's
+     relaxation); `scripts/pairs.py`; the pre-commit checks and the affected heavy tests.
+   - The prototypes: `prototypes/noise/` (`proto2.py`: two strips grounded at one end, a
+     floating contact on each, a kicker over the player's; `fold.py` and `acf.py`: a
+     trace's decay, spread and pace; `runs.out`: each run's `tube-scan` result line). The
+     traces themselves stayed in the worktree's scratch, which `cleanup.py run` prunes from
+     2026-11-19; they are reproducible from the scripts.
+   - Read from `runs.out`, not rerun: the last run with both goals (`n2`) gave a spread
+     ratio of 0.622 in the preview and 0.580 at the verification's resolution, a decay of
+     6.15 and 6.16, a pace of 8.99 and 9.03. The ratio holds between the resolutions to
+     7 %. The pace is 1.46 times the decay, where the level's idea is that they are one
+     time (fluctuation–dissipation); the pace's own error over that window is about
+     `√(2τ/T)` ≈ 20 %, so it is not settled either way: settle it before the level's text
+     says so. The last runs kicked the contact with a square wave (`sq1`, `sq2`).
+   - Still to measure, as the plan asks: the capacitances' range, and how many `RC` the
+     30 s preview holds.
+   - **Found 2026-11-15, before writing the equipartition test: the model's floating contacts
+     are not in equilibrium** (`prototypes/noise/EQUIPARTITION.md`, its table and runs). On
+     a strip fed by D7's contacts, `⟨V²⟩ C_node/kT` (exact in the model: 1) is 1.18 ± 0.03
+     at length 4 and 1.43 ± 0.03 at length 2, the same at half the step, four times the
+     macroparticles and a lumped capacitance five times the contact's: resolution-free, and
+     the size depends on the feeding resistance, against the level's idea. The same
+     contacts pass Nyquist between fixed potentials on the short strip (1.01 ± 0.05). Two
+     thermal-reservoir contacts tried (a scratch patch, reverted) move it either way (a
+     regular train 0.78–0.92, Poisson 1.15–1.21) and neither gives 1.
+     **The cause, found the same day (the owner: research it first):** two departures from
+     detailed balance. The contacts give carriers off δ (half a segment, about a Debye
+     length) out from the face but take them in at the face, so a contact's electrochemical
+     potential follows its face's field (the excess falls linearly with δ); and the refill
+     clamp is no detailed-balance reservoir (~15 % at small δ). **A fix, measured:** Poisson
+     emission of the half-space's thermal flux, each release weighted by the Boltzmann factor
+     of its potential step, to first order `exp(βq 4πσδ)` from the segment's surface density
+     (no cost): 0.987 ± 0.018 and 0.990 ± 0.021 at lengths 2 and 4, Nyquist 1.06 ± 0.06.
+     Its price: Sharvin's contact resistance (`kT/(q j₀ w)`, ~15 % on a Hall-probe strip),
+     which the clamp was designed to avoid. **The owner (2026-11-15): a contact kind for the
+     noise level.** Done: `MetalSpec::thermal_contacts` (`OhmicContact::thermal`,
+     `Tube::emit_thermal`, an editor checkbox; DEC-43), every other level bit for bit;
+     tests D13 (equipartition, two lengths and a lumped capacitance), D14 (a kick's decay
+     against the noise's pace), Y31 (charge conjugation, bit for bit), D10 (c) (the energy
+     account); PHYSICS.md §2.11 *Thermal noise*; DEC-42 written for the measures; `pairs.py`
+     `tube_noise`. **Next for the level:** rerun the prototype (`proto2.py`) with
+     `thermal_contacts` on both strips (the contacts' resistance now in its R), then measure
+     the capacitances' range and how many `RC` the 30 s preview holds, as the plan asks;
+     the level's design, reality entry, scales and document follow. A grand-canonical layer
+     (equilibrium without the contact resistance) stays untried: the way to bring every
+     contact into equilibrium, should the owner want it.
+2. **Glass screen's document is blocked on a disagreement with the game**
+   (`docs/levels/glass_screen/NOTES.md`, since 2026-10-16): its independent flight, converged
+   in its panels, leaves the board where the game's reference arrives on the detector. The
+   note lists what the calculation leaves out (the ion's own image). Either the document's
+   calculation or the engine's dielectric boxes (PHYSICS.md §2.7) is off on a shipped level,
+   and nothing else tracks it. Find which; if neither yields, `docs/OPEN_PROBLEMS.md`.
+3. **The two open numerical questions that block levels** (*State* and *The Transformer*
+   below): the AC mobility's phase through a level (Carriers' inertia and every phase goal
+   at ωτ ≈ 1 wait on it), and the dense coupled rings' dynamics (V-D10: an accurate
+   Transformer in Self-inductance's metal waits on it).
+4. **Levels the engine can build as it is.** With the frequency slider (DRUDE.md Phase 2
+   item 2): Tuned tank, Plasma resonance. With the rings (item 3): the Generator, to check
+   first against the cut-ring finding below (at the levels' frequencies the slit's own
+   capacitance may carry the current past a load across it; not measured). Phase 1's
+   remainder: Relaxation, Calibrated field, Resistive anode (DEC-11, in design: the steering
+   too weak so far).
+   Two arcs have no master level yet (docs/CURRICULUM.md): the transistors (Flip-flop
+   deferred, DEC-4) and AC and induction (Crystal radio, after Phase 2 items 2 and 4).
+5. **Phase 2's two extensions not started**, neither waiting on the above: a uniform AC
+   field (item 4: Polarization, Faraday cage, Receiving antenna) and temperatures (item 5,
+   opening with Hot carriers).
+6. **Level documents:** 25 of the 128 levels have one, all among the first 26; no tube,
+   metal or AC level does (`eddy2d.py` would be Self-inductance's `calc.py`).
+   `scripts/level_docs.py` needs `py -3.14` here: the documents' `calc.py` import numpy and
+   mpmath, which this machine's `python` (3.15) lacks, and under it `status` shows 14
+   documents failing on the import alone. Under 3.14 all 25 pass their checks (2026-11-14;
+   a full `status` runs every `calc.py`, some ten minutes).
+7. **Later stages, as planned:** interludes (SPEC.md §14; the Transformer is the first
+   candidate and waits on their format), optics (SPEC.md §8; what is in place and missing:
+   below), DRUDE.md Phase 3 items 2–4.
+
+Housekeeping, none urgent:
+
+- The main checkout has two untracked files: a session's transcript at its root
+  (`2026-09-29-…-in-electromagnetism_the_game.txt`, 6 MB) and `docs/CODE_TOUR.md` (a reading
+  guide of 2026-10-09, before the tubes and the metals; no tracked file cites it): to commit,
+  ignore or delete.
+- Left from October: the branch `level-docs/glass-screen-draft` (item 2's draft) and a stash
+  on `level-docs/metal-15-26`.
+- The side panel overflows by ~2 px on the metal levels (the capture's "panel overflow:
+  content 325.2 wider than 323.0", on main's build too; CLAUDE.md, *egui*).
+- SPEC.md §10's stages do not mention the tube world (the tubes, the metals, the
+  transistors, the self-field): its status lines stop at 2026-10-07.
+
+## Waiting on the owner
+
+- Amplifier's preview, 33 s for a 30 s rule (10 % over): whether the allowance for a much
+  better level applies (docs/LEVELS.md, *Timing audit*).
+- Three solving intervals under the 5 % rule (docs/LEVELS.md, *Showcase review*, with each
+  one's options): Klystron (2.0 % and 1.5 %) and Magnetron (3.3 % and 2.5 %), resonances
+  narrow by their physics; Long and thin's junction (1.6 %).
+- Self-inductance's metal is about 20 times denser than the other levels' (density 41
+  against 2; 30 times in its first design), where ten times was accepted (2026-11-02).
+- The interludes' format (SPEC.md §14, *Open*).
+- Whether electrodes may touch when both are grounded (it would close the Corbino disc's
+  outer contact).
+- DRUDE.md's list *For the owner, when each step starts*: which of its questions are still
+  open now that the arcs and the self-field exist (the gate's settling, the later stages'
+  order).
 
 ## State
 
-`main` = `worktree-tubes-next` (worktree `.claude/worktrees/tubes-next`).
+`main` = `worktree-tubes-next` = `a6564e1` (worktree `.claude/worktrees/tubes-next`, which
+also holds item 1's uncommitted changes).
 
-- The heavy-test verification of `4597a78` (the self-field circuits, nested metals): all 521
-  verdicts passed, golden hashes included (`scripts/refresh_coverage.py`, 02:50–07:24, 4.6 h
-  against the 11.4 h estimated; the coverage of 395 tests recorded with it).
+- Heavy tests: 529, every one recorded with its coverage at `a6564e1` (`python
+  scripts/affected.py status` on the clean main checkout, 2026-11-14: none selected). Item
+  1's changes touch the tube engine's level code and will select many.
+- Disk (`python scripts/cleanup.py`, 2026-11-14): 13 GB over the two checkouts, nothing over
+  its cap.
 - Ring-shaped metals in the level format (task #34, DEC-28): `MetalSpec::hole`, one
   rectangular hole with walls at least a cell wide; the builder (`Lattice::with_hole`,
   carriers from the net area), setup issues (the thinnest wall for the mean-free-path rule, a
@@ -23,16 +150,15 @@ self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/D
   −0.75 %; a cut ring; the quarter turn, PHYSICS.md Y29), `ring_setup_rules`,
   `ring_holes_are_editable`. Levels without a hole are bit for bit unchanged (every number
   keeps its original arithmetic; the 521 verdicts on the commit say so).
-- Not done from DRUDE.md Phase 2 item 3: contacts on a ring's inner side (an electrode in the
-  hole is refused: its lead would cross the ring; the Corbino disc needs one). In the
-  electrostatic model a lead is only drawn, so it could be allowed there with the lead drawn
-  across (refused with the self-field, as a lead from a ring is, DEC-27).
+- Contacts on a ring's inner side, DRUDE.md Phase 2 item 3's remainder (an electrode in the
+  hole was refused: its lead would cross the ring; in the electrostatic model a lead is only
+  drawn, so it is allowed there with the lead drawn across).
   **Done 2026-11-04 (the owner: "whatever makes the most sense"; DEC-40):** contacts in a
   ring's hole (a box flush with one wall, or filling the hole and emitting from every face),
   the lead drawn across the ring (refused with the self-field), ohmic layers shared where
   contacts meet at a corner; D12 (the Corbino disc against the Boltzmann equation's σ_xx,
-  four seeds) and Y30 (its mirror and quarter turn); the level **Corbino disc** (116, after
-  Magnetoresistance; levels 116–127 renumbered to 117–128, their golden keys renamed). Its
+  four seeds) and Y30 (its mirror and quarter turn); the level **Corbino disc** (after
+  Magnetoresistance; the twelve levels after it renumbered, their golden keys renamed). Its
   outer contact stops a cell short of each corner (electrodes may not touch), so its current
   falls somewhat more slowly than σ_xx (LEVELS.md; D12 is the exact test). An idea left: let
   electrodes touch when both are grounded (the infinite field between touching electrodes
@@ -43,17 +169,10 @@ self-field plan and its log: `docs/DARWIN.md` §4–5; the metals' plan: `docs/D
   own loop through its depleted layer (given off at δ, taken back at 1.5 δ). A metal with
   contacts now shows the macroscopic `J̄·Ē` (PHYSICS.md §2.11, *The contacts' layers*):
   Ohm's law +1.85 %, the Corbino disc −2.0 %, at rest 0.36 % of `I V`.
-  **Seen, not from this work:** the side panel overflows by ~2 px on the metal levels (the
-  capture's "panel overflow: content 325.2 wider than 323.0", on main's build too).
-  **Next:** Phase 2 item 1, decided by the owner 2026-11-05 in place of the RMS goal
-  (DRUDE.md): a thermal-noise level with two resolution-free goals, two floating contacts'
-  noises as a ratio and the noise's pace (its correlation time, about `RC`). First measure
-  the capacitances' range (a grounded plate beside the contact) and whether many `RC` fit the
-  preview. Phase 2 items 4 (a uniform AC field) and 5 (temperatures, now opening with hot
-  carriers) do not wait on it.
-- Coverage of the heavy tests not yet recorded since the rings: `python scripts/affected.py
-  refresh` (hours; or `scripts\refresh_coverage.cmd`) before the next engine change, else that
-  change selects all 521 again.
+- The thermal-noise level's design (Phase 2 item 1), decided by the owner 2026-11-05 in place
+  of the RMS goal (DRUDE.md): two resolution-free goals, two floating contacts' noises as a
+  ratio and the noise's pace (its correlation time, about `RC`). Where it stands: *Next*,
+  item 1.
 - README screenshots (DEC-29): `python scripts/readme_shots.py` retakes them.
 - **A supply's frequency on a slider** (DRUDE.md Phase 2 item 2, DEC-30): `limits.supply_omegas`,
   a logarithmic slider on every supply whose target a sine drives, `Element::omega`;
@@ -84,7 +203,7 @@ magnitude, and the densest carriers the self-field's step allows (`ω_p dt ≤ 0
 ρ ≲ 20) only bring R to about √(L/C). (That resonance is itself a level: a split-ring
 resonator, the metamaterials' element.)
 
-## Done: Self-inductance (level 125, DEC-32), the self-field's heat measure fixed
+## Done: Self-inductance (DEC-32), the self-field's heat measure fixed
 
 - The owner's answers (2026-11-02): find the residual's cause first; make the runs faster;
   a metal ten times denser is acceptable (the level's is 30 times: more metal-like, ω_p τ 5.5;
@@ -99,9 +218,11 @@ resonator, the metamaterials' element.)
   ring's stored energy swings by up to `√(1 + (ωL/R)²)` times the heat per period.
 - The level (redesigned 2026-11-02 for the owner's 30 s preview, DEC-32's history): a ring
   20 × 20 (walls 2), density 41, c = 27.4, dt 0.0088 (`c/ω_p` 1.21, `ω_p dt` 0.2), B₀ 0.45
-  fixed, ω on a log slider 0.05–5, heat 1000–1500 over t = 2.5–10 (to 20 since 2026-11-04) at the bend (answer ω 1.3;
-  verified 1195 ± 136, the preview 1105; ω solves on 1.15–1.55 verified, 6.5 %). Preview
-  24.4 s, verification 62 s. (The first design: density 60, c 24, the bend at 0.7, ~75 s.)
+  fixed, ω on a log slider 0.05–5, heat 1000–1500 over t = 2.5–20 at the bend (answer ω 1.3;
+  verified 1183 ± 84, the preview 1127; ω solves on 1.2–1.6 verified, 6.2 %). Preview 17 s,
+  verification 54 s (docs/LEVELS.md holds the level's numbers; to t = 10 and before the
+  solver's speedup of 2026-11-04 they were 1195 ± 136, 1.15–1.55, 24.4 s and 62 s). (The
+  first design: density 60, c 24, the bend at 0.7, ~75 s.)
   Scales:
   `ωL/R`, the skin depth, the board against c/ω (`self_field_lines`). The exact curve:
   `prototypes/inductance/eddy2d.py`; the scans: `NOTES.md` there.
@@ -116,9 +237,9 @@ resonator, the metamaterials' element.)
   preliminary answer (the preview to the goal window's end) within 30 s; the animation
   streamed without stutter at speed 1 (a tube level's run at least one time unit a second
   of computing), however long; the verification within a few minutes; each bound exceeded
-  by at most 100 % where that makes the level a lot better. To audit: every tube level's
-  preview time and streaming rate; LEVELS.md already records Eddy currents in silicon (118)
-  at 38 s and Lock-in Hall (127) at 30–70 s. Self-inductance (125) streamed at 0.41 units a
+  by at most 100 % where that makes the level a lot better. Audited since (below; at their
+  designs LEVELS.md recorded Eddy currents in silicon at 38 s and Lock-in Hall at 30–70 s:
+  the audit measured 18 s and 26 s). Self-inductance streamed at 0.41 units a
   second. The owner (2026-11-04): fewer carriers are fine if the physics barely suffers.
   Measured first: they are not the cost (at a tenth of them the preview took 20 s against
   27); 70 % of a step was the self-field's two solves, 16–17 conjugate-gradient iterations
@@ -148,7 +269,11 @@ resonator, the metamaterials' element.)
   dielectric cylinder's exact scattering, the grid's numerical dispersion, the symmetry and
   energy tests).
 
-## Then the Transformer (task #61), with B₀ and ω on sliders (the owner, 2026-11-02)
+## The Transformer (task #61): an interlude, not a level (the owner, 2026-11-02)
+
+Designed as a level with B₀ and ω on sliders, then measured: no accurate version fits a
+level's 30 s preview (the bullet *simulation material* below), so it waits on the interludes'
+format (SPEC.md §14). The design and what was learned on the way:
 
 The suggested controls (the drive's amplitude and a cut in the secondary) cannot work, and a
 level with only the solenoid's amplitude is one slider scaling everything (the owner's rule:
@@ -209,8 +334,8 @@ the frequency slider logarithmic; the run time decided after measuring the desig
   half-swings apply; Self-inductance's metal (density 60, c 24, dt 0.0072) is a starting
   point: two rings nested need the secondary's `L₂/R₂` near the primary's frequency.
 
-The rest of the Transformer's checklist stands (CLAUDE.md): `scripts/designs/` and
-`curriculum.py`; `scripts/reality.py` (headline: a transformer's mutual inductance;
+Should a version fit a level after all, a level's checklist stands (CLAUDE.md):
+`scripts/designs/` and `curriculum.py`; `scripts/reality.py` (headline: a transformer's mutual inductance;
 simplified: z-invariant one-turn coils, slow light); scales; `python scripts/levels.py --only
 <slug>`; golden hash with `GOLDEN_ONLY=<slug>`; reference and radiation tests; the level
 document (`scripts/level_docs.py new`); `docs/LEVELS.md`; a capture.
@@ -224,7 +349,7 @@ document (`scripts/level_docs.py new`); `docs/LEVELS.md`; a capture.
   `python scripts/cleanup.py run` (CLAUDE.md, *Disk*; DEC-37).
 - Before committing: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo test --workspace`, the affected heavy tests (`affected.py run`, coverage on: a
-  verdict-only run leaves the records' coverage stale and every later change runs all 525);
+  verdict-only run leaves the records' coverage stale and every later change runs all 529);
   `python -m mypy` / `pytest` for scripts; `python scripts/measured.py update`,
   `python scripts/physics_pdf.py` after PHYSICS.md edits.
 - Edit scripts written through a Bash heredoc lose doubled backslashes (`\\` became `\`, so a

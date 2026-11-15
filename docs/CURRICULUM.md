@@ -64,6 +64,15 @@ and tier):
 | 9 Jackson: radiation damping (Ch. 16) | Pr. 16.2 the classical atom | Pr. 16.3 orbits circularize | **Three orbits**: three radiating electrons, each shaped to collapse in time |
 | 10 Jackson: bound charges (§16.7–16.8, Pr. 13.2) | §16.7 a bound charge, §16.8 resonance | Pr. 13.2 a kick for a bound charge | **Spectroscopy**: two atoms, two natural frequencies, each driven at its own |
 | 11 Jackson: radiation (Ch. 14) | §14.3 forward beaming (the radiation goal), §14.6 the critical frequency (the band), Pr. 14.23 in step (the receiver sees several particles: fields add) | §14.2 a quiet turn, §14.8 Thomson scattering, §16.8 why the sky is blue (a steady receiver: tune a bound electron's resonance), §15.2 braking radiation, Pr. 14.23 a quiet ring (antiphase), Pr. 14.23 a ring of four (only 4ω₀ survives) | **Undulator**: an alternating row whose Doppler-squeezed line lands in the band, without steering the beam |
+| 12 Inside the components: vacuum tubes (docs/TUBES.md) | Vacuum diode, Sideways (the player's solenoid), Bipolar diode | Through the cloud, Electron gun, Ion diode, Rectifier, Triode, Klystron | **Magnetron**: a strapped eight-vane magnetron, its supply and solenoid set so that the tank oscillates |
+| 13 Inside the components: metals (docs/DRUDE.md) | Ohm's law, Long and thin, Potentiometer | Hall probe, Positive carriers, Few carriers or many, Magnetoresistance, Corbino disc, Wheatstone bridge, Eddy currents, Eddy currents in silicon, Laminations | **Strength and sign**: a magnetic-field sensor of two parts in series, a Hall bar for the field's sign and a magnetoresistor for its strength |
+| 14 Inside the components: transistors | Gate, Inverter | Amplifier | none yet (Flip-flop deferred, docs/DECISIONS.md DEC-4) |
+| 15 AC and induction | Ringing tank, Self-inductance | Field-tuned damping, Lock-in Hall | none yet (planned: Crystal radio, docs/DRUDE.md Phase 4) |
+
+Arcs 12–15 are the tube world's (a z-invariant slice with space charge, then conductors
+with their carriers): their plans are docs/TUBES.md and docs/DRUDE.md, their levels'
+designs and measurements docs/LEVELS.md. Arcs 14 and 15 are still growing and have no
+master level yet (principle 4).
 
 Changes to existing levels: The wall and Injection were joined into Around the wall (the
 beam must enter the detector along the axis after going around the wall: two charges).

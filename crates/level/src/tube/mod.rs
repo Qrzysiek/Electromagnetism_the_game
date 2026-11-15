@@ -221,6 +221,13 @@ pub struct MetalSpec {
     /// The cores' placement and the collisions' random numbers.
     #[serde(default)]
     pub seed: u64,
+    /// Its contacts as thermal walls in equilibrium with their electrodes (DEC-43,
+    /// `physics::tube::OhmicContact::thermal`): a floating contact's noise is `kT/C`, at the
+    /// price of Sharvin's contact resistance (`kT/(q j₀ w)` for a face `w` long, `j₀` the
+    /// half-space's thermal flux). False: the layer in front of each refilled to its density,
+    /// no contact resistance, a floating contact's noise 18–43 % above `kT/C`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub thermal_contacts: bool,
     /// Its function in the device (channel, load, Hall plate, …): shown with its number
     /// wherever it is named. Text only.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -351,6 +358,18 @@ pub enum Measure {
     /// degrees: `V ≈ A sin(ω t + φ)`, from the same Fourier sums as the amplitude. Phases
     /// are compared modulo 360: a value is taken at its turn nearest the goal's middle.
     Phase,
+    /// The spread of its noise against another's: the standard deviation of its potential
+    /// about its mean over the window, over the `reference` electrode's (each its own
+    /// potential, not their difference; DEC-42). A floating contact's thermal noise is the
+    /// model's macroparticles' (`⟨V²⟩ = kT/C` with a macroparticle's kT), so either spread
+    /// alone falls by `√2` with the verification's lighter macroparticles, while the ratio
+    /// of two is `√(C_ref/C)` at any resolution.
+    #[serde(rename = "spread_ratio")]
+    SpreadRatio,
+    /// The time its potential (against ground, or `reference`) takes to fall from its
+    /// largest excursion in the window to 1/e of it, linearly interpolated between steps:
+    /// a kicked contact's relaxation (DEC-42). The window's end if it never does.
+    Decay,
 }
 
 impl PotentialGoal {
@@ -859,6 +878,12 @@ pub struct TubeRun {
     pub currents: Vec<Option<f64>>,
     /// Each potential goal's measure, once the run has passed its window.
     pub potential: Vec<Option<f64>>,
+    /// Per potential goal measuring a spread (`Measure::SpreadRatio`), once the run has
+    /// passed its window: its electrode's noise's correlation time, the lag at which the
+    /// potential's autocorrelation falls to 1/e (`sim::correlation_time`). Shown beside a
+    /// kicked contact's decay: by fluctuation–dissipation the noise wanders at the pace a
+    /// kick relaxes. None for the other measures.
+    pub noise_pace: Vec<Option<f64>>,
     /// Each heat goal's mean power, once the run has passed its window.
     pub heat: Vec<Option<f64>>,
     /// Per metal piece (`metals`): the work the field has done on its carriers so far,
@@ -933,9 +958,12 @@ pub struct TubeSim {
     fine: std::collections::BTreeMap<u32, Vec<[f32; 2]>>,
     currents: Vec<Option<f64>>,
     /// Each potential goal's window so far: sum, count, least, most, and the samples
-    /// `(t, V)` (for `Measure::Amplitude`).
+    /// `(t, V)` (for `Measure::Amplitude`, `Phase` and `Decay`).
     windows: Vec<(f64, f64, f64, f64)>,
     series: Vec<Vec<(f64, f64)>>,
+    /// Per potential goal measuring a spread: its electrode's and its reference's
+    /// potentials at each step of its window.
+    spread: Vec<Vec<(f64, f64)>>,
     potential: Vec<Option<f64>>,
     /// Per heat goal: the time and its metal's work at its window's start, and its result.
     heat_start: Vec<Option<(f64, f64)>>,

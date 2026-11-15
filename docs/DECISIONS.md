@@ -293,7 +293,7 @@ Entries are numbered in order and never renumbered.
 
 ## DEC-13: The carriers' own magnetic field: the Darwin limit, canonical momenta
 
-- **Status:** in design (2026-10-26; docs/DARWIN.md)
+- **Status:** in use (since 2026-11-02, Self-inductance; designed 2026-10-26, docs/DARWIN.md)
 - **Area:** physics, numerics
 - **Choice:** the magnetoquasistatic (Darwin) limit in the z-invariant tube world: currents
   in the plane make B_z, its change the transverse E_T. Particles carry canonical momenta
@@ -412,6 +412,9 @@ Entries are numbered in order and never renumbered.
     0.075 ms an iteration. With the metals' scattering and the frames' middle field in
     parallel (bit for bit), Self-inductance's step 23 → ~6.5 ms, its preview to t = 10
     24.2 → 7.4 s (1.35 time units a second). Y26 1.9e-5, a third realisation.
+  - 2026-11-14: the status corrected from "in design (2026-10-26; docs/DARWIN.md)": a
+    shipped level has run on it since Self-inductance (DEC-32, 2026-11-02). Nothing else
+    changed.
 
 ## DEC-14: Round metals: a polygon of walls with the disc's area, the disc's exact background
 
@@ -1556,3 +1559,86 @@ Entries are numbered in order and never renumbered.
   - 2026-11-04: chosen. Ohm's law 1.85 % from `I V` (its rows' scatter ±1.3 %), at rest 0.36 %
     of it, the Corbino disc −2.0 %; the heat map's peak now round the Corbino disc's inner
     contact. The golden hashes stay (accounts only).
+
+## DEC-42: Thermal noise's goals: its size as a ratio, its pace beside a kick's decay
+
+- **Status:** in use (the measures since 2026-11-15; their level, Thermal noise, in design)
+- **Area:** level goals, measures, interface
+- **Choice:** two measures of a potential goal (`level::tube::Measure`): `spread_ratio`, the
+  standard deviation of the electrode's potential about its mean over the window, over the
+  `reference` electrode's (each its own potential, not their difference; a setup issue
+  without a reference); `decay`, the time from the potential's largest excursion in the
+  window (against ground or the reference) to 1/e of it, linearly interpolated between steps
+  (the window's end if it never falls so far). Beside a spread goal the panel shows its
+  electrode's noise pace, the lag at which the potential's autocorrelation over the window
+  falls to 1/e (`TubeRun::noise_pace`; `generator tube-scan` prints it): shown, not a goal.
+- **Purpose:** the owner (2026-11-05), in place of an RMS goal: a floating contact's noise
+  is a macroparticle's, `⟨V²⟩ = kT/C` with kT `∝` the macroparticles' weight, so its size
+  alone halves with the verification's lighter macroparticles; the ratio of two is
+  `√(C_ref/C)` at any resolution. The pace is the noise's correlation time, `RC`, the same
+  as a kick's relaxation (fluctuation–dissipation, D14). The resistance sets the pace and not
+  the size: the level's surprise, its two goals pinning `C` and `R` separately.
+- **Alternatives:**
+  - The spread alone (an RMS goal): not resolution-free (above).
+  - The spread of the two contacts' difference: their correlation enters it.
+  - The pace as a goal: its own error is `√(2τ/T)` of itself over a window `T` (~20 % over
+    a preview's few hundred time units at τ ≈ 9): shown beside the decay instead.
+  - The correlation time as the autocorrelation's integral to its first zero: noisier than
+    its 1/e lag; a decay fitted by an exponential: its window a choice; the 1/e crossing is
+    the other measures' kind (a level's numbers to compare).
+- **Where:** `crates/level/src/tube/{mod.rs, sim.rs, run.rs, build.rs, issues.rs}`
+  (`Measure::{SpreadRatio, Decay}`, `spread_ratio`, `decay_time`, `correlation_time`,
+  `TubeSim::noise_pace`), `crates/game/src/level_editor/tube.rs`,
+  `crates/game/src/ui/results.rs`, `crates/generator/src/main.rs` (`tube-scan`'s `pace`);
+  tests `decay_and_spread_measures`, `correlation_time_of_an_ar1_noise`, D14; the
+  prototypes `prototypes/noise/`.
+- **History:**
+  - 2026-11-05: designed with the owner (DRUDE.md Phase 2 item 1); the measures written.
+  - 2026-11-15: committed with the thermal-wall contacts (DEC-43): measuring equipartition
+    first found D7's refill contacts' floating noise 18–43 % above `kT/C`, depending on the
+    feeding strip (the size then depends on the resistance, against the level's idea).
+
+## DEC-43: Thermal-wall contacts, in equilibrium with their electrodes
+
+- **Status:** in use (since 2026-11-15; the thermal-noise level its first user)
+- **Area:** physics (the metals' contacts), level format
+- **Choice:** a second kind of ohmic contact, chosen per metal (`MetalSpec::
+  thermal_contacts`, `physics::tube::OhmicContact::thermal`, an editor checkbox): a thermal
+  wall without a layer. Each step each emitting segment gives off a Poisson number of
+  carriers whose mean is the half-space's thermal flux through it, `ρ σ_v/√(2π) · len · dt`
+  in macroparticles, times the Boltzmann factor of the release's potential step to first
+  order, `exp(βq 4πσδ)` (σ the segment's surface density, δ the release distance
+  `EMISSION_OFFSET`), with the refill's velocities, release points and absorption. Its
+  random numbers hash the metal's seed, the step, the emitter and the segment. Every other
+  contact is unchanged (the refill), bit for bit.
+- **Purpose:** a floating contact in equilibrium, which the thermal-noise level (DEC-42)
+  rests on: `⟨V²⟩ = kT/C` whatever feeds it (D13) and a kick relaxing at the noise's pace
+  (D14). The refill is out of equilibrium twice (prototypes/noise/EQUIPARTITION.md): its
+  release at δ while it takes carriers in at the face ties its electrochemical potential to
+  its face's field, a feedback that heats a floating contact (the excess falls linearly
+  with δ); and filling its layer whenever it lacks is no reservoir (~15 % at small δ).
+- **Alternatives:**
+  - Every contact a thermal wall (the owner, 2026-11-15: not; a kind instead): Sharvin's
+    contact resistance `kT/(q j₀ w)` would shift every metal level's currents by 5–15 %, its
+    goals, slider windows and golden hashes to redo.
+  - The thermal flux without the Boltzmann factor: 1.211 ± 0.033 on a strip 2 long (the
+    release's feedback), 1.080 and 1.035 at δ halved and quartered.
+  - The flux as a regular train (an accumulator) instead of Poisson: sub-Poissonian (Nyquist
+    0.70 ± 0.04, the floating noise 0.78–0.92 of `kT/C`, lower as C grows).
+  - The step evaluated exactly (the potential at each emitting segment's release point, a
+    sum over every particle): 0.982 ± 0.026 and 1.018 ± 0.035 at lengths 2 and 4, as the
+    first order's 0.987 ± 0.018 and 0.990 ± 0.021, at about half as much time again.
+  - Releasing at the face (δ → 0): within half a segment a macroparticle's own image on the
+    boundary elements is an artifact (`EMISSION_OFFSET`'s history).
+  - A grand-canonical layer (carriers inserted and removed in a contact's layer, each move
+    accepted with its Boltzmann factor): equilibrium without the contact resistance, so a
+    replacement for the refill everywhere; a potential per trial, not tried.
+- **Where:** `crates/physics/src/tube/{mod.rs, emission.rs}` (`OhmicContact::thermal`,
+  `Tube::emit_thermal`), `crates/physics/src/lattice.rs` (`mix`, `unit`),
+  `crates/level/src/tube/{mod.rs, build.rs}`, `crates/game/src/level_editor/{tube.rs,
+  check.rs}`; tests D13, D14, Y31, D10 (c) (`physics/tests/drude.rs`); PHYSICS.md §2.11
+  (*Thermal noise*); `prototypes/noise/{EQUIPARTITION.md, equipartition.rs,
+  reservoir_contacts.patch}`.
+- **History:**
+  - 2026-11-15: found, measured and chosen (the owner: research the cause first, then a
+    contact kind for the noise level).

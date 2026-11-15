@@ -335,6 +335,7 @@ pub(super) fn edit_tube(
                 core_radius,
                 carriers_per_area,
                 seed,
+                thermal_contacts,
                 label,
             } = m;
             ui.horizontal(|ui| {
@@ -395,6 +396,12 @@ pub(super) fn edit_tube(
             if let Some(i) = remove_contact {
                 contacts.remove(i);
             }
+            ui.checkbox(thermal_contacts, "  thermal contacts").on_hover_text(
+                "Its contacts as thermal walls in equilibrium with their electrodes: a floating \
+                 contact's noise is kT/C, at the price of a contact resistance (Sharvin's). \
+                 Off: each contact keeps the layer in front of it full, with no contact \
+                 resistance, but a floating contact's noise runs 18–43 % above kT/C",
+            );
             ui.horizontal(|ui| {
                 ui.label("  charge density")
                     .on_hover_text("The carriers' charge per area (the ions' is opposite)");
@@ -443,6 +450,7 @@ pub(super) fn edit_tube(
             core_radius: 0.002,
             carriers_per_area: 100.0,
             seed: 0,
+            thermal_contacts: false,
             label: String::new(),
         });
     }
@@ -753,6 +761,19 @@ pub(super) fn edit_tube(
             ui.selectable_value(&mut g.measure, Measure::Phase, "phase")
                 .on_hover_text(
                     "The oscillation's phase at ω relative to sin(ωt), in degrees (modulo 360)",
+                );
+        });
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut g.measure, Measure::SpreadRatio, "spread ratio")
+                .on_hover_text(
+                    "The noise's spread (standard deviation about the mean) over the reference \
+                     electrode's: a floating contact's thermal noise against another's \
+                     (needs a reference)",
+                );
+            ui.selectable_value(&mut g.measure, Measure::Decay, "decay")
+                .on_hover_text(
+                    "The time from the potential's largest excursion in the window to 1/e of \
+                     it: a kicked contact's relaxation",
                 );
         });
         ui.horizontal(|ui| {
