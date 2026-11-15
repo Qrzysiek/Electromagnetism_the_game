@@ -69,9 +69,17 @@ little and its gap matters less.
 
 Recommended: 1. Not decided here.
 
-## The preview's time
+## The preview's time and the verdict's error bars
 
-Not measured: the machine was busy. Under that load, on 4 threads, a run to t = 420
-(12 000 steps of 0.035) took about 450 s. On an idle machine it is to measure with
-`generator check --no-cache` once a design exists; at 200 paces in the window the window
-could be halved if the preview needs it (the ratio's scatter then about 7 % a contact).
+Measured at 07:40 with 14 of the 16 cores free (`generator check --no-cache t2.json`,
+`t2_check.out`): **preview 24.4 s** to t = 420, inside the owner's 30 s; **verification
+112.5 s**, within "a few minutes". (Under the coverage pass's load, on 4 threads, the same run
+took about 450 s.)
+
+The verification's error bars are larger than the estimate above: the spread ratio
+0.746 ± 0.144 (19 %), the decay 2.20 ± 0.31 (14 %). A goal window has to span about two of
+them each side for a comfortable verdict, so the control that sets `C` must move the ratio by
+at least about 40 %: `C` by a factor of two or more. That rules out the plate (15 % at best)
+and any modest geometry change; a capacitor chosen over a decade (option 1) moves the ratio by
+a factor of about three. Longer windows (option 3) shrink the bars as one over the root of the
+window: halving them needs four times the preview, past the 30 s.

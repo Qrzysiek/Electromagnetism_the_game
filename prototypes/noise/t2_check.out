@@ -1,0 +1,4 @@
+noise prototype 2: placement Ok(())
+  shot potential: SpreadRatio 0.746130 ± 0.143534 (preview 0.841819), goal 0.5 to 0.7: Uncertain: outcome Rejected, status NotVerified
+  shot potential: Decay 2.203476 ± 0.309896 (preview 2.410073), goal 2 to 3: Uncertain: outcome Rejected, status NotVerified
+  cost: Preview 24.4 s (Over), Verification 112.5 s (Over), Steps 2.4e4 (High), Metal setup 0.0 µs (Fine), Memory 10 MB (Fine)
