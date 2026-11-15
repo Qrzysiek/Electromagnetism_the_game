@@ -24,12 +24,15 @@ list the others here.
 - **The thermal-noise level's capacitance control** (Next, item 1;
   `prototypes/noise/LEVEL_CHECKS.md`): the plan's control, a grounded plate beside the
   player's floating contact, moves its capacitance by at most 15 % (the ratio by at most 7 %,
-  less than its ~10 % statistical error), so the two goals could not pin `C`. Options: (1) a
-  capacitor as the player's control, a lumped capacitance on the contact chosen from a list
-  or a log slider (the engine has `circuits[].capacitance`; a new control kind:
-  recommended); (2) a geometry where a plate dominates (a small contact, a long plate, plates
-  allowed nearer); (3) longer windows; (4) the pace alone, an introduction only. Not chosen
-  here: a new control kind is a design choice.
+  less than its statistical error: the verdict's error bar is ±19 % on the ratio, ±14 % on the
+  decay), so the two goals could not pin `C`; a control must move `C` by a factor of two or
+  more. Options: (1) a capacitor as the player's control, a lumped capacitance on the contact
+  chosen from a list or a log slider over a decade (the engine has `circuits[].capacitance`;
+  a new control kind: recommended); (2) a geometry where a plate dominates (a small contact,
+  a long plate, plates allowed nearer: unlikely to reach a factor of two); (3) longer windows
+  (halving the bars costs four times the preview, past 30 s); (4) the pace alone, an
+  introduction only. The rest is measured and fine (RC about 2, preview 24.4 s, verification
+  112.5 s). Not chosen here: a new control kind is a design choice.
 - **Glass screen's message changed** (Next, item 2): the level was the dielectrics'
   introduction as "a glass screen"; it now says the glass polarizes and does not screen,
   which is what it does. Chosen without asking, as the only text the physics allows. The
