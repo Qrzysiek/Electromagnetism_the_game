@@ -1,0 +1,151 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,fast_lane,first_magnet,calutron}
+\DocFingerprint{7dc161c85022571e}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Six positive ions leave the source at $(\val{xZero}, \val{yZero})$ with $T_0 = \val{Tzero}$:
+three masses, $1$, $2$ and $4$, each at $\pm\val{angDeg}$ degrees from $+x$. Every flight must
+first pass through the gate, the box $\val{gx0} \le x \le \val{gx1}$,
+$\val{gy0} \le y \le \val{gy1}$ (\physref{6.2}: a detector entered with the gate still missing
+ends the flight as a skipped gate), and then enter the detector of its mass at
+$x = \val{xDet}$ (the table in \S\ref{sec:hand}); there are no acceptance windows. The player
+places up to five charges and four magnets from the listed values in the region
+$\val{regX0} \le x \le \val{regX1}$, $\val{regY0} \le y \le \val{regY1}$. A flight ends when the
+ion touches a charge or a magnet, leaves the world, enters its detector, or reaches
+$t_{\max} = \val{tmax}$ (\xsecref{foundations}{sec:board}).
+
+This is the magnetic module's finale: an instrument in stages. The reference's two negative
+charges on the axis gather each mass's diverging pair through the gate, as a lens does
+(\levelref{fast_lane}'s impulse of a passing charge, \xeqref{fast_lane}{eq:impulse}); its three
+magnets then sort the masses by their rigidity $p/q$
+(\xeqref{calutron}{eq:curvature}), the lightest bent highest. This document integrates the six
+flights numerically.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: every ion has charge $q = \val{q}$ and radius $0$; $c = \val{c}$. The reference's
+elements (charges of radius $\val{R}$, magnets of radius $\val{Rm}$, field units, \physref{2.2}):
+\begin{center}\small\val{elements}\end{center}
+The world is $-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.95\linewidth, xmin=-1.6, xmax=41.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,40}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (40,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[violet!70!black, thick] (\rawval{gx0},\rawval{gy0}) rectangle (\rawval{gx1},\rawval{gy1});
+  \draw[green!40!black] (37,15) rectangle (40,20);
+  \draw[green!40!black] (37,8) rectangle (40,13);
+  \draw[green!40!black] (37,4) rectangle (40,7);
+  \addplot[blue!70!black] table {patha.dat};
+  \addplot[blue!70!black, dashed] table {pathb.dat};
+  \addplot[red!70!black] table {pathc.dat};
+  \addplot[red!70!black, dashed] table {pathd.dat};
+  \addplot[orange!80!black] table {pathe.dat};
+  \addplot[orange!80!black, dashed] table {pathf.dat};
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The gate (violet), the three detectors (green; the level file's) and the six flights:
+mass 1 (blue), 2 (red) and 4 (orange), each at $-\val{angDeg}^\circ$ (solid) and
+$+\val{angDeg}^\circ$ (dashed). The elements are listed in the table above.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The Lorentz force in the relativistic equation of motion \xeqref{foundations}{eq:eom};
+    the charges' field \xeqref{foundations}{eq:coulomb}; the magnets' in-plane field
+    \xeqref{first_magnet}{eq:dipole-plane}; the energy \xeqref{foundations}{eq:energy}.
+  \item The board's rules and the gate (\xsecref{foundations}{sec:board}, \physref{6.2}); the
+    classical Runge--Kutta method, cubic Hermite interpolation and the error estimate by halving
+    the step (\xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The assumptions are First magnet's (\xsecref{first_magnet}{sec:model}): the elements are held in
+place, the ions are points without moments, and their radiation is not taken from them.
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The stages}\label{sec:stages}
+
+A negative charge on the axis attracts each ray towards the axis by an impulse that grows as the
+ray passes closer (\xeqref{fast_lane}{eq:impulse}: the angle $2\kappa/(b\,pv)$ for a straight pass
+at the distance $b$); placed where the two rays of a mass are on either side, it turns them
+towards each other, and the gate on the axis selects the rays it has gathered. The ions then have
+the same energy but momenta in the ratio $1 : \sqrt2 : 2$, and in the magnets' field each path
+curves at the rate $qB_z/p$ (\xeqref{calutron}{eq:curvature}): the light ions are bent most. The
+charges' field also acts beyond the gate, so the exit angles are not the magnetic integral alone;
+the energy \xeqref{foundations}{eq:energy} is the check.
+
+\subsection{The method}\label{sec:method}
+
+The six flights are integrated by \xeqref{foundations}{eq:rk4}; the gate is passed when a sample
+of a step's cubic Hermite interpolant lies in it, the next event located as in
+\xsecref{slingshot}{sec:method}. The step $h = \val{H}$ and its half are both run, and the finer
+flight is reported: the step-halving estimate $\abs{y_h - y_{h/2}}/15$ is the error of the finer
+flight (of the coarser it is sixteen times that). The largest estimate is $\val{errMax}$, ion~2's,
+whose path passes close to an element; the energy drifts by at most $\val{wDevMax}$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:march} \emph{The march.} Advance each ion by \xeqref{foundations}{eq:rk4} in the
+    elements' fields at the step $h/2$, check the gate, and locate its entry:
+    \begin{center}\small\val{results}\end{center}
+    Every ion passes the gate and enters its detector through its left face, $x = \val{xDet}$,
+    inside the detector's span.
+\end{procedure}
+
+\begin{result}[The reference flights]
+All six ions pass the gate and enter the detectors of their masses at the points of the table.
+The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+Each flight's tolerance is the largest of $10^{-9}$, ten times its own step estimate and the
+game's own preview--verification gap, fixed before comparing. The largest difference, ion~2's
+ordinate, is the size of its step estimate: at its close pass both integrations work harder (the
+game's preview and verification differ there by $\val{gapTwo}$); smaller steps converge onto the
+game's verified value.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board, the second placement in \code{placements.json}, the ions fly straight and
+diverge; most leave through the right edge, and ion~5 enters a detector without having passed the
+gate (\val{bareOutFive}). A solution needs a stage that gathers each pair through the gate and one
+that sorts the masses, which no single element does. A map of solutions would take the game's
+verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game integrates the equations of motion with its adaptive eighth-order Runge--Kutta method
+(\physref{5}), passes gates by its certified crossing search and tracks their margins
+(\physref{6.2}), and verifies the outcome at a tighter tolerance (\physref{7}); the differences
+in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+The stages' physics: \levelref{fast_lane} (the impulse of a passing charge),
+\levelref{first_magnet} (a magnet's field), \levelref{calutron} (rigidity); motion in a magnetic
+field: \Jackson{§12.2}.
+
+\levelfileappendix
+
+\end{document}
