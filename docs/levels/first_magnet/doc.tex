@@ -1,0 +1,253 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil}
+\DocFingerprint{9d62e5b3b275ca00}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+A positive particle is launched from the left edge at $(\val{xZero}, \val{yZero})$, straight
+along $+x$. With nothing on the board it flies straight on and leaves through the right edge,
+below the detector, the rectangle $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$ (no acceptance window, no kinetic window, no gate). The
+player places up to three magnets, each a uniformly magnetized sphere with its moment out of
+the board ($\odot$) or into it ($\otimes$), of the listed strengths, inside the region
+$\val{regX0} \le x \le \val{regX1}$, $\val{regY0} \le y \le \val{regY1}$. A flight ends when
+the particle enters the detector, touches a magnet, or leaves the world
+(\xsecref{foundations}{sec:board}).
+
+The reference places one magnet of the largest strength, $\odot$, below the launch line near
+the left edge of the region. Its field, into the board along the particle's path, bends the
+particle upwards by about thirteen degrees, enough to reach the detector's left face. This
+document derives the magnet's field in the plane, and finds the flight twice: by integrating the
+equations of motion numerically, and by reducing them to quadratures with the two quantities
+the motion conserves, the size of the momentum and the canonical angular momentum about the
+magnet.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: the particle has charge $q = \val{q}$, mass $m = \val{m}$ and radius $0$; the speed
+of light is $c = \val{c}$; the launch has kinetic energy $T_0 = \val{Tzero}$, so
+$\gamma_0 = \val{gammaZero}$ and $p = \abs{\vect{p}_0} = \val{pZero}$
+(\xeqref{foundations}{eq:launch}). The reference magnet is at $\vect{r}_\mathrm{m} =
+(\val{xMag}, \val{yMag})$ with the strength $\mu = \val{muMag}$ (field units, $\mu_0 m/4\pi$,
+\physref{2.2}); its sphere has radius $R_\mathrm{m} = \val{Rm}$. We write $q\mu = \val{qmu}$.
+The world is $-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{regX0},\rawval{regY0}) rectangle (\rawval{regX1},\rawval{regY1});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[black!40, dashed] (\rawval{xMag},\rawval{yMag}) circle[radius=\rawval{rMin}];
+  \draw[orange!80!black] (\rawval{xZero},\rawval{yZero}) -- (\rawval{bareX},\rawval{bareY});
+  \addplot[very thick, blue!70!black] table {path.dat};
+  \fill[black!70] (\rawval{xMag},\rawval{yMag}) circle[radius=\rawval{Rm}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The magnet (black disc), the reference flight (blue) bending up into the detector
+(green), and the straight empty-board flight (orange) out through the right edge. The dashed
+circle has the radius of the closest approach $r_\mathrm{min}$ \eqref{eq:rmin}: the flight
+touches it and never comes nearer. The dotted rectangle is the region for magnets.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The Lorentz force in the relativistic equation of motion
+    \xeqref{foundations}{eq:eom}; a static magnetic field does no work, so $\abs{\vect{p}}$ is
+    constant (\xsecref{first_coil}{sec:nowork}).
+  \item The field outside a uniformly magnetized sphere is exactly a point dipole's, of
+    vector potential $\vect{A} = \vect{\mu}\times\vect{r}/r^3$ (\Jackson{§5.6, §5.10}), in the
+    game's field units (\physref{2.2}).
+  \item Noether's theorem: a Lagrangian invariant under rotations about an axis conserves the
+    canonical angular momentum about it; for a charge, $\vect{r}\times(\vect{p} + q\vect{A})$
+    (\Goldstein{Ch.~2 and 8}, \Jackson{§12.1} for the charge's Lagrangian).
+  \item The board's rules (\xsecref{foundations}{sec:board}); the classical Runge--Kutta method,
+    cubic Hermite interpolation and the error estimate by halving the step
+    (\xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+\begin{assumption}{The magnet is held in place}\label{as:fixed}
+It neither moves nor turns, and its magnetization is fixed (rules of the game).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the particle; along the
+reference flight it is $\val{Erad}$, a fraction $\val{EradFrac}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{A point particle without a moment}\label{as:point}
+The particle has no magnetic moment of its own, so the field's gradient exerts no force on it
+(a later level's subject).
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The magnet's field in the plane}\label{sec:dipole}
+
+The dipole's field, $\vect{B} = \nabla\times\vect{A}$, is
+$\vect{B} = \mu\,(3(\uvec{m}\cdot\uvec{r})\uvec{r} - \uvec{m})/r^3$ with
+$\vect{\mu} = \mu\uvec{m}$ (\Jackson{§5.6}). The moment stands perpendicular to the board,
+$\uvec{m} = \uvec{z}$, so at every point of the board $\uvec{m}\cdot\uvec{r} = 0$ and
+\begin{equation}\label{eq:dipole-plane}
+  \vect{B} = -\frac{\mu}{r^3}\,\uvec{z}, \qquad r = \abs{\vect{x} - \vect{r}_\mathrm{m}} :
+\end{equation}
+perpendicular to the board, opposite to the moment, and falling as $1/r^3$. With $\mu > 0$
+($\odot$) it points into the board. In the plane the vector potential is azimuthal,
+$\vect{A} = (\mu/r^2)\,\uvec{\varphi}$. The force $q\vect{v}\times\vect{B}$ lies in the plane,
+so the motion stays there, and
+\begin{equation}\label{eq:eom-dipole}
+  \deriv{\vect{x}}{t} = \vect{v} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t} = qB_z(\vect{x})\,(v_y, -v_x), \qquad
+  B_z = -\frac{\mu}{\abs{\vect{x} - \vect{r}_\mathrm{m}}^3},
+\end{equation}
+from $\vect{x}_0$ and $\vect{p}_0 = (p, 0)$. At the launch the magnet is $r_0 = \val{rZero}$
+away, $B_z = \val{Bzero}$, and the circle of \xeqref{first_coil}{eq:larmor-radius} would have
+the radius $\val{rLzero}$: far from the magnet the path is nearly straight, and it bends where
+it passes close. With $qB_z < 0$ a particle moving along $+x$ is pushed towards $+y$: the
+bend is anticlockwise.
+
+\subsection{Two conserved quantities}\label{sec:conserved}
+
+The magnetic force does no work, so $\abs{\vect{p}} = p$ and $\gamma$ are constant
+(\xsecref{first_coil}{sec:nowork}). The field \eqref{eq:dipole-plane} is unchanged by rotations
+about the magnet, and so is the charge's Lagrangian $-mc^2/\gamma + q\vect{v}\cdot\vect{A}$ with
+$\vect{A} = (\mu/r^2)\uvec{\varphi}$: the angle $\varphi$ about the magnet is cyclic, and its
+canonical momentum is conserved,
+\begin{equation}\label{eq:canonical}
+  P = \big(\vect{r}\times(\vect{p} + q\vect{A})\big)_z = L + \frac{q\mu}{r},
+  \qquad L = (\vect{r}\times\vect{p})_z = r\,p_\varphi ,
+\end{equation}
+with $\vect{r} = \vect{x} - \vect{r}_\mathrm{m}$. Directly: with
+$\dot{\vect{p}} = qB_z(v_y, -v_x)$, $\dd L/\dd t = (\vect{r}\times\dot{\vect{p}})_z =
+-qB_z\,(\vect{r}\cdot\vect{v}) = q\mu\,\dot r/r^2 = -\dd(q\mu/r)/\dd t$ (using
+$\vect{r}\cdot\vect{v} = r\dot r$), so $L + q\mu/r$ is constant. At the launch
+$L_0 = \val{Lzero}$ and $P = \val{Pcan}$.
+
+\subsection{The flight by quadratures}\label{sec:quadrature}
+
+With $p$ and $P$ fixed, $p_\varphi = L(r)/r = (P - q\mu/r)/r$ is known at every radius, and so
+is $p_r = \pm\sqrt{p^2 - p_\varphi^2}$. The particle can only be where $\abs{L(r)} \le pr$. It
+starts moving inwards ($p_r = \val{prZero}$) and turns where $\abs{L(r)} = pr$; here $L < 0$
+throughout, so $P - q\mu/r = -pr$, that is
+\begin{equation}\label{eq:rmin}
+  p\,r^2 + P\,r - q\mu = 0, \qquad
+  r_\mathrm{min} = \frac{-P + \sqrt{P^2 + 4pq\mu}}{2p} = \val{rMin} .
+\end{equation}
+It never comes nearer, whatever the rest of the flight. From $\dot\varphi = p_\varphi/(\gamma m
+r)$ and $\dot r = p_r/(\gamma m)$, on each branch
+\begin{equation}\label{eq:phi-of-r}
+  \deriv{\varphi}{r} = \frac{L(r)}{r^2\sqrt{p^2 - L(r)^2/r^2}},
+\end{equation}
+\begin{equation}\label{eq:t-of-r}
+  \deriv{t}{r} = \frac{\gamma m}{\abs{p_r}} = \frac{\gamma m}{\sqrt{p^2 - L(r)^2/r^2}} ,
+\end{equation}
+taken with $\dd r < 0$ on the way in and $\dd r > 0$ on the way out. So the outgoing branch at
+the radius $r$ has the angle $\varphi(r) = \varphi_0 + I(r_0) + I(r)$ and the time
+$t(r) = J(r_0) + J(r)$, where $I(R)$ and $J(R)$ are the integrals of \eqref{eq:phi-of-r} and
+\eqref{eq:t-of-r} from $r_\mathrm{min}$ to $R$ and $\varphi_0$ is the launch's angle. Near
+$r_\mathrm{min}$ both integrands grow as $1/\sqrt{r - r_\mathrm{min}}$; the substitution
+$r = r_\mathrm{min} + u^2$ makes them smooth, and a standard quadrature (Gauss--Legendre or the
+tanh-sinh rule, to thirty digits) evaluates them. The entry into the detector is the smallest
+$r$ on the outgoing branch whose point $\vect{r}_\mathrm{m} + r(\cos\varphi, \sin\varphi)$ lies
+in the detector, found by stepping $r$ outwards and bisecting; there
+$\vect{p} = p_r\uvec{r} + p_\varphi\uvec{\varphi}$.
+
+This is exact apart from the quadrature's rounding: it needs no time step. It gives the entry
+at $r = \val{rEntry}$, at $t = \val{tQ}$, at $(\val{xQ}, \val{yQ})$, with momentum
+$(\val{pxQ}, \val{pyQ})$.
+
+\subsection{The method}\label{sec:method}
+
+The march integrates \eqref{eq:eom-dipole} by the classical Runge--Kutta method
+\xeqref{foundations}{eq:rk4} at the fixed step $h = \val{H}$, locates the events on the cubic
+Hermite interpolant as in \xsecref{slingshot}{sec:method}, and estimates its error by halving
+$h$. Along it $p$ and $P$ are the checks: they must stay constant.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch.} $\gamma_0 = \val{gammaZero}$, $p = \val{pZero}$,
+    $\vect{p}_0 = (p, 0)$; $r_0 = \val{rZero}$, $L_0 = \val{Lzero}$, $P = \val{Pcan}$ by
+    \eqref{eq:canonical}.
+  \item\label{st:rmin} \emph{The closest approach.} \eqref{eq:rmin}:
+    $r_\mathrm{min} = \val{rMin}$. The march's closest sampled point is $\val{rMinMarch}$.
+  \item\label{st:march} \emph{The march.} Advance \eqref{eq:eom-dipole} by
+    \xeqref{foundations}{eq:rk4}. The state every five time units (step $\val{HTable}$; the
+    last column the drift of $P$):
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:entry} \emph{The entry.} With $h = \val{H}$, after $\val{steps}$ steps, the
+    particle enters the detector through its \val{faceE} face at $t_\mathrm{e} = \val{tE}$, at
+    $(\val{xE}, \val{yE})$, with momentum $(\val{pxE}, \val{pyE})$, $\val{angE}$ degrees above
+    $+x$. The step-halving estimate of its error is $\val{err}$.
+  \item\label{st:checks} \emph{The checks.} Along the march $\abs{\vect{p}}$ drifts by at most
+    $\val{pDev}$ and $P$ by $\val{PDev}$. The quadratures of \S\ref{sec:quadrature} give the
+    same end state to $\val{quadDiff}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on the steps gives $\val{Erad}$;
+    against the step $2h$ its error is a relative $\val{EradErr}$.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The particle enters the detector through its \val{faceE} face at $(\val{xE}, \val{yE})$ at
+$t_\mathrm{e} = \val{tE}$, with momentum $(\val{pxE}, \val{pyE})$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The reference flight agrees to $\val{cmpYDiff}$ in $y_\mathrm{e}$ and $\val{cmpTDiff}$ in
+$t_\mathrm{e}$, the empty board to $\val{cmpBareTDiff}$: the size of the game's verified
+accuracy (about $10^{-10}$, Foundations §6), above our step estimate $\val{err}$ and the
+quadratures' agreement $\val{quadDiff}$. The tolerance is $10^{-9}$ (ten times the larger of
+the two computations' error estimates), or the game's own preview--verification gap where that
+is larger ($\val{gapRef}$ on the reference: not larger), fixed before comparing.
+
+\section{Other solutions}\label{sec:others}
+
+The empty board, the second placement in \code{placements.json}, does not solve the level: the
+particle flies straight and leaves through the \val{bareFace} edge at
+$(\val{bareX}, \val{bareY})$ at $t = \val{bareT}$. A magnet bends the particle only near it:
+the bend's strength goes as $\mu$ over the closest approach cubed, roughly, so it must sit
+near the path. One $\odot$ magnet below the path (or $\otimes$ above it) bends it upwards; the
+reference uses the strongest, below the path at the region's edge. Several weaker magnets
+along the path can share the bend. Equation \eqref{eq:rmin} gives each single-magnet
+placement's closest approach without any integration, a quick test of whether the particle
+would strike the magnet; a map of all solutions would take the game's verdicts, which this
+document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game takes a magnet's field outside its sphere as the exact point-dipole field
+(\physref{2.2}), which is \eqref{eq:dipole-plane} in the plane, with exactly zero in-plane
+components, and integrates \eqref{eq:eom-dipole} with its adaptive eighth-order Runge--Kutta
+method (\physref{5}), event location (\physref{6}) and verification (\physref{7}). The game
+does not use the conserved $P$; it holds to it to its integration accuracy, as the march
+here does to $\val{PDev}$. Radiation is integrated, not applied (\physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+The dipole's field and a magnetized sphere: \Jackson{§5.6, §5.10}. The canonical momentum and
+cyclic coordinates: \Goldstein{Ch.~2 and 8}; the charge's Lagrangian: \Jackson{§12.1}. The
+forbidden regions of a charge in a dipole's field, of which \eqref{eq:rmin} is the case of a
+plane, are Störmer's problem. Cyclotron motion and the magnetic force's work:
+\levelref{first_coil}.
+
+\levelfileappendix
+
+\end{document}
