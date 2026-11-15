@@ -1,0 +1,240 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil,first_magnet}
+\DocFingerprint{441a120cc2fa5805}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Two neutral particles are launched from the left edge at $(\val{xZero}, \val{yZero})$ along
+$+x$: the two spin states, each with a magnetic moment perpendicular to the board,
+$\mu_\mathrm{p} = \val{momUp}$ (up, along $+z$) and $\mu_\mathrm{p} = \val{momDown}$ (down).
+Without charge they feel no Lorentz force; only the gradient of the magnetic field acts on
+them. Spin up must reach the lower detector, $\val{xDetLoUp} \le x \le \val{xDetHiUp}$,
+$\val{yDetLoUp} \le y \le \val{yDetHiUp}$; spin down the upper one,
+$\val{xDetLoDown} \le x \le \val{xDetHiDown}$, $\val{yDetLoDown} \le y \le \val{yDetHiDown}$
+(no acceptance windows, no kinetic windows, no gates). The player places up to three magnets of
+the listed strengths, of either orientation, in the region $\val{regX0} \le x \le \val{regX1}$,
+$\val{regY0} \le y \le \val{regY1}$. A flight ends when the particle enters its detector, touches
+a magnet, or leaves the world (\xsecref{foundations}{sec:board}).
+
+With nothing placed both fly straight out through the right edge. The reference places one
+magnet ($\odot$) above the launch line: its field is strongest near it, so the spin whose energy
+falls in a stronger field is drawn up into the upper detector, and the other is pushed down into
+the lower one. This document derives the force on a moment, writes it as a central potential
+about the magnet, and finds each flight twice: by integrating the equations of motion
+numerically, and by reducing them to quadratures with the energy and the angular momentum.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+Both particles have mass $m = \val{m}$ and charge $0$; $c = \val{c}$; each is launched with
+$T_0 = \val{Tzero}$, so $\gamma_0 = \val{gammaZero}$, $p_0 = \val{pZero}$ and
+$v_0 = \val{vZero}$ (\xeqref{foundations}{eq:launch}). The reference magnet stands at
+$\vect{r}_\mathrm{m} = (\val{xMag}, \val{yMag})$ with the strength $\mu = \val{muMag}$ (field
+units, \physref{2.2}) and the radius $\val{Rm}$. We write $k = \mu_\mathrm{p}\mu$: $k = \val{kUp}$
+for spin up and $\val{kDown}$ for spin down. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{regX0},\rawval{regY0}) rectangle (\rawval{regX1},\rawval{regY1});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoUp},\rawval{yDetLoUp}) rectangle (\rawval{xDetHiUp},\rawval{yDetHiUp});
+  \draw[green!40!black] (\rawval{xDetLoUp},\rawval{yDetLoUp}) rectangle (\rawval{xDetHiUp},\rawval{yDetHiUp});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoDown},\rawval{yDetLoDown}) rectangle (\rawval{xDetHiDown},\rawval{yDetHiDown});
+  \draw[green!40!black] (\rawval{xDetLoDown},\rawval{yDetLoDown}) rectangle (\rawval{xDetHiDown},\rawval{yDetHiDown});
+  \draw[black!40, dashed] (\rawval{xMag},\rawval{yMag}) circle[radius=\rawval{rTUp}];
+  \draw[black!40, densely dotted] (\rawval{xMag},\rawval{yMag}) circle[radius=\rawval{rTDown}];
+  \addplot[very thick, blue!70!black] table {pathup.dat};
+  \addplot[very thick, red!70!black] table {pathdown.dat};
+  \fill[black!70] (\rawval{xMag},\rawval{yMag}) circle[radius=\rawval{Rm}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The magnet (black), the two detectors (green), and the two flights: spin up (blue),
+pushed away from the magnet into the lower detector, and spin down (red), drawn towards it into
+the upper one. The dashed and dotted circles have the radii of the two turning points
+\eqref{eq:turning}; each flight touches its circle.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item A magnetic moment's energy in a field, $U = -\vect{\mu}_\mathrm{p}\cdot\vect{B}$, and the
+    force $\vect{F} = \nabla(\vect{\mu}_\mathrm{p}\cdot\vect{B})$ on a moment of fixed direction
+    (\Jackson{§5.7}).
+  \item The magnet's field in the plane, $B_z = -\mu/r^3$ (\xeqref{first_magnet}{eq:dipole-plane}),
+    perpendicular to the board.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom} with that force, exact
+    for a moment perpendicular to the plane in a magnetic field along $z$ (\physref{3.2}).
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate by halving the step (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+\begin{assumption}{Two spin states as two classical moments}\label{as:spin}
+Each state is a classical moment of fixed direction, $\pm\uvec{z}$. In the plane the field is
+along $z$, parallel to the moment, so there is no torque and no precession: the state stays a
+state. The quantum superposition that splits one beam into two is replaced by two shots. The
+game does the same (\physref{3.2}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+A moving moment radiates as an electric dipole $\vect{v}\times\vect{\mu}_\mathrm{p}/c^2$; the
+power, of order $\mu_\mathrm{p}^2\abs{\dot{\vect{a}}}^2/c^7$, is far below any effect on the
+flight. The game estimates it along every flight and checks it below $10^{-10}$ of $T_0$
+(\physref{3.2}).
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The force on a moment, as a potential}\label{sec:potential}
+
+A moment $\mu_\mathrm{p}\uvec{z}$ in the field $B_z\uvec{z}$ has the energy
+$U = -\mu_\mathrm{p}B_z$. Its interaction with a moving particle is the Lagrangian term
+$\vect{\mu}_\mathrm{p}\cdot\vect{B}'/\gamma$, with $\vect{B}'$ the field in the particle's rest
+frame; for a magnetic field along $z$, no electric field and motion in the plane,
+$B'_z = \gamma B_z$, and the term is $\mu_\mathrm{p}B_z$, independent of the velocity
+(\physref{3.2}). So the motion is that of a relativistic particle in the static potential
+$U$:
+\begin{equation}\label{eq:potential}
+  U(\vect{x}) = -\mu_\mathrm{p}B_z = \frac{\mu_\mathrm{p}\mu}{r^3} = \frac{k}{r^3},
+  \qquad r = \abs{\vect{x} - \vect{r}_\mathrm{m}},
+\end{equation}
+\begin{equation}\label{eq:eom-moment}
+  \deriv{\vect{x}}{t} = \frac{\vect{p}}{\gamma m}, \qquad
+  \deriv{\vect{p}}{t} = -\nabla U = \frac{3k\,(\vect{x} - \vect{r}_\mathrm{m})}{r^5} ,
+\end{equation}
+summed over the magnets. For $k > 0$ (spin up, with the magnet $\odot$) $U$ is positive and
+falls with $r$: the particle is pushed away, towards weaker $\abs{B_z}$. For $k < 0$ it is drawn
+in, towards stronger field. The force falls as $1/r^4$: the effect is a gradient's, strong only
+close to the magnet. At the launch $B_z = \val{bZero}$ and $U = \val{UZeroUp}$ for spin up.
+
+\subsection{Two conserved quantities}\label{sec:conserved}
+
+$U$ does not depend on time, so the energy is conserved,
+\begin{equation}\label{eq:energy-moment}
+  W = \gamma mc^2 + \frac{k}{r^3} = \sqrt{m^2c^4 + p^2c^2} + \frac{k}{r^3},
+\end{equation}
+and $U$ depends only on $r$, so the force is central and the angular momentum about the magnet,
+\begin{equation}\label{eq:angular}
+  L = \big((\vect{x} - \vect{r}_\mathrm{m})\times\vect{p}\big)_z ,
+\end{equation}
+is conserved too. At the launch $W = \val{WUp}$ (up) and $\val{WDown}$ (down), and $L = \val{LUp}$
+for both.
+
+\subsection{The flights by quadratures}\label{sec:quadrature}
+
+At the radius $r$ energy gives the momentum's size, $p(r)^2 = ((W - k/r^3)/c)^2 - m^2c^2$, and
+angular momentum its azimuthal part, $p_\varphi = L/r$, so
+\begin{equation}\label{eq:pr}
+  p_r^2 = \Big(\frac{W - k/r^3}{c}\Big)^2 - m^2c^2 - \frac{L^2}{r^2}, \qquad
+  \gamma(r) = \frac{W - k/r^3}{mc^2}.
+\end{equation}
+Both particles start moving inwards ($p_r = \val{prZeroUp}$) and turn where $p_r = 0$:
+\begin{equation}\label{eq:turning}
+  r_\mathrm{t}: \quad p_r^2(r_\mathrm{t}) = 0, \qquad
+  r_\mathrm{t} = \val{rTUp} \text{ (up)}, \quad \val{rTDown} \text{ (down)},
+\end{equation}
+the largest root below the launch radius, found by bisection. (For spin down $p_r^2$ turns
+positive again close to the magnet, where the attraction would win; the particle never gets
+there.) From $\dot\varphi = L/(\gamma m r^2)$ and $\dot r = p_r/(\gamma m)$, on each branch
+\begin{equation}\label{eq:phi-of-r}
+  \deriv{\varphi}{r} = \frac{L}{r^2\,\abs{p_r}} ,
+\end{equation}
+\begin{equation}\label{eq:t-of-r}
+  \deriv{t}{r} = \frac{\gamma(r)\,m}{\abs{p_r}} ,
+\end{equation}
+with $\dd r < 0$ on the way in and $\dd r > 0$ on the way out, exactly as in
+\xsecref{first_magnet}{sec:quadrature}: the angle and the time on the outgoing branch are the
+integrals from $r_\mathrm{t}$ to the launch radius plus those from $r_\mathrm{t}$ to $r$, made
+smooth by $r = r_\mathrm{t} + u^2$ and evaluated to thirty digits; the entry into the detector is
+the first point of the outgoing branch inside it, found by bisection on $r$. Spin up enters at
+$r = \val{rEUp}$, at $t = \val{tQUp}$, at $y = \val{yQUp}$; spin down at $r = \val{rEDown}$, at
+$t = \val{tQDown}$, at $y = \val{yQDown}$.
+
+\subsection{The method}\label{sec:method}
+
+The march integrates \eqref{eq:eom-moment} with the classical Runge--Kutta method
+\xeqref{foundations}{eq:rk4} at the fixed step $h = \val{H}$, locates the events on the cubic Hermite
+interpolant and estimates its error by halving $h$ (\xsecref{slingshot}{sec:method}). $W$ and $L$
+are its checks.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch.} $\gamma_0 = \val{gammaZero}$,
+    $\vect{p}_0 = (\val{pZero}, 0)$, $r_0 = \val{rZero}$; $W$ by \eqref{eq:energy-moment}, $L$ by
+    \eqref{eq:angular}.
+  \item\label{st:turn} \emph{The turning points} \eqref{eq:turning}: $\val{rTUp}$ (up),
+    $\val{rTDown}$ (down). The attracted spin comes closer.
+  \item\label{st:up} \emph{Spin up.} After $\val{stepsUp}$ steps it enters its detector through
+    the \val{faceUp} face at $t = \val{tUp}$, at $(\val{xUp}, \val{yUp})$, with momentum
+    $(\val{pxUp}, \val{pyUp})$, $\val{angUp}$ degrees from $+x$. Step estimate $\val{errUp}$; $W$
+    and $L$ drift by $\val{wDevUp}$ and $\val{LDevUp}$; the quadratures agree to
+    $\val{quadDiffUp}$.
+  \item\label{st:down} \emph{Spin down.} After $\val{stepsDown}$ steps it enters its detector
+    through the \val{faceDown} face at $t = \val{tDown}$, at $(\val{xDown}, \val{yDown})$, with
+    momentum $(\val{pxDown}, \val{pyDown})$, $\val{angDown}$ degrees from $+x$. Step estimate
+    $\val{errDown}$; $W$ and $L$ drift by $\val{wDevDown}$ and $\val{LDevDown}$; the quadratures
+    agree to $\val{quadDiffDown}$.
+\end{procedure}
+
+\begin{result}[The reference flights]
+Spin up enters the lower detector at $(\val{xUp}, \val{yUp})$ at $t = \val{tUp}$; spin down
+enters the upper detector at $(\val{xDown}, \val{yDown})$ at $t = \val{tDown}$. The level is
+solved.
+\end{result}
+
+The split is not symmetric ($\val{angUp}$ against $\val{angDown}$ degrees): the attracted spin
+passes closer to the magnet, where the $1/r^4$ force is stronger.
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+Every difference is a few $10^{-12}$ or less, the size of the game's verified accuracy
+(about $10^{-10}$, Foundations §6) and of our estimates (step $\val{errUp}$, quadratures
+$\val{quadDiffUp}$). The tolerance, $10^{-9}$, is ten times the larger of the two computations'
+estimates (or the game's own preview--verification gap where that is larger: here it is not),
+fixed before comparing.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board, the second placement in \code{placements.json}, both spins fly straight
+through the right edge at $(\val{bareX}, \val{bareY})$ at $t = \val{bareT}$: no field, no
+gradient. One magnet near the path splits them; its orientation decides which spin goes which
+way, and its strength and distance how far, roughly as $k/r_\mathrm{t}^4$ times the time spent
+near it. A $\otimes$ magnet below the path would do what the reference's $\odot$ does above it.
+A map of solutions would take the game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game gives a particle with a moment the force $\mu_\mathrm{p}\nabla B_z$, with the gradient of
+the dipole field taken directly (\physref{3.2}), and integrates \eqref{eq:eom-moment} with its
+adaptive eighth-order Runge--Kutta method (\physref{5}, \physref{6}, \physref{7}). It refuses
+moments together with electric sources at finite $c$, where the rest-frame field would make the
+interaction velocity dependent (\physref{3.2}); this level has none. Its conserved
+$\gamma mc^2 - \mu_\mathrm{p}B_z$ and $L$ are \eqref{eq:energy-moment} and \eqref{eq:angular}.
+
+\section{Further reading}\label{sec:reading}
+
+The force and energy of a magnetic moment in a field: \Jackson{§5.7}. The magnet's field:
+\levelref{first_magnet}; the quadratures for a central or axial symmetry:
+\xsecref{first_magnet}{sec:quadrature}.
+
+\levelfileappendix
+
+\end{document}

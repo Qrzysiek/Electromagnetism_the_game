@@ -1,0 +1,213 @@
+{
+ "level_file": "levels/31_stern_gerlach.json",
+ "level_sha256": "441a120cc2fa5805",
+ "golden_hash": "8c136e31db20e500",
+ "recorded": "2026-11-15",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.9958235175177355,
+        -0.1351425992476105,
+        0.0
+       ],
+       "t": 27.705889077654838,
+       "x": [
+        27.0,
+        8.208170531793591,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.88035151285726e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 32
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.9958235174895218,
+        -0.13514259927814495,
+        0.0
+       ],
+       "t": 27.70588907774866,
+       "x": [
+        27.0,
+        8.208170531081178,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.0583534876550402e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 52
+     }
+    },
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.9908239104645857,
+        0.16880720348753506,
+        0.0
+       ],
+       "t": 27.34983569529546,
+       "x": [
+        27.0,
+        12.171932537763604,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.0816125772805663e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 34
+     },
+     "shot": 2,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.9908239104485924,
+        0.16880720353515846,
+        0.0
+       ],
+       "t": 27.349835695703185,
+       "x": [
+        27.0,
+        12.171932538439254,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.9243274468626623e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 0.0,
+      "steps": 54
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      14,
+      13,
+      0
+     ],
+     "value": 1000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 31.46307595443989,
+       "x": [
+        31.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 5
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 31.463075954439894,
+       "x": [
+        31.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 7
+     }
+    },
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 31.46307595443989,
+       "x": [
+        31.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 5
+     },
+     "shot": 2,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 31.463075954439894,
+       "x": [
+        31.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 7
+     }
+    }
+   ],
+   "placement": []
+  }
+ ]
+}
