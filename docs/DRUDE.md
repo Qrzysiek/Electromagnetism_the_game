@@ -352,8 +352,9 @@ in, tested (D13, D14); the level not designed: its capacitance control failed it
      its error; `C_B` is dominated by the strip and the kicker. The way recommended: a
      capacitor as the player's control (a lumped capacitance on the floating contact, a
      list or a log slider; the engine has `circuits[].capacitance`), a new control kind,
-     for the owner to decide (HANDOFF.md, *Waiting on the owner*). The preview's time is
-     not measured yet (the machine was busy).
+     for the owner to decide (HANDOFF.md, *Waiting on the owner*). The preview to t = 420
+     takes 24.4 s and the verification 112.5 s; the verdict's error bars (the ratio ±19 %,
+     the decay ±14 %) ask for a control that moves `C` by a factor of two or more.
    - Tests: equipartition, `⟨Q²⟩/2C = kT/2` on a floating contact with D7's kT; the
      correlation time against the relaxation of a charge put on the contact. *Done
      2026-11-15 (D13, D14), after the first measurement found D7's refill contacts out of

@@ -97,7 +97,9 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
      player's contact changes its capacitance by at most 15 %, less than the measures'
      statistical error: **the plan's capacitance control fails**. Waiting on the owner (the
      options in LEVEL_CHECKS.md; recommended: a capacitor as the player's control). The
-     preview's time is still to measure on an idle machine. A grand-canonical layer
+     preview to t = 420 takes 24.4 s and the verification 112.5 s (fine); the verdict's error
+     bars (the ratio ±19 %, the decay ±14 %) ask for a control that moves `C` by a factor of
+     two or more. A grand-canonical layer
      (equilibrium without the contact resistance) stays untried: the way to bring every
      contact into equilibrium, should the owner want it.
 2. **Glass screen: resolved 2026-11-15** (`docs/levels/glass_screen/NOTES.md`). The
