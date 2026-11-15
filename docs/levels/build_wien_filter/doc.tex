@@ -1,0 +1,160 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil,first_magnet,wien_filter}
+\DocFingerprint{93734cc75d7d1aa4}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+The Wien filter of \levelref{wien_filter} without its coil: the same three ions start at
+$(\val{xZero}, \val{yZero})$ along $+x$ with the kinetic energies $\val{TSlow}$, $\val{TMid}$ and
+$\val{TFast}$, and the same three detectors wait at $x = \val{xDetLoMid}$: the middle ion must
+enter the middle one, $\val{yDetLoMid} \le y \le \val{yDetHiMid}$, moving within
+$\pm\val{coneHalf}$ degrees of $+x$; the slow one the upper,
+$\val{yDetLoSlow} \le y \le \val{yDetHiSlow}$; the fast one the lower,
+$\val{yDetLoFast} \le y \le \val{yDetHiFast}$. The player places up to four charges and two
+magnets, from the listed values, in the region $\val{regX0} \le x \le \val{regX1}$,
+$\val{regY0} \le y \le \val{regY1}$, and so builds both fields. A flight ends when the ion touches
+a charge or a magnet, leaves the world, or enters its detector, a direction outside the window
+turning an arrival into a rejection (\xsecref{foundations}{sec:board}, \physref{6.1}).
+
+The reference places a positive charge just below the path, a $\otimes$ magnet above it and a
+negative charge beyond, above the path. The magnet bends a positive ion one way, more the faster
+it goes; the charges push it the other way, whatever its speed; the middle ion's two pushes
+nearly cancel along its path (\xeqref{wien_filter}{eq:balance}). This document integrates the
+three flights numerically in the two fields.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: each ion has charge $q = \val{q}$, mass $m = \val{m}$ and radius $0$; $c = \val{c}$;
+their speeds are $\val{vSlow}$, $\val{vMid}$ and $\val{vFast}$. The reference charges are
+$Q_1 = \val{QOne}$ at $(\val{xOne}, \val{yOne})$ and $Q_2 = \val{QTwo}$ at $(\val{xTwo}, \val{yTwo})$,
+radius $R = \val{R}$; its magnet $\mu = \val{muMag}$ at $(\val{xMag}, \val{yMag})$, radius
+$\val{Rm}$ (field units, \physref{2.2}). The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{regX0},\rawval{regY0}) rectangle (\rawval{regX1},\rawval{regY1});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoSlow},\rawval{yDetLoSlow}) rectangle (\rawval{xDetHiSlow},\rawval{yDetHiSlow});
+  \draw[green!40!black] (\rawval{xDetLoSlow},\rawval{yDetLoSlow}) rectangle (\rawval{xDetHiSlow},\rawval{yDetHiSlow});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoMid},\rawval{yDetLoMid}) rectangle (\rawval{xDetHiMid},\rawval{yDetHiMid});
+  \draw[green!40!black] (\rawval{xDetLoMid},\rawval{yDetLoMid}) rectangle (\rawval{xDetHiMid},\rawval{yDetHiMid});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLoFast},\rawval{yDetLoFast}) rectangle (\rawval{xDetHiFast},\rawval{yDetHiFast});
+  \draw[green!40!black] (\rawval{xDetLoFast},\rawval{yDetLoFast}) rectangle (\rawval{xDetHiFast},\rawval{yDetHiFast});
+  \addplot[thick, blue!70!black] table {pathslow.dat};
+  \addplot[thick, green!40!black] table {pathmid.dat};
+  \addplot[thick, red!70!black] table {pathfast.dat};
+  \fill[red!75!black] (\rawval{xOne},\rawval{yOne}) circle[radius=\rawval{R}];
+  \fill[blue!75!black] (\rawval{xTwo},\rawval{yTwo}) circle[radius=\rawval{R}];
+  \fill[black!70] (\rawval{xMag},\rawval{yMag}) circle[radius=\rawval{Rm}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference's positive charge (red) below the path, its magnet (black) above it and
+its negative charge (blue) beyond, and the three flights: slow (blue) into the upper detector,
+middle (green) into the middle one within its window, fast (red) into the lower one.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The Lorentz force in the relativistic equation of motion \xeqref{foundations}{eq:eom};
+    the charges' field \xeqref{foundations}{eq:coulomb}; the energy
+    \xeqref{foundations}{eq:energy}.
+  \item The magnet's field in the plane, \xeqref{first_magnet}{eq:dipole-plane}.
+  \item The balance of the electric and magnetic forces, \xeqref{wien_filter}{eq:balance}.
+  \item The board's rules and the detector's direction window; the classical Runge--Kutta
+    method, cubic Hermite interpolation and the error estimate by halving the step
+    (\xsecref{foundations}{sec:board}, \physref{6.1}, \xsecref{foundations}{sec:numerics}), as
+    in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The assumptions are the Wien filter's (\xsecref{wien_filter}{sec:model}), with the magnet held in
+place for the coil.
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The balance with point sources}\label{sec:balance}
+
+For an ion moving along $+x$ the magnetic force is $-qvB_z$ along $y$ and the electric force
+$qE_y$; the middle ion goes straight where $E_y/B_z = v$ (\xeqref{wien_filter}{eq:balance}). With
+a magnet and point charges both fields are strongest near their sources and fall fast, the
+magnet's as $1/r^3$ and the charges' as $1/r^2$, so the ratio changes along the path (the table,
+on the launch line with the reference's elements); the middle ion bends a little one way and
+then the other, and the window asks only that the net bend stay below $\val{coneHalf}^\circ$:
+\begin{center}\small\val{axis}\end{center}
+
+\subsection{The method}\label{sec:method}
+
+The three flights are integrated by \xeqref{foundations}{eq:rk4} at $h = \val{H}$, the events
+located on the cubic Hermite interpolant (a charge's disc, the magnet's, the world's edge, the
+detector and its window), as in \xsecref{wien_filter}{sec:method}. The energy is the check; the
+largest step-halving estimate of an end state is $\val{errMax}$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:slow} \emph{The slow ion} enters its detector through the \val{faceSlow} face at
+    $(\val{xSlow}, \val{ySlow})$ at $t = \val{tSlow}$, moving $\val{angSlow}$ degrees from $+x$.
+  \item\label{st:mid} \emph{The middle ion} enters through the \val{faceMid} face at
+    $(\val{xMid}, \val{yMid})$ at $t = \val{tMid}$, moving $\val{angMid}$ degrees from $+x$:
+    inside the window, so it arrives.
+  \item\label{st:fast} \emph{The fast ion} enters through the \val{faceFast} face at
+    $(\val{xFast}, \val{yFast})$ at $t = \val{tFast}$, moving $\val{angFast}$ degrees from $+x$.
+  \item\label{st:checks} \emph{The checks.} The energy drifts by at most $\val{wDevFast}$; the
+    step estimates are at most $\val{errMax}$.
+\end{procedure}
+
+\begin{result}[The reference flights]
+The three ions enter their detectors at $(\val{xSlow}, \val{ySlow})$, $(\val{xMid}, \val{yMid})$
+and $(\val{xFast}, \val{yFast})$, the middle one within its window. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All differences are below $10^{-10}$, the game's verified accuracy (Foundations §6). The
+tolerance is $10^{-9}$, ten times the larger of the two computations' estimates, or the game's own
+preview--verification gap where that is larger, fixed before comparing. The middle ion's
+direction, $\val{angMid}$ degrees, is inside its $\pm\val{coneHalf}^\circ$ window by a margin far
+above either computation's error.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board, the second placement in \code{placements.json}, all three fly straight along
+$y = \val{yZero}$: the middle one enters its detector straight (\val{bareOutMid}), the other two
+leave through the right edge. A solution must separate them while keeping the middle one
+straight: a magnetic field that bends by speed and an electric field that undoes the middle
+ion's bend, which a single source of either kind cannot do. A map of solutions would take the
+game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game takes the magnet's field as the dipole's and the charges' as Coulomb's (\physref{2.2})
+and integrates the equations of motion with its adaptive eighth-order Runge--Kutta method
+(\physref{5}, \physref{6}, \physref{7}), testing the arrival direction against the window
+(\physref{6.1}); the differences in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+Crossed fields: \Jackson{§12.3}; the filter with a uniform field: \levelref{wien_filter}; the
+magnet's field: \levelref{first_magnet}.
+
+\levelfileappendix
+
+\end{document}
