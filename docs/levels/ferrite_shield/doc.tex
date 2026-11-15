@@ -1,0 +1,248 @@
+\documentclass{leveldoc}
+\DocUses{foundations,deflection_plates,glass_screen,first_coil,first_magnet}
+\DocFingerprint{40ca1b3f000d5ca0}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+\leveldescription
+
+One positive ion is launched along $+x$ from the left edge. Above its line stands a strong
+magnet, its moment out of the board, and between the two lies a bar of ferrite: a magnetically
+soft insulator of relative permeability $\mu_\mathrm{r} = \val{muR}$. It carries no current,
+but in the magnet's field it magnetizes, and a bound magnetic charge appears on its surfaces.
+The player places up to three magnets, of either orientation and the listed strengths, inside
+the marked region below the launch line. The ion must enter the detector, the rectangle
+$\val{xDetLo} \le x \le \val{xDetHi}$, $\val{yDetLo} \le y \le \val{yDetHi}$ (no acceptance
+window, no kinetic window, no gate). A flight ends when the ion touches a magnet or the ferrite
+(its box plus a contact shell of $\val{contact}$), leaves the world, or enters the detector
+(\xsecref{foundations}{sec:board}).
+
+With nothing placed the magnet's field, weakened by the ferrite, still bends the ion upwards,
+and it leaves through the right edge above the detector. The reference places a weaker magnet
+of the opposite orientation below the path, whose field bends the ion back down into the
+detector's left face. Without the ferrite the same magnet would not be enough. This document
+derives the ferrite's bound charge, the magnetic twin of the Glass screen's
+(\levelref{glass_screen}), solves it on rectangles, and integrates the flights.
+
+\section{Setup}\label{sec:setup}
+
+\setuptable
+
+The ion has charge $q = \val{q}$, mass $m = \val{m}$ and radius $0$; $c = \val{c}$; it starts at
+$(\val{xZero}, \val{yZero})$ along $+x$ with $T_0 = \val{Tzero}$, so $\gamma_0 = \val{gammaZero}$
+and $p = \val{pZero}$. The level's magnet has the strength $\mu_1 = \val{muOne}$ (field units,
+\physref{2.2}) at $(\val{xMagOne}, \val{yMagOne})$; the reference's, $\mu_2 = \val{muTwo}$ at
+$(\val{xMagTwo}, \val{yMagTwo})$; each sphere has radius $\val{Rm}$. The ferrite occupies
+$\val{xF0} \le x \le \val{xF1}$, $\val{yF0} \le y \le \val{yF1}$, length $\val{fL}$, thickness
+$\val{fT}$ and height $\val{fH}$ along $z$, symmetric about the plane of the flight;
+$\lambda = (\mu_\mathrm{r} - 1)/(\mu_\mathrm{r} + 1) = \val{lam}$. The world is
+$-1 \le x \le \val{xWorld}$, $-1 \le y \le \val{yWorld}$. The reported step is $h = \val{H}$ and
+the reported mesh has rectangles of edge $\val{panelFine}$, $\val{nPanels}$ of them on the
+ferrite's upper half.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth,
+  xmin=-1.5, xmax=32.5, ymin=-2, ymax=22.5,
+  xlabel={$x$}, ylabel={$y$}, tick label style={font=\small}]
+  \draw[black!40, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!25] (0,0) rectangle (30,20);
+  \fill[green!50!black, fill opacity=0.18]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \fill[brown!40!white]
+    (\rawval{xF0},\rawval{yF0}) rectangle (\rawval{xF1},\rawval{yF1});
+  \draw[brown!50!black]
+    (\rawval{xF0},\rawval{yF0}) rectangle (\rawval{xF1},\rawval{yF1});
+  \fill[black!75] (\rawval{xMagOne},\rawval{yMagOne}) circle[radius=\rawval{Rm}];
+  \fill[black!40] (\rawval{xMagTwo},\rawval{yMagTwo}) circle[radius=\rawval{Rm}];
+  \addplot[orange!80!black] table {pathbare.dat};
+  \addplot[very thick, blue!60!black] table {pathref.dat};
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.08];
+\end{axis}
+\end{tikzpicture}
+\caption{The ferrite (brown), the level's magnet above it (black) and the reference's below the
+path (gray); the green box is the detector. Blue: the reference flight, bent down into the
+detector's left face. Orange: the empty board, bent up and out through the right edge above
+the detector.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The Lorentz force in the relativistic equation of motion
+    \xeqref{foundations}{eq:eom}; the magnetic force does no work
+    (\xsecref{first_coil}{sec:nowork}).
+  \item The magnets' fields outside their spheres are point dipoles'
+    (\xsecref{first_magnet}{sec:dipole}); in three dimensions,
+    $\vect{H} = \mu\,(3(\uvec{z}\cdot\uvec{r})\uvec{r} - \uvec{z})/r^3$ (\Jackson{§5.6}).
+  \item Magnetostatics without free currents: $\nabla\times\vect{H} = 0$, so
+    $\vect{H} = -\nabla\Phi_\mathrm{M}$; $\nabla\cdot\vect{B} = 0$, with $\vect{B} = \vect{H}$
+    outside and $\vect{B} = \mu_\mathrm{r}\vect{H}$ in a linear soft ferrite; the normal $\vect{B}$
+    is continuous at a surface (\Jackson{§5.8, §5.9}).
+  \item The rectangle integral \xeqref{deflection_plates}{eq:rectangle} and the bound-charge
+    method of \xsecref{glass_screen}{sec:panels}.
+  \item The board's rules, the classical Runge--Kutta method and the cubic Hermite location of an
+    event (\xsecref{foundations}{sec:board}, \xsecref{foundations}{sec:numerics}), as in
+    \xsecref{deflection_plates}{sec:flight}.
+\end{principles}
+
+\begin{assumption}{A linear, static ferrite}\label{as:linear}
+$\mu_\mathrm{r}$ is constant: no saturation, no hysteresis, magnetized at once by the magnets
+only (the ion's own field is left out). The game makes the same assumptions (\physref{2.7},
+\emph{Ferrites}).
+\end{assumption}
+
+\begin{assumption}{No radiation}\label{as:radiation}
+The radiated energy \xeqref{foundations}{eq:larmor} is not taken from the ion; along the
+reference flight it is a fraction $\val{EradFrac}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{Equal rectangles}\label{as:panels}
+The bound magnetic charge is constant on equal rectangles of edge $\val{panelFine}$, its
+condition held on average at four Gauss points; the engine holds it on graded triangles
+(\physref{2.7}). Doubling the edge moves an end state by $\val{errMesh}$, this mesh's
+discretization estimate; halving the step, by $\val{errStep}$.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The bound magnetic charge}\label{sec:charge}
+
+Outside the ferrite and inside it there is no current, so $\vect{H} = -\nabla\Phi_\mathrm{M}$
+everywhere, and a uniform linear medium has no volume magnetic charge: the ferrite acts through
+a surface density $\sigma$, whose field is computed as a charge's. The argument of
+\xsecref{glass_screen}{sec:condition}, with $\vect{H}$ for $\vect{E}$ and the continuity of the
+normal $\vect{B}$, $\mu_\mathrm{r}H_n^\mathrm{in} = H_n^\mathrm{out}$, for that of the normal
+$\vect{D}$, gives
+\begin{equation}\label{eq:condition}
+  \sigma = \frac{\lambda}{2\pi}\,\bar H_n, \qquad \lambda = \frac{\mu_\mathrm{r} - 1}{\mu_\mathrm{r} + 1},
+\end{equation}
+with $\bar H_n$ the outward normal field of every source but the surface element itself. With
+$\mu_\mathrm{r} = \val{muR}$, $\lambda$ is nearly $1$: the ferrite nearly expels $\vect{H}$ from
+itself, drawing the field lines into it.
+
+\subsection{Odd under the mirror}\label{sec:odd}
+
+A moment along $z$ at $z = 0$ has $H_z$ even in $z$ and $H_x$, $H_y$ odd. On the top face,
+whose outward normal is $+\uvec{z}$, $\bar H_n = H_z$; on its mirror, the bottom face,
+$\bar H_n = -H_z$; on the side faces $\bar H_n$ is an in-plane component, odd in $z$. So
+\begin{equation}\label{eq:odd}
+  \sigma(x, y, -z) = -\sigma(x, y, z) :
+\end{equation}
+each rectangle's mirror carries the opposite density. Two consequences: the ferrite's total
+magnetic charge is zero by symmetry (no constraint or extra unknown is needed, unlike the glass's
+neutrality), and in the plane $z = 0$ the in-plane fields of a rectangle and its mirror cancel,
+while their $z$ components add: the ferrite's field in the plane is perpendicular to it, and the
+ion stays in the plane. On the reported mesh the upper half carries $\val{qHalf}$, the lower half
+the opposite.
+
+\subsection{The panels}\label{sec:panels}
+
+Rectangle $j$ at unit density has the field $\vect{e}_j$ (the gradient of
+\xeqref{deflection_plates}{eq:rectangle}); its mirror at unit density $\vect{e}_j^\mathrm{m}$.
+Averaging \eqref{eq:condition} over rectangle $i$ at its four Gauss points $\vect{g}_{i,k}$ and
+projecting on its outward normal $\uvec{n}_i$,
+\begin{equation}\label{eq:system}
+  \sigma_i - \frac{\lambda}{2\pi}\sum_j \sigma_j K_{ij}
+    = \frac{\lambda}{2\pi}\,\frac14\sum_k \vect{H}_\mathrm{ext}(\vect{g}_{i,k})\cdot\uvec{n}_i,
+  \qquad
+  K_{ij} = \frac14\sum_k\big(\vect{e}_j - \vect{e}_j^\mathrm{m}\big)(\vect{g}_{i,k})\cdot\uvec{n}_i ,
+\end{equation}
+with $\vect{H}_\mathrm{ext}$ the magnets' dipole fields, evaluated off the plane at the Gauss
+points, and the rectangle's own $\vect{e}_i$ left out of $K_{ii}$ (its normal part averages to
+zero over its two sides; its mirror stays). The dense system is solved by LU factorization;
+its residual is $\val{solveRes}$. In the plane,
+\begin{equation}\label{eq:bz}
+  B_z(x, y) = -\sum_{\text{magnets}}\frac{\mu_k}{\abs{\vect{x} - \vect{r}_k}^3}
+    + \sum_j \sigma_j\big(e_{j,z} - e^\mathrm{m}_{j,z}\big)(x, y, 0),
+\end{equation}
+and the ion obeys \xeqref{first_magnet}{eq:eom-dipole} with this $B_z$. The field with nothing
+placed, the level's magnet alone against magnet and ferrite:
+\begin{center}\small\val{fieldtab}\end{center}
+On the launch line under the magnet the ferrite leaves $\val{shieldRatio}$ of the field: it
+shields, unlike the glass of \levelref{glass_screen}, because $\lambda \approx 1$ and the magnet's
+field crosses the bar's large top and bottom faces, where the bound charge sits and cancels it.
+
+\subsection{The flight}\label{sec:flight}
+
+The state is advanced by \xeqref{foundations}{eq:rk4} with $h = \val{H}$, the ending located on
+the cubic Hermite interpolant (thirty-two samples, sixty halvings) with obstacles first, as in
+\xsecref{deflection_plates}{sec:flight}. The magnetic force does no work, so $\abs{\vect{p}}$ is
+constant: the check. The step's error is $\abs{y_h - y_{2h}}/15$; the mesh estimate is the
+change when the rectangles' edge doubles to $\val{panelCoarse}$. Both flights keep their
+outcome at $h$, $2h$ and on both meshes.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch.} $\gamma_0 = \val{gammaZero}$, $\vect{p}_0 = (\val{pZero}, 0)$.
+  \item\label{st:panels} \emph{The panels.} Build the upper-half rectangles of edge
+    $\val{panelFine}$ ($\val{nPanels}$ of them) and solve \eqref{eq:system} with both magnets'
+    fields on the right side: residual $\val{solveRes}$.
+  \item\label{st:march} \emph{The march.} Advance \xeqref{first_magnet}{eq:eom-dipole} with $B_z$
+    from \eqref{eq:bz} by \xeqref{foundations}{eq:rk4}. The state every five time units:
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:end} \emph{The arrival.} After $\val{RefSteps}$ steps the ion enters the
+    detector through its \val{RefFace} face at $t = \val{RefT}$, at $(\val{RefX}, \val{RefY})$,
+    with momentum $(\val{RefPx}, \val{RefPy})$, $\val{RefAng}$ degrees from $+x$.
+  \item\label{st:check} \emph{The checks.} $\abs{\vect{p}}$ drifts by $\val{RefPdev}$; the step
+    estimate is $\val{errStep}$, the mesh estimate $\val{errMesh}$; the ferrite's sampled
+    clearance is $\val{RefDmin}$, outside its shell $\val{contact}$, with at most
+    $\val{stepReach}$ travelled in a step.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The ion enters the detector through its \val{RefFace} face at $(\val{RefX}, \val{RefY})$ at
+$t = \val{RefT}$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The tolerance on a state, $\val{tolFlight}$, is ten times the larger of our estimates (the
+mesh's, $\val{errMesh}$), fixed before comparing; the game's own preview--verification gap,
+$\val{gapGame}$, is below it. The differences, $\val{cmpRefYcDiff}$ in the reference's ordinate
+and $\val{cmpBareYcDiff}$ in the empty board's, are below both discretization estimates, ours
+(rectangles of $\val{panelFine}$) and the game's (graded triangles of 0.35 of a cell): the two
+meshes' errors, not a difference of model. The ferrite converges more slowly than
+the glass (Level 22's differences were a thousand times below its estimate): as $\lambda \to 1$
+the bound charge's discretization error grows (\physref{2.7}, the cube at $\mu \to \infty$). The
+outcomes agree, and the faces the flights meet agree exactly.
+
+\section{Other solutions}\label{sec:others}
+
+The empty board, the second placement in \code{placements.json}: the ion leaves through the
+\val{BareFace} edge at $(\val{BareX}, \val{BareY})$ at $t = \val{BareT}$, bent up by the magnet's
+residual field. Without the ferrite it would be bent further, to $y = \val{bareAloneY}$ at the
+same edge (our run, not compared). The reference's magnet below the path, of the opposite
+orientation, adds a field of the other sign there and turns the ion down into the detector;
+without the ferrite the same placement ends as \val{noFerriteOut} through the \val{noFerriteFace}
+edge at $y = \val{noFerriteY}$, just above the detector: the solution counts on the shield.
+A map of solutions would take the game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The engine solves the same condition (\physref{2.7}, \emph{Ferrites}): the dielectric
+condition with $\vect{H}$ for $\vect{E}$ and $\mu$ for $\varepsilon$, on graded triangles,
+averaged per triangle by a six-point rule, each triangle's mirror carrying $-\sigma$, magnetized
+by the level's and the player's static magnets and coils. It integrates
+\xeqref{first_magnet}{eq:eom-dipole} adaptively (\physref{5}, \physref{6}, \physref{7}).
+This document holds the same condition on equal rectangles; the agreement asked of the two is
+$\val{tolFlight}$, and they agree within each one's own discretization estimate.
+
+\section{Further reading}\label{sec:reading}
+
+Magnetostatics with permeable media, the magnetic scalar potential and magnetic shielding:
+\Jackson{§5.9, §5.12}. The dielectric twin of this calculation: \levelref{glass_screen}; the
+magnets' field and the motion in it: \levelref{first_magnet}.
+
+\levelfileappendix
+
+\end{document}
