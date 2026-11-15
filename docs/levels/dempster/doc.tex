@@ -1,0 +1,184 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil}
+\DocFingerprint{10b28fda106b1bb1}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Six positive ions leave a source at $(\val{xZero}, \val{yZero})$ with the small kinetic energy
+$T_0 = \val{Tzero}$: three masses, $1$, $2$ and $4$, each at $\pm\val{angDeg}$ degrees from
+$+y$. The board lies inside a large circular coil whose field, perpendicular to the board,
+bends them round. Each ion must enter the detector of its mass, all on the line $y = 5$ to the
+right of the source (the table in \S\ref{sec:hand}); there are no acceptance windows, kinetic
+windows or gates. The player places up to three charges from the listed magnitudes in the
+region $\val{regX0} \le x \le \val{regX1}$, $\val{regY0} \le y \le \val{regY1}$, below the
+source. A flight ends when the ion enters its detector, touches a charge or the coil's wire,
+leaves the world, or reaches $t_{\max}$ (\xsecref{foundations}{sec:board}).
+
+The reference places one positive charge $Q = \val{QOne}$ at $(\val{xOne}, \val{yOne})$, just
+below the source: its repulsion accelerates the ions upwards, and the coil's field bends them
+back down after half a turn onto the detectors, the heavier ions on wider circles. This is
+Dempster's spectrometer: an accelerating field, then a magnetic half-turn whose diameter
+grows as the square root of the mass, with the two launch angles re-converging after half a
+turn. This document estimates the diameters in a uniform field and integrates the six flights
+numerically.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+In symbols: every ion has charge $q = \val{q}$ and radius $0$; $c = \val{c}$. The coil is a
+circle of radius $a = \val{aCoil}$ about $(\val{xCoil}, \val{yCoil})$ with the strength
+$\kappa = \val{kappa}$ (\physref{2.2}), whose field at its centre is $2\pi\kappa/a =
+\val{Bcentre}$ (\xsecref{first_coil}{sec:loop}). The reference charge has radius $R = \val{R}$,
+$\val{rLaunch}$ below the source. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=33.6, ymin=-1.6, ymax=23.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (32,22);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!70, thick] (\rawval{xCoil},\rawval{yCoil}) circle[radius=\rawval{aCoil}];
+  \draw[black!30, dotted] (\rawval{regX0},\rawval{regY0}) rectangle (\rawval{regX1},\rawval{regY1});
+  \fill[green!50!black, fill opacity=0.18] (13,2) rectangle (14,5);
+  \draw[green!40!black] (13,2) rectangle (14,5);
+  \fill[green!50!black, fill opacity=0.18] (17,2) rectangle (18,5);
+  \draw[green!40!black] (17,2) rectangle (18,5);
+  \fill[green!50!black, fill opacity=0.18] (22,2) rectangle (24,5);
+  \draw[green!40!black] (22,2) rectangle (24,5);
+  \addplot[blue!70!black] table {patha.dat};
+  \addplot[blue!70!black, dashed] table {pathb.dat};
+  \addplot[red!70!black] table {pathc.dat};
+  \addplot[red!70!black, dashed] table {pathd.dat};
+  \addplot[orange!80!black] table {pathe.dat};
+  \addplot[orange!80!black, dashed] table {pathf.dat};
+  \fill[red!75!black] (\rawval{xOne},\rawval{yOne}) circle[radius=\rawval{R}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The coil (black circle), the reference charge (red disc) below the source, and the six
+half-turns onto the detectors (green): mass 1 (blue), 2 (red) and 4 (orange), each at
+$+\val{angDeg}^\circ$ (solid) and $-\val{angDeg}^\circ$ (dashed). The detectors' positions are
+the level file's (the table of \S\ref{sec:hand}).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The Lorentz force in the relativistic equation of motion \xeqref{foundations}{eq:eom},
+    the point charge's field \xeqref{foundations}{eq:coulomb}, the energy
+    \xeqref{foundations}{eq:energy}; the magnetic force does no work
+    (\xsecref{first_coil}{sec:nowork}).
+  \item The coil's field in its plane, \xeqref{first_coil}{eq:loop-field}, with $K$ and $E$ by
+    \xeqref{first_coil}{eq:agm}; the circle of \xeqref{first_coil}{eq:larmor-radius}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and
+    the error estimate by halving the step (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The assumptions are First coil's (\xsecref{first_coil}{sec:model}): the coil and the charge are
+held in place, the coil is a thin circle, the ions are points, and their radiation is not taken
+from them.
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The acceleration}\label{sec:accel}
+
+The coil's field does no work; the charge does. By the energy \xeqref{foundations}{eq:energy}
+an ion's kinetic energy is $T = T_0 + qQ\,(1/r_\mathrm{launch} - 1/r)$, with $r$ its distance from
+the charge. At the source $qQ/r_\mathrm{launch} = \val{VLaunch}$, twenty times $T_0$: the ions
+leave almost at rest and take their energy from the charge, all of them about the same, whatever
+their mass. Mass 1 has $T = \val{TtopOne}$ at the top of its half-turn ($y = \val{topY}$).
+
+\subsection{Diameters and focusing in a uniform field}\label{sec:diameter}
+
+In a uniform field $B$ an ion of momentum $p$ turns on a circle of radius $p/\abs{qB}$
+\xeqref{first_coil}{eq:larmor-radius}, and after half a turn it is a diameter away from where it
+started:
+\begin{equation}\label{eq:diameter}
+  D = \frac{2p}{\abs{qB}} \approx \frac{2\sqrt{2mT}}{\abs{qB}} \propto \sqrt{m}
+\end{equation}
+at equal energy ($p \approx \sqrt{2mT}$ at these speeds, $T \ll mc^2$): the masses $1$, $2$ and
+$4$ land at distances in the ratio $1 : \sqrt2 : 2$. An ion launched at the angle $\alpha$ from
+the central direction lands at $D\cos\alpha$, to second order $D - D\alpha^2/2$ for either sign of
+$\alpha$: the two angles land together, $180^\circ$ focusing. Against the central ray they fall
+short by $r\alpha^2$, here $\val{focusOne}$ for mass 1 ($\alpha = \val{alphaRad}$).
+
+The coil's field is not uniform (\xsecref{first_coil}{sec:loop}): it grows towards the wire,
+and the charge's field still pushes along the way. With $p$ and $B_z$ taken at the top of each
+mass's half-turn from the march below (the $+\val{angDeg}^\circ$ ions):
+\begin{center}\small\val{estimates}\end{center}
+For mass 1 the estimate lands within a few per cent; the heavier ions' wider circles reach the
+stronger field near the wire and land shorter. In a uniform field the two angles would land
+together; here their landing points differ by $\val{spreadOne}$ (mass 1), $\val{spreadTwo}$
+(mass 2) and $\val{spreadFour}$ (mass 4), through the field's gradient and the charge, but by
+less than the detectors' widths.
+
+\subsection{The method}\label{sec:method}
+
+The six flights are integrated by \xeqref{foundations}{eq:rk4} at $h = \val{H}$ in the coil's
+field and the charge's, as in \xsecref{first_coil}{sec:method}; the energy is the check. The
+largest step-halving estimate of an end state is $\val{errMax}$, the largest energy drift
+$\val{wDevMax}$.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launches.} $T_0 = \val{Tzero}$ for every ion, at
+    $\pm\val{angDeg}^\circ$ from $+y$; each mass's momentum from
+    \xeqref{foundations}{eq:launch}.
+  \item\label{st:march} \emph{The march.} Advance each ion by \xeqref{foundations}{eq:rk4} in
+    the coil's field \xeqref{first_coil}{eq:loop-field} and the charge's, and locate its entry:
+    \begin{center}\small\val{results}\end{center}
+    Every ion enters its detector through its top face, $y = 5$, inside the detector's span.
+\end{procedure}
+
+\begin{result}[The reference flights]
+All six ions enter the detectors of their masses at the points of the table. The level is
+solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All differences are a few $10^{-11}$ or less, the game's verified accuracy (Foundations §6);
+our step estimates are a few $10^{-13}$. The tolerance, $10^{-9}$, is ten times the larger of
+the two computations' estimates (or the game's own preview--verification gap, where larger),
+fixed before comparing.
+
+\section{Other solutions}\label{sec:others}
+
+On the empty board, the second placement in \code{placements.json}, the ions leave the source
+almost at rest and circle slowly in the coil's field, drifting along its gradient; the light
+ones still drift into their detectors after long times, but the heavy ones do not before
+$t_{\max}$ (ion 5 ends as \val{bareOutFive}): the comparison table gives each outcome. A charge
+must give the ions their energy, and one below the source, as in the reference, gives all of
+them nearly the same, which \eqref{eq:diameter} needs. A map of solutions would take the game's
+verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game evaluates the coil's field by its closed form (\physref{2.2}) and integrates the
+equations of motion with its adaptive eighth-order Runge--Kutta method (\physref{5},
+\physref{6}, \physref{7}); the differences in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+Motion in a magnetic field: \Jackson{§12.2}; the coil's field and cyclotron motion:
+\levelref{first_coil}. The instrument is A. J. Dempster's mass spectrometer of 1918, the
+first with $180^\circ$ magnetic focusing.
+
+\levelfileappendix
+
+\end{document}
