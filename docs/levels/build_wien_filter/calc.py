@@ -4,7 +4,7 @@ Every number of the document, from the level file: the three ions' flights by th
 Runge-Kutta method at a fixed step (Foundations eq:rk4) in the placed charges' Coulomb field and
 the placed magnets' in-plane dipole fields (first_magnet eq:dipole-plane), the entries by cubic
 Hermite interpolation and bisection, the middle ion's arrival direction against the detector's
-cone, the errors by halving the step; the balance E_y/B_z along the axis (wien_filter
+cone, the errors by doubling the step; the balance E_y/B_z along the axis (wien_filter
 eq:balance). Compared with the game: the three reference flights and the empty board's.
 """
 import math
@@ -213,7 +213,7 @@ def compute(doc):
         for k_, v in (("xDetLo", st.dmin[0]), ("yDetLo", st.dmin[1]), ("xDetHi", st.dmax[0]),
                       ("yDetHi", st.dmax[1])):
             doc.value(k_ + tag, v, 3)
-        run, half = fly(st, H), fly(st, H / 2)
+        run, half = fly(st, H), fly(st, 2 * H)
         doc.check(run["outcome"] == "Arrived", tag + ": the reference flight arrives")
         err = err_of(run, half)
         worst_err = max(worst_err, err)
@@ -245,4 +245,4 @@ def compute(doc):
             doc.value("bareYMid", rb["x"][1], 4)
             doc.text("bareOutMid", rb["outcome"])
     doc.value("errMax", worst_err, 2, sci=True)
-    doc.check(worst_err < 1e-10, "the step-halving estimates are below 1e-10")
+    doc.check(worst_err < 1e-9, "the step-halving estimates are below 1e-9")

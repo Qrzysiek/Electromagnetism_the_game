@@ -78,7 +78,7 @@ middle (green) into the middle one within its window, fast (red) into the lower 
   \item The magnet's field in the plane, \xeqref{first_magnet}{eq:dipole-plane}.
   \item The balance of the electric and magnetic forces, \xeqref{wien_filter}{eq:balance}.
   \item The board's rules and the detector's direction window; the classical Runge--Kutta
-    method, cubic Hermite interpolation and the error estimate by halving the step
+    method, cubic Hermite interpolation and the error estimate by doubling the step
     (\xsecref{foundations}{sec:board}, \physref{6.1}, \xsecref{foundations}{sec:numerics}), as
     in \xsecref{slingshot}{sec:method}.
 \end{principles}
@@ -103,7 +103,7 @@ then the other, and the window asks only that the net bend stay below $\val{cone
 The three flights are integrated by \xeqref{foundations}{eq:rk4} at $h = \val{H}$, the events
 located on the cubic Hermite interpolant (a charge's disc, the magnet's, the world's edge, the
 detector and its window), as in \xsecref{wien_filter}{sec:method}. The energy is the check; the
-largest step-halving estimate of an end state is $\val{errMax}$.
+largest step-doubling estimate of an end state is $\val{errMax}$.
 
 \section{The reference solution by hand}\label{sec:hand}
 
