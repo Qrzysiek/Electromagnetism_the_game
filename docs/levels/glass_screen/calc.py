@@ -18,9 +18,11 @@ import numpy as np
 # Reported step. The coarser flight uses twice this step.
 H = 0.01
 # Panel edges, in cells. The reported mesh is the finer one. Doubling the edge
-# is the discretization estimate. Chosen as the two sizes, not from the game.
-PANEL_FINE = 0.5
-PANEL_COARSE = 1.0
+# is the discretization estimate. Chosen as the two sizes, not from the game:
+# the reference swings round its charge, and at 0.5 against 1.0 the estimate
+# (0.16 at its end) let the comparison pass anything.
+PANEL_FINE = 0.25
+PANEL_COARSE = 0.5
 # Simpson on the radiated power. Set beforehand.
 TOL_RAD = 1e-4
 # Obstacle shell (PHYSICS.md, the electrode box plus the contact shell).
@@ -217,6 +219,7 @@ class Plates:
         self.packs, self.boxes = build_panels(self.dielectrics, target, s)
         self.n_panels = sum(p["u0"].size for p in self.packs.values())
         self.sigma = self._solve()
+        self._prepare_fast()
 
     def _coulomb(self, x, y, z):
         phi = ex = ey = ez = 0.0
@@ -341,7 +344,8 @@ class Plates:
         self._areas = areas
         return sigma
 
-    def field(self, x, y):
+    def field_by_panels(self, x, y):
+        """The plane's potential and field, panel pack by pack (eq:rectangle as written)."""
         phi = ex = ey = 0.0
         for pack, sig in zip(self.packs.values(), self._sigma_parts):
             p, a, b, _c = _panel_fields(x, y, 0.0, pack, sig)
@@ -350,6 +354,63 @@ class Plates:
             ey += b
         pc, ac, bc, _ec = self._coulomb(x, y, 0.0)
         return phi + pc, ex + ac, ey + bc
+
+    def _prepare_fast(self):
+        """The same sums as `field_by_panels`, arranged for one pass per orientation: each
+        rectangle and its mirror, each with its four corners and their signs."""
+        self._fast = []
+        for pack, sig in zip(self.packs.values(), self._sigma_parts):
+            k = int(pack["kind"])
+            u0, u1, v0, v1, c = pack["u0"], pack["u1"], pack["v0"], pack["v1"], pack["c"]
+            if k == 2:
+                # The top face at z = c; its mirror, the bottom face, at -c.
+                U0, U1 = np.concatenate([u0, u0]), np.concatenate([u1, u1])
+                V0, V1 = np.concatenate([v0, v0]), np.concatenate([v1, v1])
+                C = np.concatenate([c, -c])
+            else:
+                # A side face's upper half (v is z); its mirror, z from -v1 to -v0.
+                U0, U1 = np.concatenate([u0, u0]), np.concatenate([u1, u1])
+                V0, V1 = np.concatenate([v0, -v1]), np.concatenate([v1, -v0])
+                C = np.concatenate([c, c])
+            S = np.concatenate([sig, sig])
+            self._fast.append((k, U0, U1, C, np.concatenate([V0, V1, V0, V1]),
+                               np.concatenate([S, -S, -S, S])))
+        self._last = None
+
+    def field(self, x, y):
+        """The plane's potential and field (z = 0), as `field_by_panels`, in one pass per
+        orientation; the last point's value is kept (a step's end is asked for again)."""
+        if self._last is not None and self._last[0] == x and self._last[1] == y:
+            return self._last[2]
+        phi = ex = ey = 0.0
+        for k, U0, U1, C, VV, SS in self._fast:
+            # The point in the rectangles' (u, v, w) frame: kind 0 (y, z, x), kind 1
+            # (x, z, y), kind 2 (x, y, z), with z = 0.
+            if k == 0:
+                U, V, W = y, 0.0, x
+            elif k == 1:
+                U, V, W = x, 0.0, y
+            else:
+                U, V, W = x, y, 0.0
+            ua, ub = U - U0, U - U1
+            w = W - C
+            uu = np.concatenate([ua, ua, ub, ub])
+            ww = np.concatenate([w, w, w, w])
+            pot, eu, ev, ew = _accum(uu, V - VV, ww)
+            phi += float(SS @ pot)
+            if k == 0:
+                ex += float(SS @ ew)
+                ey += float(SS @ eu)
+            elif k == 1:
+                ex += float(SS @ eu)
+                ey += float(SS @ ew)
+            else:
+                ex += float(SS @ eu)
+                ey += float(SS @ ev)
+        pc, ac, bc, _ec = self._coulomb(x, y, 0.0)
+        out = (phi + pc, ex + ac, ey + bc)
+        self._last = (x, y, out)
+        return out
 
 
 def rhs_of(st, state):
@@ -637,6 +698,18 @@ def compute(doc):
     coarse_ref = Plates(lvl, ref_place, PANEL_COARSE)
     fine_bare = Plates(lvl, bare_place, PANEL_FINE)
     coarse_bare = Plates(lvl, bare_place, PANEL_COARSE)
+    # The flights' field is the panel sum rearranged (Plates.field): the same numbers to
+    # rounding, at the launch, under the fixed charge, in the glass and beyond its end.
+    g0 = fine_bare.dielectrics[0]
+    probes = [tuple(fine_bare.x0), (fine_bare.charges[0][0], fine_bare.x0[1]),
+              (g0["center"][0], g0["center"][1]),
+              (g0["center"][0] + g0["length"], g0["center"][1])]
+    worst = 0.0
+    for st in (fine_bare, coarse_ref):
+        for x, y in probes:
+            fast, slow = st.field(x, y), st.field_by_panels(x, y)
+            worst = max(worst, max(abs(a - b) / max(1.0, abs(b)) for a, b in zip(fast, slow)))
+    doc.check(worst < 1e-10, "the flights' field differs from the panel sum")
     runs = {
         0: (fine_ref, fly(fine_ref, H, path_every=20, table_every=5.0), fly(fine_ref, 2.0 * H)),
         1: (fine_bare, fly(fine_bare, H, path_every=20), fly(fine_bare, 2.0 * H)),
@@ -729,8 +802,8 @@ def compute(doc):
     doc.value("eInsideC", ey_ci, 4, sci=True)
     inside_rel = abs(ey_i) / abs(ey_ci)
     screen_rel = abs(ey_b) / abs(ey_c)
-    doc.value("insideRel", inside_rel, 2, sci=True)
-    doc.value("screenRel", screen_rel, 2, sci=True)
+    doc.value("insideRel", inside_rel, 4)
+    doc.value("screenRel", screen_rel, 4)
     doc.value("qFixed", q_fixed, 3, sci=True)
     doc.value("xCharge", cx, 3)
     doc.value("yCharge", cy, 3)
@@ -740,10 +813,59 @@ def compute(doc):
     doc.value("yPlay", play[1], 3)
     doc.value("rSample", r_sample, 4)
     box = fine_bare.boxes[0]
-    doc.value("xGlass0", box[0], 3)
-    doc.value("xGlass1", box[1], 3)
-    doc.value("yGlass0", box[2], 3)
-    doc.value("yGlass1", box[3], 3)
+    doc.value("xGlass0", box[0], 4)
+    doc.value("xGlass1", box[1], 4)
+    doc.value("yGlass0", box[2], 4)
+    doc.value("yGlass1", box[3], 4)
+
+    # eq:slab-out and eq:slab-in: the same charge over an infinite slab of the glass's
+    # thickness and permittivity, on the line through the charge normal to the slab.
+    # a: the charge above the near face; d: the thickness; h: the launch line below the
+    # far face. The series' terms fall as beta^(2n) = 0.36^n: 60 terms leave < 1e-26.
+    a_s = cy - box[3]
+    d_s = box[3] - box[2]
+    h_s = box[2] - sample_y
+    beta = fine_bare.lam
+    r0 = a_s + d_s + h_s
+    slab_out = sum((1.0 - beta * beta) * beta ** (2 * n) * (r0 / (r0 + 2.0 * n * d_s)) ** 2
+                   for n in range(60))
+    zc = a_s + 0.5 * d_s  # the charge to the slab's middle plane
+    slab_in = (2.0 / (fine_bare.eps + 1.0)) * sum(
+        beta ** (2 * n) * ((zc / (zc + 2.0 * n * d_s)) ** 2
+                           - beta * (zc / (zc + d_s + 2.0 * n * d_s)) ** 2)
+        for n in range(60))
+    doc.check(abs(r_sample - r0) < 1e-12, "the launch-line sample is not straight under the charge")
+    doc.value("slabA", a_s, 4)
+    doc.value("slabD", d_s, 4)
+    doc.value("slabH", h_s, 4)
+    doc.value("slabZc", zc, 4)
+    doc.value("slabOut", slab_out, 4)
+    doc.value("slabIn", slab_in, 4)
+    doc.value("slabOneMinus", 1.0 - beta * beta, 4)
+    doc.value("slabFirst", (1.0 - beta * beta), 4)
+    doc.value("invEps", 1.0 / fine_bare.eps, 4)
+    doc.check(slab_out < 1.0 and slab_in < 1.0, "the infinite slab does not weaken the field")
+
+    # The panel field against the bare charge's at a few points of the plane: under the
+    # charge on the launch line and lower, in the glass, under its near end, beyond its
+    # far end on its own line.
+    pts = [("under the charge, launch line", sample_x, sample_y),
+           ("under the charge, 2 lower", sample_x, sample_y - 2.0),
+           ("under the charge, 4 lower", sample_x, sample_y - 4.0),
+           ("under the glass's left end", box[0], sample_y),
+           ("the glass's centre", sample_x, in_y),
+           ("5 beyond its right end", box[1] + 5.0, in_y)]
+    rows = []
+    for name, px_, py_ in pts:
+        _p, gx, gy = fine_bare.field(px_, py_)
+        rx, ry = px_ - cx, py_ - cy
+        rr = math.hypot(rx, ry)
+        bx, by = q_fixed * rx / rr ** 3, q_fixed * ry / rr ** 3
+        rows.append([name, f"({px_:g}, {py_:g})", gy / by, math.hypot(gx, gy) / math.hypot(bx, by)])
+    doc.table("fieldtab", ["point", r"$(x, y)$", r"$E_y/E_y^{\mathrm{bare}}$",
+                           r"$\abs{\vect{E}}/\abs{\vect{E}^{\mathrm{bare}}}$"], rows, digits=4)
+    doc.value("endRel", rows[3][2], 4)
+    doc.value("lowRel", rows[2][2], 4)
     # Bound charge of the upper half and its mirror. Neutrality makes this zero.
     q_net = 0.0
     near_mean = None

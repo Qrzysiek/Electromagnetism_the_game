@@ -42,11 +42,17 @@ comment assumed the screening and never measured it. The description, the realit
 (`scripts/reality.py`), docs/LEVELS.md and docs/CURRICULUM.md were corrected on 2026-11-15;
 the level's physics, reference and golden hash are unchanged.
 
-## Left for the document
+## The document (2026-11-15)
 
-- `calc.py` from `draft_calc.py`: under the 120 s limit (it takes 136 s: vectorize the
-  rectangles over all panels and corners at once), and an error estimate that means
-  something: doubling the panel edge to 1.0 moves the reference's end by 0.16, so the
-  tolerance (ten times that) is 1.6, which passes anything. Panels 0.5 against 0.25 instead.
-- `doc.tex` from `draft.tex` (GROK.md §5), with the field table above as the physics the
-  level shows.
+`doc.tex` and `calc.py` replace the draft. `calc.py` evaluates the flights' field in one
+vectorized pass per face orientation (checked against the panel-by-panel sum to 1e-10) and
+estimates the mesh error from rectangles of 0.25 against 0.5 (0.5 against 1.0 moved the
+reference's end by 0.16, a tolerance of 1.6 that passed anything): about 40 s here, under
+the 120 s limit. The comparison: eight rows, the largest difference 7e-4 (the reference's
+ordinate) against a tolerance of 0.55. The infinite slab's image series is the analytic
+limit (0.73 of the bare field on the launch line, 0.34 inside).
+
+Seen while building it, not from this level: `deflection_plates`' `calc.py` took 135-138 s
+on this machine while the heavy tests' coverage pass held all 16 cores, so its build
+fails the 120 s limit under such a load (all 25 documents passed their checks on
+2026-11-14, HANDOFF.md item 6).

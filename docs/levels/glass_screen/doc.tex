@@ -1,0 +1,465 @@
+\documentclass{leveldoc}
+\DocUses{foundations,deflection_plates}
+\DocFingerprint{bf08ca5fa8915aaf}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+\leveldescription
+
+One positive ion is launched along $+x$ from the left edge. Above its line a
+strong positive charge is fixed, and between the two lies a bar of glass, an
+insulator of relative permittivity $\varepsilon$. The glass carries no free
+charge, and none can flow onto it, but in the charge's field its molecules
+polarize, and a bound charge appears on its surfaces. The player may add up to
+three charges, of either sign, from the listed magnitudes, inside the marked
+region below the launch line. There are no magnets and no electrodes.
+
+The ion must enter the detector. The shot has no acceptance window, no kinetic
+window and no gate. A flight ends when the ion touches a charge or the glass,
+leaves the world, or enters the detector (\xsecref{foundations}{sec:board}).
+The glass's obstacle is its box plus a contact shell of thickness
+$\val{contact}$, as for an electrode. A fixed charge has radius $\val{Rcharge}$,
+and the ion's radius is $0$.
+
+With nothing placed, the fixed charge throws the ion down and out through the
+bottom of the world. The reference adds one negative charge low on the board,
+ahead of the fixed charge's line: the ion swings round it and comes up into the
+detector's left face. Removed from the board, the glass changes the ending: the
+same flight then strikes the placed charge. The glass does not screen the
+ion's line from the fixed charge. The bound charge on its far face, nearer the
+ion, pushes along with the fixed charge, and the push on the launch line is
+stronger than without the glass; only inside the glass is the field weaker.
+This document states the bound-charge problem, gives the infinite slab as its
+analytic limit, solves it on rectangles, and integrates the flights by the
+classical Runge--Kutta method.
+
+\section{Setup}\label{sec:setup}
+
+\setuptable
+
+The speed of light is $c = \val{cLight}$. The ion has charge $q = \val{qPart}$,
+mass $m = \val{mPart}$ and radius $0$, and it is launched with kinetic energy
+$T_0 = \val{T0}$ from $(\val{xLaunch}, \val{yLaunch})$, straight along $+x$.
+Then $\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$ and
+$v_0 = \val{v0} = \val{vOverC}\,c$ (\xeqref{foundations}{eq:launch}).
+
+The fixed charge is $Q = \val{qFixed}$ at $(\val{xCharge}, \val{yCharge})$.
+The glass occupies $\val{xGlass0} \le x \le \val{xGlass1}$ and
+$\val{yGlass0} \le y \le \val{yGlass1}$: length $\val{glassL}$ along $x$,
+thickness $\val{glassT}$ along $y$, and height $\val{glassH}$ along $z$,
+symmetric about the plane $z = 0$ of the flight. Its permittivity is
+$\varepsilon = \val{eps}$, and we write
+\begin{equation}\label{eq:lambda}
+  \lambda = \frac{\varepsilon - 1}{\varepsilon + 1} = \val{lam}.
+\end{equation}
+The reference charge is $Q_\mathrm{r} = \val{qPlay}$ at $(\val{xPlay}, \val{yPlay})$.
+The detector is $\val{xDetLo} \le x \le \val{xDetHi}$,
+$\val{yDetLo} \le y \le \val{yDetHi}$. The world is $-1 \le x \le \val{xWorld}$,
+$-1 \le y \le \val{yWorld}$. The reported time step is $h = \val{H}$; the
+reported mesh uses rectangles of edge $\val{panelFine}$, $\val{nPanels}$ of
+them on the upper half of the glass.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth,
+  xmin=-1.5, xmax=32.5, ymin=-2, ymax=22.5,
+  xlabel={$x$}, ylabel={$y$}, tick label style={font=\small}]
+  \draw[black!40, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!25] (0,0) rectangle (30,20);
+  \fill[green!50!black, fill opacity=0.18]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black]
+    (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \fill[cyan!40!white]
+    (\rawval{xGlass0},\rawval{yGlass0}) rectangle (\rawval{xGlass1},\rawval{yGlass1});
+  \draw[cyan!50!black]
+    (\rawval{xGlass0},\rawval{yGlass0}) rectangle (\rawval{xGlass1},\rawval{yGlass1});
+  \fill[red!70!black] (\rawval{xCharge},\rawval{yCharge}) circle[radius=\rawval{Rcharge}];
+  \fill[blue!70!black] (\rawval{xPlay},\rawval{yPlay}) circle[radius=\rawval{Rcharge}];
+  \addplot[orange!80!black] table {pathbare.dat};
+  \addplot[very thick, blue!60!black] table {pathref.dat};
+  \draw[-{Stealth[length=5pt]}, thick] (\rawval{xLaunch},\rawval{yLaunch}) -- (\rawval{arrowX},\rawval{arrowY});
+  \fill (\rawval{xLaunch},\rawval{yLaunch}) circle[radius=0.08];
+\end{axis}
+\end{tikzpicture}
+\caption{The glass (cyan), the fixed charge (red, above it) and the reference
+charge (blue, low on the right); the green box is the detector. Blue is the
+reference flight: it dips towards the placed charge, swings round it and comes
+up into the detector's left face. Orange is the same launch with nothing
+placed: the fixed charge throws it out through the bottom of the world.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The field of a point charge \xeqref{foundations}{eq:coulomb}, and the
+    force on a non-polarizable particle \xeqref{foundations}{eq:sphereforce}.
+    There is no magnetic field.
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom}, the
+    launch \xeqref{foundations}{eq:launch}, and energy in a static field
+    \xeqref{foundations}{eq:energy}. The motion stays in the plane
+    (\xsecref{foundations}{sec:plane}).
+  \item A linear dielectric: its polarization is proportional to the field in
+    it, so $\vect{D} = \varepsilon\vect{E}$ there, and with no free charge on
+    its surface the normal component of $\vect{D}$ is continuous across it
+    (\Jackson{§4.3, eq.~(4.40)}, in the Gaussian units of the Foundations). Its response is
+    instantaneous on the flight's time scale (\physref{2.7}).
+  \item The potential and field of a uniformly charged rectangle
+    \xeqref{deflection_plates}{eq:rectangle}, with its primitive
+    \xeqref{deflection_plates}{eq:primitive}.
+  \item The board's rules (\xsecref{foundations}{sec:board}), the classical
+    Runge--Kutta method and the cubic Hermite location of an event
+    (\xsecref{foundations}{sec:numerics}), as in the deflection plates' flight
+    (\xsecref{deflection_plates}{sec:flight}).
+  \item The radiated power \xeqref{foundations}{eq:larmor}, summed by Simpson's
+    rule \xeqref{foundations}{eq:simpson}. It is not put back into the force.
+\end{principles}
+
+The polarized glass acts on the ion through its bound charge only: a surface
+density $\sigma$ on its faces (the volume density
+$-\nabla\cdot\vect{P}$ vanishes in a uniform linear medium without free charge).
+Off the glass the field is the Coulomb field of the fixed and placed charges
+plus the field of $\sigma$ and of its mirror in the plane $z = 0$. The ion is
+not among the charges that polarize the glass. The state $(\vect{x}, \vect{p})$
+obeys \xeqref{foundations}{eq:eom} with $\vect{B} = \vect{0}$ and with that
+$\vect{E}$, from the launch until the first ending event.
+
+\begin{assumption}{A static, linear glass}\label{as:static}
+The glass answers at once, with the same $\varepsilon$ at every field: no
+dispersion, no losses, no breakdown, no charge collected from the beam. The
+launch speed is $\val{vOverC}\,c$. The game makes the same assumptions
+(\physref{2.7}), so this is the model being compared.
+\end{assumption}
+
+\begin{assumption}{No radiation reaction}\label{as:radiation}
+The ion radiates \xeqref{foundations}{eq:larmor}, and that energy is not taken
+from the flight. On the reference flight the radiated energy is a fraction
+$\val{RefRadFrac}$ of $T_0$.
+\end{assumption}
+
+\begin{assumption}{No image of the ion}\label{as:image}
+The bound charge the ion itself induces on the glass is left out: it would need
+a new solve at every force evaluation. The game leaves it out for the same
+reason (\physref{2.7}). A conductor's image force bounds it, $q^2/d^2$ with the
+distance $d$ to the glass floored at $10^{-3}$ (a dielectric's image is the
+conductor's times $\lambda < 1$), taken relative to $\max(\abs{q\vect{E}}, T_0)$.
+Along the reference samples the ratio reaches $\val{RefImage}$; along the
+empty board's samples it reaches $\val{BareImage}$. The engine asks for it to
+stay below $10^{-10}$.
+\end{assumption}
+
+\begin{assumption}{Equal rectangles}\label{as:panels}
+The bound charge is constant on equal rectangles of edge $\val{panelFine}$,
+and the surface condition is held on average over each, at four Gauss points.
+The engine holds the same condition on graded triangles (\physref{2.7}).
+Replacing the edge by $\val{panelCoarse}$ moves an end state by
+$\val{errMesh}$; that change is the discretization estimate of this mesh.
+\end{assumption}
+
+\begin{assumption}{The fixed step}\label{as:step}
+The reported step is $h = \val{H}$. Halving it estimates an end state's error
+by $\val{errStep}$ (\xsecref{foundations}{sec:numerics}). Ten times the panel
+estimate $\val{errMesh}$ is above $10^{-9}$ and above ten times the step
+estimate, so the tolerance on a state is $\val{tolFlight}$. Between samples
+the ion moves at most $\val{stepReach}$, while its smallest sampled clearance
+of the glass is $\val{RefDmin}$ on the reference flight and $\val{BareDmin}$
+on the empty board.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The surface condition}\label{sec:condition}
+
+Take a point of the glass's surface with outward normal $\uvec{n}$, and let
+$\bar E_n$ be the normal field there of every charge except the surface
+element itself: the fixed and placed charges, the rest of the bound charge,
+and the mirror. A small patch of density $\sigma$ adds $+2\pi\sigma$ to the
+normal field just outside and $-2\pi\sigma$ just inside, by Gauss's law on a
+thin box round the patch with the field \xeqref{foundations}{eq:coulomb}, so
+\[
+  E_n^\mathrm{out} = \bar E_n + 2\pi\sigma, \qquad
+  E_n^\mathrm{in} = \bar E_n - 2\pi\sigma .
+\]
+Outside is vacuum, inside $\vect{D} = \varepsilon\vect{E}$, and with no free
+charge the normal $\vect{D}$ is continuous:
+$\varepsilon(\bar E_n - 2\pi\sigma) = \bar E_n + 2\pi\sigma$. Solving for
+$\sigma$,
+\begin{equation}\label{eq:condition}
+  \sigma = \frac{\lambda}{2\pi}\,\bar E_n ,
+\end{equation}
+with $\lambda$ of \eqref{eq:lambda}. Where the field leaves the glass
+($\bar E_n > 0$) the bound charge is positive. The fixed charge is positive and
+above the glass, so its field enters the near face (negative bound charge) and
+leaves through the far face (positive bound charge), the face nearer the ion.
+
+The glass is neutral, so its bound charge sums to zero:
+\begin{equation}\label{eq:neutral}
+  \oint \sigma \,\dd S = 0 .
+\end{equation}
+Equation \eqref{eq:condition} holds this only approximately once it is
+discretized: on a closed body the uniform normal field is nearly a solution of
+the homogeneous problem (the field of a net charge, which it would let in).
+The discrete system therefore carries \eqref{eq:neutral} as a constraint with
+one more unknown $\gamma$, a uniform normal field added on the whole surface,
+\begin{equation}\label{eq:bordered}
+  \sigma_i = \frac{\lambda}{2\pi}\Big(\bar E_{n,i} + \gamma\Big), \qquad
+  \sum_i \sigma_i A_i = 0,
+\end{equation}
+where $i$ runs over the rectangles of \S\ref{sec:panels}, $A_i$ is a
+rectangle's area, and the sum counts the upper half (the mirror doubles it).
+
+\subsection{The infinite slab}\label{sec:slab}
+
+An infinite slab of the glass's thickness $d = \val{slabD}$, with the charge
+$Q$ a height $a = \val{slabA}$ above its near face, has a closed solution, the
+limit of a bar that is long and tall compared with these distances. Put the
+near face at $z' = 0$, the far face at $z' = -d$ and the charge at $z' = a$, on
+the axis $\rho = 0$. In each region the potential is a superposition of the
+solutions $J_0(k\rho)\,e^{\pm k z'}$ of Laplace's equation, and the charge's
+own potential is $Q/\abs{\vect{r} - a\uvec{z}} = Q\int_0^\infty J_0(k\rho)\,
+e^{-k\abs{z' - a}}\,\dd k$ (\Jackson{Ch.~3, cylindrical coordinates}). Write
+\begin{align*}
+  \phi_1 &= Q\!\int_0^\infty\! J_0(k\rho)\big[e^{-k\abs{z' - a}} + R\,e^{-k(z' + a)}\big]\dd k
+    && (z' > 0),\\
+  \phi_2 &= Q\!\int_0^\infty\! J_0(k\rho)\big[A\,e^{kz'} + B\,e^{-kz'}\big]\dd k
+    && (-d < z' < 0),\\
+  \phi_3 &= Q\!\int_0^\infty\! J_0(k\rho)\,C\,e^{kz'}\,\dd k
+    && (z' < -d).
+\end{align*}
+At each face $\phi$ and $\varepsilon\,\partial\phi/\partial z'$ are continuous.
+At $z' = -d$: $A e^{-kd} + B e^{kd} = C e^{-kd}$ and
+$\varepsilon(A e^{-kd} - B e^{kd}) = C e^{-kd}$, so
+$B = \lambda A\,e^{-2kd}$ and $C = (1 + \lambda)A$. At $z' = 0$:
+$(1 + R)e^{-ka} = A + B$ and $(1 - R)e^{-ka} = \varepsilon(A - B)$; adding
+them, $2e^{-ka} = A\,(1 + \varepsilon)\,(1 - \lambda^2 e^{-2kd})$. Hence
+\[
+  A = \frac{2\,e^{-ka}}{(1 + \varepsilon)(1 - \lambda^2 e^{-2kd})}, \qquad
+  C = \frac{(1 - \lambda^2)\,e^{-ka}}{1 - \lambda^2 e^{-2kd}},
+\]
+using $2(1 + \lambda)/(1 + \varepsilon) = 4\varepsilon/(1 + \varepsilon)^2 =
+1 - \lambda^2$. Expanding $1/(1 - \lambda^2 e^{-2kd}) = \sum_n \lambda^{2n}
+e^{-2nkd}$ and integrating term by term, each term is a point charge's
+potential again. Beyond the slab, a distance $h = \val{slabH}$ below the far
+face, the field on the axis relative to the bare charge's, whose distance is
+$r_0 = a + d + h = \val{rSample}$, is
+\begin{equation}\label{eq:slab-out}
+  \frac{E}{E^\mathrm{bare}} = (1 - \lambda^2) \sum_{n=0}^\infty
+    \lambda^{2n}\Big(\frac{r_0}{r_0 + 2nd}\Big)^2 = \val{slabOut},
+\end{equation}
+a series of images at heights $a + 2nd$, the first carrying
+$1 - \lambda^2 = \val{slabFirst}$ of $Q$. Inside, at the slab's middle plane,
+a distance $z_\mathrm{c} = a + d/2 = \val{slabZc}$ from the charge, the
+$A$ terms are charges at $a + 2nd$ and the $B$ terms charges below, at
+$-(a + 2d + 2nd)$, and
+\begin{equation}\label{eq:slab-in}
+  \frac{E}{E^\mathrm{bare}} = \frac{2}{\varepsilon + 1} \sum_{n=0}^\infty
+    \lambda^{2n}\bigg[\Big(\frac{z_\mathrm{c}}{z_\mathrm{c} + 2nd}\Big)^2
+    - \lambda\Big(\frac{z_\mathrm{c}}{z_\mathrm{c} + d + 2nd}\Big)^2\bigg]
+    = \val{slabIn}.
+\end{equation}
+The terms fall as $\lambda^{2n}$; sixty of them leave less than $10^{-26}$. So
+even an endless slab leaves $\val{slabOut}$ of the field on the launch line,
+not $1/\varepsilon = \val{invEps}$; inside, it keeps $\val{slabIn}$. A
+dielectric is no screen: a conductor's surface charge cancels the field
+beyond it, a dielectric's cannot, since by \eqref{eq:condition} it only follows
+the field that crosses it.
+
+The glass of this level is not a slab: it is $\val{glassH}$ high in $z$, about
+its thickness, and its bound charge sits on two narrow strips facing the
+charge and the ion. The field of such a strip pair beyond its far face is the
+field of a dipole layer of finite width, which points along the dipoles below
+it: the far face's positive charge, nearer the ion, outweighs the near face's
+negative charge. The panels of \S\ref{sec:panels} give the numbers.
+
+\subsection{The panels}\label{sec:panels}
+
+The glass is a box. Only the upper half is meshed: the four side faces from
+$z = 0$ up to half the height, and the top face. Each edge from $a$ to $b$ is
+split into $n = \max(1, \operatorname{round}((b - a)/\val{panelFine}))$ equal
+parts. The mirror of a rectangle through $z = 0$ carries the same density.
+Rectangle $j$ at unit density has, at a point, the field
+$-\nabla$\xeqref{deflection_plates}{eq:rectangle}, written $\vect{e}_j$; the
+field of its mirror is $\vect{e}_j^\mathrm{m}$. With $\uvec{n}_i$ the outward
+normal of rectangle $i$, the average of \eqref{eq:bordered} over rectangle $i$
+at its four Gauss points $\vect{g}_{i,k}$ (the product rule of order three,
+$\pm 1/\sqrt{3}$ of the half-edges) reads
+\begin{equation}\label{eq:system}
+  \sigma_i - \frac{\lambda}{2\pi}\sum_j \sigma_j K_{ij} - \frac{\lambda}{2\pi}\gamma
+    = \frac{\lambda}{2\pi}\,\frac14\sum_k \vect{E}_\mathrm{ext}(\vect{g}_{i,k})\cdot\uvec{n}_i,
+  \qquad
+  K_{ij} = \frac14\sum_k \big(\vect{e}_j + \vect{e}_j^\mathrm{m}\big)(\vect{g}_{i,k})\cdot\uvec{n}_i ,
+\end{equation}
+where $\vect{E}_\mathrm{ext}$ is the Coulomb field of the fixed and placed
+charges. In $K_{ii}$ the rectangle's own field is left out: its normal part at
+its own points is $\pm 2\pi$, the jump already taken apart in
+\S\ref{sec:condition}, and its average of the two sides is zero. Every
+$K_{ij}$ projects on the receiving rectangle's normal $\uvec{n}_i$. With the
+constraint \eqref{eq:neutral}, $\sum_i \sigma_i A_i = 0$, this is a dense
+linear system for the $\val{nPanels}$ densities and $\gamma$, solved by LU
+factorization. Its residual on the reported mesh is $\val{solveRes}$, and the
+bound charge it leaves, both halves, is $\val{qNet}$ against
+$Q = \val{qFixed}$.
+
+The field at a point of the plane $z = 0$ is the Coulomb field of the charges
+plus $\sum_j \sigma_j(\vect{e}_j + \vect{e}_j^\mathrm{m})$, whose normal
+components in $z$ cancel there, so the ion stays in the plane. On the reported
+mesh the near face's mean density is $\val{sigNear}$: negative, as
+\eqref{eq:condition} says. The field against the bare charge's at a few
+points, with nothing placed:
+\begin{center}\small\val{fieldtab}\end{center}
+Inside the glass the field falls to $\val{insideRel}$ of the bare charge's
+(the slab's \eqref{eq:slab-in}: $\val{slabIn}$). On the launch line under the
+charge it is $\val{screenRel}$ of it, larger, against the slab's
+$\val{slabOut}$; under the glass's left end, $\val{endRel}$.
+
+\subsection{The flight}\label{sec:flight}
+
+There is no closed orbit. The state is advanced by \xeqref{foundations}{eq:rk4}
+with the fixed step $h = \val{H}$, and the ending is located on the cubic
+Hermite interpolant of each step, sampled at thirty-two fractions and refined
+by sixty halvings, obstacles before the world and the world before the
+detector, as in \xsecref{deflection_plates}{sec:flight}. The conserved energy
+is
+\begin{equation}\label{eq:flight-energy}
+  W = (\gamma - 1)mc^2 + q\,\phi(\vect{x}),
+\end{equation}
+with $\phi$ the potential of the charges, the rectangles and their mirrors
+(the ion is not in it). The step's error is $\abs{y_h - y_{2h}}/15$; the
+panel estimate is the change in an end state when the edge doubles, not
+divided. Both flights give the same outcome at $h$ and $2h$ and on both
+meshes.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:launch} \emph{The launch} \xeqref{foundations}{eq:launch}.
+    $\gamma_0 = \val{gamma0}$, $\abs{\vect{p}_0} = \val{p0}$, so
+    $\vect{p}_0 = (\val{p0}, 0)$ and $v_0 = \val{v0}$.
+  \item\label{st:slab} \emph{The limit.} With $\lambda = \val{lam}$,
+    $a = \val{slabA}$, $d = \val{slabD}$, $h = \val{slabH}$, the series
+    \eqref{eq:slab-out} gives $\val{slabOut}$ of the bare field on the launch
+    line and \eqref{eq:slab-in} $\val{slabIn}$ inside. The march uses the
+    panels, not the slab.
+  \item\label{st:panels} \emph{The panels.} Build the upper-half rectangles of
+    edge $\val{panelFine}$ as in \S\ref{sec:panels}: $\val{nPanels}$ of them,
+    plus the mirrors. Solve \eqref{eq:system} with the fixed and the reference
+    charge on its right side, and \eqref{eq:neutral}. The residual is
+    $\val{solveRes}$.
+  \item\label{st:march} \emph{The march.} Advance
+    \xeqref{foundations}{eq:eom} by \xeqref{foundations}{eq:rk4} with step
+    $\val{H}$ in that field, and locate the ending as in \S\ref{sec:flight}.
+    The state every five time units:
+    \begin{center}\small\val{states}\end{center}
+  \item\label{st:end} \emph{The arrival.} The ion meets the \val{RefFace}
+    face of the detector at $(\val{RefX}, \val{RefY})$, at $t = \val{RefT}$,
+    with momentum $(\val{RefPx}, \val{RefPy})$, at $\val{RefAng}$ degrees above
+    $+x$, after $\val{RefSteps}$ steps. Its lowest point is $y = \val{RefYmin}$,
+    on its swing round the placed charge.
+  \item\label{st:check} \emph{The checks.} Along the flight $W$ drifts by at
+    most $\val{RefWdev}$. The step estimate of the end state is $\val{RefErr}$,
+    the larger of the two flights' $\val{errStep}$; the panel estimate is
+    $\val{errMesh}$. The sampled clearance of the glass is $\val{RefDmin}$,
+    outside the shell $\val{contact}$, and the ion moves at most
+    $\val{stepReach}$ in a step. The image-force ratio reaches $\val{RefImage}$.
+  \item\label{st:rad} \emph{The radiation.} Simpson's rule on steps of $h/2$
+    gives $\val{RefRad}$, a fraction $\val{RefRadFrac}$ of $T_0$; halving that
+    step again changes it by the relative amount $\val{RefRadErr}$. It is our
+    field's integral, not a row of the comparison.
+\end{procedure}
+
+\begin{result}[The reference flight]
+The ion enters the detector through its \val{RefFace} face at
+$(\val{RefX}, \val{RefY})$ at $t = \val{RefT}$, with momentum
+$(\val{RefPx}, \val{RefPy})$. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The table compares the reference's outcome, time and end point, and the same
+for the empty board. The tolerance on a state, $\val{tolFlight}$, is ten times
+the panel estimate $\val{errMesh}$, the larger of the two estimates, fixed
+before the comparison.
+
+The largest difference is the reference's ordinate, $\val{cmpRefYDiff}$, then
+the empty board's time, $\val{cmpBareTDiff}$, its abscissa,
+$\val{cmpBareXDiff}$, and the reference's time, $\val{cmpRefTDiff}$. All are
+far below the panel estimate: halving the edge from $\val{panelCoarse}$ moves
+our end states by $\val{errMesh}$, while our rectangles of $\val{panelFine}$
+and the game's graded triangles land within $\val{cmpRefYDiff}$ of each other.
+The estimate is the change from the coarser of our two meshes, so it bounds
+the error of the finer one generously. The reference flight is the sensitive
+one: it swings round the placed charge, and the field it meets there sets its
+direction when it leaves. The step estimate $\val{errStep}$ is below all of
+them. The outcomes agree, and the reference's abscissa and the empty board's
+ordinate agree exactly, since each is a face the flight meets.
+
+\section{Other solutions}\label{sec:others}
+
+The empty board, the second placement in \code{placements.json}, does not solve
+the level. Pushed down by the fixed charge and the glass, the ion leaves
+through the \val{BareFace} edge of the world at $(\val{BareX}, \val{BareY})$,
+at $t = \val{BareT}$, at $\val{BareAng}$ degrees. Its clearance of the glass
+is $\val{BareDmin}$, its energy drifts by $\val{BareWdev}$, and the run takes
+$\val{BareSteps}$ steps.
+
+The reference charge without the glass, a run of our own and not a row of the
+comparison: the ion ends as \val{HitOutcome} at
+$(\val{HitX}, \val{HitY})$, at $t = \val{HitT}$. The glass's extra push sends
+the ion down sooner and past the placed charge on the side that turns it up
+into the detector; without that push the ion falls onto the charge. A
+solution must therefore reckon with the glass, and with the glass's push, not
+with a weakened field.
+
+There is no slider, and a panel solve per placement is too slow for a map of
+every charge.
+
+\section{What the game computes}\label{sec:engine}
+
+The engine solves the same condition (\physref{2.7}, \emph{Dielectrics}): the
+glass's surface cut into flat triangles of constant density, graded towards the
+edges, the condition $\sigma = (\lambda/2\pi)\bar E_n$ averaged over each
+triangle by a six-point rule of degree four, and each body's neutrality held by
+a uniform normal field $\gamma$, a bordered dense system factorized by LU.
+Only the upper half is meshed, and the mirror is applied exactly. Preview
+flights use panels of half a cell and verification panels of 0.35 of a cell
+(\physref{2.7}); its cube polarizability is within about one per cent of the
+literature at the verification's resolution.
+
+This document holds the same condition, \eqref{eq:system}, on equal rectangles
+with the integral \xeqref{deflection_plates}{eq:rectangle}, averaged at four
+Gauss points, with the same neutrality constraint. The two discretizations are
+different, so the agreement asked of them is the tolerance $\val{tolFlight}$,
+ten times our panel estimate; they agree far more closely
+(\S\ref{sec:comparison}). Neither includes the ion's own image (bound below
+$\val{RefImage}$ here), and the obstacle is the box plus the contact shell
+$\val{contact}$ on both sides.
+
+The flight itself, in the engine, is the adaptive eighth-order Runge--Kutta
+method of \physref{5} and \physref{6}, verified as in \physref{7}; once the
+field is fixed, a verified end state is good to about $10^{-10}$, and the
+difference from ours is the field's, the panels'. Radiation is integrated and
+not applied (\xsecref{foundations}{sec:radiation}, \physref{8}).
+
+\section{Further reading}\label{sec:reading}
+
+Dielectrics and their boundary conditions: \Jackson{§4.3}; the image solution
+for a point charge and a dielectric half-space, the first step of
+\S\ref{sec:slab}: \Jackson{§4.4}. Jackson's §4.3 also states the reduction of a
+charge's field by $\varepsilon$ in a medium that fills all space, which is not
+this level's case. The expansion of a point charge's potential in Bessel
+functions: \Jackson{Ch.~3, cylindrical coordinates}. The motion, the energy, the step and the location of an
+event are in the Foundations (\xsecref{foundations}{sec:numerics}); the
+rectangle integral and the flight's events are derived in the deflection
+plates' document (\xsecref{deflection_plates}{sec:panel},
+\xsecref{deflection_plates}{sec:flight}). The engine's dielectrics are
+\physref{2.7}.
+
+\levelfileappendix
+
+\end{document}

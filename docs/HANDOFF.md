@@ -95,8 +95,9 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
    It showed that **the level's text was wrong**: the glass does not screen the beam's line,
    it strengthens the push there (+8 % under the charge, +43 % under its ends; inside the
    glass the field falls to 0.39). Text, reality entry, LEVELS.md and CURRICULUM.md
-   corrected; physics and golden hash unchanged. Left: the document itself (`calc.py` under
-   120 s with a meaningful mesh estimate, `doc.tex`; NOTES.md, *Left for the document*).
+   corrected; physics and golden hash unchanged. The level's document is written
+   (`docs/levels/glass_screen/`: eight comparisons, the largest difference 7e-4 against a
+   tolerance of 0.55; the infinite slab as the analytic limit).
 3. **The two open numerical questions that block levels** (*State* and *The Transformer*
    below): the AC mobility's phase through a level (Carriers' inertia and every phase goal
    at ωτ ≈ 1 wait on it), and the dense coupled rings' dynamics (V-D10: an accurate
