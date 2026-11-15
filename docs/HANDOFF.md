@@ -39,6 +39,11 @@ list the others here.
   alternative, a level where a dielectric visibly weakens a field, needs another design (a
   slab tall enough to approach the infinite one is too slow to solve, and even that leaves
   0.73 of the field beyond it); say if you want one.
+- **Ramp the coil's text** (found with its document, the session of 2026-11-15 evening;
+  `docs/levels/ramp_the_coil/NOTES.md`): the description says the induced field "pushes the
+  ion along a little"; at every rate that solves it slows the ion, by about a tenth of its
+  speed (the work −0.091 of `T0` 0.5 on the reference). Not changed: a wording such as "which
+  here slows the ion a little" would match.
 
 ## Next
 
@@ -138,7 +143,12 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
    carries the magnetic arc's derivations, first magnet and Stern–Gerlach check their
    marches against quadratures of their conserved quantities); no tube, metal or AC level
    does (`eddy2d.py` would be Self-inductance's `calc.py`). The mass spectrometer (37) too.
-   Next in order: Stray field. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
+   The evening of 2026-11-15 added Stray field (38), RF kick (39: carries the antennas'
+   derivation, the dipole's retarded fields from the Lorenz-gauge potentials, checked against
+   Maxwell's equations) and Ramp the coil (40: the loop's vector potential and the induced
+   field; the canonical angular momentum as the march's exact check; the rate's solving
+   interval by bisection, the game's verdicts compared on both sides of each edge).
+   Next in order: Synchrotron light. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
    the run at the step h but quoted `|y_h - y_{h/2}|/15`, the h/2 run's error (16 times
    smaller than the h run's); now the partner runs at 2h, as the Foundations state it (the mass
    spectrometer reports its h/2 run instead). `slingshot`'s, the example they followed, keeps
