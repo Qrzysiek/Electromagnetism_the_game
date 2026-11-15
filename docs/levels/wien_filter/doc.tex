@@ -82,7 +82,7 @@ detector, middle (green) straight into the middle one, fast (red) pushed into th
     (\physref{2.2}).
   \item The board's rules and the detector's direction window (\xsecref{foundations}{sec:board},
     \physref{6.1}); the classical Runge--Kutta method, cubic Hermite interpolation and the error
-    estimate by halving the step (\xsecref{foundations}{sec:numerics}), as in
+    estimate by doubling the step (\xsecref{foundations}{sec:numerics}), as in
     \xsecref{slingshot}{sec:method}.
 \end{principles}
 
@@ -133,7 +133,7 @@ The three flights are integrated by \xeqref{foundations}{eq:rk4} at $h = \val{H}
 \eqref{eq:segment} at every evaluation, with the events located on the cubic Hermite
 interpolant: a charge's disc, the coil's wire (within $\val{wire}$ of a side), the world's edge,
 the detector, where the arrival direction is tested against the window. The energy
-\xeqref{foundations}{eq:energy} is the check; the largest step-halving estimate of an end state
+\xeqref{foundations}{eq:energy} is the check; the largest step-doubling estimate of an end state
 is $\val{errMax}$.
 
 \section{The reference solution by hand}\label{sec:hand}

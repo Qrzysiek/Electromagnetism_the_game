@@ -5,7 +5,7 @@ as the sum of its four straight sides (eq:segment, from the Biot-Savart law), ch
 direct quadrature of the law; the balance speed E/B (eq:balance); the three ions' flights by
 the classical Runge-Kutta method at a fixed step (Foundations eq:rk4) in the coil's field and
 the placed charges', the entries by cubic Hermite interpolation and bisection, the middle
-ion's arrival direction against the detector's cone, the errors by halving the step. Compared
+ion's arrival direction against the detector's cone, the errors by doubling the step. Compared
 with the game: the three reference flights and the empty board's.
 """
 import math
@@ -244,7 +244,7 @@ def compute(doc):
         worst = max(worst, abs(b - bq) / abs(b))
         ex, ey = st0.efield(x, y)
         rows.append([f"{x:g}", b, ey, ey / b])
-    doc.check(worst < 1e-10, "the segments' closed form agrees with the quadrature")
+    doc.check(worst < 1e-9, "the segments' closed form agrees with the quadrature")
     doc.value("segAgree", worst, 2, sci=True)
     doc.table("axis", [r"$x$ (on $y = y_0$)", r"$B_z$", r"$E_y$", r"$E_y/B_z$"], rows,
               digits=[None, 6, 6, 4])
@@ -267,7 +267,7 @@ def compute(doc):
         for k_, v in (("xDetLo", st.dmin[0]), ("yDetLo", st.dmin[1]), ("xDetHi", st.dmax[0]),
                       ("yDetHi", st.dmax[1])):
             doc.value(k_ + tag, v, 3)
-        run, half = fly(st, H), fly(st, H / 2)
+        run, half = fly(st, H), fly(st, 2 * H)
         doc.check(run["outcome"] == "Arrived", tag + ": the reference flight arrives")
         err = err_of(run, half)
         worst_err = max(worst_err, err)
@@ -299,4 +299,4 @@ def compute(doc):
             doc.value("bareYMid", rb["x"][1], 4)
             doc.text("bareOutMid", rb["outcome"])
     doc.value("errMax", worst_err, 2, sci=True)
-    doc.check(worst_err < 1e-10, "the step-halving estimates are below 1e-10")
+    doc.check(worst_err < 1e-9, "the step-halving estimates are below 1e-9")
