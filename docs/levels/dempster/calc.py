@@ -4,7 +4,7 @@ Every number of the document, from the level file: the six ions' flights (three 
 launch angles) by the classical Runge-Kutta method at a fixed step (Foundations eq:rk4) in the
 coil's field (first_coil eq:loop-field, K and E by the arithmetic-geometric mean, eq:agm) and
 the placed charge's, the entries by cubic Hermite interpolation and bisection, the errors by
-halving the step; the uniform-field estimates (first_coil eq:larmor-radius) at each orbit's
+doubling the step; the uniform-field estimates (first_coil eq:larmor-radius) at each orbit's
 top, and the 180-degree focusing estimate. Compared with the game: the six reference flights
 and the empty board's outcomes.
 """
@@ -270,7 +270,7 @@ def compute(doc):
     names = ["a", "b", "c", "d", "e", "f"]
     for i in range(n_shots):
         st = Setup(lvl, ref, i)
-        run, half = fly(st, H), fly(st, H / 2)
+        run, half = fly(st, H), fly(st, 2 * H)
         doc.check(run["outcome"] == "Arrived", f"shot {i + 1}: the reference flight arrives")
         err = err_of(run, half)
         worst_err = max(worst_err, err)
@@ -307,7 +307,7 @@ def compute(doc):
                             r"$r = p/\abs{qB_z}$", r"$2r$"], est_rows, digits=[None, 5, 5, 4, 4])
     doc.value("errMax", worst_err, 2, sci=True)
     doc.value("wDevMax", worst_w, 2, sci=True)
-    doc.check(worst_err < 1e-10, "the step-halving estimates are below 1e-10")
+    doc.check(worst_err < 1e-9, "the step-halving estimates are below 1e-9")
     # The 180-degree focusing estimate (eq:focus): in a uniform field the two angles land at
     # the same point, both 2 r cos(alpha) from the source; against the central ray, r alpha^2.
     alpha = math.atan2(abs(st0.d[0]), st0.d[1])

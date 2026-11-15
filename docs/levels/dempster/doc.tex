@@ -82,7 +82,7 @@ the level file's (the table of \S\ref{sec:hand}).}
   \item The coil's field in its plane, \xeqref{first_coil}{eq:loop-field}, with $K$ and $E$ by
     \xeqref{first_coil}{eq:agm}; the circle of \xeqref{first_coil}{eq:larmor-radius}.
   \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and
-    the error estimate by halving the step (\xsecref{foundations}{sec:board},
+    the error estimate by doubling the step (\xsecref{foundations}{sec:board},
     \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
 \end{principles}
 
@@ -128,7 +128,7 @@ less than the detectors' widths.
 
 The six flights are integrated by \xeqref{foundations}{eq:rk4} at $h = \val{H}$ in the coil's
 field and the charge's, as in \xsecref{first_coil}{sec:method}; the energy is the check. The
-largest step-halving estimate of an end state is $\val{errMax}$, the largest energy drift
+largest step-doubling estimate of an end state is $\val{errMax}$, the largest energy drift
 $\val{wDevMax}$.
 
 \section{The reference solution by hand}\label{sec:hand}
