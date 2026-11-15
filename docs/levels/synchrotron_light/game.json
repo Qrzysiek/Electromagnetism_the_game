@@ -1,0 +1,548 @@
+{
+ "level_file": "levels/41_synchrotron_light.json",
+ "level_sha256": "787b1465010b465a",
+ "golden_hash": "6a7c023f90157922",
+ "recorded": "2026-11-15",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        -0.26928565259177745,
+        0.2830211837384742,
+        0.0
+       ],
+       "t": 530.3862621161801,
+       "x": [
+        13.033544879640147,
+        8.000000000000002,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.9907808734842547e-10,
+      "kinetic_initial": 0.43,
+      "outcome": "Arrived",
+      "radiated_energy": 0.3544064222034721,
+      "steps": 182
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.2692856528351509,
+        0.2830211836266487,
+        0.0
+       ],
+       "t": 530.3862620849486,
+       "x": [
+        13.033544877411641,
+        8.00000000000002,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 9.69946345463768e-13,
+      "kinetic_initial": 0.43,
+      "outcome": "Arrived",
+      "radiated_energy": 0.3544064220290005,
+      "steps": 322
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      15,
+      10,
+      0
+     ],
+     "value": -0.5
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Timeout",
+     "preview": {
+      "end": {
+       "p": [
+        -0.3793734812158798,
+        -0.045976739140985136,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        15.449024731375646,
+        6.810896148193863,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.978204349801672e-10,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.3576355280010977,
+      "steps": 192
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.37937348162495965,
+        -0.045976735914453566,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        15.449024698534586,
+        6.81089614338544,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.4198087150418814e-12,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.3576355277078405,
+      "steps": 341
+     }
+    }
+   ],
+   "placement": []
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Timeout",
+     "preview": {
+      "end": {
+       "p": [
+        0.2499361515400729,
+        -0.311812374610306,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        17.858898055152796,
+        12.227972112844752,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 6.09542694096632e-10,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.35093391266536833,
+      "steps": 184
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.24993614527839703,
+        -0.31181237979451726,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        17.85889809744689,
+        12.227972075562395,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 3.361311229355124e-12,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.35093391232798404,
+      "steps": 323
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      15,
+      10,
+      0
+     ],
+     "value": 0.5
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        -0.3216192985827143,
+        -0.3098494494276452,
+        0.0
+       ],
+       "t": 403.22341754692684,
+       "x": [
+        16.99999999999999,
+        8.179959151535662,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.313243791489782e-09,
+      "kinetic_initial": 0.43,
+      "outcome": "Arrived",
+      "radiated_energy": 0.33149019432016397,
+      "steps": 146
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.32161930160901075,
+        -0.30984945022848254,
+        0.0
+       ],
+       "t": 403.22341755616833,
+       "x": [
+        16.999999999999986,
+        8.179959128147422,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 2.3703816687259405e-12,
+      "kinetic_initial": 0.43,
+      "outcome": "Arrived",
+      "radiated_energy": 0.3314901942410623,
+      "steps": 259
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      15,
+      10,
+      0
+     ],
+     "value": -1.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Timeout",
+     "preview": {
+      "end": {
+       "p": [
+        0.3451702248648978,
+        0.22487049200658596,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        12.755534347379404,
+        13.254146338296545,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.2331871634962965e-09,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.3460268253664783,
+      "steps": 199
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.3451702337837641,
+        0.22487047978749447,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        12.755534502436033,
+        13.254146395726746,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 8.256617611834827e-12,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.34602682527476836,
+      "steps": 326
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      15,
+      10,
+      0
+     ],
+     "value": 1.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        -0.3866835466646688,
+        -0.3821817641355222,
+        0.0
+       ],
+       "t": 246.86780513519852,
+       "x": [
+        16.999999999999996,
+        8.556000218890013,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 7.947656421869453e-10,
+      "kinetic_initial": 0.43,
+      "outcome": "Arrived",
+      "radiated_energy": 0.28484038057628736,
+      "steps": 103
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.3866835504502345,
+        -0.3821817620832621,
+        0.0
+       ],
+       "t": 246.8678053110174,
+       "x": [
+        16.999999999999993,
+        8.556000152468613,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 9.079514917686993e-12,
+      "kinetic_initial": 0.43,
+      "outcome": "Arrived",
+      "radiated_energy": 0.2848403806447262,
+      "steps": 172
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      15,
+      10,
+      0
+     ],
+     "value": -2.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Timeout",
+     "preview": {
+      "end": {
+       "p": [
+        -0.3973960926122388,
+        0.1652059317939217,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        13.16066912226637,
+        6.142503262848202,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 3.0272967466160594e-10,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.338439586516838,
+      "steps": 205
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.397396091394049,
+        0.16520593513599657,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        13.160669059936886,
+        6.142503245928646,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.4682144389155383e-12,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.33843958643839395,
+      "steps": 361
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      15,
+      10,
+      0
+     ],
+     "value": 2.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        -0.5952117156878519,
+        -0.3423702202296005,
+        0.0
+       ],
+       "t": 110.03237216933307,
+       "x": [
+        16.999999999999996,
+        8.630244437104075,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 6.703423094389649e-10,
+      "kinetic_initial": 0.43,
+      "outcome": "Arrived",
+      "radiated_energy": 0.20081834971231474,
+      "steps": 62
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        -0.5952117156848249,
+        -0.34237022183658583,
+        0.0
+       ],
+       "t": 110.0323721633924,
+       "x": [
+        17.0,
+        8.63024444568494,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 4.736017134021608e-12,
+      "kinetic_initial": 0.43,
+      "outcome": "Arrived",
+      "radiated_energy": 0.20081835084136113,
+      "steps": 101
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      15,
+      10,
+      0
+     ],
+     "value": -4.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Timeout",
+     "preview": {
+      "end": {
+       "p": [
+        0.33689728602392194,
+        -0.3046948780382633,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        18.514281173890257,
+        13.287299279503413,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 5.857120344288091e-11,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.32812786650973197,
+      "steps": 255
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.33689728600330787,
+        -0.3046948780575362,
+        0.0
+       ],
+       "t": 600.0,
+       "x": [
+        18.514281194568895,
+        13.287299296690708,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 1.450506381672767e-13,
+      "kinetic_initial": 0.43,
+      "outcome": "Timeout",
+      "radiated_energy": 0.32812786643673436,
+      "steps": 451
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "magnet",
+     "node": [
+      15,
+      10,
+      0
+     ],
+     "value": 4.0
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,308 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,first_coil,rf_kick,ramp_the_coil}
+\DocFingerprint{787b1465010b465a}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+One particle of charge $q = \val{q}$ and mass $m = \val{m}$ is launched from
+$(\val{xZero}, \val{yZero})$ along $-x$ with $T_0 = \val{Tzero}$ in a world with $c = \val{c}$, and
+the level includes radiation reaction: the particle loses the energy it radiates, by the
+Landau--Lifshitz force (\physref{3.1}). A circular coil of radius $a = \val{a}$ and strength
+$\kappa = \val{kappa}$ (field units, \physref{2.2}) surrounds the board's middle,
+$(\val{xC}, \val{yC})$. The particle must enter the detector, the square
+$\val{xDetLo} \le x \le \val{xDetHi}$, $\val{yDetLo} \le y \le \val{yDetHi}$ about the coil's
+axis, before $t = \val{tMax}$. The player may place one magnet, a dipole perpendicular to the
+board, on the coil's axis (the only node of the placement region), with a strength from the
+listed magnitudes and either sign. A flight ends when the particle enters the detector, touches
+the magnet's sphere (radius $\val{Rm}$) or the coil's wire (within $\val{wire}$ of its circle),
+leaves the world, or reaches $t_{\max}$ (\xsecref{foundations}{sec:board}).
+
+The reference places the magnet $\mu = \val{mu}$, whose field adds to the coil's near the axis.
+The particle circles the axis, radiating, and spirals in; the stronger field makes it radiate
+fast enough to reach the square at $t = \val{tRef}$. The document derives the reaction force in
+this field, shows from the canonical angular momentum that without radiation no magnet lets the
+particle near the axis, marches the flight with exact energy and torque balances as checks,
+estimates the time by an adiabatic inspiral, and compares every legal placement with the game.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+By \xeqref{foundations}{eq:launch} the particle starts with $\gamma_0 = \val{gammaZero}$, momentum
+$p_\mathrm{i} = \val{pZero}$ and speed $v_0 = \val{vZero}$, at $\rho_0 = \val{rZero}$ from the
+axis and moving perpendicular to the radius. The time scale of radiation reaction is
+$\tau_0 = 2q^2/(3mc^3) = \val{tauZero}$. At the launch the field is $B_z = \val{BZero}$ (with the
+magnet), the cyclotron frequency $\omega_\mathrm{c} = qB_z/(\gamma_0 m) = \val{omegaC}$ and the
+period $\val{period}$. A circle about the axis through the launch would need the momentum
+$q\rho_0B_z = \val{pCircle}$; the particle has a little less, so its orbit is a circle about a
+point slightly off the axis, of mean radius $r_\mathrm{g} = \val{rGuide}$ (where
+$q r_\mathrm{g} B_z(r_\mathrm{g}) = p_\mathrm{i}$). The detector's corners are
+$\val{rCorner}$ from the axis, its edges $\val{rEdge}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.86\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (31,21);
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[green!40!black] (\rawval{xDetLo},\rawval{yDetLo}) rectangle (\rawval{xDetHi},\rawval{yDetHi});
+  \draw[black!70, thick] (\rawval{xC},\rawval{yC}) circle[radius=\rawval{a}];
+  \addplot[very thin, blue!70!black] table {pathref.dat};
+  \fill[red!75!black] (\rawval{xC},\rawval{yC}) circle[radius=\rawval{Rm}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The coil (black circle), the magnet on its axis (red), the detector (green) and the
+reference flight (blue), spiralling in from the launch (black dot) over about twelve turns.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The relativistic equation of motion \xeqref{foundations}{eq:eom} with the launch
+    \xeqref{foundations}{eq:launch}, and the Landau--Lifshitz radiation reaction force
+    (\LandauII{§§75--76}; \physref{3.1}, in the units of \xsecref{foundations}{sec:units}).
+  \item Liénard's radiated power \xeqref{foundations}{eq:larmor}.
+  \item The coil's field in its plane \xeqref{first_coil}{eq:loop-field} with
+    \xeqref{first_coil}{eq:agm}, its vector potential \xeqref{ramp_the_coil}{eq:vector-potential};
+    a magnetic dipole's field $\vect{B} = \mu\,(3(\uvec{m}\cdot\uvec{r})\uvec{r} - \uvec{m})/r^3$
+    and vector potential $\vect{A} = \mu\,\uvec{m}\times\vect{r}/r^3$ (\Jackson{§5.6};
+    \physref{2.2}); the derivatives of $K$ and $E$ (DLMF 19.4.1).
+  \item The canonical angular momentum about a symmetry axis, as in
+    \xeqref{ramp_the_coil}{eq:canonical} (\Jackson{§12.1}).
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate from the step $2h$; Simpson's rule; bisection
+    (\xsecref{foundations}{sec:board}, \xsecref{foundations}{sec:numerics}), as in
+    \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+The coil carries a steady current and the magnet is fixed: the field is static, purely magnetic
+and symmetric about the axis. The particle starts at $\vect{x}(0) = (\val{xZero}, \val{yZero})$
+with $\vect{p}(0) = (-p_\mathrm{i}, 0)$ and moves by \xeqref{foundations}{eq:eom} with the force
+$q\vect{v}\times\vect{B} + \vect{f}$, $\vect{f}$ the reaction, until the first of the board's
+events.
+
+\begin{assumption}{The Landau--Lifshitz force}\label{as:ll}
+The exact classical equation of a radiating point charge, the Lorentz--Abraham--Dirac equation,
+has runaway solutions; the Landau--Lifshitz force is its reduction of order, exact to first
+order in $\tau_0$ and free of runaways. It holds while the reaction is small against the Lorentz
+force; here their ratio is $(2q^3B\gamma^2)/(3m^2c^3) = \val{ratio}$ at the launch, and that ratio
+bounds the relative error of the reaction's effects (\physref{3.1}, test R6). The game uses the
+same force, so this approximation does not enter the comparison.
+\end{assumption}
+
+\begin{assumption}{Fixed sources, a thin wire, a point particle}\label{as:fixed}
+The coil's current and the magnet do not respond to the particle; the coil is a circle of zero
+thickness whose wire only ends a flight (as in \levelref{first_coil}, its assumption
+\xref{first_coil}{as:wire}); the particle is a point.
+These are the game's model, and nothing here comes near the wire.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The field}\label{sec:field}
+
+In the plane, at distance $\rho$ from the axis, the coil gives $b(\rho)$ of
+\xeqref{first_coil}{eq:loop-field} and the dipole $\mu\uvec{z}$ gives
+$-\mu/\rho^3$ ($\uvec{m}\cdot\uvec{r} = 0$ there), so
+\begin{equation}\label{eq:field}
+  B_z(\rho) = b(\rho) - \frac{\mu}{\rho^3},
+  \qquad
+  A_\phi(\rho) = a_\mathrm{coil}(\rho) + \frac{\mu}{\rho^2},
+\end{equation}
+with $a_\mathrm{coil}$ from \xeqref{ramp_the_coil}{eq:vector-potential}. A negative $\mu$ adds to
+the coil's field, a positive one subtracts from it near the axis. The reaction needs the field's
+gradient, radial by symmetry. Differentiating \xeqref{first_coil}{eq:loop-field},
+$b = 2\kappa N/D$ with $N = (a^2 - \rho^2)E + \alpha^2K$ and $D = \alpha^2\beta$, by the chain rule
+with $\dd m/\dd\rho = 4a(a - \rho)/\beta^3$,
+\begin{equation}\label{eq:gradient}
+  \deriv{K}{m} = \frac{E - (1 - m)K}{2m(1 - m)}, \qquad \deriv{E}{m} = \frac{E - K}{2m}, \qquad
+  \deriv{b}{\rho} = 2\kappa\,\frac{N'D - ND'}{D^2},
+\end{equation}
+$N' = -2\rho E + (a^2 - \rho^2)E' + 2(\rho - a)K + \alpha^2K'$, $D' = 2(\rho - a)\beta + \alpha^2$;
+the dipole adds $3\mu/\rho^4$. Central differences of $B_z$ confirm \eqref{eq:gradient} to
+$\val{gradCheck}$ relative. With the reference magnet:
+\begin{center}\small\val{fieldtab}\end{center}
+
+\subsection{The reaction force in a static magnetic field}\label{sec:ll}
+
+For the force $q(\vect{E} + \vect{v}\times\vect{B})$ the Landau--Lifshitz force is (\physref{3.1})
+\begin{align*}
+  \vect{f} &= \frac{2q^3}{3mc^3}\,\gamma\left[\frac{D\vect{E}}{Dt} + \vect{v}\times\frac{D\vect{B}}{Dt}\right] \\
+  &\quad + \frac{2q^4}{3m^2c^4}\left[c\,\vect{E}\times\vect{B} + c\,\vect{B}\times(\vect{B}\times\vect{v})
+    + \frac{\vect{E}(\vect{v}\cdot\vect{E})}{c}\right] \\
+  &\quad - \frac{2q^4}{3m^2c^5}\,\gamma^2\vect{v}\left[(\vect{E} + \vect{v}\times\vect{B})^2
+    - \frac{(\vect{E}\cdot\vect{v})^2}{c^2}\right],
+\end{align*}
+$D/Dt = \partial_t + \vect{v}\cdot\nabla$ along the world line. Here $\vect{E} = 0$, the field is
+static and $\vect{B} = B_z\uvec{z}$ with $\vect{v}$ in the plane, so
+$D\vect{B}/Dt = (\vect{v}\cdot\nabla B_z)\,\uvec{z}$,
+$\vect{B}\times(\vect{B}\times\vect{v}) = -B_z^2\vect{v}$ and $(\vect{v}\times\vect{B})^2 = v^2B_z^2$;
+with $1 + \gamma^2v^2/c^2 = \gamma^2$,
+\begin{equation}\label{eq:ll-static}
+  \vect{f} = \frac{2q^3}{3mc^3}\,\gamma\,(\vect{v}\cdot\nabla B_z)\,(\vect{v}\times\uvec{z})
+  - \frac{2q^4B_z^2}{3m^2c^3}\,\gamma^2\,\vect{v}.
+\end{equation}
+The first term is perpendicular to $\vect{v}$; the second is a drag along it, growing with the
+square of the field.
+
+\subsection{Energy and angular momentum}\label{sec:balances}
+
+Only the drag does work, so the energy falls at the rate
+\begin{equation}\label{eq:balance}
+  \deriv{}{t}\left(\gamma mc^2\right) = \vect{v}\cdot\vect{f} = -P,
+  \qquad P = \frac{2q^4B_z^2}{3m^2c^3}\,\gamma^2v^2,
+\end{equation}
+and $T(t) + W(t) = T_0$ exactly, $W = \int_0^t P\,\dd t'$ the radiated energy. The Lorentz force
+alone gives the acceleration $\vect{a}_\mathrm{L} = q\vect{v}\times\vect{B}/(\gamma m)$,
+perpendicular to $\vect{v}$, and Liénard's power \xeqref{foundations}{eq:larmor} for it is
+$\frac{2q^2}{3c^3}\gamma^6 a_\mathrm{L}^2(1 - v^2/c^2) = \frac{2q^2}{3c^3}\gamma^4\frac{q^2v^2B_z^2}{\gamma^2m^2}$:
+the same $P$. With the full acceleration (the reaction's own included) Liénard's power differs at
+the next order in $\tau_0$, the terms the Landau--Lifshitz reduction drops.
+
+Without the reaction, the canonical angular momentum about the axis,
+\begin{equation}\label{eq:canonical}
+  J = (x - x_\mathrm{c})\,p_y - (y - y_\mathrm{c})\,p_x + q\,\rho A_\phi(\rho),
+\end{equation}
+is conserved: with $\vect{r}$ from the axis, $(\vect{r}\times q\vect{v}\times\vect{B})_z = -qB_z\,\rho\dot\rho$,
+while $\dd(q\rho A_\phi)/\dd t = q\dot\rho\,\dd(\rho A_\phi)/\dd\rho = q\rho\dot\rho B_z$, as
+$B_z = \rho^{-1}\dd(\rho A_\phi)/\dd\rho$. With it, only the reaction's torque changes $J$:
+\begin{equation}\label{eq:torque}
+  J(t) - J(0) = \int_0^t (\vect{r}\times\vect{f})_z\,\dd t'.
+\end{equation}
+\eqref{eq:balance} and \eqref{eq:torque} hold exactly for the model; the march checks both.
+
+\subsection{Without radiation the axis is out of reach}\label{sec:bound}
+
+Without the reaction, $\abs{\vect{p}} = p_\mathrm{i}$ (the magnetic force does no work) and $J$ is
+conserved. At distance $\rho$ from the axis $\abs{(\vect{r}\times\vect{p})_z} \le \rho\,p_\mathrm{i}$,
+so the particle can be there only if
+\begin{equation}\label{eq:bound}
+  \abs{J(0) - q\rho A_\phi(\rho)} \le \rho\,p_\mathrm{i}.
+\end{equation}
+Stepping $\rho$ inward from the launch and bisecting gives the smallest reachable distance, for
+no magnet and every allowed one ($J$ at the launch in the second column):
+\begin{center}\small\val{bounds}\end{center}
+All of them stay farther than $\val{rBoundWorst}$ from the axis, outside the detector, whose
+nearest points are $\val{rEdge}$ away: without radiation no placement solves the level. For the
+reference the bound is $\val{rBoundRef}$, and a march without the reaction (at $h = 0.05$) ends
+in a \val{noRadOut}, its least distance from the axis $\val{noRadRhoMin}$.
+
+\subsection{The march}\label{sec:march}
+
+There is no closed form. \xeqref{foundations}{eq:eom} with $\vect{f}$ of \eqref{eq:ll-static} is
+marched by \xeqref{foundations}{eq:rk4} at $h = \val{H}$, with four more states: the radiated
+energy $W$, Liénard's energy with the full and with the Lorentz acceleration, and the torque's
+integral \eqref{eq:torque}. The events are located on the cubic Hermite interpolant by bisection
+and the error is estimated against the step $2h$.
+
+\subsection{The adiabatic inspiral}\label{sec:adiabatic}
+
+The particle loses $\val{lossTurn}$\,\% of its kinetic energy in its first turn, and less in
+later ones (the drag falls with the momentum); its orbit stays close to a circle about the axis
+whose radius shrinks over about a dozen turns, and this model, which follows only the mean
+radius, is judged by its result. On a
+circle of radius $r$ about the axis the momentum is $p(r) = qrB_z(r)$ (its radius of curvature
+$p/(qB_z)$ equals $r$), the energy $\mathcal{E}(r) = \sqrt{m^2c^4 + c^2p^2}$, and it falls at the
+rate $P = 2q^4B_z^2p^2/(3m^4c^3)$ of \eqref{eq:balance} ($\gamma v = p/m$). So
+$\dot r = -P/(\dd\mathcal{E}/\dd r)$ and the time from radius $r_1$ to $r_2$ is
+\begin{equation}\label{eq:adiabatic}
+  t = \int_{r_2}^{r_1} \frac{\dd\mathcal{E}/\dd r}{P(r)}\,\dd r,
+  \qquad
+  \deriv{\mathcal{E}}{r} = \frac{c^2p\,q\,(B_z + rB_z')}{\mathcal{E}}.
+\end{equation}
+From the mean radius $r_\mathrm{g} = \val{rGuide}$ to the detector's corners, $\val{rCorner}$,
+Simpson's rule gives $t = \val{tAdCorner}$; to its edges, $\val{rEdge}$, $t = \val{tAdEdge}$. The
+particle can enter between the two, depending on where on its orbit it is when it gets there.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:field} \emph{The field.} At each point, $\rho$ from the axis; $B_z$, its gradient
+    and $A_\phi$ by \eqref{eq:field} and \eqref{eq:gradient}, as in the table of
+    \S\ref{sec:field}; the force $q\vect{v}\times\vect{B} + \vect{f}$ with \eqref{eq:ll-static}.
+  \item\label{st:march} \emph{The march.} \S\ref{sec:march} from the launch; every 100 time
+    units (the last column the kinetic energy):
+
+    \smallskip
+    \centerline{\val{march}}
+    \smallskip
+
+    The particle enters the detector through its \val{faceRef} face at
+    $(\val{xRef}, \val{yRef})$ at $t = \val{tRef}$, with $\vect{p} = (\val{pxRef}, \val{pyRef})$
+    (step estimate $\val{errRef}$).
+  \item\label{st:energy} \emph{The energy.} It radiated $W = \val{wLL}$, a fraction
+    $\val{radFrac}$ of $T_0$, and arrives with $T = \val{tEnd}$; $T + W = T_0$ holds to
+    $\val{wDev}$ along the march \eqref{eq:balance}. Liénard's energy with the Lorentz
+    acceleration is $\val{wLienardL}$, the same; with the full acceleration $\val{wLienard}$,
+    $\val{lorentzOnly}$ higher, the next order in $\tau_0$.
+  \item\label{st:j} \emph{The angular momentum.} $J$ goes from $\val{jZero}$ to $\val{jEnd}$; the
+    torque's integral is $\val{torque}$, and \eqref{eq:torque} holds to $\val{jDev}$.
+  \item\label{st:adiabatic} \emph{The estimate.} The adiabatic inspiral \eqref{eq:adiabatic}
+    reaches the detector's corners at $\val{tAdCorner}$; the march arrives $\val{adRel}$\,\% from
+    that, entering near a corner.
+\end{procedure}
+
+\begin{result}[The reference flight]
+With $\mu = \val{mu}$ the particle spirals in and enters the detector at
+$(\val{xRef}, \val{yRef})$ at $t = \val{tRef} < t_{\max}$, having radiated $\val{radFrac}$ of its
+kinetic energy. The level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+The flights last up to $\val{tMax}$, about fourteen turns, and the trajectories agree to about
+$10^{-9}$ at their ends, the larger differences on the longest flights. The tolerances are ten
+times the larger of the two computations' estimates or the game's preview--verification gap,
+whichever is larger; for these long flights it is the gap (for the reference $\val{tolRef}$,
+against ten times our estimate, $\val{errRefTen}$). The game reports Liénard's energy with the
+acceleration of the Lorentz force alone, which \S\ref{sec:balances} shows equals the radiated
+energy $W$ in this field; it agrees with ours to about $10^{-11}$ relative.
+
+\section{Other solutions}\label{sec:others}
+
+The table covers every legal placement: no magnet and each of the eight magnets. A magnet with
+$\mu < 0$ strengthens the field near the axis; the drag \eqref{eq:ll-static} grows as $B_z^2$, and
+the particle spirals in faster:
+$\mu = -1$ arrives at $t = \val{tM10}$, $-2$ at $\val{tM20}$, $-4$ at $\val{tM40}$, having
+radiated $\val{radM10}$, $\val{radM20}$ and $\val{radM40}$ of $T_0$. Without a magnet, or with
+$\mu > 0$, which weakens the field near the axis, the particle radiates as much energy
+($\val{radNone}$ of $T_0$ without a magnet, $\val{radP40}$ with $\mu = 4$) but its orbit shrinks
+less, and at $t_{\max}$ it is still $\val{rhoEndNone}$ ($\mu = 0$), $\val{rhoEndP05}$, $\val{rhoEndP10}$,
+$\val{rhoEndP20}$ and $\val{rhoEndP40}$ ($\mu = 0.5$ to $4$) from the axis: a \val{outNone} each.
+On a circle $p = qrB_z$, so a weaker field near the axis means a smaller momentum, and the energy
+must fall further before the orbit fits there. The reference is the weakest magnet that solves.
+
+\section{What the game computes}\label{sec:engine}
+
+The game evaluates the coil's and the magnet's fields in closed form (\physref{2.2}) and the
+Landau--Lifshitz force in its general form (\physref{3.1}), with $D\vect{B}/Dt$ a central
+difference along the world line over $10^{-5}$ cells (relative error about $10^{-10}$, far below
+$\tau_0$'s order); in this field that is \eqref{eq:ll-static}. It integrates the motion with its
+adaptive eighth-order Runge--Kutta method, the reaction's work as one more component
+(\physref{5}), with event location and verification (\physref{6}, \physref{7}), and integrates
+Liénard's power with the Lorentz force's acceleration by three-point Gauss--Legendre on each step.
+The problem is the same as here; the differences in the comparison are the two integrations'
+errors.
+
+\section{Further reading}\label{sec:reading}
+
+Radiation reaction and the Landau--Lifshitz force: \LandauII{§§75--76}, \Jackson{Ch.~16}.
+Liénard's formula and synchrotron radiation: \Jackson{Ch.~14}. The coil and its vector
+potential: \levelref{first_coil}, \levelref{ramp_the_coil}.
+
+\levelfileappendix
+
+\end{document}
