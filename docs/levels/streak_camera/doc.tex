@@ -1,0 +1,223 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,rf_kick,rf_separator,tune_the_rf}
+\DocFingerprint{27c15f028a5caac2}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Three identical ions ($q = \val{q}$, $m = \val{m}$, $T_0 = \val{Tzero}$) leave
+$(\val{xZero}, \val{yZero})$ along $+x$ in a world with $c = \val{c}$, the second
+$\Delta t = \val{dt}$ after the first and the third $2\Delta t = \val{dtTwo}$ after it: a third of
+the period $T = 2\pi/\omega = \val{period}$ of the level's antenna frequency $\omega = \val{omega}$
+apart. Each ion has its own detector, all three at $\val{xLoOne} \le x \le \val{xHiOne}$: the first
+$\val{yLoOne} \le y \le \val{yHiOne}$ above the beam line, the second
+$\val{yLoTwo} \le y \le \val{yHiTwo}$ across it, the third $\val{yLoThree} \le y \le \val{yHiThree}$
+below it, so the three must arrive in the order of their launch, top to bottom. The game's
+``bunches'' are single ions. The player places up to two antennas, as in \levelref{rf_kick} (each
+at the frequency $\omega$, with an amplitude from $\{\val{amplitudes}\}$ of either sign and an
+orientation of $0^\circ$, $45^\circ$, $90^\circ$ or $135^\circ$, \physref{2.4}), and up to two charges, at nodes with $\val{xRegLo} \le x \le \val{xRegHi}$,
+$\val{yRegLo} \le y \le \val{yRegHi}$. A flight ends when the ion enters its own detector, touches a
+placed element's body (an antenna's radius is $\val{Ra}$), leaves the world, or reaches
+$t = \val{tMax}$ (\xsecref{foundations}{sec:board}).
+
+The reference places one antenna, $p_0 = \val{pA}$ at $(\val{xA}, \val{yA})$, oriented at
+$\val{angleA}^\circ$. The document writes the three first-order lifts as samples of one complex
+response a third of a cycle apart, which shows why they sum to zero and what equal spacing asks
+of the antenna; it finds that the reference meets those conditions only roughly, and that the
+middle ion reaches its detector through the terms beyond first order; it then marches all three
+flights.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+By \xeqref{foundations}{eq:launch} each ion starts with $\gamma_0 = \val{gammaZero}$, momentum
+$\val{pZero}$ and speed $v_0 = \val{vZero}$; undeflected, it reaches the detectors' face
+$x = \val{xLoOne}$ at $t^* = \val{tStar}$ after its launch. The detectors' centres lie
+$\val{aimOne}$, $\val{aimTwo}$ and $\val{aimThree}$ from the beam line, each $\val{halfWidth}$ wide
+on either side.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.92\linewidth, xmin=-1.6, xmax=31.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,30}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (30,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \fill[blue!60!black, fill opacity=0.18] (\rawval{xLoOne},\rawval{yLoOne}) rectangle (\rawval{xHiOne},\rawval{yHiOne});
+  \fill[green!50!black, fill opacity=0.18] (\rawval{xLoTwo},\rawval{yLoTwo}) rectangle (\rawval{xHiTwo},\rawval{yHiTwo});
+  \fill[red!60!black, fill opacity=0.18] (\rawval{xLoThree},\rawval{yLoThree}) rectangle (\rawval{xHiThree},\rawval{yHiThree});
+  \addplot[thick, blue!70!black] table {pathone.dat};
+  \addplot[thick, green!45!black] table {pathtwo.dat};
+  \addplot[thick, red!70!black] table {paththree.dat};
+  \fill[orange!80!black] (\rawval{xA},\rawval{yA}) circle[radius=\rawval{Ra}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference antenna (orange disc), the placement region (dotted), the three detectors
+and the three flights: the first ion (blue), the second, $\Delta t$ later (green), and the third,
+$2\Delta t$ later (red), each shaded like its detector.}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The antenna's exact retarded fields, \xeqref{rf_kick}{eq:fields}; a flight launched at $t_0$
+    in the fields of the lab time $t_0 + t$, \xeqref{rf_separator}{eq:offset}.
+  \item The relativistic equations of motion \xeqref{foundations}{eq:eom} with the launch
+    \xeqref{foundations}{eq:launch}; Liénard's power \xeqref{foundations}{eq:larmor}.
+  \item The kick to first order in the field, \xeqref{rf_kick}{eq:first-order}, and its
+    dependence on the launch time through one complex response, \xeqref{tune_the_rf}{eq:phasor}.
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate from the step $2h$ (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+\begin{assumption}{The ions' radiation, and the antenna as a fixed source}\label{as:rf}
+As in \levelref{rf_kick}, whose assumptions \xref{rf_kick}{as:radiation} and
+\xref{rf_kick}{as:driven} these are: the ions' radiation is neglected, $\val{radOne}$,
+$\val{radTwo}$ and $\val{radThree}$ here, and the antenna oscillates at a fixed amplitude. The ions
+fly separately and do not act on each other. These are the game's model.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{Three samples of one response}\label{sec:phases}
+
+By \xeqref{tune_the_rf}{eq:phasor}, an ion launched at $t_0$ is lifted, to first order in the
+field and on the detectors' face, by $L(t_0) = \mathrm{Re}\,[K e^{i\omega t_0}]$, with one complex
+response $K = \abs{K}e^{i\alpha}$ set by the antennas' places, orientations and amplitudes (the
+responses of several antennas at the same frequency add). The launch times $t_k = (k-1)T/3$,
+$k = 1, 2, 3$, sample it a third of a cycle apart:
+\begin{equation}\label{eq:lifts}
+  L_k = \abs{K}\cos\!\Big(\alpha + \frac{2\pi(k-1)}{3}\Big), \qquad k = 1, 2, 3.
+\end{equation}
+Since $1 + e^{2\pi i/3} + e^{4\pi i/3} = 0$, for every placement of antennas
+\begin{equation}\label{eq:sum}
+  L_1 + L_2 + L_3 = \mathrm{Re}\Big[K\big(1 + e^{2\pi i/3} + e^{4\pi i/3}\big)\Big] = 0:
+\end{equation}
+a sinusoidal sweep sampled at three equally spaced phases has no mean. A static charge, on the
+other hand, lifts the three identical ions alike, whenever they leave; to first order it shifts
+the pattern as a whole. The detectors are placed for this: their centres sum to zero. Equal
+spacing, $L_1 - L_2 = L_2 - L_3$, with \eqref{eq:sum} gives
+\begin{equation}\label{eq:spacing}
+  L_2 = 0, \qquad L_1 = -L_3 = \abs{K}\cos\frac{\pi}{6} = \frac{\sqrt{3}}{2}\abs{K},
+  \qquad \alpha = -\frac{\pi}{6} = \val{KargIdeal}^\circ
+\end{equation}
+(the other root of $\cos(\alpha + 2\pi/3) = 0$, $\alpha = 5\pi/6$, sends the first ion down and the
+third up). Centring the outer ions on their detectors needs $\abs{K} = \val{Kneed}$, and to first
+order any $\abs{K}$ from $\val{KneedLo}$ to $\val{KneedHi}$ lands them within $\val{halfWidth}$ of
+the centres on the face.
+
+The reference antenna's response, from the two first-order integrals of
+\xeqref{tune_the_rf}{eq:phasor} along the undeflected line, is
+$K = \val{Kabs}\,e^{-i\,\val{KargNeg}^\circ}$: of the right size but $\val{Karg}^\circ$ instead of
+$\val{KargIdeal}^\circ$ in phase. \eqref{eq:lifts} gives $L_1 = \val{LOne}$, $L_2 = \val{LTwo}$ and
+$L_3 = \val{LThree}$ (their sum, rounding aside, $\val{liftSum}$), each equal to its directly
+integrated first-order lift to $10^{-10}$. To first order the outer ions would reach their
+detectors, but the middle one would pass $\abs{L_2} > \val{halfWidth}$ below the beam line and
+miss. $K$ is proportional to the amplitude; at the reference's place, orientation and sign, the
+listed amplitudes give
+\begin{center}\small\val{amps}\end{center}
+and only the largest lifts the outer ions as far as their detectors.
+
+\subsection{Beyond first order}\label{sec:orders}
+
+The march (\S\ref{sec:march}) puts the three ions, on the face $x = \val{xLoOne}$, at
+$\val{yLineOne}$, $\val{yLineTwo}$ and $\val{yLineThree}$ from the beam line: they depart from
+\eqref{eq:lifts} by $\val{residOne}$, $\val{residTwo}$ and $\val{residThree}$, and the middle ion's
+departure brings it inside its detector. To see what these departures are, the reference antenna's
+amplitude is scaled by $u$ and each flight marched again; the lift over $u$ is
+\begin{center}\small\val{orders}\end{center}
+As $u \to 0$ it tends to the first-order lift, linearly in $u$: the extrapolation
+$2y(u)/u - y(2u)/(2u)$ from the two smallest $u$ removes that term and reproduces \eqref{eq:lifts} to
+$\val{extraGap}$. The term linear in $u$ is the second order (the field sampled on the deflected
+path, and at the times the ion's changed speed brings it there). Its coefficients, the lifts'
+terms in $u^2$ estimated at the smallest $u$, are $\val{sTwoOne}$, $\val{sTwoTwo}$ and
+$\val{sTwoThree}$; they do not sum to zero, for a product of two fields at the frequency $\omega$
+has a part that does not depend on the launch time. At the reference's amplitude, $u = 1$, the
+terms of higher order are as large as the second (the middle ion's lift over $u$ moves by more
+between $u = 1$ and $u = 0.5$ than its second-order term alone would move it): the march, not an
+expansion in the field, decides where the middle ion lands.
+
+\subsection{The march}\label{sec:march}
+
+Each flight is marched by \xeqref{foundations}{eq:rk4} at $h = \val{H}$ with Liénard's energy as one
+more state; the line $x = \val{xLoOne}$ and the entry are located on the cubic Hermite interpolant
+by bisection, and the error is estimated against the step $2h$, as in \xsecref{rf_kick}{sec:flight}.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:response} \emph{The response.} The two first-order integrals of
+    \xeqref{tune_the_rf}{eq:phasor}: $K = \val{Kabs}\,e^{-i\,\val{KargNeg}^\circ}$.
+  \item\label{st:lifts} \emph{The first-order lifts.} \eqref{eq:lifts}: $\val{LOne}$, $\val{LTwo}$,
+    $\val{LThree}$, summing to zero by \eqref{eq:sum}; the middle one is outside its detector's
+    half-width, so the march is needed.
+  \item\label{st:one} \emph{The first ion.} The march: it enters through the \val{faceOne} face at
+    $(\val{xOne}, \val{yOne})$ at $t = \val{tOne}$, with $\vect{p} = (\val{pxOne}, \val{pyOne})$ (step
+    estimate $\val{errOne}$).
+  \item\label{st:two} \emph{The second ion.} Launched $\Delta t$ later: through the \val{faceTwo}
+    face at $(\val{xTwo}, \val{yTwo})$ at $t = \val{tTwo}$ after its launch, $\val{marginTwo}$ above
+    its detector's lower edge, with $\vect{p} = (\val{pxTwo}, \val{pyTwo})$ (step estimate
+    $\val{errTwo}$).
+  \item\label{st:three} \emph{The third ion.} Launched $2\Delta t$ after the first: through the
+    \val{faceThree} face at $(\val{xThree}, \val{yThree})$ at $t = \val{tThree}$ after its launch,
+    with $\vect{p} = (\val{pxThree}, \val{pyThree})$ (step estimate $\val{errThree}$).
+\end{procedure}
+
+\begin{result}[The reference flights]
+Each ion enters its own detector, in the order of their launch from top to bottom. The level is
+solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All trajectory differences on the reference are at most $\val{largest}$, the game's verified
+accuracy (Foundations §6). The tolerances are ten times the larger of the two computations'
+estimates, or the game's own preview--verification gap where that is larger; the radiated energies
+agree to a few $10^{-9}$ relative. On the empty board the middle ion, whose detector straddles the
+beam line, enters it at $t^* = \val{tStar}$ without any field, and the outer two fly straight to the
+world's right edge at $t = \val{bareT}$. At half the reference's amplitude, $p_0 = \val{pHalf}$, the
+first ion \val{halfOutOne} at height $\val{halfYOne}$, the second \val{halfOutTwo} and the third
+\val{halfOutThree} at height $\val{halfYThree}$, as the table of \S\ref{sec:phases} foresees.
+
+\section{Other solutions}\label{sec:others}
+
+The conditions \eqref{eq:spacing} hold for any placement of antennas: a response of phase
+$-\pi/6$ and a size near $\val{Kneed}$, to first order. The place sets the phase (when each ion
+passes the antenna, and the retardation), the orientation and the amplitude set the size, and the
+amplitude's sign adds $\pi$; a second antenna's response adds to the first one's, which can bring
+both closer to \eqref{eq:spacing} than the reference's one antenna does. A charge lifts all three
+alike to first order, so it cannot spread them, but it can shift the pattern, as the second order's
+common part (\S\ref{sec:orders}) does. The reference's margins are narrow: the middle ion enters
+$\val{marginTwo}$ inside its detector's edge, which it reaches only through the terms beyond first
+order. A map of the solutions would take the game's verdicts, which this document does not
+reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game evaluates each antenna's fields at the level's frequency (\physref{2.4}), at the lab time
+$t_0 + t$, and integrates the motion with its adaptive eighth-order Runge--Kutta method
+(\physref{3}, \physref{5}, \physref{6}, \physref{7}), each shot verified on its own. The problem is
+the same as here, and the differences in the comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+One ion's kick: \levelref{rf_kick}; two ions half a period apart: \levelref{rf_separator}; the
+complex response and the choice of frequency: \levelref{tune_the_rf}. Phasors for time-harmonic
+fields: \Jackson{§9.1}.
+
+\levelfileappendix
+
+\end{document}
