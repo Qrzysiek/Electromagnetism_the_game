@@ -172,7 +172,15 @@ Reviewed 2026-11-14 against the tree, the plans and the tools' reports. In order
    half a period late is exactly the opposite charge; the second-order asymmetry) and Tune the
    RF (46: each ion's kick the real part of one complex response; why ω = 0.4 separates best).
    These documents change only their own folders (no code): they need no test run beyond
-   `level_docs.py build`, which each passed before its commit. Next in order: Streak camera. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
+   `level_docs.py build`, which each passed before its commit. The night of 2026-11-16 added
+   Streak camera (47: three launches a third of a period apart sample one complex response, so
+   the first-order lifts sum to zero and equal spacing puts the middle ion on the beam line; the
+   reference's middle ion would miss to first order and lands through the higher orders, which
+   at its amplitude are as large as the second) and RF beam line (48: the stray field moves the
+   gate entry by nearly the gate's height and the cone's width, so the charges centre both cases,
+   with margins down to 0.125°; half a period late is every antenna reversed, not the opposite
+   charge; the empty board by the hyperbolic motion in a uniform field). Next in order: Charging
+   a plate (49), the circuits arc's first document. **The step estimate's convention, fixed 2026-11-15** in that day's documents: they had compared
    the run at the step h but quoted `|y_h - y_{h/2}|/15`, the h/2 run's error (16 times
    smaller than the h run's); now the partner runs at 2h, as the Foundations state it (the mass
    spectrometer reports its h/2 run instead). `slingshot`'s, the example they followed, keeps
