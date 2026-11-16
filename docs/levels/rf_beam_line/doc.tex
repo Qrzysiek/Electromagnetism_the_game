@@ -1,0 +1,237 @@
+\documentclass{leveldoc}
+\DocUses{foundations,slingshot,two_stages,injection,stray_field,rf_kick,rf_separator,streak_camera}
+\DocFingerprint{2145ee355d7eb0c8}
+
+\begin{document}
+
+\section{What the level asks}\label{sec:asks}
+
+The game's text:
+\leveldescription
+
+Two identical ions ($q = \val{q}$, $m = \val{m}$, $T_0 = \val{Tzero}$) leave
+$(\val{xZero}, \val{yZero})$ along $+x$ in a world with $c = \val{c}$, the second
+$\Delta t = \val{dt}$ after the first: half the period $T = 2\pi/\omega = \val{period}$ of the level's
+antenna frequency $\omega = \val{omega}$. The game's ``bunches'' are single ions. Each ion is flown
+under both of the level's disturbances (\physref{2.3}), ``\val{distOff}'', no outside field, and
+``\val{distOn}'', a uniform field $\vect{E} = (0, \val{Ey})$; the level is solved only if all four
+flights succeed. Each flight must first pass the gate $\val{xGLo} \le x \le \val{xGHi}$,
+$\val{yGLo} \le y \le \val{yGHi}$, entering it with a direction within $\delta = \val{gHalf}^\circ$
+of the $+x$ axis (by the rules \xeqref{two_stages}{eq:gate} and \xeqref{injection}{eq:cone}; an
+entry outside the cone does not count, and a later entry is tested again, \physref{6.2}), and then
+enter its own
+detector: the first ion $\val{xLoOne} \le x \le \val{xHiOne}$, $\val{yLoOne} \le y \le \val{yHiOne}$
+above the beam line, the second $\val{xLoTwo} \le x \le \val{xHiTwo}$,
+$\val{yLoTwo} \le y \le \val{yHiTwo}$ below it. A detector entered before the gate is a skipped gate.
+The player places up to $\val{maxQ}$ charges, of magnitudes $\{\val{magnitudes}\}$ and either sign,
+and up to $\val{maxA}$ antennas, as in \levelref{rf_kick} (at the frequency $\omega$, amplitudes
+$\{\val{amplitudes}\}$ of either sign, oriented at $0^\circ$, $45^\circ$, $90^\circ$ or $135^\circ$),
+at nodes with $\val{xRegLo} \le x \le \val{xRegHi}$, $\val{yRegLo} \le y \le \val{yRegHi}$. A flight
+ends when the ion enters its detector, touches a placed element's body (radius $\val{Rq}$ for a
+charge, $\val{Ra}$ for an antenna), leaves the world, or reaches $t = \val{tMax}$
+(\xsecref{foundations}{sec:board}).
+
+The reference places two charges, $Q_1 = \val{Q1}$ at $(\val{xQ1}, \val{yQ1})$ and
+$Q_2 = \val{Q2}$ at $(\val{xQ2}, \val{yQ2})$, and two antennas oriented at $\val{angA1}^\circ$,
+$p_1 = \val{pA1}$ at $(\val{xA1}, \val{yA1})$ and $p_2 = \val{pA2}$ at $(\val{xA2}, \val{yA2})$. The
+document sizes the stray field against the gate, which shows what the steering must do (centre the
+two cases on the gate in height and in angle); proves that no static field can separate the ions
+and that the late ion is the early one with the antennas reversed; solves the empty board in closed
+form; and marches the four flights.
+
+\section{Setup}\label{sec:setup}
+
+The level file, field by field (the appendix reproduces it):
+\setuptable
+
+By \xeqref{foundations}{eq:launch} each ion starts with $\gamma_0 = \val{gammaZero}$, momentum
+$p_\mathrm{i} = \val{pZero}$ and speed $v_0 = \val{vZero}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[axis equal image, width=0.95\linewidth, xmin=-1.6, xmax=41.6, ymin=-1.6, ymax=21.6,
+  xtick={0,5,...,40}, ytick={0,5,...,20}, tick label style={font=\small},
+  xlabel={$x$}, ylabel={$y$}, label style={font=\small}]
+  \draw[black!8] (0,0) grid (40,20);
+  \draw[black!45, dashed] (-1,-1) rectangle (\rawval{xWorld},\rawval{yWorld});
+  \draw[black!30, dotted] (\rawval{xRegLo},\rawval{yRegLo}) rectangle (\rawval{xRegHi},\rawval{yRegHi});
+  \draw[black!60, thick] (\rawval{xGLo},\rawval{yGLo}) rectangle (\rawval{xGHi},\rawval{yGHi});
+  \fill[blue!60!black, fill opacity=0.18] (\rawval{xLoOne},\rawval{yLoOne}) rectangle (\rawval{xHiOne},\rawval{yHiOne});
+  \fill[red!60!black, fill opacity=0.18] (\rawval{xLoTwo},\rawval{yLoTwo}) rectangle (\rawval{xHiTwo},\rawval{yHiTwo});
+  \addplot[thick, blue!70!black] table {pathoneoff.dat};
+  \addplot[thick, blue!70!black, dashed] table {pathoneon.dat};
+  \addplot[thick, red!70!black] table {pathtwooff.dat};
+  \addplot[thick, red!70!black, dashed] table {pathtwoon.dat};
+  \fill[red!80!black] (\rawval{xQ1},\rawval{yQ1}) circle[radius=\rawval{Rq}];
+  \fill[blue!80!black] (\rawval{xQ2},\rawval{yQ2}) circle[radius=\rawval{Rq}];
+  \fill[orange!80!black] (\rawval{xA1},\rawval{yA1}) circle[radius=\rawval{Ra}];
+  \fill[orange!80!black] (\rawval{xA2},\rawval{yA2}) circle[radius=\rawval{Ra}];
+  \fill (\rawval{xZero},\rawval{yZero}) circle[radius=0.15];
+\end{axis}
+\end{tikzpicture}
+\caption{The reference: the positive charge $Q_1$ (red disc), the negative $Q_2$ (blue), the two
+antennas (orange), the placement region (dotted), the gate (outlined) and the detectors. The first
+ion (blue) and the second, $\Delta t$ later (red), with the stray field off (solid) and on
+(dashed).}
+\label{fig:board}
+\end{figure}
+
+\section{Principles and model}\label{sec:model}
+
+\begin{principles}
+  \item The charges' fields \xeqref{foundations}{eq:coulomb}, the uniform outside field of each
+    disturbance (\physref{2.3}), as in \levelref{stray_field}; the antennas' exact retarded fields,
+    \xeqref{rf_kick}{eq:fields}; a flight launched at $t_0$ in the fields of the lab time $t_0 + t$,
+    \xeqref{rf_separator}{eq:offset}.
+  \item The relativistic equations of motion \xeqref{foundations}{eq:eom} with the launch
+    \xeqref{foundations}{eq:launch}; Liénard's power \xeqref{foundations}{eq:larmor}.
+  \item The gate \xeqref{two_stages}{eq:gate} and its direction cone \xeqref{injection}{eq:cone},
+    tested at every entry (\physref{6.2}).
+  \item The board's rules; the classical Runge--Kutta method, cubic Hermite interpolation and the
+    error estimate from the step $2h$ (\xsecref{foundations}{sec:board},
+    \xsecref{foundations}{sec:numerics}), as in \xsecref{slingshot}{sec:method}.
+\end{principles}
+
+\begin{assumption}{The ions' radiation, and fixed sources}\label{as:rf}
+As in \levelref{rf_kick}, whose assumptions \xref{rf_kick}{as:radiation} and
+\xref{rf_kick}{as:driven} these are: the ions' radiation is neglected, at most $\val{radOneOn}$ here,
+and the antennas oscillate at fixed amplitudes. The charges are held in place, the outside field is
+uniform and static under each disturbance (an exact solution of Maxwell's equations in vacuum), and
+the ions fly separately. These are the game's model.
+\end{assumption}
+
+\section{Derivation}\label{sec:derivation}
+
+\subsection{The stray field against the gate}\label{sec:stray}
+
+The supply's field pushes with $F = qE_y = \val{force}$, a transverse acceleration of
+$F/(\gamma_0 m) = \val{accel}$ at the start. Along the undeflected line the ion reaches the gate's
+face at $t = \val{tGate}$: by then the push alone has lowered it by about
+$\tfrac12 (F/\gamma_0 m)t^2 = \val{dropGate}$ and turned it by $\arctan(\abs{F}t/p_\mathrm{i}) = \val{angleGate}^\circ$, against a gate
+$\val{gateHeight}$ high and a cone $2\delta = \val{coneWidth}^\circ$ wide. The charges and antennas
+act the same under both disturbances, so whatever they do, the stray field changes the entry by
+nearly the gate's whole height and the cone's whole width: a solution must enter the gate near its
+top, climbing at nearly $+\delta$, with the field off, and near its bottom, descending at nearly
+$-\delta$, with it on. The reference's four entries (the march, \S\ref{sec:march}; $\theta$ is the
+direction of motion above the axis):
+\begin{center}\small\val{gates}\end{center}
+Along the reference's paths the field changes the entry by $\val{dYOne}$ in height and
+$\val{dThetaOne}^\circ$ in angle for the first ion ($\val{dYTwo}$ and $\val{dThetaTwo}^\circ$ for the
+second), a little less than along the straight line; the field-off entries lie within
+$\val{gateTop}$ of the gate's top, the field-on ones $\val{gateBottom}$ above its bottom, and the
+smallest angular margin is $\val{minGateMargin}^\circ$.
+
+\subsection{Two ions in one static field}\label{sec:late}
+
+The charges' fields and the stray field do not depend on time. With them alone the two ions, which
+differ only in their launch time, obey the same equations \xeqref{rf_separator}{eq:offset} with the
+same initial state: they fly the same path and cannot reach two different detectors, whatever the
+charges. The antennas' moments satisfy $\vect{p}(t + T/2) = -\vect{p}(t)$, and their fields
+\xeqref{rf_kick}{eq:fields} are linear in $\vect{p}$ and its derivatives at the retarded time, so the
+second ion, launched at $t_0 = T/2$, moves in
+\begin{equation}\label{eq:late}
+  \vect{E}_Q + \vect{E}_\mathrm{out} + \vect{E}_\mathrm{ant}(\vect{x}, T/2 + t;\, \vect{p}_0)
+  = \vect{E}_Q + \vect{E}_\mathrm{out} + \vect{E}_\mathrm{ant}(\vect{x}, t;\, -\vect{p}_0),
+\end{equation}
+and the same for $\vect{B}$: it flies as an ion launched with the first one would, with every
+antenna's amplitude reversed. Unlike the second ion of \levelref{rf_separator}, which \xeqref{rf_separator}{eq:conjugate}
+makes the opposite charge, it is not the opposite charge, for the static fields keep their sign. Marching both, with the second ion's detector, gives the same end state to
+$\val{lateGap}$. Only the antennas can send the two ions apart, and they must do it while the
+static fields keep both on a path through the gate.
+
+\subsection{The empty board in closed form}\label{sec:hyperbolic}
+
+With no element and the field off the ions fly straight along $y = \val{yZero}$, through the gate
+on its axis, to the world's right edge at $t = \val{bareTOff}$. With the field on, the force
+$(0, F)$ is constant: $p_x = p_\mathrm{i}$, $p_y = Ft$, and the energy
+$\varepsilon = \sqrt{\varepsilon_0^2 + c^2F^2t^2}$ with $\varepsilon_0 = \gamma_0 mc^2$. Integrating
+$\dot{\vect{x}} = c^2\vect{p}/\varepsilon$,
+\begin{equation}\label{eq:hyperbolic}
+  x - x_0 = \frac{p_\mathrm{i}c}{\abs{F}}\operatorname{arsinh}\frac{c\abs{F}t}{\varepsilon_0},
+  \qquad
+  y - y_0 = \frac{\varepsilon - \varepsilon_0}{F},
+\end{equation}
+the second also from the energy balance $\dd\varepsilon = F\,\dd y$. The ion passes below the gate
+(\S\ref{sec:stray}) and reaches the bottom edge $y = \val{bareYOn}$ when
+$\varepsilon = \varepsilon_0 + F(\val{bareYOn} - y_0)$: at $t = \val{bareTOn}$, at
+$x = \val{bareXOn}$, just before the right edge.
+
+\subsection{The march}\label{sec:march}
+
+Each flight is marched by \xeqref{foundations}{eq:rk4} at $h = \val{H}$ with Liénard's energy as one
+more state. Every entry into the gate and the detector is located on the cubic Hermite interpolant by
+bisection; at a gate entry the momentum, from a Runge--Kutta step of the located length, is tested
+against the cone, and the flight goes on. The error is estimated against the step $2h$, as in
+\xsecref{rf_kick}{sec:flight}.
+
+\section{The reference solution by hand}\label{sec:hand}
+
+\begin{procedure}
+  \item\label{st:stray} \emph{The stray field's size.} \S\ref{sec:stray}: the field moves the entry
+    by nearly the gate's height and the cone's width.
+  \item\label{st:gate} \emph{The gate.} The march: the four entries of the table in
+    \S\ref{sec:stray}, each within the cone at its first entry.
+  \item\label{st:oneoff} \emph{The first ion, field off.} It enters through the \val{faceOneOff}
+    face of its detector at $(\val{xOneOff}, \val{yOneOff})$ at $t = \val{tOneOff}$, with
+    $\vect{p} = (\val{pxOneOff}, \val{pyOneOff})$ (step estimate $\val{errOneOff}$).
+  \item\label{st:oneon} \emph{The first ion, field on.} Through the \val{faceOneOn} face at
+    $(\val{xOneOn}, \val{yOneOn})$ at $t = \val{tOneOn}$, with $\vect{p} = (\val{pxOneOn}, \val{pyOneOn})$
+    (step estimate $\val{errOneOn}$).
+  \item\label{st:twooff} \emph{The second ion, field off.} Launched $\Delta t$ later: through the
+    \val{faceTwoOff} face at $(\val{xTwoOff}, \val{yTwoOff})$ at $t = \val{tTwoOff}$ after its
+    launch, with $\vect{p} = (\val{pxTwoOff}, \val{pyTwoOff})$ (step estimate $\val{errTwoOff}$).
+  \item\label{st:twoon} \emph{The second ion, field on.} Through the \val{faceTwoOn} face at
+    $(\val{xTwoOn}, \val{yTwoOn})$ at $t = \val{tTwoOn}$ after its launch, with
+    $\vect{p} = (\val{pxTwoOn}, \val{pyTwoOn})$ (step estimate $\val{errTwoOn}$).
+\end{procedure}
+
+\begin{result}[The reference flights]
+Under both disturbances each ion passes the gate within the cone and enters its own detector. The
+level is solved.
+\end{result}
+
+\section{Comparison with the game}\label{sec:comparison}
+
+\comparisontable
+
+All trajectory differences on the reference are at most $\val{largest}$, in the first ion's flight
+with the field on, which passes about $\val{closeQ}$ from the negative charge, where the force is
+strongest and both integrations are least accurate: there our own step estimate is
+$\val{errOneOn}$, and the difference is of its size. The tolerances are ten times the larger of the
+two computations' estimates, or the game's own preview--verification gap where that is larger; the
+radiated energies agree to about $10^{-9}$ relative. The empty board agrees with
+\eqref{eq:hyperbolic} to the game's accuracy. With the reference's charges alone both ions pass the
+gate under both disturbances and fly the same path, as \S\ref{sec:late} says, leaving the world at
+height $\val{chargesYOff}$ with the field off and $\val{chargesYOn}$ with it on: the game's two shots
+give the same numbers.
+
+\section{Other solutions}\label{sec:others}
+
+The level separates into its two stages only roughly, for the antennas also act before the gate and
+the charges after it, but \S\ref{sec:stray} and \S\ref{sec:late} hold for every solution: the
+static elements must centre the field-off and field-on entries on the gate in height and in angle,
+and at least one antenna must kick the two ions apart, the second with the opposite of the first's
+antenna fields. The reference does both with two of the five charges and two of the three antennas,
+with small margins: $\val{minGateMargin}^\circ$ in angle and $\val{gateTop}$ in height at the gate.
+A map of the solutions would take the game's verdicts, which this document does not reproduce.
+
+\section{What the game computes}\label{sec:engine}
+
+The game adds the charges' Coulomb fields, the disturbance's uniform field (\physref{2.3}) and each
+antenna's retarded fields at the level's frequency (\physref{2.4}), at the lab time $t_0 + t$, and
+integrates the motion with its adaptive eighth-order Runge--Kutta method (\physref{3}, \physref{5},
+\physref{6}, \physref{7}); the gate is tested at every entry (\physref{6.2}), and each shot is flown
+and verified under each disturbance. The problem is the same as here, and the differences in the
+comparison are the two integrations' errors.
+
+\section{Further reading}\label{sec:reading}
+
+One setup under two outside fields: \levelref{stray_field}; gates: \levelref{two_stages}; the
+direction cone: \levelref{injection}; the antennas' fields and kicks: \levelref{rf_kick}; two ions
+half a period apart: \levelref{rf_separator}; three a third of a period apart:
+\levelref{streak_camera}. Relativistic motion in static uniform fields: \Jackson{Ch.~12}.
+
+\levelfileappendix
+
+\end{document}

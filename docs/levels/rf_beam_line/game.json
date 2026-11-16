@@ -1,0 +1,634 @@
+{
+ "level_file": "levels/48_rf_beam_line.json",
+ "level_sha256": "2145ee355d7eb0c8",
+ "golden_hash": "5a23444e7f65ca21",
+ "recorded": "2026-11-16",
+ "command": "generator scan <level file> <the reference, then placements.json>",
+ "results": [
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.5312882611613925,
+        0.1743693249672561,
+        0.0
+       ],
+       "t": 39.04676125826055,
+       "x": [
+        37.0,
+        14.914040067674197,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 1.2148053109094215e-15,
+      "steps": 58
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.5312882612003126,
+        0.17436932506439903,
+        0.0
+       ],
+       "t": 39.04676125834833,
+       "x": [
+        37.0,
+        14.914040068071488,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 1.2148053477703672e-15,
+      "steps": 92
+     }
+    },
+    {
+     "disturbance": 2,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.38604487553434996,
+        1.2464105335396887,
+        0.0
+       ],
+       "t": 39.54930158534996,
+       "x": [
+        39.30966308011603,
+        14.000000000000007,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 3.8220061611738896e-14,
+      "steps": 90
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.38604487589978875,
+        1.246410533510037,
+        0.0
+       ],
+       "t": 39.54930158577473,
+       "x": [
+        39.30966308210003,
+        14.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 3.8220062116634065e-14,
+      "steps": 131
+     }
+    },
+    {
+     "disturbance": 1,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        0.9092850894493877,
+        -1.5037772268664205,
+        0.0
+       ],
+       "t": 37.36509037591545,
+       "x": [
+        39.58954012415254,
+        5.999999999999995,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 7.017722504843422e-15,
+      "steps": 68
+     },
+     "shot": 2,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        0.9092850895122214,
+        -1.5037772270178797,
+        0.0
+       ],
+       "t": 37.36509037525665,
+       "x": [
+        39.58954012381467,
+        5.999999999999993,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 7.017722652160012e-15,
+      "steps": 108
+     }
+    },
+    {
+     "disturbance": 2,
+     "outcome": "Arrived",
+     "preview": {
+      "end": {
+       "p": [
+        1.4455193357849943,
+        -0.06420293397648456,
+        0.0
+       ],
+       "t": 34.763610946829125,
+       "x": [
+        37.0,
+        5.089281330634809,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 9.685353192917577e-16,
+      "steps": 54
+     },
+     "shot": 2,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.4455193358111222,
+        -0.06420293412712776,
+        0.0
+       ],
+       "t": 34.76361094679648,
+       "x": [
+        37.0,
+        5.0892813305904765,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": null,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "Arrived",
+      "radiated_energy": 9.685353299128502e-16,
+      "steps": 84
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      5,
+      3,
+      0
+     ],
+     "value": 500000.0
+    },
+    {
+     "angle_deg": 90.0,
+     "kind": "antenna",
+     "node": [
+      19,
+      19,
+      0
+     ],
+     "value": 1000000.0
+    },
+    {
+     "angle_deg": 90.0,
+     "kind": "antenna",
+     "node": [
+      34,
+      10,
+      0
+     ],
+     "value": 4000000.0
+    },
+    {
+     "kind": "charge",
+     "node": [
+      36,
+      7,
+      0
+     ],
+     "value": -1000000.0
+    }
+   ]
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 41.61245529458177,
+       "x": [
+        41.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 6
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 41.61245529458178,
+       "x": [
+        41.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 7
+     }
+    },
+    {
+     "disturbance": 2,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        -0.5408677842070118,
+        0.0
+       ],
+       "t": 41.60521416977009,
+       "x": [
+        40.91640973741907,
+        -1.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 3.4109381985558684e-12,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 3.9015173093102234e-17,
+      "steps": 5
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        -0.5408677842133187,
+        0.0
+       ],
+       "t": 41.60521417025525,
+       "x": [
+        40.9164097379155,
+        -0.9999999999999991,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 8.537615059367454e-14,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 3.9015173093557185e-17,
+      "steps": 6
+     }
+    },
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 41.61245529458177,
+       "x": [
+        41.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 6
+     },
+     "shot": 2,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        0.0,
+        0.0
+       ],
+       "t": 41.61245529458178,
+       "x": [
+        41.0,
+        10.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 0.0,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 0.0,
+      "steps": 7
+     }
+    },
+    {
+     "disturbance": 2,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        -0.5408677842070118,
+        0.0
+       ],
+       "t": 41.60521416977009,
+       "x": [
+        40.91640973741907,
+        -1.0,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 3.4109381985558684e-12,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 3.9015173093102234e-17,
+      "steps": 5
+     },
+     "shot": 2,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.004987562112089,
+        -0.5408677842133187,
+        0.0
+       ],
+       "t": 41.60521417025525,
+       "x": [
+        40.9164097379155,
+        -0.9999999999999991,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 8.537615059367454e-14,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 3.9015173093557185e-17,
+      "steps": 6
+     }
+    }
+   ],
+   "placement": []
+  },
+  {
+   "flights": [
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.1454912160035022,
+        -0.17171417111672416,
+        0.0
+       ],
+       "t": 39.04371678775956,
+       "x": [
+        41.0,
+        11.742654142791059,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 6.800005003526621e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 5.511568170792163e-17,
+      "steps": 31
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.1454912160504376,
+        -0.17171417119096383,
+        0.0
+       ],
+       "t": 39.04371678759165,
+       "x": [
+        41.0,
+        11.742654142411476,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 4.1966430330830917e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 5.511568403333269e-17,
+      "steps": 46
+     }
+    },
+    {
+     "disturbance": 2,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.0246878028068038,
+        0.6562921731370877,
+        0.0
+       ],
+       "t": 38.04062801048511,
+       "x": [
+        41.0,
+        8.417250487096071,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 5.071487674257469e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 4.370815887134841e-15,
+      "steps": 60
+     },
+     "shot": 1,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.0246878027035444,
+        0.6562921732501615,
+        0.0
+       ],
+       "t": 38.04062801089061,
+       "x": [
+        41.0,
+        8.417250488343472,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 7.509548538564559e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 4.3708159612739846e-15,
+      "steps": 95
+     }
+    },
+    {
+     "disturbance": 1,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.1454912160035022,
+        -0.17171417111672416,
+        0.0
+       ],
+       "t": 39.04371678775956,
+       "x": [
+        41.0,
+        11.742654142791059,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 6.800005003526621e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 5.511568170792163e-17,
+      "steps": 31
+     },
+     "shot": 2,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.1454912160504376,
+        -0.17171417119096383,
+        0.0
+       ],
+       "t": 39.04371678759165,
+       "x": [
+        41.0,
+        11.742654142411476,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 4.1966430330830917e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 5.511568403333269e-17,
+      "steps": 46
+     }
+    },
+    {
+     "disturbance": 2,
+     "outcome": "LeftBounds",
+     "preview": {
+      "end": {
+       "p": [
+        1.0246878028068038,
+        0.6562921731370877,
+        0.0
+       ],
+       "t": 38.04062801048511,
+       "x": [
+        41.0,
+        8.417250487096071,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 5.071487674257469e-11,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 4.370815887134841e-15,
+      "steps": 60
+     },
+     "shot": 2,
+     "status": "Verified",
+     "verified": {
+      "end": {
+       "p": [
+        1.0246878027035444,
+        0.6562921732501615,
+        0.0
+       ],
+       "t": 38.04062801089061,
+       "x": [
+        41.0,
+        8.417250488343472,
+        0.0
+       ]
+      },
+      "energy_max_abs_error": 7.509548538564559e-13,
+      "kinetic_initial": 0.4999999999999999,
+      "outcome": "LeftBounds",
+      "radiated_energy": 4.3708159612739846e-15,
+      "steps": 95
+     }
+    }
+   ],
+   "placement": [
+    {
+     "kind": "charge",
+     "node": [
+      5,
+      3,
+      0
+     ],
+     "value": 500000.0
+    },
+    {
+     "kind": "charge",
+     "node": [
+      36,
+      7,
+      0
+     ],
+     "value": -1000000.0
+    }
+   ]
+  }
+ ]
+}
