@@ -14,10 +14,13 @@ The owner's instructions for that session: make progress on this plan until noon
 new test suites (the next night runs them), take the recommended choice where confident and
 list the others here.
 
-- **Tests owed by the night run.** The commits after `1d483cc` were made without the fast
-  tier, pytest or the affected heavy tests (each commit message says what it skipped). Before
-  pushing: `cargo test --workspace`, `py -3.14 -m pytest`, `python scripts/affected.py run`
-  on the last commit.
+- **Tests owed by the night run: run 2026-11-16 at `892f724`, all pass.** `cargo fmt --check`
+  clean; `cargo clippy --workspace --all-targets -- -D warnings` clean; the fast tier
+  (`cargo nextest run --workspace`) 378 of 378 in 299 s; `py -3.14 -m mypy` no issues in 31
+  files; `py -3.14 -m pytest` 52 passed; `python scripts/affected.py run` 0 of 529 selected
+  (the code changed since `1d483cc` is the Scales header in `crates/game/src/ui/mod.rs` and
+  Glass screen's texts; the 529 last passed on 2026-11-15). The main checkout shows all 529
+  selected only because main is behind this branch, whose code the records hold.
 - **Nothing pushed.** `1d483cc` (the thermal-wall contacts, its 529 heavy verdicts passed)
   and the later commits are on `worktree-tubes-next` only; pushing, fast-forwarding main
   and rebuilding the game there wait for the owner (as the session of 2026-11-14 left it).
